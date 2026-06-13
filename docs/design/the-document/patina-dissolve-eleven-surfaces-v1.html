@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · The Dissolve — Eleven Surfaces · Design v1</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--paper:#FCFAF6;--sheet2:#EFE9DD;--ink:rgba(44,41,38,0.18);--fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
+body{font-family:var(--fb);background:var(--ch);color:var(--mo);line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1060px;margin:0 auto;padding:4rem 2.5rem 6rem}
+.kicker{font-family:var(--fm);font-size:0.6rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--cl);font-weight:500}
+h1{font-family:var(--fd);font-weight:400;font-size:3rem;color:var(--ow);line-height:1.1;margin:0.6rem 0 0.4rem}
+h1 em{font-style:italic;color:var(--cl)}
+.lede{font-size:0.95rem;color:rgba(250,247,242,0.6);max-width:62ch;line-height:1.75}
+.strata{display:flex;flex-direction:column;gap:4px;margin:2.2rem 0}
+.strata div{height:2px;border-radius:1px}
+.strata div:nth-child(1){width:64px;background:var(--cl)}
+.strata div:nth-child(2){width:44px;background:var(--cl);opacity:0.55}
+.strata div:nth-child(3){width:26px;background:var(--cl);opacity:0.28}
+.toc{display:grid;grid-template-columns:1fr 1fr;gap:0.3rem 2.5rem;margin:1.8rem 0 0}
+.toc a{font-size:0.78rem;color:rgba(250,247,242,0.55);text-decoration:none;padding:0.32rem 0;border-bottom:1px solid rgba(250,247,242,0.07);display:flex;justify-content:space-between;gap:1rem}
+.toc a:hover{color:var(--cl)}
+.toc .n{font-family:var(--fm);font-size:0.58rem;color:var(--cl);letter-spacing:0.08em}
+
+section.card{background:var(--paper);border-radius:8px;border:1px solid var(--ink);margin-top:3.2rem;overflow:hidden}
+.card-in{padding:2.6rem 2.8rem}
+.sec-kick{font-family:var(--fm);font-size:0.56rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--cl);font-weight:600}
+h2{font-family:var(--fd);font-weight:500;font-size:1.7rem;color:var(--ch);margin:0.4rem 0 0.2rem}
+h2 em{font-style:italic;color:var(--ao)}
+.was{font-family:var(--fm);font-size:0.6rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao);background:rgba(196,165,123,0.09);border:1px solid rgba(196,165,123,0.3);border-radius:3px;display:inline-block;padding:0.25rem 0.6rem;margin:0.5rem 0 1rem}
+p{font-size:0.85rem;color:var(--mo);max-width:68ch;margin:0.7rem 0}
+p strong{color:var(--ch);font-weight:600}
+.rule{display:flex;flex-direction:column;gap:3px;margin:1.6rem 0}
+.rule div{height:1.5px;border-radius:1px}
+.rule div:nth-child(1){width:44px;background:var(--cl)}
+.rule div:nth-child(2){width:30px;background:var(--cl);opacity:0.5}
+.h3{font-family:var(--fd);font-style:italic;font-weight:500;font-size:1.05rem;color:var(--ch);margin:1.6rem 0 0.3rem}
+.ruling{background:rgba(232,197,71,0.07);border-left:3px solid var(--gh);border-radius:0 6px 6px 0;padding:0.9rem 1.1rem;margin:1.4rem 0;font-size:0.78rem;color:var(--mo)}
+.ruling .rl{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.14em;text-transform:uppercase;color:#b89a2e;font-weight:600;display:block;margin-bottom:0.3rem}
+.build{font-family:var(--fm);font-size:0.62rem;letter-spacing:0.04em;color:var(--ao);background:rgba(229,226,221,0.4);border:1px solid var(--pe);border-radius:4px;padding:0.7rem 0.9rem;margin-top:1.4rem;line-height:1.8}
+
+/* ===== mock frames ===== */
+.mock{background:var(--paper);border:1px solid var(--ink);border-radius:6px;margin:1.4rem 0;padding:1.6rem 1.8rem;position:relative;background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,115,85,0.012) 3px,rgba(139,115,85,0.012) 4px)}
+.mock-tag{position:absolute;top:-9px;left:16px;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--ao);background:var(--paper);padding:0 8px;font-weight:600}
+.mock.dark{background:var(--ch);border-color:rgba(250,247,242,0.18)}
+.mock.dark .mock-tag{background:var(--ch);color:var(--cl)}
+
+/* paper grammar */
+.sec-head{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;margin-bottom:0.4rem}
+.sec-title{font-family:var(--fd);font-weight:500;font-size:1.05rem;color:var(--ch)}
+.sec-meta{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao)}
+.line{display:flex;justify-content:space-between;gap:0.8rem;padding:0.6rem 0.2rem;border-top:1px solid var(--pe);align-items:center}
+.l-name{font-weight:500;font-size:0.78rem;color:var(--ch)}
+.l-sub{font-size:0.62rem;color:var(--ao)}
+.l-right{display:flex;align-items:center;gap:0.8rem;flex-shrink:0}
+.price{font-family:var(--fd);font-weight:500;font-size:0.8rem;color:var(--ch)}
+.stamp{display:inline-block;padding:2px 9px;border:1.5px solid;border-radius:3px;font-family:var(--fm);font-size:0.46rem;letter-spacing:0.09em;text-transform:uppercase;font-weight:600;transform:rotate(-1.5deg);white-space:nowrap}
+.st-sa{color:var(--sa);border-color:var(--sa)}
+.st-db{color:var(--db);border-color:var(--db)}
+.st-gh{color:#b89a2e;border-color:#cfae34}
+.st-te{color:#c4836f;border-color:var(--te)}
+.st-mu{color:var(--ao);border-color:#cfc8bb}
+.st-cl{color:var(--cl);border-color:var(--cl)}
+.qbtn{display:inline-block;padding:0.35rem 0.75rem;border:1px solid var(--pe);border-radius:4px;font-size:0.62rem;font-weight:500;color:var(--ch);cursor:default}
+.qbtn.clay{background:var(--cl);color:#fff;border-color:var(--cl)}
+.qbtn.dark{background:var(--ch);color:var(--ow);border-color:var(--ch)}
+.mono-link{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--cl);font-weight:600;cursor:default}
+.muted-i{font-style:italic;color:var(--ao);font-size:0.68rem}
+
+/* roomhead */
+.roomhead{display:flex;justify-content:space-between;align-items:baseline;padding:0.9rem 0.2rem 0.3rem;gap:1rem}
+.roomhead .rn{font-family:var(--fd);font-style:italic;font-weight:500;font-size:0.92rem;color:var(--ao)}
+.roomhead .rm{font-family:var(--fm);font-size:0.48rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao)}
+.minirule{display:flex;gap:3px;flex-direction:column;margin:0.2rem 0 0.2rem 0.2rem}
+.minirule div{height:1px;background:var(--cl)}
+.minirule div:nth-child(1){width:26px}.minirule div:nth-child(2){width:16px;opacity:0.5}
+
+/* work block */
+.work{margin:0.6rem 0 0.4rem;border:1px solid var(--pe);border-radius:6px;background:rgba(252,250,246,0.7)}
+.work-head{display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0.9rem;border-bottom:1px solid var(--pe)}
+.work-title{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.task{display:flex;align-items:center;gap:0.6rem;padding:0.5rem 0.9rem;border-bottom:1px solid rgba(229,226,221,0.6);font-size:0.74rem;color:var(--ch)}
+.task:last-child{border-bottom:none}
+.tick{width:13px;height:13px;border:1.5px solid #cfc8bb;border-radius:3px;flex-shrink:0;position:relative}
+.tick.done{border-color:var(--sa);background:rgba(168,181,160,0.15)}
+.tick.done::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.55rem;color:var(--sa);font-weight:700}
+.task .t-meta{margin-left:auto;font-family:var(--fm);font-size:0.46rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--ao)}
+.task.done .t-text{color:var(--ao);text-decoration:line-through;text-decoration-color:rgba(139,115,85,0.4)}
+.gate{display:flex;align-items:center;gap:0.7rem;padding:0.65rem 0.9rem;background:rgba(232,197,71,0.06);border-top:1px solid rgba(207,174,52,0.35)}
+.gate-label{font-size:0.72rem;color:var(--ch)}
+.gate-label strong{font-weight:600}
+
+/* folio */
+.folio{display:flex;gap:0.6rem;align-items:stretch;margin:0.7rem 0;flex-wrap:wrap}
+.fcard{position:relative;width:128px;padding:0.6rem 0.7rem;background:var(--paper);border:1px solid var(--ink);border-radius:4px}
+.fcard.stack::before{content:'';position:absolute;left:3px;right:-3px;top:3px;bottom:-3px;background:var(--sheet2);border:1px solid var(--ink);border-radius:4px;z-index:-1}
+.fcard.stack::after{content:'';position:absolute;left:6px;right:-6px;top:6px;bottom:-6px;background:#E2DACA;border:1px solid var(--ink);border-radius:4px;z-index:-2}
+.f-kind{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--cl);font-weight:600}
+.f-name{font-size:0.66rem;font-weight:500;color:var(--ch);line-height:1.3;margin:0.15rem 0}
+.f-meta{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--ao)}
+.dropzone{border:1.5px dashed rgba(196,165,123,0.5);border-radius:4px;width:128px;display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:0.46rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);min-height:74px}
+
+/* accounts table */
+.acct-table{width:100%;border-collapse:collapse;margin:0.6rem 0}
+.acct-table th{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);font-weight:600;text-align:right;padding:0.4rem 0.5rem;border-bottom:1px solid var(--pe)}
+.acct-table th:first-child{text-align:left}
+.acct-table td{font-size:0.72rem;color:var(--ch);text-align:right;padding:0.42rem 0.5rem;border-bottom:1px solid rgba(229,226,221,0.55);font-family:var(--fm)}
+.acct-table td:first-child{text-align:left;font-family:var(--fb);font-weight:500}
+.v-under{color:#7e8f76}
+.v-over{color:#c4836f}
+.tot td{border-top:1.5px solid var(--ch);border-bottom:none;font-weight:600;color:var(--ch)}
+.eyes{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--te);border:1px solid rgba(212,160,144,0.45);border-radius:3px;padding:1px 7px}
+
+/* margin item / threads */
+.mitem{border:1px solid var(--pe);border-left:3px solid var(--db);border-radius:5px;padding:0.6rem 0.8rem;margin:0.45rem 0;max-width:430px}
+.mi-k{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;color:var(--db)}
+.mi-t{font-size:0.74rem;font-weight:500;color:var(--ch);margin:0.1rem 0}
+.mi-d{font-size:0.64rem;color:var(--ao);line-height:1.5}
+
+/* dark book pages */
+.bookbar{display:flex;gap:1.4rem;align-items:baseline;border-bottom:1px solid rgba(250,247,242,0.12);padding-bottom:0.6rem;margin-bottom:0.9rem}
+.bb-title{font-family:var(--fd);font-weight:500;font-size:1.05rem;color:var(--ow)}
+.bb-title em{font-style:italic;color:var(--cl)}
+.bb-pages{display:flex;gap:1.1rem;margin-left:auto}
+.bb-page{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:rgba(250,247,242,0.4);cursor:default;padding-bottom:2px}
+.bb-page.on{color:var(--cl);border-bottom:1px solid var(--cl)}
+.drow{display:flex;justify-content:space-between;gap:0.8rem;padding:0.55rem 0.1rem;border-bottom:1px solid rgba(250,247,242,0.08);align-items:center}
+.d-name{font-size:0.74rem;color:var(--ow);font-weight:500}
+.d-sub{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.05em;text-transform:uppercase;color:rgba(250,247,242,0.4);display:block}
+.d-val{font-family:var(--fd);font-size:0.8rem;color:var(--ow)}
+.wkgrid{display:grid;grid-template-columns:120px repeat(5,1fr);gap:1px;background:rgba(250,247,242,0.1);border:1px solid rgba(250,247,242,0.12);border-radius:5px;overflow:hidden;margin:0.7rem 0;font-size:0.6rem}
+.wk-cell{background:var(--ch);padding:0.5rem 0.55rem;min-height:44px;color:rgba(250,247,242,0.75)}
+.wk-head{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.08em;text-transform:uppercase;color:rgba(250,247,242,0.45);min-height:auto;padding:0.4rem 0.55rem}
+.wk-ev{display:inline-block;border-left:2.5px solid var(--cl);background:rgba(196,165,123,0.1);border-radius:3px;padding:2px 6px;font-size:0.54rem;color:var(--ow);margin:1px 0}
+.wk-ev.sa{border-left-color:var(--sa);background:rgba(168,181,160,0.12)}
+.wk-ev.te{border-left-color:var(--te);background:rgba(212,160,144,0.12)}
+.statline{display:flex;gap:2rem;margin:0.4rem 0 0.9rem}
+.statline .s{font-family:var(--fm)}
+.statline .sl{font-size:0.44rem;letter-spacing:0.1em;text-transform:uppercase;color:rgba(250,247,242,0.4);display:block}
+.statline .sv{font-family:var(--fd);font-size:1.05rem;color:var(--ow)}
+.colophon{display:flex;align-items:center;gap:0.9rem;border-top:1px solid var(--pe);padding-top:0.6rem;margin-top:0.8rem;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao)}
+.colophon .cdot{opacity:0.4}
+.via{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(196,165,123,0.5);background:rgba(196,165,123,0.08);border-radius:3px;padding:2px 8px;font-family:var(--fm);font-size:0.44rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.via i{display:inline-flex;flex-direction:column;gap:1.5px}
+.via i b{display:block;height:1px;background:var(--cl);border:none}
+.via i b:nth-child(1){width:9px}.via i b:nth-child(2){width:6px;opacity:0.55}.via i b:nth-child(3){width:4px;opacity:0.3}
+
+/* library room */
+.lib{background:var(--paper);border-radius:6px;overflow:hidden;border:1px solid var(--ink)}
+.lib-top{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.4rem;border-bottom:1px solid var(--pe)}
+.lib-name{font-family:var(--fd);font-weight:500;font-size:1.2rem;color:var(--ch)}
+.lib-name em{font-style:italic;color:var(--cl)}
+.ask{flex:1;max-width:380px;margin:0 1.5rem;border:1px solid var(--pe);border-radius:5px;padding:0.45rem 0.8rem;font-size:0.68rem;color:var(--ao);font-style:italic;background:#fff}
+.shelf-head{display:flex;align-items:baseline;gap:0.8rem;padding:1.1rem 1.4rem 0.4rem}
+.shelf-name{font-family:var(--fd);font-style:italic;font-size:0.95rem;color:var(--ao)}
+.shelf-meta{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao)}
+.shelf{display:grid;grid-template-columns:repeat(5,1fr);gap:0.7rem;padding:0.2rem 1.4rem 1.2rem}
+.pcard{border:1px solid var(--pe);border-radius:5px;overflow:hidden;background:#fff}
+.pimg{height:64px;background:linear-gradient(135deg,var(--sheet2),#E2DACA);display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:0.44rem;color:var(--ao);letter-spacing:0.1em}
+.pmeta{padding:0.4rem 0.55rem}
+.pname{font-size:0.6rem;font-weight:500;color:var(--ch);line-height:1.25}
+.pteach{font-family:var(--fm);font-size:0.38rem;letter-spacing:0.08em;text-transform:uppercase;color:#b89a2e;margin-top:2px}
+
+footer{margin-top:4rem;text-align:left}
+.f-note{font-size:0.78rem;color:rgba(250,247,242,0.5);max-width:64ch;line-height:1.8}
+.f-note strong{color:var(--cl);font-weight:500}
+@media(max-width:760px){.wrap{padding:2.5rem 1.2rem}.card-in{padding:1.6rem 1.3rem}.toc{grid-template-columns:1fr}.shelf{grid-template-columns:repeat(2,1fr)}.wkgrid{grid-template-columns:90px repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">Patina · The Document · Dissolve Design Package</div>
+<h1>Eleven surfaces,<br><em>drawn on paper</em></h1>
+<p class="lede">The complete UX/UI design for every undefined surface in the parity map, in your priority order — plus the new foundational pattern your directive creates: drawer objects now come in two weights, and the Library becomes the first full-screen <em>Room</em>. Everything below uses the document's existing grammar — lines, stamps, unfolds, margin items, settled bars, Strata rules — so each surface arrives feeling inevitable rather than added.</p>
+
+<div class="strata"><div></div><div></div><div></div></div>
+
+<div class="toc">
+<a href="#p0"><span>Sheets &amp; Rooms — the two weights (new pattern)</span><span class="n">D14</span></a>
+<a href="#s1"><span>The Work — tasks, deliverables, gates</span><span class="n">C-4</span></a>
+<a href="#s2"><span>The Folio — files on the paper</span><span class="n">C-5</span></a>
+<a href="#s3"><span>Rooms on the schedule</span><span class="n">C-3</span></a>
+<a href="#s4"><span>The Account Page — engagement financials</span><span class="n">C-2</span></a>
+<a href="#s5"><span>Client View · Send a Note · the Scan</span><span class="n">C-6</span></a>
+<a href="#s6"><span>Vendor threads — the Orders book</span><span class="n">C-7</span></a>
+<a href="#s7"><span>The Week — calendar &amp; conflicts</span><span class="n">C-8</span></a>
+<a href="#s8"><span>Receiving — the warehouse page</span><span class="n">C-9</span></a>
+<a href="#s9"><span>The Colophon — actions &amp; team</span><span class="n">C-11</span></a>
+<a href="#s10"><span>Via Patina — the marketplace rail</span><span class="n">C-10</span></a>
+<a href="#s11"><span>The Engine — a presence, not a place</span><span class="n">C-1</span></a>
+<a href="#s12"><span>The Library — the first Room</span><span class="n">B-1</span></a>
+</div>
+
+<!-- ============ PATTERN 0 ============ -->
+<section class="card" id="p0"><div class="card-in">
+<div class="sec-kick">Pattern 0 · Foundational — proposed D14</div>
+<h2>Sheets &amp; Rooms <em>— the two weights</em></h2>
+<p>Your directive — "some drawer items may open full-screen; the Library should be immersive" — isn't an exception to the drawer, it's the drawer growing a second physics. The studio metaphor already contains it: a desk has a drawer of <strong>books</strong> you pull and put back, and the studio has <strong>rooms</strong> you walk into.</p>
+<p><strong>Sheets</strong> (existing): charcoal overlays for quick reference — pull, glance, put back. The document stays mounted beneath. Orders, Hours, Accounts, People remain sheets: their job is a thirty-second answer.</p>
+<p><strong>Rooms</strong> (new): full-screen, paper-material, immersive — places you go to <em>work</em>. Entering a Room puts the current document down through the normal put-down flow (D1 holds: one thing in hand — a Room IS the thing in hand). The drawer bar persists inside a Room (D8 holds). The raise-to-fill motion carries over; leaving a Room returns you to wherever you were. <strong>The Library is the first Room.</strong> The Engine, when summoned at full depth, borrows the Library's roof (§11).</p>
+<div class="ruling"><span class="rl">Ruling needed · D14</span>Drawer objects declare a weight: <strong>sheet</strong> (overlay reference) or <strong>room</strong> (full-screen workplace). Rooms obey D1 (entering = putting down, timer chains out through the log offer), D8 (drawer persists), D12 (full-bleed paper), and D4 (no shadows). The drawer renders rooms with a doorway affordance — the book's spine tick plus a small "↗" — so the hand learns which pull opens which physics.</div>
+</div></section>
+
+<!-- ============ 1 · C-4 THE WORK ============ -->
+<section class="card" id="s1"><div class="card-in">
+<div class="sec-kick">Priority 1 · C-4</div>
+<h2>The Work <em>— tasks, deliverables, and gates</em></h2>
+<span class="was">Was: Phase Timeline · approval gates · per-phase tasks · + Add Phase · hour estimates</span>
+<p>The philosophy ruling, answered: <strong>the document absorbs the work, but refuses the task manager.</strong> No kanban, no assignee avatars, no priority flags. Each section already IS a phase — so each active section carries a quiet block called <strong>The work</strong>: deliverables as checkable lines in the paper's own grammar, and the phase's approval gate as the section's closing line.</p>
+<p>The deep move: <strong>a gate is a decision.</strong> "Sarah signs off on Design Development" runs on the shipped decisions machinery — requested from the gate line, mirrored to the client portal, overdue on the Desk like any decision, resolvable from the margin. We get approval gates for the cost of one decision kind, and the section's SETTLED stamp becomes something the <em>client</em> grants.</p>
+
+<div class="mock"><span class="mock-tag">In the document · Direction section, active</span>
+<div class="sec-head"><span class="sec-title">Direction</span><span class="sec-meta">Active · est. 2–4 wks · 9h logged of 14h est.</span></div>
+<div class="work">
+  <div class="work-head"><span class="work-title">The work · 3 of 5</span><span class="mono-link">+ Task</span></div>
+  <div class="task done"><span class="tick done"></span><span class="t-text">Concept boards — two directions</span><span class="t-meta">Jun 4</span></div>
+  <div class="task done"><span class="tick done"></span><span class="t-text">Material palette — living + dining</span><span class="t-meta">Jun 6</span></div>
+  <div class="task done"><span class="tick done"></span><span class="t-text">Lighting plan, first pass</span><span class="t-meta">Jun 9</span></div>
+  <div class="task"><span class="tick"></span><span class="t-text">Rug options — narrow to three</span><span class="t-meta">due Fri</span></div>
+  <div class="task"><span class="tick"></span><span class="t-text">Client presentation deck</span><span class="t-meta">—</span></div>
+  <div class="gate"><span class="stamp st-gh">Gate</span><span class="gate-label"><strong>Sarah signs off on Direction</strong> — settles this section when she approves.</span><span class="qbtn" style="margin-left:auto">Request sign-off</span></div>
+</div>
+</div>
+
+<p><strong>Mechanics.</strong> Tasks are ≤5-second capture (the Note's contract), check with a small square that fills sage — a stamp, not a checkbox from a SaaS kit. A task with a due date passes the R22 action test and may rise to the Desk; undated tasks never nag. Hour estimates live in the work-head meta and give Hours its "of N est." readout (closing C-4's estimates gap). "+ Add Phase" from the old portal maps to custom sections — deferred; six phases cover Middlewest today.</p>
+<div class="ruling"><span class="rl">Ruling needed · gates-are-decisions</span>Gate = a `client_decision` of kind <em>approval</em>, anchored to the section. Approval settles the section (stamp + date); the Desk, margin, and client mirror all inherit existing behavior. Declined approval = the section stays active with the gate narrating why.</div>
+<div class="build">BUILD · additive `section_tasks` (engagement_id, section_key, title, due_date, done_at, estimate_minutes) · gate rides `client_decisions` with `decision_kind:'approval'` + `section_key` · Desk need-line input: dued tasks (R22 tier rules apply) · Hours reads estimates per section.</div>
+</div></section>
+
+<!-- ============ 2 · C-5 THE FOLIO ============ -->
+<section class="card" id="s2"><div class="card-in">
+<div class="sec-kick">Priority 2 · C-5</div>
+<h2>The Folio <em>— files clipped to the paper</em></h2>
+<span class="was">Was: Documents · version-controlled uploads · click to view/download</span>
+<p>Files are <strong>material, not conversation</strong> — so they don't join the margin's six kinds. They clip to the paper where they belong: a thin <strong>folio strip</strong> under any section head (and on FF&amp;E line unfolds, for cut sheets and spec PDFs). The brand gift is versioning: a re-uploaded file stacks behind its predecessor using the Desk's stacked-edge recipe — <strong>version control rendered literally as sheets of paper behind the current one.</strong></p>
+
+<div class="mock"><span class="mock-tag">In the document · Discovery section folio</span>
+<div class="sec-head"><span class="sec-title">Discovery</span><span class="sec-meta">Settled · Jun 12</span></div>
+<div class="folio">
+  <div class="fcard stack"><div class="f-kind">PDF · v3</div><div class="f-name">Site measurements</div><div class="f-meta">Jun 10 · 2.1 MB</div></div>
+  <div class="fcard"><div class="f-kind">IMG · 12</div><div class="f-name">Walkthrough photos</div><div class="f-meta">Jun 3 · Leah</div></div>
+  <div class="fcard"><div class="f-kind">PDF</div><div class="f-name">HOA finish rules</div><div class="f-meta">Jun 4 · from Sarah</div></div>
+  <div class="dropzone">+ drop a file</div>
+</div>
+<p class="muted-i" style="margin:0.2rem 0 0">The stacked edges on “Site measurements” are its older versions — one click slides v2 and v1 out from behind.</p>
+</div>
+
+<p><strong>Mechanics.</strong> Drag anywhere on a section = the folio catches it (dashed clay dropzone appears on drag-over). Letterhead unfold "The folio · 14 files ↓" lists everything grouped by section for the find-it case. Files open in a full-screen paper viewer (PDF/image), never a new tab. Client-visible flag per file, default studio-only — the folio respects the same private layer as Notes.</p>
+<div class="build">BUILD · Supabase storage bucket per engagement · `engagement_files` (anchor_kind/anchor_id like margin items, version_of, client_visible) · stacked-edge render when version_of chain ≥2 · drag-drop per section · viewer reuses the D12 overlay rules (Doc* wrapper, no shadows).</div>
+</div></section>
+
+<!-- ============ 3 · C-3 ROOMS ON THE SCHEDULE ============ -->
+<section class="card" id="s3"><div class="card-in">
+<div class="sec-kick">Priority 3 · C-3</div>
+<h2>Rooms on the schedule <em>— the FF&amp;E gains geography</em></h2>
+<span class="was">Was: Project Scope by Room · per-room budget allocation &amp; progress · Pipeline “Rooms” tab</span>
+<p>Rooms aren't a directory and they aren't tabs — they're <strong>how a real FF&amp;E schedule is written</strong>: grouped by room, each group with its allocation and its progress, separated by Strata rules. The flat schedule becomes a structured one and nothing else changes; every line keeps its stamps, unfolds, chips, and margin anchors.</p>
+
+<div class="mock"><span class="mock-tag">In the document · Project section with room headings</span>
+<div class="sec-head"><span class="sec-title">Project · FF&amp;E</span><span class="sec-meta">2 rooms · 5 of 9 underway</span></div>
+<div class="roomhead"><span class="rn">Living Room</span><span class="rm">$11,200 of $15,000 · 4 of 6 placed</span></div>
+<div class="minirule"><div></div><div></div></div>
+<div class="line"><div><div class="l-name">Meadow Linen Sectional</div><div class="l-sub">Woodward &amp; Sons</div></div><div class="l-right"><span class="stamp st-db">Ordered</span><span class="price">$6,800</span></div></div>
+<div class="line"><div><div class="l-name">Living Room Rug · 9×12</div><div class="l-sub">Awaiting Sarah's pick</div></div><div class="l-right"><span class="stamp st-te">Decision due · Wed</span><span class="price">~$3,200</span></div></div>
+<div class="roomhead"><span class="rn">Dining Room</span><span class="rm">$9,560 of $12,000 · 1 of 3 placed</span></div>
+<div class="minirule"><div></div><div></div></div>
+<div class="line"><div><div class="l-name">Heirloom Oak Dining Table</div><div class="l-sub">Nordic Atelier · late July</div></div><div class="l-right"><span class="stamp st-gh">Production</span><span class="price">$4,200</span></div></div>
+<div class="line" style="border-bottom:1px solid var(--pe)"><div><div class="l-name muted-i" style="font-weight:400">Throughout · unassigned</div><div class="l-sub">2 lines — drag to a room or leave</div></div><div class="l-right"><span class="mono-link">+ Room</span></div></div>
+</div>
+
+<p><strong>Mechanics.</strong> "+ Room" adds a heading inline (name + optional allocation). Lines assign by drag or from the unfold. Room headings appear in the spine sheet on mobile as jump rows. Allocations feed the Account Page's by-room variance (§4) — one source. The iOS Room Scan (§5) can pre-seed room names with measured dimensions.</p>
+<div class="build">BUILD · `project_rooms` likely exists (R5 audit said the directory dissolves into documents — verify, extend with budget_allocation) · room_id on ffe items · group-by render + drag assign · spine-sheet room rows on &lt;980px.</div>
+</div></section>
+
+<!-- ============ 4 · C-2 THE ACCOUNT PAGE ============ -->
+<section class="card" id="s4"><div class="card-in">
+<div class="sec-kick">Priority 4 · C-2</div>
+<h2>The Account Page <em>— the project's own ledger leaf</em></h2>
+<span class="was">Was: project Financials · budget vs committed vs actual vs variance · margin · earnings · milestone triggers · Generate Invoice · Export</span>
+<p>Engagement-scoped money belongs in the document (the ledger rule), and the document already knows how to hold dense settled material: <strong>a settled bar that unfolds in place.</strong> "The accounts" sits at the top of the Project section — collapsed, it's one honest line; unfolded, it's the full financial picture in paper-table form. Studio-eyes-only, marked so.</p>
+
+<div class="mock"><span class="mock-tag">In the document · collapsed, then unfolded</span>
+<div class="line" style="border:1px solid var(--pe);border-radius:5px;padding:0.65rem 0.9rem;background:rgba(229,226,221,0.3)">
+<div><div class="l-name" style="font-family:var(--fd)">The accounts <span style="font-weight:400;color:var(--ao)">· this project</span></div><div class="l-sub">Budget $17.3K · committed $4.8K · margin 20% · unfold ↓</div></div>
+<div class="l-right"><span class="eyes">Studio eyes only</span></div>
+</div>
+<div style="border:1px solid var(--pe);border-top:none;border-radius:0 0 5px 5px;padding:0.9rem 1rem;background:rgba(252,250,246,0.75)">
+<table class="acct-table">
+<tr><th>Room · category</th><th>Budget</th><th>Committed</th><th>Actual</th><th>Variance</th></tr>
+<tr><td>Living · seating</td><td>$12,500</td><td>$6,800</td><td>$0</td><td class="v-under">−$5,700</td></tr>
+<tr><td>Dining · tables</td><td>$1,920</td><td>$1,920</td><td>$0</td><td class="v-under">on plan</td></tr>
+<tr><td>Dining · casegoods</td><td>$2,840</td><td>$2,840</td><td>$3,120</td><td class="v-over">+$280</td></tr>
+<tr class="tot"><td>Total</td><td>$17,260</td><td>$11,560</td><td>$3,120</td><td class="v-under">under by $5,700</td></tr>
+</table>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:0.5rem">
+<div style="font-size:0.7rem;color:var(--mo)"><strong style="color:var(--ch)">Margin</strong> · $2,820 — 20% of client total <span class="muted-i">(3 of 5 items carry trade cost)</span><br><strong style="color:var(--ch)">Your earnings</strong> · design fee $5,700 + est. commissions $410 <span class="mono-link" style="margin-left:6px">→ Accounts</span></div>
+<div style="display:flex;gap:0.5rem"><span class="qbtn">Export</span><span class="qbtn clay">Generate invoice</span></div>
+</div>
+<div style="margin-top:0.8rem;border-top:1px solid var(--pe);padding-top:0.6rem">
+<div class="work-title" style="margin-bottom:0.3rem">Payment milestones · each drafts its own invoice when its trigger fires</div>
+<div class="line" style="border-top:none;padding:0.3rem 0.1rem"><div class="l-sub" style="font-size:0.68rem;color:var(--ch)">M2 · $14,600 — <em>when production starts</em> <span class="mono-link" style="margin-left:4px">edit trigger</span></div><div class="l-right"><span class="stamp st-cl">Drafted</span></div></div>
+<div class="line" style="border-top:none;padding:0.3rem 0.1rem"><div class="l-sub" style="font-size:0.68rem;color:var(--ch)">M3 · $14,600 — <em>when Install settles</em></div><div class="l-right"><span class="stamp st-mu">Waiting</span></div></div>
+</div>
+</div>
+</div>
+
+<p><strong>Mechanics.</strong> Variance colors: Sage under, Terracotta over — never red/green. Generate Invoice drafts into the Money margin (review-then-send, as always). Milestone triggers edit inline as a quiet select (on signing · on production start · when [section] settles · on date) — the gate system (§1) makes "when a section settles" a real, client-granted trigger. The earnings block links to the Accounts book where royalties and the Pledge live; nothing here ever renders in the client mirror.</p>
+<div class="build">BUILD · roll-up view over ffe items (budget/committed/actual by room×category) · trade_cost field coverage · milestone `trigger_kind/trigger_ref` (extends the existing auto-draft trigger) · QBO export reuses the procurement exporter · Client-mirror exclusion test in CI.</div>
+</div></section>
+
+<!-- ============ 5 · C-6 LETTERHEAD ROW ============ -->
+<section class="card" id="s5"><div class="card-in">
+<div class="sec-kick">Priority 5 · C-6</div>
+<h2>Client View · Send a Note · the Scan <em>— three letterhead instruments</em></h2>
+<span class="was">Was: Client View · Send Update · Room Scan header actions</span>
+<p>Three small designs, one home: a quiet DM-mono row under the letterhead subtitle.</p>
+<div class="mock"><span class="mock-tag">In the document · under the letterhead</span>
+<div style="font-family:var(--fd);font-weight:500;font-size:1.3rem;color:var(--ch)">Whitfield Living &amp; Dining</div>
+<div style="font-size:0.66rem;color:var(--ao);margin-bottom:0.4rem">Sarah Whitfield · Design · $100,000</div>
+<div style="display:flex;gap:1.2rem"><span class="mono-link">View as the Whitfields ↗</span><span class="mono-link" style="color:var(--db)">Send a note</span><span class="mono-link" style="color:var(--ao)">The scan · Jun 3</span></div>
+</div>
+<p><strong>View as the Whitfields</strong> renders the real client mirror full-screen under a thin charcoal banner — <em>"You're seeing what they see · ← back to your copy."</em> A trust instrument: before anything sends, she can stand where Sarah stands. <strong>Send a note</strong> is the ad-hoc sibling of the Pulse ("the Pulse handles Fridays; this is for now") — a compose sheet posting into the comms thread, landing as a letterhead-anchored message item. <strong>The scan</strong> is a Discovery artifact card: floor-plan thumbnail from the iOS RoomPlan capture, full-screen viewer, measured dimensions available to room headings (§3) — the first physical handshake between the iOS app and the Designer Portal.</p>
+<div class="build">BUILD · client-view = existing client portal rendered with a preview banner (read-only session) · send-a-note = comms post + margin index row (no schema) · scan card reads the iOS scan asset; viewer in the folio's full-screen pattern (§2). Ties §14.8.</div>
+</div></section>
+
+<!-- ============ 6 · C-7 VENDOR THREADS ============ -->
+<section class="card" id="s6"><div class="card-in">
+<div class="sec-kick">Priority 6 · C-7</div>
+<h2>Vendor threads <em>— the Orders book learns to talk</em></h2>
+<span class="was">Was: Messages → Vendors tab</span>
+<p>Vendor comms are cross-engagement, so they live in the Orders book's vendor pane — each vendor page carries terms, open POs, and <strong>the thread</strong>, rendered in the margin's message grammar with PO-anchored chips that deep-link into documents. "+ Brief vendor" (from the colophon, §9) opens this pane pre-addressed with the PO in context.</p>
+<div class="mock dark"><span class="mock-tag">Orders book · vendor pane · Sawkille Co</span>
+<div class="bookbar"><span class="bb-title">Sawkille Co <em>· vendor</em></span><div class="bb-pages"><span class="bb-page">Terms · 50/50</span><span class="bb-page on">Thread</span><span class="bb-page">Orders · 2</span></div></div>
+<div class="mitem" style="border-color:rgba(250,247,242,0.15);background:rgba(250,247,242,0.04)"><span class="mi-k">Sawkille · Tue</span><div class="mi-t" style="color:var(--ow)">"SK-102 mid-production — photos attached."</div><div class="mi-d" style="color:rgba(250,247,242,0.5)">re: PO SK-102 → <span class="mono-link">Chen Residence</span></div></div>
+<div class="mitem" style="border-left-color:var(--cl);border-color:rgba(250,247,242,0.15);background:rgba(250,247,242,0.04)"><span class="mi-k" style="color:var(--cl)">You · Tue</span><div class="mi-t" style="color:var(--ow)">"Beautiful. Confirming the Aug 1 ETA holds for SK-087?"</div></div>
+</div>
+<div class="build">BUILD · comms_threads gain `vendor_id` scope (audit existing Messages-Vendors plumbing first — likely reusable wholesale) · PO chips reuse margin message body component · Inbox retirement (§14.10) verifies against this pane.</div>
+</div></section>
+
+<!-- ============ 7 · C-8 THE WEEK ============ -->
+<section class="card" id="s7"><div class="card-in">
+<div class="sec-kick">Priority 7 · C-8</div>
+<h2>The Week <em>— deliveries, installs, and the conflicts that matter</em></h2>
+<span class="was">Was: Procurement Calendar · cross-project timeline · conflict detection (overlap / late / drift)</span>
+<p>The Orders book gains pages — <strong>Ledger · The Week · Receiving · Vendors</strong> — DM-mono page links, never tabs. The Week is the old calendar in book material: weeks across, projects down. The intelligence survives and gets promoted: <strong>conflicts don't wait to be visited — they rise on the Desk as need lines</strong> ("Two installs collide — week of Jul 13"), because a conflict passes the action test and a calendar you must remember to check fails it.</p>
+<div class="mock dark"><span class="mock-tag">Orders book · The Week</span>
+<div class="bookbar"><span class="bb-title">Orders <em>· the week</em></span><div class="bb-pages"><span class="bb-page">Ledger</span><span class="bb-page on">The Week</span><span class="bb-page">Receiving</span><span class="bb-page">Vendors</span></div></div>
+<div class="wkgrid">
+<div class="wk-cell wk-head">Project</div><div class="wk-cell wk-head">Jun 15</div><div class="wk-cell wk-head">Jun 22</div><div class="wk-cell wk-head">Jun 29</div><div class="wk-cell wk-head">Jul 6</div><div class="wk-cell wk-head">Jul 13</div>
+<div class="wk-cell">Chen</div><div class="wk-cell"></div><div class="wk-cell"><span class="wk-ev">Nordic · 2 items</span></div><div class="wk-cell"></div><div class="wk-cell"></div><div class="wk-cell"><span class="wk-ev te">Install ⚠ collides</span></div>
+<div class="wk-cell">Whitfield</div><div class="wk-cell"><span class="wk-ev sa">Verellen ✓ recvd</span></div><div class="wk-cell"></div><div class="wk-cell"><span class="wk-ev">Sawkille</span></div><div class="wk-cell"></div><div class="wk-cell"><span class="wk-ev te">Install ⚠ collides</span></div>
+</div>
+<div style="font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:rgba(250,247,242,0.4)">Expected · <span style="color:var(--sa)">received</span> · <span style="color:var(--te)">conflict — also on your Desk</span></div>
+</div>
+<div class="build">BUILD · reuses the existing calendar derivation (00189 delivery-week crons feed it) · conflict classifier already exists (overlap/late/drift) → new Desk need-line input, R22 tier rules apply (a drift with no act = in-motion chip; a collision = folder).</div>
+</div></section>
+
+<!-- ============ 8 · C-9 RECEIVING PAGE ============ -->
+<section class="card" id="s8"><div class="card-in">
+<div class="sec-kick">Priority 8 · C-9</div>
+<h2>Receiving <em>— the warehouse-day page</em></h2>
+<span class="was">Was: Receiving workspace · arriving / pending / claims / cleared · inspection pass rate</span>
+<p>Per-line receiving shipped long ago; what the old portal adds is the <strong>queue</strong> — the warehouse-day view when a truck shows up with five POs. It becomes the Orders book's Receiving page: a front-matter stat line, then the queue, every Inspect button mounting the <em>same</em> inspection drawer the unfolds use. One component, two doors.</p>
+<div class="mock dark"><span class="mock-tag">Orders book · Receiving</span>
+<div class="bookbar"><span class="bb-title">Orders <em>· receiving</em></span><div class="bb-pages"><span class="bb-page">Ledger</span><span class="bb-page">The Week</span><span class="bb-page on">Receiving</span><span class="bb-page">Vendors</span></div></div>
+<div class="statline"><span class="s"><span class="sl">Arriving · 7d</span><span class="sv">3</span></span><span class="s"><span class="sl">Awaiting log</span><span class="sv">1</span></span><span class="s"><span class="sl">Claims open</span><span class="sv">2</span></span><span class="s"><span class="sl">Pass rate · 30d</span><span class="sv">86%</span></span></div>
+<div class="drow"><span><span class="d-name">Boucle Lounge Chairs · ×2</span><span class="d-sub">Olsen Penthouse · Cisco AP-012 · delivered Tue</span></span><span class="qbtn" style="color:var(--cl);border-color:rgba(196,165,123,0.4)">Inspect</span></div>
+<div class="drow"><span><span class="d-name">Shaker Chairs · 6 of 8</span><span class="d-sub">Whitfield · Sawkille · ETA Jun 22 · PARTIAL</span></span><span class="d-val" style="font-size:0.6rem;font-family:var(--fm);color:rgba(250,247,242,0.4)">ARRIVING</span></div>
+</div>
+<div class="build">BUILD · pure composition: receiving hook (I17) + queue query + pass-rate stat (exists in old portal) · cleared items use the Settled fold pattern.</div>
+</div></section>
+
+<!-- ============ 9 · C-11 THE COLOPHON ============ -->
+<section class="card" id="s9"><div class="card-in">
+<div class="sec-kick">Priority 9 · C-11</div>
+<h2>The Colophon <em>— where the document states its own facts</em></h2>
+<span class="was">Was: Put on hold · Archive · reassign lead · invite designer · add bookkeeper · + Brief vendor</span>
+<p>A printed document ends with a colophon — the small line stating who made it. Ours does the same: a quiet DM-mono row at the paper's foot carrying the studio, the hands on the work, and the document's housekeeping. Click it and a small paper popover offers the rare acts.</p>
+<div class="mock"><span class="mock-tag">In the document · the paper's last line</span>
+<div class="colophon"><span>Middlewest Studio</span><span class="cdot">·</span><span>Leah K. + Devon (bookkeeper)</span><span class="cdot">·</span><span style="color:var(--cl)">Brief a vendor</span><span class="cdot">·</span><span style="color:var(--cl)">Hold</span><span class="cdot">·</span><span style="color:var(--cl)">Archive</span><span class="cdot">·</span><span style="color:var(--cl)">Team…</span></div>
+<p class="muted-i" style="margin:0.5rem 0 0">Hold → the Desk's paused in-motion chip. Archive → "the document goes to the cabinet — find it any time in ⌘K." Team… → invite designer / add bookkeeper / reassign lead, and the §14.6 RLS widening rides this exact popover.</p>
+</div>
+<div class="build">BUILD · letterhead/footer component + Doc* popover · hold/archive call existing status mutations · team = studio membership UI (unblocks margin_notes RLS, §14.6) · Brief a vendor deep-links the Orders vendor pane (§6) with PO context.</div>
+</div></section>
+
+<!-- ============ 10 · C-10 VIA PATINA ============ -->
+<section class="card" id="s10"><div class="card-in">
+<div class="sec-kick">Priority 10 · C-10</div>
+<h2>Via Patina <em>— the marketplace rail, and the Pledge at the moment of ordering</em></h2>
+<span class="was">Was: PATINA CATALOG badges · Order via Patina · Order all · PATINA HANDLED</span>
+<p>Catalog vendors carry a small mark built from the Strata device. Ordering via Patina is the same Order Assistant with one swapped step — Patina handles fulfillment instead of a vendor email — and the PO cell narrates <strong>PATINA HANDLED</strong> thereafter. The brand moment: at the instant of ordering, one quiet line shows the commission flowing to her own book — <strong>the 25% Pledge made visible exactly where the money is born.</strong></p>
+<div class="mock"><span class="mock-tag">Line unfold · PO cell, catalog vendor</span>
+<div class="line" style="border-top:none"><div><div class="l-name">Heirloom Oak Dining Table</div><div class="l-sub">Nordic Atelier · <span class="via"><i><b></b><b></b><b></b></i>Patina catalog</span></div></div><div class="l-right"><span class="stamp st-sa">Approved</span><span class="price">$4,200</span></div></div>
+<div style="padding:0.6rem 0.2rem;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+<div style="font-size:0.66rem;color:var(--mo)">Patina handles this order — production, freight, and claims.<br><span class="muted-i">Commission to your Accounts: ~$336 · the Pledge returns $84 of it as teaching royalty.</span></div>
+<span class="qbtn dark">Review &amp; order via Patina</span>
+</div>
+</div>
+<p><strong>Mechanics.</strong> Review-then-send holds (R18): the preview shows what Patina receives. Vendor-pane "Order all via Patina" batches with the same preview-as-confirm. PATINA HANDLED renders as a PO-cell state, not a line stamp — the line's stamps stay about the piece.</p>
+<div class="build">BUILD · catalog detection exists (PATINA CATALOG badge logic) · Order Assistant gains a fulfillment branch · commission/Pledge line reads the marketplace rate config · Accounts book receives the ledger rows (B-2 dependency).</div>
+</div></section>
+
+<!-- ============ 11 · C-1 THE ENGINE ============ -->
+<section class="card" id="s11"><div class="card-in">
+<div class="sec-kick">Priority 11 · C-1</div>
+<h2>The Engine <em>— a presence, not a place</em></h2>
+<span class="was">Was: /portal/companion — a chat zone with prompt suggestions</span>
+<p>The old portal gave the Engine a room of its own with a chat window — chrome, in a product whose thesis is paper. The document model's answer: <strong>the Engine is never a destination; it's the studio's quiet voice</strong>, reachable in exactly two places where asking already happens.</p>
+<p><strong>1 · ⌘K speaks.</strong> Find-anything already accepts language; now sentences work. A jump stays a jump — but "walnut credenza under $3K for Whitfield" returns Engine results as paper cards with one action: <em>place into the document</em>. Ask-and-place, no conversation thread, no chat history. Every query teaches the profile, narrated by a single honest line.</p>
+<div class="mock"><span class="mock-tag">⌘K · Engine results inline</span>
+<div style="border:1px solid var(--pe);border-radius:6px;padding:0.7rem 0.9rem;background:#fff;max-width:560px">
+<div style="font-size:0.78rem;color:var(--ch);border-bottom:1px solid var(--pe);padding-bottom:0.5rem">walnut credenza under $3k for whitfield<span style="color:var(--ao)">|</span></div>
+<div class="line"><div><div class="l-name">Walnut Credenza · 64"</div><div class="l-sub">Studio library · 92 match · $2,840</div></div><div class="l-right"><span class="qbtn">Place → Whitfield</span></div></div>
+<div class="line"><div><div class="l-name">Mid-century Sideboard</div><div class="l-sub">Patina catalog · 88 match · $2,400 · <span class="via" style="padding:1px 5px"><i><b></b><b></b><b></b></i>Patina</span></div></div><div class="l-right"><span class="qbtn">Place → Whitfield</span></div></div>
+<div style="font-family:var(--fm);font-size:0.44rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);padding-top:0.5rem">The Engine · every ask teaches your profile · deeper: open the Library ↗</div>
+</div>
+</div>
+<p><strong>2 · The Library's librarian (§12).</strong> Inside the Library Room, the Engine is the standing input at the top — style recommendations, market trends, longer work — answered in the room built for browsing, beside the teaching queue it learns from. The Engine, teaching, and the Pledge stay one system, which is why this section and the Aesthete fold share their design session.</p>
+<div class="ruling"><span class="rl">Ruling needed · no-chat-zone</span>The Engine gets no standalone surface, no thread history, no avatar. It answers in ⌘K and in the Library, always in document grammar (lines, cards, stamps), always with a place-into-document act. /portal/companion retires at dissolve with its capability fully absorbed.</div>
+<div class="build">BUILD · ⌘K intent split (jump vs ask) · Engine API exists (companion backend) — re-skin responses as result lines · profile-teaching writes unchanged · Library input shares the same endpoint.</div>
+</div></section>
+
+<!-- ============ 12 · THE LIBRARY ROOM ============ -->
+<section class="card" id="s12"><div class="card-in">
+<div class="sec-kick">Bucket B-1 · the first Room (D14)</div>
+<h2>The Library <em>— walk in, browse the shelves, teach as you go</em></h2>
+<span class="was">Was: Products → My Library / Studio Library / Patina Catalog + Aesthete Teaching Queue</span>
+<p>The Library opens <strong>full-screen — the first Room</strong>. Paper-material, edge-to-edge, the drawer bar still at the desk's edge below. Three layers render as <strong>shelves</strong> separated by Strata rules — My Library (raw captures), Studio Library (proven), Patina Catalog (the marketplace) — with capture → promote → nominate as the movement between them. The Engine stands at the top as the librarian; <strong>teaching happens while browsing</strong> ("needs teaching" cards carry their Golden-Hour tag; tap = the Quick Tags flow inline), so the queue stops being a chore page and becomes the shelf's own dust.</p>
+
+<div class="mock" style="padding:0"><span class="mock-tag">The Library · full-screen Room</span>
+<div class="lib">
+<div class="lib-top"><span class="lib-name">The Library <em>· 336 pieces</em></span><span class="ask">Ask the library — "warm-grain sideboards that photograph well"…</span><span class="mono-link">← Back to the Desk</span></div>
+<div class="shelf-head"><span class="shelf-name">My Library</span><span class="shelf-meta">41 captures · 12 need teaching · from Chrome, photos, paste</span><span class="mono-link" style="margin-left:auto">+ Capture</span></div>
+<div class="shelf">
+<div class="pcard"><div class="pimg">IMG</div><div class="pmeta"><div class="pname">Heirloom Oak Table</div><div class="pteach">Needs teaching</div></div></div>
+<div class="pcard"><div class="pimg">IMG</div><div class="pmeta"><div class="pname">Walnut Credenza</div><div class="pteach">Needs teaching</div></div></div>
+<div class="pcard"><div class="pimg">IMG</div><div class="pmeta"><div class="pname">Live-Edge Coffee Table</div><div class="pteach" style="color:var(--sa)">Taught · 94</div></div></div>
+<div class="pcard"><div class="pimg">IMG</div><div class="pmeta"><div class="pname">Ceramic Table Lamp</div><div class="pteach" style="color:var(--ao)">Draft</div></div></div>
+<div class="pcard"><div class="pimg">IMG</div><div class="pmeta"><div class="pname">Iron Shelf</div><div class="pteach">Needs teaching</div></div></div>
+</div>
+<div class="shelf-head"><span class="shelf-name">Studio Library</span><span class="shelf-meta">208 proven pieces · promote from captures</span></div>
+<div class="shelf-head" style="padding-top:0.4rem"><span class="shelf-name">Patina Catalog</span><span class="shelf-meta">87 maker pieces · <span class="via" style="padding:1px 6px"><i><b></b><b></b><b></b></i>order via Patina</span> · nominate a maker</span></div>
+</div>
+</div>
+
+<p><strong>Why a Room.</strong> The Library is where taste lives — Leah browsing shelves IS the Aesthete Engine being built. That deserves big imagery, slow whitespace, and zero overlay claustrophobia: a place, not a popup. Teaching stats (today's progress, accuracy, impact) compress to one quiet line in the room's foot — present, never gamified. Deep Analysis opens as a paper sheet over the room for the 15-minute sittings.</p>
+<div class="build">BUILD · Room shell (D14: full-bleed route /library, drawer persists, put-down semantics) · three-layer queries exist (the catalog handoff) · inline Quick Tags = teaching flow re-mounted on cards · Engine input shares §11's endpoint · Chrome-extension capture inbox lands on the My Library shelf.</div>
+</div></section>
+
+<footer>
+<div class="strata"><div></div><div></div><div></div></div>
+<p class="f-note"><strong>Sequencing.</strong> These designs slot into the dissolve stages unchanged: §1–§5 are in-document work (Stage 1–2, and §1's gates ride the decisions machinery already live) · §6–§8 are Orders-book pages (one book, three pages, one PR arc) · §9–§10 are small and ride along · §11–§12 belong to the Accounts/Aesthete design session already named — this document is that session's first half. <strong>Rulings queued for the log:</strong> D14 (Sheets &amp; Rooms) · gates-are-decisions · the folio's not-a-margin-kind placement · conflicts-as-need-lines · no-chat-zone. Flight telemetry still gets the final vote on build order — but nothing on this page is undefined anymore.</p>
+</footer>
+
+</div>
+</body>
+</html>

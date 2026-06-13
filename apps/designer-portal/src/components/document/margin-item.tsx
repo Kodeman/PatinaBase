@@ -13,6 +13,7 @@ import {
   marginAccent,
   type MarginItemRow,
 } from '@/lib/document/margin-derivation';
+import { MItemContent } from './m-item';
 
 export function MarginItem({
   row,
@@ -52,20 +53,13 @@ export function MarginItem({
         disabled={!expandable}
         className="block w-full px-3 py-2.5 text-left"
       >
-        <span
-          className="mb-0.5 block font-mono text-[8px] font-semibold uppercase tracking-[0.06em]"
-          style={{ color: accent.label }}
-        >
-          {deriveKindLine(row)}
-        </span>
-        <span className="block text-[11.5px] font-medium leading-snug text-[var(--color-charcoal)]">
-          {row.title}
-        </span>
-        {row.detail && (
-          <span className="mt-0.5 block text-[10.5px] leading-relaxed text-[var(--text-muted)]">
-            {row.detail}
-          </span>
-        )}
+        <MItemContent
+          kindLine={deriveKindLine(row)}
+          kindColor={accent.label}
+          title={row.title}
+          detail={row.detail}
+          tone="paper"
+        />
       </button>
       {expandable && open && <div className="px-3 pb-3">{children}</div>}
     </div>

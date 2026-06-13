@@ -21,6 +21,14 @@ import {
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay } from '@/lib/document/format';
 import { useToggleSectionTask } from '@/hooks/use-section-work';
+import { Stamp } from './stamp';
+
+// The gate's Golden-Hour stamp (HTML §1 .stamp.st-gh) — a gate IS a decision,
+// and the section's closing line wears the stamp the client will grant.
+const GATE_STAMP = { label: 'Gate', color: 'var(--color-golden-hour)', ink: '#B89A2E' } as const;
+// The .gate row treatment: a faint golden wash over a golden top rule.
+const GATE_ROW =
+  'flex items-center gap-2.5 border-t border-[rgba(207,174,52,0.35)] bg-[rgba(232,197,71,0.06)] px-3 py-2';
 
 const todayYmd = () => new Date().toISOString().slice(0, 10);
 
@@ -75,7 +83,8 @@ export function WorkBlock({
   );
 
   const estTotal = sectionTasks.reduce((s, t) => s + (t.estimate_minutes ?? 0), 0);
-  const openCount = sectionTasks.filter((t) => t.status !== 'done').length;
+  const total = sectionTasks.length;
+  const doneCount = sectionTasks.filter((t) => t.status === 'done').length;
 
   const save = () => {
     const trimmed = title.trim();
@@ -113,7 +122,7 @@ export function WorkBlock({
             onClick={() => setGateAsking(true)}
             className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
           >
-            Request approval
+            Request sign-off
           </button>
         )}
       </div>
@@ -121,10 +130,10 @@ export function WorkBlock({
   }
 
   return (
-    <div className="mb-2 mt-4">
-      <div className="mb-1 flex items-baseline justify-between">
-        <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-          The work{openCount > 0 ? ` · ${openCount} open` : ''}
+    <div className="mb-2 mt-4 rounded-[6px] border border-[var(--color-pearl)] bg-[rgba(252,250,246,0.7)]">
+      <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-3 py-1.5">
+        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+          The work{total > 0 ? ` · ${doneCount} of ${total}` : ''}
         </span>
         {estTotal > 0 && (
           <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
@@ -133,7 +142,7 @@ export function WorkBlock({
         )}
       </div>
 
-      <ul>
+      <ul className="px-1.5">
         {sectionTasks.map((t) => {
           const done = t.status === 'done';
           const overdue = !done && t.due_date && t.due_date <= todayYmd();
@@ -144,14 +153,19 @@ export function WorkBlock({
                 onClick={() => toggleTask.mutate(t)}
                 className="grid w-full grid-cols-[auto_1fr_auto] items-baseline gap-2.5 px-1 py-1.5 text-left hover:bg-[rgba(196,165,123,0.04)]"
               >
+                {/* The tick is a stamp, not a SaaS checkbox: sage-wash fill
+                    + a sage ✓ when done (HTML §1 .tick.done). */}
                 <span
                   aria-hidden
-                  className="relative top-px inline-block h-[11px] w-[11px] border"
+                  className="relative top-px inline-flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.5px] text-[8px] font-bold leading-none"
                   style={{
                     borderColor: done ? 'var(--color-sage)' : 'var(--doc-ink-border)',
-                    background: done ? 'var(--color-sage)' : 'transparent',
+                    background: done ? 'rgba(168,181,160,0.15)' : 'transparent',
+                    color: 'var(--color-sage)',
                   }}
-                />
+                >
+                  {done ? '✓' : ''}
+                </span>
                 <span
                   className={`text-[12px] leading-snug ${
                     done ? 'text-[var(--text-muted)]' : 'text-[var(--color-charcoal)]'
@@ -239,17 +253,19 @@ export function WorkBlock({
               onClick={() => setGateAsking(true)}
               className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
             >
-              Request approval
+              Request sign-off
             </button>
           )}
         </div>
       )}
 
-      {/* The gate line (R23): an approval gate IS a client decision. */}
+      {/* The gate line (R23): an approval gate IS a client decision — the
+          section's closing line, wearing the Gate stamp the client grants. */}
       {gateAsking && !gate && (
-        <div className="flex items-center gap-3 border-t border-[var(--color-pearl)] px-1 py-2">
-          <span className="text-[11px] italic text-[var(--text-muted)]">
-            Ask {clientName} to approve {sectionLabel} — their approval settles the section.
+        <div className={GATE_ROW}>
+          <Stamp label={GATE_STAMP.label} color={GATE_STAMP.color} ink={GATE_STAMP.ink} />
+          <span className="text-[11px] text-[var(--color-charcoal)]">
+            Ask <strong className="font-medium">{clientName}</strong> to sign off on {sectionLabel} — settles this section when they approve.
           </span>
           <input
             type="date"
@@ -271,9 +287,9 @@ export function WorkBlock({
               });
               setGateAsking(false);
             }}
-            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
+            className="ml-auto font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
           >
-            Request
+            Request sign-off
           </button>
           <button
             type="button"
@@ -286,21 +302,22 @@ export function WorkBlock({
       )}
 
       {gate && (
-        <div className="border-t border-[var(--color-pearl)] px-1 py-2">
+        <div className={GATE_ROW}>
+          <Stamp label={GATE_STAMP.label} color={GATE_STAMP.color} ink={GATE_STAMP.ink} />
           {gateState(gate) === 'requested' && (
-            <p className="text-[11px] italic text-[var(--text-muted)]">
-              Approval requested · awaiting {clientName}
+            <span className="text-[11px] italic text-[var(--text-muted)]">
+              {sectionLabel} sign-off requested · awaiting {clientName}
               {gate.due_date ? ` · due ${fmtDay(gate.due_date)}` : ''}
-            </p>
+            </span>
           )}
           {gateState(gate) === 'declined' && (
-            <div className="flex items-baseline gap-3">
-              <p className="text-[11px] italic" style={{ color: '#C4836F' }}>
+            <>
+              <span className="text-[11px] italic" style={{ color: '#C4836F' }}>
                 Changes requested
                 {gate.options.find((o) => o.selected)?.client_note
                   ? ` — “${gate.options.find((o) => o.selected)?.client_note}”`
                   : ''}
-              </p>
+              </span>
               {clientUserId && (
                 <button
                   type="button"
@@ -314,18 +331,18 @@ export function WorkBlock({
                       dueDate: plusDaysYmd(7),
                     });
                   }}
-                  className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
+                  className="ml-auto font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] disabled:opacity-40"
                 >
                   Request again
                 </button>
               )}
-            </div>
+            </>
           )}
           {gateState(gate) === 'approved' && (
-            <p className="text-[11px] italic text-[var(--text-muted)]">
-              Approved by {clientName}
+            <span className="text-[11px] italic text-[var(--text-muted)]">
+              {sectionLabel} approved by {clientName}
               {gate.responded_at ? ` · ${fmtDay(gate.responded_at)}` : ''}
-            </p>
+            </span>
           )}
         </div>
       )}

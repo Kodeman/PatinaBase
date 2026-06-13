@@ -75,10 +75,11 @@ console.log('✓ R28: the book opens on the Ledger with four DM-mono page links'
 // ── C · The Week — grid + the conflict line ──
 await gotoPage('The Week');
 await page.waitForSelector('th:has-text("Project")', { timeout: 15_000 });
-await page.waitForSelector('text=/Conflicts ·/', { timeout: 15_000 });
-await page.waitForSelector('text=/installs collide — week of/i', { timeout: 10_000 });
+// The legend (not a conflict list) + the ⚠ collides pill on the colliding cell.
+await page.waitForSelector('text=/also on your Desk/', { timeout: 15_000 });
+await page.waitForSelector('text=/⚠ collides/', { timeout: 10_000 });
 await page.screenshot({ path: `${OUT}orders-book-week.png` });
-console.log('✓ R28: The Week grid (weeks across, projects down) + the live collision line');
+console.log('✓ R28: The Week grid — wk-ev pills, ⚠ collides annotation, legend');
 
 // ── D · Receiving — front-matter stats + the warehouse queue ──
 await gotoPage('Receiving');
@@ -89,19 +90,25 @@ await page.waitForSelector('text=/30-day pass|Awaiting log|Claims/', { timeout: 
 await page.screenshot({ path: `${OUT}orders-book-receiving.png` });
 console.log('✓ R28: Receiving — front-matter stat line + warehouse-day queue (Inspect mounts I17)');
 
-// ── E · Vendors — the directory, then the pane (terms · open POs · thread) ──
+// ── E · Vendors — the directory, then the vendor pane (bookbar pages) ──
 await gotoPage('Vendors');
 await page.waitForSelector('button:has-text("Verellen")', { timeout: 15_000 });
 await page.click('button:has-text("Verellen")');
-await page.waitForSelector('text=/Open orders ·/', { timeout: 15_000 });
-await page.waitForSelector('text=/The thread/', { timeout: 10_000 });
-// the vendor's reply is in the pane (R28: a vendor reply threads in)
-await page.waitForSelector('text=/send the acknowledgment|Confirmed — 8 weeks/i', {
-  timeout: 10_000,
-});
+// The bookbar: vendor name · vendor + Terms/Thread/Orders page links.
+await page.waitForSelector('text=/· vendor/', { timeout: 15_000 });
+await page.waitForSelector('button:has-text("Thread")', { timeout: 10_000 });
+// Default Thread page: the vendor's reply threads in (R28) + the PO deep-link.
+await page.waitForSelector('text=/Confirmed — 8 weeks/i', { timeout: 10_000 });
+await page.waitForSelector('text=/re: .* →/', { timeout: 10_000 });
 await page.waitForSelector('text=/Brief vendor/', { timeout: 10_000 });
 await page.screenshot({ path: `${OUT}orders-book-vendors.png` });
-console.log('✓ R28: the vendor pane — terms, open POs, the thread (vendor reply present), + Brief vendor');
+console.log('✓ R28: the vendor pane — bookbar pages, the thread (vendor reply + PO deep-link), + Brief vendor');
+
+// ── E2 · the Orders sub-page of the vendor pane ──
+await page.click('button:has-text("Orders ·")');
+await page.waitForSelector('text=/open document →/', { timeout: 10_000 });
+await page.screenshot({ path: `${OUT}orders-book-vendor-orders.png` });
+console.log('✓ R28: the vendor pane Orders page — open POs deep-linking into documents');
 
 // ── F · mobile inherits via the DocSheet path ──
 await page.setViewportSize({ width: 390, height: 844 });
