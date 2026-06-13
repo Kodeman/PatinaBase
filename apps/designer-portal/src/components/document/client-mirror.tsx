@@ -28,7 +28,7 @@ export function useClientMirrorData(projectId: string) {
       const supabase = getSupabase();
       const [{ data: project }, { data: decisions }, { data: files }, { data: milestones }, { data: thread }] =
         await Promise.all([
-          supabase.from('projects').select('name, status').eq('id', projectId).single(),
+          supabase.from('projects').select('name, status, client_id').eq('id', projectId).single(),
           supabase
             .from('client_decisions')
             .select('id, title, context, due_date, status, decision_kind, responded_at, options:client_decision_options!client_decision_options_decision_id_fkey(id, name, selected)')
@@ -59,7 +59,20 @@ export function useClientMirrorData(projectId: string) {
         .filter((m) => !m.deleted_at)
         .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
         .slice(0, 8);
-      return { project, decisions: decisions ?? [], files: files ?? [], milestones: milestones ?? [], messages };
+      // R33 F2 — split attribution: the mirror must never group the client's
+      // own words under "From the studio."
+      const clientId = (project as AnyRow)?.client_id ?? null;
+      const studioMessages = messages.filter((m) => m.sender_id !== clientId);
+      const clientMessages = messages.filter((m) => m.sender_id === clientId && m.sender_id != null);
+      return {
+        project,
+        decisions: decisions ?? [],
+        files: files ?? [],
+        milestones: milestones ?? [],
+        messages,
+        studioMessages,
+        clientMessages,
+      };
     },
   });
 }
@@ -169,18 +182,37 @@ export function ClientMirror({
               </section>
             )}
 
-            {data.messages.length > 0 && (
+            {data.studioMessages.length > 0 && (
               <section className="mb-6">
                 <h2 className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
                   From the studio
                 </h2>
-                {(data.messages as AnyRow[]).map((m) => (
+                {(data.studioMessages as AnyRow[]).map((m) => (
                   <div key={m.id} className="border-b border-dashed border-[var(--color-pearl)] py-2">
                     <p className="whitespace-pre-wrap text-[11.5px] leading-relaxed text-[var(--color-charcoal)]">
                       {m.body}
                     </p>
                     <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
                       {fmtDay(m.created_at)}
+                    </p>
+                  </div>
+                ))}
+              </section>
+            )}
+
+            {/* R33 F2 — the client's own words render as their own. */}
+            {data.clientMessages.length > 0 && (
+              <section className="mb-6">
+                <h2 className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                  You asked
+                </h2>
+                {(data.clientMessages as AnyRow[]).map((m) => (
+                  <div key={m.id} className="border-b border-dashed border-[var(--color-pearl)] py-2">
+                    <p className="whitespace-pre-wrap text-[11.5px] leading-relaxed text-[var(--color-charcoal)]">
+                      {m.body}
+                    </p>
+                    <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      You · {fmtDay(m.created_at)}
                     </p>
                   </div>
                 ))}

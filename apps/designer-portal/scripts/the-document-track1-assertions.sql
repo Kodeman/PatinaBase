@@ -124,3 +124,72 @@ begin
   if v_assigned < 2 then raise exception 'ASSERT 5 FAILED: no lines assigned to rooms'; end if;
   raise notice 'ASSERT 5 OK: % rooms · % lines assigned (headings + variance read the same rows)', v_rooms, v_assigned;
 end $$;
+
+-- ── 6 · R33 F3: one mirror post per pulse — never the same Pulse ×2 ──────────
+-- Two teeth: (a) every sent pulse's mirror message exists, exactly once;
+-- (b) no project thread carries duplicate studio-authored mirror bodies
+--     (the orphaned-reset artifact the Track 1 review caught).
+do $$
+declare
+  v_broken int;
+  v_dupes  int;
+begin
+  select count(*) into v_broken
+  from weekly_pulses wp
+  where wp.status = 'sent'
+    and (wp.sent_message_id is null
+         or not exists (select 1 from comms_messages m
+                        where m.id = wp.sent_message_id and m.deleted_at is null));
+  if v_broken > 0 then
+    raise exception 'ASSERT 6 FAILED: % sent pulse(s) without exactly one live mirror message', v_broken;
+  end if;
+
+  select count(*) into v_dupes
+  from (
+    select m.thread_id, m.body
+    from comms_messages m
+    join comms_threads t on t.id = m.thread_id and t.kind = 'project'
+    where m.deleted_at is null and m.system is not true
+    group by m.thread_id, m.body
+    having count(*) > 1
+  ) d;
+  if v_dupes > 0 then
+    raise exception 'ASSERT 6 FAILED: % duplicate message body group(s) in project threads (orphaned pulse mirror?)', v_dupes;
+  end if;
+  raise notice 'ASSERT 6 OK: one mirror post per pulse; no duplicate mirrors in project threads';
+end $$;
+
+-- ── 7 · R33 F1: a studio-authored latest post never derives unread ──────────
+do $$
+declare v_bad int;
+begin
+  select count(*) into v_bad
+  from margin_items
+  where kind = 'message'
+    and (payload->>'own_voice')::boolean is true
+    and state = 'unread';
+  if v_bad > 0 then
+    raise exception 'ASSERT 7 FAILED: % own-voice message item(s) derive unread', v_bad;
+  end if;
+  raise notice 'ASSERT 7 OK: own-voice threads never derive unread (00206)';
+end $$;
+
+-- ── 8 · R33 sanity line: the two AP-012 desk folders are two DISTINCT claims ─
+-- §14.13 stays closed: seed coincidence (two POs both numbered AP-012 on two
+-- different engagements), not one claim crossing engagements.
+do $$
+declare
+  v_claims   int;
+  v_projects int;
+begin
+  select count(distinct dc.id), count(distinct po.project_id)
+    into v_claims, v_projects
+  from damage_claims dc
+  join receiving_inspections ri on ri.id = dc.receiving_inspection_id
+  join purchase_orders po on po.id = ri.purchase_order_id
+  where po.vendor_po_number = 'AP-012';
+  if v_claims >= 2 and v_claims <> v_projects then
+    raise exception 'ASSERT 8 FAILED: AP-012 claims (%) do not map 1:1 to engagements (%)', v_claims, v_projects;
+  end if;
+  raise notice 'ASSERT 8 OK: AP-012 → % distinct claim(s) on % distinct engagement(s) — two folders, two claims, seed coincidence', v_claims, v_projects;
+end $$;

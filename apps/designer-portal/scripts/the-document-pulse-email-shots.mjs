@@ -29,7 +29,13 @@ const psql = (sql) =>
 
 const projectId = psql(`select project_id from proposals where id='${WHITFIELD_PROPOSAL}';`);
 // Reset this week's pulse to draft so it can be sent (idempotent re-runs).
-psql(`update weekly_pulses set status='draft', sent_at=null, sent_message_id=null
+// R33 F3: the reset must also retire the previously posted mirror message —
+// an orphaned mirror re-sent on the next run is the "same Pulse ×2" bug.
+psql(`delete from comms_messages where id in (
+        select sent_message_id from weekly_pulses
+        where project_id='${projectId}' and week_of = date_trunc('week', now())::date
+          and sent_message_id is not null);
+      update weekly_pulses set status='draft', sent_at=null, sent_message_id=null
       where project_id='${projectId}' and week_of = date_trunc('week', now())::date;`);
 const mirrorsBefore = psql(
   `select count(*) from comms_messages m join comms_threads t on t.id=m.thread_id

@@ -47,7 +47,9 @@ BEGIN
     ('00000000-0000-0000-0000-000000000000', uid_designer, 'authenticated', 'authenticated',
      'designer@patina.dev', pw_hash, ts,
      '{"provider":"email","providers":["email"]}'::jsonb,
-     '{"full_name":"Designer User"}'::jsonb,
+     -- R33 F6: senders render display names — the seed gets a real one,
+     -- never a role noun.
+     '{"full_name":"Leah Hartwell"}'::jsonb,
      ts, ts, '', '', '', ''),
     ('00000000-0000-0000-0000-000000000000', uid_client, 'authenticated', 'authenticated',
      'client@patina.dev', pw_hash, ts,
@@ -108,7 +110,7 @@ BEGIN
     (uid_superadmin, 'superadmin@patina.dev', 'Super Admin', 'Super Admin', 'admin', ts, ts),
     (uid_admin, 'admin@patina.dev', 'Admin User', 'Admin User', 'admin', ts, ts),
     (uid_studio_mgr, 'studio_manager@patina.dev', 'Studio Manager', 'Studio Manager', 'designer', ts, ts),
-    (uid_designer, 'designer@patina.dev', 'Designer User', 'Designer User', 'designer', ts, ts),
+    (uid_designer, 'designer@patina.dev', 'Leah Hartwell', 'Leah Hartwell', 'designer', ts, ts),
     (uid_client, 'client@patina.dev', 'Client User', 'Client User', 'homeowner', ts, ts),
     (uid_manufacturer, 'manufacturer@patina.dev', 'Manufacturer User', 'Manufacturer User', 'designer', ts, ts),
     (uid_support, 'support@patina.dev', 'Support Agent', 'Support Agent', 'admin', ts, ts)

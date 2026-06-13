@@ -52,6 +52,19 @@ describe('the client mirror (R26/R27 contract)', () => {
   });
 });
 
+describe('mirror attribution (R33 F2)', () => {
+  it('splits studio-authored from client-authored — the client never sits under "From the studio"', () => {
+    // The split must key on the project's client_id vs sender_id…
+    expect(mirrorSource).toMatch(/m\.sender_id !== clientId/);
+    expect(mirrorSource).toMatch(/m\.sender_id === clientId/);
+    // …and the client's own words render as their own.
+    expect(mirrorSource).toContain('You asked');
+    // The studio section renders ONLY the studio split, never the raw list.
+    expect(mirrorSource).toMatch(/data\.studioMessages[\s\S]*From the studio/);
+    expect(mirrorSource).not.toMatch(/data\.messages\s+as\s+AnyRow\[\]\)\.map/);
+  });
+});
+
 describe('the account band stays out of every mirror-side import', () => {
   it('client-mirror does not import the band, the band does not import the mirror', () => {
     const bandSource = readFileSync(join(COMPONENTS, 'account-band.tsx'), 'utf8');
