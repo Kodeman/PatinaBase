@@ -1376,4 +1376,59 @@ the shared DocSheet (the open-ledger event mounts the same book).
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I26 · R1–R34 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I26*
+### I27 · Design-authority audit + grammar polish; I24 CLOSED — 2026-06-13
+
+The two artifacts logged absent in **I24** arrived and are now committed:
+`patina-dissolve-eleven-surfaces-v1.html` (the look/feel authority) +
+`the-document-parity-map.md`. **I24 is closed.** Track 1 (R23–R27/R29) and
+Track 2 (R28) were both built against the rulings text alone, without these
+mocks — so a 12-agent adversarial audit compared the shipped code against
+the authority.
+
+**Verdict: logic-correct, right C-gaps closed, visual grammar systematically
+under-built.** Of 11 surfaces: 3 full parity, 6 partial, 2 divergent — zero
+wrong on logic. The parity map confirms Track 2 closed C-7/C-8/C-9 and Track 1
+closed C-2..C-6/C-11; no C-cluster mis-targeted. The recurring miss was
+load-bearing grammar classes (`.mitem`, `.wk-ev` pills, the `.gate` stamp,
+`.minirule`, `.mono-link` palette) skipped or approximated with one-off
+Tailwind — the data true, the paper not yet looking like the paper.
+
+**Polished (high-leverage subset, this PR):** shared primitives `MItem`/
+`MItemContent` (the margin rail AND the vendor thread now render through one
+grammar — anti-drift, I21; §6 had drifted to flat `<li>`s) + `StrataMiniRule`.
+**§6 Vendor pane** → a bookbar (Terms · Thread · Orders · N, DM-mono links
+never tabs), messages as `.mitem` with the studio's own posts reading "You"
+in clay (ownVoice) over the vendor's dusty-blue, and a PO-anchored "re:
+{project} →" deep-link into the document. **§7 The Week** → `.wk-ev` pill
+chips with "✓ recvd" / "⚠ collides" annotations (only true cross-project
+install collisions wear the word — overlaps get the cell border, no word) +
+the legend. **§1 The Work** → the Golden-Hour "Gate" stamp on the gate row +
+"Request sign-off" + the `.work` container + a sage ✓-glyph tick + head
+"N of M". **§3 Rooms** → the Strata mini-rule under each heading. New
+source-contracts hold the anti-drift + pill + gate-stamp + mini-rule grammar
+(`dissolve-grammar-contract.test.ts`). 48 jest suites / 442 tests green;
+screenshots re-captured. **No migration** — presentation-only.
+
+**Correctly superseded — the v1 HTML is the OLD version, code is right (NO
+action):** §3 room vocabulary "placed" → "underway" (R33 F5 retired "placed");
+§7 conflict-count word generalization + `<table>` vs CSS-grid (a11y) + concise
+chip dates; §4 band placement; §2 viewer/D12. Flag the HTML stale at the next
+spec cut.
+
+**Deferred (gap inventory, a later polish session):** §8 Receiving
+product-name-first queue rows + ARRIVING in-flight rows (needs an ffe-items
+query join) · §2 folio `.f-kind`/`.f-meta` card anatomy · §5 instrument
+three-color palette + scan-date suffix · §9 colophon `.cdot` separators +
+clay-default actions · the `MonoLink` color-variant util · the broader RLS
+spot-checks (§14.6 widening, folio storage-objects policy) + the full-surface
+mobile walk. **Week-count:** The Week shows 8 weeks (not the mock's 5) —
+deliberate visibility choice, logged here rather than diverged silently.
+
+**Track 3 — NOT gaps, unbuilt by design:** §10 Via Patina (R30), §11 The
+Engine (R31), §12 The Library Room + D14 Rooms physics (R32) — return with the
+Accounts/Aesthete design session. Any future audit must scope these as
+not-yet-built, never regressions.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I27 · R1–R34 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I27*
