@@ -96,7 +96,8 @@ export function CommandBar() {
       kind: 'ledger' as const,
       ledger: l,
       label: l,
-      sub: 'ledger',
+      // D14: the Library is a Room you walk into, not a sheet you pull.
+      sub: l === 'Library' ? 'room ↗' : 'ledger',
     }));
     const actions: Row[] = [
       { kind: 'action' as const, label: 'The Desk', sub: 'go home', run: () => router.push('/desk') },
