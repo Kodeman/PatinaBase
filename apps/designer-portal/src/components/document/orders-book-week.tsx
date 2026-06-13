@@ -43,6 +43,16 @@ const fmtShort = (isoDate: string) =>
   });
 const dayOfMonth = (isoDate: string) => String(Number(isoDate.slice(8, 10)));
 
+// The .wk-ev pill recipe (HTML §7): 2.5px left border + tinted bg + radius.
+// Three tones — clay (expected), sage (received), terracotta (conflict).
+const WK_EV_BASE =
+  'mb-px inline-block rounded-[3px] border-l-[2.5px] px-1.5 py-px text-[9px] leading-tight text-[var(--color-off-white)]';
+const WK_EV_TONE = {
+  clay: 'border-l-[var(--color-clay)] bg-[rgba(196,165,123,0.10)]',
+  sage: 'border-l-[var(--color-sage)] bg-[rgba(168,181,160,0.12)]',
+  terracotta: 'border-l-[var(--color-terracotta)] bg-[rgba(212,160,144,0.12)]',
+} as const;
+
 function useWeekEvents() {
   return useQuery({
     queryKey: ['orders-book', 'week-events'],
@@ -63,7 +73,8 @@ function useWeekEvents() {
 export function WeekBookPage() {
   const { data: events, isLoading } = useWeekEvents();
 
-  const { weeks, projects, cells, conflictWeeksByProject, conflictLines } = useMemo(() => {
+  const { weeks, projects, cells, collisionWeeksByProject, conflictWeeksByProject, hasConflicts } =
+    useMemo(() => {
     const start = mondayOf(new Date());
     const weeks: string[] = Array.from({ length: WEEKS_ACROSS }, (_, i) =>
       iso(new Date(start.getTime() + i * 7 * DAY_MS)),
@@ -90,13 +101,17 @@ export function WeekBookPage() {
       cells.set(key, list);
     }
 
-    // Conflict marking: collisions (cross-project weeks) + per-project pairs.
+    // Conflict marking. Two distinct sets so only TRUE install collisions
+    // wear "⚠ collides" (M2): collisionWeeks = cross-project install collisions
+    // (an install can't be in two homes); conflictWeeks = the wider set
+    // (overlap/late/drift) that earns the terracotta cell border but no word.
     const collisions = detectInstallCollisions(events ?? []);
     const conflicts = detectDeliveryConflicts(events ?? []);
-    const conflictWeeksByProject = new Set<string>();
+    const collisionWeeksByProject = new Set<string>();
     for (const col of collisions) {
-      for (const pid of col.projectIds) conflictWeeksByProject.add(`${pid}|${col.weekOf}`);
+      for (const pid of col.projectIds) collisionWeeksByProject.add(`${pid}|${col.weekOf}`);
     }
+    const conflictWeeksByProject = new Set<string>(collisionWeeksByProject);
     for (const c of conflicts) {
       for (const e of [c.eventA, c.eventB]) {
         if (!e.event_date) continue;
@@ -105,12 +120,9 @@ export function WeekBookPage() {
       }
     }
 
-    const conflictLines = [
-      ...collisions.map((c) => c.message),
-      ...conflicts.map((c) => c.message),
-    ];
+    const hasConflicts = collisions.length + conflicts.length > 0;
 
-    return { weeks, projects, cells, conflictWeeksByProject, conflictLines };
+    return { weeks, projects, cells, collisionWeeksByProject, conflictWeeksByProject, hasConflicts };
   }, [events]);
 
   if (isLoading) {
@@ -159,6 +171,7 @@ export function WeekBookPage() {
                 {weeks.map((w) => {
                   const key = `${p.id}|${w}`;
                   const cellEvents = cells.get(key) ?? [];
+                  const collides = collisionWeeksByProject.has(key);
                   const conflicted = conflictWeeksByProject.has(key);
                   return (
                     <td
@@ -167,28 +180,27 @@ export function WeekBookPage() {
                         conflicted ? 'border-l-2 border-l-[var(--color-terracotta)]' : ''
                       }`}
                     >
-                      {cellEvents.map((e) => (
-                        <p
-                          key={e.event_id}
-                          className="whitespace-nowrap font-mono text-[8.5px] uppercase tracking-[0.04em]"
-                          style={{
-                            color:
-                              e.event_type === 'install_milestone'
-                                ? conflicted
-                                  ? 'var(--color-terracotta)'
-                                  : 'var(--color-off-white)'
-                                : received(e)
-                                  ? 'var(--color-sage)'
-                                  : 'rgba(250,247,242,0.55)',
-                          }}
-                        >
-                          {e.event_type === 'install_milestone'
-                            ? `install ·${dayOfMonth(e.event_date!)}`
-                            : `${received(e) ? '✓' : '▴'} ${(e.vendor_name ?? 'delivery')
-                                .split(' ')[0]
-                                .toLowerCase()} ·${dayOfMonth(e.event_date!)}`}
-                        </p>
-                      ))}
+                      {cellEvents.map((e) => {
+                        const isInstall = e.event_type === 'install_milestone';
+                        // Only a true cross-project install collision wears
+                        // the word "⚠ collides" (M2); a delivery overlap gets
+                        // the cell border but no annotation.
+                        const tone = isInstall
+                          ? collides
+                            ? 'terracotta'
+                            : 'clay'
+                          : received(e)
+                            ? 'sage'
+                            : 'clay';
+                        const label = isInstall
+                          ? `Install ·${dayOfMonth(e.event_date!)}${collides ? ' ⚠ collides' : ''}`
+                          : `${e.vendor_name ?? 'Delivery'} ·${dayOfMonth(e.event_date!)}${received(e) ? ' ✓ recvd' : ''}`;
+                        return (
+                          <span key={e.event_id} className={`${WK_EV_BASE} ${WK_EV_TONE[tone]}`}>
+                            {label}
+                          </span>
+                        );
+                      })}
                     </td>
                   );
                 })}
@@ -198,19 +210,17 @@ export function WeekBookPage() {
         </table>
       </div>
 
-      {/* The conflict lines — same classifier the Desk promotes (R28). */}
-      {conflictLines.length > 0 && (
-        <div className="mt-3 border-t border-[rgba(250,247,242,0.12)] pt-2">
-          <p className="mb-1 font-mono text-[8px] font-semibold uppercase tracking-[0.08em] text-[var(--color-terracotta)]">
-            Conflicts · {conflictLines.length}
-          </p>
-          {conflictLines.map((line, i) => (
-            <p key={i} className="py-0.5 text-[11px] leading-relaxed text-[rgba(250,247,242,0.7)]">
-              {line}
-            </p>
-          ))}
-        </div>
-      )}
+      {/* The legend (HTML §7). The actionable conflicts rise on the Desk as
+          need lines (R28) — the page marks them; the Desk carries the act. */}
+      <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.4)]">
+        Expected · <span className="text-[var(--color-sage)]">received</span>
+        {hasConflicts && (
+          <>
+            {' · '}
+            <span className="text-[var(--color-terracotta)]">conflict — also on your Desk</span>
+          </>
+        )}
+      </p>
     </div>
   );
 }
