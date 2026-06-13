@@ -24,7 +24,8 @@ for f in 00191_document_state_view 00192_document_state_open_claims \
          00203_folio_file_anchors \
          00204_account_milestones_and_settlement \
          00205_margin_notes_studio_rls \
-         00206_margin_own_voice_and_milestone_cron; do
+         00206_margin_own_voice_and_milestone_cron \
+         00207_vendor_pane_links; do
   echo "── applying $f"
   "${PSQL[@]}" < "supabase/migrations/$f.sql"
 done
@@ -32,6 +33,7 @@ done
 echo "── seeding demo engagements"
 "${PSQL[@]}" < apps/designer-portal/scripts/the-document-local-seed.sql
 "${PSQL[@]}" < apps/designer-portal/scripts/the-document-track1-seed.sql
+"${PSQL[@]}" < apps/designer-portal/scripts/the-document-track2-seed.sql
 
 echo "── reloading PostgREST schema cache"
 "${PSQL[@]}" -c "notify pgrst, 'reload schema';"

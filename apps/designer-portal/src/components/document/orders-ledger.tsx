@@ -1,12 +1,15 @@
 'use client';
 
 /**
- * The Orders ledger v2 (D8/R5/R18, spec v1.3 §8): cross-engagement
- * procurement as a book pulled over whatever the designer is holding.
- * Vendor-grouped PO rows narrating the send lifecycle, send/resend through
- * the shared preview-confirm (the PDF IS the confirm — R18), the
- * unscheduled-shipment condition as a quiet row mark (never a banner), the
- * R5 vendor pane, and the "same truck" batch — a shared ETA written
+ * The Orders book (D8/R5/R18/R28, spec v1.3 §8): cross-engagement
+ * procurement as a book pulled over whatever the designer is holding. R28
+ * grows it pages — LEDGER · THE WEEK · RECEIVING · VENDORS — linked by
+ * DM-mono text, never tabs.
+ *
+ * LEDGER (this file's body): vendor-grouped PO rows narrating the send
+ * lifecycle, send/resend through the shared preview-confirm (the PDF IS the
+ * confirm — R18), the unscheduled-shipment condition as a quiet row mark
+ * (never a banner), and the "same truck" batch — a shared ETA written
  * through the ETA-only path; history says "ETA aligned," never an
  * acknowledgment claim (R16: a batch ETA is not a vendor act).
  */
@@ -21,6 +24,19 @@ import { PoPreview } from './po-preview';
 import { LedgerFrontMatter } from './ledger-front-matter';
 import { ordersThroughput } from '@/lib/document/ledger-summary';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
+import { VendorsBookPage } from './orders-book-vendors';
+import { WeekBookPage } from './orders-book-week';
+import { ReceivingBookPage } from './orders-book-receiving';
+import type { OpenLedgerContext } from './command-bar';
+
+type BookPage = 'ledger' | 'week' | 'receiving' | 'vendors';
+
+const PAGES: { key: BookPage; label: string }[] = [
+  { key: 'ledger', label: 'Ledger' },
+  { key: 'week', label: 'The Week' },
+  { key: 'receiving', label: 'Receiving' },
+  { key: 'vendors', label: 'Vendors' },
+];
 
 interface POForThroughput {
   status: string;
@@ -41,7 +57,13 @@ const PO_STAMP: Record<string, { color: string; ink?: string }> = {
   cancelled: { color: 'var(--color-terracotta)' },
 };
 
-export function OrdersLedger({ onClose }: { onClose: () => void }) {
+export function OrdersLedger({
+  onClose,
+  initialContext,
+}: {
+  onClose: () => void;
+  initialContext?: OpenLedgerContext | null;
+}) {
   const router = useRouter();
   const qc = useQueryClient();
   const { data: orders, isLoading } = usePurchaseOrders() as {
@@ -56,7 +78,9 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
   const vendors = vendorsPage?.data;
 
   const updateEta = useUpdatePurchaseOrderETA();
-  const [showVendors, setShowVendors] = useState(false);
+  // R28: the book's pages, linked by DM-mono text. Brief-a-vendor (R29)
+  // pre-addresses straight onto Vendors with the document's project.
+  const [page, setPage] = useState<BookPage>(initialContext?.page ?? 'ledger');
   // R18: send / resend through the shared preview-confirm.
   const [previewPo, setPreviewPo] = useState<AnyRecord | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
@@ -123,59 +147,58 @@ export function OrdersLedger({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <div>
-          <h2 className="font-heading text-xl text-[var(--color-pearl)]">
-            Orders <em className="italic text-[var(--color-clay)]">· the studio ledger</em>
-          </h2>
-          <p className="mt-0.5 text-[11px] text-[rgba(250,247,242,0.45)]">
-            A lens over every document — pulled over whatever you&apos;re holding, put back when
-            done.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowVendors((v) => !v)}
-          className="whitespace-nowrap rounded-[3px] border border-[rgba(250,247,242,0.15)] px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.07em] text-[rgba(250,247,242,0.55)] hover:text-[var(--color-clay)]"
-        >
-          {showVendors ? 'Orders' : 'Vendors'}
-        </button>
+      <div className="mb-3">
+        <h2 className="font-heading text-xl text-[var(--color-pearl)]">
+          Orders <em className="italic text-[var(--color-clay)]">· the studio book</em>
+        </h2>
+        <p className="mt-0.5 text-[11px] text-[rgba(250,247,242,0.45)]">
+          A lens over every document — pulled over whatever you&apos;re holding, put back when
+          done.
+        </p>
       </div>
 
-      {/* Front-matter (R5): procurement throughput — the book's opening page. */}
-      {!showVendors && !isLoading && (
-        <LedgerFrontMatter caption="throughput" stats={ordersThroughput((orders ?? []) as POForThroughput[])} />
+      {/* R28: the book's pages — DM-mono links, never tabs. */}
+      <div className="mb-4 flex flex-wrap items-baseline gap-x-4 border-b border-[rgba(250,247,242,0.1)] pb-2">
+        {PAGES.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            onClick={() => setPage(p.key)}
+            aria-current={page === p.key ? 'page' : undefined}
+            className={`font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors ${
+              page === p.key
+                ? 'text-[var(--color-clay)]'
+                : 'text-[rgba(250,247,242,0.45)] hover:text-[rgba(250,247,242,0.8)]'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {page === 'vendors' && (
+        <VendorsBookPage
+          vendors={vendors ?? []}
+          orders={orders ?? []}
+          initialVendorId={initialContext?.vendorId ?? null}
+          briefProjectId={initialContext?.projectId ?? null}
+          onOpenDocument={openDocument}
+        />
       )}
 
-      {showVendors ? (
-        <ul>
-          {(vendors ?? []).map((v) => (
-            <li
-              key={v.id}
-              className="grid grid-cols-[1fr_auto] items-baseline gap-3 border-b border-[rgba(250,247,242,0.08)] px-1 py-2.5"
-            >
-              <div>
-                <p className="text-[13px] font-medium text-[var(--color-off-white)]">{v.name}</p>
-                <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
-                  {[v.default_payment_terms, v.trade_account_email].filter(Boolean).join(' · ') ||
-                    'No terms on file'}
-                </p>
-              </div>
-              {v.trade_portal_url && (
-                <a
-                  href={v.trade_portal_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10.5px] text-[var(--color-clay)] hover:underline"
-                >
-                  trade portal →
-                </a>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : (
+      {page === 'week' && <WeekBookPage />}
+
+      {page === 'receiving' && <ReceivingBookPage onOpenDocument={openDocument} />}
+
+      {page === 'ledger' && (
         <>
+          {/* Front-matter (R5): procurement throughput — the page's opening. */}
+          {!isLoading && (
+            <LedgerFrontMatter
+              caption="throughput"
+              stats={ordersThroughput((orders ?? []) as POForThroughput[])}
+            />
+          )}
           {isLoading && (
             <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">
               Opening the book…

@@ -82,10 +82,19 @@ export type NeedKind =
   | 'new_lead'
   | 'hesitating_proposal'
   | 'awaiting_inspection'
+  | 'schedule_conflict'
   | 'task_due'
   | 'po_unsent'
   | 'po_unacknowledged'
   | 'pulse_due';
+
+/** R28 conflict inputs (built client-side from delivery_events by
+ *  lib/document/desk-conflicts.ts — the Wave 2.1 precedent). Collision tier
+ *  rises as the folder's need line; drift tier rides an in-motion chip. */
+export interface DeskConflictInput {
+  collision: { text: string; label: string; date: string | null } | null;
+  drift: string | null;
+}
 
 export interface NeedLine {
   kind: NeedKind;
@@ -133,10 +142,13 @@ const NEED_RANK: Record<NeedKind, number> = {
   new_lead: 5,
   hesitating_proposal: 6,
   awaiting_inspection: 7,
-  task_due: 8,
-  po_unsent: 9,
-  po_unacknowledged: 10,
-  pulse_due: 11,
+  // R28: a schedule collision slots under awaiting-inspection; R33's blessed
+  // ordering (TASK DUE below awaiting-inspection, above send-weave) holds.
+  schedule_conflict: 8,
+  task_due: 9,
+  po_unsent: 10,
+  po_unacknowledged: 11,
+  pulse_due: 12,
 };
 
 /** Prototype stamp palette (v0.3 is the look authority): borders use brand
@@ -171,7 +183,11 @@ export function folderTab(row: Pick<DocumentStateRow, 'client_name' | 'title'>):
 }
 
 /** The ONE thing this engagement needs from the designer today, or null. */
-export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
+export function deriveNeed(
+  row: DocumentStateRow,
+  now: Date,
+  conflict?: DeskConflictInput | null,
+): NeedLine | null {
   if (row.is_archived || row.is_paused) return null;
 
   if (row.overdue_decision_count > 0) {
@@ -287,6 +303,18 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
     };
   }
 
+  // R28: the calendar's intelligence, promoted — a collision needs her hand
+  // (two installs one week, or a delivery landing after its install). Drift
+  // with no act stays an in-motion chip (deriveMotion).
+  if (conflict?.collision) {
+    return {
+      kind: 'schedule_conflict',
+      text: conflict.collision.text,
+      stamp: { label: conflict.collision.label, ...STAMP.terracotta },
+      urgent: false,
+    };
+  }
+
   // R23: a dued task is the designer's own committed act — it rises (the
   // R22 test passes: the act is doing it). Undated tasks never nag.
   if (row.due_task_count > 0 && row.earliest_task_due) {
@@ -355,7 +383,11 @@ export function deriveNeed(row: DocumentStateRow, now: Date): NeedLine | null {
 }
 
 /** One quiet line for an engagement progressing without the designer. */
-export function deriveMotion(row: DocumentStateRow, now: Date): string | null {
+export function deriveMotion(
+  row: DocumentStateRow,
+  now: Date,
+  conflict?: DeskConflictInput | null,
+): string | null {
   if (row.is_archived) return null;
   if (row.is_paused) return 'Paused';
 
@@ -376,6 +408,9 @@ export function deriveMotion(row: DocumentStateRow, now: Date): string | null {
   }
 
   if (row.engagement_kind === 'relationship') return 'In discovery';
+
+  // R28/R22 drift tier: state carried, never a nag.
+  if (conflict?.drift) return conflict.drift;
 
   if (row.in_flight_count > 0) {
     const n = row.in_flight_count;
@@ -404,22 +439,25 @@ function needSortKey(folder: DeskFolder): [number, number, number] {
   return [need.urgent ? 0 : 1, NEED_RANK[need.kind], date];
 }
 
-/** Split rows into the needs-your-hand stack and the in-motion chips. */
+/** Split rows into the needs-your-hand stack and the in-motion chips.
+ *  `conflicts` (R28) maps project_id → Desk conflict inputs. */
 export function partitionDesk(
   rows: DocumentStateRow[],
   now: Date,
+  conflicts?: ReadonlyMap<string, DeskConflictInput>,
 ): { folders: DeskFolder[]; chips: MotionChip[] } {
   const folders: DeskFolder[] = [];
   const chips: MotionChip[] = [];
 
   for (const row of rows) {
     if (row.is_archived) continue;
-    const need = deriveNeed(row, now);
+    const conflict = row.project_id ? (conflicts?.get(row.project_id) ?? null) : null;
+    const need = deriveNeed(row, now, conflict);
     if (need) {
       folders.push({ row, need });
       continue;
     }
-    const motion = deriveMotion(row, now);
+    const motion = deriveMotion(row, now, conflict);
     if (motion) chips.push({ row, text: motion });
   }
 

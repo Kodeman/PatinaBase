@@ -1324,4 +1324,56 @@ document when it signs). Config stored, drafting manual, as built.
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I25+ · R1–R34 · L1–L3 · THE GO · FLIP CONFIRMED · last id = R34*
+## Implementation decisions — Track 2 (2026-06-12)
+
+### I26 · Track 1 fixes (F1–F6) + Orders book Track 2 (R28) — 2026-06-12
+
+Built on `the-document/track1-fixes` (PR #11) → `the-document/track2-orders-book`
+(stacked). Migrations **00206** (margin own-voice + milestone-date cron) and
+**00207** (vendor pane links). 47 jest suites / 433 tests green; Track 1
+asserts 1–8 + Track 2 asserts 1–4 green; 6 review screenshots in
+`screenshots/track-2/`.
+
+**F1–F6 / R34 (PR #11):** own-voice messages settle (00206 derives `own_voice`
+= latest post not from a client/vendor participant; excluded from unread,
+sunk to the Settled fold) · the mirror splits "From the studio" / "You asked"
+by `client_id` · the pulse-×2 was the shots-script reset orphaning the prior
+mirror (RPC guard sound; scripts now retire the orphan; ASSERT 6 holds it) ·
+MANUAL replaces NO TRIGGER · rooms speak "committed $X of $Y · N of M
+underway" · senders render display names (seed designer = Leah Hartwell;
+00206 falls back to the STUDIO name for nameless studio senders only, never a
+role noun) · on_date milestones now draft via `milestone-date-invoices-daily`
+pg_cron, on_signing stays manual.
+
+**R28 — audit-first findings:**
+- **00207 was a latent bug, not just an addition:** the shipped Orders-ledger
+  vendor directory already rendered `trade_account_email` / `trade_portal_url`
+  but NO migration ever defined them — they read undefined on every row.
+  Defined now (additive, D7), alongside `contact_profile_id` (the missing link
+  between vendor COMPANIES and vendor comms PROFILES).
+- **The conflict classifier already existed** (`delivery-conflicts.ts`, Wave
+  2.1) with overlap/late/drift per-project. R28's cross-project install
+  collision is the one shape it lacked — added `detectInstallCollisions`
+  (two+ DISTINCT projects, same ISO Mon-week; same-project installs never
+  collide — one home, one crew).
+- **The inspection drawer is reused wholesale** — Receiving and the line
+  unfold mount the SAME `LogInspectionDrawer` (one component, two doors;
+  source-contract test holds it), so the two doors write identical rows.
+
+**R28 build:** Orders book grows four DM-mono page links — LEDGER · THE WEEK ·
+RECEIVING · VENDORS (never tabs; source-contract forbids Tabs primitives).
+The Week is weeks-across / projects-down over `delivery_events`; its
+intelligence is **promoted, not just preserved** — `desk-conflicts.ts` maps
+the classifier onto the Desk's two tiers (collision/late → folder need line
+ranked under awaiting-inspection per R33's blessed order; drift/overlap →
+in-motion chip per R22) through `use-desk-engagements` (one 60s cycle reads
+both sources). Receiving carries the I23 front-matter stat line (arriving ·
+awaiting log · claims · 30-day pass) + the warehouse-day queue + the Settled
+fold. Vendors resolves the thread through `contact_profile_id` (vendor_brief
+threads with the company's comms profile); "+ Brief vendor" and the R29
+colophon both pre-address it with the document's project. Mobile inherits via
+the shared DocSheet (the open-ledger event mounts the same book).
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I26 · R1–R34 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I26*

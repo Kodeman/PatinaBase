@@ -24,9 +24,22 @@ type Row =
 
 const LEDGERS = ['Library', 'Orders', 'Accounts', 'People', 'Hours'];
 
+/** R28/R29 pre-addressing: optional context rides the open-ledger event —
+ *  e.g. Brief-a-vendor opens the Orders book onto the Vendors page with the
+ *  project in hand. */
+export interface OpenLedgerContext {
+  page?: 'ledger' | 'week' | 'receiving' | 'vendors';
+  vendorId?: string;
+  projectId?: string;
+}
+
 /** Open a Studio Drawer ledger from anywhere (the drawer listens). */
-export function openLedger(name: string) {
-  window.dispatchEvent(new CustomEvent('document:open-ledger', { detail: name.toLowerCase() }));
+export function openLedger(name: string, context?: OpenLedgerContext) {
+  window.dispatchEvent(
+    new CustomEvent('document:open-ledger', {
+      detail: context ? { name: name.toLowerCase(), context } : name.toLowerCase(),
+    }),
+  );
 }
 
 /** Open the command bar from a click affordance (the Desk's "Find anything"). */
