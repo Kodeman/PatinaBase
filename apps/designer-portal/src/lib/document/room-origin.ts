@@ -47,9 +47,15 @@ export function clearRoomOrigin(): void {
 export function originLabel(origin: string): string {
   if (origin.startsWith('/doc/')) return 'the document';
   if (origin === '/desk' || origin === '') return 'the Desk';
+  if (origin === '/library' || origin.startsWith('/library/')) return 'the Library';
   return 'back';
 }
 
 export function isRoomPath(pathname: string): boolean {
-  return pathname === '/library' || pathname.startsWith('/library/');
+  return (
+    pathname === '/library' ||
+    pathname.startsWith('/library/') ||
+    pathname === '/compose' ||
+    pathname.startsWith('/compose/')
+  );
 }

@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   useLayerCounts,
   useTeachingQueue,
@@ -26,9 +27,17 @@ import { PromoteToStudioModal } from '@/components/products/promotion/promote-to
 import { NominateToCatalogModal } from '@/components/products/nomination/nominate-to-catalog-modal';
 
 export function LibraryRoom() {
+  const router = useRouter();
   const { data: counts } = useLayerCounts();
   const { data: queue } = useTeachingQueue();
   const { data: orgs } = useOrganizations();
+
+  // R40: authoring a new piece walks into the Composing Page (a nested Room);
+  // RoomShell's backTo returns it here. (No rememberRoomOrigin — it no-ops on a
+  // Room path; the stashed origin still holds the surface before the Library.)
+  const enterCompose = () => {
+    router.push('/compose');
+  };
 
   const studioId = useMemo(() => {
     const first = ((orgs ?? []) as unknown as Array<Record<string, unknown>>)[0];
@@ -84,13 +93,22 @@ export function LibraryRoom() {
       title="The Library"
       count={total != null ? `${total} pieces` : undefined}
       action={
-        <button
-          type="button"
-          onClick={() => setCaptureOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-[5px] bg-[var(--color-charcoal)] px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-off-white)] transition-opacity hover:opacity-85"
-        >
-          <span aria-hidden>⊕</span> Capture
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={enterCompose}
+            className="inline-flex items-center gap-1.5 rounded-[5px] border border-[var(--doc-ink-border)] bg-white px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)]"
+          >
+            <span aria-hidden>✎</span> Compose a piece
+          </button>
+          <button
+            type="button"
+            onClick={() => setCaptureOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-[5px] bg-[var(--color-charcoal)] px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-off-white)] transition-opacity hover:opacity-85"
+          >
+            <span aria-hidden>⊕</span> Capture
+          </button>
+        </div>
       }
     >
       <div className="mx-auto max-w-[1240px]">

@@ -35,6 +35,8 @@ export function RoomShell({
   title,
   count,
   action,
+  backTo,
+  backLabel,
   children,
 }: {
   /** The Room's name, shown small + mono in the head (e.g. "The Library"). */
@@ -43,6 +45,13 @@ export function RoomShell({
   count?: string;
   /** The Room's single head action (e.g. the Capture button). */
   action?: React.ReactNode;
+  /** A nested Room (one reached FROM another Room, e.g. Compose from the
+   *  Library) overrides the stashed origin so leaving returns to its parent —
+   *  the single-slot origin holds the surface BEFORE the parent Room. When set,
+   *  leaving navigates here and does NOT clear the origin (the parent still uses
+   *  it). */
+  backTo?: string;
+  backLabel?: string;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -68,9 +77,11 @@ export function RoomShell({
   const leave = useCallback(() => {
     setLeaving((already) => {
       if (already) return already;
-      const dest = readRoomOrigin();
+      // A nested Room returns to its parent (backTo) and leaves the stashed
+      // origin intact; a top-level Room returns to — and clears — the origin.
+      const dest = backTo ?? readRoomOrigin();
       const go = () => {
-        clearRoomOrigin();
+        if (!backTo) clearRoomOrigin();
         router.push(dest);
       };
       const reduced =
@@ -84,7 +95,7 @@ export function RoomShell({
       leaveTimer.current = window.setTimeout(go, 380);
       return true;
     });
-  }, [router]);
+  }, [router, backTo]);
 
   // Esc leaves the Room — but only after deeper overlays (the log strip and any
   // open sheet stop the event in the capture / document phase first).
@@ -114,7 +125,7 @@ export function RoomShell({
           onClick={leave}
           className="inline-flex items-center gap-1.5 rounded-[4px] border border-transparent px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:border-[var(--doc-ink-border)] hover:text-[var(--color-mocha)]"
         >
-          <span aria-hidden>←</span> {originLabel(origin)}
+          <span aria-hidden>←</span> {backLabel ?? originLabel(origin)}
         </button>
 
         <div className="mx-auto flex items-center gap-2.5">
