@@ -26,6 +26,7 @@ import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { Stamp } from './stamp';
 import { LineUnfold } from './line-unfold';
 import { StrataMark } from './strata-mark';
+import { StrataMiniRule } from './strata-mini-rule';
 import { WorkBlock } from './work-block';
 import { FolioStrip } from './folio-strip';
 import { useAddDocumentRoom, useDocumentRooms } from '@/hooks/use-document-rooms';
@@ -187,17 +188,18 @@ function RoomHeading({
     .join(' · ');
 
   return (
-    <div
-      id={roomId ? `doc-room-${roomId}` : undefined}
-      className="mt-4 flex items-baseline gap-2.5 border-b border-[var(--color-charcoal)] pb-1 scroll-mt-16"
-    >
-      <StrataMark size="sm" state={state} />
-      <h3 className="font-heading text-[13.5px] font-medium italic text-[var(--color-charcoal)]">
-        {name}
-      </h3>
-      <span className="ml-auto font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-        {meta}
-      </span>
+    <div id={roomId ? `doc-room-${roomId}` : undefined} className="mt-4 scroll-mt-16">
+      <div className="flex items-baseline gap-2.5 pb-1">
+        <StrataMark size="sm" state={state} />
+        <h3 className="font-heading text-[13.5px] font-medium italic text-[var(--color-charcoal)]">
+          {name}
+        </h3>
+        <span className="ml-auto font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+          {meta}
+        </span>
+      </div>
+      {/* The Strata mini-rule divides the room from its lines (HTML §3). */}
+      <StrataMiniRule className="mb-0.5 ml-[3px]" />
     </div>
   );
 }
