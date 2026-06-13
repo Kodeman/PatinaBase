@@ -97,6 +97,38 @@ describe('isResolved', () => {
     expect(isResolved(mkItem({ kind: 'note', state: 'escalated' }))).toBe(true);
     expect(isResolved(mkItem({ kind: 'note', state: 'open' }))).toBe(false);
   });
+
+  it('R33 F1: a studio-authored latest post (own_voice) is pre-settled', () => {
+    expect(
+      isResolved(mkItem({ kind: 'message', state: 'read', payload: { own_voice: true } })),
+    ).toBe(true);
+    expect(
+      isResolved(mkItem({ kind: 'message', state: 'read', payload: { own_voice: false } })),
+    ).toBe(false);
+    expect(isResolved(mkItem({ kind: 'message', state: 'read', payload: {} }))).toBe(false);
+  });
+});
+
+describe('partitionMargin — own voice (R33 F1)', () => {
+  it('sinks a studio-authored thread into the Settled fold, never needs-action', () => {
+    const ownPulseMirror = mkItem({
+      item_id: 'own',
+      kind: 'message',
+      state: 'read',
+      payload: { own_voice: true, sender_name: 'Leah Hartwell' },
+      ts: '2026-06-11T10:00:00Z',
+    });
+    const clientMsg = mkItem({
+      item_id: 'client',
+      kind: 'message',
+      state: 'unread',
+      payload: { own_voice: false, sender_name: 'Sarah Whitfield' },
+      ts: '2026-06-11T09:00:00Z',
+    });
+    const { raised, settled } = partitionMargin([ownPulseMirror, clientMsg], NOW);
+    expect(settled.map((i) => i.item_id)).toEqual(['own']);
+    expect(raised.map((i) => i.item_id)).toEqual(['client']);
+  });
 });
 
 describe('partitionMargin (R12)', () => {

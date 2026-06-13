@@ -23,7 +23,8 @@ for f in 00191_document_state_view 00192_document_state_open_claims \
          00202_section_work_and_gates \
          00203_folio_file_anchors \
          00204_account_milestones_and_settlement \
-         00205_margin_notes_studio_rls; do
+         00205_margin_notes_studio_rls \
+         00206_margin_own_voice_and_milestone_cron; do
   echo "── applying $f"
   "${PSQL[@]}" < "supabase/migrations/$f.sql"
 done

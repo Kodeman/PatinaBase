@@ -63,7 +63,8 @@ function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string
           aria-label={`${m.label} trigger`}
           className="bg-transparent font-mono text-[9px] uppercase tracking-[0.04em] text-[var(--text-muted)] outline-none"
         >
-          <option value="">no trigger</option>
+          {/* R33 F4: the honest word for a designer-act milestone is MANUAL. */}
+          <option value="">manual</option>
           {Object.entries(TRIGGER_LABELS).map(([k, label]) => (
             <option key={k} value={k}>
               {label}

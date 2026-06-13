@@ -156,7 +156,7 @@ function FFELine({
 }
 
 /** R25 room heading: Playfair-italic name + allocation/progress, over a
- *  Strata mini-rule. The mark's state is the room's truth: all placed =
+ *  Strata mini-rule. The mark's state is the room's truth: all installed =
  *  settled, lines underway = active, empty = future. */
 function RoomHeading({
   name,
@@ -172,13 +172,16 @@ function RoomHeading({
   const committed = rows
     .filter((r) => COMMITTED.has(r.stamp.kind))
     .reduce((s, r) => s + (r.item.line_total_cents ?? 0), 0);
-  const placed = rows.filter((r) => r.stamp.kind === 'installed').length;
+  const installed = rows.filter((r) => r.stamp.kind === 'installed').length;
+  const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
   const state: 'settled' | 'active' | 'future' =
-    rows.length > 0 && placed === rows.length ? 'settled' : rows.length > 0 ? 'active' : 'future';
+    rows.length > 0 && installed === rows.length ? 'settled' : rows.length > 0 ? 'active' : 'future';
 
+  // R33 F5 — one schedule, one vocabulary: rooms speak the section's word.
+  // "Placed" retires until it can truthfully mean installed.
   const meta = [
-    budgetCents > 0 ? `${fmtUsd(committed)} of ${fmtUsd(budgetCents)}` : null,
-    rows.length > 0 ? `${placed} of ${rows.length} placed` : 'no lines yet',
+    budgetCents > 0 ? `committed ${fmtUsd(committed)} of ${fmtUsd(budgetCents)}` : null,
+    rows.length > 0 ? `${underway} of ${rows.length} underway` : 'no lines yet',
   ]
     .filter(Boolean)
     .join(' · ');

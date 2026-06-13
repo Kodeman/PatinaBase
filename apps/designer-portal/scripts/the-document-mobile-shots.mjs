@@ -29,8 +29,14 @@ const BASE = 'http://localhost:3100';
 const WHITFIELD_PROPOSAL = 'b0000000-0000-0000-0000-000000000001';
 
 // Reset this week's Whitfield pulse to draft so its margin item is actionable.
+// R33 F3: also retire the previously posted mirror message — an orphaned
+// mirror re-sent on the next run is the "same Pulse ×2" bug.
 const wproj = psql(`select project_id from proposals where id='b0000000-0000-0000-0000-000000000001';`);
-psql(`update weekly_pulses set status='draft', sent_at=null, sent_message_id=null
+psql(`delete from comms_messages where id in (
+        select sent_message_id from weekly_pulses
+        where project_id='${wproj}' and week_of = date_trunc('week', now())::date
+          and sent_message_id is not null);
+      update weekly_pulses set status='draft', sent_at=null, sent_message_id=null
       where project_id='${wproj}' and week_of = date_trunc('week', now())::date;`);
 
 const browser = await chromium.launch();

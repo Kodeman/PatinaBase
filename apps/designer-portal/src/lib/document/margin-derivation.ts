@@ -75,10 +75,13 @@ export function deriveKindLine(row: MarginItemRow): string {
 
 /** Resolved items render at reduced opacity and sink below active ones.
  *  Expired decisions and sent invoices still want the designer's eye —
- *  they stay active. */
+ *  they stay active. R33 F1: a thread whose latest post is studio-authored
+ *  (own_voice from 00206) is pre-settled — the margin asks for her hand,
+ *  and her own voice never qualifies. */
 export function isResolved(row: MarginItemRow): boolean {
   return (
     (row.kind === 'decision' && row.state === 'responded') ||
+    (row.kind === 'message' && row.payload.own_voice === true) ||
     (row.kind === 'pulse' && row.state === 'sent') ||
     (row.kind === 'note' && row.state === 'escalated')
   );

@@ -48,6 +48,10 @@ declare
 begin
   -- Sarah Whitfield is the demo client (R11's personalization example).
   update profiles set full_name = 'Sarah Whitfield' where id = v_client;
+  -- R33 F6: senders render display names — never a role noun. Leah is the
+  -- demo designer (dev-accounts.sql seeds the same name on a fresh reset).
+  update profiles set full_name = 'Leah Hartwell', display_name = 'Leah Hartwell'
+   where id = v_designer;
 
   select id into v_dc from designer_clients
    where designer_id = v_designer and client_id = v_client;
