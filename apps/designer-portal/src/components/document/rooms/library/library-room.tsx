@@ -158,6 +158,7 @@ export function LibraryRoom() {
       <PromoteToStudioModal
         open={promoteId !== null}
         productId={promoteId}
+        shadowless
         onClose={() => setPromoteId(null)}
         onSuccess={() => setToast('Promoted to the Studio Library — proven, and shared with the studio.')}
       />
@@ -165,6 +166,7 @@ export function LibraryRoom() {
         open={nominateVendorId !== null}
         vendorId={nominateVendorId}
         studioId={studioId}
+        shadowless
         onClose={() => setNominateVendorId(null)}
         onSubmitted={() => setToast('Maker nominated to the Patina Catalog.')}
       />

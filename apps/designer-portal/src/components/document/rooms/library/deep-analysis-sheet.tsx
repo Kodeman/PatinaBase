@@ -46,6 +46,7 @@ export function DeepAnalysisSheet({
           spectrum,
           idealClientIds,
           avoidanceClientIds,
+          appealSignalIds,
         },
       });
       onSaved?.();

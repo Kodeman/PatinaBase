@@ -19,7 +19,7 @@
  * Look/feel authority: patina-library-room-prototype.html (ported as intent).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { StrataMark } from '@/components/document/strata-mark';
 import {
@@ -50,10 +50,20 @@ export function RoomShell({
   // SSR and hydration agree, then resolve the real origin after mount.
   const [origin, setOrigin] = useState('/desk');
   const [leaving, setLeaving] = useState(false);
+  const leaveTimer = useRef<number | null>(null);
 
   useEffect(() => {
     setOrigin(readRoomOrigin());
   }, []);
+
+  // Cancel a pending put-down if the Room unmounts first (browser Back, a
+  // redirect) — otherwise the stale router.push fires after we've navigated.
+  useEffect(
+    () => () => {
+      if (leaveTimer.current !== null) window.clearTimeout(leaveTimer.current);
+    },
+    [],
+  );
 
   const leave = useCallback(() => {
     setLeaving((already) => {
@@ -68,10 +78,10 @@ export function RoomShell({
         window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
       if (reduced) {
         go();
-        return already; // navigate immediately; no veil
+        return true; // navigate immediately; no veil — keep the guard latched
       }
       // Hold the "putting down" veil briefly, then return to origin.
-      window.setTimeout(go, 380);
+      leaveTimer.current = window.setTimeout(go, 380);
       return true;
     });
   }, [router]);

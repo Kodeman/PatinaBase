@@ -19,13 +19,15 @@ interface TeachingStats {
 }
 
 export function LibraryFoot() {
-  const { data } = useDesignerTeachingStats();
+  const { data, isLoading } = useDesignerTeachingStats();
   const stats = (data ?? null) as TeachingStats | null;
 
-  const taught = stats?.products_taught ?? 0;
-  const impact = stats?.match_impact_count ?? 0;
+  // Real-or-nothing (R32/R37): show "—" while the stats are in flight rather
+  // than flashing a fabricated 0 that reads as a truthful zero.
+  const taught = isLoading ? null : (stats?.products_taught ?? 0);
+  const impact = isLoading ? null : (stats?.match_impact_count ?? 0);
   const acc =
-    stats == null || stats.accuracy_score === 0
+    isLoading || stats == null || stats.accuracy_score === 0
       ? null
       : stats.accuracy_score <= 1
         ? Math.round(stats.accuracy_score * 100)
@@ -33,9 +35,9 @@ export function LibraryFoot() {
 
   return (
     <div className="mx-auto mt-10 flex max-w-[1240px] flex-wrap items-center gap-x-8 gap-y-3 border-t border-[var(--doc-ink-border)] px-6 pt-5 sm:px-9">
-      <FootStat value={String(taught)} label="Taught" />
+      <FootStat value={taught == null ? '—' : String(taught)} label="Taught" />
       <FootStat value={acc == null ? '—' : `${acc}%`} label="Your accuracy" />
-      <FootStat value={String(impact)} label="Matches sharpened" />
+      <FootStat value={impact == null ? '—' : String(impact)} label="Matches sharpened" />
       <p className="ml-auto max-w-[32ch] text-right text-[0.66rem] italic text-[var(--color-aged-oak)]">
         The shelves are your eye, made legible to the Engine.
       </p>

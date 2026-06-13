@@ -29,6 +29,9 @@ interface NominateToCatalogModalProps {
   onClose: () => void;
   /** Fires after a successful submit so callers can re-route or toast. */
   onSubmitted?: (nominationId: string) => void;
+  /** D4: drop the box-shadow when mounted over a Document surface (the Library
+   *  Room). Depth then reads from the scrim + the hairline border. */
+  shadowless?: boolean;
 }
 
 const FIT_SIGNAL_OPTIONS: Array<{ value: string; label: string }> = [
@@ -62,6 +65,7 @@ export function NominateToCatalogModal({
   studioId,
   onClose,
   onSubmitted,
+  shadowless = false,
 }: NominateToCatalogModalProps) {
   const enabled = open && Boolean(vendorId);
   const { data: vendor } = useVendor(vendorId ?? '');
@@ -123,7 +127,11 @@ export function NominateToCatalogModal({
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        // Stop the Room (RoomShell) from also catching Escape and leaving (D14).
+        e.stopPropagation();
+        onClose();
+      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -188,7 +196,7 @@ export function NominateToCatalogModal({
       <div
         className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-[var(--bg-surface)]"
         style={{
-          boxShadow: '0 32px 80px rgba(44, 41, 38, 0.3)',
+          ...(shadowless ? {} : { boxShadow: '0 32px 80px rgba(44, 41, 38, 0.3)' }),
           border: '1px solid var(--border-default)',
         }}
       >

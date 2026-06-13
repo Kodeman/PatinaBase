@@ -22,6 +22,9 @@ interface PromoteToStudioModalProps {
   onClose: () => void;
   /** Fires after the RPC succeeds. Caller renders PromotionToast off this. */
   onSuccess?: (productId: string) => void;
+  /** D4: drop the box-shadow when mounted over a Document surface (the Library
+   *  Room). Depth then reads from the scrim + the hairline border. */
+  shadowless?: boolean;
 }
 
 interface VendorContactForm {
@@ -63,6 +66,7 @@ export function PromoteToStudioModal({
   productId,
   onClose,
   onSuccess,
+  shadowless = false,
 }: PromoteToStudioModalProps) {
   const enabled = open && Boolean(productId);
   const { data: product } = useProduct(productId ?? '');
@@ -177,7 +181,11 @@ export function PromoteToStudioModal({
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        // Stop the Room (RoomShell) from also catching Escape and leaving (D14).
+        event.stopPropagation();
+        onClose();
+      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -240,7 +248,7 @@ export function PromoteToStudioModal({
       <div
         className="relative flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-lg bg-[var(--bg-surface)]"
         style={{
-          boxShadow: '0 32px 80px rgba(44, 41, 38, 0.3)',
+          ...(shadowless ? {} : { boxShadow: '0 32px 80px rgba(44, 41, 38, 0.3)' }),
           border: '1px solid var(--border-default)',
         }}
       >

@@ -58,8 +58,10 @@ export function StudioDrawer() {
   const { inHandToday } = useDocumentTime();
 
   /** Walk into a Room: stash the surface we're leaving, then navigate. The
-   *  prior document unmounts and puts itself down (timer chains out). */
+   *  prior document unmounts and puts itself down (timer chains out). A no-op
+   *  when we're already in that Room (no redundant push / remount / refetch). */
   const enterRoom = (href: string) => {
+    if (pathname === href) return;
     rememberRoomOrigin(pathname);
     router.push(href);
   };

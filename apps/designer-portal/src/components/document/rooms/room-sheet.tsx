@@ -24,10 +24,21 @@ export function RoomSheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
 
+  // Focus capture/restore — keyed on `open` ALONE, so a new `onClose` identity
+  // mid-open (the caller re-renders with an inline arrow) doesn't bounce focus
+  // out to the opener and back into the panel.
   useEffect(() => {
     if (!open) return;
     restoreRef.current = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
+    return () => {
+      restoreRef.current?.focus?.();
+    };
+  }, [open]);
+
+  // Esc closes — re-registers when `onClose` changes identity.
+  useEffect(() => {
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -35,10 +46,7 @@ export function RoomSheet({
       }
     };
     document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      restoreRef.current?.focus?.();
-    };
+    return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
   if (!open) return null;

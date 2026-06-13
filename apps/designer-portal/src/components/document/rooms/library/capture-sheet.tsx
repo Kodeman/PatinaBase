@@ -54,7 +54,9 @@ export function CaptureSheet({
         captureSource: trimmedUrl ? 'url_paste' : 'manual',
         destination: { type: 'personal' },
       });
-      onCaptured?.(trimmedName || 'Captured piece');
+      // Match the mutation's own fallback (captureProduct stores
+      // `name || 'Untitled Product'`) so the toast and the shelf card agree.
+      onCaptured?.(trimmedName || 'Untitled Product');
       reset();
       onClose();
     } catch (e) {
