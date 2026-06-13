@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · The Room Shell · The Library</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;
+  --sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--paper:#FCFAF6;--sheet2:#EFE9DD;--sheet3:#E2DACA;
+  --ink:rgba(44,41,38,0.16);--ink-soft:rgba(44,41,38,0.08);
+  --fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace;
+  --bar-h:60px;
+}
+html,body{height:100%}
+body{font-family:var(--fb);background:#1c1a18;color:var(--mo);line-height:1.55;-webkit-font-smoothing:antialiased;overflow:hidden}
+#app{position:fixed;inset:0;overflow:hidden;background:#1c1a18}
+
+/* ============================================================
+   THE DESK GROUND (the surface a Room sits on) — entry/exit state
+   ============================================================ */
+#desk{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:
+   radial-gradient(120% 80% at 50% 30%, #2c2926 0%, #211f1c 70%, #1a1816 100%);transition:opacity .5s ease;z-index:5}
+#desk.hidden{opacity:0;pointer-events:none}
+.desk-kicker{font-family:var(--fm);font-size:0.58rem;letter-spacing:0.24em;text-transform:uppercase;color:rgba(196,165,123,0.7);margin-bottom:2.2rem}
+.desk-doorways{display:flex;gap:1.4rem;align-items:stretch}
+.doorway{display:block;position:relative;width:200px;border:1px solid rgba(250,247,242,0.14);border-radius:8px;padding:1.6rem 1.5rem;background:rgba(250,247,242,0.025);cursor:pointer;transition:all .3s ease;overflow:hidden}
+.doorway:hover{border-color:rgba(196,165,123,0.5);background:rgba(196,165,123,0.06);transform:translateY(-3px)}
+.doorway.is-room::after{content:'↗';position:absolute;top:0.9rem;right:1rem;font-size:0.85rem;color:var(--cl);opacity:0.7}
+.dw-spine{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-bottom:1.1rem;width:30px}
+.dw-spine i{display:block;height:2.5px;border-radius:2px;background:var(--cl)}
+.dw-spine i:nth-child(1){width:30px}.dw-spine i:nth-child(2){width:22px;opacity:0.6}.dw-spine i:nth-child(3){width:14px;opacity:0.3}
+.dw-name{font-family:var(--fd);font-weight:500;font-size:1.15rem;color:var(--ow)}
+.dw-meta{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:rgba(250,247,242,0.4);margin-top:0.3rem}
+.dw-kind{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.12em;text-transform:uppercase;margin-top:1rem;display:inline-block;padding:2px 8px;border-radius:3px}
+.dw-kind.room{color:var(--cl);border:1px solid rgba(196,165,123,0.4)}
+.dw-kind.bookdoor{color:rgba(250,247,242,0.45);border:1px solid rgba(250,247,242,0.18)}
+.doorway.bookdoor{cursor:default;opacity:0.62}
+.doorway.bookdoor:hover{transform:none;border-color:rgba(250,247,242,0.14);background:rgba(250,247,242,0.025)}
+.desk-hint{font-family:var(--fm);font-size:0.55rem;letter-spacing:0.06em;color:rgba(250,247,242,0.35);margin-top:2.4rem;font-style:italic}
+
+/* ============================================================
+   THE ROOM SHELL  (reusable chrome — full-bleed paper)
+   ============================================================ */
+#room{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--ow);
+   opacity:0;transform:scale(0.985);transition:opacity .45s ease,transform .45s cubic-bezier(.2,.7,.3,1);z-index:10;pointer-events:none}
+#room.entered{opacity:1;transform:none;pointer-events:auto}
+@media(prefers-reduced-motion:reduce){#room,#desk{transition:opacity .2s ease}#room.entered{transform:none}}
+
+/* room header — the thin band that frames a Room */
+.room-head{flex-shrink:0;display:flex;align-items:center;gap:1rem;padding:0.85rem 1.6rem;border-bottom:1px solid var(--ink-soft);background:rgba(250,247,242,0.6);backdrop-filter:blur(6px)}
+.leave{display:flex;align-items:center;gap:0.5rem;font-family:var(--fm);font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);cursor:pointer;padding:0.4rem 0.6rem;border-radius:4px;border:1px solid transparent;transition:all .2s}
+.leave:hover{border-color:var(--ink);color:var(--mo)}
+.room-ident{display:flex;align-items:center;gap:0.7rem;margin:0 auto}
+.room-mark{display:flex;flex-direction:column;align-items:flex-start;gap:2.5px;width:18px}
+.room-mark i{display:block}
+.room-mark i{height:2px;border-radius:2px;background:var(--cl)}
+.room-mark i:nth-child(1){width:18px}.room-mark i:nth-child(2){width:13px;opacity:0.6}.room-mark i:nth-child(3){width:8px;opacity:0.3}
+.room-title-sm{font-family:var(--fm);font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.room-count{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.06em;color:var(--ao);opacity:0.7}
+.room-action{display:flex;align-items:center;gap:0.4rem;font-family:var(--fm);font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:#fff;background:var(--ch);padding:0.5rem 0.9rem;border-radius:5px;cursor:pointer;transition:opacity .2s}
+.room-action:hover{opacity:0.85}
+
+/* room scroll — the paper itself */
+.room-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+   background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,115,85,0.01) 3px,rgba(139,115,85,0.01) 4px);
+   padding-bottom:calc(var(--bar-h) + 2rem)}
+.room-inner{max-width:1240px;margin:0 auto;padding:0 2.4rem}
+
+/* ============================================================
+   THE LIBRARIAN  (the Engine as presence — R31)
+   ============================================================ */
+.librarian{padding:3.4rem 0 2.6rem;text-align:center;border-bottom:1px solid var(--ink-soft)}
+.lib-title{font-family:var(--fd);font-weight:400;font-size:2.6rem;color:var(--ch);line-height:1.05}
+.lib-title em{font-style:italic;color:var(--cl)}
+.lib-sub{font-size:0.82rem;color:var(--ao);margin:0.6rem 0 1.8rem}
+.ask-wrap{max-width:580px;margin:0 auto;position:relative}
+.ask-input{width:100%;padding:0.95rem 3rem 0.95rem 1.2rem;border:1px solid var(--ink);border-radius:8px;font-family:var(--fb);font-size:0.86rem;color:var(--ch);background:#fff;transition:border-color .2s}
+.ask-input::placeholder{color:var(--ao);font-style:italic}
+.ask-input:focus{outline:none;border-color:var(--cl)}
+.ask-send{position:absolute;right:0.7rem;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:6px;background:var(--cl);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.9rem;transition:opacity .2s}
+.ask-send:hover{opacity:0.85}
+.prompts{display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;margin-top:1rem}
+.prompt{font-size:0.68rem;color:var(--mo);padding:0.4rem 0.8rem;border:1px solid var(--pe);border-radius:20px;background:var(--paper);cursor:pointer;transition:all .2s}
+.prompt:hover{border-color:var(--cl);color:var(--ch);background:rgba(196,165,123,0.06)}
+
+/* ============================================================
+   SHELVES  (the Library's three layers — R32)
+   ============================================================ */
+.shelf{padding:2.4rem 0 0.5rem}
+.shelf-head{display:flex;align-items:baseline;gap:0.9rem;margin-bottom:0.5rem;flex-wrap:wrap}
+.shelf-name{font-family:var(--fd);font-style:italic;font-weight:500;font-size:1.5rem;color:var(--ch)}
+.shelf-meta{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao)}
+.shelf-act{margin-left:auto;display:flex;gap:1rem}
+.shelf-link{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);cursor:pointer;font-weight:600;transition:color .2s}
+.shelf-link:hover{color:var(--ao)}
+.shelf-link.muted{color:var(--ao);opacity:0.6}
+/* the Strata rule that separates shelves */
+.strata-rule{display:flex;flex-direction:column;gap:3px;margin:0.4rem 0 1.4rem}
+.strata-rule i{height:1.5px;border-radius:1px;background:var(--cl)}
+.strata-rule i:nth-child(1){width:100%;max-width:100%;opacity:0.5}
+.strata-rule i:nth-child(2){width:62%;opacity:0.3}
+.strata-rule i:nth-child(3){width:34%;opacity:0.16}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1.4rem}
+
+/* ============================================================
+   PRODUCT CARD
+   ============================================================ */
+.card{border:1px solid var(--ink);border-radius:8px;overflow:hidden;background:#fff;cursor:pointer;transition:transform .25s ease,border-color .25s ease;position:relative}
+.card:hover{transform:translateY(-4px);border-color:var(--cl)}
+.card.teaching{cursor:default}
+.card.teaching:hover{transform:none}
+.card-img{height:150px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;transition:filter .3s}
+.card:hover .card-img{filter:saturate(1.08)}
+.card-img svg{width:88px;height:88px;opacity:0.92}
+.tone-1{background:linear-gradient(140deg,#EFE9DD,#E2DACA)}
+.tone-2{background:linear-gradient(140deg,#E8E4DC,#D8CFC0)}
+.tone-3{background:linear-gradient(140deg,#EDE6DA,#DDD2C2)}
+.tone-4{background:linear-gradient(140deg,#E9E6E0,#D4CcC0)}
+.tone-warm{background:linear-gradient(140deg,#F0E6D6,#E2CFB4)}
+.card-tag{position:absolute;top:0.6rem;left:0.6rem;font-family:var(--fm);font-size:0.42rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;padding:3px 7px;border-radius:3px;backdrop-filter:blur(2px)}
+.tag-teach{background:rgba(232,197,71,0.92);color:#5c4a1a}
+.tag-taught{background:rgba(168,181,160,0.92);color:#33422c}
+.tag-draft{background:rgba(139,115,85,0.85);color:#fff}
+.card-via{position:absolute;top:0.6rem;right:0.6rem;display:inline-flex;align-items:center;gap:4px;background:rgba(252,250,246,0.92);border:1px solid rgba(196,165,123,0.5);border-radius:3px;padding:2px 6px;font-family:var(--fm);font-size:0.4rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.card-via .vm{display:inline-flex;flex-direction:column;gap:1.2px}
+.card-via .vm b{height:1px;background:var(--cl);border:none;display:block}
+.card-via .vm b:nth-child(1){width:8px}.card-via .vm b:nth-child(2){width:5.5px;opacity:0.55}.card-via .vm b:nth-child(3){width:3.5px;opacity:0.3}
+.card-body{padding:0.8rem 0.9rem}
+.card-name{font-weight:500;font-size:0.8rem;color:var(--ch);line-height:1.3}
+.card-meta{font-size:0.64rem;color:var(--ao);margin-top:0.2rem}
+.card-foot{display:flex;align-items:center;justify-content:space-between;margin-top:0.6rem;gap:0.5rem}
+.score{font-family:var(--fm);font-size:0.62rem;color:var(--sa);font-weight:500}
+.card-cta{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--cl);font-weight:600;cursor:pointer;padding:0.3rem 0.5rem;border:1px solid rgba(196,165,123,0.4);border-radius:4px;transition:all .2s}
+.card-cta:hover{background:var(--cl);color:#fff}
+.card-cta.dark{color:var(--ao);border-color:var(--pe)}
+.card-cta.dark:hover{background:var(--ao);color:#fff;border-color:var(--ao)}
+
+/* inline Quick Tags teaching (expands on the card) */
+.teach-panel{border-top:1px solid var(--pe);padding:0.8rem 0.9rem;background:rgba(232,197,71,0.05);display:none}
+.card.teaching .teach-panel{display:block;animation:slidedown .3s ease}
+@keyframes slidedown{from{opacity:0}to{opacity:1}}
+.teach-q{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.08em;text-transform:uppercase;color:#b89a2e;font-weight:600;margin:0.5rem 0 0.4rem}
+.teach-q:first-child{margin-top:0}
+.chips{display:flex;flex-wrap:wrap;gap:0.3rem}
+.tchip{font-size:0.62rem;padding:0.28rem 0.55rem;border:1px solid var(--pe);border-radius:14px;background:#fff;cursor:pointer;color:var(--mo);transition:all .15s}
+.tchip:hover{border-color:var(--cl)}
+.tchip.on{background:var(--cl);color:#fff;border-color:var(--cl)}
+.teach-actions{display:flex;gap:0.5rem;margin-top:0.9rem;align-items:center}
+.teach-save{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:#fff;background:var(--ch);padding:0.45rem 0.8rem;border-radius:4px;cursor:pointer;border:none}
+.teach-deep{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao);cursor:pointer}
+.teach-deep:hover{color:var(--cl)}
+
+/* room foot — teaching stats, quiet (R32) */
+.room-foot{max-width:1240px;margin:2.6rem auto 0;padding:1.2rem 2.4rem;border-top:1px solid var(--ink-soft);display:flex;align-items:center;gap:2rem;flex-wrap:wrap}
+.foot-stat{font-family:var(--fm)}
+.foot-stat .v{font-family:var(--fd);font-size:1rem;color:var(--ch)}
+.foot-stat .l{font-size:0.46rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);display:block;margin-top:1px}
+.foot-note{margin-left:auto;font-size:0.66rem;color:var(--ao);font-style:italic;max-width:30ch;text-align:right}
+
+/* ============================================================
+   THE DRAWER BAR  (persistent across Rooms — D8/D14)
+   ============================================================ */
+.drawer-bar{position:absolute;left:0;right:0;bottom:0;height:var(--bar-h);background:var(--ch);border-top:1px solid rgba(250,247,242,0.14);
+   display:flex;align-items:center;gap:0.4rem;padding:0 1.4rem;z-index:30}
+.book{display:flex;align-items:center;gap:0.55rem;padding:0.5rem 0.85rem;border-radius:6px;cursor:pointer;transition:background .2s;position:relative}
+.book:hover{background:rgba(250,247,242,0.05)}
+.book-spine{width:3px;height:18px;border-radius:2px;flex-shrink:0}
+.book-name{font-family:var(--fd);font-weight:500;font-size:0.82rem;color:rgba(250,247,242,0.85)}
+.book.current{background:rgba(196,165,123,0.12)}
+.book.current .book-name{color:var(--ow)}
+.book.current::after{content:'· here';font-family:var(--fm);font-size:0.46rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl)}
+.book-door{font-size:0.6rem;color:var(--cl);opacity:0.6}
+.bar-foot{margin-left:auto;display:flex;align-items:center;gap:0.4rem;font-family:var(--fm);font-size:0.52rem;letter-spacing:0.04em;color:rgba(250,247,242,0.45)}
+.bar-foot b{color:var(--cl);font-weight:500}
+
+/* ============================================================
+   SHEETS  (charcoal book-sheets + paper deep-analysis) — the D14 crux
+   ============================================================ */
+.scrim{position:absolute;inset:0;background:rgba(28,26,24,0.5);opacity:0;pointer-events:none;transition:opacity .3s;z-index:40}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;transform:translateY(102%);transition:transform .38s cubic-bezier(.2,.8,.3,1);z-index:50;max-height:82%;overflow-y:auto;border-radius:16px 16px 0 0}
+.sheet.open{transform:none}
+@media(prefers-reduced-motion:reduce){.sheet{transition:transform .2s ease}}
+.sheet.charcoal{background:var(--ch);border-top:1px solid rgba(250,247,242,0.16);padding-bottom:2rem}
+.sheet.paper{background:var(--paper);border-top:1px solid var(--ink);padding-bottom:2rem;background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,115,85,0.012) 3px,rgba(139,115,85,0.012) 4px)}
+.grab{width:38px;height:4px;border-radius:2px;margin:10px auto 6px}
+.charcoal .grab{background:rgba(250,247,242,0.22)}
+.paper .grab{background:var(--pe)}
+.sheet-in{max-width:920px;margin:0 auto;padding:0.6rem 2.2rem 0}
+
+/* charcoal book-sheet contents */
+.bs-head{display:flex;align-items:baseline;gap:1rem;border-bottom:1px solid rgba(250,247,242,0.12);padding-bottom:0.8rem;margin-bottom:1rem}
+.bs-title{font-family:var(--fd);font-weight:500;font-size:1.3rem;color:var(--ow)}
+.bs-title em{font-style:italic;color:var(--cl)}
+.bs-note{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:rgba(250,247,242,0.4);margin-left:auto}
+.bs-row{display:flex;justify-content:space-between;align-items:center;padding:0.7rem 0.2rem;border-bottom:1px solid rgba(250,247,242,0.08);gap:1rem}
+.bs-rname{font-size:0.8rem;color:rgba(250,247,242,0.9);font-weight:500}
+.bs-rsub{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.05em;text-transform:uppercase;color:rgba(250,247,242,0.4);display:block;margin-top:2px}
+.bs-rval{font-family:var(--fd);font-size:0.92rem;color:var(--ow)}
+.bs-back{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);cursor:pointer;border:1px solid rgba(196,165,123,0.4);border-radius:4px;padding:0.35rem 0.7rem}
+.bs-callout{font-family:var(--fm);font-size:0.55rem;letter-spacing:0.04em;color:rgba(250,247,242,0.5);font-style:italic;margin-top:1.2rem;padding-top:0.9rem;border-top:1px solid rgba(250,247,242,0.08)}
+.bs-callout b{color:var(--cl);font-style:normal;font-weight:500}
+
+/* paper deep-analysis sheet */
+.da-kick{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--cl);font-weight:600}
+.da-title{font-family:var(--fd);font-weight:500;font-size:1.6rem;color:var(--ch);margin:0.3rem 0 0.2rem}
+.da-sub{font-size:0.72rem;color:var(--ao);margin-bottom:1.4rem}
+.da-product{display:flex;gap:1.1rem;align-items:center;padding:0.9rem;border:1px solid var(--pe);border-radius:8px;background:#fff;margin-bottom:1.4rem}
+.da-pimg{width:72px;height:72px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.da-pimg svg{width:48px;height:48px}
+.da-pname{font-family:var(--fd);font-weight:500;font-size:1.05rem;color:var(--ch)}
+.da-pmeta{font-size:0.66rem;color:var(--ao)}
+.da-dim{margin-bottom:1.3rem}
+.da-dim-q{font-family:var(--fd);font-style:italic;font-size:0.98rem;color:var(--ch);margin-bottom:0.55rem}
+.da-dim-help{font-size:0.66rem;color:var(--ao);margin-bottom:0.6rem}
+.da-foot{display:flex;gap:0.6rem;align-items:center;padding:1.2rem 0 0.4rem;border-top:1px solid var(--pe);margin-top:0.5rem}
+.btn{font-family:var(--fm);font-size:0.54rem;letter-spacing:0.06em;text-transform:uppercase;padding:0.6rem 1.1rem;border-radius:5px;cursor:pointer;border:1px solid var(--pe);background:transparent;color:var(--ch);font-weight:600}
+.btn.primary{background:var(--ch);color:var(--ow);border-color:var(--ch)}
+.btn:hover{opacity:0.88}
+
+/* capture sheet */
+.cap-field{width:100%;padding:0.8rem 1rem;border:1px solid var(--pe);border-radius:7px;font-family:var(--fb);font-size:0.82rem;color:var(--ch);background:#fff;margin-bottom:0.8rem}
+.cap-field:focus{outline:none;border-color:var(--cl)}
+.cap-or{display:flex;gap:1rem;margin:1rem 0}
+.cap-src{flex:1;text-align:center;padding:1.1rem;border:1px dashed rgba(196,165,123,0.45);border-radius:8px;cursor:pointer;transition:all .2s}
+.cap-src:hover{background:rgba(196,165,123,0.05);border-color:var(--cl)}
+.cap-src .cs-i{font-size:1.3rem}
+.cap-src .cs-l{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao);margin-top:0.5rem}
+
+/* toast */
+.toast{position:absolute;bottom:calc(var(--bar-h) + 16px);left:50%;transform:translateX(-50%) translateY(10px);background:var(--ch);color:var(--ow);padding:0.7rem 1.2rem;border-radius:8px;font-size:0.74rem;z-index:200;opacity:0;pointer-events:none;transition:all .3s;display:flex;align-items:center;gap:0.6rem;border:1px solid rgba(196,165,123,0.3)}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast .tdot{width:6px;height:6px;border-radius:50%;background:var(--sa)}
+
+/* put-down overlay */
+.putdown{position:absolute;inset:0;background:rgba(28,26,24,0.0);display:flex;align-items:center;justify-content:center;z-index:60;opacity:0;pointer-events:none;transition:opacity .4s}
+.putdown.show{opacity:1;pointer-events:auto;background:rgba(28,26,24,0.4)}
+.putdown-msg{font-family:var(--fm);font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:rgba(250,247,242,0.7)}
+
+@media(max-width:720px){
+  .room-inner,.room-foot,.sheet-in{padding-left:1.2rem;padding-right:1.2rem}
+  .lib-title{font-size:1.9rem}.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1rem}
+  .desk-doorways{flex-direction:column}.doorway{width:240px}
+  .bar-foot{display:none}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ===================== THE DESK GROUND ===================== -->
+  <div id="desk">
+    <div class="desk-kicker">The Studio Desk</div>
+    <div class="desk-doorways">
+      <div class="doorway is-room" onclick="enterRoom()">
+        <div class="dw-spine"><i></i><i></i><i></i></div>
+        <div class="dw-name">The Library</div>
+        <div class="dw-meta">336 pieces · 12 need teaching</div>
+        <span class="dw-kind room">Room · walk in</span>
+      </div>
+      <div class="doorway bookdoor" title="Books open as sheets — try them from inside a room">
+        <div class="dw-spine"><i style="background:var(--db)"></i><i style="background:var(--db);opacity:0.6"></i><i style="background:var(--db);opacity:0.3"></i></div>
+        <div class="dw-name">Orders</div>
+        <div class="dw-meta">23 open · 2 arriving</div>
+        <span class="dw-kind bookdoor">Book · a sheet</span>
+      </div>
+      <div class="doorway bookdoor">
+        <div class="dw-spine"><i style="background:var(--sa)"></i><i style="background:var(--sa);opacity:0.6"></i><i style="background:var(--sa);opacity:0.3"></i></div>
+        <div class="dw-name">Hours</div>
+        <div class="dw-meta">6.2h this week</div>
+        <span class="dw-kind bookdoor">Book · a sheet</span>
+      </div>
+    </div>
+    <div class="desk-hint">A Room is a place you walk into. A book is a sheet you pull. Tap the Library to enter.</div>
+  </div>
+
+  <!-- ===================== THE ROOM SHELL ===================== -->
+  <div id="room">
+    <div class="room-head">
+      <div class="leave" onclick="leaveRoom()">← The Desk</div>
+      <div class="room-ident">
+        <span class="room-mark"><i></i><i></i><i></i></span>
+        <span class="room-title-sm">The Library</span>
+        <span class="room-count" id="roomCount">· 336 pieces</span>
+      </div>
+      <div class="room-action" onclick="openSheet('capture')">⊕ Capture</div>
+    </div>
+
+    <div class="room-scroll" id="roomScroll">
+      <div class="room-inner">
+
+        <!-- the librarian -->
+        <div class="librarian">
+          <div class="lib-title">The <em>Library</em></div>
+          <div class="lib-sub">Ask the librarian, or browse the shelves below. Every ask teaches your eye.</div>
+          <div class="ask-wrap">
+            <input class="ask-input" id="askInput" placeholder="Ask the library — “warm-grain sideboards that photograph well”…" onkeydown="if(event.key==='Enter')askLibrarian()">
+            <button class="ask-send" onclick="askLibrarian()">→</button>
+          </div>
+          <div class="prompts">
+            <span class="prompt" onclick="quickAsk('Mid-century walnut credenzas under $3K')">Walnut credenzas under $3K</span>
+            <span class="prompt" onclick="quickAsk('Pieces that need teaching')">What needs teaching?</span>
+            <span class="prompt" onclick="quickAsk('Warm organic lighting')">Warm organic lighting</span>
+          </div>
+        </div>
+
+        <!-- engine results land here -->
+        <div id="resultsShelf"></div>
+
+        <!-- shelves render here -->
+        <div id="shelves"></div>
+
+      </div>
+
+      <!-- room foot: teaching stats, quiet -->
+      <div class="room-foot">
+        <div class="foot-stat"><span class="v" id="statTaught">7</span><span class="l">Taught today</span></div>
+        <div class="foot-stat"><span class="v">94%</span><span class="l">Your accuracy</span></div>
+        <div class="foot-stat"><span class="v" id="statImpact">214</span><span class="l">Future matches improved</span></div>
+        <div class="foot-note">The shelves are your eye, made legible to the Engine.</div>
+      </div>
+    </div>
+
+    <!-- the persistent drawer bar -->
+    <div class="drawer-bar">
+      <div class="book current"><span class="book-spine" style="background:var(--cl)"></span><span class="book-name">Library</span></div>
+      <div class="book" onclick="openSheet('orders')"><span class="book-spine" style="background:var(--db)"></span><span class="book-name">Orders</span></div>
+      <div class="book" onclick="openSheet('accounts')"><span class="book-spine" style="background:var(--sa)"></span><span class="book-name">Accounts</span></div>
+      <div class="book" onclick="openSheet('people')"><span class="book-spine" style="background:var(--te)"></span><span class="book-name">People</span></div>
+      <div class="book" onclick="openSheet('hours')"><span class="book-spine" style="background:var(--mo)"></span><span class="book-name">Hours</span></div>
+      <div class="bar-foot"><span class="tdot" style="width:5px;height:5px;border-radius:50%;background:var(--sa);display:inline-block"></span> <b id="barTaught">7</b>&nbsp;taught today · 94%</div>
+    </div>
+
+    <!-- scrim + sheets live inside the room so they sit over the paper -->
+    <div class="scrim" id="scrim" onclick="closeSheet()"></div>
+
+    <!-- charcoal book-sheet (reused for orders/accounts/people/hours) -->
+    <div class="sheet charcoal" id="sheet-book">
+      <div class="grab"></div>
+      <div class="sheet-in" id="bookBody"></div>
+    </div>
+
+    <!-- paper deep-analysis sheet -->
+    <div class="sheet paper" id="sheet-deep">
+      <div class="grab"></div>
+      <div class="sheet-in" id="deepBody"></div>
+    </div>
+
+    <!-- paper capture sheet -->
+    <div class="sheet paper" id="sheet-capture">
+      <div class="grab"></div>
+      <div class="sheet-in">
+        <div class="da-kick">Capture · into My Library</div>
+        <div class="da-title">Bring something in</div>
+        <div class="da-sub">Captures land on your shelf raw — no taxonomy, no queue. You teach them when you’re ready.</div>
+        <input class="cap-field" id="capUrl" placeholder="Paste a product URL…">
+        <div class="cap-or">
+          <div class="cap-src" onclick="doCapture('extension')"><div class="cs-i">⌘</div><div class="cs-l">From the Chrome extension</div></div>
+          <div class="cap-src" onclick="doCapture('photo')"><div class="cs-i">▣</div><div class="cs-l">Upload a photo</div></div>
+          <div class="cap-src" onclick="doCapture('url')"><div class="cs-i">↧</div><div class="cs-l">Paste this URL</div></div>
+        </div>
+        <div class="da-foot" style="border-top:none;padding-top:0.4rem">
+          <button class="btn primary" onclick="doCapture('url')">Capture to My Library</button>
+          <button class="btn" onclick="closeSheet()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"><span class="tdot"></span><span id="toastMsg"></span></div>
+    <div class="putdown" id="putdown"><div class="putdown-msg">Putting the Library down…</div></div>
+  </div>
+
+</div>
+
+<script>
+// ===== furniture silhouettes (original SVG glyphs) =====
+const GLYPH = {
+  table:`<svg viewBox="0 0 64 64" fill="none" stroke="#8B7355" stroke-width="2.2" stroke-linecap="round"><rect x="8" y="22" width="48" height="5" rx="2" fill="#8B7355" stroke="none"/><line x1="13" y1="27" x2="13" y2="48"/><line x1="51" y1="27" x2="51" y2="48"/><line x1="24" y1="27" x2="24" y2="44"/><line x1="40" y1="27" x2="40" y2="44"/></svg>`,
+  chair:`<svg viewBox="0 0 64 64" fill="none" stroke="#8B7355" stroke-width="2.2" stroke-linecap="round"><path d="M22 14 L22 38 L42 38 L42 14"/><rect x="20" y="36" width="24" height="5" rx="2" fill="#8B7355" stroke="none"/><line x1="23" y1="41" x2="23" y2="52"/><line x1="41" y1="41" x2="41" y2="52"/><line x1="24" y1="20" x2="40" y2="20"/><line x1="24" y1="27" x2="40" y2="27"/></svg>`,
+  sofa:`<svg viewBox="0 0 64 64" fill="none" stroke="#8B7355" stroke-width="2.2" stroke-linecap="round"><path d="M12 30 Q12 24 18 24 L46 24 Q52 24 52 30 L52 42 L12 42 Z" fill="#8B7355" fill-opacity="0.18"/><rect x="8" y="30" width="8" height="14" rx="3" fill="#8B7355" stroke="none"/><rect x="48" y="30" width="8" height="14" rx="3" fill="#8B7355" stroke="none"/><line x1="16" y1="42" x2="16" y2="48"/><line x1="48" y1="42" x2="48" y2="48"/></svg>`,
+  lamp:`<svg viewBox="0 0 64 64" fill="none" stroke="#8B7355" stroke-width="2.2" stroke-linecap="round"><path d="M24 16 L40 16 L36 28 L28 28 Z" fill="#8B7355" fill-opacity="0.2"/><line x1="32" y1="28" x2="32" y2="48"/><path d="M24 48 L40 48" /><ellipse cx="32" cy="49" rx="10" ry="2.5" fill="#8B7355" stroke="none"/></svg>`,
+  pendant:`<svg viewBox="0 0 64 64" fill="none" stroke="#8B7355" stroke-width="2.2" stroke-linecap="round"><line x1="32" y1="8" x2="32" y2="24"/><path d="M20 24 Q32 20 44 24 L40 38 Q32 42 24 38 Z" fill="#8B7355" fill-opacity="0.18"/><circle cx="32" cy="46" r="2" fill="#8B7355" stroke="none"/></svg>`,
+  credenza:`<svg viewBox="0 0 64 64" fill="none" stroke="#8B7355" stroke-width="2.2" stroke-linecap="round"><rect x="10" y="24" width="44" height="22" rx="2" fill="#8B7355" fill-opacity="0.14"/><line x1="32" y1="24" x2="32" y2="46"/><circle cx="26" cy="35" r="1.6" fill="#8B7355" stroke="none"/><circle cx="38" cy="35" r="1.6" fill="#8B7355" stroke="none"/><line x1="16" y1="46" x2="16" y2="52"/><line x1="48" y1="46" x2="48" y2="52"/></svg>`,
+  shelf:`<svg viewBox="0 0 64 64" fill="none" stroke="#8B7355" stroke-width="2.2" stroke-linecap="round"><rect x="16" y="12" width="32" height="40" rx="1.5"/><line x1="16" y1="25" x2="48" y2="25"/><line x1="16" y1="38" x2="48" y2="38"/></svg>`,
+  bench:`<svg viewBox="0 0 64 64" fill="none" stroke="#8B7355" stroke-width="2.2" stroke-linecap="round"><rect x="10" y="30" width="44" height="5" rx="2" fill="#8B7355" stroke="none"/><line x1="15" y1="20" x2="15" y2="30"/><line x1="49" y1="20" x2="49" y2="30"/><line x1="15" y1="35" x2="15" y2="48"/><line x1="49" y1="35" x2="49" y2="48"/><line x1="15" y1="20" x2="49" y2="20"/></svg>`,
+};
+
+// ===== the data: three shelves =====
+let DATA = {
+  my: {name:'My Library', meta:'41 captures · 12 need teaching · from the extension, photos, paste', items:[
+    {id:'m1', name:'Heirloom Oak Dining Table', src:'Nordic Atelier · captured Jun 3', g:'table', tone:'tone-warm', state:'teach'},
+    {id:'m2', name:'Walnut Credenza', src:'unknown maker · from a photo', g:'credenza', tone:'tone-1', state:'teach'},
+    {id:'m3', name:'Live-Edge Coffee Table', src:'Verellen · captured May 28', g:'table', tone:'tone-2', state:'taught', score:94},
+    {id:'m4', name:'Ceramic Table Lamp', src:'In Common With · pasted', g:'lamp', tone:'tone-3', state:'draft'},
+    {id:'m5', name:'Hand-Forged Iron Shelf', src:'unknown maker · from a photo', g:'shelf', tone:'tone-4', state:'teach'},
+    {id:'m6', name:'Brass Arc Floor Lamp', src:'Apparatus · captured Jun 1', g:'lamp', tone:'tone-warm', state:'teach'},
+  ]},
+  studio: {name:'Studio Library', meta:'208 proven pieces · promoted from captures', items:[
+    {id:'s1', name:'Meadow Linen Sectional', src:'Woodward & Sons', g:'sofa', tone:'tone-2', state:'taught', score:96},
+    {id:'s2', name:'Shaker Dining Chair', src:'Sawkille Co', g:'chair', tone:'tone-1', state:'taught', score:92},
+    {id:'s3', name:'Stoneware Pendant', src:'Heath Ceramics', g:'pendant', tone:'tone-3', state:'taught', score:89},
+    {id:'s4', name:'Oak Spindle Bench', src:'O&G Studio', g:'bench', tone:'tone-warm', state:'taught', score:91},
+  ]},
+  catalog: {name:'Patina Catalog', meta:'87 maker pieces · order through Patina · nominate a maker', items:[
+    {id:'c1', name:'Heirloom Dining Table', src:'Nordic Atelier', g:'table', tone:'tone-warm', state:'via', score:93},
+    {id:'c2', name:'Spindle Side Chair', src:'Sawkille Co', g:'chair', tone:'tone-1', state:'via', score:90},
+    {id:'c3', name:'Cloud Pendant Cluster', src:'Apparatus', g:'pendant', tone:'tone-3', state:'via', score:88},
+    {id:'c4', name:'Linen Slipcover Sofa', src:'Cisco Home', g:'sofa', tone:'tone-2', state:'via', score:87},
+  ]},
+};
+
+const STYLE_TAGS = ['Transitional','Mid-century','Traditional','Modern','Rustic','Organic','Coastal','Industrial'];
+const TONE_TAGS = ['Warm walnut','Pale oak','Blackened','Natural linen','Brass','Stoneware'];
+
+let teachState = {}; // id -> selected tags
+
+function cardHTML(it, shelf){
+  let tag='', cta='', foot='';
+  if(it.state==='teach'){ tag=`<span class="card-tag tag-teach">Needs teaching</span>`; cta=`<span class="card-cta" onclick="event.stopPropagation();startTeach('${it.id}')">Teach →</span>`; }
+  else if(it.state==='taught'){ tag=`<span class="card-tag tag-taught">Taught · ${it.score}</span>`; foot=`<span class="score">↑ matching ${it.score}</span>`; if(shelf==='my'){cta=`<span class="card-cta dark" onclick="event.stopPropagation();promote('${it.id}')">Promote ↑</span>`;} }
+  else if(it.state==='draft'){ tag=`<span class="card-tag tag-draft">Draft</span>`; cta=`<span class="card-cta" onclick="event.stopPropagation();startTeach('${it.id}')">Finish →</span>`; }
+  else if(it.state==='via'){ tag=`<span class="card-via"><span class="vm"><b></b><b></b><b></b></span>Patina</span>`; foot=`<span class="score">${it.score} match</span>`; cta=`<span class="card-cta" onclick="event.stopPropagation();toast('Order Assistant would mount here — order via Patina')">Order →</span>`; }
+  return `<div class="card" id="card-${it.id}" onclick="openDetail('${it.id}')">
+    <div class="card-img ${it.tone}">${GLYPH[it.g]}${tag}</div>
+    <div class="card-body">
+      <div class="card-name">${it.name}</div>
+      <div class="card-meta">${it.src}</div>
+      <div class="card-foot">${foot||'<span></span>'}${cta}</div>
+    </div>
+    <div class="teach-panel" id="teach-${it.id}"></div>
+  </div>`;
+}
+
+function renderShelves(){
+  const order=[['my',DATA.my],['studio',DATA.studio],['catalog',DATA.catalog]];
+  let html='';
+  order.forEach(([key,sh])=>{
+    let acts='';
+    if(key==='my') acts=`<span class="shelf-link" onclick="filterTeach()">Needs teaching</span><span class="shelf-link muted" onclick="openSheet('capture')">+ Capture</span>`;
+    if(key==='catalog') acts=`<span class="shelf-link" onclick="toast('Nominate a maker — a personal note to bring them into the Catalog')">Nominate a maker</span>`;
+    html+=`<div class="shelf" id="shelf-${key}">
+      <div class="shelf-head"><span class="shelf-name">${sh.name}</span><span class="shelf-meta">${sh.meta}</span><span class="shelf-act">${acts}</span></div>
+      <div class="strata-rule"><i></i><i></i><i></i></div>
+      <div class="grid">${sh.items.map(it=>cardHTML(it,key)).join('')}</div>
+    </div>`;
+  });
+  document.getElementById('shelves').innerHTML=html;
+}
+
+// ===== teaching: inline Quick Tags =====
+function startTeach(id){
+  const card=document.getElementById('card-'+id);
+  card.classList.add('teaching');
+  teachState[id]=teachState[id]||{style:new Set(),tone:new Set()};
+  const p=document.getElementById('teach-'+id);
+  p.innerHTML=`
+    <div class="teach-q">What’s its character?</div>
+    <div class="chips">${STYLE_TAGS.map(t=>`<span class="tchip" onclick="event.stopPropagation();tog('${id}','style','${t}',this)">${t}</span>`).join('')}</div>
+    <div class="teach-q">Tone &amp; material</div>
+    <div class="chips">${TONE_TAGS.map(t=>`<span class="tchip" onclick="event.stopPropagation();tog('${id}','tone','${t}',this)">${t}</span>`).join('')}</div>
+    <div class="teach-actions">
+      <span class="teach-save" onclick="event.stopPropagation();saveTeach('${id}')">Save teaching</span>
+      <span class="teach-deep" onclick="event.stopPropagation();openDeep('${id}')">Deep analysis →</span>
+    </div>`;
+}
+function tog(id,dim,tag,el){ const s=teachState[id][dim]; if(s.has(tag)){s.delete(tag);el.classList.remove('on');}else{s.add(tag);el.classList.add('on');} }
+function saveTeach(id){
+  const sel=teachState[id]; const n=sel.style.size+sel.tone.size;
+  if(n===0){ toast('Tap a few traits first — they teach the Engine'); return; }
+  // find item, flip to taught
+  let item=findItem(id); const score=Math.min(98, 84+n*2);
+  item.state='taught'; item.score=score;
+  document.getElementById('card-'+id).classList.remove('teaching');
+  renderShelves();
+  bumpTeaching();
+  toast(`Taught — “${item.name}” now matches at ${score}. Your eye, learned.`);
+}
+
+// ===== deep analysis (paper sheet) =====
+function openDeep(id){
+  const item=findItem(id);
+  const dims=[
+    ['Era &amp; lineage','When does this piece belong to? What tradition does it draw from?',['1950s–60s','Mid-century','Contemporary craft','Timeless']],
+    ['Scale &amp; presence','How does it hold a room — anchor, accent, or quiet?',['Anchor piece','Statement','Supporting','Quiet']],
+    ['Formality','Where does it sit between relaxed and refined?',['Casual','Relaxed-refined','Formal','Ceremonial']],
+    ['Color story','What palette does it live inside?',['Warm neutrals','Earth tones','Cool & calm','High contrast']],
+    ['Who it’s for','The client whose room this completes',['The collector','The host','The minimalist','The nester']],
+  ];
+  document.getElementById('deepBody').innerHTML=`
+    <div class="da-kick">Deep analysis · the 15-minute sitting</div>
+    <div class="da-title">Map ${item.name}</div>
+    <div class="da-sub">Full intelligence mapping. The more you give, the better the Engine matches — for every designer after you, too.</div>
+    <div class="da-product"><div class="da-pimg ${item.tone}">${GLYPH[item.g]}</div><div><div class="da-pname">${item.name}</div><div class="da-pmeta">${item.src}</div></div></div>
+    ${dims.map(d=>`<div class="da-dim"><div class="da-dim-q">${d[0]}</div><div class="da-dim-help">${d[1]}</div><div class="chips">${d[2].map(o=>`<span class="tchip" onclick="this.classList.toggle('on')">${o}</span>`).join('')}</div></div>`).join('')}
+    <div class="da-foot"><button class="btn primary" onclick="finishDeep('${id}')">Save full analysis</button><button class="btn" onclick="closeSheet()">Later</button></div>`;
+  openSheetEl('deep');
+}
+function finishDeep(id){ let item=findItem(id); item.state='taught'; item.score=97; closeSheet(); document.getElementById('card-'+id)?.classList.remove('teaching'); renderShelves(); bumpTeaching(2); toast(`Deep analysis saved — “${item.name}” mapped at 97. The richest teaching there is.`); }
+
+// ===== detail (reuse deep sheet as a read view) =====
+function openDetail(id){
+  const item=findItem(id);
+  const stateLine = item.state==='taught'?`Taught · matching at ${item.score}`: item.state==='via'?`Patina Catalog · ${item.score} match`: item.state==='draft'?'Draft · partially taught':'Captured · awaiting your teaching';
+  document.getElementById('deepBody').innerHTML=`
+    <div class="da-kick">${item.state==='via'?'Catalog piece':'In your library'}</div>
+    <div class="da-title">${item.name}</div>
+    <div class="da-sub">${item.src}</div>
+    <div class="da-product"><div class="da-pimg ${item.tone}">${GLYPH[item.g]}</div><div><div class="da-pname">${stateLine}</div><div class="da-pmeta">${item.state==='via'?'Patina handles production, freight, and claims. Commission flows to your Accounts; the Pledge returns a quarter as teaching royalty.':'This piece lives on your shelf. Teach it, and it sharpens every match.'}</div></div></div>
+    <div class="da-foot" style="border-top:none">
+      ${item.state==='teach'||item.state==='draft'?`<button class="btn primary" onclick="closeSheet();startTeach('${id}')">Teach this piece</button><button class="btn" onclick="openDeep('${id}')">Deep analysis</button>`:''}
+      ${item.state==='taught'?`<button class="btn primary" onclick="toast('Added to a project — would open the room picker')">Use in a project</button><button class="btn" onclick="openDeep('${id}')">Re-teach</button>`:''}
+      ${item.state==='via'?`<button class="btn primary" onclick="toast('Order Assistant would mount — review &amp; order via Patina')">Order via Patina</button><button class="btn" onclick="toast('Added to a project')">Use in a project</button>`:''}
+    </div>`;
+  openSheetEl('deep');
+}
+
+// ===== promote =====
+function promote(id){
+  const idx=DATA.my.items.findIndex(x=>x.id===id);
+  if(idx<0) return; const item=DATA.my.items.splice(idx,1)[0];
+  DATA.studio.items.unshift(item);
+  renderShelves();
+  toast(`“${item.name}” promoted to the Studio Library — proven, and shared with the studio.`);
+}
+
+// ===== capture =====
+function doCapture(kind){
+  const url=document.getElementById('capUrl').value;
+  const names=['Tapered Oak Stool','Boucle Accent Chair','Travertine Side Table','Rattan Pendant'];
+  const glyphs=['bench','chair','table','pendant'];
+  const i=Math.floor(Math.random()*names.length);
+  const nid='m'+Date.now();
+  DATA.my.items.unshift({id:nid,name:url?'Captured piece':names[i],src:kind==='extension'?'via Chrome extension · just now':kind==='photo'?'from a photo · just now':'pasted URL · just now',g:glyphs[i],tone:'tone-warm',state:'teach'});
+  document.getElementById('capUrl').value='';
+  closeSheet(); renderShelves();
+  setTimeout(()=>{ document.getElementById('shelf-my').scrollIntoView({behavior:'smooth',block:'start'}); toast('Captured → My Library. Raw and waiting — teach it when you’re ready.'); },200);
+}
+
+// ===== librarian (the Engine) =====
+function quickAsk(q){ document.getElementById('askInput').value=q; askLibrarian(); }
+function askLibrarian(){
+  const q=document.getElementById('askInput').value.trim(); if(!q) return;
+  // gather a few matches across shelves
+  const pool=[...DATA.my.items,...DATA.studio.items,...DATA.catalog.items].filter(x=>x.state==='taught'||x.state==='via').slice(0,4);
+  const cards=pool.map(it=>`<div class="card" onclick="openDetail('${it.id}')"><div class="card-img ${it.tone}">${GLYPH[it.g]}${it.state==='via'?'<span class="card-via"><span class="vm"><b></b><b></b><b></b></span>Patina</span>':''}</div><div class="card-body"><div class="card-name">${it.name}</div><div class="card-meta">${it.src}</div><div class="card-foot"><span class="score">${it.score} match</span><span class="card-cta" onclick="event.stopPropagation();toast('Placed into a project — room picker would open')">Place →</span></div></div></div>`).join('');
+  document.getElementById('resultsShelf').innerHTML=`<div class="shelf"><div class="shelf-head"><span class="shelf-name">The Engine found</span><span class="shelf-meta">“${q}” · across your shelves</span><span class="shelf-act"><span class="shelf-link" onclick="document.getElementById('resultsShelf').innerHTML=''">clear</span></span></div><div class="strata-rule"><i></i><i></i><i></i></div><div class="grid">${cards}</div><div style="font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);margin-top:0.9rem">The Engine · every ask teaches your profile</div></div>`;
+  document.getElementById('resultsShelf').scrollIntoView({behavior:'smooth',block:'start'});
+  document.getElementById('askInput').value='';
+}
+
+// ===== charcoal book-sheets (the D14 crux) =====
+const BOOKS={
+  orders:{title:'Orders',em:'· the studio ledger',note:'pulled over the Library',rows:[
+    ['Shaker Chairs · 6 of 8','Whitfield · PO-0214 · ~Apr 22','open'],
+    ['Reading Chair · pair','Brandt · PO-0219 · ~Apr 24','open'],
+    ['Cloud Pendant · ×1','Olsen · AP-012 · damage claim','claim'],
+  ],callout:'You never left the Library. A book is a <b>sheet</b> pulled over the room — the paper is still beneath you. Tap outside to put it back.'},
+  accounts:{title:'Accounts',em:'· the studio’s own book',note:'pulled over the Library',rows:[
+    ['Receivable · open','3 invoices · $31,400','due'],
+    ['Teaching royalties','the 25% Pledge · $2,840 returned','pledge'],
+    ['This month','collected $18,600','ok'],
+  ],callout:'The Pledge lives here — a quarter of commission returned as teaching royalty. The Library is still open beneath this sheet.'},
+  people:{title:'People',em:'· clients',note:'pulled over the Library',rows:[
+    ['Sarah Whitfield','2 active projects · 96 satisfaction','active'],
+    ['Margaret Olsen','1 active · in delivery','active'],
+    ['Chen Residence','completed · referral source','done'],
+  ],callout:'One client = one entry; their projects are documents. A sheet, not a room — the Library holds beneath.'},
+  hours:{title:'Hours',em:'· time ledger',note:'pulled over the Library',rows:[
+    ['Sourcing · the Library','today · 35m','today'],
+    ['Design · Whitfield','today · 1h 45m','today'],
+    ['This week','6h 12m · 78% billable','wk'],
+  ],callout:'Even time you spend <b>in the Library</b> is captured. Pull the book, glance, put it back — the room never closed.'},
+};
+function openSheet(which){
+  if(which==='capture'){ openSheetEl('capture'); return; }
+  const b=BOOKS[which]; if(!b){return;}
+  document.getElementById('bookBody').innerHTML=`
+    <div class="bs-head"><span class="bs-title">${b.title} <em>${b.em}</em></span><span class="bs-note">${b.note}</span></div>
+    ${b.rows.map(r=>`<div class="bs-row"><span><span class="bs-rname">${r[0]}</span><span class="bs-rsub">${r[1]}</span></span><span class="bs-back" onclick="toast('Opening this would put the Library down and pick up that document')">open →</span></div>`).join('')}
+    <div class="bs-callout">${b.callout}</div>`;
+  openSheetEl('book');
+}
+
+// ===== sheet plumbing =====
+function openSheetEl(name){ closeSheet(true); document.getElementById('scrim').classList.add('on'); document.getElementById('sheet-'+name).classList.add('open'); }
+function closeSheet(keepScrim){ ['book','deep','capture'].forEach(n=>document.getElementById('sheet-'+n).classList.remove('open')); if(!keepScrim)document.getElementById('scrim').classList.remove('on'); }
+
+// ===== room enter / leave (D14 physics) =====
+function enterRoom(){ document.getElementById('desk').classList.add('hidden'); setTimeout(()=>document.getElementById('room').classList.add('entered'),120); }
+function leaveRoom(){
+  closeSheet();
+  const pd=document.getElementById('putdown'); pd.classList.add('show');
+  document.getElementById('room').style.transform='scale(0.985)'; document.getElementById('room').style.opacity='0.4';
+  setTimeout(()=>{
+    pd.classList.remove('show');
+    document.getElementById('room').classList.remove('entered');
+    document.getElementById('room').style.transform=''; document.getElementById('room').style.opacity='';
+    document.getElementById('desk').classList.remove('hidden');
+  },900);
+}
+
+// ===== helpers =====
+function findItem(id){ for(const k of ['my','studio','catalog']){ const f=DATA[k].items.find(x=>x.id===id); if(f)return f; } return null; }
+function filterTeach(){ document.getElementById('shelf-my').scrollIntoView({behavior:'smooth',block:'start'}); toast('12 pieces on your shelf are waiting to be taught.'); }
+let taughtCount=7, impact=214;
+function bumpTeaching(n=1){ taughtCount+=n; impact+=Math.floor(Math.random()*40+20); document.getElementById('statTaught').textContent=taughtCount; document.getElementById('barTaught').textContent=taughtCount; document.getElementById('statImpact').textContent=impact; }
+function toast(msg){ const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),3400); }
+
+renderShelves();
+</script>
+</body>
+</html>
