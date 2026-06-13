@@ -114,7 +114,13 @@ export function DocColophon({
           hands on the work: {hands}
         </span>
         <span className="flex-1" />
-        <button type="button" className={ROW_BTN} onClick={() => openLedger('orders')}>
+        {/* R29: deep-links the R28 vendor pane, pre-addressed with this
+            project's context. */}
+        <button
+          type="button"
+          className={ROW_BTN}
+          onClick={() => openLedger('orders', { page: 'vendors', projectId })}
+        >
           Brief a vendor
         </button>
         <button

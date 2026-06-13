@@ -1,0 +1,121 @@
+/**
+ * R28 — schedule conflicts on the Desk. A collision needs her hand (folder,
+ * ranked just under awaiting-inspection, above task_due — R33's blessed
+ * ordering holds); drift rides an in-motion chip. Inputs arrive as a
+ * project_id → DeskConflictInput map (built from delivery_events client-side).
+ */
+
+import {
+  deriveNeed,
+  deriveMotion,
+  partitionDesk,
+  type DeskConflictInput,
+  type DocumentStateRow,
+} from '../desk-derivation';
+
+const NOW = new Date('2026-06-12T16:00:00Z');
+
+function projectRow(over: Partial<DocumentStateRow> = {}): DocumentStateRow {
+  return {
+    engagement_kind: 'project',
+    engagement_id: 'p1',
+    project_id: 'p1',
+    proposal_id: null,
+    lead_id: null,
+    designer_id: 'd1',
+    client_profile_id: 'c1',
+    client_name: 'Sarah Whitfield',
+    title: 'Whitfield Residence',
+    project_status: 'active',
+    current_phase: 'install',
+    active_section: 'install',
+    is_paused: false,
+    is_archived: false,
+    proposal_status: null,
+    proposal_sent_at: null,
+    proposal_viewed_at: null,
+    lead_response_deadline: null,
+    lead_status: null,
+    overdue_decision_count: 0,
+    earliest_overdue_due: null,
+    awaiting_inspection_count: 0,
+    blocked_item_count: 0,
+    in_flight_count: 0,
+    installed_count: 0,
+    item_count: 4,
+    updated_at: '2026-06-10T00:00:00Z',
+    open_claim_count: 0,
+    open_claim_po: null,
+    unsent_pulse_count: 0,
+    pulse_week_of: null,
+    draft_unsent_po_count: 0,
+    oldest_draft_po_created_at: null,
+    draft_po_label: null,
+    unacked_po_count: 0,
+    oldest_unacked_sent_at: null,
+    unacked_po_label: null,
+    due_task_count: 0,
+    earliest_task_due: null,
+    due_task_title: null,
+    ...over,
+  };
+}
+
+const collision: DeskConflictInput = {
+  collision: { text: 'Two installs collide — week of Jul 13', label: 'COLLISION', date: '2026-07-13' },
+  drift: null,
+};
+const drift: DeskConflictInput = { collision: null, drift: 'delivery 5d before install' };
+
+describe('schedule_conflict need (R28)', () => {
+  it('a collision becomes the folder need line', () => {
+    const need = deriveNeed(projectRow(), NOW, collision);
+    expect(need?.kind).toBe('schedule_conflict');
+    expect(need?.text).toBe('Two installs collide — week of Jul 13');
+    expect(need?.stamp.label).toBe('COLLISION');
+    expect(need?.urgent).toBe(false);
+  });
+
+  it('drift does not raise a need line — it stays a motion chip', () => {
+    expect(deriveNeed(projectRow(), NOW, drift)).toBeNull();
+    expect(deriveMotion(projectRow(), NOW, drift)).toBe('delivery 5d before install');
+  });
+
+  it('no conflict input → no conflict need', () => {
+    expect(deriveNeed(projectRow(), NOW, null)).toBeNull();
+    expect(deriveNeed(projectRow(), NOW)).toBeNull();
+  });
+
+  it('a real overdue decision still outranks a collision (R33 ordering holds)', () => {
+    const need = deriveNeed(
+      projectRow({ overdue_decision_count: 1, earliest_overdue_due: '2026-06-10' }),
+      NOW,
+      collision,
+    );
+    expect(need?.kind).toBe('overdue_decision');
+  });
+
+  it('a collision outranks a dued task on the same engagement', () => {
+    const need = deriveNeed(
+      projectRow({ due_task_count: 1, earliest_task_due: '2026-06-12', due_task_title: 'x' }),
+      NOW,
+      collision,
+    );
+    expect(need?.kind).toBe('schedule_conflict');
+  });
+});
+
+describe('partitionDesk threads conflicts by project_id (R28)', () => {
+  it('routes the collision to its project folder and drift to its chip', () => {
+    const rows = [projectRow({ project_id: 'p1' }), projectRow({ engagement_id: 'p2', project_id: 'p2' })];
+    const conflicts = new Map<string, DeskConflictInput>([
+      ['p1', collision],
+      ['p2', drift],
+    ]);
+    const { folders, chips } = partitionDesk(rows, NOW, conflicts);
+    expect(folders).toHaveLength(1);
+    expect(folders[0].row.project_id).toBe('p1');
+    expect(folders[0].need.kind).toBe('schedule_conflict');
+    expect(chips.some((c) => c.row.project_id === 'p2' && c.text === 'delivery 5d before install')).toBe(true);
+  });
+});

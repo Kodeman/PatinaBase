@@ -14,6 +14,7 @@ import { OrdersLedger } from './orders-ledger';
 import { HoursLedger } from './hours-ledger';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { fmtMinutes } from '@/lib/document/time-derivation';
+import type { OpenLedgerContext } from './command-bar';
 
 const LEDGERS = [
   { key: 'library', name: 'Library', spine: 'var(--color-clay)' },
@@ -27,15 +28,23 @@ type LedgerKey = (typeof LEDGERS)[number]['key'];
 
 export function StudioDrawer() {
   const [openLedger, setOpenLedger] = useState<LedgerKey | null>(null);
+  const [ordersContext, setOrdersContext] = useState<OpenLedgerContext | null>(null);
   const open = LEDGERS.find((l) => l.key === openLedger) ?? null;
   const { inHandToday } = useDocumentTime();
 
   // ⌘K and other surfaces open a ledger by name through this event.
+  // R28/R29: the detail may carry pre-addressing context ({ name, context }).
   useEffect(() => {
     const onOpen = (e: Event) => {
-      const name = (e as CustomEvent<string>).detail;
+      const detail = (e as CustomEvent<string | { name: string; context?: OpenLedgerContext }>)
+        .detail;
+      const name = typeof detail === 'string' ? detail : detail.name;
+      const context = typeof detail === 'string' ? null : (detail.context ?? null);
       const match = LEDGERS.find((l) => l.key === name);
-      if (match) setOpenLedger(match.key);
+      if (match) {
+        setOrdersContext(match.key === 'orders' ? context : null);
+        setOpenLedger(match.key);
+      }
     };
     window.addEventListener('document:open-ledger', onOpen);
     return () => window.removeEventListener('document:open-ledger', onOpen);
@@ -83,7 +92,9 @@ export function StudioDrawer() {
       </nav>
 
       <DocSheet open={open !== null} onClose={() => setOpenLedger(null)} title={open?.name ?? ''}>
-        {open?.key === 'orders' && <OrdersLedger onClose={() => setOpenLedger(null)} />}
+        {open?.key === 'orders' && (
+          <OrdersLedger onClose={() => setOpenLedger(null)} initialContext={ordersContext} />
+        )}
         {open?.key === 'hours' && <HoursLedger />}
         {open && open.key !== 'orders' && open.key !== 'hours' && (
           <div className="mx-auto max-w-2xl">

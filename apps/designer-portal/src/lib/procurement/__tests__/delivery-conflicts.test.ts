@@ -11,6 +11,7 @@
 import type { DeliveryEvent } from '@patina/supabase';
 import {
   detectDeliveryConflicts,
+  detectInstallCollisions,
   OVERLAP_WINDOW_DAYS,
   DRIFT_BUFFER_DAYS,
 } from '../delivery-conflicts';
@@ -227,5 +228,67 @@ describe('detectDeliveryConflicts', () => {
     ];
     // d2 has null event_date → only d1 remains → 0 conflicts.
     expect(detectDeliveryConflicts(events)).toEqual([]);
+  });
+});
+
+describe('detectInstallCollisions (R28 — The Week → Desk)', () => {
+  it('flags two installs from different projects in the same week', () => {
+    // Mon Jul 13 2026 week: an install Tue Jul 14 + an install Thu Jul 16.
+    const events = [
+      makeInstall('i-a', 'proj-a', '2026-07-14'),
+      makeInstall('i-b', 'proj-b', '2026-07-16'),
+    ];
+    const collisions = detectInstallCollisions(events);
+    expect(collisions).toHaveLength(1);
+    expect(collisions[0].weekOf).toBe('2026-07-13');
+    expect(collisions[0].projectIds.sort()).toEqual(['proj-a', 'proj-b']);
+    expect(collisions[0].message).toBe('Two installs collide — week of Jul 13');
+  });
+
+  it('does NOT flag two installs in the same project (one home, one crew)', () => {
+    const events = [
+      makeInstall('i-1', 'proj-a', '2026-07-14'),
+      makeInstall('i-2', 'proj-a', '2026-07-16'),
+    ];
+    expect(detectInstallCollisions(events)).toEqual([]);
+  });
+
+  it('does NOT flag installs in different weeks', () => {
+    const events = [
+      makeInstall('i-a', 'proj-a', '2026-07-14'), // week of Jul 13
+      makeInstall('i-b', 'proj-b', '2026-07-22'), // week of Jul 20
+    ];
+    expect(detectInstallCollisions(events)).toEqual([]);
+  });
+
+  it('ignores deliveries — only installs collide', () => {
+    const events = [
+      makeDelivery('d-a', 'proj-a', '2026-07-14'),
+      makeDelivery('d-b', 'proj-b', '2026-07-16'),
+    ];
+    expect(detectInstallCollisions(events)).toEqual([]);
+  });
+
+  it('counts three projects as "Three installs collide"', () => {
+    const events = [
+      makeInstall('i-a', 'proj-a', '2026-07-14'),
+      makeInstall('i-b', 'proj-b', '2026-07-15'),
+      makeInstall('i-c', 'proj-c', '2026-07-16'),
+    ];
+    const collisions = detectInstallCollisions(events);
+    expect(collisions).toHaveLength(1);
+    expect(collisions[0].projectIds).toHaveLength(3);
+    expect(collisions[0].message).toBe('Three installs collide — week of Jul 13');
+  });
+
+  it('Sunday installs bucket to the prior Monday (ISO week)', () => {
+    // Sun Jul 19 2026 belongs to the week of Mon Jul 13.
+    const events = [
+      makeInstall('i-a', 'proj-a', '2026-07-19'),
+      makeInstall('i-b', 'proj-b', '2026-07-13'),
+    ];
+    const collisions = detectInstallCollisions(events);
+    expect(collisions).toHaveLength(1);
+    expect(collisions[0].weekOf).toBe('2026-07-13');
   });
 });

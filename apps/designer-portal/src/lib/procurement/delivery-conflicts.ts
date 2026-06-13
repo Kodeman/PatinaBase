@@ -268,3 +268,76 @@ export function detectDeliveryConflicts(events: DeliveryEvent[]): DeliveryConfli
   conflicts.sort((x, y) => compareEventDate(x.eventA, y.eventA));
   return conflicts;
 }
+
+// ─── Install collisions (R28 — The Week's promoted intelligence) ─────────────
+//
+// The per-project passes above deliberately never compare across projects.
+// The one cross-project shape a single designer can't absorb is two INSTALLS
+// landing in the same week — she can't be in two homes at once. R28 promotes
+// this onto the Desk as a need line ("Two installs collide — week of Jul 13");
+// a calendar you must remember to check fails the action test.
+
+export interface InstallCollision {
+  /** Monday of the colliding week (ISO YYYY-MM-DD). */
+  weekOf: string;
+  /** The colliding install_milestone events (one per project, ≥2 projects). */
+  events: DeliveryEvent[];
+  projectIds: string[];
+  /** "Two installs collide — week of Jul 13" (R28's exact grammar). */
+  message: string;
+}
+
+/** Monday of the ISO date's week (Mon-start, matching date_trunc('week')). */
+function mondayOf(iso: string): string | null {
+  const ms = Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(ms)) return null;
+  const d = new Date(ms);
+  const dow = d.getUTCDay(); // 0 Sun … 6 Sat
+  const back = dow === 0 ? 6 : dow - 1;
+  d.setUTCDate(d.getUTCDate() - back);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatWeekOf(mondayIso: string): string {
+  return new Date(`${mondayIso}T00:00:00Z`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+const COUNT_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five'] as const;
+
+/**
+ * Detect cross-project install collisions: install_milestone events from
+ * two or more DISTINCT projects landing in the same Mon-start week. Multiple
+ * installs inside one project never collide (one home, one crew, one plan).
+ * Pure function; output sorted by weekOf ascending.
+ */
+export function detectInstallCollisions(events: DeliveryEvent[]): InstallCollision[] {
+  const byWeek = new Map<string, DeliveryEvent[]>();
+  for (const e of events) {
+    if (e.event_type !== 'install_milestone' || !e.event_date) continue;
+    const week = mondayOf(e.event_date);
+    if (!week) continue;
+    const list = byWeek.get(week);
+    if (list) list.push(e);
+    else byWeek.set(week, [e]);
+  }
+
+  const collisions: InstallCollision[] = [];
+  for (const [weekOf, weekEvents] of byWeek) {
+    const projectIds = [...new Set(weekEvents.map((e) => e.project_id))];
+    if (projectIds.length < 2) continue;
+    const n = projectIds.length;
+    collisions.push({
+      weekOf,
+      events: weekEvents,
+      projectIds,
+      message: `${COUNT_WORDS[n] ?? String(n)} installs collide — week of ${formatWeekOf(weekOf)}`,
+    });
+  }
+
+  collisions.sort((a, b) => (a.weekOf < b.weekOf ? -1 : a.weekOf > b.weekOf ? 1 : 0));
+  return collisions;
+}

@@ -44,6 +44,56 @@ export function ordersThroughput(
   return stats;
 }
 
+interface POForReceiving {
+  id: string;
+  status: string;
+  confirmed_eta: string | null;
+}
+
+interface InspectionForReceiving {
+  purchase_order_id: string;
+  outcome: string;
+}
+
+/** Receiving front-matter (R28, the I23 precedent): arriving · awaiting
+ *  log · claims · 30-day pass rate. Pure aggregation over rows the book
+ *  already holds; inspections are expected pre-filtered to the 30-day
+ *  window (the page's query owns the date math). */
+export function receivingFrontMatter(
+  pos: POForReceiving[],
+  inspections: InspectionForReceiving[],
+  openClaimCount: number,
+  now: Date = new Date(),
+): ThroughputStat[] {
+  const weekEnd = now.getTime() + 7 * DAY_MS;
+  const arriving = pos.filter((p) => {
+    if (!p.confirmed_eta) return false;
+    if (p.status !== 'in_production' && p.status !== 'shipped') return false;
+    const eta = new Date(`${p.confirmed_eta.slice(0, 10)}T00:00:00`).getTime();
+    return eta >= now.getTime() - DAY_MS && eta <= weekEnd;
+  }).length;
+
+  const inspectedPoIds = new Set(inspections.map((i) => i.purchase_order_id));
+  const awaitingLog = pos.filter(
+    (p) => p.status === 'delivered' && !inspectedPoIds.has(p.id),
+  ).length;
+
+  const passRate =
+    inspections.length > 0
+      ? Math.round(
+          (inspections.filter((i) => i.outcome === 'clean').length / inspections.length) * 100,
+        )
+      : null;
+
+  const stats: ThroughputStat[] = [
+    { label: 'Arriving', value: String(arriving) },
+    { label: 'Awaiting log', value: String(awaitingLog) },
+    { label: 'Claims', value: String(openClaimCount) },
+  ];
+  if (passRate !== null) stats.push({ label: '30-day pass', value: `${passRate}%` });
+  return stats;
+}
+
 interface EntryForUtilization {
   duration_minutes: number | null;
   billable?: boolean | null;
