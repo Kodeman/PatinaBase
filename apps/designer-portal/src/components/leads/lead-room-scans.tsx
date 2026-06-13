@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { StrataSweep } from '@/components/ui/strata-sweep';
 import { useHomeownerScans, useRequestScanAccess } from '@patina/supabase';
 import {
   Box,
   Eye,
   Lock,
-  Loader2,
   Maximize2,
   Ruler,
   Clock,
@@ -58,7 +58,7 @@ export function LeadRoomScans({ homeownerId, leadName, onViewScan }: LeadRoomSca
           </h2>
         </div>
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="w-6 h-6 animate-spin text-patina-clay-beige" />
+          <StrataSweep size="sm" label="Loading scans" />
         </div>
       </div>
     );

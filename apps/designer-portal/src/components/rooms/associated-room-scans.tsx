@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { StrataSweep } from '@/components/ui/strata-sweep';
 import {
   useRoomScanAssociations,
   useDesignerSharedScans,
@@ -21,7 +22,6 @@ import {
   Box,
   Camera,
   Check,
-  Loader2,
   Maximize2,
   Plus,
   Ruler,
@@ -67,7 +67,7 @@ export function AssociatedRoomScans({ context, onViewScan }: AssociatedRoomScans
             <h2 className="text-lg font-semibold">Room Scans</h2>
           </div>
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <StrataSweep size="sm" label="Loading" />
           </div>
         </CardContent>
       </Card>
@@ -275,7 +275,7 @@ function ScanPickerDialog({
         <div className="max-h-[400px] overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <StrataSweep size="sm" label="Loading" />
             </div>
           ) : availableScans.length === 0 ? (
             <div className="text-center py-12">
@@ -373,7 +373,7 @@ function ScanPickerDialog({
               disabled={selectedIds.size === 0 || isAssociating}
             >
               {isAssociating ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <StrataSweep size="xs" className="mr-2" label="Saving" />
               ) : (
                 <Plus className="h-4 w-4 mr-2" />
               )}

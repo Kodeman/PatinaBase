@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { StrataSweep } from '@/components/ui/strata-sweep';
 
 /**
  * Canonical portal button.
@@ -147,7 +147,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         aria-busy={loading || undefined}
         {...props}
       >
-        {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+        {loading && <StrataSweep size="xs" label="Working" />}
         {children}
       </button>
     );
