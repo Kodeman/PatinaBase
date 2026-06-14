@@ -8,15 +8,15 @@
  *   · returned to you — a teaching royalty that accrues to a YTD total
  *   · given to the commons — funds the shared catalog + maker community
  *
- * Per R30's explicit worked example ("the Pledge returns $84 as teaching
- * royalty"), the Pledge returns to the designer as royalty, so **returned-to-you
- * = the Pledge** (real, accrues YTD). The COMMONS contribution is OPEN brand
- * config (§14.15) — its rate is not ruled — so it renders real-or-placeholder
- * and is never invented. (OPEN / needs design ruling: R37's "money she
- * contributes" could instead mean the commons is carved OUT of her Pledge rather
- * than a Patina match alongside it — that split is the open input. Until ruled,
- * the rendering follows R30: returned = the full Pledge; commons = a separate
- * rate, pending.)
+ * Per R30's worked example ($336 → $84) and R41's ruling, **returned-to-you =
+ * the full 25%** (real, accrues YTD). R41 RESOLVED the R30/R37 tension: the
+ * commons share is a **separate Patina contribution ALONGSIDE** her share — a
+ * match on top, never a carve-out. The Pledge is generative; it does not shrink
+ * what she keeps. The commons rate ships as a **visible provisional default**
+ * (R41, the send-weave precedent): a real number, flagged "provisional"
+ * in-product, never left as "—" and never presented as final. §14.15 stays open
+ * for the FINAL brand/finance number — wiring it later is a one-constant change,
+ * no rebuild.
  *
  * Earnings money is stored in CENTS (integer `net_amount`; the live earnings
  * page divides by 100), so every figure here is in cents — format with fmtUsd.
@@ -26,12 +26,22 @@
 export const PLEDGE_RATE = 0.25;
 
 /**
- * OPEN (§14.15, brand config — NOT ruled): the commons contribution rate (the
- * "given to the commons" share, as a fraction of the commission). `null` = not
- * yet configured → the commons sub-line renders pending. Wire from marketplace
- * config; never invent it.
+ * R41 — the commons contribution rate (the "given to the commons" share, as a
+ * fraction of the commission): a **provisional 10%**, a separate Patina match
+ * ALONGSIDE the full 25% returned to the designer (never a carve-out). Named and
+ * tunable beside PLEDGE_RATE (the R10 / R22 / send-weave constant precedent).
+ * Provisional until §14.15 closes with the final brand/finance number — wiring
+ * the final value later is a one-constant change, no rebuild. `null` would mean
+ * "not yet configured" (renders pending); R41 says never leave it null/"—".
  */
-export const COMMONS_MATCH_RATE: number | null = null;
+export const COMMONS_MATCH_RATE: number | null = 0.1;
+
+/**
+ * R41 — the commons rate above is a PROVISIONAL default, not the final brand
+ * number. Drives the in-product "provisional" flag so a provisional figure is
+ * never shown as final. Set false when §14.15 lands the confirmed rate.
+ */
+export const COMMONS_MATCH_PROVISIONAL = true;
 
 const roundCents = (n: number) => Math.round(n);
 

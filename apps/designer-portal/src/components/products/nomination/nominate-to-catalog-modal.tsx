@@ -17,6 +17,7 @@ import {
   NominationStatusBanner,
   VendorContextBlock,
 } from '@patina/catalog-ui';
+import { RoomSheet } from '@/components/document/rooms/room-sheet';
 
 interface NominateToCatalogModalProps {
   open: boolean;
@@ -29,9 +30,15 @@ interface NominateToCatalogModalProps {
   onClose: () => void;
   /** Fires after a successful submit so callers can re-route or toast. */
   onSubmitted?: (nominationId: string) => void;
-  /** D4: drop the box-shadow when mounted over a Document surface (the Library
-   *  Room). Depth then reads from the scrim + the hairline border. */
+  /** D4: drop the box-shadow for any NON-sheet mount over a Document surface
+   *  (depth then reads from the scrim + the hairline border). The Library Room
+   *  now uses `asSheet` below; retained for other over-Document modal uses. */
   shadowless?: boolean;
+  /** R41 F4: render as a paper RoomSheet over the Room (doc grammar — paper,
+   *  flat edges, no shadow, slide-up) instead of the portal-modal card. The
+   *  form, timeline, and RPC are unchanged. Defaults off: portal callers keep
+   *  the modal. */
+  asSheet?: boolean;
 }
 
 const FIT_SIGNAL_OPTIONS: Array<{ value: string; label: string }> = [
@@ -66,6 +73,7 @@ export function NominateToCatalogModal({
   onClose,
   onSubmitted,
   shadowless = false,
+  asSheet = false,
 }: NominateToCatalogModalProps) {
   const enabled = open && Boolean(vendorId);
   const { data: vendor } = useVendor(vendorId ?? '');
@@ -125,7 +133,8 @@ export function NominateToCatalogModal({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    // In sheet mode RoomSheet owns Esc — don't double-bind.
+    if (!open || asSheet) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         // Stop the Room (RoomShell) from also catching Escape and leaving (D14).
@@ -135,7 +144,7 @@ export function NominateToCatalogModal({
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, asSheet, onClose]);
 
   const nominate = useNominateVendor();
 
@@ -182,25 +191,9 @@ export function NominateToCatalogModal({
         ? latestNomination!.status
         : null;
 
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Nominate vendor to Patina Catalog"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(44, 41, 38, 0.45)' }}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-[var(--bg-surface)]"
-        style={{
-          ...(shadowless ? {} : { boxShadow: '0 32px 80px rgba(44, 41, 38, 0.3)' }),
-          border: '1px solid var(--border-default)',
-        }}
-      >
-        <header className="flex items-start justify-between gap-3 border-b border-[var(--border-default)] px-6 pt-6 pb-4">
+  const body = (
+    <>
+        <header className={`flex items-start justify-between gap-3 border-b border-[var(--border-default)] pt-6 pb-4 ${asSheet ? '' : 'px-6'}`}>
           <div className="flex flex-col gap-2">
             <LayerChip layer="catalog" size="sm" />
             <h2 className="type-section-head">
@@ -222,7 +215,7 @@ export function NominateToCatalogModal({
         </header>
 
         {showPostSubmitTimeline && activeStatusForBanner ? (
-          <div className="flex flex-col gap-4 px-6 py-5">
+          <div className={`flex flex-col gap-4 py-5 ${asSheet ? '' : 'px-6'}`}>
             <NominationStatusBanner
               status={activeStatusForBanner}
               showTimeline
@@ -242,7 +235,7 @@ export function NominateToCatalogModal({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
-            <div className="flex flex-col gap-5 px-6 py-5">
+            <div className={`flex flex-col gap-5 py-5 ${asSheet ? '' : 'px-6'}`}>
               {stats && v && (
                 <VendorContextBlock
                   vendorName={v.name ?? 'Unnamed vendor'}
@@ -382,7 +375,7 @@ export function NominateToCatalogModal({
               )}
             </div>
 
-            <footer className="flex items-center justify-end gap-2 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3">
+            <footer className={`flex items-center justify-end gap-2 border-t border-[var(--border-default)] py-3 ${asSheet ? '' : 'px-6 bg-[var(--bg-surface)]'}`}>
               <Button
                 type="button"
                 variant="ghost"
@@ -403,6 +396,41 @@ export function NominateToCatalogModal({
             </footer>
           </form>
         )}
+    </>
+  );
+
+  // R41 F4 — a paper sheet over the Room (doc grammar), the form/timeline unchanged.
+  if (asSheet) {
+    return (
+      <RoomSheet
+        open={open}
+        onClose={onClose}
+        title={showPostSubmitTimeline ? 'Nomination in flight' : 'Nominate to Patina Catalog'}
+      >
+        {body}
+      </RoomSheet>
+    );
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Nominate vendor to Patina Catalog"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(44, 41, 38, 0.45)' }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-[var(--bg-surface)]"
+        style={{
+          ...(shadowless ? {} : { boxShadow: '0 32px 80px rgba(44, 41, 38, 0.3)' }),
+          border: '1px solid var(--border-default)',
+        }}
+      >
+        {body}
       </div>
     </div>
   );

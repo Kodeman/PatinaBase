@@ -8,16 +8,24 @@
  *
  * The Pledge is twinned and the two directions never blur (R37): each event
  * shows "returned to you" (a teaching royalty accruing to a YTD total) and
- * "given to the commons". Per R30 the Pledge (25% of the commission) returns to
- * her, so that figure is real; the commons share is OPEN brand config (§14.15)
- * and renders pending — never invented (see pledge.ts).
+ * "given to the commons". R41 ruled the commons a SEPARATE match on top: returned
+ * = the full 25% (real, YTD), commons = a provisional 10% Patina contribution
+ * ALONGSIDE it (never a carve-out). The commons renders a real number flagged
+ * "provisional" in-product — never "—", never presented as final; §14.15 stays
+ * open for the FINAL brand/finance rate (see pledge.ts).
  *
  * Earnings money is stored in CENTS (integer net_amount; the live earnings page
  * divides by 100) — fmtUsd throughout.
  */
 
 import { fmtDay, fmtUsd } from '@/lib/document/format';
-import { commonsRateKnown, PLEDGE_RATE, type PledgeEvent } from '@/lib/document/pledge';
+import {
+  COMMONS_MATCH_PROVISIONAL,
+  COMMONS_MATCH_RATE,
+  commonsRateKnown,
+  PLEDGE_RATE,
+  type PledgeEvent,
+} from '@/lib/document/pledge';
 
 interface EarningsStats {
   totalEarnings: number;
@@ -146,8 +154,15 @@ export function AccountsEarningsPage({
                     </span>
                   </span>
                   <span className="flex items-baseline justify-between gap-2 rounded-[3px] border border-[rgba(196,165,123,0.3)] px-2 py-1">
-                    <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
-                      given to the commons
+                    <span className="flex flex-col">
+                      <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+                        given to the commons
+                      </span>
+                      {COMMONS_MATCH_PROVISIONAL && COMMONS_MATCH_RATE != null && (
+                        <span className="font-mono text-[7px] uppercase tracking-[0.04em] text-[rgba(196,165,123,0.7)]">
+                          provisional · {Math.round(COMMONS_MATCH_RATE * 100)}%
+                        </span>
+                      )}
                     </span>
                     <span className="font-mono text-[11px] text-[var(--color-off-white)]">
                       {ev.givenToCommons != null ? fmtUsd(ev.givenToCommons) : '—'}
@@ -159,7 +174,14 @@ export function AccountsEarningsPage({
           </ul>
         )}
 
-        {/* Honest flag: the commons share is open brand config (§14.15). */}
+        {/* Honest flag: the commons share is a provisional default (R41), with
+            the FINAL brand/finance number still open (§14.15) — flagged, never
+            presented as final, never left as "—". */}
+        {COMMONS_MATCH_PROVISIONAL && COMMONS_MATCH_RATE != null && (
+          <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+            the commons share is provisional ({Math.round(COMMONS_MATCH_RATE * 100)}%) — final rate awaits brand config (§14.15)
+          </p>
+        )}
         {!commonsRateKnown && (
           <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
             the commons share awaits brand config (§14.15) — never invented

@@ -176,11 +176,11 @@ export function LibraryRoom() {
       )}
 
       {/* Promote (personal → studio) and Nominate (studio → catalog) reuse the
-          proven flows; a doc-grammar re-skin of these forms is a follow-up. */}
+          proven flows, re-skinned as paper RoomSheets over the Room (R41 F4). */}
       <PromoteToStudioModal
         open={promoteId !== null}
         productId={promoteId}
-        shadowless
+        asSheet
         onClose={() => setPromoteId(null)}
         onSuccess={() => setToast('Promoted to the Studio Library — proven, and shared with the studio.')}
       />
@@ -188,7 +188,7 @@ export function LibraryRoom() {
         open={nominateVendorId !== null}
         vendorId={nominateVendorId}
         studioId={studioId}
-        shadowless
+        asSheet
         onClose={() => setNominateVendorId(null)}
         onSubmitted={() => setToast('Maker nominated to the Patina Catalog.')}
       />

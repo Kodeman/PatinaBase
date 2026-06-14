@@ -149,6 +149,7 @@ export {
   useValidationQueue,
   useSubmitValidation,
   useDesignerTeachingStats,
+  useDesignerTaughtToday,
   useSubmitTeaching,
 } from './use-teaching';
 export {

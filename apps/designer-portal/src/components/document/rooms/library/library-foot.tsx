@@ -2,15 +2,16 @@
 
 /**
  * The Room's quiet foot (R32/R37): teaching compressed to ONE line —
- * "taught · accuracy · matches sharpened". Present, never gamified: no badges,
- * no daily-goal bars, no streaks. Reads the real designer_teaching_stats.
+ * "taught today · accuracy · matches sharpened". Present, never gamified: no
+ * badges, no daily-goal bars, no streaks.
  *
- * Note: the stats view carries lifetime totals, not a per-day cut, so the line
- * reads "taught" (lifetime), not "taught today" — labelled honestly until a
- * daily view exists (flagged in the Track-3 I-entry).
+ * R32's foot reads the DAY (R41 F3): the "Taught today" count is a date-filtered
+ * read over the real teaching write (useDesignerTaughtToday → product_styles),
+ * resetting daily. Accuracy and matches-sharpened stay lifetime quality measures
+ * from designer_teaching_stats (they are running scores, not daily counts).
  */
 
-import { useDesignerTeachingStats } from '@patina/supabase';
+import { useDesignerTeachingStats, useDesignerTaughtToday } from '@patina/supabase';
 
 interface TeachingStats {
   products_taught: number;
@@ -20,11 +21,12 @@ interface TeachingStats {
 
 export function LibraryFoot() {
   const { data, isLoading } = useDesignerTeachingStats();
+  const { data: taughtTodayCount, isLoading: loadingToday } = useDesignerTaughtToday();
   const stats = (data ?? null) as TeachingStats | null;
 
-  // Real-or-nothing (R32/R37): show "—" while the stats are in flight rather
-  // than flashing a fabricated 0 that reads as a truthful zero.
-  const taught = isLoading ? null : (stats?.products_taught ?? 0);
+  // Real-or-nothing (R32/R37): show "—" while a read is in flight rather than
+  // flashing a fabricated 0 that reads as a truthful zero.
+  const taughtToday = loadingToday ? null : (taughtTodayCount ?? 0);
   const impact = isLoading ? null : (stats?.match_impact_count ?? 0);
   const acc =
     isLoading || stats == null || stats.accuracy_score === 0
@@ -35,7 +37,7 @@ export function LibraryFoot() {
 
   return (
     <div className="mx-auto mt-10 flex max-w-[1240px] flex-wrap items-center gap-x-8 gap-y-3 border-t border-[var(--doc-ink-border)] px-6 pt-5 sm:px-9">
-      <FootStat value={taught == null ? '—' : String(taught)} label="Taught" />
+      <FootStat value={taughtToday == null ? '—' : String(taughtToday)} label="Taught today" />
       <FootStat value={acc == null ? '—' : `${acc}%`} label="Your accuracy" />
       <FootStat value={impact == null ? '—' : String(impact)} label="Matches sharpened" />
       <p className="ml-auto max-w-[32ch] text-right text-[0.66rem] italic text-[var(--color-aged-oak)]">
