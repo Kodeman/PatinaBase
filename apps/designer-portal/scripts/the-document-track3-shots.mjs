@@ -22,21 +22,27 @@ mkdirSync(OUT, { recursive: true });
 const BASE = 'http://localhost:3000';
 const done = [], failed = [];
 
+// Desktop (≥1280) by default; SHOT_W/SHOT_H/SHOT_PREFIX produce the ~390px L4
+// mobile set (SHOT_W=390 SHOT_H=844 SHOT_PREFIX=mobile-).
+const W = Number(process.env.SHOT_W) || 1440;
+const H = Number(process.env.SHOT_H) || 900;
+const PREFIX = process.env.SHOT_PREFIX || '';
+
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const page = await browser.newPage({ viewport: { width: W, height: H }, isMobile: W < 700, hasTouch: W < 700 });
 page.setDefaultTimeout(20_000);
 
 const shot = async (name, fn) => {
   try {
     await fn();
     await page.waitForTimeout(350);
-    await page.screenshot({ path: `${OUT}${name}.png`, fullPage: false });
+    await page.screenshot({ path: `${OUT}${PREFIX}${name}.png`, fullPage: false });
     done.push(name);
     console.log(`✓ ${name}`);
   } catch (e) {
     failed.push(`${name}: ${e.message?.split('\n')[0]}`);
     console.log(`✗ ${name} — ${e.message?.split('\n')[0]}`);
-    try { await page.screenshot({ path: `${OUT}${name}.png`, fullPage: false }); } catch {}
+    try { await page.screenshot({ path: `${OUT}${PREFIX}${name}.png`, fullPage: false }); } catch {}
   }
 };
 const lib = async () => {
@@ -97,7 +103,7 @@ try {
   });
   await page.waitForTimeout(400);
   const top = Math.max(0, Math.round(box.y) - 90);
-  await page.screenshot({ path: `${OUT}library-foot.png`, clip: { x: 0, y: top, width: 1440, height: Math.min(900 - top, Math.round(box.h) + 180) } });
+  await page.screenshot({ path: `${OUT}${PREFIX}library-foot.png`, clip: { x: 0, y: top, width: W, height: Math.min(H - top, Math.round(box.h) + 180) } });
   done.push('library-foot');
   console.log('✓ library-foot');
 } catch (e) {

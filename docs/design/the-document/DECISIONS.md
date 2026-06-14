@@ -1753,4 +1753,54 @@ same PR. The remaining gate is the **L4 device walk** (human, Kody + Leah — th
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I34 · R1–R41 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I34*
+## Pilot record — the L4 device walk (2026-06-14)
+
+### L4 · Leah's phone — the Rooms shell + Track 3 surfaces — 2026-06-14
+
+**Gate:** the R39/R41 device check — the Rooms **physics** are new (a full-screen
+paper place you *walk into*), so they get validated on a real phone before they're
+trusted for every future Room. Per R41 the walk covers **three** surfaces: the
+Library Room, the Composing Page, and the Engine ask-and-place.
+
+**Build under test:** `the-document/track3-rooms-library` incl. the F1–F4 commit
+(`22006e8a`) — reached on Leah's phone via a local tunnel to :3000, so the "taught
+today" foot (F3), the paper Promote/Nominate sheets (F4), and the live Engine were
+all present in what she tapped. Flag default-on; rollback = the toggle.
+
+**Signal: GREEN — all three surfaces, clean.**
+- **The Library Room** — GREEN. The Rooms physics held one-handed: the doorway
+  read as walk-in vs pull, full-bleed paper, the Drawer persisted, no
+  shadow/zone/badge, walking in put a held document down (timer chained out),
+  capture + teach worked in place, leaving returned to origin.
+- **The Composing Page** — GREEN. Sections fill in any order, the Strata Mark is
+  the only progress, a usable draft at every percent, saved.
+- **The Engine ask-and-place** — GREEN. The ask returned real paper result-lines
+  and Place dropped a piece into a document. (The librarian is no longer inert —
+  the slice-2 deferred stub is closed.)
+- **Reduced motion** — GREEN. Run with Reduce Motion on: enter/leave fell to
+  plain fades, the put-down veil skipped, nothing janked or was lost.
+- **Findings:** none — a clean green. No physic felt off; nothing to route back.
+
+**The ~390px set landed (F1 closeout).** The walk is where the mobile frame gets
+taken (desktop automation couldn't — fixed viewport). Committed 14 ~390px
+captures (`screenshots/track-3/mobile-*.png`) generated via the capture harness at
+a 390px viewport (`SHOT_W=390 SHOT_H=844 SHOT_PREFIX=mobile-`), corroborating the
+green walk: the Library Room, foot, Quick Tags, Deep Analysis, Promote sheet, the
+Engine ask→placed, the Composing Page, the Desk receivable, and the Accounts
+pages all render in mobile form. **Harness-render note (NOT a gate failure, device
+walk was green):** at a strict 390px headless frame the *overlay* surfaces (the ⌘K
+command bar, the ledger DocSheets) and the Room head action row sit a touch wide —
+right-edge content (e.g. the commons dollar figure on the Aesthete fold, the
+"Capture" head button) clips. Full-page surfaces (Library, Compose, Desk) are
+clean. Confirm the overlay width on a real device in a later mobile-polish pass;
+note that Accounts was a bonus capture, not one of the three walked surfaces.
+
+**Disposition:** the L4 gate is **satisfied** — the last merge gate for
+`the-document/track3-rooms-library` → main. With F1 + F2 landed and L4 green,
+**Track 3 is cleared to merge** (PR #13 marked ready for review; the merge itself
+is Kody's / a reviewer's call). After merge: deploy migrations 00191–00209,
+surface week-one flight telemetry at the next review.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I34 · R1–R41 · L1–L4 · THE GO · FLIP CONFIRMED · last id = L4*
