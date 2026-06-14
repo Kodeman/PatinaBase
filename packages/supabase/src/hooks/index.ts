@@ -149,6 +149,7 @@ export {
   useValidationQueue,
   useSubmitValidation,
   useDesignerTeachingStats,
+  useDesignerTaughtToday,
   useSubmitTeaching,
 } from './use-teaching';
 export {
@@ -1049,6 +1050,7 @@ export {
   useDeleteLineItem,
   useIssueInvoice,
   useSendInvoice,
+  useChaseInvoice,
   useRecordPayment,
   useStartCheckout,
   useVoidInvoice,

@@ -130,6 +130,12 @@ function FFELine({
             {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
           </p>
           {line && <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>}
+          {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
+          {item.added_via === 'engine' && (
+            <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay)] opacity-70">
+              via the Engine
+            </p>
+          )}
         </div>
         <Stamp label={sp.label} color={sp.color} ink={sp.ink} />
         <span className="whitespace-nowrap text-right font-heading text-[13px] font-medium text-[var(--color-charcoal)]">

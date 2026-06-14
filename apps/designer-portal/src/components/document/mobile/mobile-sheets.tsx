@@ -24,12 +24,19 @@ import { fillStateAtSection } from '@/lib/document/fill-state';
 import { openLedger } from '../command-bar';
 import { useMobileShell } from './mobile-shell';
 
-const LEDGERS: { key: string; name: string; spine: string; count: string }[] = [
-  { key: 'library', name: 'Library', spine: 'var(--color-clay)', count: 'pieces · teaching mode' },
-  { key: 'orders', name: 'Orders', spine: 'var(--color-dusty-blue)', count: 'cross-engagement POs' },
-  { key: 'accounts', name: 'Accounts', spine: 'var(--color-sage)', count: 'revenue · A/R' },
-  { key: 'people', name: 'People', spine: 'var(--color-terracotta)', count: 'clients' },
-  { key: 'hours', name: 'Hours', spine: 'var(--color-mocha)', count: 'this week' },
+const LEDGERS: {
+  key: string;
+  name: string;
+  spine: string;
+  count: string;
+  weight: 'room' | 'sheet';
+}[] = [
+  // D14: the Library is a Room (walk in); the rest are Sheets (pulled over).
+  { key: 'library', name: 'Library', spine: 'var(--color-clay)', count: 'a room · walk in', weight: 'room' },
+  { key: 'orders', name: 'Orders', spine: 'var(--color-dusty-blue)', count: 'cross-engagement POs', weight: 'sheet' },
+  { key: 'accounts', name: 'Accounts', spine: 'var(--color-sage)', count: 'revenue · A/R', weight: 'sheet' },
+  { key: 'people', name: 'People', spine: 'var(--color-terracotta)', count: 'clients', weight: 'sheet' },
+  { key: 'hours', name: 'Hours', spine: 'var(--color-mocha)', count: 'this week', weight: 'sheet' },
 ];
 
 function Sheet({
@@ -103,14 +110,27 @@ export function MobileSheets() {
                 }}
                 className="flex w-full items-center gap-3 border-b border-[rgba(250,247,242,0.08)] py-2.5 text-left"
               >
-                <span
-                  aria-hidden
-                  className="h-[18px] w-[3px] shrink-0 rounded-[1px]"
-                  style={{ background: l.spine }}
-                />
+                {l.weight === 'room' ? (
+                  <span aria-hidden className="flex shrink-0 flex-col gap-[2px]">
+                    <i className="block h-[2px] w-[15px] rounded-[1px] bg-[var(--color-clay)]" />
+                    <i className="block h-[2px] w-[11px] rounded-[1px] bg-[var(--color-clay)] opacity-60" />
+                    <i className="block h-[2px] w-[7px] rounded-[1px] bg-[var(--color-clay)] opacity-30" />
+                  </span>
+                ) : (
+                  <span
+                    aria-hidden
+                    className="h-[18px] w-[3px] shrink-0 rounded-[1px]"
+                    style={{ background: l.spine }}
+                  />
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="block font-heading text-[13px] font-medium text-[rgba(250,247,242,0.9)]">
                     {l.name}
+                    {l.weight === 'room' && (
+                      <span aria-hidden className="ml-1.5 font-mono text-[11px] text-[var(--color-clay)] opacity-70">
+                        ↗
+                      </span>
+                    )}
                   </span>
                   <span className="block font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
                     {l.count}

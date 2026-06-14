@@ -328,6 +328,8 @@ export function useAssignStyle() {
     onSuccess: (_, { productId }) => {
       queryClient.invalidateQueries({ queryKey: ['product-styles', productId] });
       queryClient.invalidateQueries({ queryKey: ['product', productId] });
+      // F3: a Quick-Tags assign is a teach — refresh the Library foot's daily count.
+      queryClient.invalidateQueries({ queryKey: ['designer-taught-today'] });
     },
   });
 }
@@ -462,6 +464,58 @@ export function useDesignerTeachingStats() {
   });
 }
 
+/**
+ * "Taught today" (R32 / R41 F3) — the count of distinct pieces the designer
+ * taught TODAY, for the Library Room's foot line. `designer_teaching_stats` is
+ * lifetime, so this is a date-filtered read over the real teaching write
+ * (`product_styles` — the target of both Quick Tags and Deep Analysis), scoped
+ * to the designer's local day. Additive read, no migration (R41 F3: "a date
+ * filter on existing rows suffices").
+ *
+ * Semantics: counts distinct `product_styles` rows INSERTED in the local day —
+ * i.e. pieces first styled today. Re-tagging a piece already styled on a prior
+ * day is an upsert that does not bump `created_at`, so it does not re-count; this
+ * is the cleanest no-migration read and matches the lifetime "products taught"
+ * (distinct pieces) notion. The local calendar day is folded into the queryKey
+ * so the count refetches when the day rolls over (R41 "resets daily"), and every
+ * mutation that writes product_styles invalidates this key (see useAssignStyle /
+ * useSubmitTeaching) so the foot's three numbers refresh together.
+ */
+export function useDesignerTaughtToday() {
+  // Local calendar day — stable within a day, changes at local midnight so the
+  // query re-keys and refetches instead of holding yesterday's baseline.
+  const now = new Date();
+  const localDay = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+
+  return useQuery({
+    queryKey: ['designer-taught-today', localDay],
+    queryFn: async () => {
+      const supabase = getSupabase() as any;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return 0;
+
+      // Designer-local start of day → UTC for the timestamptz comparison.
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const { data, error } = await supabase
+        .from('product_styles')
+        .select('product_id')
+        .eq('assigned_by', user.id)
+        .gte('created_at', startOfDay.toISOString());
+
+      if (error) throw error;
+
+      // Distinct pieces — one piece taught twice today is still one piece taught.
+      const distinct = new Set(
+        ((data ?? []) as Array<{ product_id: string }>).map((r) => r.product_id),
+      );
+      return distinct.size;
+    },
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // FULL TEACHING SUBMISSION
 // ═══════════════════════════════════════════════════════════════════════════
@@ -575,6 +629,9 @@ export function useSubmitTeaching() {
       queryClient.invalidateQueries({ queryKey: ['product-spectrum', productId] });
       queryClient.invalidateQueries({ queryKey: ['teaching-queue'] });
       queryClient.invalidateQueries({ queryKey: ['designer-teaching-stats'] });
+      // F3: Deep Analysis is a teach — refresh the Library foot's daily count
+      // so "Taught today" updates alongside accuracy / matches-sharpened.
+      queryClient.invalidateQueries({ queryKey: ['designer-taught-today'] });
     },
   });
 }

@@ -79,8 +79,11 @@ export function OrdersLedger({
 
   const updateEta = useUpdatePurchaseOrderETA();
   // R28: the book's pages, linked by DM-mono text. Brief-a-vendor (R29)
-  // pre-addresses straight onto Vendors with the document's project.
-  const [page, setPage] = useState<BookPage>(initialContext?.page ?? 'ledger');
+  // pre-addresses straight onto Vendors with the document's project. (page is
+  // a free string on the shared context — narrow it to this book's pages.)
+  const [page, setPage] = useState<BookPage>(
+    PAGES.some((p) => p.key === initialContext?.page) ? (initialContext!.page as BookPage) : 'ledger',
+  );
   // R18: send / resend through the shared preview-confirm.
   const [previewPo, setPreviewPo] = useState<AnyRecord | null>(null);
   const [selected, setSelected] = useState<string[]>([]);

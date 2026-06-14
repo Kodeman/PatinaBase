@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · The Composing Page · Detailed processes</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;
+  --sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--paper:#FCFAF6;--sheet2:#EFE9DD;
+  --ink:rgba(44,41,38,0.16);--ink-soft:rgba(44,41,38,0.07);
+  --line1:#5C4A3C;--line2:#C4A57B;--line3:#8B9CAD;
+  --fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace;
+  --bar-h:58px;
+}
+html,body{height:100%}
+body{font-family:var(--fb);background:#1c1a18;color:var(--mo);line-height:1.55;-webkit-font-smoothing:antialiased;overflow:hidden}
+#app{position:fixed;inset:0;overflow:hidden}
+
+/* explainer banner (prototype framing, not part of the UI) */
+.frame-note{position:absolute;top:0;left:0;right:0;z-index:100;background:var(--ch);color:rgba(250,247,242,0.75);font-family:var(--fm);font-size:0.56rem;letter-spacing:0.04em;padding:0.5rem 1.4rem;display:flex;gap:0.6rem;align-items:center;border-bottom:1px solid rgba(196,165,123,0.25)}
+.frame-note b{color:var(--cl);font-weight:500}
+.frame-note .lad{margin-left:auto;display:flex;gap:0.5rem;align-items:center}
+.lad .rung{opacity:0.4}.lad .rung.on{opacity:1;color:var(--cl)}
+
+/* ===== the workbench (a Room — full-bleed paper) ===== */
+.room{position:absolute;inset:0;top:28px;display:flex;flex-direction:column;background:var(--ow)}
+.room-head{flex-shrink:0;display:flex;align-items:center;gap:1rem;padding:0.8rem 1.6rem;border-bottom:1px solid var(--ink-soft);background:rgba(250,247,242,0.7)}
+.leave{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);cursor:pointer;padding:0.4rem 0.6rem;border:1px solid transparent;border-radius:4px}
+.leave:hover{border-color:var(--ink);color:var(--mo)}
+.room-ident{margin:0 auto;display:flex;align-items:center;gap:0.7rem}
+.room-title-sm{font-family:var(--fm);font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.save-draft{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ch);border:1px solid var(--pe);border-radius:5px;padding:0.5rem 0.9rem;cursor:pointer;background:#fff;transition:all .2s}
+.save-draft:hover{border-color:var(--cl)}
+
+.scroll{flex:1;overflow-y:auto;background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,115,85,0.01) 3px,rgba(139,115,85,0.01) 4px);padding-bottom:calc(var(--bar-h) + 2rem)}
+.inner{max-width:760px;margin:0 auto;padding:0 2rem}
+
+/* ===== the product taking shape (live preview + the Strata Mark) ===== */
+.taking-shape{padding:2.6rem 0 1.6rem;border-bottom:1px solid var(--ink-soft);position:sticky;top:0;background:linear-gradient(180deg,var(--ow) 86%,rgba(250,247,242,0));z-index:5}
+.ts-row{display:flex;gap:1.4rem;align-items:center}
+.ts-img{width:96px;height:96px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#EFE9DD,#E2DACA);transition:background .4s;position:relative;overflow:hidden}
+.ts-img svg{width:60px;height:60px;opacity:0;transition:opacity .5s}
+.ts-img.has svg{opacity:0.9}
+.ts-img .ph{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);opacity:0.6;position:absolute}
+.ts-img.has .ph{opacity:0}
+.ts-meta{flex:1;min-width:0}
+.ts-name{font-family:var(--fd);font-weight:500;font-size:1.5rem;color:var(--ch);transition:color .3s}
+.ts-name.empty{color:var(--ao);font-style:italic;font-weight:400;font-size:1.2rem}
+.ts-sub{font-size:0.72rem;color:var(--ao);margin-top:0.15rem;min-height:1.1em}
+/* the Strata progress mark */
+.ts-mark-wrap{display:flex;align-items:center;gap:0.9rem;margin-top:0.8rem}
+.strata{display:inline-flex;flex-direction:column;align-items:flex-start;gap:4px;width:120px}
+.strata i{display:block;height:4px;border-radius:999px;position:relative;background:rgba(44,41,38,0.1)}
+.strata i::after{content:'';position:absolute;inset:0;border-radius:999px;transform-origin:left center;transform:scaleX(var(--f,0));transition:transform .6s cubic-bezier(.4,0,.2,1)}
+.strata i:nth-child(1){width:120px}.strata i:nth-child(2){width:96px}.strata i:nth-child(3){width:72px;opacity:0.6}
+.strata i:nth-child(1)::after{background:var(--line1)}
+.strata i:nth-child(2)::after{background:var(--line2)}
+.strata i:nth-child(3)::after{background:var(--line3)}
+.ts-pct{font-family:var(--fm);font-size:0.6rem;letter-spacing:0.04em;color:var(--ao)}
+.ts-pct b{font-family:var(--fd);font-size:0.95rem;color:var(--ch);font-weight:500}
+.ts-state{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;padding:2px 8px;border-radius:3px;margin-left:0.4rem}
+.st-capture{color:var(--ao);border:1px solid #cfc8bb}
+.st-draft{color:#b89a2e;border:1px solid #cfae34}
+.st-ready{color:var(--sa);border:1px solid var(--sa)}
+
+/* engine guidance line — offers, never blocks */
+.guide{display:flex;align-items:center;gap:0.6rem;margin-top:1rem;padding:0.6rem 0.9rem;background:rgba(196,165,123,0.07);border:1px solid rgba(196,165,123,0.25);border-radius:7px}
+.guide-mark{display:flex;flex-direction:column;gap:1.5px;flex-shrink:0}
+.guide-mark i{display:block;height:1.5px;background:var(--cl);border-radius:1px}
+.guide-mark i:nth-child(1){width:11px}.guide-mark i:nth-child(2){width:8px;opacity:0.6}.guide-mark i:nth-child(3){width:5px;opacity:0.3}
+.guide-text{font-size:0.72rem;color:var(--mo)}
+.guide-text b{color:var(--ch);font-weight:600}
+
+/* ===== the movements (three groupings = the three Strata lines) ===== */
+.movement{padding:2rem 0 0.5rem}
+.mv-head{display:flex;align-items:baseline;gap:0.8rem;margin-bottom:0.3rem}
+.mv-line{height:4px;width:34px;border-radius:2px;flex-shrink:0;align-self:center}
+.mv-name{font-family:var(--fd);font-style:italic;font-weight:500;font-size:1.2rem;color:var(--ch)}
+.mv-meta{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao);margin-left:auto}
+.mv-rule{height:1px;background:var(--ink-soft);margin:0.5rem 0 1rem}
+
+/* a section = a fillable grouping */
+.section{border:1px solid var(--pe);border-radius:8px;margin-bottom:0.9rem;overflow:hidden;background:#fff;transition:border-color .25s}
+.section.done{border-color:rgba(168,181,160,0.5)}
+.section.open{border-color:var(--cl)}
+.sec-bar{display:flex;align-items:center;gap:0.8rem;padding:0.9rem 1.1rem;cursor:pointer}
+.sec-tick{width:16px;height:16px;border-radius:4px;border:1.5px solid #cfc8bb;flex-shrink:0;position:relative;transition:all .2s}
+.section.done .sec-tick{border-color:var(--sa);background:rgba(168,181,160,0.18)}
+.section.done .sec-tick::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--sa);font-weight:700}
+.sec-name{font-weight:600;font-size:0.86rem;color:var(--ch)}
+.sec-status{margin-left:auto;font-family:var(--fm);font-size:0.55rem;letter-spacing:0.04em;color:var(--ao)}
+.sec-status.empty{font-style:italic;opacity:0.7}
+.sec-chev{color:var(--ao);font-size:0.7rem;transition:transform .25s}
+.section.open .sec-chev{transform:rotate(90deg)}
+.sec-body{display:none;padding:0 1.1rem 1.1rem;border-top:1px solid var(--ink-soft)}
+.section.open .sec-body{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+
+/* fields */
+.field{margin-top:0.9rem}
+.field-label{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);font-weight:600;margin-bottom:0.35rem;display:block}
+.field input,.field textarea{width:100%;padding:0.6rem 0.8rem;border:1px solid var(--pe);border-radius:6px;font-family:var(--fb);font-size:0.82rem;color:var(--ch);background:var(--paper)}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--cl);background:#fff}
+.field-row{display:flex;gap:0.7rem}
+.field-row .field{flex:1}
+.help{font-size:0.66rem;color:var(--ao);font-style:italic;margin-top:0.3rem}
+.chips{display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.4rem}
+.chip{font-size:0.68rem;padding:0.32rem 0.6rem;border:1px solid var(--pe);border-radius:16px;background:var(--paper);cursor:pointer;color:var(--mo);transition:all .15s}
+.chip:hover{border-color:var(--cl)}
+.chip.on{background:var(--cl);color:#fff;border-color:var(--cl)}
+.sec-note{font-size:0.7rem;color:var(--ao);margin-top:0.9rem;padding-top:0.7rem;border-top:1px solid var(--ink-soft);font-style:italic}
+.sec-note b{color:var(--mo);font-style:normal;font-weight:600}
+.deep-link{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--cl);font-weight:600;cursor:pointer;margin-top:0.8rem;display:inline-block}
+.deep-link:hover{color:var(--ao)}
+
+/* folio dropzone */
+.folio{display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:0.6rem}
+.fcard{width:92px;height:92px;border:1px solid var(--ink);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(140deg,#EFE9DD,#E2DACA);gap:0.3rem}
+.fcard .fk{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao)}
+.dropzone{width:92px;height:92px;border:1.5px dashed rgba(196,165,123,0.5);border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:0.46rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--cl);cursor:pointer;text-align:center;transition:all .2s}
+.dropzone:hover{background:rgba(196,165,123,0.06);border-color:var(--cl)}
+
+/* foot */
+.foot{max-width:760px;margin:2.4rem auto 0;padding:1.2rem 2rem;border-top:1px solid var(--ink-soft)}
+.foot-note{font-size:0.72rem;color:var(--ao);font-style:italic;text-align:center}
+
+/* drawer bar */
+.drawer-bar{position:absolute;left:0;right:0;bottom:0;height:var(--bar-h);background:var(--ch);border-top:1px solid rgba(250,247,242,0.14);display:flex;align-items:center;gap:0.4rem;padding:0 1.4rem;z-index:30}
+.book{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.8rem;border-radius:6px;cursor:pointer}
+.book.current{background:rgba(196,165,123,0.12)}
+.book-spine{width:3px;height:16px;border-radius:2px}
+.book-name{font-family:var(--fd);font-weight:500;font-size:0.8rem;color:rgba(250,247,242,0.55)}
+.book.current .book-name{color:var(--ow)}
+.book.current::after{content:'· here';font-family:var(--fm);font-size:0.44rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl)}
+.bar-foot{margin-left:auto;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.04em;color:rgba(250,247,242,0.45)}
+
+/* toast */
+.toast{position:absolute;bottom:calc(var(--bar-h) + 16px);left:50%;transform:translateX(-50%) translateY(10px);background:var(--ch);color:var(--ow);padding:0.7rem 1.2rem;border-radius:8px;font-size:0.74rem;z-index:200;opacity:0;pointer-events:none;transition:all .3s;display:flex;gap:0.6rem;align-items:center;border:1px solid rgba(196,165,123,0.3);max-width:80%}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast .d{width:6px;height:6px;border-radius:50%;background:var(--sa);flex-shrink:0}
+
+@media(max-width:720px){.inner,.foot{padding-left:1.2rem;padding-right:1.2rem}.ts-name{font-size:1.2rem}.frame-note .lad{display:none}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="frame-note">
+    <b>The Composing Page</b> · a detailed process is a paper artifact that builds itself — no wizard, no modal, no Step N of M.
+    <span class="lad"><span class="rung">inline</span>·<span class="rung">sheet</span>·<span class="rung on">room ◂ you are here</span></span>
+  </div>
+
+  <div class="room">
+    <div class="room-head">
+      <div class="leave" onclick="toast('Putting it down — the product saves as a draft at whatever completeness it reached')">← The Library</div>
+      <div class="room-ident"><span class="room-title-sm">Compose a piece</span></div>
+      <div class="save-draft" onclick="saveDraft()">Save draft</div>
+    </div>
+
+    <div class="scroll" id="scroll">
+      <div class="inner">
+
+        <!-- the product taking shape -->
+        <div class="taking-shape">
+          <div class="ts-row">
+            <div class="ts-img" id="tsImg"><span class="ph">no image</span>
+              <svg viewBox="0 0 64 64" fill="none" stroke="#8B7355" stroke-width="2.2" stroke-linecap="round"><rect x="10" y="24" width="44" height="22" rx="2" fill="#8B7355" fill-opacity="0.14"/><line x1="32" y1="24" x2="32" y2="46"/><circle cx="26" cy="35" r="1.6" fill="#8B7355" stroke="none"/><circle cx="38" cy="35" r="1.6" fill="#8B7355" stroke="none"/><line x1="16" y1="46" x2="16" y2="52"/><line x1="48" y1="46" x2="48" y2="52"/></svg>
+            </div>
+            <div class="ts-meta">
+              <div class="ts-name empty" id="tsName">A piece, taking shape…</div>
+              <div class="ts-sub" id="tsSub">Fill any section below. The piece composes itself as you go.</div>
+              <div class="ts-mark-wrap">
+                <span class="strata" id="strata"><i></i><i></i><i></i></span>
+                <span class="ts-pct"><b id="pctNum">0</b>% composed<span class="ts-state st-capture" id="stateChip">Capture</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="guide">
+            <span class="guide-mark"><i></i><i></i><i></i></span>
+            <span class="guide-text" id="guideText">The librarian is here if you want it. <b>Start anywhere</b> — identity, the price, or just teach its style. Nothing is required to save.</span>
+          </div>
+        </div>
+
+        <!-- MOVEMENT 1 · the record (Mocha, line 1) -->
+        <div class="movement">
+          <div class="mv-head"><span class="mv-line" style="background:var(--line1)"></span><span class="mv-name">The record</span><span class="mv-meta">Line 1 · what it is</span></div>
+          <div class="mv-rule"></div>
+
+          <div class="section" data-sec="identity" data-mv="1">
+            <div class="sec-bar" onclick="toggle('identity')"><span class="sec-tick"></span><span class="sec-name">Identity</span><span class="sec-status empty" id="st-identity">not yet written</span><span class="sec-chev">▸</span></div>
+            <div class="sec-body">
+              <div class="field"><label class="field-label">Name</label><input id="f-name" oninput="onIdentity()" placeholder="e.g. Heirloom Oak Dining Table"></div>
+              <div class="field-row">
+                <div class="field"><label class="field-label">Maker</label><input id="f-maker" oninput="onIdentity()" placeholder="Nordic Atelier"></div>
+                <div class="field"><label class="field-label">Source URL</label><input id="f-url" oninput="onIdentity()" placeholder="paste or from capture"></div>
+              </div>
+              <div class="sec-note">Often this arrives pre-filled — a <b>capture</b> from the extension lands here already named. You're deepening a piece that already exists at 10%.</div>
+            </div>
+          </div>
+
+          <div class="section" data-sec="piece" data-mv="1">
+            <div class="sec-bar" onclick="toggle('piece')"><span class="sec-tick"></span><span class="sec-name">The piece</span><span class="sec-status empty" id="st-piece">not yet written</span><span class="sec-chev">▸</span></div>
+            <div class="sec-body">
+              <div class="field-row">
+                <div class="field"><label class="field-label">Width</label><input id="f-w" oninput="onPiece()" placeholder="72&quot;"></div>
+                <div class="field"><label class="field-label">Depth</label><input id="f-d" oninput="onPiece()" placeholder="38&quot;"></div>
+                <div class="field"><label class="field-label">Height</label><input id="f-h" oninput="onPiece()" placeholder="30&quot;"></div>
+              </div>
+              <div class="field"><label class="field-label">Materials</label><input id="f-mat" oninput="onPiece()" placeholder="solid white oak, hand-rubbed oil"></div>
+              <div class="field"><label class="field-label">Finish options</label>
+                <div class="chips" id="finishChips"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MOVEMENT 2 · the catalog (Clay, line 2) -->
+        <div class="movement">
+          <div class="mv-head"><span class="mv-line" style="background:var(--line2)"></span><span class="mv-name">The catalog</span><span class="mv-meta">Line 2 · into the marketplace</span></div>
+          <div class="mv-rule"></div>
+
+          <div class="section" data-sec="commerce" data-mv="2">
+            <div class="sec-bar" onclick="toggle('commerce')"><span class="sec-tick"></span><span class="sec-name">Commerce</span><span class="sec-status empty" id="st-commerce">not yet written</span><span class="sec-chev">▸</span></div>
+            <div class="sec-body">
+              <div class="field-row">
+                <div class="field"><label class="field-label">Trade price</label><input id="f-trade" oninput="onCommerce()" placeholder="$3,360"></div>
+                <div class="field"><label class="field-label">Retail</label><input id="f-retail" oninput="onCommerce()" placeholder="$4,200"></div>
+              </div>
+              <div class="field-row">
+                <div class="field"><label class="field-label">Lead time</label><input id="f-lead" oninput="onCommerce()" placeholder="10–12 weeks"></div>
+                <div class="field"><label class="field-label">Min. order</label><input id="f-moq" oninput="onCommerce()" placeholder="1"></div>
+              </div>
+              <div class="sec-note">On the maker's side, <b>this section is theirs</b> — the manufacturer fills price and lead time in their portal; the designer adds the eye. One page, composed from both sides of the marketplace.</div>
+            </div>
+          </div>
+
+          <div class="section" data-sec="folio" data-mv="2">
+            <div class="sec-bar" onclick="toggle('folio')"><span class="sec-tick"></span><span class="sec-name">The folio</span><span class="sec-status empty" id="st-folio">no images yet</span><span class="sec-chev">▸</span></div>
+            <div class="sec-body">
+              <div class="folio" id="folio">
+                <div class="dropzone" onclick="addImage()">+ drop an image</div>
+              </div>
+              <div class="help">Images and cut sheets clip here — the same folio that lives on a document section.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MOVEMENT 3 · the eye = TEACHING (Dusty Blue, line 3) -->
+        <div class="movement">
+          <div class="mv-head"><span class="mv-line" style="background:var(--line3)"></span><span class="mv-name">The eye</span><span class="mv-meta">Line 3 · the teaching</span></div>
+          <div class="mv-rule"></div>
+
+          <div class="section" data-sec="eye" data-mv="3">
+            <div class="sec-bar" onclick="toggle('eye')"><span class="sec-tick"></span><span class="sec-name">Style &amp; character</span><span class="sec-status empty" id="st-eye">untaught</span><span class="sec-chev">▸</span></div>
+            <div class="sec-body">
+              <div class="field"><label class="field-label">Character</label>
+                <div class="chips" id="styleChips"></div>
+              </div>
+              <div class="field"><label class="field-label">Tone &amp; material feel</label>
+                <div class="chips" id="toneChips"></div>
+              </div>
+              <div class="sec-note"><b>This is the teaching.</b> The exact same act you do inline on a card with Quick Tags — here it's one section of the larger composition. Add it now, or leave the piece at draft and teach it later from the shelf. Same continuum, same Strata line.</div>
+              <span class="deep-link" onclick="toast('Deep analysis opens as a paper SHEET over this room — the 15-minute sitting. The ladder, one rung up from here.')">Go deeper · the full mapping →</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="foot"><div class="foot-note">No Next. No Back. No Step 3 of 7. The page fills in any order, shows its own gaps, and is a real, usable draft at every percentage. The Strata Mark is the only progress indicator there is.</div></div>
+    </div>
+
+    <div class="drawer-bar">
+      <div class="book current"><span class="book-spine" style="background:var(--cl)"></span><span class="book-name">Library</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--db)"></span><span class="book-name">Orders</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--sa)"></span><span class="book-name">Accounts</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--te)"></span><span class="book-name">People</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--mo)"></span><span class="book-name">Hours</span></div>
+      <div class="bar-foot">composing · saves as draft anytime</div>
+    </div>
+
+    <div class="toast" id="toast"><span class="d"></span><span id="toastMsg"></span></div>
+  </div>
+</div>
+
+<script>
+const FINISH=['Natural oak','Smoked','Blackened','Walnut stain','Custom'];
+const STYLE=['Transitional','Mid-century','Traditional','Modern','Rustic','Organic','Coastal'];
+const TONE=['Warm walnut','Pale oak','Natural linen','Brass','Stoneware','Matte black'];
+
+// section completion state — fillable in ANY order, no gates
+const done={identity:false,piece:false,commerce:false,folio:false,eye:false};
+let images=0, finishSel=new Set(), styleSel=new Set(), toneSel=new Set();
+
+// render chip groups
+function chips(host,arr,sel,cb){ document.getElementById(host).innerHTML=arr.map(t=>`<span class="chip" onclick="${cb}('${t}',this)">${t}</span>`).join(''); }
+chips('finishChips',FINISH,finishSel,'togFinish');
+chips('styleChips',STYLE,styleSel,'togStyle');
+chips('toneChips',TONE,toneSel,'togTone');
+
+function toggle(id){ const s=document.querySelector(`[data-sec="${id}"]`); s.classList.toggle('open'); }
+
+// ---- the three movements map to the three Strata lines ----
+// line 1 (record): identity + piece ; line 2 (catalog): commerce + folio ; line 3 (eye): teaching
+function recompute(){
+  const l1=( (done.identity?0.5:0)+(done.piece?0.5:0) );
+  const l2=( (done.commerce?0.5:0)+(done.folio?0.5:0) );
+  const l3=( done.eye?1:(styleSel.size+toneSel.size>0?0.5:0) );
+  setMark(l1,l2,l3);
+  const filled=[done.identity,done.piece,done.commerce,done.folio,done.eye].filter(Boolean).length;
+  const pct=Math.round((l1+l2+l3)/3*100);
+  document.getElementById('pctNum').textContent=pct;
+  // state band
+  const chip=document.getElementById('stateChip');
+  if(pct===0){chip.className='ts-state st-capture';chip.textContent='Capture';}
+  else if(pct>=100){chip.className='ts-state st-ready';chip.textContent='Catalog-ready';}
+  else {chip.className='ts-state st-draft';chip.textContent='Draft';}
+  guide(pct,filled);
+}
+function setMark(a,b,c){ const m=document.getElementById('strata').children; m[0].style.setProperty('--f',a); m[1].style.setProperty('--f',b); m[2].style.setProperty('--f',c); }
+
+function guide(pct,filled){
+  const g=document.getElementById('guideText'); let msg;
+  const missing=[];
+  if(!done.identity) missing.push('a name');
+  if(!done.piece) missing.push('dimensions');
+  if(!done.commerce) missing.push('a price');
+  if(!done.folio) missing.push('an image');
+  if(!done.eye) missing.push('its style');
+  if(pct===0) msg=`The librarian is here if you want it. <b>Start anywhere</b> — identity, the price, or just teach its style. Nothing is required to save.`;
+  else if(pct>=100) msg=`<b>Fully composed.</b> This piece is catalog-ready and taught — it'll match at the top of its kind. Nicely done.`;
+  else if(missing.length<=2) msg=`Almost there — still missing <b>${missing.join(' and ')}</b>. Add them, or save the draft and finish later.`;
+  else msg=`Coming together. Still open: <b>${missing.slice(0,3).join(', ')}</b>${missing.length>3?'…':''}. Fill them in any order.`;
+  g.innerHTML=msg;
+}
+
+// ---- field handlers: fill marks the section done, advances the mark ----
+function onIdentity(){
+  const name=document.getElementById('f-name').value.trim();
+  const maker=document.getElementById('f-maker').value.trim();
+  // live preview
+  const tn=document.getElementById('tsName');
+  if(name){ tn.textContent=name; tn.classList.remove('empty'); } else { tn.textContent='A piece, taking shape…'; tn.classList.add('empty'); }
+  document.getElementById('tsSub').textContent = maker? maker : (name?'':'Fill any section below. The piece composes itself as you go.');
+  done.identity = !!(name && maker);
+  mark('identity', done.identity? 'identity set' : (name?'needs a maker':'not yet written'));
+}
+function onPiece(){
+  const w=val('f-w'),d=val('f-d'),h=val('f-h'),mat=val('f-mat');
+  done.piece = !!(w&&d&&h&&mat);
+  const sub = (w&&d&&h)? `${w} × ${d} × ${h}` : '';
+  if(sub && !done.identity) {} // keep sub for maker if present
+  if(done.piece){ document.getElementById('tsSub').textContent = `${w} × ${d} × ${h} · ${mat}`; }
+  mark('piece', done.piece? `${w}×${d}×${h}` : ((w||d||h||mat)?'partly written':'not yet written'));
+}
+function onCommerce(){
+  const t=val('f-trade'),r=val('f-retail'),l=val('f-lead');
+  done.commerce = !!(t&&r&&l);
+  mark('commerce', done.commerce? `${t} trade` : ((t||r||l)?'partly written':'not yet written'));
+}
+function togFinish(t,el){ tg(finishSel,t,el); recompute(); }
+function togStyle(t,el){ tg(styleSel,t,el); evalEye(); }
+function togTone(t,el){ tg(toneSel,t,el); evalEye(); }
+function evalEye(){
+  done.eye = (styleSel.size>=1 && toneSel.size>=1);
+  mark('eye', done.eye? `taught · ${styleSel.size+toneSel.size} traits` : ((styleSel.size+toneSel.size)?'teaching…':'untaught'));
+}
+function addImage(){
+  images++;
+  const f=document.getElementById('folio');
+  const card=document.createElement('div'); card.className='fcard'; card.innerHTML=`<div class="fk">IMG ${images}</div>`;
+  f.insertBefore(card, f.querySelector('.dropzone'));
+  // first image fills the preview tile
+  if(images===1){ document.getElementById('tsImg').classList.add('has'); }
+  done.folio = images>=1;
+  mark('folio', `${images} image${images>1?'s':''}`);
+}
+
+// helpers
+function val(id){return document.getElementById(id).value.trim();}
+function tg(set,t,el){ if(set.has(t)){set.delete(t);el.classList.remove('on');}else{set.add(t);el.classList.add('on');} }
+function mark(sec,status){
+  const s=document.querySelector(`[data-sec="${sec}"]`);
+  s.classList.toggle('done',done[sec]);
+  const st=document.getElementById('st-'+sec);
+  st.textContent=status; st.classList.toggle('empty', !done[sec]);
+  recompute();
+}
+function saveDraft(){
+  const pct=document.getElementById('pctNum').textContent;
+  toast(pct>=100? 'Saved — catalog-ready and taught. It joins the shelf at full strength.' : `Saved as a draft at ${pct}%. It lives on your shelf; deepen it anytime. Nothing was lost.`);
+}
+function toast(msg){ const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),3800); }
+
+// open identity to start
+toggle('identity');
+recompute();
+</script>
+</body>
+</html>

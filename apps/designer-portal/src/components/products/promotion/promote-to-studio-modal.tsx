@@ -15,6 +15,7 @@ import {
   PrefilledChip,
   LayerChip,
 } from '@patina/catalog-ui';
+import { RoomSheet } from '@/components/document/rooms/room-sheet';
 
 interface PromoteToStudioModalProps {
   open: boolean;
@@ -22,6 +23,15 @@ interface PromoteToStudioModalProps {
   onClose: () => void;
   /** Fires after the RPC succeeds. Caller renders PromotionToast off this. */
   onSuccess?: (productId: string) => void;
+  /** D4: drop the box-shadow for any NON-sheet mount over a Document surface
+   *  (depth then reads from the scrim + the hairline border). The Library Room
+   *  now uses `asSheet` below; retained for other over-Document modal uses. */
+  shadowless?: boolean;
+  /** R41 F4: render the flow as a paper RoomSheet over the Room (doc grammar —
+   *  paper, flat edges, no shadow, slide-up) instead of the portal-modal card.
+   *  The form, validation, and RPC are unchanged. Defaults off: every existing
+   *  portal caller keeps the modal. */
+  asSheet?: boolean;
 }
 
 interface VendorContactForm {
@@ -63,6 +73,8 @@ export function PromoteToStudioModal({
   productId,
   onClose,
   onSuccess,
+  shadowless = false,
+  asSheet = false,
 }: PromoteToStudioModalProps) {
   const enabled = open && Boolean(productId);
   const { data: product } = useProduct(productId ?? '');
@@ -173,15 +185,19 @@ export function PromoteToStudioModal({
     });
   }, [open]);
 
-  // Escape closes.
+  // Escape closes. In sheet mode RoomSheet owns Esc — don't double-bind.
   useEffect(() => {
-    if (!open) return;
+    if (!open || asSheet) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        // Stop the Room (RoomShell) from also catching Escape and leaving (D14).
+        event.stopPropagation();
+        onClose();
+      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, asSheet, onClose]);
 
   const promote = usePromoteToStudio();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -226,25 +242,9 @@ export function PromoteToStudioModal({
 
   if (!open) return null;
 
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Promote to Studio Library"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(44, 41, 38, 0.45)' }}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        className="relative flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-lg bg-[var(--bg-surface)]"
-        style={{
-          boxShadow: '0 32px 80px rgba(44, 41, 38, 0.3)',
-          border: '1px solid var(--border-default)',
-        }}
-      >
-        <header className="flex items-start justify-between gap-3 border-b border-[var(--border-default)] px-6 pt-6 pb-4">
+  const body = (
+    <>
+        <header className={`flex items-start justify-between gap-3 border-b border-[var(--border-default)] pt-6 pb-4 ${asSheet ? '' : 'px-6'}`}>
           <div className="flex flex-col gap-2">
             <LayerChip layer="studio" size="sm" />
             <h2 className="type-section-head">Promote to Studio Library</h2>
@@ -263,7 +263,7 @@ export function PromoteToStudioModal({
         </header>
 
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
-          <div className="flex flex-col gap-5 px-6 py-5">
+          <div className={`flex flex-col gap-5 py-5 ${asSheet ? '' : 'px-6'}`}>
             {/* Studio destination */}
             <Field
               label="Studio"
@@ -429,7 +429,7 @@ export function PromoteToStudioModal({
             )}
           </div>
 
-          <footer className="flex items-center justify-end gap-2 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-6 py-3">
+          <footer className={`flex items-center justify-end gap-2 border-t border-[var(--border-default)] py-3 ${asSheet ? '' : 'px-6 bg-[var(--bg-surface)]'}`}>
             <Button
               type="button"
               variant="ghost"
@@ -445,6 +445,37 @@ export function PromoteToStudioModal({
             </Button>
           </footer>
         </form>
+    </>
+  );
+
+  // R41 F4 — a paper sheet over the Room (doc grammar), the form unchanged.
+  if (asSheet) {
+    return (
+      <RoomSheet open={open} onClose={onClose} title="Promote to Studio Library">
+        {body}
+      </RoomSheet>
+    );
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Promote to Studio Library"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(44, 41, 38, 0.45)' }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="relative flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-lg bg-[var(--bg-surface)]"
+        style={{
+          ...(shadowless ? {} : { boxShadow: '0 32px 80px rgba(44, 41, 38, 0.3)' }),
+          border: '1px solid var(--border-default)',
+        }}
+      >
+        {body}
       </div>
     </div>
   );

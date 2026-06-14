@@ -1521,4 +1521,286 @@ intentionally left.)
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I28 · R1–R35 · L1–L3 · THE GO · FLIP CONFIRMED · last id = I28*
+## Rulings — design session, 2026-06-13 (Track 3 — the Accounts book, the Aesthete fold, the Engine, the Library, the Composing Page)
+
+> Opens Track 3 of the Dissolve. Source for look/feel: `patina-dissolve-eleven-surfaces-v1.html` §10–12 (landed I27), the shipped Orders book (R28), ledger front-matter (I23), and the Strata progress system (R35) — now joined by two prototypes landed in the workstream dir: `patina-library-room-prototype.html` (the Room shell + the Library, R39) and `patina-composing-page-prototype.html` (the Composing Page, R40). These rulings unblock the build I27 deferred ("return with the Accounts/Aesthete design session").
+
+### R36 · The Accounts book — the studio's money ledger — 2026-06-13
+
+R26 put per-engagement money inside the document (the Account Page, a Project-section band, studio-eyes-only). What stays inherently studio-wide — cross-engagement receivables, the studio's own earnings, the Pledge — needs its own Drawer ledger. R5 named the destiny ("Accounts: revenue/AR … the 25% Pledge rendered as a line in the studio's own account book"); this rules its shape.
+
+The Accounts book grows pages in the R28 grammar — DM-mono page links, never tabs — and carries three: **Ledger** (invoices: draft / sent / paid / partially-paid / void — the old Billing list), **Receivables** (A/R aging buckets plus the Send-reminder dunning Billing carried), and **Earnings** (design fees + Via-Patina commissions + teaching royalties; the Aesthete fold lives here per R37). The opening **front-matter** band (the I23 treatment — a mono lens caption with stat pairs, charcoal sheet, no dashboard furniture) states **Revenue · AR · margin**: money in, money owed, margin percent. This extends R5's revenue/AR lens with margin now that the per-engagement Account Pages (R26) roll up into the book. A teaching lens joins this band — ruled in R37.
+
+Aging receivables obey the action test (R22): an invoice past due **rises on the Desk as a need line** — the available act is "send the reminder / chase" — and the Receivables page carries the same dunning action, so one act updates both surfaces. A receivable still within terms has no available act and therefore stays an in-motion reading on the page, never a Desk folder. The book aggregates; it does not re-author. The per-engagement Account Page (R26) is the leaf, this book is the sum — it rolls up the Account Pages and the cross-engagement rows (studio AR, earnings) that have no single-document home, with no figure entered in two places. Studio-eyes-only carries over from R26; bookkeeper access rides the colophon's Team… affordance (R29 / §14.6). Drawer weight: Accounts is a **Sheet** (D14), not a Room — pull, glance, put it back; the document stays mounted beneath.
+
+### R37 · The Aesthete fold — teaching royalties and the two-sided Pledge — 2026-06-13
+
+The brand-critical rendering, and the one named design deliverable the flip left open (R21, THE GO). The Designer-Taught loop (R31) earns the designer money; R5 routed teaching royalties and the 25% Pledge into Accounts. This rules how that money reads, on the Earnings page of the Accounts book (R36).
+
+The Pledge mechanic, as confirmed this session (correct against brand if it differs): ordering via Patina earns the designer a commission, and 25% of it is the **Pledge** — rendered **two-sided**: what it returns to her, and what it gives to the commons (R30's worked example: a $336 commission, $84 at 25%).
+
+The **Earnings page reads in two bands.** *What you earn* gathers design fees and Via-Patina commissions — client-work income. *What teaching returns* gathers teaching royalties and the running Pledge — taught-taste income. Keeping them apart lets the Designer-Taught loop speak in its own voice instead of dissolving into the invoice stream. The **Pledge is twinned, and the two directions never blur**: each Pledge event renders as a pair of distinctly labelled sub-lines — **returned to you** (royalty income, accruing to a year-to-date total: "the Pledge, returned to you: $X") and **given to the commons** (the share that funds the shared catalog and maker community). Money she keeps and money she contributes are labelled on the face of the line, so "is this mine?" is answered without a tooltip. R30's order-moment line now shows both halves at the instant of ordering, then lands both in this band.
+
+Teaching also appears in the Accounts **front-matter as one quiet stat pair** — a teaching lens beside Revenue · AR · margin — to make the loop visible where the book opens. This is rendered strictly as a single mono lens pair (for example "Taught this month · royalties returned"), never a dashboard: a deliberate, bounded extension of R5's "no dashboard book," and it must stay one line and not grow furniture. Teaching *progress* — accuracy, impact — stays where R32 put it, in the Library Room's foot line; Accounts shows only the monetary face, and the front-matter pair links into the Library for the progress detail.
+
+**Open (brand input, not ruled here):** the commission rate and the Designer-Selections-vs-Style-Matches split that feed these lines are a marketplace-config / brand decision. The rendering is built to receive them; promote them to spec §14 at the v1.4 cut.
+
+### R38 · The Engine — built as a presence (R31, build-grade) — 2026-06-13
+
+R31 ruled the Engine "a presence, not a place." This deepens it to what Claude Code can build and resolves C-1, the highest-stakes undefined item: where a conversational capability lives in a model whose whole thesis is "no chrome, just paper."
+
+**⌘K speaks by read intent, with no mode.** One box: a destination-like input jumps (the existing ⌘K behavior); a question-like input asks the Engine, whose answer renders inline beneath the query as **paper result-lines** — each a product or idea in document grammar carrying one act, **Place → [document]**. No toggle, no "ask mode," no chat affordance. Ask-and-place; the Engine is summoned where asking already happens and leaves no surface behind it. While it works, the Engine "thinking" state uses the R35 Strata sweep, never a spinner.
+
+**No thread, no history, no avatar — but the placement carries provenance.** The ask itself does not persist; what persists is the *act* — a placed item wears a quiet "via the Engine" mark in the document and its folio, and the Engine profile updates silently (the teaching). This holds R31's no-room rule while giving trust a faint, honest footprint ("where did this come from?") without reconstructing a conversation log. The **Library's librarian** is the second and only other home: the standing input at the top of the Library Room (R32, built in R39) takes the longer work — style recommendations, market trends, deeper sittings — in the same paper grammar and the same no-history stance ("Ask the librarian … every ask teaches your eye"). Two homes, both places where asking is already native. `/portal/companion` retires at the dissolve, re-skinned rather than rebuilt: its backend capability is reused behind these two surfaces while the conversational web surface is exiled (⌘K-reachable only until removal). Always the Engine / Designer-Taught Intelligence in copy — never "AI."
+
+### R39 · The Library — the first Room, on a reusable Rooms shell (D14) — 2026-06-13
+
+R32 builds the Library as the *first Room*; D14 ruled the Sheets-versus-Rooms model but no Room has been built yet. This rules the build order and what the Room is. Canonical look/feel: `patina-library-room-prototype.html` — the Room shell and the Library together; the Desk marks a Room "walk in" and a book "a sheet" ("A Room is a place you walk into. A book is a sheet you pull"), and exiting reads "Putting the Library down…".
+
+**Build the Rooms shell first; the Library is its first tenant.** The reusable physics land as a foundation before any Library content: entering a Room runs the normal **put-down** of the current document (D1 — a Room *is* the thing in hand, so the timer chains out through the log offer), the **Drawer persists** inside the Room (D8), the Room renders **full-bleed paper** (D12) with **zero shadows** (D4), the Drawer marks room-weight objects with a **doorway affordance** (a spine tick and "↗" so the hand learns which pull opens which physics), and **leaving a Room returns you to wherever you were.** This costs more upfront than a one-off surface, but it validates the physics once and makes the second Room nearly free.
+
+The Library itself is **three shelves separated by Strata rules** (R32, unchanged): **My Library** (raw captures — Chrome extension, photos, URL paste — landing raw, no taxonomy, no queue, taught when ready), **Studio Library** (proven, promoted from captures), and **Patina Catalog** (the marketplace, with Via-Patina marks and maker nomination), with capture → promote → nominate as the movement between shelves. The Engine stands at the top as the librarian (R38). **Teaching happens while browsing** (R32): needs-teaching cards carry a Golden-Hour tag; a tap opens Quick Tags inline on the card, and Deep Analysis opens as a paper sheet over the Room for fifteen-minute sittings. Teaching stats compress to one quiet line in the Room's foot ("taught today · accuracy · future matches improved") — present, never gamified. Authoring a new piece opens the Composing Page (R40). The old Teaching Queue page and the Products zone dissolve into this Room.
+
+### R40 · The Composing Page — detailed processes as self-composing paper — 2026-06-13
+
+Ratifies `patina-composing-page-prototype.html` as the canonical pattern for "detailed processes" in The Document — the model's answer to the wizard, the modal, and the multi-step form. A detailed process is **a paper artifact that builds itself**: there is no Next, no Back, no "Step N of M." Sections fill in **any order**, the artifact shows its own gaps, and it is a real, usable **draft at every percentage**, saveable at any point. The **Strata Mark (R35) is the only progress indicator** there is; the three movements map to the three Strata lines, and the state reads Capture → Draft → Catalog-ready off the same fill the mark shows.
+
+Three weights, one continuum — **inline · sheet · room**: the same compositional act can happen inline (Quick Tags on a card, R32), as a sheet over a surface, or as a full room/page (the Composing Page) for the deepest work. The weight changes; the grammar does not.
+
+First instance — **Compose a piece** (a catalog product), reached from the Library (R39): three movements mapping to the three Strata lines — *the record* (identity + the piece: name, maker, dimensions, materials), *the catalog* (commerce + the folio: trade/retail price, lead time, min order, images & cut sheets — the same folio as R24), and *the eye* (the teaching — style & character, the exact Quick-Tags act of R32, here as one section of the larger composition). It is **composed from both sides of the marketplace**: the maker fills price and lead time in their own portal; the designer adds the eye — one page, two authors. The librarian (the Engine, R38) stands by, but nothing is required to save — a piece can rest at draft and be taught later from the shelf. This pattern governs detailed creation flows generally, not the Library alone; other "compose" surfaces adopt it as they arrive.
+
+### Spec cut — v1.4 (flip-state consolidation) — 2026-06-13
+
+`the-document-spec-v1.4.md` cut, superseding v1.3 (preserved). Folds the flip
+(THE GO / FLIP CONFIRMED), Dissolve Tracks 1–2 (R23–R34, I25–I27), the Strata
+progress system (R35 / I28), and the Track 3 rulings R36–R40 — with the
+`patina-library-room-prototype.html` and `patina-composing-page-prototype.html`
+references — into the body. §-numbers are frozen, so every existing `spec §N`
+cross-reference in this log remains valid. New: §16 (the Dissolve) and §14.15
+(Via Patina commission rate + the Designer-Selections-vs-Style-Matches split,
+open). The I27 "HTML is the old version" flags are carried as §0/§10 notes.
+
+### I29 · Dissolve Track 3 — the Rooms shell + the Library (R39/R32, slices 1–2) — 2026-06-13
+
+Built on `the-document/track3-rooms-library`. **No migrations** — presentation plus reuse of the shipped catalog / teaching / time layers; the audit (`the-document-track3-audit.md`) confirmed the data already exists everywhere Track 3 needs it. type-check + lint (including the D4 shadow ban, scope unchanged — the Room components live under `components/document/**`, already covered) are green on every new file; live-verified against real data on local Supabase.
+
+**Slice 1 — the reusable Rooms shell.** `RoomShell` (`components/document/rooms/room-shell.tsx`): full-bleed paper (D12), zero shadows (D4), a thin head (leave · ident · one action slot), reduced-motion-safe enter/leave. It mounts under the `(document)` group (`app/(document)/library/page.tsx`) so the Drawer (D8), the log strip, and ⌘K persist around it. **Put-down on entry rides the existing path, not a fork** — navigating off `/doc/[id]` unmounts the page, whose `useHoldDocument` cleanup chains the timer out through the log offer (R39 reuse #5). **Return-to-origin** is a new session-scoped stash (`lib/document/room-origin.ts`, distinct from the telemetry-only `rememberDocumentInHand`); leaving reads it and navigates back (verified live: `/library` → ← → `/desk`). The Drawer marks the Library room-weight with a **doorway affordance** (Strata spine-tick + "↗"); clicking it — or ⌘K "Library", or the mobile drawer row — navigates IN rather than opening a sheet, centralized in the Drawer's `open-ledger` listener so all three entry points agree. A room-weight book reads "· here" when current.
+
+**Slice 2 — the Library, first Room.** Three Strata-ruled shelves on the real catalog (`useLayerProducts` / `useLayerCounts`; layer enum `personal | studio | catalog`) — re-housed, data layer untouched. Capture lands raw in My Library (`useCaptureProduct`; verified end-to-end — the count ticked and the card appeared with its Promote CTA). Promote (personal→studio) reuses `PromoteToStudioModal`; nominate (studio→catalog) reuses `NominateToCatalogModal` from Studio cards (vendor resolved on click, studio from `useOrganizations`). Teaching in place: inline **Quick Tags** (a doc-grammar panel over `useStyleArchetypes` + `useAssignStyle`) and **Deep Analysis** as a paper sheet over the Room (`RoomSheet`) reusing the proven `StyleAttributionPanel` + `StyleSpectrumSlider` + `ClientMatchingPanel` → `useSubmitTeaching`. The foot compresses teaching to one quiet line (`useDesignerTeachingStats`); gamification (badges, daily-goal bars) stripped per R32/R37. The **librarian** input stands atop the Room (R38) but the ASK is deferred to slice 3 (the Engine) — present, honestly noted, no companion call. The old Teaching Queue page and the Products zone stay URL/⌘K-reachable (staged exile, D7).
+
+**Flagged for the design session (none blocking slices 1–2):**
+1. **Non-project Room time.** The library-room prototype's Hours sheet shows a "Sourcing · the Library" line, implying a Room logs its own time. The shipped time system is project-scoped and R39's physics list requires only putting the held *document* down — slice 1 does that and does NOT capture Library time. Wants a ruling if "studio time" inside a Room is intended.
+2. **Via-Patina mark + Golden-Hour signal are derived, not columns.** The Catalog "Patina" mark renders off `layer='catalog'`; "needs teaching" renders off `teaching_queue` membership. Nothing invented; a distinct Via-Patina / Golden-Hour signal would need an additive read view (R30 territory).
+3. **Foot stat granularity.** `designer_teaching_stats` is lifetime, not per-day — the foot reads "taught" (lifetime), not "taught today". A daily cut needs a new read.
+4. **Grammar seam.** Promote / Nominate reuse the existing portal-grammar modals (functional, correct movement); a doc-grammar re-skin is a follow-up, not a slice-2 blocker.
+
+**Next:** the L4 device check — the Library Room on Leah's phone (the Rooms physics are new, like the D13 walk) — before the Engine (slice 3). Screenshots ≥1280 were captured live; the local Chrome automation renders at a fixed ~1886px logical viewport, so the ~390px capture folds into the L4 device walk.
+
+### I30 · Dissolve Track 3 — the Engine, a presence (R38, slice 3) — 2026-06-13
+
+Continues `the-document/track3-rooms-library`. Migration **00208** (additive: `project_ffe_items.added_via`). type-check + lint green; live-verified end-to-end on real data (both homes → ask → real result-lines → Place → the "via the Engine" mark + SPECIFIED stamp on the FF&E line); adversarially reviewed (3 confirmed fixes, 2 false alarms refuted).
+
+**The ask sources from the real catalog, not the companion edge fn — deliberately.** R38 says reuse `/portal/companion`'s backend, but the audit found its product extraction stubbed (`parseAIResponse` returns null) AND `companion-message` **persists** conversation (`companion_messages`) — which R38 forbids for the Engine ("no thread, no history; the ask does not persist"). So the Engine answers from a **non-persisting cross-layer catalog search** (`useCrossLayerSearch`) — the designer's own taught/captured shelves, which *is* Designer-Taught Intelligence. Only the **placement** persists. This honors the no-persistence rule, is reliable, and is locally verifiable (the edge fns aren't served in local dev — `useCompanionQuickActions` already treats them as optional). **Follow-up:** LLM-curated re-ranking via a NON-persisting companion path (Claude tool_use, no message write) is a one-line swap of the result-line source.
+
+**⌘K (3a) — no mode.** A destination-like input filters documents/ledgers/actions (jump, unchanged); a non-empty query always also offers an **"Ask the Engine"** row (last option) — when nothing matches, it is the natural Enter target. Choosing it answers INLINE in the same paper panel: the R35 sweep while reading, then paper **result-lines** (real piece · maker · layer), each carrying **Place → [document]**. The held document (resolved from `/doc/[id]` via the desk data) is the place target; off-document, a quiet "Place into" picker of active projects. No route change, no persistence; "← results" / Esc steps back.
+
+**The librarian (3b)** — the Library Room's standing input (replacing the slice-2 deferred stub) does the same ask-and-place inline.
+
+**Placement + provenance.** `usePlaceInDocument` inserts a `project_ffe_items` line (mirroring the 00175 feed-through shape) with `added_via='engine'`; the FF&E `select('*')` carries it through and the line wears a quiet **"via the Engine"** mark (ffe-section). Dual-pricing honored (00185): `unit_price_cents` = client `price_retail` (the budget source of truth), `trade_price_cents` = `price_trade`.
+
+**Review fixes (3 confirmed):** (1) HIGH — placement wrote trade cost into the client-price column (budget understatement); now mapped per 00185. (2) HIGH + (3) MED — `doPlace` lacked try/catch, so a team-member RLS rejection failed silently + leaked an unhandled rejection; now caught with an inline "you may not be the lead designer" message. (Refuted: the ⌘K Escape `stopPropagation` is correct; the ⌘K-results-have-no-toast is intentional — the inline "placed ✓" suffices and the bar stays open for a multi-place session.)
+
+**Copy:** the Engine surfaces say "the Engine / Designer-Taught Intelligence," never "AI." `/portal/companion` is already nav-less post-flip (exiled, ⌘K-unreached); its legacy copy stays pending Stage-3 removal — it is NOT the Engine surface.
+
+**Flags (none blocking):** the companion edge backend stays stubbed-for-products + persists, so the ask doesn't use it (above); R30's Via-Patina order-moment line into Accounts is slice 4–5; placed lines land `item_type='tbd'`, unassigned-room (designer assigns). **Next:** the Accounts book (R36, slice 4) + the Aesthete fold (R37, slice 5), then the Composing Page (R40, slice 6). The L4 device check (Rooms-shell physics, R39) is still pending.
+
+### I31 · Dissolve Track 3 — the Accounts book, a Drawer Sheet (R36, slice 4) — 2026-06-13
+
+Continues `the-document/track3-rooms-library`. Migration **00209** (additive: `invoices.ar_last_chased_at` + the `chase_invoice` RPC). type-check + lint + 36 desk-derivation tests green; **live-verified end-to-end on real data** (all three pages render; the overdue→Desk→chase→clear loop walked with INV-0001 temporarily backdated, then restored); adversarially reviewed (no critical bugs; 3 fixes applied).
+
+**The book reuses the Billing data layer wholesale — no rebuild.** The audit found everything already shipped: `useInvoices` (Ledger), `useArAging`/`computeArAging` + `useSendInvoice({type:'reminder'})` (Receivables + dunning), `useEarningsStats` (Earnings). The book is a re-housing in document grammar, not a new data layer. The `accounts` LEDGERS entry (weight `sheet`, spine sage) already existed with a stub — slice 4 fills it. Three pages in the R28 grammar (DM-mono links, never tabs): **Ledger · Receivables · Earnings**; the I23 front-matter states **Revenue · A/R · margin**. Studio-eyes-only.
+
+**No figure authored twice (R36).** Revenue (Σ `amount_paid_cents`) and A/R (`computeArAging` balance) come straight off invoice rows; the front-matter margin uses the SAME committed-line trade→client definition as the per-engagement Account Page (`useStudioMargin` mirrors `use-account-page.ts`, aggregated studio-wide, one query). The book is the sum; the R26 Account Page is the leaf (its `→ Accounts ↗` button already pointed here).
+
+**The overdue receivable rises on the Desk via the R28-conflict precedent — no `document_state` surgery.** `buildDeskReceivables` (mirroring `desk-conflicts.ts`) classifies invoices client-side in `use-desk-engagements` and injects a `ReceivableSignal` map into `partitionDesk` (4th arg, like `conflicts`). A new `overdue_invoice` NeedKind (rank 1 — money owed sorts just under a blocking decision) carries `need.ledger` so the folder **opens the Accounts book onto Receivables** (the act surface) rather than the document — `folder-card` renders a button for ledger-acted needs. AR thresholds (`AR_OVERDUE_NEEDS_DAYS=1`, `AR_CHASE_COOLDOWN_DAYS=7`, provisional like the send weave) sit beside the R10/R22 set.
+
+**One act clears both surfaces (R36 / R22).** The automated reminder cadence owns `last_reminder_at`/`ar_flagged_at` — a manual nudge must not perturb it — so the designer's chase gets its OWN stamp, `ar_last_chased_at` (00209, `chase_invoice` SECURITY DEFINER + ownership + status guard). The Receivables dunning act emails the reminder AND stamps the chase; the Desk need gates on overdue **AND** not-chased-within-cooldown, so chasing drops it (verified live: the PAST DUE folder cleared and Chen fell back to its next need). The Desk reads invoices under its OWN key (`['document-state','desk']`), so `doChase` invalidates `['document-state']` too — the Orders-book same-truck precedent.
+
+**Review fixes (3):** (1) server-side status guard on `chase_invoice` (a direct RPC call can't stamp a paid/void invoice); (2) corrected the `useChaseInvoice` comment (it does NOT clear the Desk — the Receivables page does, separately) to kill a maintenance trap; (3) Ledger "owed" tail now only reads for issued receivables (a draft isn't owed). Also fixed a bare-DATE timezone off-by-one in desk-derivation's `fmtDay` (the invoice due_date rendered a day early).
+
+**Open input carried forward (R37, §14.15):** the Earnings page builds the *What you earn* band on real earnings (design fees + Via-Patina commissions); the *What teaching returns* band + the twinned 25% Pledge are the Aesthete fold (slice 5). There is **no `teaching_royalty` earnings source_type and no stored commission/Pledge rate** in the schema yet — flagged here, to be wired from brand/marketplace config in slice 5 (render real-or-placeholder, never invent the rate).
+
+### I32 · Dissolve Track 3 — the Aesthete fold (R37, slice 5) — 2026-06-13
+
+Continues `the-document/track3-rooms-library`. **No migration** — the Pledge is a client-side read model computed from existing `designer_earnings`. type-check + lint green; **live-verified** (a test commission temporarily seeded then removed: $336 commission → $84 Pledge, R30's exact worked example, rendered twinned).
+
+**The Earnings page now reads in two bands (R37).** *What you earn* (slice 4) gathers design fees + Via-Patina commissions; *What teaching returns* (new) gathers the Designer-Taught loop's income — the **two-sided 25% Pledge**. Each Pledge event renders the twinned, distinctly-labelled sub-lines — **returned to you** (sage) and **given to the commons** (clay) — never blurred; the brand-critical **"returned to you, YTD"** crescendo accrues at the band head. A one-line **teaching lens** ("N taught · $X returned → Library ↗") joins the front-matter beside Revenue·A/R·margin and links into the Library Room for the progress detail (R37: the monetary face here, the progress in the Library's foot).
+
+**The Pledge is computed, not stored — 25% is confirmed, the commons split is NOT.** `pledge.ts`: `PLEDGE_RATE = 0.25` (R37/R30, confirmed). The Pledge = 25% × the Via-Patina commission (`product_commission` earnings — real). Per R30's worked example ("the Pledge returns $84 as teaching royalty") **returned-to-you = the full Pledge** (real, accrues YTD — satisfies the acceptance). `COMMONS_MATCH_RATE = null` (OPEN §14.15): the commons share renders "—" with a visible flag ("the commons share awaits brand config — never invented"). There is **no `teaching_royalty` source_type and no stored rate** — the structure is built to receive the config; nothing is invented.
+
+**⚠ Open — needs design ruling (R30 vs R37 tension):** R30's example frames the Pledge as *returning* to the designer ("returns $84 as teaching royalty"), but R37 says "money she **contributes**" to the commons — i.e. the commons share may be carved OUT of her Pledge rather than a separate match alongside it. The build follows R30 (returned = full Pledge; commons = a separate, pending rate) so the YTD crescendo is real, but the commons mechanic (carve-out vs match) + its rate are the design session's to rule. Flagged, not silently chosen.
+
+**Money-unit correction (caught in build):** the Track-3 audit map called `designer_earnings` money "dollars," but the schema (`net_amount` integer) and the live `/portal/earnings` page (`cents/100`) prove it is **CENTS**. The earnings surfaces format with `fmtUsd` (cents); the misleading `fmtUsdFromDollars` helper was removed. (Invisible at the seed's $0 earnings; a 100× error with real data — fixed before it shipped.)
+
+### I33 · Dissolve Track 3 — the Composing Page (R40, slice 6) — 2026-06-13
+
+Continues `the-document/track3-rooms-library`. **No migration** — reuses the shipped catalog tables. type-check + lint green; **live-verified** (entered from the Library; "Heirloom Oak Dining Table" by "Nordic Atelier" → the mark advanced to 17% / DRAFT off the fill; Save draft wrote a real `products` row, layer `personal`/status `draft`; test row removed).
+
+**The anti-wizard, as a Room (R40).** `/compose` is a full-bleed paper Room (reuses RoomShell). The page is a paper artifact that **builds itself**: five sections fill in **any order**, each shows its own completion, and the piece is a usable draft at every percent. There is **no Next/Back/Step N of M** — the **Strata Mark is the only progress indicator**: the three movements map to the three lines (*the record* = identity + the piece → line 1; *the catalog* = commerce + the folio → line 2; *the eye* = the teaching → line 3), and the state band reads **Capture → Draft → Catalog-ready** off the same fill (`compose-progress.ts`, pure). A sticky live preview + the librarian's offer line (⌘K, never blocks) sit at the top.
+
+**It writes a real catalog draft (no migration).** `useComposePiece` creates/updates a `products` row on the designer's own shelf (`layer 'personal'`, `status 'draft'`) — saveable at any completeness; `savedId` is held so re-saves UPDATE (no duplicates). The eye reuses `product_styles` (the same upsert `useAssignStyle` uses) — the exact Quick-Tags act of R32, here one section of the larger composition. **Percent-composed is DERIVED from what's filled** (the "draft/percent-composed read" the plan called for) — no stored progress column. Prices: the form takes dollars, persisted as integer cents (`price_trade`/`price_retail`); **min-order is dropped (no column)** — schema is authority. **Two-sided authorship** holds in copy (the maker fills price/lead time in their portal; the designer adds the eye); nothing is required to save.
+
+**Nested-Room return (RoomShell `backTo`).** Compose is always reached from the Library, but `rememberRoomOrigin` no-ops on a Room path (the single origin slot holds the surface *before* the Library), so the leave read "← the Desk." Added an optional `backTo`/`backLabel` to RoomShell: a nested Room returns to its parent and leaves the stashed origin intact (so leaving the Library still returns to the real prior surface). `isRoomPath` now also covers `/compose`. Verified: "← the Library."
+
+**The Composing Page is the pattern, not the one screen (R40).** This is the model's answer to the wizard/modal/multi-step form generally — `inline · sheet · room`, one grammar, three weights. Other "compose" surfaces adopt it as they arrive.
+
+---
+
+## Rulings — design session, 2026-06-13 (Track 3 review)
+
+### R41 · Track 3 review — blessed, with rulings on the flagged calls and four fixes — 2026-06-13
+
+Reviews the Track 3 build (I29–I33, slices 1–6 on `the-document/track3-rooms-library`): the Rooms shell + the Library, the Engine, the Accounts book, the Aesthete fold, the Composing Page. Built fast, additive-only (00208 `added_via`, 00209 `chase_invoice`), live-verified, each slice adversarially self-reviewed with fixes applied. The substance is sound; this ruling blesses it, rules the four designer-visible questions Claude Code raised, and names the gates to merge.
+
+**Blessed as built:**
+- **The Engine's no-persistence deviation (I30).** R38 said reuse `/portal/companion`; the audit found that backend *persists* messages — which R38 forbids ("the ask does not persist") — so Claude Code answered instead from a non-persisting cross-layer catalog search over the designer's own taught/captured shelves. That *is* Designer-Taught Intelligence, and choosing the rule over the instruction is exactly right. Blessed. The follow-up — LLM re-ranking via a non-persisting companion path (no message write) — is a code-only swap when wanted.
+- **The Desk-receivable model (I31).** An overdue invoice rises as an `overdue_invoice` need (ranked just under a blocking decision) whose folder opens the Accounts book onto Receivables — the *act surface*, not the document — and the manual chase carries its own `ar_last_chased_at` stamp so it never perturbs the automated reminder cadence. One act clears both surfaces. The action test (R22) applied to money, done right. Blessed.
+- The Composing Page writing a real `products` draft with **derived** percent (no stored progress column), the **cents** money-unit correction (a caught 100× error), and the derived Via-Patina / Golden-Hour signals (no invented columns) — all blessed as built.
+
+**Ruling — the Pledge is a separate match on top (resolves the R30/R37 tension).** "Returned to you" is the **full 25%** — R30's $84 on $336 stands and the YTD crescendo is real; "given to the commons" is a **separate Patina contribution alongside it**, never a carve-out of her share. The Pledge is generative — it does not shrink what she keeps. Rates ship as **visible provisional defaults** (tune later, the send-weave precedent), wired as named constants and flagged in-product as provisional: `PLEDGE_RATE = 25%` (confirmed); `COMMONS_MATCH_RATE` provisional **10%** of the commission, clearly labelled provisional; the **Designer-Selections vs Style-Matches commission differential** is an upstream earnings/marketplace concern (provisional-equal until brand differentiates) — the document renders whatever commission lands and needs no change when the split is set. §14.15 stays open for the FINAL brand/finance numbers; the build no longer renders "—".
+
+**Ruling — Room time is project-scoped in v1.** Rooms do not log time; the timer stays attached to project documents (I16 holds). Browsing/teaching in the Library is not billable project time, so the prototype's "Sourcing · the Library" Hours line is **deferred, not built** — "studio time" inside a Room is a deliberate later expansion, logged here as a known prototype-vs-build divergence rather than a silent drop.
+
+**Ruling — the foot stat reads the day.** R32's foot line is "taught **today**"; the build's lifetime `designer_teaching_stats` is a stand-in. Add a per-day read so the foot reads the day's teaching, matching the prototype (F3).
+
+**Ruling — Promote / Nominate may keep portal grammar for now.** The reused `PromoteToStudioModal` / `NominateToCatalogModal` are functional and the movement is correct; a document-grammar re-skin is a **follow-up polish, explicitly non-blocking** for the merge (F4).
+
+**Fixes (F1–F4):**
+1. **F1 — land the screenshots.** Track 3 committed none (only track-1/2 + the slice dirs exist). Capture and commit the ≥1280 set for each new surface — the Library, the Engine ask-and-place, the Accounts three pages + the Desk receivable, the Aesthete fold's twinned Pledge, the Composing Page; the ~390px set rides the L4 walk. The record cannot show its own surfaces until this lands.
+2. **F2 — the provisional rate constants.** Wire `COMMONS_MATCH_RATE` (provisional 10%) and the commission handling as named, tunable constants beside the R10 / R22 / send-weave set; render the commons line as a real provisional number, flagged provisional in-product — never present a provisional as final.
+3. **F3 — daily teaching read** (above): the Library foot reads "taught today," not lifetime.
+4. **F4 — doc-grammar re-skin of Promote / Nominate** — follow-up, non-blocking.
+
+**Gates to merge `the-document/track3-rooms-library` → main:** (1) the **L4 device check** — the Library Room, the Composing Page, and the Engine ask-and-place on Leah's phone (the Rooms physics are new, as the D13 walk was); GREEN means the shell is trustworthy for every future Room. (2) **F1 screenshots** landed. F2–F4 may ride the same PR or follow as a short polish slice; they do not block the merge. Rollback remains the pilot flag.
+
+---
+
+## Implementation decisions — Track 3 review fixes (2026-06-13)
+
+### I34 · F1–F4 landed — the Track 3 review fixes — 2026-06-13
+
+All four R41 fixes shipped on `the-document/track3-rooms-library`, additive-only,
+behind the `the-document-pilot` flag, in one PR. Each was adversarially
+self-reviewed (a 4-lens pass over the diff against the R41 rulings + D4 /
+additive / flag constraints); the catches it surfaced are folded in below.
+
+**F1 — the ≥1280 screenshot set landed.** `docs/design/the-document/screenshots/track-3/`
+now holds 15 desktop (1440px) captures, live against real/seeded data: the
+**Library Room** (shelves + librarian bar; the populated My Library) and its
+**foot reading "Taught today · 1"** (F3); inline **Quick Tags**, the **Deep
+Analysis** paper sheet, the **Capture** paper sheet; the **Promote paper
+RoomSheet** (F4); the **Engine** ⌘K ask ("credenza") → result-lines → **placed ✓**
+into Whitfield; the **Accounts** Ledger / Receivables (the overdue INV-0001 +
+the chase) / **the Aesthete fold** (the twinned Pledge with the real provisional
+commons figures — F2); the **Desk** PAST DUE receivable need; and the **Composing
+Page** at 17% and 83% (the Strata Mark the only progress). The capture harness is
+`apps/designer-portal/scripts/the-document-track3-shots.mjs` (the per-slice
+convention). The **~390px set is NOT here — it rides the L4 device walk** (R41).
+
+**F2 — provisional rate constants; the commons renders a real flagged number, no "—".**
+`pledge.ts`: `COMMONS_MATCH_RATE = 0.10` (was `null`) + `COMMONS_MATCH_PROVISIONAL = true`
+— named, tunable constants beside `PLEDGE_RATE` (the R10/R22/send-weave precedent).
+`returnedToYou` stays the **full 25%** (R41: a separate match on top, never a
+carve-out); `givenToCommons = commission × 0.10`. The Earnings band renders each
+commons sub-line as a real number with an in-product **"provisional · 10%"** tag
+and a band note ("the commons share is provisional (10%) — final rate awaits
+brand config §14.15"). The **Designer-Selections vs Style-Matches commission
+differential** is upstream earnings (provisional-equal until brand sets it) — the
+document renders whatever commission lands, so **no document change is needed and
+none was built** (R41/F2). §14.15 stays open for the FINAL brand/finance number;
+wiring it later is a one-constant change, no rebuild.
+
+**F3 — the Library foot reads "taught today."** Audit first (R41): `designer_teaching_stats`
+is a lifetime base table and `teaching_sessions` is unused, so the daily cut is a
+new additive read — `useDesignerTaughtToday()` counts distinct `product_styles`
+rows the designer wrote today (the canonical Quick-Tags / Deep-Analysis target),
+scoped to the designer's local day folded into the queryKey so it resets daily.
+**No migration** (a date filter on existing rows sufficed). The review caught a
+missing invalidation: `useAssignStyle` / `useSubmitTeaching` now invalidate
+`['designer-taught-today']` so the foot's count refreshes with accuracy / matches
+after a teach (verified live: the count ticked to 1). Accuracy and matches stay
+lifetime quality measures.
+
+**F4 — Promote / Nominate re-skinned as paper RoomSheets (non-blocking).** Both
+shared modals gained an opt-in `asSheet` prop that renders the unchanged form
+inside the Document `RoomSheet` (paper, flat edges, no shadow — D4; the
+white-card wrapper dropped, padding de-doubled, Esc owned by the sheet) instead
+of the portal-modal card. Default off — every existing portal caller (teaching
+page, layer-view, promotion banner) is untouched; only the Library Room passes
+`asSheet`. The movement (personal→studio, studio→catalog) and RPCs are unchanged.
+Shipped in this PR though R41 made it non-blocking.
+
+**Local demo seed:** `scripts/the-document-track3-demo-earnings.sql` (dev-only,
+idempotent) seeds for `designer@patina.dev` the Via-Patina commissions + design
+fees the Aesthete fold renders, one raw My Library piece (for the Promote shot),
+and flips INV-0001 overdue (the Desk/Receivables need). These are **real rows the
+document renders truthfully** — no figure is mocked; the Pledge arithmetic is
+computed from them.
+
+**Merge status:** F1 + F2 landed (the two merge-gating fixes), F3 + F4 ride the
+same PR. The remaining gate is the **L4 device walk** (human, Kody + Leah — the
+~390px captures get taken there). Do not merge until L4 is GREEN.
+
+---
+
+## Pilot record — the L4 device walk (2026-06-14)
+
+### L4 · Leah's phone — the Rooms shell + Track 3 surfaces — 2026-06-14
+
+**Gate:** the R39/R41 device check — the Rooms **physics** are new (a full-screen
+paper place you *walk into*), so they get validated on a real phone before they're
+trusted for every future Room. Per R41 the walk covers **three** surfaces: the
+Library Room, the Composing Page, and the Engine ask-and-place.
+
+**Build under test:** `the-document/track3-rooms-library` incl. the F1–F4 commit
+(`22006e8a`) — reached on Leah's phone via a local tunnel to :3000, so the "taught
+today" foot (F3), the paper Promote/Nominate sheets (F4), and the live Engine were
+all present in what she tapped. Flag default-on; rollback = the toggle.
+
+**Signal: GREEN — all three surfaces, clean.**
+- **The Library Room** — GREEN. The Rooms physics held one-handed: the doorway
+  read as walk-in vs pull, full-bleed paper, the Drawer persisted, no
+  shadow/zone/badge, walking in put a held document down (timer chained out),
+  capture + teach worked in place, leaving returned to origin.
+- **The Composing Page** — GREEN. Sections fill in any order, the Strata Mark is
+  the only progress, a usable draft at every percent, saved.
+- **The Engine ask-and-place** — GREEN. The ask returned real paper result-lines
+  and Place dropped a piece into a document. (The librarian is no longer inert —
+  the slice-2 deferred stub is closed.)
+- **Reduced motion** — GREEN. Run with Reduce Motion on: enter/leave fell to
+  plain fades, the put-down veil skipped, nothing janked or was lost.
+- **Findings:** none — a clean green. No physic felt off; nothing to route back.
+
+**The ~390px set landed (F1 closeout).** The walk is where the mobile frame gets
+taken (desktop automation couldn't — fixed viewport). Committed 14 ~390px
+captures (`screenshots/track-3/mobile-*.png`) generated via the capture harness at
+a 390px viewport (`SHOT_W=390 SHOT_H=844 SHOT_PREFIX=mobile-`), corroborating the
+green walk: the Library Room, foot, Quick Tags, Deep Analysis, Promote sheet, the
+Engine ask→placed, the Composing Page, the Desk receivable, and the Accounts
+pages all render in mobile form. **Harness-render note (NOT a gate failure, device
+walk was green):** at a strict 390px headless frame the *overlay* surfaces (the ⌘K
+command bar, the ledger DocSheets) and the Room head action row sit a touch wide —
+right-edge content (e.g. the commons dollar figure on the Aesthete fold, the
+"Capture" head button) clips. Full-page surfaces (Library, Compose, Desk) are
+clean. Confirm the overlay width on a real device in a later mobile-polish pass;
+note that Accounts was a bonus capture, not one of the three walked surfaces.
+
+**Disposition:** the L4 gate is **satisfied** — the last merge gate for
+`the-document/track3-rooms-library` → main. With F1 + F2 landed and L4 green,
+**Track 3 is cleared to merge** (PR #13 marked ready for review; the merge itself
+is Kody's / a reviewer's call). After merge: deploy migrations 00191–00209,
+surface week-one flight telemetry at the next review.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I34 · R1–R41 · L1–L4 · THE GO · FLIP CONFIRMED · last id = L4*
