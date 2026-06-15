@@ -206,6 +206,34 @@ export function blocksText(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// deriveBlocksKind — the composer's "what does it block?" → blocks_kind (R55)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * The single `blocks_kind` category a composed item carries, from the composer's
+ * three independent gate pickers (an item may gate FF&E lines AND tasks AND the
+ * phase at once — those links ride the `blockedFfeItemIds` / `blockedTaskIds`
+ * arrays — but `blocks_kind` is one descriptor that drives `blocking_status`).
+ *
+ * Precedence is **ffe > phase > task > none**: gating an FF&E line is the
+ * procurement concern that lights the `decision_due` stamp (blocks_kind 'ffe' →
+ * blocking_status 'blocks_procurement'), so it wins; a phase gate
+ * ('blocks_phase') outranks a plain task gate ('non_blocking'). This mirrors the
+ * server's `blockingStatusFor` ladder (use-coordination.ts) so the Desk
+ * need-lines and the FF&E stamp read the same truth from either side.
+ */
+export function deriveBlocksKind(picks: {
+  ffe: boolean;
+  phase: boolean;
+  task: boolean;
+}): BlocksKind {
+  if (picks.ffe) return 'ffe';
+  if (picks.phase) return 'phase';
+  if (picks.task) return 'task';
+  return 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // isBlocked — derived effective-blocked per task (mirrors 00219 task_blocked_state)
 // ═══════════════════════════════════════════════════════════════════════════
 

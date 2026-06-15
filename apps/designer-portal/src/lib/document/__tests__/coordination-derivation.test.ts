@@ -5,6 +5,7 @@ import {
   blocksText,
   isBlocked,
   dueState,
+  deriveBlocksKind,
   COURT_ORDER,
   type CoordinationItemLike,
   type CoordinationTaskLike,
@@ -229,5 +230,25 @@ describe('dueState', () => {
   it('parses bare YYYY-MM-DD as local midnight (no timezone day-slip)', () => {
     // A bare date 2 days out is still "soon" regardless of offset.
     expect(dueState('2026-06-13', NOW)).toBe('soon');
+  });
+});
+
+describe('deriveBlocksKind', () => {
+  it('returns "none" when nothing is gated', () => {
+    expect(deriveBlocksKind({ ffe: false, phase: false, task: false })).toBe('none');
+  });
+
+  it('FF&E wins over phase and task (procurement gate lights the decision_due stamp)', () => {
+    expect(deriveBlocksKind({ ffe: true, phase: true, task: true })).toBe('ffe');
+    expect(deriveBlocksKind({ ffe: true, phase: false, task: true })).toBe('ffe');
+  });
+
+  it('phase wins over task when no FF&E line is gated', () => {
+    expect(deriveBlocksKind({ ffe: false, phase: true, task: true })).toBe('phase');
+    expect(deriveBlocksKind({ ffe: false, phase: true, task: false })).toBe('phase');
+  });
+
+  it('task is the gate only when neither FF&E nor phase is picked', () => {
+    expect(deriveBlocksKind({ ffe: false, phase: false, task: true })).toBe('task');
   });
 });

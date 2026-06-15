@@ -28,6 +28,8 @@ import {
   useCoordinationItems,
   useCourtSummary,
   useProjectParties,
+  useProjectFFEItems,
+  useProjectPhases,
   useCoordinationRealtime,
   useDesignerClientForClientUser,
 } from '@patina/supabase';
@@ -39,7 +41,7 @@ import { CourtBar } from './court-bar';
 import { CourtGroup, courtAnchorId } from './court-group';
 import { CoordinationWork } from './coordination-work';
 import { OpenItemSheet } from './open-item-sheet';
-import { ItemComposer } from './item-composer';
+import { ItemComposer, toComposerFfeItems, toComposerPhases } from './item-composer';
 import type { Court } from '@patina/supabase';
 
 // ── coordination-band.tsx (orchestrator; owns ALL sheet-open LOCAL state) ──
@@ -70,6 +72,9 @@ export function CoordinationBand({
   const { data: summary } = useCourtSummary(projectId);
   const { data: parties } = useProjectParties(projectId);
   const { data: tasks } = useSectionTasks(projectId);
+  // R55: the composer's FF&E-line gate + phase-link pickers.
+  const { data: ffeRows } = useProjectFFEItems(projectId);
+  const { data: phaseRows } = useProjectPhases(projectId);
   // Subscribe ONCE for the whole band — the rows above re-read on its invalidation.
   useCoordinationRealtime(projectId);
 
@@ -77,6 +82,11 @@ export function CoordinationBand({
   const allTasks = useMemo(() => tasks ?? [], [tasks]);
   const allParties = useMemo(() => parties ?? [], [parties]);
   const courtSummary = useMemo(() => summary ?? [], [summary]);
+  const composerFfe = useMemo(
+    () => toComposerFfeItems(ffeRows),
+    [ffeRows],
+  );
+  const composerPhases = useMemo(() => toComposerPhases(phaseRows), [phaseRows]);
 
   // The open items, grouped by court (designer-first, empties dropped, due-sorted).
   const groups = useMemo(() => groupByCourt(allItems), [allItems]);
@@ -172,6 +182,8 @@ export function CoordinationBand({
             projectId={projectId}
             designerClientId={designerClientId}
             tasks={allTasks}
+            ffeItems={composerFfe}
+            phases={composerPhases}
             parties={allParties}
             onClose={closeSheet}
             onCreated={closeSheet}

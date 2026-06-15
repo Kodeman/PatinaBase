@@ -8,18 +8,34 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useProjectFFEItems } from '@patina/supabase';
+import {
+  useProjectFFEItems,
+  useProjectParties,
+  useProjectPhases,
+  useCoordinationItems,
+  useDesignerClientForClientUser,
+  type CoordinationItem,
+} from '@patina/supabase';
+import { useSectionTasks } from '@/hooks/use-section-work';
 import { useMarginItems } from '@/hooks/use-margin-items';
 import { useCreateMarginNote } from '@/hooks/use-margin-notes';
 import { partitionMargin, type MarginItemRow } from '@/lib/document/margin-derivation';
 import { todayYmd } from '@/lib/document/format';
 import { MarginItem } from './margin-item';
 import { MarginItemBody } from './margin-bodies';
+import { DocSheet } from './overlays/doc-sheet';
+import {
+  ItemComposer,
+  toComposerFfeItems,
+  toComposerPhases,
+} from './coordination/item-composer';
+import { itemTypeToken } from './coordination/item-type';
 
 export function MarginRail({
   projectId,
   proposalId,
   clientName,
+  clientUserId = null,
   onHoverLine,
   pendingNoteAnchor = null,
   onNoteAnchorConsumed = () => {},
@@ -27,6 +43,9 @@ export function MarginRail({
   projectId: string | null;
   proposalId: string | null;
   clientName: string;
+  /** The client's AUTH uid (row.client_profile_id) — resolves designer_clients.id
+   *  for the R55 decision composer's INSERT (the same FK the band resolves). */
+  clientUserId?: string | null;
   onHoverLine: (lineId: string | null) => void;
   /** R14: a line unfold asked for a note — open the composer pre-anchored. */
   pendingNoteAnchor?: string | null;
@@ -38,15 +57,39 @@ export function MarginRail({
 
   // R12 ordering: needs-action floats → anchor order → "Settled · N" fold.
   // Line anchors rank by the document's rendered FF&E order (shared cache
-  // with FFESection — same query key).
-  const { data: ffeItems } = useProjectFFEItems(projectId ?? '') as {
-    data: Array<{ id: string }> | undefined;
-  };
+  // with FFESection — same query key). The full rows also feed the R55
+  // composer's FF&E-line gate picker.
+  const { data: ffeItems } = useProjectFFEItems(projectId ?? '');
   const { raised, settled } = useMemo(() => {
     const lineRank = new Map<string, number>();
-    (ffeItems ?? []).forEach((it, i) => lineRank.set(it.id, i));
+    ((ffeItems ?? []) as Array<{ id: string }>).forEach((it, i) => lineRank.set(it.id, i));
     return partitionMargin(items ?? [], new Date(), { lineRank });
   }, [items, ffeItems]);
+
+  // ── R55: the decision composer, opened from the margin "+ New" ──
+  // designer_clients.id resolution (the band's pattern) — the composer INSERT
+  // needs the FK, not the raw client auth uid. null until the resolver lands.
+  const { data: designerClient } = useDesignerClientForClientUser(clientUserId ?? '');
+  const designerClientId = designerClient?.id ?? null;
+  const canCompose = Boolean(projectId && designerClientId);
+
+  const { data: parties } = useProjectParties(projectId ?? '');
+  const { data: phaseRows } = useProjectPhases(projectId ?? '');
+  const { data: tasks } = useSectionTasks(projectId ?? '');
+  const { data: coordItems } = useCoordinationItems(projectId);
+
+  const composerFfe = useMemo(() => toComposerFfeItems(ffeItems), [ffeItems]);
+  const composerPhases = useMemo(() => toComposerPhases(phaseRows), [phaseRows]);
+  const draftItems = useMemo(
+    () => (coordItems ?? []).filter((i) => i.status === 'draft'),
+    [coordItems],
+  );
+
+  // The composer sheet: a new decision, or re-opening an unsent draft (R55).
+  const [composer, setComposer] = useState<
+    { mode: 'new' } | { mode: 'edit'; item: CoordinationItem } | null
+  >(null);
+  const [draftsOpen, setDraftsOpen] = useState(false);
 
   // ── Note capture (R14: ≤5 seconds — one tap, type, save) ──
   const createNote = useCreateMarginNote();
@@ -120,14 +163,62 @@ export function MarginRail({
         <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
           In the margin
         </p>
-        <button
-          type="button"
-          onClick={() => setComposing((v) => !v)}
-          className="rounded-[3px] border border-transparent px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[rgba(196,165,123,0.35)] hover:text-[var(--color-clay)]"
-        >
-          + Note
-        </button>
+        <div className="flex items-baseline gap-1">
+          {canCompose && (
+            <button
+              type="button"
+              onClick={() => setComposer({ mode: 'new' })}
+              className="rounded-[3px] border border-transparent px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[rgba(196,165,123,0.35)] hover:text-[var(--color-clay)]"
+            >
+              + New
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setComposing((v) => !v)}
+            className="rounded-[3px] border border-transparent px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[rgba(196,165,123,0.35)] hover:text-[var(--color-clay)]"
+          >
+            + Note
+          </button>
+        </div>
       </div>
+
+      {/* R55: unsent drafts live here — editable in the margin until published. */}
+      {draftItems.length > 0 && (
+        <div className="mb-2">
+          <button
+            type="button"
+            aria-expanded={draftsOpen}
+            onClick={() => setDraftsOpen((v) => !v)}
+            className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+          >
+            Drafts · {draftItems.length} {draftsOpen ? '↑' : '↓'}
+          </button>
+          {draftsOpen && (
+            <div className="flex flex-col gap-1">
+              {draftItems.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => setComposer({ mode: 'edit', item: d })}
+                  className="flex items-center gap-2 rounded-[5px] border border-dashed border-[var(--color-pearl)] bg-[var(--doc-paper)] px-2 py-1.5 text-left text-[11px] text-[var(--color-charcoal)] hover:border-[var(--color-clay)]"
+                >
+                  <span
+                    className="inline-block rounded-[2px] border px-1 py-px font-mono text-[7.5px] font-semibold uppercase tracking-[0.04em] text-[var(--color-aged-oak)]"
+                    style={{ borderColor: 'var(--color-pearl)' }}
+                  >
+                    {itemTypeToken(d.coordination_kind).label}
+                  </span>
+                  <span className="flex-1 truncate">{d.title || 'Untitled draft'}</span>
+                  <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    edit
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {composing && (
         <div
@@ -199,6 +290,29 @@ export function MarginRail({
           {settledOpen && settled.map(renderItem)}
         </div>
       )}
+
+      {/* R55: the decision composer — a DocSheet overlay; the document stays
+          mounted beneath (D1). Keyed so switching new↔draft remounts fresh. */}
+      <DocSheet
+        open={Boolean(composer) && canCompose}
+        onClose={() => setComposer(null)}
+        title={composer?.mode === 'edit' ? 'Edit draft' : 'New decision'}
+      >
+        {composer && projectId && designerClientId && (
+          <ItemComposer
+            key={composer.mode === 'edit' ? composer.item.id : 'new'}
+            projectId={projectId}
+            designerClientId={designerClientId}
+            tasks={tasks ?? []}
+            ffeItems={composerFfe}
+            phases={composerPhases}
+            parties={parties ?? []}
+            editItem={composer.mode === 'edit' ? composer.item : null}
+            onClose={() => setComposer(null)}
+            onCreated={() => setComposer(null)}
+          />
+        )}
+      </DocSheet>
     </>
   );
 }

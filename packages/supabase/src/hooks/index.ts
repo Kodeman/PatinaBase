@@ -254,6 +254,9 @@ export {
   useItemRevisions,
   useResolveCoordinationItem,
   useCreateCoordinationItem,
+  useUpdateCoordinationItem,
+  usePublishCoordinationItem,
+  useDeleteCoordinationItem,
   useNudgeCoordinationItem,
   useExtendCoordinationItem,
   useReassignCoordinationItem,
@@ -271,6 +274,7 @@ export type {
   ProjectParty,
   CourtCount,
   CreateCoordinationItemInput,
+  UpdateCoordinationItemInput,
   ResolveCoordinationItemInput,
 } from './use-coordination';
 export {

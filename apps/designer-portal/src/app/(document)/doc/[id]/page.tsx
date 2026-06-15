@@ -464,6 +464,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           projectId={row.project_id}
           proposalId={row.proposal_id}
           clientName={row.client_name}
+          clientUserId={row.client_profile_id}
           onHoverLine={setHighlightLineId}
           pendingNoteAnchor={pendingNoteAnchor}
           onNoteAnchorConsumed={() => setPendingNoteAnchor(null)}

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createBrowserClient } from '../client';
-import type { ClientDecisionOption } from './use-decisions';
+import type { ClientDecisionOption, DecisionType } from './use-decisions';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Track 5 — Project Coordination data layer (the ball-in-court).
@@ -92,6 +92,10 @@ export interface CoordinationItem {
   blocking_status: string | null;
   section_key: string | null;
   decision_kind: string | null;
+  /** The subject-matter taxonomy (00084) — R55's composer "kind" picker writes it. */
+  decision_type: string | null;
+  /** The real project-phase FK (00084) the composer's "link to a phase" writes. */
+  phase_id: string | null;
   reminder_sent_at: string | null;
   sent_at: string | null;
   responded_at: string | null;
@@ -115,6 +119,10 @@ export interface CreateCoordinationItemInput {
   court: Court;
   courtPartyId?: string | null;
   blocksKind?: BlocksKind;
+  /** The subject-matter taxonomy (00084), meaningful for a selection. R55. */
+  decisionType?: DecisionType;
+  /** The project phase (00084 phase_id FK) this item links to. R55. */
+  phaseId?: string | null;
   /** Persist as a draft (default) or publish straight to pending. */
   status?: 'draft' | 'pending';
   /** Selection options (only meaningful for coordination_kind='selection'). */
@@ -158,7 +166,8 @@ export interface ResolveCoordinationItemInput {
 const COORDINATION_SELECT = `
   id, designer_client_id, designer_id, project_id, title, context, due_date, status,
   coordination_kind, court, court_party_id, blocks_kind, answer, answered_at, answered_by,
-  blocking_status, section_key, decision_kind, reminder_sent_at, sent_at, responded_at,
+  blocking_status, section_key, decision_kind, decision_type, phase_id,
+  reminder_sent_at, sent_at, responded_at,
   viewed_at, created_at, updated_at,
   options:client_decision_options!decision_id(*),
   court_party:project_parties!court_party_id(*),
@@ -492,6 +501,10 @@ export function useCreateCoordinationItem(projectId: string | null | undefined) 
           // A selection is a 'choice' decision; the other four ride 'choice' too
           // (the coordination_kind axis carries the real shape — see 00213).
           decision_kind: 'choice',
+          // R55: the subject-matter taxonomy (00084 decision_type) the composer's
+          // "kind" chips set for a selection; coordination kinds keep the default.
+          decision_type: input.decisionType ?? 'product',
+          phase_id: input.phaseId ?? null,
           blocking_status: blockingStatusFor(input.blocksKind),
           status,
           sent_at: status === 'draft' ? null : new Date().toISOString(),
@@ -786,4 +799,224 @@ function invalidateCoordination(
   if (designerClientId) {
     void queryClient.invalidateQueries({ queryKey: ['client-decisions', designerClientId] });
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// R55 — the composer's edit / publish / delete lifecycle over a draft item
+//
+// These complete the create→light direction of the one-act invariant (§5): the
+// composer authors a draft, edits it in place, publishes it (draft→pending,
+// which lights the decision_due stamp on any gated FF&E line), or deletes it
+// (clearing the dependency web first so no line is left blocked by a ghost).
+// The CLEAR/resolve direction stays Track 5's `resolve_coordination_item` (00218).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface UpdateCoordinationItemInput {
+  itemId: string;
+  /** Carried for cache scoping (the client-decisions key). */
+  designerClientId: string;
+  projectId?: string;
+  title?: string;
+  context?: string | null;
+  dueDate?: string | null;
+  coordinationKind?: CoordinationKind;
+  court?: Court;
+  courtPartyId?: string | null;
+  blocksKind?: BlocksKind;
+  decisionType?: DecisionType;
+  phaseId?: string | null;
+  /** When provided, REPLACES the option set (delete-then-insert). Omit to leave. */
+  options?: CreateCoordinationItemInput['options'];
+  /** When provided (incl. []), RE-TAGS which FF&E lines this item gates. */
+  blockedFfeItemIds?: string[];
+  /** When provided (incl. []), RE-TAGS which tasks this item blocks. */
+  blockedTaskIds?: string[];
+}
+
+/**
+ * Edit a draft coordination item in place — the composer re-opens on a draft and
+ * saves changes. Patches only the provided columns, replaces options when given,
+ * and re-tags the dependency web (clear this item's old FF&E/task links, set the
+ * new ones). A draft stays quiet (no notify). Intended for status='draft' rows.
+ */
+export function useUpdateCoordinationItem(projectId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: UpdateCoordinationItemInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      // 1) Patch only the columns the caller supplied (never null untouched cols).
+      const patch: Record<string, unknown> = {};
+      if (input.title !== undefined) patch.title = input.title;
+      if (input.context !== undefined) patch.context = input.context || null;
+      if (input.dueDate !== undefined) patch.due_date = input.dueDate || null;
+      if (input.coordinationKind !== undefined) patch.coordination_kind = input.coordinationKind;
+      if (input.court !== undefined) patch.court = input.court;
+      if (input.courtPartyId !== undefined) patch.court_party_id = input.courtPartyId ?? null;
+      if (input.blocksKind !== undefined) {
+        patch.blocks_kind = input.blocksKind;
+        patch.blocking_status = blockingStatusFor(input.blocksKind);
+      }
+      if (input.decisionType !== undefined) patch.decision_type = input.decisionType;
+      if (input.phaseId !== undefined) patch.phase_id = input.phaseId ?? null;
+
+      const { data: item, error: itemError } = await supabase
+        .from('client_decisions')
+        .update(patch)
+        .eq('id', input.itemId)
+        .select()
+        .single();
+      if (itemError) throw itemError;
+
+      // 2) Replace the option set when provided (delete-then-insert, like
+      //    useUpdateDecision). Drafts have no client picks to dangle.
+      if (input.options !== undefined) {
+        const { error: delErr } = await supabase
+          .from('client_decision_options')
+          .delete()
+          .eq('decision_id', input.itemId);
+        if (delErr) throw delErr;
+        if (input.options.length > 0) {
+          const { error: insErr } = await supabase
+            .from('client_decision_options')
+            .insert(
+              input.options.map((opt, i) => ({
+                decision_id: input.itemId,
+                name: opt.name,
+                image_url: opt.imageUrl || null,
+                designer_note: opt.designerNote || null,
+                is_recommended: opt.isRecommended || false,
+                price: opt.price ?? null,
+                quantity: opt.quantity ?? 1,
+                cost_delta_cents: opt.costDeltaCents ?? null,
+                lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
+                product_id: opt.productId || null,
+                sort_order: i,
+              })),
+            );
+          if (insErr) throw insErr;
+        }
+      }
+
+      // 3) Re-tag the FF&E gate — clear this item's stale links, set the new set.
+      if (input.blockedFfeItemIds !== undefined) {
+        await supabase
+          .from('project_ffe_items')
+          .update({ blocked: false, blocked_by_decision_id: null })
+          .eq('blocked_by_decision_id', input.itemId);
+        if (input.blockedFfeItemIds.length > 0) {
+          await supabase
+            .from('project_ffe_items')
+            .update({ blocked: true, blocked_by_decision_id: input.itemId })
+            .in('id', input.blockedFfeItemIds);
+        }
+      }
+
+      // 4) Re-tag the task gate the same way (00215 blocked_by_item_id).
+      if (input.blockedTaskIds !== undefined) {
+        await supabase
+          .from('project_tasks')
+          .update({ status: 'todo', blocked_by_item_id: null })
+          .eq('blocked_by_item_id', input.itemId);
+        if (input.blockedTaskIds.length > 0) {
+          await supabase
+            .from('project_tasks')
+            .update({ status: 'blocked', blocked_by_item_id: input.itemId })
+            .in('id', input.blockedTaskIds);
+        }
+      }
+
+      return item as CoordinationItem;
+    },
+    onSuccess: (data) => {
+      invalidateCoordination(
+        queryClient,
+        data.project_id ?? projectId ?? null,
+        data.designer_client_id,
+      );
+    },
+  });
+}
+
+/**
+ * Publish a draft (draft→pending) — the composer's "Publish →" on an existing
+ * draft. Flips status + stamps sent_at + knocks on the recorded court. Because a
+ * gated FF&E line already carries blocked=true (set at create), flipping the
+ * decision to 'pending' is exactly what lights the `decision_due` stamp (§5,
+ * R55). Idempotent: a no-op when the row is already past draft.
+ */
+export function usePublishCoordinationItem(projectId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { itemId: string; designerClientId?: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data: item, error } = await supabase
+        .from('client_decisions')
+        .update({ status: 'pending', sent_at: new Date().toISOString() })
+        .eq('id', input.itemId)
+        .eq('status', 'draft')
+        .select()
+        .maybeSingle();
+      if (error) throw error;
+
+      // Already-published (double-fire) returns no row — quietly idempotent.
+      if (item) {
+        const { error: notifyErr } = await supabase.rpc('notify_decision_required', {
+          p_decision_id: input.itemId,
+        });
+        if (notifyErr) {
+          console.warn('usePublishCoordinationItem: notify_decision_required failed', notifyErr);
+        }
+      }
+      return (item ?? null) as CoordinationItem | null;
+    },
+    onSuccess: (data, input) => {
+      invalidateCoordination(
+        queryClient,
+        data?.project_id ?? projectId ?? null,
+        data?.designer_client_id ?? input.designerClientId ?? null,
+      );
+    },
+  });
+}
+
+/**
+ * Delete a coordination item (destructive). Clears the dependency web FIRST —
+ * un-blocks any FF&E line or task gated by this item — so deleting a draft can
+ * never leave a line blocked by a ghost decision (the FK is ON DELETE SET NULL,
+ * which would null the pointer but strand blocked=true). The row delete cascades
+ * its options / overrides / events (ON DELETE CASCADE).
+ */
+export function useDeleteCoordinationItem(projectId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { itemId: string; designerClientId?: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      await supabase
+        .from('project_ffe_items')
+        .update({ blocked: false, blocked_by_decision_id: null })
+        .eq('blocked_by_decision_id', input.itemId);
+      await supabase
+        .from('project_tasks')
+        .update({ status: 'todo', blocked_by_item_id: null })
+        .eq('blocked_by_item_id', input.itemId);
+
+      const { error } = await supabase
+        .from('client_decisions')
+        .delete()
+        .eq('id', input.itemId);
+      if (error) throw error;
+      return input;
+    },
+    onSuccess: (input) => {
+      invalidateCoordination(queryClient, projectId ?? null, input.designerClientId ?? null);
+    },
+  });
 }
