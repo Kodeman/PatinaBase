@@ -868,6 +868,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "client_decision_options_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+          {
             foreignKeyName: "client_decision_options_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
@@ -906,11 +913,18 @@ export type Database = {
       }
       client_decisions: {
         Row: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
           blocking_status: string
+          blocks_kind: string
           client_consent_method: string | null
           client_consented_at: string | null
           client_signature: string | null
           context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
           created_at: string
           decision_kind: string
           decision_type: string
@@ -935,11 +949,18 @@ export type Database = {
           viewed_at: string | null
         }
         Insert: {
+          answer?: string | null
+          answered_at?: string | null
+          answered_by?: string | null
           blocking_status?: string
+          blocks_kind?: string
           client_consent_method?: string | null
           client_consented_at?: string | null
           client_signature?: string | null
           context?: string | null
+          coordination_kind?: string
+          court?: string
+          court_party_id?: string | null
           created_at?: string
           decision_kind?: string
           decision_type?: string
@@ -964,11 +985,18 @@ export type Database = {
           viewed_at?: string | null
         }
         Update: {
+          answer?: string | null
+          answered_at?: string | null
+          answered_by?: string | null
           blocking_status?: string
+          blocks_kind?: string
           client_consent_method?: string | null
           client_consented_at?: string | null
           client_signature?: string | null
           context?: string | null
+          coordination_kind?: string
+          court?: string
+          court_party_id?: string | null
           created_at?: string
           decision_kind?: string
           decision_type?: string
@@ -993,6 +1021,13 @@ export type Database = {
           viewed_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "client_decisions_court_party_id_fkey"
+            columns: ["court_party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "client_decisions_designer_client_id_fkey"
             columns: ["designer_client_id"]
@@ -1590,6 +1625,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "comms_messages_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+          {
             foreignKeyName: "comms_messages_reply_to_message_id_fkey"
             columns: ["reply_to_message_id"]
             isOneToOne: false
@@ -1726,6 +1768,7 @@ export type Database = {
         Row: {
           anchor_id: string | null
           anchor_kind: string | null
+          coordination_item_id: string | null
           created_at: string
           created_by: string
           id: string
@@ -1740,6 +1783,7 @@ export type Database = {
         Insert: {
           anchor_id?: string | null
           anchor_kind?: string | null
+          coordination_item_id?: string | null
           created_at?: string
           created_by: string
           id?: string
@@ -1754,6 +1798,7 @@ export type Database = {
         Update: {
           anchor_id?: string | null
           anchor_kind?: string | null
+          coordination_item_id?: string | null
           created_at?: string
           created_by?: string
           id?: string
@@ -1766,6 +1811,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "comms_threads_coordination_item_id_fkey"
+            columns: ["coordination_item_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_threads_coordination_item_id_fkey"
+            columns: ["coordination_item_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
           {
             foreignKeyName: "comms_threads_created_by_fkey"
             columns: ["created_by"]
@@ -1989,6 +2048,60 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      coordination_item_revisions: {
+        Row: {
+          attachments: Json
+          created_at: string
+          decision_id: string
+          id: string
+          note: string | null
+          rev_number: number
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_by: string | null
+        }
+        Insert: {
+          attachments?: Json
+          created_at?: string
+          decision_id: string
+          id?: string
+          note?: string | null
+          rev_number: number
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_by?: string | null
+        }
+        Update: {
+          attachments?: Json
+          created_at?: string
+          decision_id?: string
+          id?: string
+          note?: string | null
+          rev_number?: number
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coordination_item_revisions_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coordination_item_revisions_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+        ]
       }
       cowork_tasks: {
         Row: {
@@ -2298,6 +2411,13 @@ export type Database = {
             referencedRelation: "client_decisions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "decision_comments_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
         ]
       }
       decision_events: {
@@ -2335,6 +2455,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "client_decisions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_events_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
           },
         ]
       }
@@ -2374,6 +2501,13 @@ export type Database = {
             referencedRelation: "client_decisions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "decision_notifications_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
         ]
       }
       decision_overrides: {
@@ -2411,6 +2545,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "client_decisions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_overrides_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
           },
           {
             foreignKeyName: "decision_overrides_option_id_fkey"
@@ -4018,6 +4159,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "client_decisions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "margin_notes_escalated_to_decision_id_fkey"
+            columns: ["escalated_to_decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
           },
           {
             foreignKeyName: "margin_notes_escalated_to_scope_change_id_fkey"
@@ -6421,6 +6569,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_ffe_items_blocked_by_decision_id_fkey"
+            columns: ["blocked_by_decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
+          {
             foreignKeyName: "project_ffe_items_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
@@ -6475,6 +6630,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "client_decisions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_ffe_items_source_decision_id_fkey"
+            columns: ["source_decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
           },
           {
             foreignKeyName: "project_ffe_items_source_proposal_item_id_fkey"
@@ -6602,6 +6764,94 @@ export type Database = {
             columns: ["source_palette_id"]
             isOneToOne: false
             referencedRelation: "proposal_palettes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_parties: {
+        Row: {
+          company_name: string | null
+          created_at: string
+          created_by: string | null
+          display_name: string
+          email: string | null
+          id: string
+          party_kind: string
+          phone: string | null
+          profile_id: string | null
+          project_id: string
+          updated_at: string
+          vendor_id: string | null
+        }
+        Insert: {
+          company_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          display_name: string
+          email?: string | null
+          id?: string
+          party_kind: string
+          phone?: string | null
+          profile_id?: string | null
+          project_id: string
+          updated_at?: string
+          vendor_id?: string | null
+        }
+        Update: {
+          company_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          display_name?: string
+          email?: string | null
+          id?: string
+          party_kind?: string
+          phone?: string | null
+          profile_id?: string | null
+          project_id?: string
+          updated_at?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_parties_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_parties_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -6972,6 +7222,7 @@ export type Database = {
       }
       project_tasks: {
         Row: {
+          blocked_by_item_id: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -6979,15 +7230,19 @@ export type Database = {
           due_date: string | null
           estimate_minutes: number | null
           id: string
+          owner: string
+          owner_party_id: string | null
           phase_key: string | null
           project_id: string
           section_key: string | null
+          seq_after_task_id: string | null
           sort_order: number
           status: string
           title: string
           updated_at: string
         }
         Insert: {
+          blocked_by_item_id?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -6995,15 +7250,19 @@ export type Database = {
           due_date?: string | null
           estimate_minutes?: number | null
           id?: string
+          owner?: string
+          owner_party_id?: string | null
           phase_key?: string | null
           project_id: string
           section_key?: string | null
+          seq_after_task_id?: string | null
           sort_order?: number
           status?: string
           title: string
           updated_at?: string
         }
         Update: {
+          blocked_by_item_id?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -7011,15 +7270,32 @@ export type Database = {
           due_date?: string | null
           estimate_minutes?: number | null
           id?: string
+          owner?: string
+          owner_party_id?: string | null
           phase_key?: string | null
           project_id?: string
           section_key?: string | null
+          seq_after_task_id?: string | null
           sort_order?: number
           status?: string
           title?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_tasks_blocked_by_item_id_fkey"
+            columns: ["blocked_by_item_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_blocked_by_item_id_fkey"
+            columns: ["blocked_by_item_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
+          },
           {
             foreignKeyName: "project_tasks_created_by_fkey"
             columns: ["created_by"]
@@ -7035,11 +7311,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_tasks_owner_party_id_fkey"
+            columns: ["owner_party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_tasks_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_seq_after_task_id_fkey"
+            columns: ["seq_after_task_id"]
+            isOneToOne: false
+            referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_seq_after_task_id_fkey"
+            columns: ["seq_after_task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "project_tasks_seq_after_task_id_fkey"
+            columns: ["seq_after_task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["waiting_on_task_id"]
           },
         ]
       }
@@ -7197,6 +7501,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "project_tasks"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["waiting_on_task_id"]
           },
           {
             foreignKeyName: "project_time_entries_user_id_fkey"
@@ -11670,6 +11988,24 @@ export type Database = {
         }
         Relationships: []
       }
+      coordination_court_summary: {
+        Row: {
+          court: string | null
+          next_due: string | null
+          open_count: number | null
+          overdue_count: number | null
+          project_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_decisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_events: {
         Row: {
           delivered_date: string | null
@@ -11722,6 +12058,7 @@ export type Database = {
           is_archived: boolean | null
           is_paused: boolean | null
           item_count: number | null
+          items_in_your_court: number | null
           lead_id: string | null
           lead_response_deadline: string | null
           lead_status: string | null
@@ -11729,6 +12066,7 @@ export type Database = {
           oldest_unacked_sent_at: string | null
           open_claim_count: number | null
           open_claim_po: string | null
+          open_items_count: number | null
           overdue_decision_count: number | null
           project_id: string | null
           project_status: string | null
@@ -11789,6 +12127,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "project_tasks"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "project_time_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["waiting_on_task_id"]
           },
           {
             foreignKeyName: "project_time_entries_user_id_fkey"
@@ -11988,6 +12340,26 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_blocked_state: {
+        Row: {
+          blocked_by_open_item: boolean | null
+          blocked_by_sequence: boolean | null
+          blocking_item_court: string | null
+          blocking_item_id: string | null
+          project_id: string | null
+          task_id: string | null
+          waiting_on_task_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -12671,6 +13043,10 @@ export type Database = {
         Args: { p_thread_id: string; p_user_id: string }
         Returns: boolean
       }
+      is_coordination_party: {
+        Args: { _project_id: string; _user_id?: string }
+        Returns: boolean
+      }
       is_org_admin_or_owner: {
         Args: { _organization_id: string; _user_id?: string }
         Returns: boolean
@@ -12774,12 +13150,23 @@ export type Database = {
         Args: { p_scan_id: string }
         Returns: undefined
       }
+      may_resolve_coordination_item: {
+        Args: {
+          actor: string
+          item: Database["public"]["Tables"]["client_decisions"]["Row"]
+        }
+        Returns: boolean
+      }
       merge_scan_artifact_sha256: {
         Args: { p_kind: string; p_scan_id: string; p_sha: string }
         Returns: undefined
       }
       migrate_legacy_ffe_notes: { Args: never; Returns: number }
       next_co_number: { Args: { p_project_id: string }; Returns: string }
+      next_court_for: {
+        Args: { item: Database["public"]["Tables"]["client_decisions"]["Row"] }
+        Returns: string
+      }
       nomination_transition_is_legal: {
         Args: { p_from: string; p_to: string }
         Returns: boolean
@@ -12854,6 +13241,58 @@ export type Database = {
       request_proposal_change: {
         Args: { p_feedback: string; p_proposal_id: string }
         Returns: undefined
+      }
+      resolve_coordination_item: {
+        Args: {
+          p_answer?: string
+          p_item_id: string
+          p_next_court?: string
+          p_resolved_by?: string
+          p_revision_id?: string
+          p_selected_option_id?: string
+        }
+        Returns: {
+          answer: string | null
+          answered_at: string | null
+          answered_by: string | null
+          blocking_status: string
+          blocks_kind: string
+          client_consent_method: string | null
+          client_consented_at: string | null
+          client_signature: string | null
+          context: string | null
+          coordination_kind: string
+          court: string
+          court_party_id: string | null
+          created_at: string
+          decision_kind: string
+          decision_type: string
+          designer_client_id: string
+          designer_id: string
+          due_date: string | null
+          id: string
+          linked_phase: string | null
+          linked_proposal_id: string | null
+          phase_id: string | null
+          project_id: string | null
+          recommended_option_id: string | null
+          reminder_sent_at: string | null
+          responded_at: string | null
+          room_id: string | null
+          section_key: string | null
+          selected_by: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          updated_at: string
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       revoke_role_from_user: {
         Args: { p_role_name: string; p_user_id: string }
@@ -13087,6 +13526,33 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      submit_coordination_revision: {
+        Args: {
+          p_attachments?: Json
+          p_item_id: string
+          p_note?: string
+          p_status?: string
+          p_submitted_by?: string
+        }
+        Returns: {
+          attachments: Json
+          created_at: string
+          decision_id: string
+          id: string
+          note: string | null
+          rev_number: number
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "coordination_item_revisions"
           isOneToOne: true
           isSetofReturn: false
         }

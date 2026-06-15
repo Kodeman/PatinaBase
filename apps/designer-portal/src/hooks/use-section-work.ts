@@ -14,6 +14,18 @@ import { createBrowserClient } from '@patina/supabase';
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { invalidateMarginSurfaces } from './use-margin-items';
 
+// Track 5: resolving a coordination item flips this section's blocked tasks
+// todo (the cascade, 00218). The Work renders that unblock inline, so the
+// coordination resolve hook is re-exported here alongside the task read model
+// it invalidates — one import for "the work + the items that gate it".
+export {
+  useResolveCoordinationItem,
+  useCoordinationItems,
+  useCourtSummary,
+  useCreateCoordinationItem,
+} from '@patina/supabase';
+export type { CoordinationItem, Court } from '@patina/supabase';
+
 const getSupabase = () => createBrowserClient() as any;
 
 export interface SectionTask {
@@ -26,6 +38,13 @@ export interface SectionTask {
   completed_at: string | null;
   estimate_minutes: number | null;
   sort_order: number;
+  // Track 5 dependency web (00215). owner='designer' + both deps NULL = today's
+  // behavior for legacy tasks; the coordination band reads these to render the
+  // owner chip + the ⊘ blocked tick / "↳ after …" sequence line.
+  owner: 'designer' | 'client' | 'gc' | 'vendor';
+  owner_party_id: string | null;
+  blocked_by_item_id: string | null;
+  seq_after_task_id: string | null;
 }
 
 export interface SectionGateOption {
@@ -60,7 +79,7 @@ export function useSectionTasks(projectId: string | null) {
     queryFn: async () => {
       const { data, error } = await getSupabase()
         .from('project_tasks')
-        .select('id, project_id, section_key, title, status, due_date, completed_at, estimate_minutes, sort_order')
+        .select('id, project_id, section_key, title, status, due_date, completed_at, estimate_minutes, sort_order, owner, owner_party_id, blocked_by_item_id, seq_after_task_id')
         .eq('project_id', projectId)
         .not('section_key', 'is', null)
         .order('sort_order', { ascending: true })

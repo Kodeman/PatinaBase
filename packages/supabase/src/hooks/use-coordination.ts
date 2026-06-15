@@ -1,0 +1,789 @@
+'use client';
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { createBrowserClient } from '../client';
+import type { ClientDecisionOption } from './use-decisions';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Track 5 — Project Coordination data layer (the ball-in-court).
+//
+// An RFI / Submittal / Sign-off / Punch IS a decision with an owner — the table
+// is the widened `client_decisions` (00213: coordination_kind + court +
+// blocks_kind), the option child table is `client_decision_options`, the resolve
+// path is the one-tx SECURITY DEFINER `resolve_coordination_item` (00218), and the
+// read models are `coordination_court_summary` / `task_blocked_state` (00219).
+//
+// Mirrors use-decisions.ts conventions: createBrowserClient via getSupabase(),
+// React Query keys, fan-out invalidation, the one-act-many-surfaces pass on resolve.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const getSupabase = () => createBrowserClient();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type Court = 'designer' | 'client' | 'gc' | 'vendor';
+export type CoordinationKind = 'selection' | 'rfi' | 'submittal' | 'signoff' | 'punch';
+export type BlocksKind = 'none' | 'ffe' | 'task' | 'phase';
+export type CoordinationStatus = 'draft' | 'pending' | 'responded' | 'expired';
+
+/** A project_parties row (00212) the court / owner can point at. */
+export interface ProjectParty {
+  id: string;
+  project_id: string;
+  party_kind: 'gc' | 'vendor' | 'client_rep' | 'other';
+  display_name: string;
+  company_name: string | null;
+  email: string | null;
+  phone: string | null;
+  vendor_id: string | null;
+  profile_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A submittal revision row (00214) — Rev-N history for R48. */
+export interface CoordinationItemRevision {
+  id: string;
+  decision_id: string;
+  rev_number: number;
+  status: 'submitted' | 'approved' | 'rejected' | 'revise_resubmit';
+  attachments: unknown[];
+  note: string | null;
+  submitted_by: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+/** The latest post on an item's per-item thread (00216), for the row preview. */
+export interface CoordinationThreadPost {
+  thread_id: string;
+  last_message_at: string | null;
+  title: string | null;
+}
+
+/**
+ * A coordination item — the widened `client_decisions` row read at the
+ * coordination grain, plus its options and the latest thread post for the
+ * open-item row preview.
+ */
+export interface CoordinationItem {
+  id: string;
+  designer_client_id: string;
+  designer_id: string | null;
+  project_id: string | null;
+  title: string;
+  context: string | null;
+  due_date: string | null;
+  status: CoordinationStatus;
+  // Track 5 axis (00213).
+  coordination_kind: CoordinationKind;
+  court: Court;
+  court_party_id: string | null;
+  blocks_kind: BlocksKind;
+  answer: string | null;
+  answered_at: string | null;
+  answered_by: string | null;
+  // Reused decision columns relevant to coordination.
+  blocking_status: string | null;
+  section_key: string | null;
+  decision_kind: string | null;
+  reminder_sent_at: string | null;
+  sent_at: string | null;
+  responded_at: string | null;
+  viewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  options?: ClientDecisionOption[];
+  /** The concrete party (00212) the current court points at, when any. */
+  court_party?: ProjectParty | null;
+  /** The latest post on the item's per-item thread (00216), when threaded. */
+  latest_thread_post?: CoordinationThreadPost | null;
+}
+
+export interface CreateCoordinationItemInput {
+  designerClientId: string;
+  projectId?: string;
+  title: string;
+  context?: string;
+  dueDate?: string;
+  coordinationKind: CoordinationKind;
+  court: Court;
+  courtPartyId?: string | null;
+  blocksKind?: BlocksKind;
+  /** Persist as a draft (default) or publish straight to pending. */
+  status?: 'draft' | 'pending';
+  /** Selection options (only meaningful for coordination_kind='selection'). */
+  options?: {
+    name: string;
+    imageUrl?: string;
+    designerNote?: string;
+    isRecommended?: boolean;
+    price?: number;
+    quantity?: number;
+    costDeltaCents?: number;
+    leadTimeDaysDelta?: number;
+    productId?: string;
+  }[];
+  /** project_ffe_items.id[] this item blocks (sets blocked_by_decision_id). */
+  blockedFfeItemIds?: string[];
+  /** project_tasks.id[] this item blocks (sets blocked_by_item_id + blocked). */
+  blockedTaskIds?: string[];
+}
+
+export interface ResolveCoordinationItemInput {
+  itemId: string;
+  /** Selection: the chosen option (delegates to apply_decision). */
+  selectedOptionId?: string | null;
+  /** RFI / Punch: the recorded answer / verification note. */
+  answer?: string | null;
+  /** Submittal: the revision id being approved. */
+  revisionId?: string | null;
+  /** Override the default ball hand-off (R49 punch verify step). */
+  nextCourt?: Court | null;
+  /** The acting user (defaults to auth.uid() in the RPC). */
+  resolvedBy?: string | null;
+  /** Carried for optimistic rollback / cache scoping. */
+  designerClientId?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The widened SELECT — coordination kinds, options, court party, latest thread
+// ═══════════════════════════════════════════════════════════════════════════
+
+const COORDINATION_SELECT = `
+  id, designer_client_id, designer_id, project_id, title, context, due_date, status,
+  coordination_kind, court, court_party_id, blocks_kind, answer, answered_at, answered_by,
+  blocking_status, section_key, decision_kind, reminder_sent_at, sent_at, responded_at,
+  viewed_at, created_at, updated_at,
+  options:client_decision_options!decision_id(*),
+  court_party:project_parties!court_party_id(*),
+  latest_thread_post:comms_threads!coordination_item_id(thread_id:id, last_message_at, title)
+`;
+
+/** The 5 coordination kinds (selection IS the shipped path; the other four are
+ *  the new generalization). The read model includes all so the band shows them
+ *  grouped by court. */
+const COORDINATION_KINDS: CoordinationKind[] = [
+  'selection',
+  'rfi',
+  'submittal',
+  'signoff',
+  'punch',
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HOOKS — Queries
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * The coordination read model for a project: every coordination-kind open item
+ * (selection / rfi / submittal / signoff / punch) with its options, the concrete
+ * court party, and the latest per-item thread post for the row preview.
+ *
+ * Key `['coordination-items', projectId]`, 30s refetchInterval (mirrors the
+ * margin read model). Realtime is layered by `useCoordinationRealtime`.
+ */
+export function useCoordinationItems(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['coordination-items', projectId],
+    enabled: !!projectId,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('client_decisions')
+        .select(COORDINATION_SELECT)
+        .eq('project_id', projectId)
+        .in('coordination_kind', COORDINATION_KINDS)
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(normalizeThreadPost) as CoordinationItem[];
+    },
+  });
+}
+
+/** The embed comes back as an array (a thread→item is 1:1 via the partial unique
+ *  index, but PostgREST types the reverse embed as a list); collapse to one. */
+function normalizeThreadPost(row: CoordinationItem & {
+  latest_thread_post?: CoordinationThreadPost[] | CoordinationThreadPost | null;
+}): CoordinationItem {
+  const tp = row.latest_thread_post;
+  return {
+    ...row,
+    latest_thread_post: Array.isArray(tp) ? (tp[0] ?? null) : (tp ?? null),
+  };
+}
+
+export interface CourtCount {
+  court: Court;
+  open: number;
+  overdue: number;
+  nextDue: string | null;
+}
+
+/**
+ * The court bar's per-court rollup. A `select` OVER the same coordination-items
+ * query (no second fetch) — counts open/overdue/next-due per court client-side,
+ * exactly as `coordination_court_summary` (00219) does server-side. Pass
+ * `now` only in tests; production uses the live clock at render.
+ */
+export function useCourtSummary(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['coordination-items', projectId],
+    enabled: !!projectId,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('client_decisions')
+        .select(COORDINATION_SELECT)
+        .eq('project_id', projectId)
+        .in('coordination_kind', COORDINATION_KINDS)
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(normalizeThreadPost) as CoordinationItem[];
+    },
+    select: (items: CoordinationItem[]): CourtCount[] => summarizeCourts(items),
+  });
+}
+
+const COURT_ORDER: Court[] = ['designer', 'client', 'gc', 'vendor'];
+
+/** Per-court open/overdue/next-due rollup over the items list (the select body). */
+function summarizeCourts(items: CoordinationItem[], now: Date = new Date()): CourtCount[] {
+  const nowMs = now.getTime();
+  const acc = new Map<Court, { open: number; overdue: number; nextDue: number | null }>();
+  for (const c of COURT_ORDER) acc.set(c, { open: 0, overdue: 0, nextDue: null });
+  for (const item of items) {
+    if (item.status !== 'pending') continue;
+    const b = acc.get(item.court);
+    if (!b) continue;
+    b.open += 1;
+    if (item.due_date) {
+      const dueMs = new Date(item.due_date).getTime();
+      if (dueMs < nowMs) b.overdue += 1;
+      if (b.nextDue === null || dueMs < b.nextDue) b.nextDue = dueMs;
+    }
+  }
+  return COURT_ORDER.map((court) => {
+    const b = acc.get(court)!;
+    return {
+      court,
+      open: b.open,
+      overdue: b.overdue,
+      nextDue: b.nextDue === null ? null : new Date(b.nextDue).toISOString(),
+    };
+  });
+}
+
+/** The project's coordination courts (00212 project_parties). */
+export function useProjectParties(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['project-parties', projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('project_parties')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ProjectParty[];
+    },
+  });
+}
+
+/** A submittal's Rev-N history (00214), latest first. */
+export function useItemRevisions(itemId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['coordination-revisions', itemId],
+    enabled: !!itemId,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('coordination_item_revisions')
+        .select('*')
+        .eq('decision_id', itemId)
+        .order('rev_number', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as CoordinationItemRevision[];
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HOOKS — Mutations
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Resolve a coordination item — the one act, many surfaces (spec §5). Calls the
+ * SECURITY DEFINER `resolve_coordination_item` (00218): dispatches by kind
+ * (selection → apply_decision; rfi → answer; submittal → approve revision;
+ * signoff/punch → record), then in the SAME transaction clears FF&E blocks, flips
+ * downstream tasks blocked→todo, and shifts the ball to the next court.
+ *
+ * onMutate optimistically flips the item to responded and clears
+ * `blocked_by_item_id` on its dependent tasks (the cascade preview); onError rolls
+ * both back; onSuccess invalidates coordination-items + section-tasks +
+ * project-decisions + the margin surfaces (margin-items / document-state / FF&E).
+ */
+export function useResolveCoordinationItem(projectId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: ResolveCoordinationItemInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const { error: rpcError } = await supabase.rpc('resolve_coordination_item', {
+        p_item_id: input.itemId,
+        p_selected_option_id: input.selectedOptionId ?? null,
+        p_answer: input.answer ?? null,
+        p_revision_id: input.revisionId ?? null,
+        p_next_court: input.nextCourt ?? null,
+        p_resolved_by: input.resolvedBy ?? user?.id ?? null,
+      });
+      if (rpcError) throw rpcError;
+
+      // The item is now resolved — notify the owning designer. Non-fatal, same
+      // posture as the decision resolve path.
+      const { error: notifyError } = await supabase.rpc('notify_decision_resolved', {
+        p_decision_id: input.itemId,
+      });
+      if (notifyError) {
+        console.warn('useResolveCoordinationItem: notify_decision_resolved failed', notifyError);
+      }
+
+      const { data, error } = await supabase
+        .from('client_decisions')
+        .select('*')
+        .eq('id', input.itemId)
+        .single();
+      if (error) throw error;
+      return data as CoordinationItem;
+    },
+
+    // Optimistic cascade preview: the item resolves, its dependent tasks unblock.
+    onMutate: async (input) => {
+      const itemsKey = ['coordination-items', projectId];
+      const tasksKey = ['section-tasks', projectId];
+      await queryClient.cancelQueries({ queryKey: itemsKey });
+      await queryClient.cancelQueries({ queryKey: tasksKey });
+
+      const prevItems = queryClient.getQueryData<CoordinationItem[]>(itemsKey);
+      const prevTasks = queryClient.getQueryData<unknown[]>(tasksKey);
+
+      const nextCourt = input.nextCourt ?? defaultNextCourt(prevItems, input.itemId);
+
+      if (prevItems) {
+        queryClient.setQueryData<CoordinationItem[]>(
+          itemsKey,
+          prevItems.map((it) =>
+            it.id === input.itemId
+              ? {
+                  ...it,
+                  status: 'responded',
+                  responded_at: new Date().toISOString(),
+                  court: nextCourt ?? it.court,
+                  answer: input.answer ?? it.answer,
+                }
+              : it,
+          ),
+        );
+      }
+
+      if (Array.isArray(prevTasks)) {
+        queryClient.setQueryData(
+          tasksKey,
+          prevTasks.map((t) => {
+            const task = t as { blocked_by_item_id?: string | null; status?: string };
+            return task.blocked_by_item_id === input.itemId
+              ? { ...task, blocked_by_item_id: null, status: 'todo' }
+              : t;
+          }),
+        );
+      }
+
+      return { itemsKey, tasksKey, prevItems, prevTasks };
+    },
+
+    onError: (_err, _input, ctx) => {
+      if (!ctx) return;
+      if (ctx.prevItems !== undefined) queryClient.setQueryData(ctx.itemsKey, ctx.prevItems);
+      if (ctx.prevTasks !== undefined) queryClient.setQueryData(ctx.tasksKey, ctx.prevTasks);
+    },
+
+    onSettled: (data) => {
+      // One act, many surfaces (§5): re-read every surface the resolve touched.
+      void queryClient.invalidateQueries({ queryKey: ['coordination-items', projectId] });
+      void queryClient.invalidateQueries({ queryKey: ['section-tasks', projectId] });
+      void queryClient.invalidateQueries({ queryKey: ['coordination-revisions'] });
+      // Margin / Desk / document FF&E (the margin one-act trio).
+      void queryClient.invalidateQueries({ queryKey: ['margin-items'] });
+      void queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      const pid = data?.project_id ?? projectId;
+      if (pid) {
+        void queryClient.invalidateQueries({ queryKey: ['project-decisions', pid] });
+        void queryClient.invalidateQueries({ queryKey: ['project-ffe-items', pid] });
+        void queryClient.invalidateQueries({ queryKey: ['project-ffe', pid] });
+      }
+    },
+  });
+}
+
+/** The default ball hand-off (mirrors next_court_for, 00218) for the optimistic
+ *  preview only — the RPC is the source of truth on the server. */
+function defaultNextCourt(
+  items: CoordinationItem[] | undefined,
+  itemId: string,
+): Court {
+  const kind = items?.find((i) => i.id === itemId)?.coordination_kind;
+  switch (kind) {
+    case 'rfi':
+      return 'gc';
+    case 'submittal':
+      return 'vendor';
+    default:
+      return 'designer';
+  }
+}
+
+/**
+ * Raise a coordination item — generalizes useCreateDecision across all five
+ * kinds. Inserts a `client_decisions` row carrying coordination_kind / court /
+ * blocks_kind, inserts selection options (when any), wires the dependency web
+ * (project_ffe_items.blocked_by_decision_id + project_tasks.blocked_by_item_id),
+ * and fires notify_decision_required when published. Drafts stay quiet.
+ */
+export function useCreateCoordinationItem(projectId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CreateCoordinationItemInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const status = input.status ?? 'pending';
+
+      const { data: item, error: itemError } = await supabase
+        .from('client_decisions')
+        .insert({
+          designer_client_id: input.designerClientId,
+          project_id: input.projectId ?? projectId ?? null,
+          title: input.title,
+          context: input.context || null,
+          due_date: input.dueDate || null,
+          coordination_kind: input.coordinationKind,
+          court: input.court,
+          court_party_id: input.courtPartyId ?? null,
+          blocks_kind: input.blocksKind ?? 'none',
+          // A selection is a 'choice' decision; the other four ride 'choice' too
+          // (the coordination_kind axis carries the real shape — see 00213).
+          decision_kind: 'choice',
+          blocking_status: blockingStatusFor(input.blocksKind),
+          status,
+          sent_at: status === 'draft' ? null : new Date().toISOString(),
+        })
+        .select()
+        .single();
+      if (itemError) throw itemError;
+
+      // Selection options (only selections carry them).
+      if (
+        input.coordinationKind === 'selection' &&
+        input.options &&
+        input.options.length > 0
+      ) {
+        const { error: optErr } = await supabase
+          .from('client_decision_options')
+          .insert(
+            input.options.map((opt, i) => ({
+              decision_id: item.id,
+              name: opt.name,
+              image_url: opt.imageUrl || null,
+              designer_note: opt.designerNote || null,
+              is_recommended: opt.isRecommended || false,
+              price: opt.price ?? null,
+              quantity: opt.quantity ?? 1,
+              cost_delta_cents: opt.costDeltaCents ?? null,
+              lead_time_days_delta: opt.leadTimeDaysDelta ?? null,
+              product_id: opt.productId || null,
+              sort_order: i,
+            })),
+          );
+        if (optErr) throw optErr;
+      }
+
+      // Wire the dependency web — FF&E lines this item blocks.
+      if (input.blockedFfeItemIds && input.blockedFfeItemIds.length > 0) {
+        const { error: ffeErr } = await supabase
+          .from('project_ffe_items')
+          .update({ blocked: true, blocked_by_decision_id: item.id })
+          .in('id', input.blockedFfeItemIds);
+        if (ffeErr) {
+          console.warn('useCreateCoordinationItem: failed to tag blocked FF&E items', ffeErr);
+        }
+      }
+
+      // Wire the dependency web — tasks this item blocks (00215 blocked_by_item_id).
+      if (input.blockedTaskIds && input.blockedTaskIds.length > 0) {
+        const { error: taskErr } = await supabase
+          .from('project_tasks')
+          .update({ status: 'blocked', blocked_by_item_id: item.id })
+          .in('id', input.blockedTaskIds);
+        if (taskErr) {
+          console.warn('useCreateCoordinationItem: failed to tag blocked tasks', taskErr);
+        }
+      }
+
+      // Published items knock on the client (or the recorded court). Non-fatal.
+      if (status === 'pending') {
+        const { error: notifyErr } = await supabase.rpc('notify_decision_required', {
+          p_decision_id: item.id,
+        });
+        if (notifyErr) {
+          console.warn('useCreateCoordinationItem: notify_decision_required failed', notifyErr);
+        }
+      }
+
+      return item as CoordinationItem;
+    },
+    onSuccess: (data) => {
+      invalidateCoordination(queryClient, data.project_id ?? projectId ?? null, data.designer_client_id);
+    },
+  });
+}
+
+/** A blocks_kind maps onto the existing blocking_status axis so the legacy
+ *  FF&E/phase machinery and the Desk need-lines still read truthfully. */
+function blockingStatusFor(blocksKind: BlocksKind | undefined): string {
+  switch (blocksKind) {
+    case 'ffe':
+      return 'blocks_procurement';
+    case 'phase':
+      return 'blocks_phase';
+    case 'task':
+    case 'none':
+    default:
+      return 'non_blocking';
+  }
+}
+
+/**
+ * Nudge — record a reminder on a waiting item (reuses the decision reminder
+ * path: stamps reminder_sent_at, surfaces in the margin, fires no toast per R51).
+ */
+export function useNudgeCoordinationItem(projectId: string | null | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId }: { itemId: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('client_decisions')
+        .update({ reminder_sent_at: new Date().toISOString() })
+        .eq('id', itemId)
+        .select()
+        .single();
+      if (error) throw error;
+
+      // Re-knock the client/court that the item is waiting on. Non-fatal.
+      const { error: notifyErr } = await supabase.rpc('notify_decision_required', {
+        p_decision_id: itemId,
+      });
+      if (notifyErr) console.warn('useNudgeCoordinationItem: notify failed', notifyErr);
+
+      return data as CoordinationItem;
+    },
+    onSuccess: (data) => {
+      invalidateCoordination(queryClient, data.project_id ?? projectId ?? null, data.designer_client_id);
+    },
+  });
+}
+
+/** Extend — push a waiting item's due date out (reuses the decision update path). */
+export function useExtendCoordinationItem(projectId: string | null | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId, dueDate }: { itemId: string; dueDate: string | null }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('client_decisions')
+        .update({ due_date: dueDate })
+        .eq('id', itemId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as CoordinationItem;
+    },
+    onSuccess: (data) => {
+      invalidateCoordination(queryClient, data.project_id ?? projectId ?? null, data.designer_client_id);
+    },
+  });
+}
+
+/**
+ * Reassign — move the ball to a different court (the accountability primitive).
+ * A plain `court` update (+ the concrete party row when gc/vendor). The item
+ * stays pending; only whose move it is changes.
+ */
+export function useReassignCoordinationItem(projectId: string | null | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      court,
+      courtPartyId,
+    }: {
+      itemId: string;
+      court: Court;
+      courtPartyId?: string | null;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const patch: Record<string, unknown> = { court };
+      if (courtPartyId !== undefined) patch.court_party_id = courtPartyId;
+      const { data, error } = await supabase
+        .from('client_decisions')
+        .update(patch)
+        .eq('id', itemId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as CoordinationItem;
+    },
+    onSuccess: (data) => {
+      invalidateCoordination(queryClient, data.project_id ?? projectId ?? null, data.designer_client_id);
+    },
+  });
+}
+
+/**
+ * Record a submittal revision round (R48 revise & resubmit) — the RPC-only write
+ * path (coordination_item_revisions has no broad write policy, 00214). Adds the
+ * next revision row and leaves the item pending; the resolve RPC later approves a
+ * revision id.
+ */
+export function useSubmitCoordinationRevision(projectId: string | null | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      attachments,
+      note,
+      status,
+    }: {
+      itemId: string;
+      attachments?: unknown[];
+      note?: string | null;
+      status?: 'submitted' | 'approved' | 'rejected' | 'revise_resubmit';
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.rpc('submit_coordination_revision', {
+        p_item_id: itemId,
+        p_attachments: attachments ?? [],
+        p_note: note ?? null,
+        p_status: status ?? 'submitted',
+        p_submitted_by: user?.id ?? null,
+      });
+      if (error) throw error;
+      return data as CoordinationItemRevision;
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['coordination-revisions', data.decision_id] });
+      void queryClient.invalidateQueries({ queryKey: ['coordination-items', projectId] });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HOOKS — Realtime
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Project-grain realtime for the coordination band — mirrors useDecisionRealtime
+ * at the project level so a designer-recorded GC answer (or a client pick from
+ * the mirror) surfaces live. Invalidates the items read model + the dependency
+ * web on any change to client_decisions / project_tasks on this project.
+ */
+export function useCoordinationRealtime(projectId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!projectId) return;
+    const supabase = getSupabase();
+
+    const invalidate = () => {
+      queryClient.invalidateQueries({ queryKey: ['coordination-items', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['section-tasks', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['margin-items'] });
+      queryClient.invalidateQueries({ queryKey: ['document-state'] });
+    };
+
+    const channel: RealtimeChannel = supabase
+      .channel(`coordination:${projectId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'client_decisions',
+          filter: `project_id=eq.${projectId}`,
+        },
+        invalidate,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'project_tasks',
+          filter: `project_id=eq.${projectId}`,
+        },
+        invalidate,
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projectId, queryClient]);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Shared invalidation — the coordination read model + the surfaces it feeds
+// ═══════════════════════════════════════════════════════════════════════════
+
+function invalidateCoordination(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string | null,
+  designerClientId?: string | null,
+) {
+  void queryClient.invalidateQueries({ queryKey: ['coordination-items', projectId] });
+  void queryClient.invalidateQueries({ queryKey: ['margin-items'] });
+  void queryClient.invalidateQueries({ queryKey: ['document-state'] });
+  if (projectId) {
+    void queryClient.invalidateQueries({ queryKey: ['section-tasks', projectId] });
+    void queryClient.invalidateQueries({ queryKey: ['project-decisions', projectId] });
+    void queryClient.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
+  }
+  if (designerClientId) {
+    void queryClient.invalidateQueries({ queryKey: ['client-decisions', designerClientId] });
+  }
+}

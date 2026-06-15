@@ -247,6 +247,33 @@ export type {
   ConsentMethod,
 } from './use-decisions';
 export {
+  // Project Coordination (Track 5 — the ball-in-court)
+  useCoordinationItems,
+  useCourtSummary,
+  useProjectParties,
+  useItemRevisions,
+  useResolveCoordinationItem,
+  useCreateCoordinationItem,
+  useNudgeCoordinationItem,
+  useExtendCoordinationItem,
+  useReassignCoordinationItem,
+  useSubmitCoordinationRevision,
+  useCoordinationRealtime,
+} from './use-coordination';
+export type {
+  Court,
+  CoordinationKind,
+  BlocksKind,
+  CoordinationStatus,
+  CoordinationItem,
+  CoordinationItemRevision,
+  CoordinationThreadPost,
+  ProjectParty,
+  CourtCount,
+  CreateCoordinationItemInput,
+  ResolveCoordinationItemInput,
+} from './use-coordination';
+export {
   // Client Reviews
   useClientReviews,
   useReviewStats,
