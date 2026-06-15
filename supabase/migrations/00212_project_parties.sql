@@ -106,20 +106,17 @@ CREATE POLICY project_parties_team_select
   TO authenticated
   USING (public.is_project_team_member(project_id));
 
--- A party with a real login READS its OWN project's parties (future logged-in
--- GC / vendor / client-rep). No write — acts funnel through the resolve RPC.
+-- A party with a real login READS its OWN row (future logged-in GC / vendor /
+-- client-rep). No write — acts funnel through the resolve RPC. The broader
+-- "a logged-in party sees ALL co-courts on its project" read is granted
+-- non-recursively in 00217 via the SECURITY DEFINER is_coordination_party()
+-- helper; doing it here with a self-EXISTS on project_parties would recurse the
+-- policy infinitely (42P17), which breaks every embed of project_parties.
 DROP POLICY IF EXISTS project_parties_self_select ON public.project_parties;
 CREATE POLICY project_parties_self_select
   ON public.project_parties FOR SELECT
   TO authenticated
-  USING (
-    profile_id = auth.uid()
-    OR EXISTS (
-      SELECT 1 FROM public.project_parties pp
-      WHERE pp.project_id = project_parties.project_id
-        AND pp.profile_id = auth.uid()
-    )
-  );
+  USING (profile_id = auth.uid());
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.project_parties TO authenticated;
 GRANT ALL ON public.project_parties TO service_role;

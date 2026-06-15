@@ -55,9 +55,10 @@ export function TaskDepLine({ task, items, tasks, onOpenBlocker }: TaskDepLinePr
     const kindLabel = blocker
       ? itemTypeToken(blocker.coordination_kind).label.toLowerCase()
       : 'an item';
-    const courtLabel = blocked.blockingItemCourt
-      ? courtToken(blocked.blockingItemCourt).label
-      : 'another';
+    const courtPhrase =
+      blocked.blockingItemCourt === 'designer'
+        ? 'your court'
+        : `${blocked.blockingItemCourt ? courtToken(blocked.blockingItemCourt).label : 'another'}’s court`;
     const title = blocker?.title ?? 'a pending item';
 
     return (
@@ -70,7 +71,7 @@ export function TaskDepLine({ task, items, tasks, onOpenBlocker }: TaskDepLinePr
       >
         <span aria-hidden>⊘</span>
         <span>
-          blocked by {kindLabel} — &ldquo;{title}&rdquo; ({courtLabel}&rsquo;s court)
+          blocked by {kindLabel} — &ldquo;{title}&rdquo; ({courtPhrase})
         </span>
       </button>
     );

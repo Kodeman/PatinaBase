@@ -52,13 +52,17 @@ export function CourtGroup({
 }: CourtGroupProps) {
   if (items.length === 0) return null;
 
-  // Resolve a concrete party for gc/vendor courts (the named row, when one is
-  // attached to any item in this group), else the generic court token. The
-  // client court can also show the real client's name.
+  // Resolve a concrete party ONLY for the gc/vendor courts (the named GC /
+  // vendor row, when one is attached to any item in this group). The designer
+  // court is always "In your court" and the client court shows the client's
+  // name — neither is ever overridden by a court_party an item happens to carry
+  // (e.g. a submittal in YOUR court submitted BY a vendor still groups as yours).
   const party =
-    parties?.find((p) => items.some((it) => it.court_party_id === p.id)) ??
-    items.find((it) => it.court_party)?.court_party ??
-    null;
+    court === 'gc' || court === 'vendor'
+      ? (parties?.find((p) => items.some((it) => it.court_party_id === p.id)) ??
+         items.find((it) => it.court_party)?.court_party ??
+         null)
+      : null;
   const token = partyFor(court, { party, clientName });
 
   const isYours = court === 'designer';
