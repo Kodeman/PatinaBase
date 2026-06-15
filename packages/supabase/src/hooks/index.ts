@@ -303,6 +303,7 @@ export {
   // Signing
   useSignProposal,
   useDeclineProposal,
+  useRequestProposalChange,
 } from './use-proposals';
 export type {
   Proposal,

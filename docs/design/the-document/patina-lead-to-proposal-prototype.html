@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · Lead → Proposal · The document grows</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;
+  --sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--paper:#FCFAF6;--sheet2:#EFE9DD;
+  --ink:rgba(44,41,38,0.16);--ink-soft:rgba(44,41,38,0.07);
+  --line1:#5C4A3C;--line2:#C4A57B;--line3:#8B9CAD;
+  --fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace;
+  --bar-h:56px;
+}
+html,body{height:100%}
+body{font-family:var(--fb);background:#1c1a18;color:var(--mo);line-height:1.55;-webkit-font-smoothing:antialiased;overflow:hidden}
+#app{position:fixed;inset:0;overflow:hidden}
+.mono{font-family:var(--fm)}
+
+/* prototype framing banner */
+.frame{position:absolute;top:0;left:0;right:0;height:26px;z-index:200;background:var(--ch);color:rgba(250,247,242,0.7);font-family:var(--fm);font-size:0.54rem;letter-spacing:0.05em;display:flex;align-items:center;gap:0.5rem;padding:0 1.2rem;border-bottom:1px solid rgba(196,165,123,0.22)}
+.frame b{color:var(--cl);font-weight:500}
+.frame .step{margin-left:auto;display:flex;gap:0.45rem;align-items:center}
+.frame .step .s{opacity:0.35}.frame .step .s.on{opacity:1;color:var(--cl)}
+
+/* ===================== THE DESK (entry) ===================== */
+#desk{position:absolute;inset:0;top:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+   background:radial-gradient(120% 80% at 50% 35%,#2c2926,#211f1c 70%,#1a1816);z-index:20;transition:opacity .5s}
+#desk.hidden{opacity:0;pointer-events:none}
+.desk-date{font-family:var(--fd);font-style:italic;font-size:1.4rem;color:rgba(250,247,242,0.85);margin-bottom:0.3rem}
+.desk-k{font-family:var(--fm);font-size:0.54rem;letter-spacing:0.18em;text-transform:uppercase;color:rgba(196,165,123,0.6);margin-bottom:2.2rem}
+.desk-section-label{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.14em;text-transform:uppercase;color:rgba(250,247,242,0.4);display:flex;align-items:center;gap:0.6rem;margin-bottom:0.9rem}
+.desk-section-label .sm{display:flex;flex-direction:column;align-items:flex-start;gap:1.5px;width:13px}
+.desk-section-label .sm i{display:block;height:1.5px;background:var(--cl);border-radius:1px}
+.desk-section-label .sm i:nth-child(1){width:13px}.desk-section-label .sm i:nth-child(2){width:9px;opacity:0.6}.desk-section-label .sm i:nth-child(3){width:6px;opacity:0.3}
+.lead-folder{position:relative;width:420px;cursor:pointer}
+.lead-folder::before{content:'';position:absolute;left:5px;right:-5px;top:5px;bottom:-5px;background:#3a352f;border-radius:5px 8px 8px 8px;border:1px solid rgba(250,247,242,0.1)}
+.lf-tab{position:absolute;top:-13px;left:16px;background:#fdf9f0;border:1px solid var(--ink);border-bottom:none;border-radius:5px 5px 0 0;padding:3px 12px;font-family:var(--fm);font-size:0.48rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);font-weight:600;z-index:3;display:flex;align-items:center;gap:6px}
+.lf-tab .nm{display:flex;flex-direction:column;align-items:flex-start;gap:1.5px;width:13px}
+.lf-tab .nm i{display:block;height:1.5px;background:var(--cl);border-radius:1px}
+.lf-tab .nm i:nth-child(1){width:13px}.lf-tab .nm i:nth-child(2){width:9px;opacity:0.6}.lf-tab .nm i:nth-child(3){width:6px;opacity:0.3}
+.lf-card{position:relative;z-index:1;background:var(--paper);border:1px solid var(--ink);border-radius:3px 7px 7px 7px;padding:1.4rem 1.5rem;transition:transform .25s}
+.lead-folder:hover .lf-card{transform:translateY(-3px)}
+.lf-name{font-family:var(--fd);font-weight:500;font-size:1.3rem;color:var(--ch)}
+.lf-from{font-size:0.72rem;color:var(--ao);margin-top:0.1rem}
+.lf-body{font-size:0.78rem;color:var(--mo);margin-top:0.8rem;padding-top:0.8rem;border-top:1px solid var(--ink-soft);line-height:1.6}
+.lf-cta{display:inline-flex;align-items:center;gap:0.5rem;margin-top:1rem;font-family:var(--fm);font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:#fff;background:var(--ch);padding:0.5rem 0.9rem;border-radius:5px}
+.desk-hint{font-family:var(--fm);font-size:0.54rem;letter-spacing:0.04em;color:rgba(250,247,242,0.35);margin-top:2.2rem;font-style:italic}
+
+/* ===================== THE DOCUMENT (three-pane) ===================== */
+#doc{position:absolute;inset:0;top:26px;display:flex;background:var(--ow);opacity:0;transform:scale(.99);transition:opacity .45s,transform .45s cubic-bezier(.2,.7,.3,1);z-index:10;pointer-events:none}
+#doc.on{opacity:1;transform:none;pointer-events:auto}
+
+/* the spine (left) */
+.spine{width:228px;flex-shrink:0;border-right:1px solid var(--ink-soft);background:rgba(250,247,242,0.5);display:flex;flex-direction:column;padding:1rem 0}
+.putdown{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);cursor:pointer;padding:0.5rem 1.2rem;border-radius:4px;margin:0 0.6rem 0.8rem}
+.putdown:hover{color:var(--mo)}
+.sp-sec{display:flex;align-items:center;gap:0.7rem;padding:0.6rem 1.2rem;cursor:pointer;position:relative;transition:background .15s}
+.sp-sec:hover{background:rgba(196,165,123,0.06)}
+.sp-sec.current{background:rgba(196,165,123,0.1)}
+.sp-mark{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:16px;flex-shrink:0}
+.sp-mark i{display:block;height:2px;border-radius:1px;background:rgba(44,41,38,0.12)}
+.sp-mark i::after{content:'';display:block;height:100%;border-radius:1px;width:var(--ff,0%);transition:width .5s}
+.sp-mark i:nth-child(1){width:16px}.sp-mark i:nth-child(2){width:11px}.sp-mark i:nth-child(3){width:7px}
+.sp-mark.settled i::after{background:var(--cl);width:100%}
+.sp-info{flex:1;min-width:0}
+.sp-name{font-weight:500;font-size:0.8rem;color:var(--ch)}
+.sp-sec.faint .sp-name{color:var(--ao);opacity:0.5;font-weight:400}
+.sp-sec.faint{cursor:default}
+.sp-state{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao);display:block;margin-top:1px}
+.sp-state.live{color:var(--cl)}
+.sp-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.sp-dot.settled{background:var(--cl)}.sp-dot.active{background:var(--gh)}.sp-dot.faint{background:transparent;border:1px solid rgba(44,41,38,0.15)}
+.spine-foot{margin-top:auto;padding:1rem 1.2rem 0;border-top:1px solid var(--ink-soft)}
+.sf-mark-label{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);margin-bottom:0.5rem}
+.bigmark{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:90px}
+.bigmark i{display:block;height:3px;border-radius:2px;position:relative;background:rgba(44,41,38,0.1)}
+.bigmark i::after{content:'';position:absolute;inset:0;border-radius:2px;transform-origin:left;transform:scaleX(var(--f,0));transition:transform .6s cubic-bezier(.4,0,.2,1)}
+.bigmark i:nth-child(1){width:90px}.bigmark i:nth-child(2){width:72px}.bigmark i:nth-child(3){width:54px;opacity:0.6}
+.bigmark i:nth-child(1)::after{background:var(--line1)}.bigmark i:nth-child(2)::after{background:var(--line2)}.bigmark i:nth-child(3)::after{background:var(--line3)}
+.sf-pct{font-family:var(--fm);font-size:0.5rem;color:var(--ao);margin-top:0.5rem}
+.sf-pct b{font-family:var(--fd);color:var(--ch);font-size:0.85rem}
+
+/* the paper (center) */
+.paper{flex:1;overflow-y:auto;background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,115,85,0.01) 3px,rgba(139,115,85,0.01) 4px);padding-bottom:calc(var(--bar-h) + 1.5rem)}
+.paper-in{max-width:680px;margin:0 auto;padding:2.2rem 2.2rem 0}
+.letterhead{border-bottom:1px solid var(--ink-soft);padding-bottom:1.1rem;margin-bottom:1.4rem}
+.lh-mark{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:60px;margin-bottom:0.7rem}
+.lh-mark i{display:block;height:3px;border-radius:2px;position:relative;background:rgba(44,41,38,0.1)}
+.lh-mark i::after{content:'';position:absolute;inset:0;border-radius:2px;transform-origin:left;transform:scaleX(var(--f,0));transition:transform .6s}
+.lh-mark i:nth-child(1){width:60px}.lh-mark i:nth-child(2){width:48px}.lh-mark i:nth-child(3){width:36px;opacity:0.6}
+.lh-mark i:nth-child(1)::after{background:var(--line1)}.lh-mark i:nth-child(2)::after{background:var(--line2)}.lh-mark i:nth-child(3)::after{background:var(--line3)}
+.lh-title{font-family:var(--fd);font-weight:500;font-size:1.7rem;color:var(--ch)}
+.lh-sub{font-size:0.72rem;color:var(--ao);margin-top:0.15rem}
+.lh-actions{display:flex;gap:1.2rem;margin-top:0.7rem}
+.lh-act{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);cursor:pointer;font-weight:600}
+.lh-act:hover{color:var(--ao)}
+
+/* a section in the paper */
+.sec-h{display:flex;align-items:baseline;gap:0.8rem;margin:1.8rem 0 0.3rem}
+.sec-t{font-family:var(--fd);font-weight:500;font-size:1.3rem;color:var(--ch)}
+.sec-badge{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;padding:2px 9px;border-radius:3px;transform:rotate(-1.5deg)}
+.b-settled{color:var(--cl);border:1.5px solid var(--cl)}
+.b-active{color:#b89a2e;border:1.5px solid #cfae34}
+.sec-meta{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--ao);margin-left:auto}
+.sec-rule{display:flex;flex-direction:column;gap:2px;margin:0.4rem 0 1rem}
+.sec-rule i{display:block;height:1.5px;border-radius:1px;background:var(--cl)}
+.sec-rule i:nth-child(1){width:44px;opacity:0.5}.sec-rule i:nth-child(2){width:28px;opacity:0.28}
+.prose{font-size:0.84rem;color:var(--mo);line-height:1.7;max-width:60ch}
+.prose b{color:var(--ch);font-weight:600}
+.kv{display:flex;gap:0.6rem;padding:0.4rem 0;font-size:0.78rem;border-bottom:1px solid var(--ink-soft)}
+.kv .k{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--ao);width:130px;flex-shrink:0;padding-top:2px}
+.kv .v{color:var(--ch)}
+
+/* compose affordance */
+.compose{margin:1rem 0;padding:1.1rem 1.2rem;border:1.5px dashed rgba(196,165,123,0.45);border-radius:8px;background:rgba(196,165,123,0.04);text-align:center}
+.compose-q{font-family:var(--fd);font-style:italic;font-size:1rem;color:var(--ch);margin-bottom:0.3rem}
+.compose-help{font-size:0.72rem;color:var(--ao);margin-bottom:0.9rem}
+.btn{font-family:var(--fm);font-size:0.54rem;letter-spacing:0.06em;text-transform:uppercase;padding:0.6rem 1.1rem;border-radius:6px;cursor:pointer;border:1px solid var(--pe);background:#fff;color:var(--ch);font-weight:600;transition:all .2s}
+.btn:hover{border-color:var(--cl)}
+.btn.primary{background:var(--ch);color:var(--ow);border-color:var(--ch)}
+.btn.primary:hover{opacity:0.88}
+.btn.gold{background:var(--cl);color:#fff;border-color:var(--cl)}
+.nexthint{position:relative}
+.nexthint::after{content:'';position:absolute;right:-12px;top:-6px;width:8px;height:8px;border-radius:50%;background:var(--gh);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:0.4;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+
+/* FF&E schedule */
+.room-h{display:flex;justify-content:space-between;align-items:baseline;margin:1.2rem 0 0.2rem;gap:1rem}
+.room-h .rn{font-family:var(--fd);font-style:italic;font-weight:500;font-size:1rem;color:var(--ao)}
+.room-h .rm{font-family:var(--fm);font-size:0.48rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--ao)}
+.minirule{display:flex;flex-direction:column;gap:1.5px;margin:0.15rem 0 0.4rem}
+.minirule i{display:block;height:1px;background:var(--cl)}
+.minirule i:nth-child(1){width:26px}.minirule i:nth-child(2){width:16px;opacity:0.5}
+.ffe{display:flex;align-items:center;gap:0.8rem;padding:0.55rem 0.2rem;border-bottom:1px solid var(--ink-soft)}
+.ffe-name{font-weight:500;font-size:0.78rem;color:var(--ch)}
+.ffe-sub{font-size:0.62rem;color:var(--ao)}
+.ffe-type{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.08em;text-transform:uppercase;padding:2px 7px;border-radius:3px;font-weight:600;margin-left:auto;flex-shrink:0}
+.t-fixed{color:var(--mo);background:rgba(92,74,60,0.1);border:1px solid rgba(92,74,60,0.25)}
+.t-allow{color:#9a7b2e;background:rgba(232,197,71,0.12);border:1px solid rgba(207,174,52,0.4)}
+.t-tbd{color:var(--db);background:rgba(139,156,173,0.12);border:1px solid rgba(139,156,173,0.4)}
+.ffe-price{font-family:var(--fd);font-weight:500;font-size:0.82rem;color:var(--ch);width:74px;text-align:right;flex-shrink:0}
+.ffe-price.muted{color:var(--ao);font-style:italic;font-size:0.66rem;font-family:var(--fb);font-weight:400}
+
+/* proposal blocks */
+.pblock{border:1px solid var(--pe);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0;background:#fff}
+.pblock-h{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);font-weight:600;margin-bottom:0.6rem}
+.excl-item{display:flex;gap:0.6rem;align-items:flex-start;font-size:0.76rem;color:var(--mo);padding:0.3rem 0}
+.excl-item .x{color:var(--te);font-weight:600;flex-shrink:0}
+.fee-row{display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--ink-soft);font-size:0.8rem}
+.fee-row.total{border-bottom:none;border-top:1.5px solid var(--ch);margin-top:0.3rem;padding-top:0.6rem;font-weight:600}
+.fee-row .fl{color:var(--ch)}.fee-row .fv{font-family:var(--fd);font-weight:500;color:var(--ch)}
+.mile{display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--ink-soft);gap:1rem}
+.mile-l{font-size:0.76rem;color:var(--ch)}
+.mile-trig{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--ao);font-style:normal}
+.mile-v{font-family:var(--fd);font-weight:500;font-size:0.8rem;color:var(--ch);flex-shrink:0}
+
+/* the margin (right) */
+.margin{width:296px;flex-shrink:0;border-left:1px solid var(--ink-soft);background:rgba(250,247,242,0.4);overflow-y:auto;padding:1rem 1rem calc(var(--bar-h) + 1rem)}
+.margin-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.9rem;padding:0 0.3rem}
+.margin-t{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.mi{border:1px solid var(--pe);border-left:3px solid var(--db);border-radius:6px;padding:0.7rem 0.8rem;margin-bottom:0.6rem;background:#fff;transition:all .3s}
+.mi.decision{border-left-color:var(--gh)}
+.mi.settled{border-left-color:var(--sa);opacity:0.75}
+.mi-k{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;color:var(--db)}
+.mi.decision .mi-k{color:#b89a2e}.mi.settled .mi-k{color:var(--sa)}
+.mi-t{font-size:0.76rem;font-weight:500;color:var(--ch);margin:0.15rem 0}
+.mi-d{font-size:0.64rem;color:var(--ao);line-height:1.5}
+.mi-act{margin-top:0.6rem}
+.mi-empty{font-size:0.68rem;color:var(--ao);font-style:italic;text-align:center;padding:1.5rem 0.5rem;line-height:1.6}
+
+/* drawer bar */
+.drawer-bar{position:absolute;left:0;right:0;bottom:0;height:var(--bar-h);background:var(--ch);border-top:1px solid rgba(250,247,242,0.14);display:flex;align-items:center;gap:0.4rem;padding:0 1.4rem;z-index:30}
+.book{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.8rem;border-radius:6px;cursor:pointer}
+.book:hover{background:rgba(250,247,242,0.05)}
+.book-spine{width:3px;height:16px;border-radius:2px}
+.book-name{font-family:var(--fd);font-weight:500;font-size:0.8rem;color:rgba(250,247,242,0.55)}
+.bar-right{margin-left:auto;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.04em;color:rgba(250,247,242,0.4);display:flex;align-items:center;gap:0.5rem}
+
+/* client mirror overlay */
+.scrim{position:absolute;inset:0;top:26px;background:rgba(28,26,24,0.45);opacity:0;pointer-events:none;transition:opacity .3s;z-index:40}
+.scrim.on{opacity:1;pointer-events:auto}
+.mirror{position:absolute;inset:0;top:26px;background:var(--paper);z-index:50;transform:translateY(100%);transition:transform .4s cubic-bezier(.2,.8,.3,1);overflow-y:auto;display:flex;flex-direction:column}
+.mirror.on{transform:none}
+.mirror-banner{flex-shrink:0;background:var(--ch);color:rgba(250,247,242,0.8);padding:0.7rem 1.6rem;display:flex;align-items:center;justify-content:space-between;font-family:var(--fm);font-size:0.54rem;letter-spacing:0.08em;text-transform:uppercase}
+.mirror-banner .back{color:var(--cl);cursor:pointer}
+.mirror-in{max-width:620px;margin:0 auto;padding:2.4rem 2rem;width:100%}
+.mr-title{font-family:var(--fd);font-weight:500;font-size:1.9rem;color:var(--ch)}
+.mr-sub{font-size:0.78rem;color:var(--ao);margin:0.2rem 0 1.6rem}
+.mr-k{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--cl);font-weight:600;margin:1.6rem 0 0.5rem}
+.mr-sign{margin-top:2rem;padding:1.4rem;border:1px solid var(--cl);border-radius:10px;background:rgba(196,165,123,0.05);text-align:center}
+.mr-sign .q{font-family:var(--fd);font-style:italic;font-size:1.1rem;color:var(--ch);margin-bottom:0.9rem}
+
+/* toast */
+.toast{position:absolute;bottom:calc(var(--bar-h) + 16px);left:50%;transform:translateX(-50%) translateY(10px);background:var(--ch);color:var(--ow);padding:0.7rem 1.2rem;border-radius:8px;font-size:0.74rem;z-index:200;opacity:0;pointer-events:none;transition:all .3s;display:flex;gap:0.6rem;align-items:center;border:1px solid rgba(196,165,123,0.3);max-width:70%}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast .d{width:6px;height:6px;border-radius:50%;background:var(--sa);flex-shrink:0}
+
+/* grow flash on project open */
+@keyframes grow{0%{background:rgba(196,165,123,0)}30%{background:rgba(196,165,123,0.12)}100%{background:rgba(196,165,123,0)}}
+.growflash{animation:grow 2s ease-out}
+
+@media(max-width:1080px){.margin{display:none}}
+@media(max-width:780px){.spine{display:none}.paper-in{padding:1.4rem 1.2rem 0}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="frame">
+    <b>Lead → Proposal</b> · one document, growing — nothing converts
+    <span class="step" id="stepRail">
+      <span class="s on">Brief</span>·<span class="s">Discovery</span>·<span class="s">Direction</span>·<span class="s">Proposal</span>·<span class="s">Signed</span>·<span class="s">Project</span>
+    </span>
+  </div>
+
+  <!-- ============ THE DESK ============ -->
+  <div id="desk">
+    <div class="desk-date">Friday, June 13</div>
+    <div class="desk-k">The Studio Desk</div>
+    <div class="desk-section-label"><span class="sm"><i></i><i></i><i></i></span> Needs your hand</div>
+    <div class="lead-folder" onclick="openDoc()">
+      <div class="lf-tab"><span class="nm"><i></i><i></i><i></i></span> New lead</div>
+      <div class="lf-card">
+        <div class="lf-name">Aspen Loft Refresh</div>
+        <div class="lf-from">Sarah Whitfield · came in via the website · 2 days ago</div>
+        <div class="lf-body">“We just took possession of a loft in Aspen and the living and dining rooms are echoing-empty. We'd love help making them feel warm and collected — not decorated. Budget's flexible for the right pieces. Hoping to host by the holidays.”</div>
+        <div class="lf-cta">Open the document →</div>
+      </div>
+    </div>
+    <div class="desk-hint">A lead isn't a separate thing that becomes a project. It's a document at its very first section. Open it.</div>
+  </div>
+
+  <!-- ============ THE DOCUMENT ============ -->
+  <div id="doc">
+
+    <!-- spine -->
+    <div class="spine">
+      <div class="putdown" onclick="putDown()">← The Desk</div>
+      <div id="spineSecs"></div>
+      <div class="spine-foot">
+        <div class="sf-mark-label">This engagement</div>
+        <div class="bigmark" id="bigmark"><i></i><i></i><i></i></div>
+        <div class="sf-pct"><b id="pctNum">14</b>% · <span id="movementName">Shaping</span></div>
+      </div>
+    </div>
+
+    <!-- paper -->
+    <div class="paper" id="paper">
+      <div class="paper-in">
+        <div class="letterhead">
+          <div class="lh-mark" id="lhMark"><i></i><i></i><i></i></div>
+          <div class="lh-title">Aspen Loft Refresh</div>
+          <div class="lh-sub" id="lhSub">Sarah Whitfield · new lead · Living &amp; Dining</div>
+          <div class="lh-actions" id="lhActions"></div>
+        </div>
+        <div id="secContent"></div>
+      </div>
+    </div>
+
+    <!-- margin -->
+    <div class="margin">
+      <div class="margin-h"><span class="margin-t">In the margin</span><span class="mono" style="font-size:0.5rem;color:var(--cl);cursor:pointer">+ Note</span></div>
+      <div id="marginItems"></div>
+    </div>
+
+    <!-- drawer bar -->
+    <div class="drawer-bar">
+      <div class="book"><span class="book-spine" style="background:var(--cl)"></span><span class="book-name">Library</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--db)"></span><span class="book-name">Orders</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--sa)"></span><span class="book-name">Accounts</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--te)"></span><span class="book-name">People</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--mo)"></span><span class="book-name">Hours</span></div>
+      <div class="bar-right"><span id="timerDisp">◷ 0:42 · in hand</span></div>
+    </div>
+
+    <!-- client mirror -->
+    <div class="scrim" id="scrim" onclick="closeMirror()"></div>
+    <div class="mirror" id="mirror">
+      <div class="mirror-banner"><span>You're seeing what the Whitfields see</span><span class="back" onclick="closeMirror()">← back to your copy</span></div>
+      <div class="mirror-in" id="mirrorBody"></div>
+    </div>
+
+    <div class="toast" id="toast"><span class="d"></span><span id="toastMsg"></span></div>
+  </div>
+</div>
+
+<script>
+// ===== state =====
+const P={ discovery:false, direction:false, proposalReady:true, sent:false, signed:false, projectOpen:false };
+let current='brief';
+
+const SECTIONS=[
+  {key:'brief',name:'Brief',mv:1},
+  {key:'discovery',name:'Discovery',mv:1},
+  {key:'direction',name:'Direction',mv:1},
+  {key:'proposal',name:'Proposal',mv:2},
+  {key:'project',name:'Project',mv:3},
+  {key:'install',name:'Install',mv:3},
+  {key:'care',name:'Care',mv:3},
+];
+
+// section state: settled | active | faint
+function secState(k){
+  switch(k){
+    case 'brief': return 'settled';
+    case 'discovery': return P.discovery?'settled':'active';
+    case 'direction': return P.direction?'settled':(P.discovery?'active':'faint');
+    case 'proposal': return P.signed?'settled':(P.direction?'active':'faint');
+    case 'project': return P.projectOpen?'active':'faint';
+    default: return 'faint';
+  }
+}
+function reachable(k){ const s=secState(k); return s!=='faint'; }
+
+// ===== render spine =====
+function renderSpine(){
+  let html='';
+  SECTIONS.forEach(s=>{
+    const st=secState(s.key);
+    const cls=(st==='faint'?'faint':'')+(current===s.key?' current':'');
+    let stateLabel = st==='settled'?settledLabel(s.key) : st==='active'?'<span class="sp-state live">active now</span>' : '<span class="sp-state">—</span>';
+    html+=`<div class="sp-sec ${cls}" onclick="${st==='faint'?'':'go(\''+s.key+'\')'}">
+      <span class="sp-mark ${st==='settled'?'settled':''}"><i></i><i></i><i></i></span>
+      <span class="sp-info"><span class="sp-name">${s.name}</span>${stateLabel}</span>
+      <span class="sp-dot ${st}"></span>
+    </div>`;
+  });
+  document.getElementById('spineSecs').innerHTML=html;
+}
+function settledLabel(k){
+  if(k==='brief') return '<span class="sp-state">settled</span>';
+  if(k==='discovery') return '<span class="sp-state">settled · jun 13</span>';
+  if(k==='direction') return '<span class="sp-state">settled · jun 13</span>';
+  if(k==='proposal') return '<span class="sp-state">signed · jun 13</span>';
+  return '<span class="sp-state">settled</span>';
+}
+
+// ===== the Strata progress (3 movements) =====
+function progress(){
+  const l1=(1 + (P.discovery?1:0) + (P.direction?1:0))/3; // brief always settled
+  const l2= P.signed?1:(P.sent?0.6:0.3); // proposal drafted .3, sent .6, signed 1
+  const l3= P.projectOpen?0.12:0;
+  return [l1,l2,l3];
+}
+function setMarks(){
+  const [a,b,c]=progress();
+  ['bigmark','lhMark'].forEach(id=>{ const m=document.getElementById(id).children; m[0].style.setProperty('--f',a);m[1].style.setProperty('--f',b);m[2].style.setProperty('--f',c); });
+  const pct=Math.round((a+b+c)/3*100);
+  document.getElementById('pctNum').textContent=pct;
+  let mv='Shaping'; if(P.signed)mv='Delivery'; else if(P.sent||P.direction)mv= P.direction?'Commitment':'Shaping';
+  if(P.projectOpen)mv='Delivery';
+  document.getElementById('movementName').textContent=mv;
+}
+
+// ===== step rail =====
+function updateRail(){
+  const order=['brief','discovery','direction','proposal','signed','project'];
+  let active='brief';
+  if(P.projectOpen)active='project'; else if(P.signed)active='signed';
+  else if(current==='proposal'||P.sent)active='proposal';
+  else if(P.direction||current==='direction')active='direction';
+  else if(P.discovery||current==='discovery')active='discovery';
+  const rail=document.getElementById('stepRail').children;
+  for(let i=0;i<rail.length;i++){ if(rail[i].classList) rail[i].classList.toggle('on', rail[i].textContent.toLowerCase()===active || order.indexOf(rail[i].textContent.toLowerCase())<=order.indexOf(active)); }
+}
+
+// ===== navigate =====
+function go(k){ if(!reachable(k))return; current=k; render(); }
+
+// ===== render the active section into the paper =====
+function render(){
+  renderSpine(); setMarks(); updateRail(); renderMargin();
+  // letterhead sub + actions
+  const sub=document.getElementById('lhSub');
+  if(P.projectOpen) sub.textContent='Sarah Whitfield · Project · active';
+  else if(P.signed) sub.textContent='Sarah Whitfield · Proposal signed · becoming a project';
+  else sub.textContent='Sarah Whitfield · '+(P.direction?'in proposal':'new lead')+' · Living & Dining';
+  // letterhead instruments appear once there's something to show a client
+  document.getElementById('lhActions').innerHTML = (P.direction||current==='proposal')?
+    `<span class="lh-act" onclick="openMirror()">View as the Whitfields ↗</span><span class="lh-act" style="color:var(--db)" onclick="toast('Send a note — the ad-hoc sibling of the weekly Pulse')">Send a note</span>`:'';
+
+  const c=document.getElementById('secContent');
+  c.innerHTML = CONTENT[current] ? CONTENT[current]() : '';
+}
+
+// ===== section content =====
+const CONTENT={
+  brief: ()=>`
+    <div class="sec-h"><span class="sec-t">Brief</span><span class="sec-badge b-settled">Settled</span><span class="sec-meta">from the inquiry</span></div>
+    <div class="sec-rule"><i></i><i></i></div>
+    <div class="prose">Sarah and her family have taken possession of a loft in Aspen. The <b>living and dining rooms are empty</b> and she wants them to feel “warm and collected, not decorated.” Budget is flexible for the right pieces. She'd like to <b>host by the holidays</b>.</div>
+    <div style="margin-top:1rem">
+      <div class="kv"><span class="k">Rooms</span><span class="v">Living room, dining room</span></div>
+      <div class="kv"><span class="k">Stated budget</span><span class="v">Flexible · “the right pieces”</span></div>
+      <div class="kv"><span class="k">Timeline</span><span class="v">Host-ready by December</span></div>
+      <div class="kv"><span class="k">Style cues</span><span class="v">Warm, collected, layered naturals</span></div>
+    </div>
+    <div class="compose">
+      <div class="compose-q">The brief is captured. Now you learn the space.</div>
+      <div class="compose-help">Discovery is where the lead becomes real — site, needs, the budget behind the word “flexible.”</div>
+      <button class="btn primary nexthint" onclick="go('discovery')">Go to Discovery →</button>
+    </div>`,
+
+  discovery: ()=> P.discovery ? `
+    <div class="sec-h"><span class="sec-t">Discovery</span><span class="sec-badge b-settled">Settled</span><span class="sec-meta">jun 13</span></div>
+    <div class="sec-rule"><i></i><i></i></div>
+    <div class="prose">A video walkthrough and a measured scan established the space and the real scope. The “flexible” budget resolved to a comfortable <b>$18–22K for furnishings</b> plus the design fee.</div>
+    <div style="margin-top:1rem">
+      <div class="kv"><span class="k">Site</span><span class="v">Loft · 19' ceilings · north light · scan attached</span></div>
+      <div class="kv"><span class="k">Living room</span><span class="v">Seating for 8 · a reading corner · warm, not precious</span></div>
+      <div class="kv"><span class="k">Dining</span><span class="v">Table for 6–8 · a real pendant moment</span></div>
+      <div class="kv"><span class="k">Budget</span><span class="v">$18–22K furnishings · fee separate</span></div>
+    </div>
+    <div class="compose">
+      <div class="compose-q">You know the space. Set the direction.</div>
+      <button class="btn primary nexthint" onclick="go('direction')">Go to Direction →</button>
+    </div>`
+  : `
+    <div class="sec-h"><span class="sec-t">Discovery</span><span class="sec-badge b-active">Active</span><span class="sec-meta">your turn</span></div>
+    <div class="sec-rule"><i></i><i></i></div>
+    <div class="prose">This is where you learn the space — the site, the needs, and the budget behind the word “flexible.” In the real portal you'd attach the room scan and record what you heard.</div>
+    <div class="compose">
+      <div class="compose-q">Record what you learned</div>
+      <div class="compose-help">A walkthrough, the measurements, the real budget. Then this section settles and the document grows.</div>
+      <button class="btn gold nexthint" onclick="doDiscovery()">Record Discovery</button>
+    </div>`,
+
+  direction: ()=> P.direction ? `
+    <div class="sec-h"><span class="sec-t">Direction</span><span class="sec-badge b-settled">Settled</span><span class="sec-meta">agreed jun 13</span></div>
+    <div class="sec-rule"><i></i><i></i></div>
+    <div class="prose"><b>“Warm modern, layered naturals.”</b> Oak and walnut, bouclé and linen, a single sculptural lighting moment per room. Collected over time, not matched in a showroom. Sarah saw the concept boards and said yes.</div>
+    <div style="margin-top:1rem">
+      <div class="kv"><span class="k">Palette</span><span class="v">Warm neutrals · oak · walnut · brass</span></div>
+      <div class="kv"><span class="k">Feeling</span><span class="v">Collected, lived-in, quietly refined</span></div>
+      <div class="kv"><span class="k">Client</span><span class="v">Approved the concept · ready for the proposal</span></div>
+    </div>
+    <div class="compose">
+      <div class="compose-q">The vision is agreed. Now the proposal — the heart of it.</div>
+      <div class="compose-help">Scope, the FF&amp;E schedule, exclusions, your fee, and how it's paid. This is what Sarah will sign.</div>
+      <button class="btn primary nexthint" onclick="go('proposal')">Go to the Proposal →</button>
+    </div>`
+  : `
+    <div class="sec-h"><span class="sec-t">Direction</span><span class="sec-badge b-active">Active</span><span class="sec-meta">your turn</span></div>
+    <div class="sec-rule"><i></i><i></i></div>
+    <div class="prose">The concept you'll present — palette, feeling, the one or two moves that define the rooms. Once Sarah agrees, the direction settles and you can write the proposal against it.</div>
+    <div class="compose">
+      <div class="compose-q">Set the direction</div>
+      <div class="compose-help">“Warm modern, layered naturals” — present it, get the nod, settle it.</div>
+      <button class="btn gold nexthint" onclick="doDirection()">Set &amp; share the Direction</button>
+    </div>`,
+
+  proposal: ()=> proposalHTML(),
+
+  project: ()=> `
+    <div class="sec-h"><span class="sec-t">Project</span><span class="sec-badge b-active">Active · week 1</span><span class="sec-meta">opened on signing</span></div>
+    <div class="sec-rule"><i></i><i></i></div>
+    <div class="prose" style="padding:1rem 1.1rem;border:1px solid rgba(196,165,123,0.4);border-radius:8px;background:rgba(196,165,123,0.05)">Nothing converted. <b>The proposal didn't become a project — it IS the project.</b> The schedule below is the same FF&amp;E schedule Sarah signed; the allowances are now budgets to spend, the TBD lines are now decisions to make, the fixed pieces are ready to order. The document simply grew its next section.</div>
+    <div class="room-h"><span class="rn">Living Room</span><span class="rm">$11,200 committed of $14,000 · 2 of 4 underway</span></div>
+    <div class="minirule"><i></i><i></i></div>
+    ${ffeLine('Meadow Linen Sectional','Woodward & Sons · ready to order','fixed','$6,800')}
+    ${ffeLine('Brass Arc Floor Lamp','Apparatus · ready to order','fixed','$1,200')}
+    ${ffeLine('Area Rug · 9×12','allowance to spend','allow','$3,200')}
+    ${ffeLine('Accent Chairs · pair','now a decision — site visit done','tbd','—')}
+    <div class="compose" style="border-style:solid;border-color:var(--pe);background:#fff">
+      <div class="compose-q">The work begins.</div>
+      <div class="compose-help">From here: the Account Page tracks budget vs spend, POs flow from the fixed lines, the TBD chairs become a client decision. All in this same document.</div>
+      <button class="btn" onclick="toast('That is the rest of the document — Project → Install → Care, the same paper growing on.')">See what's next →</button>
+    </div>`,
+};
+
+function ffeLine(name,sub,type,price){
+  const tcls={fixed:'t-fixed',allow:'t-allow',tbd:'t-tbd'}[type];
+  const tlabel={fixed:'Fixed',allow:'Allowance',tbd:'TBD'}[type];
+  const pcls = price==='—'?'ffe-price muted':'ffe-price';
+  const pval = price==='—'?'pending':price;
+  return `<div class="ffe"><div style="flex:1;min-width:0"><div class="ffe-name">${name}</div><div class="ffe-sub">${sub}</div></div><span class="ffe-type ${tcls}">${tlabel}</span><span class="${pcls}">${pval}</span></div>`;
+}
+
+function proposalHTML(){
+  const signed=P.signed;
+  return `
+    <div class="sec-h"><span class="sec-t">Proposal</span><span class="sec-badge ${signed?'b-settled':'b-active'}">${signed?'Settled · Signed':'Active'}</span><span class="sec-meta">${signed?'jun 13':'ready to send'}</span></div>
+    <div class="sec-rule"><i></i><i></i></div>
+    <div class="prose">Furnishing of the living and dining rooms per the agreed direction. Below is everything Sarah is agreeing to — the schedule, what's <b>not</b> included, how revisions work, and the fee.</div>
+
+    <div class="pblock">
+      <div class="pblock-h">FF&amp;E Schedule · by room</div>
+      <div class="room-h"><span class="rn">Living Room</span><span class="rm">target $14,000</span></div>
+      <div class="minirule"><i></i><i></i></div>
+      ${ffeLine('Meadow Linen Sectional','Woodward & Sons · selected','fixed','$6,800')}
+      ${ffeLine('Brass Arc Floor Lamp','Apparatus · selected','fixed','$1,200')}
+      ${ffeLine('Area Rug · 9×12','category set, piece pending','allow','$3,200')}
+      ${ffeLine('Accent Chairs · pair','pending site visit','tbd','—')}
+      <div class="room-h"><span class="rn">Dining Room</span><span class="rm">target $6,600</span></div>
+      <div class="minirule"><i></i><i></i></div>
+      ${ffeLine('Oak Dining Table','Nordic Atelier · selected','fixed','$4,200')}
+      ${ffeLine('Dining Chairs · set of 6','category set, piece pending','allow','$2,400')}
+      ${ffeLine('Pendant','fixture & height pending','tbd','—')}
+      <div style="font-family:var(--fm);font-size:0.55rem;color:var(--ao);margin-top:0.7rem;line-height:1.6"><span class="ffe-type t-fixed" style="margin:0">Fixed</span> a specific piece at a set price · <span class="ffe-type t-allow" style="margin:0 0 0 4px">Allowance</span> a budget for a category not yet chosen · <span class="ffe-type t-tbd" style="margin:0 0 0 4px">TBD</span> to be determined</div>
+    </div>
+
+    <div class="pblock">
+      <div class="pblock-h">Not included · so there are no surprises</div>
+      <div class="excl-item"><span class="x">—</span><span>Architectural or structural changes</span></div>
+      <div class="excl-item"><span class="x">—</span><span>Window treatments (a separate proposal, if wanted)</span></div>
+      <div class="excl-item"><span class="x">—</span><span>Fine art and accessories procurement</span></div>
+      <div class="excl-item"><span class="x">—</span><span>Electrical or installation labor</span></div>
+    </div>
+
+    <div class="pblock">
+      <div class="pblock-h">Revisions · how changes work</div>
+      <div class="prose" style="font-size:0.76rem"><b>Two revision rounds</b> are included per phase. Beyond that, revisions are billed at <b>$150/hour</b>, always with your approval first. A change to agreed scope is handled with a written Scope Change — never a surprise on an invoice.</div>
+    </div>
+
+    <div class="pblock">
+      <div class="pblock-h">The fee &amp; how it's paid</div>
+      <div class="fee-row"><span class="fl">FF&amp;E budget (Fixed + Allowance)</span><span class="fv">$17,800</span></div>
+      <div class="fee-row"><span class="fl">Design fee</span><span class="fv">$8,500</span></div>
+      <div class="fee-row total"><span class="fl">Proposed engagement</span><span class="fv">$26,300</span></div>
+      <div style="height:0.7rem"></div>
+      <div class="pblock-h" style="margin-bottom:0.4rem">Payment milestones</div>
+      <div class="mile"><span class="mile-l">Deposit · 50% of fee <span class="mile-trig">— on signing</span></span><span class="mile-v">$4,250</span></div>
+      <div class="mile"><span class="mile-l">Production start · 25% <span class="mile-trig">— when ordering begins</span></span><span class="mile-v">$2,125</span></div>
+      <div class="mile"><span class="mile-l">Delivery · 25% <span class="mile-trig">— when Install settles</span></span><span class="mile-v">$2,125</span></div>
+      <div style="font-family:var(--fm);font-size:0.52rem;color:var(--ao);margin-top:0.6rem;font-style:italic">Each milestone drafts its own invoice automatically when its trigger fires.</div>
+    </div>
+
+    ${signed ? `
+    <div class="compose" style="border-style:solid;border-color:var(--sa);background:rgba(168,181,160,0.06)">
+      <div class="compose-q">Signed by Sarah Whitfield · June 13</div>
+      <div class="compose-help">This section is settled. The Project section just opened below it — same schedule, now underway.</div>
+      <button class="btn primary nexthint" onclick="go('project')">Go to the Project →</button>
+    </div>`
+    : P.sent ? `
+    <div class="compose">
+      <div class="compose-q">Sent to Sarah · awaiting signature</div>
+      <div class="compose-help">She's reviewing her copy now. The signature is a decision — watch the margin.</div>
+      <button class="btn gold nexthint" onclick="signNow()">Sign on Sarah's behalf (demo)</button>
+    </div>`
+    : `
+    <div class="compose">
+      <div class="compose-q">Ready. Show Sarah her copy, then send for signature.</div>
+      <div class="compose-help">She never sees your cost, your margin, or the TBD logic — only her clean proposal. That's the send weave.</div>
+      <div style="display:flex;gap:0.6rem;justify-content:center;flex-wrap:wrap">
+        <button class="btn" onclick="openMirror()">View as the Whitfields</button>
+        <button class="btn gold nexthint" onclick="sendProposal()">Send for signature →</button>
+      </div>
+    </div>`}`;
+}
+
+// ===== margin =====
+function renderMargin(){
+  const m=document.getElementById('marginItems');
+  let items='';
+  if(P.signed){
+    items+=mItem('decision settled','Proposal · approved','Sarah Whitfield signed — this settled the Proposal section.','settled');
+    items+=mItem('money · draft','Deposit invoice drafted','50% of fee · $4,250 · fired on signing.','');
+  } else if(P.sent){
+    items+=mItem('decision · awaiting','Sarah signs the Proposal','Her approval will settle the Proposal section and open the Project.','decision','<button class="btn gold" style="font-size:0.46rem;padding:0.4rem 0.7rem" onclick="signNow()">Demo: she signs</button>');
+  } else if(current==='proposal'){
+    items+=mItem('proposal · draft','Ready to send','Show her copy, then send for signature.','');
+  }
+  if(P.discovery && current!=='proposal' && !P.sent && !P.signed){
+    items+=mItem('note','Budget resolved','“Flexible” → $18–22K furnishings. Recorded in Discovery.','');
+  }
+  if(!items) items=`<div class="mi-empty">Quiet for now.<br>As the document grows, the things that need Sarah — decisions, sends, invoices — anchor here.</div>`;
+  m.innerHTML=items;
+}
+function mItem(kind,title,desc,cls,act){
+  return `<div class="mi ${cls||''}"><div class="mi-k">${kind}</div><div class="mi-t">${title}</div><div class="mi-d">${desc}</div>${act?`<div class="mi-act">${act}</div>`:''}</div>`;
+}
+
+// ===== actions =====
+function doDiscovery(){ P.discovery=true; toast('Discovery settled — the document grew. Budget, site, and needs are now part of the record.'); flash(); render(); }
+function doDirection(){ P.direction=true; toast('Direction settled — Sarah approved the concept. Now the proposal.'); flash(); render(); }
+function sendProposal(){
+  P.sent=true; closeMirror();
+  toast('Sent for signature. Sarah has her copy — your cost and margin stayed behind.');
+  current='proposal'; render();
+}
+function signNow(){
+  P.signed=true; P.projectOpen=true; closeMirror();
+  current='proposal'; render();
+  flashGrow();
+  setTimeout(()=>toast('Signed. The Proposal section settled — and the Project opened. Nothing converted; the document grew.'),300);
+}
+
+// ===== client mirror =====
+function openMirror(){
+  document.getElementById('mirrorBody').innerHTML=`
+    <div class="mr-title">Aspen Loft Refresh</div>
+    <div class="mr-sub">Proposal from Middlewest Studio · ${P.sent?'awaiting your signature':'for your review'}</div>
+    <div class="mr-k">Your rooms</div>
+    <div class="prose">Furnishing of your living and dining rooms — warm modern, layered naturals, collected over time.</div>
+    <div class="mr-k">What we'll bring in</div>
+    ${mirrorLine('Living room','Sectional, floor lamp, area rug, a pair of accent chairs')}
+    ${mirrorLine('Dining room','Oak table, six chairs, a sculptural pendant')}
+    <div class="mr-k">What's not included</div>
+    <div class="prose" style="font-size:0.78rem">Architectural changes · window treatments · art · installation labor.</div>
+    <div class="mr-k">Investment</div>
+    <div class="fee-row"><span class="fl">Furnishings</span><span class="fv">$17,800</span></div>
+    <div class="fee-row"><span class="fl">Design fee</span><span class="fv">$8,500</span></div>
+    <div class="fee-row total"><span class="fl">Total</span><span class="fv">$26,300</span></div>
+    <div class="prose" style="font-size:0.72rem;margin-top:0.5rem;color:var(--ao)">Paid in three milestones: 50% to begin, 25% at production, 25% at delivery.</div>
+    ${P.sent?`<div class="mr-sign"><div class="q">Ready to make it yours?</div><button class="btn primary" onclick="signNow()">Sign &amp; approve →</button></div>`:`<div class="prose" style="font-size:0.72rem;margin-top:1.5rem;font-style:italic;color:var(--ao)">This is exactly what Sarah sees — no cost breakdown, no margin, no internal notes.</div>`}`;
+  document.getElementById('scrim').classList.add('on');
+  document.getElementById('mirror').classList.add('on');
+}
+function mirrorLine(r,d){ return `<div style="padding:0.5rem 0;border-bottom:1px solid var(--ink-soft)"><div style="font-family:var(--fd);font-style:italic;color:var(--ao);font-size:0.9rem">${r}</div><div style="font-size:0.76rem;color:var(--mo);margin-top:0.1rem">${d}</div></div>`; }
+function closeMirror(){ document.getElementById('scrim').classList.remove('on'); document.getElementById('mirror').classList.remove('on'); }
+
+// ===== misc =====
+function openDoc(){ document.getElementById('desk').classList.add('hidden'); setTimeout(()=>{document.getElementById('doc').classList.add('on'); render();},150); }
+function putDown(){ closeMirror(); document.getElementById('doc').classList.remove('on'); document.getElementById('desk').classList.remove('hidden'); }
+function flash(){ const p=document.getElementById('paper'); p.classList.remove('growflash'); void p.offsetWidth; }
+function flashGrow(){ const p=document.getElementById('paper'); p.classList.add('growflash'); }
+function toast(msg){ const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),3800); }
+
+render();
+</script>
+</body>
+</html>

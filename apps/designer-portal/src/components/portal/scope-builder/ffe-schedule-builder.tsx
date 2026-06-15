@@ -452,7 +452,8 @@ function RoomDropZone({
         isOver ? 'bg-[rgba(122,155,118,0.06)]' : ''
       }`}
       style={{
-        boxShadow: isOver ? '0 0 0 1px var(--accent-primary)' : 'none',
+        outline: isOver ? '1px solid var(--accent-primary)' : 'none',
+        outlineOffset: isOver ? '-1px' : undefined,
       }}
     >
       {children}
@@ -508,7 +509,7 @@ function CategoryPromptModal({
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-[480px] rounded-md border bg-[var(--bg-surface)] p-6 shadow-xl"
+        className="w-full max-w-[480px] rounded-md border-2 bg-[var(--bg-surface)] p-6"
         style={{ borderColor: 'var(--border-default)' }}
         onClick={(e) => e.stopPropagation()}
       >

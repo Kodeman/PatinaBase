@@ -35,6 +35,7 @@ function mkRow(partial: Partial<DocumentStateRow>): DocumentStateRow {
     proposal_status: null,
     proposal_sent_at: null,
     proposal_viewed_at: null,
+    proposal_updated_at: null,
     lead_response_deadline: null,
     lead_status: null,
     overdue_decision_count: 0,
@@ -202,7 +203,7 @@ describe('deriveNeed', () => {
       proposal_sent_at: daysAgo(1),
     });
     expect(deriveNeed(row, NOW)).toBeNull();
-    expect(deriveMotion(row, NOW)).toBe('sent, unopened 1d');
+    expect(deriveMotion(row, NOW)).toEqual({ kind: 'sent_unopened', text: 'sent, unopened 1d' });
   });
 
   it('proposal sent 2 days ago, never viewed → promotes to a folder (R22)', () => {
@@ -231,7 +232,8 @@ describe('deriveNeed', () => {
       proposal_sent_at: daysAgo(0.5),
     });
     expect(deriveNeed(row, NOW)).toBeNull();
-    expect(deriveMotion(row, NOW)).toMatch(/with client/i);
+    expect(deriveMotion(row, NOW)!.kind).toBe('with_client');
+    expect(deriveMotion(row, NOW)!.text).toMatch(/with client/i);
   });
 
   it('proposal viewed 2 days ago, unsigned → hesitating ("no signature") (R10)', () => {
@@ -359,15 +361,21 @@ describe('R18 send-weave need lines (FINAL 1d thresholds, L3)', () => {
 });
 
 describe('deriveMotion', () => {
-  it('paused project → "Paused"', () => {
-    expect(deriveMotion(mkRow({ is_paused: true, project_status: 'on_hold' }), NOW)).toBe('Paused');
+  it('paused project → "Paused" (kind paused)', () => {
+    expect(deriveMotion(mkRow({ is_paused: true, project_status: 'on_hold' }), NOW)).toEqual({
+      kind: 'paused',
+      text: 'Paused',
+    });
   });
 
-  it('in-flight procurement summarized', () => {
-    expect(deriveMotion(mkRow({ in_flight_count: 3 }), NOW)).toMatch(/3/);
+  it('in-flight procurement summarized (kind in_flight)', () => {
+    const motion = deriveMotion(mkRow({ in_flight_count: 3 }), NOW);
+    expect(motion!.kind).toBe('in_flight');
+    expect(motion!.text).toMatch(/3/);
   });
 
-  it('draft proposal → drafting line', () => {
+  it('actively-drafting proposal (touched 1d ago) → quiet, no chip (R45)', () => {
+    // R45: while she's in it, nothing shows. A fresh touch keeps the draft warm.
     expect(
       deriveMotion(
         mkRow({
@@ -375,25 +383,57 @@ describe('deriveMotion', () => {
           active_section: 'direction',
           project_id: null,
           proposal_status: 'draft',
+          proposal_updated_at: daysAgo(1),
         }),
         NOW,
       ),
-    ).toMatch(/draft/i);
+    ).toBeNull();
   });
 
-  it('recently sent proposal (no hesitation yet) → with-client line', () => {
+  it('untouched draft (cold ≥3d) → "drafting, untouched Nd" chip (R45)', () => {
     expect(
       deriveMotion(
         mkRow({
           engagement_kind: 'proposal',
-          active_section: 'proposal',
+          active_section: 'direction',
           project_id: null,
-          proposal_status: 'sent',
-          proposal_sent_at: daysAgo(0.5),
+          proposal_status: 'draft',
+          proposal_updated_at: daysAgo(4),
         }),
         NOW,
       ),
-    ).toMatch(/client/i);
+    ).toEqual({ kind: 'drafting', text: 'drafting, untouched 4d' });
+  });
+
+  it('untouched draft falls back to updated_at when no proposal touch (R45)', () => {
+    expect(
+      deriveMotion(
+        mkRow({
+          engagement_kind: 'proposal',
+          active_section: 'direction',
+          project_id: null,
+          proposal_status: 'draft',
+          proposal_updated_at: null,
+          updated_at: daysAgo(5),
+        }),
+        NOW,
+      ),
+    ).toEqual({ kind: 'drafting', text: 'drafting, untouched 5d' });
+  });
+
+  it('recently sent proposal (no hesitation yet) → with-client line', () => {
+    const motion = deriveMotion(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_status: 'sent',
+        proposal_sent_at: daysAgo(0.5),
+      }),
+      NOW,
+    );
+    expect(motion!.kind).toBe('with_client');
+    expect(motion!.text).toMatch(/client/i);
   });
 
   it('quiet project with no movement → no chip', () => {
@@ -440,6 +480,69 @@ describe('partitionDesk', () => {
     );
     const { chips } = partitionDesk(rows, NOW);
     expect(chips).toHaveLength(6);
+  });
+
+  it('actively-drafting proposal (touched 1d) → no folder and no chip (R45)', () => {
+    const { folders, chips } = partitionDesk(
+      [
+        mkRow({
+          engagement_id: 'e-draft',
+          engagement_kind: 'proposal',
+          project_id: null,
+          proposal_id: 'pr1',
+          proposal_status: 'draft',
+          proposal_updated_at: daysAgo(1),
+        }),
+      ],
+      NOW,
+    );
+    expect(folders).toHaveLength(0);
+    expect(chips).toHaveLength(0);
+  });
+
+  it('cold draft (untouched 4d) → one "drafting, untouched 4d" chip, no folder (R45)', () => {
+    const { folders, chips } = partitionDesk(
+      [
+        mkRow({
+          engagement_id: 'e-cold',
+          engagement_kind: 'proposal',
+          project_id: null,
+          proposal_id: 'pr1',
+          proposal_status: 'draft',
+          proposal_updated_at: daysAgo(4),
+        }),
+      ],
+      NOW,
+    );
+    expect(folders).toHaveLength(0);
+    expect(chips).toHaveLength(1);
+    expect(chips[0].kind).toBe('drafting');
+    expect(chips[0].text).toBe('drafting, untouched 4d');
+  });
+
+  it('just-activated project (proposal accepted WITH project_id) → a project folder, never a proposal need (R45)', () => {
+    // Shape-A: once the signed proposal activates, the engagement is a project
+    // (engagement_kind 'project' with a project_id), so the proposal_signed
+    // "open the project" need never fires — its real needs are project ones.
+    const { folders, chips } = partitionDesk(
+      [
+        mkRow({
+          engagement_id: 'e-activated',
+          engagement_kind: 'project',
+          project_id: 'p-activated',
+          proposal_id: 'pr1',
+          proposal_status: 'accepted',
+          overdue_decision_count: 1,
+          earliest_overdue_due: daysAgo(2),
+        }),
+      ],
+      NOW,
+    );
+    expect(folders).toHaveLength(1);
+    expect(folders[0].row.project_id).toBe('p-activated');
+    expect(folders[0].need.kind).toBe('overdue_decision');
+    expect(folders[0].need.kind).not.toBe('proposal_signed');
+    expect(chips).toHaveLength(0);
   });
 });
 
