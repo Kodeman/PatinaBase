@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · The Decision System · Composition in the Document</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;--sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--paper:#FCFAF6;--ink:rgba(44,41,38,0.16);--ink-soft:rgba(44,41,38,0.07);--line1:#5C4A3C;--line2:#C4A57B;--line3:#8B9CAD;--fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace;--bar-h:56px}
+html,body{height:100%}
+body{font-family:var(--fb);background:#1c1a18;color:var(--mo);line-height:1.55;-webkit-font-smoothing:antialiased;overflow:hidden}
+#app{position:fixed;inset:0;overflow:hidden}
+.mono{font-family:var(--fm)}
+.frame{position:absolute;top:0;left:0;right:0;height:26px;z-index:300;background:var(--ch);color:rgba(250,247,242,0.7);font-family:var(--fm);font-size:0.54rem;letter-spacing:0.05em;display:flex;align-items:center;gap:0.5rem;padding:0 1.2rem;border-bottom:1px solid rgba(196,165,123,0.22)}
+.frame b{color:var(--cl);font-weight:500}.frame .gap{margin-left:auto;color:rgba(250,247,242,0.45)}.frame .gap em{color:var(--te);font-style:normal}
+
+#doc{position:absolute;inset:0;top:26px;display:flex;background:var(--ow)}
+/* spine */
+.spine{width:200px;flex-shrink:0;border-right:1px solid var(--ink-soft);background:rgba(250,247,242,0.5);display:flex;flex-direction:column;padding:1rem 0}
+.sp-back{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);cursor:pointer;padding:0.5rem 1.1rem;margin-bottom:0.6rem}
+.sp-sec{display:flex;align-items:center;gap:0.6rem;padding:0.5rem 1.1rem;position:relative}
+.sp-sec.current{background:rgba(196,165,123,0.1)}
+.sp-mark{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:14px;flex-shrink:0}
+.sp-mark i{display:block;height:2px;border-radius:1px;background:rgba(44,41,38,0.12)}
+.sp-mark i:nth-child(1){width:14px}.sp-mark i:nth-child(2){width:10px}.sp-mark i:nth-child(3){width:6px}
+.sp-mark.settled i{background:var(--cl)}
+.sp-name{flex:1;font-weight:500;font-size:0.76rem;color:var(--ch)}
+.sp-sec.faint .sp-name{color:var(--ao);opacity:0.5;font-weight:400}
+.sp-state{font-family:var(--fm);font-size:0.4rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--ao);display:block;margin-top:1px}
+.sp-state.live{color:var(--cl)}
+.sp-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.sp-dot.settled{background:var(--cl)}.sp-dot.active{background:var(--gh)}.sp-dot.faint{background:transparent;border:1px solid rgba(44,41,38,0.15)}
+.spine-foot{margin-top:auto;padding:1rem 1.1rem 0;border-top:1px solid var(--ink-soft)}
+.sf-label{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);margin-bottom:0.5rem}
+.bigmark{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:80px}
+.bigmark i{display:block;height:3px;border-radius:2px;position:relative;background:rgba(44,41,38,0.1)}
+.bigmark i::after{content:'';position:absolute;inset:0;border-radius:2px;transform-origin:left;transform:scaleX(var(--f,0));transition:transform .6s cubic-bezier(.4,0,.2,1)}
+.bigmark i:nth-child(1){width:80px}.bigmark i:nth-child(2){width:62px}.bigmark i:nth-child(3){width:46px;opacity:0.6}
+.bigmark i:nth-child(1)::after{background:var(--line1)}.bigmark i:nth-child(2)::after{background:var(--line2)}.bigmark i:nth-child(3)::after{background:var(--line3)}
+.sf-pct{font-family:var(--fm);font-size:0.5rem;color:var(--ao);margin-top:0.5rem}.sf-pct b{font-family:var(--fd);color:var(--ch);font-size:0.82rem}
+
+/* paper */
+.paper{flex:1;overflow-y:auto;background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,115,85,0.01) 3px,rgba(139,115,85,0.01) 4px);padding-bottom:calc(var(--bar-h) + 1.5rem)}
+.paper-in{max-width:600px;margin:0 auto;padding:1.8rem 2rem 0}
+.letterhead{border-bottom:1px solid var(--ink-soft);padding-bottom:1rem;margin-bottom:1.1rem}
+.lh-title{font-family:var(--fd);font-weight:500;font-size:1.5rem;color:var(--ch)}
+.lh-sub{font-size:0.7rem;color:var(--ao);margin-top:0.15rem}
+.sec-h{display:flex;align-items:baseline;gap:0.8rem;margin:1.2rem 0 0.3rem}
+.sec-t{font-family:var(--fd);font-weight:500;font-size:1.2rem;color:var(--ch)}
+.sec-badge{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;padding:2px 9px;border-radius:3px;color:#b89a2e;border:1.5px solid #cfae34;transform:rotate(-1.5deg)}
+.callout{padding:0.85rem 1.1rem;border:1px solid rgba(196,165,123,0.4);border-radius:8px;background:rgba(196,165,123,0.05);font-size:0.78rem;color:var(--mo);line-height:1.6;margin:0.6rem 0}
+.callout b{color:var(--ch);font-weight:600}
+.room-sub{font-family:var(--fd);font-style:italic;font-weight:500;font-size:1rem;color:var(--ao);margin:1.1rem 0 0.2rem}
+.minirule{display:flex;flex-direction:column;gap:1.5px;margin:0.1rem 0 0.3rem}
+.minirule i{display:block;height:1px;background:var(--cl)}.minirule i:nth-child(1){width:24px}.minirule i:nth-child(2){width:15px;opacity:0.5}
+.ffe{display:flex;align-items:center;gap:0.8rem;padding:0.55rem 0.2rem;border-bottom:1px solid var(--ink-soft)}
+.ffe-name{font-weight:500;font-size:0.78rem;color:var(--ch)}
+.ffe-sub{font-size:0.62rem;color:var(--ao)}
+.stamp{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.07em;text-transform:uppercase;padding:2px 8px;border-radius:3px;font-weight:600;flex-shrink:0;border:1.5px solid;transform:rotate(-1deg);cursor:pointer}
+.st-decision{color:#c4836f;border-color:var(--te);background:rgba(212,160,144,0.06)}
+.st-specified{color:var(--ao);border-color:#cfc8bb}
+.st-ordered{color:var(--db);border-color:var(--db)}
+.st-chosen{color:var(--sa);border-color:var(--sa)}
+.ffe-price{font-family:var(--fd);font-weight:500;font-size:0.8rem;color:var(--ch);width:64px;text-align:right;flex-shrink:0}
+.ffe-price.muted{color:var(--ao);font-style:italic;font-size:0.6rem;font-family:var(--fb);font-weight:400}
+
+/* margin */
+.margin{width:300px;flex-shrink:0;border-left:1px solid var(--ink-soft);background:rgba(250,247,242,0.4);overflow-y:auto;padding:1rem 0.9rem calc(var(--bar-h) + 1rem)}
+.margin-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;padding:0 0.3rem}
+.margin-t{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.new-dec{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.04em;color:#fff;background:var(--ch);border:none;padding:0.4rem 0.7rem;border-radius:5px;cursor:pointer;font-weight:600}
+.new-dec:hover{opacity:0.88}
+.margin-note{font-size:0.58rem;color:var(--ao);font-style:italic;padding:0 0.3rem;margin-bottom:0.7rem;line-height:1.5}
+.mi{border:1px solid var(--pe);border-left:3px solid var(--gh);border-radius:7px;padding:0.65rem 0.75rem;margin-bottom:0.55rem;background:#fff;cursor:pointer;transition:all .2s}
+.mi:hover{border-color:var(--cl);transform:translateY(-1px)}
+.mi.overdue{border-left-color:var(--te)}
+.mi.responded{border-left-color:var(--db)}
+.mi.resolved{border-left-color:var(--sa);opacity:0.7}
+.mi.draft{border-left-color:#cbb48f;border-style:dashed}
+.mi-k{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;color:var(--ao);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.mi-kind{color:var(--cl)}
+.mi-state{color:#b89a2e}.mi.overdue .mi-state{color:#c4836f}.mi.responded .mi-state{color:var(--db)}.mi.resolved .mi-state{color:var(--sa)}.mi.draft .mi-state{color:var(--ao)}
+.mi-t{font-size:0.78rem;font-weight:500;color:var(--ch);margin:0.15rem 0}
+.mi-d{font-size:0.62rem;color:var(--ao);line-height:1.45}
+.mi-opts{display:flex;gap:3px;margin-top:0.4rem}
+.mi-sw{width:16px;height:16px;border-radius:4px;border:1px solid var(--ink)}
+
+/* drawer */
+.drawer-bar{position:absolute;left:0;right:0;bottom:0;height:var(--bar-h);background:var(--ch);border-top:1px solid rgba(250,247,242,0.14);display:flex;align-items:center;gap:0.4rem;padding:0 1.4rem;z-index:30}
+.book{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.8rem;border-radius:6px;cursor:pointer}
+.book-spine{width:3px;height:16px;border-radius:2px}
+.book-name{font-family:var(--fd);font-weight:500;font-size:0.8rem;color:rgba(250,247,242,0.55)}
+.bar-right{margin-left:auto;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.04em;color:rgba(250,247,242,0.4)}
+
+/* sheets */
+.scrim{position:absolute;inset:0;top:26px;background:rgba(28,26,24,0.45);opacity:0;pointer-events:none;transition:opacity .3s;z-index:40}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;top:26px;right:0;bottom:0;width:520px;max-width:94vw;background:var(--paper);border-left:1px solid var(--ink);z-index:50;transform:translateX(102%);transition:transform .4s cubic-bezier(.2,.8,.3,1);overflow-y:auto}
+.sheet.on{transform:none}
+.sheet-in{padding:1.6rem 1.7rem 3rem}
+.sh-close{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);cursor:pointer;margin-bottom:0.9rem;display:inline-block}
+.sh-close:hover{color:var(--mo)}
+.kind-badge{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.07em;text-transform:uppercase;font-weight:600;padding:3px 10px;border-radius:3px;border:1.5px solid var(--cl);color:var(--cl);display:inline-block;margin-bottom:0.5rem}
+.sh-title{font-family:var(--fd);font-weight:500;font-size:1.5rem;color:var(--ch);line-height:1.15}
+.sh-meta{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--ao);margin-top:0.4rem}
+.sh-meta .st-due{color:#c4836f}
+.blocks-line{margin:0.9rem 0;padding:0.6rem 0.85rem;border:1px solid rgba(212,160,144,0.4);border-radius:7px;background:rgba(212,160,144,0.05);font-size:0.72rem;color:var(--mo)}
+.blocks-line b{color:#c4836f;font-weight:600}
+.sect-k{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);font-weight:600;margin:1.3rem 0 0.6rem}
+.context{font-size:0.82rem;color:var(--mo);line-height:1.65;padding:0.2rem 0}
+/* option (rich attributes) */
+.opt{display:flex;gap:0.8rem;padding:0.7rem;border:1px solid var(--pe);border-radius:9px;margin-bottom:0.55rem;background:#fff;position:relative}
+.opt.recommended{border-color:rgba(196,165,123,0.5)}
+.opt.chosen{border-color:var(--sa);background:rgba(168,181,160,0.06)}
+.opt-img{width:54px;height:54px;border-radius:7px;flex-shrink:0;border:1px solid var(--ink);position:relative;overflow:hidden}
+.opt-body{flex:1;min-width:0}
+.opt-top{display:flex;align-items:baseline;gap:0.5rem}
+.opt-name{font-weight:600;font-size:0.84rem;color:var(--ch)}
+.opt-price{font-family:var(--fd);font-weight:500;font-size:0.88rem;color:var(--ch);margin-left:auto;flex-shrink:0}
+.opt-qty{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.03em;color:var(--ao);text-transform:uppercase}
+.opt-note{font-size:0.68rem;color:var(--mo);font-style:italic;margin-top:0.3rem;line-height:1.5;padding-left:0.6rem;border-left:2px solid var(--pe)}
+.opt-badges{display:flex;gap:0.35rem;margin-top:0.4rem;flex-wrap:wrap}
+.obadge{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.05em;text-transform:uppercase;font-weight:600;padding:2px 7px;border-radius:3px;border:1px solid}
+.ob-rec{color:var(--cl);border-color:var(--cl)}
+.ob-chosen{color:var(--sa);border-color:var(--sa);background:rgba(168,181,160,0.1)}
+.ob-note{color:var(--ao);border-color:#cfc8bb}
+
+.lifecycle-controls{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.3rem}
+.btn{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.06em;text-transform:uppercase;padding:0.55rem 0.95rem;border-radius:6px;cursor:pointer;border:1px solid var(--pe);background:#fff;color:var(--ch);font-weight:600;transition:all .2s}
+.btn:hover{border-color:var(--cl)}
+.btn.gold{background:var(--cl);color:#fff;border-color:var(--cl)}.btn.dark{background:var(--ch);color:#fff;border-color:var(--ch)}.btn.sage{background:var(--sa);color:#fff;border-color:var(--sa)}.btn.danger{color:#b06a55;border-color:rgba(212,160,144,0.5)}
+.btn.wide{width:100%;text-align:center}
+.btn.sm{font-size:0.46rem;padding:0.4rem 0.7rem}
+.extend-row{display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem}
+.extend-row input{flex:1;padding:0.5rem 0.7rem;border:1px solid var(--pe);border-radius:6px;font-family:var(--fb);font-size:0.78rem}
+
+/* override / consent (FULL — preserve) */
+.override{margin-top:0.6rem;padding:1rem;border:1px solid var(--cl);border-radius:10px;background:rgba(196,165,123,0.04)}
+.ov-h{font-family:var(--fd);font-style:italic;font-weight:500;font-size:1rem;color:var(--ch);margin-bottom:0.3rem}
+.ov-sub{font-size:0.68rem;color:var(--ao);line-height:1.5;margin-bottom:0.8rem}
+.ov-select{width:100%;padding:0.6rem 0.75rem;border:1px solid var(--pe);border-radius:7px;font-family:var(--fb);font-size:0.8rem;color:var(--ch);background:#fff;margin-bottom:0.7rem}
+.consent-label{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);font-weight:600;margin-bottom:0.4rem}
+.consent-methods{display:flex;gap:0.4rem;margin-bottom:0.7rem;flex-wrap:wrap}
+.cm{flex:1;min-width:64px;text-align:center;padding:0.5rem 0.3rem;border:1px solid var(--pe);border-radius:6px;cursor:pointer;font-family:var(--fm);font-size:0.46rem;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;color:var(--ao);transition:all .15s}
+.cm:hover{border-color:var(--cl)}.cm.on{border-color:var(--cl);background:rgba(196,165,123,0.1);color:var(--ch)}
+.ov-evidence{width:100%;padding:0.6rem 0.75rem;border:1px solid var(--pe);border-radius:7px;font-family:var(--fb);font-size:0.78rem;margin-bottom:0.8rem}
+
+/* audit trail */
+.audit{padding:0.9rem;border:1px solid var(--pe);border-radius:9px;background:#fff}
+.audit-row{display:flex;gap:0.7rem;font-size:0.72rem;color:var(--mo);padding:0.25rem 0}
+.audit-row .al{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--ao);width:72px;flex-shrink:0}
+.audit-row .av b{color:var(--ch);font-weight:600}
+.discuss{font-size:0.7rem;color:var(--ao);font-style:italic;margin-top:0.8rem;padding:0.6rem 0.8rem;border:1px dashed var(--pe);border-radius:7px;line-height:1.5}
+
+/* composer */
+.field{margin-bottom:0.9rem}
+.field-label{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);font-weight:600;margin-bottom:0.35rem;display:block}
+.field input,.field textarea,.field select{width:100%;padding:0.6rem 0.8rem;border:1px solid var(--pe);border-radius:7px;font-family:var(--fb);font-size:0.82rem;color:var(--ch);background:#fff}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--cl)}
+.field-row{display:flex;gap:0.6rem}.field-row .field{flex:1}
+.kind-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;margin-bottom:0.4rem}
+.kind-card{border:1px solid var(--pe);border-radius:7px;padding:0.55rem 0.3rem;text-align:center;cursor:pointer;transition:all .15s}
+.kind-card:hover{border-color:var(--cl)}.kind-card.on{border-color:var(--cl);background:rgba(196,165,123,0.08)}
+.kc-name{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.03em;text-transform:uppercase;font-weight:600;color:var(--ch)}
+/* option builder */
+.ob-row{display:flex;gap:0.5rem;align-items:flex-start;padding:0.6rem;border:1px solid var(--pe);border-radius:8px;margin-bottom:0.45rem;background:#fff}
+.ob-sw{width:34px;height:34px;border-radius:6px;flex-shrink:0;border:1px solid var(--ink);cursor:pointer}
+.ob-fields{flex:1;display:flex;flex-direction:column;gap:0.35rem}
+.ob-line{display:flex;gap:0.4rem}
+.ob-fields input{padding:0.4rem 0.6rem;border:1px solid var(--pe);border-radius:5px;font-family:var(--fb);font-size:0.74rem;width:100%}
+.ob-rec-toggle{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--ao);cursor:pointer;font-weight:600;white-space:nowrap;padding:0.3rem 0.5rem;border:1px solid var(--pe);border-radius:4px}
+.ob-rec-toggle.on{color:var(--cl);border-color:var(--cl);background:rgba(196,165,123,0.08)}
+.ob-x{color:var(--te);cursor:pointer;font-size:0.85rem;padding:0.2rem}
+.ob-add{display:flex;gap:0.5rem;margin-top:0.3rem}
+.materialize{display:flex;align-items:center;gap:0.6rem;padding:0.7rem 0.85rem;border:1px dashed rgba(196,165,123,0.5);border-radius:8px;background:rgba(196,165,123,0.04);margin-bottom:0.6rem;cursor:pointer}
+.materialize:hover{background:rgba(196,165,123,0.08)}
+.materialize .mt-t{font-size:0.74rem;color:var(--ch);font-weight:500}
+.materialize .mt-d{font-size:0.6rem;color:var(--ao)}
+.block-toggle{display:flex;align-items:center;gap:0.6rem;padding:0.6rem 0.8rem;border:1px solid var(--pe);border-radius:7px;cursor:pointer;margin-bottom:0.5rem}
+.block-toggle.on{border-color:var(--te);background:rgba(212,160,144,0.05)}
+.bt-box{width:14px;height:14px;border:1.5px solid #cfc8bb;border-radius:4px;flex-shrink:0;position:relative}
+.block-toggle.on .bt-box{border-color:var(--te);background:var(--te)}
+.block-toggle.on .bt-box::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:#fff}
+.bt-text{font-size:0.76rem;color:var(--ch)}
+.sh-foot{display:flex;gap:0.6rem;align-items:center;margin-top:1.3rem;padding-top:1rem;border-top:1px solid var(--ink-soft)}
+
+/* toast */
+.toast{position:absolute;bottom:calc(var(--bar-h) + 16px);left:calc(50% - 150px);transform:translateX(-50%) translateY(10px);background:var(--ch);color:var(--ow);padding:0.7rem 1.2rem;border-radius:8px;font-size:0.74rem;z-index:200;opacity:0;pointer-events:none;transition:all .3s;display:flex;gap:0.6rem;align-items:center;border:1px solid rgba(196,165,123,0.3);max-width:60%}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast .d{width:6px;height:6px;border-radius:50%;background:var(--sa);flex-shrink:0}
+
+@media(max-width:1180px){.margin{width:260px}}
+@media(max-width:900px){.spine{display:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="frame"><b>The Decision System</b> · composition in the Document — the authoring half the margin never had<span class="gap">closes gap matrix: <em>Decisions · composition · 11 absent · P0</em></span></div>
+
+  <div id="doc">
+    <div class="spine">
+      <div class="sp-back" onclick="toast('Back to the Desk — overdue decisions surface there as need-lines.')">← The Desk</div>
+      <div id="spineSecs"></div>
+      <div class="spine-foot"><div class="sf-label">This engagement</div><div class="bigmark" id="bigmark"><i></i><i></i><i></i></div><div class="sf-pct"><b>71</b>% · Delivery</div></div>
+    </div>
+
+    <div class="paper"><div class="paper-in">
+      <div class="letterhead"><div class="lh-title">Aspen Loft Refresh</div><div class="lh-sub">Project · active · the decisions that gate the work</div></div>
+      <div class="sec-h"><span class="sec-t">Project</span><span class="sec-badge">Active · week 4</span></div>
+      <div class="callout"><b>Decisions live in the margin →</b> A decision is a choice the client owes, with options you compose, that blocks procurement until it's made. The margin shows them; here in the schedule, a blocked piece carries a <b>Decision due</b> stamp until the choice is recorded.</div>
+      <div class="room-sub">Living Room</div><div class="minirule"><i></i><i></i></div>
+      <div id="ffeList"></div>
+      <div style="font-family:var(--fm);font-size:0.52rem;color:var(--ao);margin-top:0.8rem;line-height:1.6">Tap a <span class="stamp st-decision" style="cursor:default">Decision due</span> stamp to open its decision in the margin. Recording the choice clears the stamp — procurement unblocks (spec §5, one act, every surface).</div>
+    </div></div>
+
+    <div class="margin">
+      <div class="margin-h"><span class="margin-t">Decisions · in the margin</span><button class="new-dec" onclick="openComposer()">+ New</button></div>
+      <div class="margin-note">The notification model: every decision, anchored to the work it gates. Compose a new one without leaving.</div>
+      <div id="marginItems"></div>
+    </div>
+
+    <div class="drawer-bar">
+      <div class="book"><span class="book-spine" style="background:var(--cl)"></span><span class="book-name">Library</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--db)"></span><span class="book-name">Orders</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--sa)"></span><span class="book-name">Accounts</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--te)"></span><span class="book-name">People</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--mo)"></span><span class="book-name">Hours</span></div>
+      <div class="bar-right">the Library seeds decision options · one tap away</div>
+    </div>
+
+    <div class="scrim" id="scrim" onclick="closeAll()"></div>
+    <div class="sheet" id="detailSheet"><div class="sheet-in" id="detailBody"></div></div>
+    <div class="sheet" id="composerSheet"><div class="sheet-in" id="composerBody"></div></div>
+    <div class="toast" id="toast"><span class="d"></span><span id="toastMsg"></span></div>
+  </div>
+</div>
+
+<script>
+// ===== decision_kind taxonomy =====
+const KINDS=['Material/Color','Product','Layout','Finish'];
+// ===== decisions (with full option attributes, lifecycle states, blocking, audit) =====
+const D={
+  'd-rug':{kind:'Material/Color',title:'Living-room rug',state:'pending',due:'Wed',phase:'Procurement',
+    context:'The rug anchors the seating group and sets the floor tone against the oak. All three work with the sectional; the differences are texture underfoot and how they photograph. My recommendation wears best with a dog in the house.',
+    blocksFfe:'f-rug',
+    options:[
+      {name:'Tasara · wool blend',price:3200,qty:1,sw:'#C4A57B',note:'My pick — depth of texture, photographs beautifully, and the wool blend hides everyday wear.',rec:true},
+      {name:'Höörn · flatweave',price:2650,qty:1,sw:'#B8A98C',note:''},
+      {name:'Marle · jute + wool',price:3900,qty:1,sw:'#D8C9AE',note:'Coarser hand — lovely but less forgiving with the dog.'},
+    ],chosen:null},
+  'd-chairs':{kind:'Product',title:'Accent chairs — the pair',state:'overdue',due:'2 days ago',phase:'Procurement',
+    context:'For the reading nook by the window. The site visit confirmed 28" of clearance each side, so both options fit. Swivel reads more relaxed; the lounge is the firmer sit.',
+    blocksFfe:'f-chairs',
+    options:[
+      {name:'Hartwell swivel',price:1400,qty:2,sw:'#A8B5A0',note:'My pick for the nook — the swivel makes the corner feel intentional.',rec:true},
+      {name:'Lound lounge',price:1650,qty:2,sw:'#8B9CAD',note:''},
+    ],chosen:null},
+  'd-console':{kind:'Layout',title:'Console placement',state:'responded',due:'answered',phase:'Concept',
+    context:'Whether the console floats behind the sectional or anchors the entry wall.',
+    blocksFfe:null,
+    options:[{name:'Behind the sectional',price:0,qty:1,sw:'#C4A57B',note:'Sarah chose this — keeps the entry open.'},{name:'Entry wall',price:0,qty:1,sw:'#B8A98C',note:''}],
+    chosen:0},
+  'd-hardware':{kind:'Finish',title:'Cabinet hardware finish',state:'draft',due:'not sent',phase:'Procurement',
+    context:'',
+    blocksFfe:null,
+    options:[],chosen:null},
+  'd-drapery':{kind:'Material/Color',title:'Drapery fabric',state:'resolved',due:'resolved',phase:'Procurement',
+    context:'The drape weight and tone for the south windows.',
+    blocksFfe:null,
+    options:[{name:'Belgian linen · oatmeal',price:2800,qty:1,sw:'#E2DACA',note:'',rec:true},{name:'Cotton blend · fog',price:1900,qty:1,sw:'#D8D2C6',note:''}],
+    chosen:0,
+    audit:{who:'Designer override · on Sarah\u2019s behalf',method:'written',evidence:'Email approval 6/10 \u2014 \u201cthe oatmeal linen, yes\u201d',when:'Jun 10, 2:14pm'}},
+};
+let order=['d-rug','d-chairs','d-console','d-hardware','d-drapery'];
+
+// FF&E lines (decision_due stamps link to decisions)
+const FFE={
+  'f-sectional':{name:'Meadow Linen Sectional',sub:'Woodward & Sons',stamp:'ordered',price:6800,dec:null},
+  'f-rug':{name:'Area Rug · 9×12',sub:'allowance · awaiting selection',stamp:'decision',price:0,dec:'d-rug'},
+  'f-chairs':{name:'Accent Chairs · pair',sub:'reading nook · awaiting selection',stamp:'decision',price:0,dec:'d-chairs'},
+  'f-lamp':{name:'Brass Arc Floor Lamp',sub:'Apparatus · ready to order',stamp:'specified',price:1200,dec:null},
+};
+const STAMP_LABEL={decision:'Decision due',specified:'Specified',ordered:'Ordered',chosen:'Chosen'};
+const STATE_LABEL={pending:'pending',overdue:'overdue',responded:'responded',resolved:'resolved',draft:'draft · unsent'};
+
+// ===== render =====
+function render(){ renderSpine(); setMarks(); renderFfe(); renderMargin(); }
+function renderSpine(){
+  const secs=[['Brief','settled'],['Discovery','settled'],['Direction','settled'],['Proposal','settled'],['Project','active'],['Install','faint'],['Care','faint']];
+  document.getElementById('spineSecs').innerHTML=secs.map(([n,st])=>`<div class="sp-sec ${st==='faint'?'faint':''} ${n==='Project'?'current':''}"><span class="sp-mark ${st==='settled'?'settled':''}"><i></i><i></i><i></i></span><span class="sp-name">${n}</span>${st==='active'?'<span class="sp-state live">active</span>':st==='settled'?'<span class="sp-state">settled</span>':''}<span class="sp-dot ${st}"></span></div>`).join('');
+}
+function setMarks(){ const m=document.getElementById('bigmark').children; m[0].style.setProperty('--f',1);m[1].style.setProperty('--f',1);m[2].style.setProperty('--f',0.55); }
+
+function renderFfe(){
+  document.getElementById('ffeList').innerHTML=Object.keys(FFE).map(fid=>{
+    const it=FFE[fid];
+    const clickable=it.stamp==='decision'&&it.dec;
+    return `<div class="ffe"><div style="flex:1;min-width:0"><div class="ffe-name">${it.name}</div><div class="ffe-sub">${it.sub}</div></div>
+      <span class="stamp st-${it.stamp}" ${clickable?`onclick="openDetail('${it.dec}')"`:'style="cursor:default"'}>${STAMP_LABEL[it.stamp]}${it.stamp==='decision'&&D[it.dec]?' · '+D[it.dec].due:''}</span>
+      <span class="ffe-price ${it.price?'':'muted'}">${it.price?'$'+it.price.toLocaleString():'pending'}</span></div>`;
+  }).join('');
+}
+
+function renderMargin(){
+  document.getElementById('marginItems').innerHTML=order.map(id=>{
+    const d=D[id];
+    const recOpt=d.options.find(o=>o.rec)||d.options[0];
+    const swatches=d.options.slice(0,4).map(o=>`<span class="mi-sw" style="background:${o.sw}"></span>`).join('');
+    let line='';
+    if(d.state==='draft') line='Draft — not sent to the client yet';
+    else if(d.state==='resolved') line='Resolved'+(d.audit?' · '+d.audit.when.split(',')[0]:'');
+    else if(d.state==='responded') line=d.chosen!=null?`${d.options[d.chosen].name} — chosen`:'Responded';
+    else line=`${d.options.length} options · ${d.blocksFfe?'blocks procurement':'no block'}`;
+    return `<div class="mi ${d.state}" onclick="openDetail('${id}')">
+      <div class="mi-k"><span class="mi-kind">${d.kind}</span> · <span class="mi-state">${STATE_LABEL[d.state]}</span>${d.state!=='draft'&&d.state!=='resolved'?' · due '+d.due:''}</div>
+      <div class="mi-t">${d.title}</div>
+      <div class="mi-d">${line}</div>
+      ${d.options.length?`<div class="mi-opts">${swatches}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ===== decision detail (deep — closes the PARTIAL enrichments) =====
+let consentMethod='written', overridePick=null;
+function openDetail(id){
+  const d=D[id];
+  overridePick = d.options.findIndex(o=>o.rec); if(overridePick<0)overridePick=0;
+  consentMethod='written';
+  const blocksHtml = d.blocksFfe&&FFE[d.blocksFfe] ? `<div class="blocks-line"><b>⊘ Blocks procurement:</b> ${FFE[d.blocksFfe].name} can't be ordered until this is recorded. The line carries a <b>Decision due</b> stamp now.</div>` : '';
+  // options with full attributes
+  const optsHtml = d.options.length ? d.options.map((o,i)=>{
+    const chosen = d.chosen===i;
+    const badges=[];
+    if(o.rec) badges.push('<span class="obadge ob-rec">★ Your pick</span>');
+    if(chosen) badges.push('<span class="obadge ob-chosen">✓ Chosen</span>');
+    return `<div class="opt ${o.rec?'recommended':''} ${chosen?'chosen':''}">
+      <div class="opt-img" style="background:${o.sw}"></div>
+      <div class="opt-body">
+        <div class="opt-top"><span class="opt-name">${o.name}</span><span class="opt-price">${o.price?'$'+o.price.toLocaleString():'—'}</span></div>
+        <div class="opt-qty">qty ${o.qty}${o.price?' · $'+(o.price*o.qty).toLocaleString()+' total':''}</div>
+        ${o.note?`<div class="opt-note">${o.note}</div>`:''}
+        ${badges.length?`<div class="opt-badges">${badges.join('')}</div>`:''}
+      </div></div>`;
+  }).join('') : '<div class="context" style="color:var(--ao);font-style:italic">No options yet — this draft needs options before it can be published.</div>';
+
+  // lifecycle/resolution region by state
+  let action='';
+  if(d.state==='draft'){
+    action=`<div class="sect-k">This draft</div>
+      <div class="context" style="color:var(--ao);font-style:italic;margin-bottom:0.6rem">Unsent. Edit it, publish it to the client, or discard it.</div>
+      <div class="lifecycle-controls">
+        <button class="btn dark" onclick="editDecision('${id}')">Edit decision</button>
+        <button class="btn gold" onclick="publishDecision('${id}')">Publish to client →</button>
+        <button class="btn danger" onclick="deleteDecision('${id}')">Delete</button>
+      </div>`;
+  } else if(d.state==='resolved'){
+    action=`<div class="sect-k">Resolution · audit trail</div>
+      <div class="audit">
+        <div class="audit-row"><span class="al">Choice</span><span class="av"><b>${d.options[d.chosen].name}</b> · $${(d.options[d.chosen].price*d.options[d.chosen].qty).toLocaleString()}</span></div>
+        <div class="audit-row"><span class="al">Recorded by</span><span class="av">${d.audit.who}</span></div>
+        <div class="audit-row"><span class="al">Consent</span><span class="av"><b>${d.audit.method}</b></span></div>
+        <div class="audit-row"><span class="al">Evidence</span><span class="av">${d.audit.evidence}</span></div>
+        <div class="audit-row"><span class="al">When</span><span class="av">${d.audit.when}</span></div>
+      </div>
+      <div class="discuss">Discussion lives in the project's communication thread (R27) — not a separate per-decision feed.</div>`;
+  } else {
+    // pending / overdue / responded — nudge + extend + the FULL override/consent workflow
+    const overdueControls = (d.state==='overdue'||d.state==='pending') ? `
+      <div class="lifecycle-controls">
+        <button class="btn gold" onclick="nudge('${id}')">Send a nudge</button>
+        <button class="btn" onclick="toggleExtend('${id}')">Extend the date</button>
+      </div>
+      <div id="extendArea-${id}"></div>` : '';
+    const optionsSelect = d.options.map((o,i)=>`<option value="${i}" ${overridePick===i?'selected':''}>${o.name} — $${(o.price*o.qty).toLocaleString()}${o.rec?' (your pick)':''}</option>`).join('');
+    action=`<div class="sect-k">Keep it moving</div>
+      ${overdueControls}
+      <div class="sect-k">Record the decision</div>
+      <div class="override">
+        <div class="ov-h">Record on the client's behalf</div>
+        <div class="ov-sub">When the client decides verbally or you've confirmation in writing, record it here with consent. This invalidates the margin item, the Desk need-line, and the FF&amp;E line stamp in one act.</div>
+        <select class="ov-select" id="ovSelect" onchange="overridePick=+this.value">${optionsSelect}</select>
+        <div class="consent-label">Consent method</div>
+        <div class="consent-methods" id="consentMethods">
+          ${['verbal','written','text','email'].map(m=>`<div class="cm ${consentMethod===m?'on':''}" onclick="setConsent('${m}')">${m}</div>`).join('')}
+        </div>
+        <div class="consent-label">Evidence</div>
+        <input class="ov-evidence" id="ovEvidence" placeholder="e.g. confirmed on the 6/13 call / forwarded email">
+        <button class="btn sage wide" onclick="recordDecision('${id}')">Record the decision</button>
+      </div>`;
+  }
+
+  document.getElementById('detailBody').innerHTML=`
+    <span class="sh-close" onclick="closeAll()">✕ close</span>
+    <span class="kind-badge">${d.kind}</span>
+    <div class="sh-title">${d.title}</div>
+    <div class="sh-meta">${STATE_LABEL[d.state]}${d.state!=='draft'&&d.state!=='resolved'?` · <span class="st-due">due ${d.due}</span>`:''} · phase: ${d.phase}</div>
+    ${blocksHtml}
+    ${d.context?`<div class="sect-k">Context · what the client sees</div><div class="context">${d.context}</div>`:''}
+    <div class="sect-k">Options${d.options.length?' · '+d.options.length:''}</div>
+    ${optsHtml}
+    ${action}`;
+  openSheet('detailSheet');
+}
+
+function setConsent(m){ consentMethod=m; document.querySelectorAll('#consentMethods .cm').forEach(el=>el.classList.toggle('on',el.textContent.trim()===m)); }
+function toggleExtend(id){
+  const area=document.getElementById('extendArea-'+id);
+  if(area.innerHTML){ area.innerHTML=''; return; }
+  area.innerHTML=`<div class="extend-row"><input id="extendInput-${id}" placeholder="new date — e.g. next Tuesday"><button class="btn sm gold" onclick="doExtend('${id}')">Extend</button></div>`;
+}
+function doExtend(id){ const v=(document.getElementById('extendInput-'+id)||{}).value||'a new date'; D[id].due=v; D[id].state='pending'; closeAll(); render(); toast(`Due date extended to ${v}. The margin item and the FF&E stamp update together.`); }
+
+// ===== lifecycle transitions =====
+function nudge(id){ closeAll(); toast(`Nudge sent to the client for "${D[id].title}". Logged — and it invalidates every surface per spec §5.`); }
+function recordDecision(id){
+  const d=D[id]; const ev=(document.getElementById('ovEvidence')||{}).value||'recorded with consent';
+  d.state='resolved'; d.chosen=overridePick;
+  d.audit={who:'Designer override · on the client\u2019s behalf',method:consentMethod,evidence:ev,when:'just now'};
+  // clear the FF&E block — procurement unblocks
+  if(d.blocksFfe&&FFE[d.blocksFfe]){ FFE[d.blocksFfe].stamp='chosen'; FFE[d.blocksFfe].price=d.options[d.chosen].price*d.options[d.chosen].qty; FFE[d.blocksFfe].sub=d.options[d.chosen].name+' · ready to order'; }
+  closeAll(); render();
+  toast(`Recorded: ${d.options[d.chosen].name}. The decision resolved, the margin cleared, and the FF&E line unblocked — one act, every surface.`);
+}
+function publishDecision(id){
+  const d=D[id];
+  if(d.options.length<2){ toast('Add at least two options before publishing — the client needs a real choice.'); return; }
+  d.state='pending'; d.due='in 5 days';
+  if(d.blocksFfe&&FFE[d.blocksFfe]) FFE[d.blocksFfe].stamp='decision';
+  closeAll(); render();
+  toast(`Published — "${d.title}" went from draft to pending. The client sees it now; if it blocks a piece, the Decision due stamp is live.`);
+}
+function deleteDecision(id){ order=order.filter(x=>x!==id); delete D[id]; closeAll(); render(); toast('Decision deleted.'); }
+function editDecision(id){ openComposer(id); }
+
+// ===== the composer (the #1 P0 gap: create / compose options / publish) =====
+let comp;
+function openComposer(editId){
+  if(editId&&D[editId]){
+    const d=D[editId];
+    comp={editId,kind:d.kind,title:d.title,context:d.context,due:d.due==='not sent'?'':d.due,phase:d.phase,
+      options:d.options.map(o=>({name:o.name,price:o.price,qty:o.qty,note:o.note,rec:!!o.rec,sw:o.sw})),
+      blocking:!!d.blocksFfe,blockFfe:d.blocksFfe||'f-rug'};
+  } else {
+    comp={editId:null,kind:'Material/Color',title:'',context:'',due:'',phase:'Procurement',
+      options:[{name:'',price:0,qty:1,note:'',rec:true,sw:'#C4A57B'},{name:'',price:0,qty:1,note:'',rec:false,sw:'#B8A98C'}],
+      blocking:false,blockFfe:'f-rug'};
+  }
+  renderComposer(); openSheet('composerSheet');
+}
+const SWATCHES=['#C4A57B','#B8A98C','#D8C9AE','#A8B5A0','#8B9CAD','#D4A090','#E2DACA','#5C4A3C'];
+function renderComposer(){
+  const ffeChoices=Object.keys(FFE).filter(f=>FFE[f].stamp==='decision'||FFE[f].stamp==='specified');
+  document.getElementById('composerBody').innerHTML=`
+    <span class="sh-close" onclick="closeAll()">✕ close</span>
+    <span class="kind-badge" style="border-color:var(--ao);color:var(--ao)">${comp.editId?'Edit decision':'New decision'}</span>
+    <div class="sh-title">${comp.editId?'Edit the decision':'Compose a decision'}</div>
+    <p style="font-size:0.74rem;color:var(--ao);margin:0.5rem 0 1.1rem;line-height:1.6">The matrix's missing half — <b style="color:var(--mo)">create, build options, and publish</b>, all from the margin. A sheet, not a full-page modal.</p>
+
+    <div class="field-label">Kind · the taxonomy</div>
+    <div class="kind-grid">${KINDS.map(k=>`<div class="kind-card ${comp.kind===k?'on':''}" onclick="compKind('${k}')"><div class="kc-name">${k}</div></div>`).join('')}</div>
+
+    <div class="field"><label class="field-label">Title</label><input id="compTitle" value="${comp.title}" placeholder="e.g. Living-room rug"></div>
+    <div class="field"><label class="field-label">Context · the explanation the client reads</label><textarea id="compContext" rows="3" placeholder="Why this choice matters, what differs between options, your steer…">${comp.context}</textarea></div>
+
+    <div class="sect-k" style="margin-top:1rem">Options · the choices</div>
+    <div class="materialize" onclick="materialize()"><div style="flex:1"><div class="mt-t">⤵ Materialize from the Library</div><div class="mt-d">Seed options from saved products — pulls name, price, and image so you're not retyping.</div></div></div>
+    <div id="obList"></div>
+    <div class="ob-add"><button class="btn sm" onclick="addOption()">+ Add option</button></div>
+
+    <div class="sect-k">Gating</div>
+    <div class="field-row">
+      <div class="field"><label class="field-label">Due date</label><input id="compDue" value="${comp.due}" placeholder="e.g. next Wednesday"></div>
+      <div class="field"><label class="field-label">Link to phase</label><select id="compPhase"><option ${comp.phase==='Concept'?'selected':''}>Concept</option><option ${comp.phase==='Procurement'?'selected':''}>Procurement</option><option ${comp.phase==='Install'?'selected':''}>Install</option></select></div>
+    </div>
+    <div class="block-toggle ${comp.blocking?'on':''}" onclick="compBlockToggle()"><span class="bt-box"></span><span class="bt-text">Block procurement until this is decided</span></div>
+    ${comp.blocking?`<div class="field"><label class="field-label">Which FF&E line does it block?</label><select id="compBlockFfe">${ffeChoices.map(f=>`<option value="${f}" ${comp.blockFfe===f?'selected':''}>${FFE[f].name}</option>`).join('')}</select></div>`:''}
+
+    <div class="sh-foot">
+      <button class="btn" onclick="saveComposer(true)">Save as draft</button>
+      <button class="btn gold" onclick="saveComposer(false)">Publish to client →</button>
+      <span style="font-family:var(--fm);font-size:0.5rem;color:var(--ao);margin-left:auto">${comp.blocking?'will block a piece':'no block'}</span>
+    </div>`;
+  renderObList();
+}
+function renderObList(){
+  document.getElementById('obList').innerHTML=comp.options.map((o,i)=>`
+    <div class="ob-row">
+      <div class="ob-sw" style="background:${o.sw}" onclick="cycleSw(${i})" title="tap to change color"></div>
+      <div class="ob-fields">
+        <input value="${o.name}" oninput="comp.options[${i}].name=this.value" placeholder="Option name">
+        <div class="ob-line">
+          <input value="${o.price||''}" oninput="comp.options[${i}].price=+this.value||0" placeholder="Price" style="width:80px">
+          <input value="${o.qty}" oninput="comp.options[${i}].qty=+this.value||1" placeholder="Qty" style="width:56px">
+          <span class="ob-rec-toggle ${o.rec?'on':''}" onclick="setRec(${i})">★ pick</span>
+        </div>
+        <input value="${o.note||''}" oninput="comp.options[${i}].note=this.value" placeholder="Designer note (optional — shown to the client)">
+      </div>
+      <span class="ob-x" onclick="rmOption(${i})">✕</span>
+    </div>`).join('');
+}
+function compKind(k){ comp.kind=k; const t=document.getElementById('compTitle'); if(t)comp.title=t.value; syncComposerText(); renderComposer(); }
+function syncComposerText(){ const t=document.getElementById('compTitle'),c=document.getElementById('compContext'),dz=document.getElementById('compDue'); if(t)comp.title=t.value; if(c)comp.context=c.value; if(dz)comp.due=dz.value; }
+function addOption(){ syncComposerText(); comp.options.push({name:'',price:0,qty:1,note:'',rec:false,sw:SWATCHES[comp.options.length%SWATCHES.length]}); renderComposer(); }
+function rmOption(i){ syncComposerText(); comp.options.splice(i,1); renderComposer(); }
+function setRec(i){ comp.options.forEach((o,j)=>o.rec=(j===i)); renderObList(); }
+function cycleSw(i){ const cur=SWATCHES.indexOf(comp.options[i].sw); comp.options[i].sw=SWATCHES[(cur+1)%SWATCHES.length]; renderObList(); }
+function compBlockToggle(){ syncComposerText(); comp.blocking=!comp.blocking; renderComposer(); }
+function materialize(){
+  syncComposerText();
+  // draft product seeding from the Library
+  comp.options=[
+    {name:'Tasara · wool blend',price:3200,qty:1,note:'',rec:true,sw:'#C4A57B'},
+    {name:'Höörn · flatweave',price:2650,qty:1,note:'',rec:false,sw:'#B8A98C'},
+    {name:'Marle · jute + wool',price:3900,qty:1,note:'',rec:false,sw:'#D8C9AE'},
+  ];
+  renderComposer();
+  toast('Seeded 3 options from the Library — names, prices, and swatches pulled in. Add your notes and a pick.');
+}
+function saveComposer(asDraft){
+  syncComposerText();
+  const title=comp.title.trim()||'Untitled decision';
+  const opts=comp.options.filter(o=>o.name.trim()).map(o=>({name:o.name,price:o.price,qty:o.qty,note:o.note,sw:o.sw,rec:o.rec}));
+  if(!asDraft && opts.length<2){ toast('Publishing needs at least two named options — the client needs a real choice.'); return; }
+  const phase=(document.getElementById('compPhase')||{}).value||'Procurement';
+  const blockFfe = comp.blocking ? ((document.getElementById('compBlockFfe')||{}).value||comp.blockFfe) : null;
+  const id=comp.editId||('d-new'+Date.now());
+  D[id]={kind:comp.kind,title,state:asDraft?'draft':'pending',due:asDraft?'not sent':(comp.due||'in 5 days'),phase,context:comp.context,blocksFfe:blockFfe,options:opts,chosen:null};
+  if(!comp.editId) order.unshift(id);
+  // wire FF&E blocking
+  if(blockFfe&&FFE[blockFfe]&&!asDraft){ FFE[blockFfe].stamp='decision'; FFE[blockFfe].dec=id; }
+  closeAll(); render();
+  if(asDraft) toast(`Saved "${title}" as a draft — unsent, editable, in the margin. Publish when the options are right.`);
+  else toast(`Published "${title}" — ${opts.length} options, ${blockFfe?'blocking '+FFE[blockFfe].name:'no block'}. The client has it now.`);
+}
+
+// ===== plumbing =====
+function openSheet(id){ closeAll(true); document.getElementById('scrim').classList.add('on'); document.getElementById(id).classList.add('on'); }
+function closeAll(keepScrim){ ['detailSheet','composerSheet'].forEach(id=>document.getElementById(id).classList.remove('on')); if(!keepScrim)document.getElementById('scrim').classList.remove('on'); }
+function toast(msg){ const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),4600); }
+
+render();
+</script>
+</body>
+</html>
