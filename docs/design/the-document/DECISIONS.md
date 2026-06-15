@@ -1803,4 +1803,147 @@ surface week-one flight telemetry at the next review.
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I34 · R1–R41 · L1–L4 · THE GO · FLIP CONFIRMED · last id = L4*
+## Rulings — design session, 2026-06-14 (Proposal Authoring + Desk integration)
+
+> Source: the approved prototypes (patina-proposal-authoring-prototype.html primary)
+> and the Feature Gap Matrix (portal-vs-desk-feature-gap-matrix.md), Proposals zone.
+> Closes the matrix's #1 P0 gap: proposal authoring (20 absent capabilities).
+
+### R42 · The Drafting Room — proposal authoring as a Room — 2026-06-14
+
+Resolves the matrix's largest gap: the legacy 8-tab Scope Builder
+(/portal/proposals/[id]/scope) and the block-based section editor
+(/portal/proposals/[id]) are reconceived, not ported. **Proposal authoring
+is a Room** (D14) — "The Drafting Room" — entered from the Proposal section
+of a document, never a top-level zone. Inside, the eight scope-builder tabs
+become **eight facets that compose in any order** (R40 anti-wizard): Rooms
+in scope · FF&E schedule · Palette · Mood boards · Phases & fees ·
+Exclusions · Payments · Change-order terms. **The Strata Mark is the only
+progress** (R35) — no "step N of 8" — filling across three movements:
+*scope* (Rooms + FF&E, line 1) · *the offer* (Phases, Exclusions, Payments,
+Terms, line 2) · *the vision* (Palette, Boards, line 3). Each facet is a
+checkable section showing its own completion and summary; draft saves at any
+percentage (the proposal is a real, usable draft throughout). The drawer bar
+persists inside (D8) — the Library is one tap away for FF&E selections.
+Declined from scope: a wizard stepper, hard gates between tabs, a separate
+"generate" step (see R43).
+
+### R43 · The live proposal — generate-as-you-compose — 2026-06-14
+
+Resolves "Generate Proposal from Scope" (matrix ABSENT) by dissolving it.
+There is no generate button. The Drafting Room shows a **live proposal
+preview** (right rail) that builds itself as facets fill — "Sarah's copy" —
+rendering rooms, palette, pieces, exclusions, and the investment total in
+client-mirror grammar (NO cost breakdown, NO margin, NO TBD logic; CI-tested
+exclusion per R27). The full client view opens via the existing client
+mirror (R27). The FF&E schedule carries the three line types from the
+lead→proposal flow as canonical: **Fixed** (a specific piece at a set price)
+· **Allowance** (a budget for a category not yet chosen) · **TBD** (to be
+determined), tap-to-cycle. Section editors (Concept/Space Plan/Selections/
+Investment/Timeline/Terms — all matrix ABSENT) are the facet editors; asset
+uploads (mood boards, palette, space plan) clip via the Folio (R24).
+
+### R44 · Send and revise — letterhead instrument + supersede — 2026-06-14
+
+Resolves "Send Proposal to Client" and "Revise Proposal (Supersede/Clone)"
+(both matrix ABSENT, P0). **Send is a letterhead instrument** (R27 family):
+a sheet carrying recipient, CC, expiry, and a personal note (the matrix's
+/send ClientPicker form), flowing into the client mirror and the
+signature-as-decision (R23). Sending a proposal does NOT mutate the sent
+copy thereafter. **Revise creates a new version:** "Sarah asked for a
+change" opens a revise sheet showing her feedback on v1, then opens **v2**,
+which **supersedes v1 and carries the feedback forward** (the matrix's
+useCreateProposalRevision); v1 is kept in version history on the document,
+never deleted (D7). Signature settles the Proposal section and opens the
+Project in the same document — nothing converts (R23, the lead→proposal
+spine). Proposal *list/filter* and *tracking dashboard* (matrix ABSENT) stay
+TRANSFORMED into Desk need-derivation and the margin, per the matrix's own
+"TRANSFORMED ≠ gap" caveat — not rebuilt as zones.
+
+### R45 · The proposal on the Desk — lifecycle tiers — 2026-06-14
+
+Defines how an authoring/sent proposal surfaces on the Desk, completing the
+thread from Drafting Room to Desk. The Desk's two populations (R1/R22)
+classify a proposal by its lifecycle state, derived — never a list:
+- **Drafting, actively** → quiet; nothing waits, nothing shows.
+- **Drafting, untouched** past a threshold → an **in-motion chip**
+  (`drafting` kind) — one quiet line ("Aspen Loft — drafting, untouched
+  3d"), awareness tier, no urgency stamp.
+- **Sent, unopened ≥1 day** → an **in-motion chip** (`sent_unopened`) —
+  awareness tier; the client hasn't acted, no hand needed yet.
+- **Hesitating** (opened, no signature past the R10 threshold) → **promotes
+  to a needs-your-hand FolderCard** (`hesitating_proposal` need-line — "sent
+  6 days ago, opened twice, no signature"), because a nudge is the available
+  act (passes R22).
+- **Signed** → the folder resolves; the engagement re-enters the Desk as a
+  **project** with its first real need. The Drafting Room's send is the hinge
+  that drives this whole chain.
+The Drafting Room is reachable only through the document (Desk → folder →
+document → Proposal section → the Room doorway), consistent with D14/D1.
+
+### I35 · Track 4 — Proposal Authoring built (R42–R45) — 2026-06-14
+
+Proposal authoring landed as one program on `the-document/track4-proposal-authoring`
+(off `origin/main` f70de9df, which already carries Track 3). Closes the gap matrix's
+#1 P0 gap. **Audit-first finding:** the data layer was far more complete than "20
+absent" implied — all `proposal_*` tables, hooks, and the `send_proposal`/
+`clone_proposal`/`activate_proposal_as_project` RPCs already existed; this was
+mostly a new *surface* over existing data (like the Library Room).
+
+**Migrations (additive, D7):** `00210` — `sign_proposal` (SECURITY DEFINER, client-
+invoked): one transaction settles an `approval` `client_decision` (R23), flips the
+proposal to `accepted`, logs a `signed` engagement, and auto-activates the project
+(the §5 one-act-many-surfaces invariant, modeled on `send_weekly_pulse`); idempotent
+via the `accepted` short-circuit + a partial unique index on
+`(linked_proposal_id) where decision_type='approval'`. Also `request_proposal_change`
+(client feedback capture). `00211` — `document_state` gains `proposal_updated_at`
+(greatest of the proposal + its child rows) for the R45 drafting-untouched tier.
+
+**Sign→project ruling (Kody, this session):** `sign_proposal` ships parameterized
+(`p_auto_activate`, default **true**) — the project opens the instant the client
+signs (R44 "nothing converts"); the existing `proposal_signed` "Signed — open the
+project" Desk folder is **retained as a safety net** (fires only if activation is
+deferred). Revisit with Leah whether to keep the two-step ever available.
+
+**Surfaces:** the Drafting Room (`/drafting/[proposalId]`, a RoomShell tenant
+cloning the Composing Page) — eight facets (the reused scope-builder editors)
+composing in any order, the Strata Mark (`draftingFill`, three movements:
+Scope/The Offer/The Vision) as the only progress, FF&E Fixed/Allowance/TBD tap-to-
+cycle, and a NEW proposal-grain live client mirror (`proposal-mirror.tsx`) — the
+shipped `client-mirror.tsx` was project-grain, so a parallel projection + its own
+CI contract test was added (excludes cost/margin/TBD, R43). Send/Revise are
+`DocSheet` overlays (`ProposalInstruments` on the document's Proposal section: a
+doorway into the Room for drafts; Send/Preview/Revise + version-history once live;
+D1 — the document never unmounts beneath). The client sign route now calls
+`sign_proposal` while keeping the `proposal-sign-confirmation` email (the RPC does
+not send it). Desk (R45): `deriveMotion` gates drafting (actively-drafting = quiet;
+untouched ≥ threshold = a `drafting` chip), typed `MotionKind`.
+
+**Verification:** `00210`/`00211` apply clean on a fresh `db reset`; functional SQL
+smoke green (sign creates exactly one approval decision + a project, idempotent on
+re-sign); both portals type-check with **zero Track-4 errors** (260 designer + 91
+client errors are all pre-existing email/scans/msw noise); 186 document/Desk Jest
+tests pass incl. the two new contract suites. **Live Chrome walk GREEN** against
+real seed data: the Desk shows the accepted proposal as a *Signed — open the
+project* folder, the sent one as a *sent, unopened 1d* chip, and a fresh draft
+correctly absent (actively-drafting = quiet); the draft document shows the
+*Into the Drafting Room ↗* doorway + *Send* instrument; the Room renders the
+three movements, the Strata Mark (17% drafted), and the live *Client's copy* rail
+excluding cost; the Send sheet opens as an overlay over an intact document.
+
+**Provisional / needs-Leah (shipped truthful, revisit):** `DRAFTING_UNTOUCHED_CHIP_DAYS`
+= 3d (provisional, like the send-weave constants); the hesitating-proposal copy
+ships as "Opened {date} — no signature yet" (the matrix's "opened twice" is not
+backable — only `proposal_viewed_at` first-open is tracked, no open-count); revise
+supersedes **on send** (v1 stays a real option until v2 ships); the Room's facet
+display order is Scope → The Vision → The Offer (movement labels L1/L3/L2) — a
+Leah-facing ordering call, flagged. **Known follow-ups:** `screenshots/track-4/`
+not auto-captured (Chrome automation can't reliably save files — manual ≥1280 +
+~390px pass pending); the `['desk-engagements']` invalidation is a harmless no-op
+(real key `['document-state','desk']` is prefix-covered). NOT yet merged; prod
+deploy of `00210`–`00211` rides the pending `00191`–`00209` deploy (migrations
+before app).
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I35 · R1–R45 · L1–L4 · THE GO · FLIP CONFIRMED · last id = I35*

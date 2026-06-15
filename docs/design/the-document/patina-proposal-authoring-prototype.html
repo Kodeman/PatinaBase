@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · Proposal Authoring · The Drafting Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;
+  --sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--paper:#FCFAF6;--sheet2:#EFE9DD;--sheet3:#E2DACA;
+  --ink:rgba(44,41,38,0.16);--ink-soft:rgba(44,41,38,0.07);
+  --line1:#5C4A3C;--line2:#C4A57B;--line3:#8B9CAD;
+  --fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace;
+  --bar-h:56px;
+}
+html,body{height:100%}
+body{font-family:var(--fb);background:#1c1a18;color:var(--mo);line-height:1.55;-webkit-font-smoothing:antialiased;overflow:hidden}
+#app{position:fixed;inset:0;overflow:hidden}
+.mono{font-family:var(--fm)}
+
+.frame{position:absolute;top:0;left:0;right:0;height:26px;z-index:300;background:var(--ch);color:rgba(250,247,242,0.7);font-family:var(--fm);font-size:0.54rem;letter-spacing:0.05em;display:flex;align-items:center;gap:0.5rem;padding:0 1.2rem;border-bottom:1px solid rgba(196,165,123,0.22)}
+.frame b{color:var(--cl);font-weight:500}
+.frame .gap{margin-left:auto;color:rgba(250,247,242,0.45)}
+.frame .gap em{color:var(--te);font-style:normal}
+
+/* ===================== ENTRY (from the document) ===================== */
+#entry{position:absolute;inset:0;top:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+   background:radial-gradient(120% 80% at 50% 35%,#2c2926,#211f1c 70%,#1a1816);z-index:20;transition:opacity .5s}
+#entry.hidden{opacity:0;pointer-events:none}
+.entry-k{font-family:var(--fm);font-size:0.54rem;letter-spacing:0.18em;text-transform:uppercase;color:rgba(196,165,123,0.6);margin-bottom:0.4rem}
+.entry-title{font-family:var(--fd);font-weight:400;font-size:2.2rem;color:var(--ow);margin-bottom:0.3rem}
+.entry-title em{font-style:italic;color:var(--cl)}
+.entry-sub{font-size:0.82rem;color:rgba(250,247,242,0.5);max-width:46ch;text-align:center;line-height:1.7;margin-bottom:2rem}
+.doorway{position:relative;width:340px;border:1px solid rgba(250,247,242,0.14);border-radius:10px;padding:1.6rem 1.7rem;background:rgba(250,247,242,0.025);cursor:pointer;transition:all .3s}
+.doorway:hover{border-color:rgba(196,165,123,0.5);background:rgba(196,165,123,0.06);transform:translateY(-3px)}
+.doorway::after{content:'↗';position:absolute;top:1rem;right:1.2rem;color:var(--cl);opacity:0.7}
+.dw-spine{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:34px;margin-bottom:1rem}
+.dw-spine i{display:block;height:3px;border-radius:2px;background:var(--cl)}
+.dw-spine i:nth-child(1){width:34px}.dw-spine i:nth-child(2){width:25px;opacity:0.6}.dw-spine i:nth-child(3){width:16px;opacity:0.3}
+.dw-name{font-family:var(--fd);font-weight:500;font-size:1.25rem;color:var(--ow)}
+.dw-meta{font-size:0.72rem;color:rgba(250,247,242,0.5);margin-top:0.2rem}
+.dw-kind{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--cl);border:1px solid rgba(196,165,123,0.4);border-radius:3px;padding:2px 8px;margin-top:1rem;display:inline-block}
+.entry-hint{font-family:var(--fm);font-size:0.54rem;letter-spacing:0.04em;color:rgba(250,247,242,0.35);margin-top:2rem;font-style:italic;max-width:50ch;text-align:center;line-height:1.7}
+
+/* ===================== THE DRAFTING ROOM ===================== */
+#room{position:absolute;inset:0;top:26px;display:flex;flex-direction:column;background:var(--ow);opacity:0;transform:scale(.99);transition:opacity .45s,transform .45s cubic-bezier(.2,.7,.3,1);z-index:10;pointer-events:none}
+#room.on{opacity:1;transform:none;pointer-events:auto}
+.room-head{flex-shrink:0;display:flex;align-items:center;gap:1rem;padding:0.8rem 1.6rem;border-bottom:1px solid var(--ink-soft);background:rgba(250,247,242,0.7)}
+.leave{font-family:var(--fm);font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);cursor:pointer;padding:0.4rem 0.6rem;border:1px solid transparent;border-radius:4px}
+.leave:hover{border-color:var(--ink);color:var(--mo)}
+.room-ident{margin:0 auto;display:flex;align-items:center;gap:0.7rem}
+.room-mark{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:16px}
+.room-mark i{display:block;height:2px;border-radius:1px;background:var(--cl)}
+.room-mark i:nth-child(1){width:16px}.room-mark i:nth-child(2){width:11px;opacity:0.6}.room-mark i:nth-child(3){width:7px;opacity:0.3}
+.room-title-sm{font-family:var(--fm);font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.head-actions{display:flex;gap:0.6rem}
+.h-btn{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;border-radius:5px;padding:0.5rem 0.85rem;cursor:pointer;font-weight:600;border:1px solid var(--pe);background:#fff;color:var(--ch);transition:all .2s}
+.h-btn:hover{border-color:var(--cl)}
+.h-btn.dark{background:var(--ch);color:var(--ow);border-color:var(--ch)}
+.h-btn.dark:hover{opacity:0.88}
+.h-btn.gold{background:var(--cl);color:#fff;border-color:var(--cl)}
+
+/* room body: facets (left) + live preview (right) */
+.room-body{flex:1;display:flex;overflow:hidden}
+.facets{width:230px;flex-shrink:0;border-right:1px solid var(--ink-soft);background:rgba(250,247,242,0.45);overflow-y:auto;padding:1rem 0 calc(var(--bar-h) + 1rem)}
+.facets-k{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);padding:0 1.1rem;margin-bottom:0.6rem}
+.facet{display:flex;align-items:center;gap:0.7rem;padding:0.6rem 1.1rem;cursor:pointer;transition:background .15s;position:relative}
+.facet:hover{background:rgba(196,165,123,0.06)}
+.facet.current{background:rgba(196,165,123,0.11)}
+.facet.current::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2.5px;background:var(--cl)}
+.facet-tick{width:14px;height:14px;border-radius:4px;border:1.5px solid #cfc8bb;flex-shrink:0;position:relative;transition:all .2s}
+.facet.done .facet-tick{border-color:var(--sa);background:rgba(168,181,160,0.18)}
+.facet.done .facet-tick::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:var(--sa);font-weight:700}
+.facet-info{flex:1;min-width:0}
+.facet-name{font-weight:500;font-size:0.78rem;color:var(--ch)}
+.facet.empty .facet-name{color:var(--ao);font-weight:400}
+.facet-sub{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--ao);display:block;margin-top:1px}
+.facet-mv{width:3px;height:14px;border-radius:2px;flex-shrink:0;opacity:0.5}
+
+.facets-foot{padding:1rem 1.1rem 0;border-top:1px solid var(--ink-soft);margin-top:0.5rem}
+.bigmark{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:84px}
+.bigmark i{display:block;height:3px;border-radius:2px;position:relative;background:rgba(44,41,38,0.1)}
+.bigmark i::after{content:'';position:absolute;inset:0;border-radius:2px;transform-origin:left;transform:scaleX(var(--f,0));transition:transform .6s cubic-bezier(.4,0,.2,1)}
+.bigmark i:nth-child(1){width:84px}.bigmark i:nth-child(2){width:66px}.bigmark i:nth-child(3){width:48px;opacity:0.6}
+.bigmark i:nth-child(1)::after{background:var(--line1)}.bigmark i:nth-child(2)::after{background:var(--line2)}.bigmark i:nth-child(3)::after{background:var(--line3)}
+.fm-label{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);margin-bottom:0.5rem}
+.fm-pct{font-family:var(--fm);font-size:0.5rem;color:var(--ao);margin-top:0.5rem}
+.fm-pct b{font-family:var(--fd);color:var(--ch);font-size:0.85rem}
+
+/* facet editor (center) */
+.editor{flex:1;overflow-y:auto;padding:0 0 calc(var(--bar-h) + 1.5rem);background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,115,85,0.01) 3px,rgba(139,115,85,0.01) 4px)}
+.editor-in{max-width:560px;margin:0 auto;padding:2rem 1.8rem 0}
+.ed-kick{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--cl);font-weight:600}
+.ed-title{font-family:var(--fd);font-weight:500;font-size:1.6rem;color:var(--ch);margin:0.3rem 0 0.2rem}
+.ed-help{font-size:0.74rem;color:var(--ao);margin-bottom:1.4rem;line-height:1.6}
+.field{margin-bottom:1rem}
+.field-label{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);font-weight:600;margin-bottom:0.35rem;display:block}
+.field input,.field textarea,.field select{width:100%;padding:0.6rem 0.8rem;border:1px solid var(--pe);border-radius:6px;font-family:var(--fb);font-size:0.82rem;color:var(--ch);background:var(--paper)}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--cl);background:#fff}
+.field-row{display:flex;gap:0.6rem}.field-row .field{flex:1}
+.help{font-size:0.66rem;color:var(--ao);font-style:italic;margin-top:0.3rem}
+.chips{display:flex;flex-wrap:wrap;gap:0.35rem;margin-top:0.4rem}
+.chip{font-size:0.68rem;padding:0.32rem 0.6rem;border:1px solid var(--pe);border-radius:16px;background:var(--paper);cursor:pointer;color:var(--mo);transition:all .15s}
+.chip:hover{border-color:var(--cl)}.chip.on{background:var(--cl);color:#fff;border-color:var(--cl)}
+.btn{font-family:var(--fm);font-size:0.54rem;letter-spacing:0.06em;text-transform:uppercase;padding:0.6rem 1.1rem;border-radius:6px;cursor:pointer;border:1px solid var(--pe);background:#fff;color:var(--ch);font-weight:600;transition:all .2s}
+.btn:hover{border-color:var(--cl)}
+.btn.primary{background:var(--ch);color:var(--ow);border-color:var(--ch)}.btn.primary:hover{opacity:0.88}
+.btn.gold{background:var(--cl);color:#fff;border-color:var(--cl)}
+.btn.sm{font-size:0.46rem;padding:0.4rem 0.7rem}
+.row-add{display:flex;align-items:center;gap:0.5rem;margin-top:0.6rem;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--cl);font-weight:600;cursor:pointer}
+.row-add:hover{color:var(--ao)}
+.ed-done{margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid var(--ink-soft);display:flex;gap:0.6rem;align-items:center}
+.next-hint{position:relative}
+.next-hint::after{content:'';position:absolute;right:-11px;top:-5px;width:7px;height:7px;border-radius:50%;background:var(--gh);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:0.4;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
+
+/* line rows (rooms, ffe, exclusions, phases, milestones) */
+.lrow{display:flex;align-items:center;gap:0.7rem;padding:0.55rem 0.2rem;border-bottom:1px solid var(--ink-soft)}
+.lrow-name{font-weight:500;font-size:0.78rem;color:var(--ch)}
+.lrow-sub{font-size:0.62rem;color:var(--ao)}
+.lrow-x{margin-left:auto;color:var(--te);cursor:pointer;font-size:0.8rem;opacity:0.6}
+.lrow-x:hover{opacity:1}
+.ffe-type{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.08em;text-transform:uppercase;padding:2px 7px;border-radius:3px;font-weight:600;flex-shrink:0}
+.t-fixed{color:var(--mo);background:rgba(92,74,60,0.1);border:1px solid rgba(92,74,60,0.25)}
+.t-allow{color:#9a7b2e;background:rgba(232,197,71,0.12);border:1px solid rgba(207,174,52,0.4)}
+.t-tbd{color:var(--db);background:rgba(139,156,173,0.12);border:1px solid rgba(139,156,173,0.4)}
+.ffe-price{font-family:var(--fd);font-weight:500;font-size:0.8rem;color:var(--ch);width:70px;text-align:right;flex-shrink:0}
+.ffe-price.muted{color:var(--ao);font-style:italic;font-size:0.62rem;font-family:var(--fb);font-weight:400}
+.room-sub{font-family:var(--fd);font-style:italic;font-weight:500;font-size:0.95rem;color:var(--ao);margin:1rem 0 0.2rem}
+.minirule{display:flex;flex-direction:column;gap:1.5px;margin:0.1rem 0 0.3rem}
+.minirule i{display:block;height:1px;background:var(--cl)}
+.minirule i:nth-child(1){width:24px}.minirule i:nth-child(2){width:15px;opacity:0.5}
+.swatches{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem}
+.swatch{width:48px;height:48px;border-radius:8px;border:1px solid var(--ink);cursor:pointer;position:relative;transition:transform .15s}
+.swatch:hover{transform:scale(1.06)}
+.swatch.on::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.8rem;text-shadow:0 1px 2px rgba(0,0,0,0.4)}
+.board-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-top:0.5rem}
+.board-cell{height:74px;border:1px solid var(--ink);border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:0.42rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);cursor:pointer}
+.board-drop{border:1.5px dashed rgba(196,165,123,0.5);color:var(--cl)}
+
+/* live preview (right) */
+.preview{width:330px;flex-shrink:0;border-left:1px solid var(--ink-soft);background:rgba(252,250,246,0.85);overflow-y:auto;padding:1.2rem 1.2rem calc(var(--bar-h) + 1rem)}
+.pv-k{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);display:flex;justify-content:space-between;align-items:center;margin-bottom:0.7rem}
+.pv-paper{background:#fff;border:1px solid var(--ink);border-radius:8px;padding:1.1rem 1.1rem}
+.pv-title{font-family:var(--fd);font-weight:500;font-size:1.1rem;color:var(--ch);line-height:1.2}
+.pv-sub{font-size:0.62rem;color:var(--ao);margin-top:0.1rem}
+.pv-sec{margin-top:0.9rem;padding-top:0.7rem;border-top:1px solid var(--ink-soft)}
+.pv-sec-h{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--cl);font-weight:600;margin-bottom:0.3rem}
+.pv-line{font-size:0.66rem;color:var(--mo);padding:0.12rem 0;display:flex;justify-content:space-between;gap:0.5rem}
+.pv-empty{font-size:0.62rem;color:var(--ao);font-style:italic;opacity:0.7}
+.pv-total{display:flex;justify-content:space-between;font-family:var(--fd);font-weight:500;font-size:0.85rem;color:var(--ch);margin-top:0.4rem;padding-top:0.4rem;border-top:1.5px solid var(--ch)}
+.pv-swatches{display:flex;gap:3px;margin-top:0.2rem}
+.pv-sw{width:16px;height:16px;border-radius:4px;border:1px solid var(--ink)}
+
+/* drawer bar */
+.drawer-bar{position:absolute;left:0;right:0;bottom:0;height:var(--bar-h);background:var(--ch);border-top:1px solid rgba(250,247,242,0.14);display:flex;align-items:center;gap:0.4rem;padding:0 1.4rem;z-index:30}
+.book{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.8rem;border-radius:6px;cursor:pointer}
+.book:hover{background:rgba(250,247,242,0.05)}
+.book-spine{width:3px;height:16px;border-radius:2px}
+.book-name{font-family:var(--fd);font-weight:500;font-size:0.8rem;color:rgba(250,247,242,0.55)}
+.bar-right{margin-left:auto;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.04em;color:rgba(250,247,242,0.4)}
+
+/* overlays: send sheet, mirror, revise */
+.scrim{position:absolute;inset:0;top:26px;background:rgba(28,26,24,0.45);opacity:0;pointer-events:none;transition:opacity .3s;z-index:40}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;transform:translateY(102%);transition:transform .4s cubic-bezier(.2,.8,.3,1);z-index:50;max-height:84%;overflow-y:auto;border-radius:16px 16px 0 0;background:var(--paper);border-top:1px solid var(--ink)}
+.sheet.on{transform:none}
+.grab{width:38px;height:4px;border-radius:2px;background:var(--pe);margin:10px auto 4px}
+.sheet-in{max-width:600px;margin:0 auto;padding:0.6rem 2rem 2rem}
+
+/* full mirror */
+.mirror{position:absolute;inset:0;top:26px;background:var(--paper);z-index:60;transform:translateY(100%);transition:transform .4s cubic-bezier(.2,.8,.3,1);overflow-y:auto;display:flex;flex-direction:column}
+.mirror.on{transform:none}
+.mirror-banner{flex-shrink:0;background:var(--ch);color:rgba(250,247,242,0.8);padding:0.7rem 1.6rem;display:flex;align-items:center;justify-content:space-between;font-family:var(--fm);font-size:0.54rem;letter-spacing:0.08em;text-transform:uppercase}
+.mirror-banner .back{color:var(--cl);cursor:pointer}
+.mirror-in{max-width:600px;margin:0 auto;padding:2.4rem 2rem;width:100%}
+.mr-title{font-family:var(--fd);font-weight:500;font-size:1.9rem;color:var(--ch)}
+.mr-sub{font-size:0.78rem;color:var(--ao);margin:0.2rem 0 1.6rem}
+.mr-k{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--cl);font-weight:600;margin:1.6rem 0 0.5rem}
+.mr-line{display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid var(--ink-soft);font-size:0.78rem;color:var(--mo)}
+.mr-sign{margin-top:2rem;padding:1.4rem;border:1px solid var(--cl);border-radius:10px;background:rgba(196,165,123,0.05);text-align:center}
+.mr-sign .q{font-family:var(--fd);font-style:italic;font-size:1.1rem;color:var(--ch);margin-bottom:0.9rem}
+
+/* toast */
+.toast{position:absolute;bottom:calc(var(--bar-h) + 16px);left:50%;transform:translateX(-50%) translateY(10px);background:var(--ch);color:var(--ow);padding:0.7rem 1.2rem;border-radius:8px;font-size:0.74rem;z-index:200;opacity:0;pointer-events:none;transition:all .3s;display:flex;gap:0.6rem;align-items:center;border:1px solid rgba(196,165,123,0.3);max-width:72%}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast .d{width:6px;height:6px;border-radius:50%;background:var(--sa);flex-shrink:0}
+
+@media(max-width:1180px){.preview{display:none}}
+@media(max-width:880px){.facets{width:180px}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="frame">
+    <b>Proposal Authoring</b> · the Scope Builder, reconceived as a Room — no 8-tab wizard
+    <span class="gap">closes gap matrix: <em>Proposals · 20 absent · P0 #1</em></span>
+  </div>
+
+  <!-- ============ ENTRY ============ -->
+  <div id="entry">
+    <div class="entry-k">From the Aspen Loft document · Direction is settled</div>
+    <div class="entry-title">Draft the <em>proposal</em></div>
+    <div class="entry-sub">The legacy portal built proposals in an 8-tab scope-builder wizard. In the Document, it's a Room you walk into — and the facets compose in any order.</div>
+    <div class="doorway" onclick="enterRoom()">
+      <div class="dw-spine"><i></i><i></i><i></i></div>
+      <div class="dw-name">The Drafting Room</div>
+      <div class="dw-meta">Aspen Loft Refresh · Sarah Whitfield</div>
+      <span class="dw-kind">Room · walk in</span>
+    </div>
+    <div class="entry-hint">Rooms · FF&amp;E · Palette · Boards · Phases · Exclusions · Payments · Terms — eight facets, one composing page, the Strata Mark as the only progress.</div>
+  </div>
+
+  <!-- ============ THE DRAFTING ROOM ============ -->
+  <div id="room">
+    <div class="room-head">
+      <div class="leave" onclick="leaveRoom()">← The document</div>
+      <div class="room-ident"><span class="room-mark"><i></i><i></i><i></i></span><span class="room-title-sm">The Drafting Room</span></div>
+      <div class="head-actions">
+        <div class="h-btn" onclick="saveDraft()">Save draft</div>
+        <div class="h-btn" onclick="openMirror()">View as client</div>
+        <div class="h-btn gold" id="sendBtn" onclick="openSend()">Send for signature</div>
+      </div>
+    </div>
+
+    <div class="room-body">
+      <!-- facets -->
+      <div class="facets">
+        <div class="facets-k">The proposal · 8 facets</div>
+        <div id="facetList"></div>
+        <div class="facets-foot">
+          <div class="fm-label">This proposal</div>
+          <div class="bigmark" id="bigmark"><i></i><i></i><i></i></div>
+          <div class="fm-pct"><b id="pctNum">0</b>% composed · <span id="readyState">draft</span></div>
+        </div>
+      </div>
+
+      <!-- editor -->
+      <div class="editor"><div class="editor-in" id="edBody"></div></div>
+
+      <!-- live preview -->
+      <div class="preview">
+        <div class="pv-k"><span>Sarah's copy · live</span><span class="mono" style="color:var(--cl);cursor:pointer" onclick="openMirror()">full ↗</span></div>
+        <div class="pv-paper" id="pvPaper"></div>
+      </div>
+    </div>
+
+    <div class="drawer-bar">
+      <div class="book"><span class="book-spine" style="background:var(--cl)"></span><span class="book-name">Library</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--db)"></span><span class="book-name">Orders</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--sa)"></span><span class="book-name">Accounts</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--te)"></span><span class="book-name">People</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--mo)"></span><span class="book-name">Hours</span></div>
+      <div class="bar-right">drafting · saves anytime · the Library is one tap away for selections</div>
+    </div>
+
+    <!-- send sheet -->
+    <div class="scrim" id="scrim" onclick="closeAll()"></div>
+    <div class="sheet" id="sendSheet">
+      <div class="grab"></div>
+      <div class="sheet-in">
+        <div class="ed-kick">Send · a letterhead instrument</div>
+        <div class="ed-title">Send the proposal to Sarah</div>
+        <div class="ed-help">She receives her clean copy — no cost breakdown, no margin, no TBD logic. This is the send weave.</div>
+        <div class="field"><label class="field-label">To</label><input value="Sarah Whitfield · sarah@whitfield.com" readonly style="color:var(--ao)"></div>
+        <div class="field-row">
+          <div class="field"><label class="field-label">CC (optional)</label><input placeholder="partner, advisor…"></div>
+          <div class="field"><label class="field-label">Expires</label><select><option>In 30 days</option><option>In 14 days</option><option>No expiry</option></select></div>
+        </div>
+        <div class="field"><label class="field-label">A personal note</label><textarea rows="3">Hi Sarah — here's everything we discussed, laid out room by room. Take your time; I'm happy to walk through any of it. — Leah</textarea></div>
+        <div class="ed-done" style="border-top:none;padding-top:0.4rem">
+          <button class="btn gold" onclick="doSend()">Send for signature →</button>
+          <button class="btn" onclick="closeAll()">Not yet</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- revise sheet -->
+    <div class="sheet" id="reviseSheet">
+      <div class="grab"></div>
+      <div class="sheet-in">
+        <div class="ed-kick">Revise · supersede with a new version</div>
+        <div class="ed-title">Sarah asked for a change</div>
+        <div class="ed-help">Revising never edits the sent copy — it creates <b>v2</b>, supersedes v1, and carries her feedback forward. The version history stays on the document.</div>
+        <div class="pv-paper" style="margin-bottom:1rem">
+          <div class="pv-sec-h" style="margin-bottom:0.4rem">Her feedback · on v1</div>
+          <div style="font-size:0.74rem;color:var(--mo);font-style:italic;line-height:1.6">“Love it all — but could we drop the dining allowance a bit and put that toward a better sofa? And the holiday timeline is the firm one.”</div>
+        </div>
+        <div class="ed-done" style="border-top:none;padding-top:0.4rem">
+          <button class="btn gold" onclick="doRevise()">Open v2 to revise →</button>
+          <button class="btn" onclick="closeAll()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- full mirror -->
+    <div class="mirror" id="mirror">
+      <div class="mirror-banner"><span>You're seeing what the Whitfields see</span><span class="back" onclick="closeAll()">← back to drafting</span></div>
+      <div class="mirror-in" id="mirrorBody"></div>
+    </div>
+
+    <div class="toast" id="toast"><span class="d"></span><span id="toastMsg"></span></div>
+  </div>
+</div>
+
+<script>
+// ===== facet model (the 8 scope-builder tabs → composable facets) =====
+// movement map: 1 (scope/Mocha): rooms,ffe ; 2 (the offer/Clay): phases,exclusions,payments,terms ; eye→3 (vision/DustyBlue): palette,boards
+const FACETS=[
+  {key:'rooms',name:'Rooms in scope',mv:1,sub:'which rooms'},
+  {key:'ffe',name:'FF&E schedule',mv:1,sub:'the pieces & budget'},
+  {key:'palette',name:'Palette',mv:3,sub:'the vision'},
+  {key:'boards',name:'Mood boards',mv:3,sub:'the vision'},
+  {key:'phases',name:'Phases & fees',mv:2,sub:'the plan'},
+  {key:'exclusions',name:'Exclusions',mv:2,sub:"what's not in"},
+  {key:'payments',name:'Payments',mv:2,sub:'how it\'s paid'},
+  {key:'terms',name:'Change-order terms',mv:2,sub:'revisions'},
+];
+const mvColor={1:'var(--line1)',2:'var(--line2)',3:'var(--line3)'};
+
+// state
+const S={
+  rooms:['Living Room','Dining Room'],
+  ffe:[
+    {room:'Living Room',name:'Sectional',sub:'Woodward & Sons',type:'fixed',price:6800},
+    {room:'Living Room',name:'Area Rug · 9×12',sub:'category set',type:'allow',price:3200},
+    {room:'Living Room',name:'Accent Chairs · pair',sub:'pending site visit',type:'tbd',price:0},
+    {room:'Dining Room',name:'Oak Dining Table',sub:'Nordic Atelier',type:'fixed',price:4200},
+    {room:'Dining Room',name:'Dining Chairs · 6',sub:'category set',type:'allow',price:2400},
+  ],
+  palette:new Set(['Warm oak','Bouclé cream','Brass']),
+  boards:2,
+  phases:[{name:'Concept & sourcing',fee:4500},{name:'Procurement & install',fee:4000}],
+  exclusions:['Architectural changes','Window treatments','Art & accessories'],
+  payments:[{label:'Deposit · 50%',trigger:'on signing'},{label:'Production · 25%',trigger:'when ordering begins'},{label:'Delivery · 25%',trigger:'when Install settles'}],
+  terms:{revisions:2,rate:150},
+};
+let version=1, sent=false, current='rooms';
+// facet completion
+function isDone(k){
+  switch(k){
+    case 'rooms': return S.rooms.length>0;
+    case 'ffe': return S.ffe.length>0;
+    case 'palette': return S.palette.size>=2;
+    case 'boards': return S.boards>=1;
+    case 'phases': return S.phases.length>0;
+    case 'exclusions': return S.exclusions.length>0;
+    case 'payments': return S.payments.length>0;
+    case 'terms': return S.terms.revisions>0;
+  }
+}
+
+// ===== render facets list =====
+function renderFacets(){
+  document.getElementById('facetList').innerHTML=FACETS.map(f=>{
+    const done=isDone(f.key);
+    const cls=(done?'done':'empty')+(current===f.key?' current':'');
+    const sub=done?facetSummary(f.key):'not yet';
+    return `<div class="facet ${cls}" onclick="goFacet('${f.key}')">
+      <span class="facet-tick"></span>
+      <span class="facet-info"><span class="facet-name">${f.name}</span><span class="facet-sub">${sub}</span></span>
+      <span class="facet-mv" style="background:${mvColor[f.mv]}"></span>
+    </div>`;
+  }).join('');
+}
+function facetSummary(k){
+  switch(k){
+    case 'rooms': return S.rooms.length+' rooms';
+    case 'ffe': return S.ffe.length+' lines · $'+ffeTotal().toLocaleString();
+    case 'palette': return S.palette.size+' tones';
+    case 'boards': return S.boards+' boards';
+    case 'phases': return S.phases.length+' phases · $'+feeTotal().toLocaleString();
+    case 'exclusions': return S.exclusions.length+' listed';
+    case 'payments': return S.payments.length+' milestones';
+    case 'terms': return S.terms.revisions+' rounds · $'+S.terms.rate+'/hr';
+  }
+}
+function ffeTotal(){ return S.ffe.reduce((s,i)=>s+i.price,0); }
+function feeTotal(){ return S.phases.reduce((s,p)=>s+p.fee,0); }
+
+// ===== Strata mark =====
+function progress(){
+  const mv1=['rooms','ffe'], mv2=['phases','exclusions','payments','terms'], mv3=['palette','boards'];
+  const frac=arr=>arr.filter(isDone).length/arr.length;
+  return [frac(mv1),frac(mv2),frac(mv3)];
+}
+function setMarks(){
+  const [a,b,c]=progress();
+  const m=document.getElementById('bigmark').children;
+  m[0].style.setProperty('--f',a);m[1].style.setProperty('--f',b);m[2].style.setProperty('--f',c);
+  const pct=Math.round((a+b+c)/3*100);
+  document.getElementById('pctNum').textContent=pct;
+  document.getElementById('readyState').textContent = pct>=100?'ready to send':(pct>0?'draft':'empty');
+  const sb=document.getElementById('sendBtn'); sb.style.opacity = pct>=60?'1':'0.5';
+}
+
+// ===== navigate =====
+function goFacet(k){ current=k; render(); }
+
+// ===== render everything =====
+function render(){ renderFacets(); setMarks(); renderEditor(); renderPreview(); }
+
+// ===== editor bodies =====
+function renderEditor(){
+  document.getElementById('edBody').innerHTML = ED[current]();
+}
+const ED={
+  rooms:()=>`
+    <div class="ed-kick">Facet · scope</div><div class="ed-title">Rooms in scope</div>
+    <div class="ed-help">Which rooms this proposal covers. Each becomes a heading the FF&E schedule groups under — and later, the project's room structure.</div>
+    ${S.rooms.map((r,i)=>`<div class="lrow"><div><div class="lrow-name">${r}</div></div><span class="lrow-x" onclick="rmRoom(${i})">✕</span></div>`).join('')}
+    <div class="row-add" onclick="addRoom()">+ add a room</div>
+    ${doneBlock('rooms','ffe','To the FF&E schedule →')}`,
+
+  ffe:()=>{
+    let html='';
+    S.rooms.forEach(room=>{
+      const items=S.ffe.filter(i=>i.room===room);
+      const tot=items.reduce((s,i)=>s+i.price,0);
+      html+=`<div class="room-sub">${room} <span style="font-family:var(--fm);font-size:0.5rem;color:var(--ao);font-style:normal;text-transform:uppercase">· $${tot.toLocaleString()}</span></div><div class="minirule"><i></i><i></i></div>`;
+      items.forEach((it,idx)=>{
+        const gi=S.ffe.indexOf(it);
+        html+=`<div class="lrow"><div style="flex:1;min-width:0"><div class="lrow-name">${it.name}</div><div class="lrow-sub">${it.sub}</div></div><span class="ffe-type t-${it.type}" onclick="cycleType(${gi})" style="cursor:pointer">${({fixed:'Fixed',allow:'Allowance',tbd:'TBD'})[it.type]}</span><span class="ffe-price ${it.price?'':'muted'}">${it.price?'$'+it.price.toLocaleString():'pending'}</span><span class="lrow-x" onclick="rmFfe(${gi})">✕</span></div>`;
+      });
+    });
+    return `<div class="ed-kick">Facet · scope</div><div class="ed-title">FF&E schedule</div>
+    <div class="ed-help">The pieces and the budget, grouped by room. <b>Tap a type to cycle it</b> — Fixed (set piece & price), Allowance (a budget for a category), TBD (decide later). Pull pieces from the Library without leaving.</div>
+    ${html}
+    <div class="row-add" onclick="addFfe()">+ add a line</div>
+    <div style="font-family:var(--fm);font-size:0.52rem;color:var(--ao);margin-top:0.7rem">FF&E budget · <b style="font-family:var(--fd);color:var(--ch)">$${ffeTotal().toLocaleString()}</b> across ${S.ffe.length} lines</div>
+    ${doneBlock('ffe','palette','To the palette →')}`;
+  },
+
+  palette:()=>{
+    const tones=['Warm oak','Bouclé cream','Brass','Charcoal','Sage','Terracotta','Pale linen','Walnut'];
+    const colors={'Warm oak':'#C4A57B','Bouclé cream':'#EFE9DD','Brass':'#B8975A','Charcoal':'#2C2926','Sage':'#A8B5A0','Terracotta':'#D4A090','Pale linen':'#F0E9DC','Walnut':'#5C4A3C'};
+    return `<div class="ed-kick">Facet · the vision</div><div class="ed-title">Palette</div>
+    <div class="ed-help">The tones the rooms live inside. These show in Sarah's copy as the feeling — and seed the Engine's matching for the allowance pieces.</div>
+    <div class="swatches">${tones.map(t=>`<div class="swatch ${S.palette.has(t)?'on':''}" style="background:${colors[t]}" title="${t}" onclick="togPalette('${t}')"></div>`).join('')}</div>
+    <div class="help">${[...S.palette].join(' · ')||'pick a few tones'}</div>
+    ${doneBlock('palette','boards','To mood boards →')}`;
+  },
+
+  boards:()=>`
+    <div class="ed-kick">Facet · the vision</div><div class="ed-title">Mood boards</div>
+    <div class="ed-help">A board or two that say the feeling words can't. The Engine suggests pieces that fit; you arrange. Optional, but it's what makes a proposal feel inevitable.</div>
+    <div class="board-grid">
+      ${Array.from({length:S.boards}).map((_,i)=>`<div class="board-cell" style="background:linear-gradient(140deg,#EFE9DD,#E2DACA)">Board ${i+1}</div>`).join('')}
+      <div class="board-cell board-drop" onclick="addBoard()">+ board</div>
+    </div>
+    ${doneBlock('boards','phases','To phases & fees →')}`,
+
+  phases:()=>`
+    <div class="ed-kick">Facet · the plan</div><div class="ed-title">Phases &amp; fees</div>
+    <div class="ed-help">How the work breaks down and what each phase costs. Phases become the project's spine sections after signing; the fees become payment milestones.</div>
+    ${S.phases.map((p,i)=>`<div class="lrow"><div style="flex:1"><div class="lrow-name">${p.name}</div><div class="lrow-sub">phase ${i+1}</div></div><span class="ffe-price">$${p.fee.toLocaleString()}</span><span class="lrow-x" onclick="rmPhase(${i})">✕</span></div>`).join('')}
+    <div class="row-add" onclick="addPhase()">+ add a phase</div>
+    <div style="font-family:var(--fm);font-size:0.52rem;color:var(--ao);margin-top:0.7rem">Design fee · <b style="font-family:var(--fd);color:var(--ch)">$${feeTotal().toLocaleString()}</b></div>
+    ${doneBlock('phases','exclusions','To exclusions →')}`,
+
+  exclusions:()=>`
+    <div class="ed-kick">Facet · what's not in</div><div class="ed-title">Exclusions</div>
+    <div class="ed-help">First-class, never fine print. Naming what's <b>out</b> is how you prevent the awkward conversation three months in.</div>
+    ${S.exclusions.map((e,i)=>`<div class="lrow"><div><div class="lrow-name" style="font-weight:400">— ${e}</div></div><span class="lrow-x" onclick="rmExcl(${i})">✕</span></div>`).join('')}
+    <div class="row-add" onclick="addExcl()">+ add an exclusion</div>
+    ${doneBlock('exclusions','payments','To payments →')}`,
+
+  payments:()=>`
+    <div class="ed-kick">Facet · how it's paid</div><div class="ed-title">Payment milestones</div>
+    <div class="ed-help">Each milestone carries a <b>trigger</b> — and after signing, each drafts its own invoice automatically when its trigger fires. “When Install settles” is a real gate, not a guess.</div>
+    ${S.payments.map((m,i)=>`<div class="lrow"><div style="flex:1"><div class="lrow-name">${m.label}</div><div class="lrow-sub mono" style="text-transform:uppercase;font-size:0.5rem;letter-spacing:0.04em">— ${m.trigger}</div></div><span class="lrow-x" onclick="rmPay(${i})">✕</span></div>`).join('')}
+    <div class="row-add" onclick="addPay()">+ add a milestone</div>
+    ${doneBlock('payments','terms','To change-order terms →')}`,
+
+  terms:()=>`
+    <div class="ed-kick">Facet · revisions</div><div class="ed-title">Change-order terms</div>
+    <div class="ed-help">How changes work, agreed up front. A change to scope is a written Scope Change — never a surprise on an invoice.</div>
+    <div class="field-row">
+      <div class="field"><label class="field-label">Revision rounds included / phase</label><input type="number" value="${S.terms.revisions}" onchange="S.terms.revisions=+this.value;render()"></div>
+      <div class="field"><label class="field-label">Overage rate ($/hr)</label><input type="number" value="${S.terms.rate}" onchange="S.terms.rate=+this.value;render()"></div>
+    </div>
+    <div class="pv-paper" style="margin-top:0.5rem"><div style="font-size:0.74rem;color:var(--mo);line-height:1.6"><b>${S.terms.revisions} revision rounds</b> included per phase. Beyond that, $${S.terms.rate}/hour with your approval first.</div></div>
+    ${doneBlock('terms',null,null,true)}`,
+};
+
+function doneBlock(k,next,label,last){
+  const done=isDone(k);
+  if(last){
+    return `<div class="ed-done">
+      <span class="mono" style="font-size:0.6rem;color:${done?'var(--sa)':'var(--ao)'}">${done?'✓ all facets in good shape':'this facet needs a value'}</span>
+      <button class="btn gold ${pctReady()?'next-hint':''}" style="margin-left:auto" onclick="openSend()">Send for signature →</button>
+    </div>`;
+  }
+  return `<div class="ed-done">
+    <span class="mono" style="font-size:0.6rem;color:${done?'var(--sa)':'var(--ao)'}">${done?'✓ this facet is set':'add at least one value'}</span>
+    <button class="btn ${done?'':'next-hint'}" style="margin-left:auto" onclick="goFacet('${next}')">${label}</button>
+  </div>`;
+}
+function pctReady(){ return progress().reduce((s,x)=>s+x,0)/3>=0.6; }
+
+// ===== live preview =====
+function renderPreview(){
+  const swColors={'Warm oak':'#C4A57B','Bouclé cream':'#EFE9DD','Brass':'#B8975A','Charcoal':'#2C2926','Sage':'#A8B5A0','Terracotta':'#D4A090','Pale linen':'#F0E9DC','Walnut':'#5C4A3C'};
+  document.getElementById('pvPaper').innerHTML=`
+    <div class="pv-title">Aspen Loft Refresh${version>1?' · v'+version:''}</div>
+    <div class="pv-sub">Proposal from Middlewest Studio</div>
+    <div class="pv-sec"><div class="pv-sec-h">Your rooms</div>${S.rooms.length?S.rooms.map(r=>`<div class="pv-line">${r}</div>`).join(''):'<div class="pv-empty">no rooms yet</div>'}</div>
+    <div class="pv-sec"><div class="pv-sec-h">Palette</div>${S.palette.size?`<div class="pv-swatches">${[...S.palette].map(t=>`<span class="pv-sw" style="background:${swColors[t]||'#ccc'}"></span>`).join('')}</div>`:'<div class="pv-empty">no palette yet</div>'}</div>
+    <div class="pv-sec"><div class="pv-sec-h">What we'll bring</div>${S.ffe.length?`<div class="pv-line"><span>${S.ffe.length} pieces across ${S.rooms.length} rooms</span></div>`:'<div class="pv-empty">no pieces yet</div>'}</div>
+    <div class="pv-sec"><div class="pv-sec-h">Not included</div>${S.exclusions.length?S.exclusions.slice(0,3).map(e=>`<div class="pv-line" style="font-size:0.6rem">— ${e}</div>`).join(''):'<div class="pv-empty">—</div>'}</div>
+    <div class="pv-sec"><div class="pv-sec-h">Investment</div>
+      <div class="pv-line"><span>Furnishings</span><span>$${ffeTotal().toLocaleString()}</span></div>
+      <div class="pv-line"><span>Design fee</span><span>$${feeTotal().toLocaleString()}</span></div>
+      <div class="pv-total"><span>Total</span><span>$${(ffeTotal()+feeTotal()).toLocaleString()}</span></div>
+    </div>
+    <div style="font-family:var(--fm);font-size:0.46rem;color:var(--ao);margin-top:0.7rem;font-style:italic">No cost breakdown, no margin — only what Sarah sees.</div>`;
+}
+
+// ===== mutations =====
+function addRoom(){ const n=prompt('Room name:','Primary Bedroom'); if(n){S.rooms.push(n);render();} }
+function rmRoom(i){ S.rooms.splice(i,1);render(); }
+function addFfe(){ S.ffe.push({room:S.rooms[0]||'Living Room',name:'New piece',sub:'from the Library',type:'allow',price:1500}); render(); }
+function rmFfe(i){ S.ffe.splice(i,1);render(); }
+function cycleType(i){ const o=['fixed','allow','tbd']; const it=S.ffe[i]; it.type=o[(o.indexOf(it.type)+1)%3]; if(it.type==='tbd')it.price=0; else if(!it.price)it.price=2000; render(); }
+function togPalette(t){ S.palette.has(t)?S.palette.delete(t):S.palette.add(t); render(); }
+function addBoard(){ S.boards++; render(); }
+function addPhase(){ const n=prompt('Phase name:','Styling & reveal'); if(n){S.phases.push({name:n,fee:2000});render();} }
+function rmPhase(i){ S.phases.splice(i,1);render(); }
+function addExcl(){ const n=prompt('Exclusion:','Electrical labor'); if(n){S.exclusions.push(n);render();} }
+function rmExcl(i){ S.exclusions.splice(i,1);render(); }
+function addPay(){ S.payments.push({label:'Milestone',trigger:'on date'}); render(); }
+function rmPay(i){ S.payments.splice(i,1);render(); }
+
+// ===== send / mirror / revise =====
+function openSend(){ if(!pctReady()){ toast('Compose a little more first — the offer needs its bones (rooms, pieces, a fee).'); return;} closeAll(true); document.getElementById('scrim').classList.add('on'); document.getElementById('sendSheet').classList.add('on'); }
+function doSend(){ sent=true; closeAll(); toast('Sent for signature. Sarah has v'+version+' — her clean copy. The document now shows the Proposal section as sent, awaiting her.'); }
+function openMirror(){
+  const swColors={'Warm oak':'#C4A57B','Bouclé cream':'#EFE9DD','Brass':'#B8975A','Charcoal':'#2C2926','Sage':'#A8B5A0','Terracotta':'#D4A090','Pale linen':'#F0E9DC','Walnut':'#5C4A3C'};
+  document.getElementById('mirrorBody').innerHTML=`
+    <div class="mr-title">Aspen Loft Refresh${version>1?' · v'+version:''}</div>
+    <div class="mr-sub">Proposal from Middlewest Studio · for your review</div>
+    <div class="mr-k">Your rooms</div>
+    ${S.rooms.map(r=>`<div class="mr-line">${r}</div>`).join('')}
+    <div class="mr-k">The palette</div>
+    <div style="display:flex;gap:6px;margin-top:0.3rem">${[...S.palette].map(t=>`<span style="width:28px;height:28px;border-radius:6px;border:1px solid var(--ink);background:${swColors[t]||'#ccc'}" title="${t}"></span>`).join('')}</div>
+    <div class="mr-k">What we'll bring in</div>
+    ${S.rooms.map(r=>{const items=S.ffe.filter(i=>i.room===r);return `<div class="mr-line"><span style="font-family:var(--fd);font-style:italic;color:var(--ao)">${r}</span><span style="font-size:0.66rem;color:var(--mo)">${items.map(i=>i.name).join(', ')}</span></div>`;}).join('')}
+    <div class="mr-k">Not included</div>
+    <div style="font-size:0.78rem;color:var(--mo)">${S.exclusions.join(' · ')}</div>
+    <div class="mr-k">Investment</div>
+    <div class="mr-line"><span>Furnishings</span><span>$${ffeTotal().toLocaleString()}</span></div>
+    <div class="mr-line"><span>Design fee</span><span>$${feeTotal().toLocaleString()}</span></div>
+    <div class="mr-line" style="font-family:var(--fd);font-weight:500;color:var(--ch);border-bottom:none;border-top:1.5px solid var(--ch);margin-top:0.3rem;padding-top:0.5rem"><span>Total</span><span>$${(ffeTotal()+feeTotal()).toLocaleString()}</span></div>
+    <div style="font-size:0.7rem;color:var(--ao);margin-top:0.5rem;font-style:italic">Paid in ${S.payments.length} milestones: ${S.payments.map(m=>m.label.split('·')[1]||m.label).join(', ')}.</div>
+    ${sent?`<div class="mr-sign"><div class="q">Ready to make it yours?</div><button class="btn primary" onclick="afterSign()">Sign &amp; approve →</button><div style="margin-top:0.8rem"><span class="mono" style="font-size:0.5rem;color:var(--ao);cursor:pointer" onclick="closeAll();openRevise()">…or request a change</span></div></div>`:`<div style="font-size:0.72rem;color:var(--ao);margin-top:1.5rem;font-style:italic">This is exactly what Sarah sees. Send it to make it signable.</div>`}`;
+  closeAll(true); document.getElementById('scrim').classList.add('on'); document.getElementById('mirror').classList.add('on');
+}
+function afterSign(){ closeAll(); toast('Signed. Back on the document, the Proposal section settled and the Project opened — same schedule, now underway. Nothing converted.'); }
+function openRevise(){ closeAll(true); document.getElementById('scrim').classList.add('on'); document.getElementById('reviseSheet').classList.add('on'); }
+function doRevise(){
+  version=2; sent=false;
+  // carry feedback forward: drop a dining allowance, bump the sofa
+  const din=S.ffe.find(i=>i.name.includes('Dining Chairs')); if(din)din.price=1900;
+  const sofa=S.ffe.find(i=>i.name==='Sectional'); if(sofa)sofa.price=7600;
+  closeAll(); goFacet('ffe');
+  toast('v2 opened. v1 is superseded and kept in the version history. Sarah\'s note rides along — adjust and re-send.');
+}
+
+// ===== shell =====
+function enterRoom(){ document.getElementById('entry').classList.add('hidden'); setTimeout(()=>{document.getElementById('room').classList.add('on');render();},150); }
+function leaveRoom(){ closeAll(); document.getElementById('room').classList.remove('on'); document.getElementById('entry').classList.remove('hidden'); }
+function saveDraft(){ const p=document.getElementById('pctNum').textContent; toast(`Saved as a draft at ${p}%. It lives on the document; pick the Drafting Room back up anytime.`); }
+function closeAll(keepScrim){ ['sendSheet','reviseSheet','mirror'].forEach(id=>document.getElementById(id).classList.remove('on')); if(!keepScrim)document.getElementById('scrim').classList.remove('on'); }
+function toast(msg){ const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),4200); }
+
+render();
+</script>
+</body>
+</html>

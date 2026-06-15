@@ -44,7 +44,7 @@ export interface DocumentStateRow {
   proposal_status: string | null;
   proposal_sent_at: string | null;
   proposal_viewed_at: string | null;
-  /** R45 (00210): last touch on a still-drafting proposal — quiet while it's
+  /** R45 (00211): last touch on a still-drafting proposal — quiet while it's
    *  warm, an "untouched Nd" chip once it goes cold. Null until first edit. */
   proposal_updated_at: string | null;
   lead_response_deadline: string | null;
@@ -481,7 +481,7 @@ export function deriveMotion(
       // R45: actively-drafting is quiet — while she's in it, nothing shows. The
       // chip only appears once the draft goes cold (untouched ≥ threshold), and
       // then it carries state, never a nag. Falls back to updated_at when the
-      // view has no proposal-level touch (pre-00210 rows, or never edited).
+      // view has no proposal-level touch (pre-00211 rows, or never edited).
       const touchedIso = row.proposal_updated_at ?? row.updated_at;
       const days = daysBetween(touchedIso, now);
       if (days >= DRAFTING_UNTOUCHED_CHIP_DAYS) {

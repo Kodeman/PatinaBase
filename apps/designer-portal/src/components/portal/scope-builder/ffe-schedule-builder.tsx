@@ -509,7 +509,7 @@ function CategoryPromptModal({
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-[480px] rounded-md border bg-[var(--bg-surface)] p-6 shadow-xl"
+        className="w-full max-w-[480px] rounded-md border-2 bg-[var(--bg-surface)] p-6"
         style={{ borderColor: 'var(--border-default)' }}
         onClick={(e) => e.stopPropagation()}
       >
