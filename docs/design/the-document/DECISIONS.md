@@ -1946,4 +1946,208 @@ before app).
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I35 · R1–R45 · L1–L4 · THE GO · FLIP CONFIRMED · last id = I35*
+## Rulings — design session, 2026-06-15 (Track 5 — Project Coordination · the ball-in-court)
+
+> Opens Track 5 of the Dissolve. **Project Coordination generalizes
+> `client_decisions` in place** — an RFI, a submittal, a sign-off, and a punch
+> item are all a decision with an owner (a court). The table is the widened
+> `client_decisions` (coordination_kind · court · blocks_kind are new columns,
+> orthogonal to the existing decision_type/decision_kind axes), the option child
+> is `client_decision_options`, the resolve path is the one-tx SECURITY DEFINER
+> `resolve_coordination_item`, and the read models are
+> `coordination_court_summary` / `task_blocked_state`. All work is **additive,
+> D7-clean — migrations 00212–00220**; the old decision/FF&E/phase machinery is
+> untouched and reads truthfully through the reused `blocking_status` axis. The
+> canonical look/feel reference is
+> `docs/design/the-document/patina-project-coordination-prototype.html`. These
+> rulings open the build; the the-document-spec.md Track-5 fold is owed post-merge
+> (R54).
+
+### O7 (Track 5) · Quiet inline confirmation vs. toast for coordination acts — 2026-06-15
+
+> NOTE: an earlier O7 (the PO send/expedite weave) was opened and RESOLVED at R18
+> on 2026-06-12. This is a distinct Track-5 open item that the session opened and
+> resolved in the same sitting (R51); logged here to keep the O-number trail honest.
+
+**Conflict:** the coordination acts (resolve / nudge / extend / reassign /
+resubmit) are mutations that a SaaS reflex would confirm with a toast. D2 forbids
+anything breaking through by default, and the document's whole grammar answers
+"did that work?" by the surface itself changing — the stamp, the court bar count,
+the margin row — not by a transient overlay shouting it.
+**Proposed resolution:** the acts confirm by the surfaces updating in place (the
+one-act-many-surfaces invariant, §5) and at most a quiet inline "recorded ✓"
+beside the act; never a toast.
+**Resolved by R51.**
+
+### R46 · Tracked parties — GC and vendor courts without a login — 2026-06-15
+
+The ball-in-court needs four courts (designer / client / gc / vendor), but a GC or
+a vendor has no Patina login in v1 and onboarding one is not Track 5's job.
+**Parties are tracked, not authenticated.** `project_parties` (00212) holds a
+GC / vendor / client_rep / other per project — display name, company, email,
+phone, optional `vendor_id` — and `profile_id` is **NULLABLE**: a v1 party does
+NOT log in. The designer records the party's move on its behalf through
+`resolve_coordination_item` (the same one-act path a designer uses to record a
+client's pick, R11). This is additive and forward-compatible: giving a party a
+real login later is a flag flip (set `profile_id = auth.uid()`, the party then
+reads its own court via 00217's party-self read path), never a migration. The
+court bar groups open items by court so the designer sees, at a glance, whose move
+each item is waiting on — even when "whose move" is a party who will never sign in.
+
+### R47 · RFI answer authority — the designer writes, the GC court is tracked — 2026-06-15
+
+An RFI's answer is the designer's to record. The RFI sits with the GC court while
+open (`court='gc'`, the question is theirs to answer); resolving it WRITES the
+`answer` and stamps `answered_by` / `answered_at`, and the default ball hand-off
+returns the item to the designer's reading (`next_court_for`: rfi → gc while open,
+designer on resolve). Because the GC is login-less in v1 (R46), the answer is
+**designer-recorded** — the designer captures the GC's reply through
+`resolve_coordination_item` exactly as a client's pick is recorded. The authority
+to settle the item is the designer's; the court column tracks accountability (whose
+answer this is), not write access. No new write surface for GCs ships in v1.
+
+### R48 · The submittal split — vendor resubmits, only the designer approves — 2026-06-15
+
+A submittal is a review loop, not a one-shot answer, so its two moves are split
+across two acts and two parties. **A vendor resubmit creates a new
+`coordination_item_revisions` row** (Rev-N history, 00214) via the RPC-only
+`submit_coordination_revision` — the revisions table carries no broad write policy,
+so a round can only be added through the function; **the item stays `pending`** (a
+resubmit does not resolve anything — it puts a fresh revision in front of the
+designer). **Only the designer approves a revision and resolves the item:**
+`resolve_coordination_item` takes the approved `revision_id`, marks that revision
+approved, and settles the submittal. The two acts never collapse into one —
+submitting is the vendor's move (designer-recorded in v1, R46), approving is the
+designer's. This is why the submittal carries its own RPC write path while the
+other kinds resolve through the shared dispatch.
+
+### R49 · The punch two-step — open with the GC, close by designer verify — 2026-06-15
+
+A punch item is two moves: the GC fixes it, the designer verifies the fix. While
+open the punch sits with the **GC court** (`court='gc'` — the fix is theirs).
+**Resolving is the designer's verify-and-close step:** the resolve records the
+verification note and the designer steers the ball home with the
+`p_next_court` override (gc → designer) rather than the kind's default — the punch
+does not auto-return, the designer's act is the closure. This is the one place the
+explicit `p_next_court` argument earns its keep: a punch's "done" is a designer
+assertion ("I checked it"), not a status the GC can set. Until that verify, the
+punch stays an open GC-court item carrying its state.
+
+### R50 · One thread per item — `comms_threads.coordination_item_id` — 2026-06-15
+
+A coordination item's conversation — the back-and-forth on an RFI, the notes across
+submittal rounds — lives in **ONE canonical thread** anchored to the item via
+`comms_threads.coordination_item_id` (00216, partial unique index: one thread per
+item). The item row's preview reads the latest post on that thread; the per-item
+margin/row surfaces all point at the same thread, so the conversation never
+fragments across the item's life. **`decision_comments` is retained for
+back-compat** — existing decision comments keep working untouched (D7); the new
+thread link is additive and the legacy comment surface coexists. New coordination
+conversation flows through the one thread; old comment history stays readable where
+it already lives.
+
+### R51 · Quiet inline confirmation, never a toast (D2) — resolves O7 (Track 5) — 2026-06-15
+
+A coordination act confirms by the document changing, not by an overlay shouting.
+The resolve/nudge/extend/reassign/resubmit acts fan out across their surfaces in
+one transaction (the §5 one-act-many-surfaces invariant) — the item's status, the
+court bar's per-court count, the dependent task flipping blocked→todo, the margin
+row — and **that visible change IS the confirmation**, optionally joined by a quiet
+inline "recorded ✓" beside the act. **No toast, ever** (D2: nothing breaks through
+by default). This is the same discipline the ⌘K ask-and-place follows (I30, the
+inline "placed ✓" with no toast) and the no-badge ledger discipline (D8): the
+surface answers "did that work?" by being true, not by interrupting. O7 (Track 5)
+RESOLVED.
+
+### R52 · Block-on-phase unlocks, it does not auto-advance — 2026-06-15
+
+A coordination item can block FF&E, a task, or a phase (`blocks_kind`), mapped onto
+the existing `blocking_status` axis so the legacy machinery and the Desk need-lines
+read truthfully. **Resolving a blocking item UNLOCKS what it gated — it does not
+advance the project's phase.** Clearing an FF&E block lets procurement proceed;
+flipping a blocked task to todo lets the work resume; clearing a phase block lifts
+the gate — but the phase advances only when its own gate is granted. The one
+exception is the **sign-off**, which keeps its existing settle path: a sign-off is
+an approval gate (R23) and its settlement still advances the project's real
+vocabulary through the 00204 trigger, unchanged. Coordination unblocks; only the
+gate-as-decision (the sign-off) settles a section. The distinction keeps "the GC
+answered the RFI" from silently moving the project forward.
+
+### R53 · Cycle prevention — DB self-reference only; multi-hop is app-side for v1 — 2026-06-15
+
+The dependency web (an item blocks an FF&E line / a task; a task can be blocked by
+an item) can, in principle, form a cycle. **The database enforces only the direct
+self-reference guard** — an item cannot block itself, a task cannot depend on its
+own blocker in a one-hop loop — because that is the constraint a trigger can hold
+cheaply and correctly. **Multi-hop cycle detection (A blocks B blocks C blocks A
+across mixed item/task edges) is handled app-side for v1** — the create/resolve
+surfaces refuse to wire an edge that would close a longer loop. Pushing full
+transitive-closure cycle detection into the database is deferred; the v1 webs are
+shallow (an item gates a few lines or a task), the app-side check covers the real
+shapes, and the DB self-ref is the floor that nothing can slip past. Promote to a
+DB-side closure check if real coordination webs ever grow deep enough to need it.
+
+### R54 · The Track 5 prototype is the canonical reference; the spec fold is owed — 2026-06-15
+
+`docs/design/the-document/patina-project-coordination-prototype.html` is the
+canonical look/feel reference for Project Coordination — the court bar, the
+kind-grouped coordination band, the per-item rows, the resolve/nudge/extend/
+reassign/resubmit acts, and the quiet-inline confirmation (R51) all read from it,
+exactly as the Library and Composing Page prototypes governed Track 3. The
+**the-document-spec.md Track-5 fold is owed post-merge** — the rulings R46–R54 and
+the I36 implementation note land in the spec body at the next cut (alongside the
+§14.15 open items still carried from Track 3), with the coordination_kind/court/
+blocks_kind axes documented against §6 (stamps) and §11 (the presentation-layer
+contract). Until that cut, this log plus the prototype are the authority; any
+designer-visible call returns with screenshots per the standing protocol.
+
+### I36 · Track 5 — Project Coordination built (R46–R54) — 2026-06-15
+
+Project Coordination landed as the verified foundation
+(`packages/supabase/src/hooks/use-coordination.ts` + migrations 00212–00220) plus
+the designer surfaces, on `the-document/track5-project-coordination`. Built
+additive-only (D7) — `client_decisions` is widened in place, never forked.
+
+**`coordination_kind` is a NEW third axis, orthogonal to the two that already
+existed.** The codebase carried `decision_type` (00084) and `decision_kind`
+(00202); Track 5 adds `coordination_kind` (selection · rfi · submittal · signoff ·
+punch) as a separate column (00213) and **leaves both prior axes untouched** — so
+the existing gate logic (decision_kind 'approval' = R23's sign-off gate) and the
+existing choice logic (decision_type) keep working unchanged. A coordination item
+rides `decision_kind='choice'` and carries its real shape on the new axis; the
+sign-off is the bridge (coordination_kind='signoff' is a decision_kind='approval'
+gate, R52). `court` and `blocks_kind` join it (00213); `blocks_kind` maps onto the
+reused `blocking_status` axis (ffe→blocks_procurement, phase→blocks_phase,
+task/none→non_blocking) so the legacy FF&E/phase machinery and the Desk need-lines
+read truthfully with zero edits.
+
+**Submittal revisions are RPC-only-writable.** `coordination_item_revisions`
+(00214) has no broad write policy; a Rev-N row can be added only through
+`submit_coordination_revision` (R48) and the item stays pending. Approval/resolve
+flows through `resolve_coordination_item` (00218, SECURITY DEFINER), which
+dispatches by kind, then in the SAME transaction clears FF&E blocks, flips
+downstream tasks blocked→todo (00215 `blocked_by_item_id`), and shifts the ball via
+`p_next_court` / `next_court_for` (R47/R49). The one-act-many-surfaces fan-out
+(§5) is the resolve hook's invalidation pass (coordination-items + section-tasks +
+margin-items + document-state + project-decisions + FF&E), with an optimistic
+cascade preview (the item resolves, its dependent tasks unblock) and rollback.
+
+**GC/vendor courts are login-less, so the existing notify covers all kinds.**
+`project_parties.profile_id` is nullable (R46); a v1 GC/vendor never signs in, the
+designer records its move. Because no new external actor receives notifications,
+the shipped client+designer notify path (`notify_decision_required` /
+`notify_decision_resolved`, 00173/00174 + the overdue cron) already addresses
+every party that can act — the client when the ball is in their court (they read
+their coordination items through the SAME `designer_clients.client_id=auth.uid()`
+RLS that already let them read decisions), and the designer otherwise. **00220 is
+therefore an intentional NO-OP** — a documentation migration confirming the notify
+coverage rather than adding DDL; every coordination_kind is already a first-class
+citizen of the decision notify path. Read models: `coordination_court_summary` /
+`task_blocked_state` (00219); one thread per item via
+`comms_threads.coordination_item_id` (00216, R50). Migrations now **00191–00220**.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved; O7 twice — the R18 send-weave and the R51
+Track-5 inline-confirm) · I1–I36 · R1–R54 · L1–L4 · THE GO · FLIP CONFIRMED ·
+last id = I36*
