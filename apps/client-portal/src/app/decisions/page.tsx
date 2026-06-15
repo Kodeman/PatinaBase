@@ -3,6 +3,7 @@
 import { useAllDecisions } from '@patina/supabase';
 import type { ClientDecision } from '@patina/supabase';
 import { DecisionCardClient } from '@/components/decision-card-client';
+import { isClientActionableDecision } from '@/hooks/use-decisions-client';
 import { StrataMark } from '@/components/strata-mark';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -14,10 +15,16 @@ export default function ClientDecisionsPage() {
   const pending = (decisions ?? []).filter(
     (d: ClientDecision) => d.status === 'pending'
   );
-  const overdue = pending.filter(
+  // The client's "your move" pile: selections + sign-offs in their court.
+  const pendingMine = pending.filter(isClientActionableDecision);
+  // Track 5 — pending coordination items the client can read but isn't acting on
+  // (RFIs / submittals / punch items, or anything in the designer / GC / vendor
+  // court). Shown quietly, read-only, as "your designer is handling this".
+  const pendingHandled = pending.filter((d) => !isClientActionableDecision(d));
+  const overdue = pendingMine.filter(
     (d) => d.due_date && new Date(d.due_date) < now
   );
-  const awaiting = pending.filter(
+  const awaiting = pendingMine.filter(
     (d) => !d.due_date || new Date(d.due_date) >= now
   );
   const resolved = (decisions ?? []).filter(
@@ -69,6 +76,27 @@ export default function ClientDecisionsPage() {
           </h2>
           <div className="space-y-0">
             {awaiting.map((decision: ClientDecision) => (
+              <Link key={decision.id} href={`/decisions/${decision.id}`} className="block no-underline">
+                <DecisionCardClient decision={decision} />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Track 5 — coordination items your designer is carrying for you.
+          Read-only mirror: visible so nothing ages in the dark, but clearly
+          not the client's to act on. */}
+      {pendingHandled.length > 0 && (
+        <section className="mt-8">
+          <h2 className="type-meta mb-1 text-[var(--text-muted)]">
+            Your Designer Is Handling ({pendingHandled.length})
+          </h2>
+          <p className="type-body-small mb-4 text-[var(--text-muted)]">
+            In progress with your designer — no action needed from you.
+          </p>
+          <div className="space-y-0">
+            {pendingHandled.map((decision: ClientDecision) => (
               <Link key={decision.id} href={`/decisions/${decision.id}`} className="block no-underline">
                 <DecisionCardClient decision={decision} />
               </Link>

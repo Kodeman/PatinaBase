@@ -2,13 +2,26 @@
 
 import { useState } from 'react';
 import { useSelectDecisionOption } from '@patina/supabase';
-import type { ClientDecision, ClientDecisionOption, DecisionType, BlockingStatus } from '@patina/supabase';
+import type {
+  ClientDecision,
+  ClientDecisionOption,
+  DecisionType,
+  BlockingStatus,
+  CoordinationKind,
+  Court,
+} from '@patina/supabase';
 import { CheckCircle2 } from 'lucide-react';
 import { DecisionConsentBlock } from '@/components/decisions/DecisionConsentBlock';
+import { CoordinationBanner } from '@/components/decisions/coordination-banner';
 
 const CONSENT_REQUIRED_TYPES: DecisionType[] = ['budget', 'approval', 'substitution'];
 
 function decisionRequiresConsent(decision: ClientDecision): boolean {
+  // A coordination sign-off is an e-signature gate by definition — require
+  // consent for it the same way approval/budget/substitution decisions do.
+  // Additive: legacy decisions have coordination_kind undefined, so this only
+  // ever turns ON consent (never off) for the new sign-off kind.
+  if (decision.coordination_kind === 'signoff') return true;
   return CONSENT_REQUIRED_TYPES.includes(decision.decision_type);
 }
 
@@ -35,6 +48,37 @@ const typeIcons: Record<DecisionType, string> = {
 interface DecisionCardClientProps {
   decision: ClientDecision;
   compact?: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Track 5 — coordination axis (additive). A coordination item IS a widened
+// client_decisions row. Legacy pure-selection / approval decisions have these
+// columns undefined, so we default them to the values that reproduce the old
+// behavior exactly: coordination_kind='selection', court='client'. The card
+// only diverges when the data says otherwise.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The coordination kind, defaulting to the legacy 'selection' shape. */
+function coordinationKind(decision: ClientDecision): CoordinationKind {
+  return decision.coordination_kind ?? 'selection';
+}
+
+/** Whose move it is, defaulting to the legacy 'client' court. */
+function coordinationCourt(decision: ClientDecision): Court {
+  return decision.court ?? 'client';
+}
+
+/**
+ * Does the client act on this item directly, or is it their designer's to carry?
+ * The client acts on selections and sign-offs that are in their court; everything
+ * else (RFIs, submittals, punch items, or anything sitting in the designer / GC /
+ * vendor court) renders read-only as the mirror's "waiting on your designer" view.
+ */
+function isClientActionable(decision: ClientDecision): boolean {
+  const court = coordinationCourt(decision);
+  if (court !== 'client') return false;
+  const kind = coordinationKind(decision);
+  return kind === 'selection' || kind === 'signoff';
 }
 
 function formatDueDate(date: string | null): string | null {
@@ -239,6 +283,56 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
       }
     );
   };
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Track 5 — the read-only mirror branch. RFIs, submittals, punch items, and
+  // anything sitting in the designer / GC / vendor court are the designer's to
+  // carry. The client sees the banner + the item's context (read-only), never
+  // action controls. Pure-selection / approval decisions (kind defaulting to
+  // 'selection', court to 'client') skip this entirely and render as before.
+  // ───────────────────────────────────────────────────────────────────────────
+  if (!isClientActionable(decision)) {
+    const kind = coordinationKind(decision);
+    const court = coordinationCourt(decision);
+    return (
+      <div
+        className="border-b border-[var(--border-default)] py-6"
+        data-testid="decision-card"
+        data-readonly="true"
+        data-coordination-kind={kind}
+        data-court={court}
+      >
+        <CoordinationBanner kind={kind} court={court} />
+        <h3 className="font-heading text-lg text-[var(--text-primary)]">
+          {decision.title}
+        </h3>
+        {decision.context && (
+          <p className="type-body-small mt-1">{decision.context}</p>
+        )}
+        {decision.answer && (
+          <div className="mt-3 border-t border-[var(--border-default)] pt-3">
+            <p className="type-meta-small text-[var(--text-muted)]">
+              {isResolved ? 'Resolved' : 'Latest update'}
+            </p>
+            <p className="type-body-small mt-1 whitespace-pre-wrap text-[var(--text-primary)]">
+              {decision.answer}
+            </p>
+          </div>
+        )}
+        {isResolved && !decision.answer && (
+          <p className="type-meta mt-3 flex items-center gap-1.5 text-patina-sage">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Resolved
+          </p>
+        )}
+        {!isResolved && (
+          <p className="type-meta-small pt-2">
+            No action needed from you &middot; your designer will update you here
+          </p>
+        )}
+      </div>
+    );
+  }
 
   // Resolved compact display
   if (isResolved && compact && selectedOption) {

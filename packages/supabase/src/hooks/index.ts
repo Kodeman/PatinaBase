@@ -874,6 +874,8 @@ export {
   useVendorProfiles,
   useMyThreadOverrides,
   useUpdateThreadNotificationPref,
+  useCoordinationItemThread,
+  useEnsureCoordinationItemThread,
   commsKeys,
 } from './use-comms';
 export type {
@@ -891,6 +893,7 @@ export type {
   UseThreadsParams,
   SendMessageInput,
   ThreadOverride,
+  EnsureItemThreadInput,
 } from './use-comms';
 
 // ═══════════════════════════════════════════════════════════════════════════

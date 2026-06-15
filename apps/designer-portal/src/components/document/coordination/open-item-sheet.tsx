@@ -20,11 +20,20 @@
  * line and the cascade re-reads every surface via the foundation hooks.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type {
   CoordinationItem,
   ProjectParty,
+  CommsMessage,
 } from '@patina/supabase';
+import {
+  useThreadMessages,
+  useSendMessage,
+  useThreadRealtime,
+  useCoordinationItemThread,
+  useEnsureCoordinationItemThread,
+} from '@patina/supabase';
+import { useAuth } from '@/hooks/use-auth';
 import type { SectionTask } from '@/hooks/use-section-work';
 import { blocksText } from '@/lib/document/coordination-derivation';
 import { fmtDay } from '@/lib/document/format';
@@ -309,12 +318,19 @@ export function OpenItemSheet({
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Thread — the latest per-item thread post (00216), read-only preview.
-// The comms hooks key off a thread_id the designer participates in; the
-// coordination embed gives only the thread head, so this shows the latest
-// post as the prototype's single `.msg` and links into the full thread.
-// (A full message composer lives in the comms surface; this band keeps the
-// thread a quiet read so the sheet stays focused on resolving — R51/D1.)
+// Thread — the item's canonical multi-party conversation (00216, R50).
+//
+// The item's thread is the ONE comms_threads row anchored via
+// coordination_item_id. This reads its real messages (useThreadMessages, live
+// via useThreadRealtime) and lets the designer post (useSendMessage). When no
+// thread exists yet, the composer creates-on-first-post
+// (useEnsureCoordinationItemThread) — the thread carries coordination_item_id
+// and the designer as participant, then the message lands in the same flow.
+//
+// Kept paper-grammar and shadow-free (D4): the messages are flat `.msg` rows
+// over the paper ground; depth is value contrast + a hairline rule. The
+// composer is the prototype's quiet inline field (R51/D1) — no toast, no route
+// change, the document stays mounted beneath.
 // ════════════════════════════════════════════════════════════════════════
 
 function Thread({
@@ -326,9 +342,12 @@ function Thread({
   parties: ProjectParty[];
   clientName?: string;
 }) {
-  const post = item.latest_thread_post;
-  const court = item.court;
-  const tok = partyFor(court, {
+  const { user } = useAuth();
+  const myId = user?.id ?? '';
+
+  // The court token gives a fallback name/colour for a non-self sender that has
+  // no joined profile (e.g. a tracked GC/vendor with no login, R46).
+  const courtTok = partyFor(item.court, {
     party:
       item.court_party ??
       (item.court_party_id
@@ -337,36 +356,100 @@ function Thread({
     clientName,
   });
 
+  // Resolve the existing item thread; the helper creates it on first post.
+  const { data: resolvedThreadId } = useCoordinationItemThread(item.id);
+  // The embed on the item row gives the thread head before the resolver settles.
+  const threadId = resolvedThreadId ?? item.latest_thread_post?.thread_id ?? null;
+
+  const ensureThread = useEnsureCoordinationItemThread();
+  const sendMessage = useSendMessage();
+  useThreadRealtime(threadId ?? undefined);
+  const { data: pages, isLoading } = useThreadMessages(threadId ?? undefined);
+
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  // Messages come back newest-first per page; flatten then show oldest-first.
+  const messages = useMemo<CommsMessage[]>(() => {
+    const all = (pages?.pages ?? []).flat();
+    return all.slice().reverse();
+  }, [pages]);
+
+  const busy = ensureThread.isPending || sendMessage.isPending;
+
+  const handleSend = async () => {
+    const body = draft.trim();
+    if (!body || busy) return;
+    setError(null);
+    try {
+      // Create-on-first-post: resolve (or create) the thread, then post.
+      let tid = threadId;
+      if (!tid) {
+        if (!item.project_id) {
+          setError('This item has no project — start the thread from the project.');
+          return;
+        }
+        tid = await ensureThread.mutateAsync({
+          itemId: item.id,
+          projectId: item.project_id,
+        });
+      }
+      await sendMessage.mutateAsync({ threadId: tid, body });
+      setDraft('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not post to the thread.');
+    }
+  };
+
   return (
     <div className="my-4">
       <div className="mb-2.5 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         The thread
       </div>
-      {post ? (
-        <div className="flex gap-2.5">
-          <span
-            aria-hidden
-            className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full font-mono text-[0.5rem] font-semibold text-white"
-            style={{ background: tok.dotColor }}
-          >
-            {initialsFor(tok.label)}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="font-mono text-[0.48rem] font-semibold uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
-              {tok.label}
-              {post.last_message_at && (
-                <span className="ml-1.5 font-normal normal-case tracking-normal opacity-60">
-                  {fmtDay(post.last_message_at)}
+
+      {/* Messages — flat paper rows, oldest first. */}
+      {threadId && isLoading ? (
+        <p className="text-[0.74rem] italic text-[var(--text-muted)]">Loading the thread…</p>
+      ) : messages.length > 0 ? (
+        <ul className="space-y-3">
+          {messages.map((msg) => {
+            const mine = msg.sender_id === myId;
+            const name = msg.system
+              ? 'System'
+              : mine
+                ? 'You'
+                : (msg.sender?.full_name ?? courtTok.label);
+            const dot = mine ? 'var(--color-clay)' : courtTok.dotColor;
+            return (
+              <li key={msg.id} className="flex gap-2.5">
+                <span
+                  aria-hidden
+                  className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full font-mono text-[0.5rem] font-semibold text-white"
+                  style={{ background: dot }}
+                >
+                  {initialsFor(name)}
                 </span>
-              )}
-            </div>
-            <p className="mt-0.5 text-[0.78rem] leading-[1.55] text-[var(--color-mocha)]">
-              {post.title || (item.context ?? 'Thread open on this item.')}
-            </p>
-          </div>
-        </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-[0.48rem] font-semibold uppercase tracking-[0.04em] text-[var(--color-aged-oak)]">
+                    {name}
+                    <span className="ml-1.5 font-normal normal-case tracking-normal opacity-60">
+                      {fmtDay(msg.created_at)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 whitespace-pre-wrap text-[0.78rem] leading-[1.55] text-[var(--color-mocha)]">
+                    {msg.deleted_at ? (
+                      <em className="text-[var(--text-muted)]">(message deleted)</em>
+                    ) : (
+                      msg.body
+                    )}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       ) : item.context ? (
-        // No thread yet — show the item's own context as the opening note.
+        // No thread yet — the item's own context reads as the opening note.
         <p className="text-[0.78rem] leading-[1.55] text-[var(--color-mocha)]">
           {item.context}
         </p>
@@ -374,6 +457,34 @@ function Thread({
         <p className="text-[0.74rem] italic text-[var(--text-muted)]">
           No messages yet on this item.
         </p>
+      )}
+
+      {/* Composer — the quiet inline field (R51), shadow-free. */}
+      <div className="mt-3 flex items-end gap-2 border-t border-[var(--doc-ink-border)] pt-3">
+        <ResolveTextarea
+          rows={2}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              void handleSend();
+            }
+          }}
+          placeholder="Add a note to the thread…"
+          disabled={busy}
+          className="flex-1"
+        />
+        <ResolveButton
+          tone="plain"
+          onClick={() => void handleSend()}
+          disabled={busy || !draft.trim()}
+        >
+          {busy ? 'Posting…' : 'Post'}
+        </ResolveButton>
+      </div>
+      {error && (
+        <p className="mt-1.5 text-[0.68rem] text-[#C4836F]">{error}</p>
       )}
     </div>
   );

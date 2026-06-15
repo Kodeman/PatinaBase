@@ -4,6 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createBrowserClient } from '../client';
+// Track 5 coordination axis — type-only import (erased at compile time, so no
+// runtime cycle even though use-coordination imports ClientDecisionOption back).
+import type { CoordinationKind, Court } from './use-coordination';
 
 const getSupabase = () => createBrowserClient();
 
@@ -84,6 +87,18 @@ export interface ClientDecision {
   viewed_at: string | null;
   selected_by: string | null;
   reminder_sent_at: string | null;
+  // ─── Track 5 — Project Coordination axis (00213) ────────────────────────────
+  // Additive: a coordination item IS a widened client_decisions row. These flow
+  // through every `select('*')` read for free; the legacy decision paths default
+  // to coordination_kind='selection' / court='client', so existing pure-selection
+  // and approval decisions are unaffected. Optional so old read models that don't
+  // request them stay valid.
+  /** The workflow shape: selection | rfi | submittal | signoff | punch. */
+  coordination_kind?: CoordinationKind;
+  /** Whose move it is: designer | client | gc | vendor. */
+  court?: Court;
+  /** RFI / Punch recorded answer (designer-authored for tracked courts). */
+  answer?: string | null;
   created_at: string;
   updated_at: string;
   options?: ClientDecisionOption[];

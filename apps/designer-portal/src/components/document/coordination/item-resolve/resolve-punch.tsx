@@ -7,6 +7,14 @@
  * `resolve_coordination_item({ itemId, answer, nextCourt:'designer' })` (00218,
  * R49) records the verification and keeps the ball with the designer for the
  * final close — the verify step, not a hand-off. Quiet confirmation only (R51).
+ *
+ * TODO (Slice F, lower priority — punch↔PO/receiving closeout link): there is no
+ * clean column joining a punch item to a purchase_order / receiving_inspection
+ * today (use-procurement exposes damage_claims↔receiving_inspections, but no
+ * coordination_item_id on either, and no PO closeout hook). Deferred rather than
+ * over-built: a future additive migration would add
+ * client_decisions.purchase_order_id (or a punch↔PO join) so a verified punch can
+ * surface the related PO/receiving record here. Not wired in this slice.
  */
 
 import { useState } from 'react';
