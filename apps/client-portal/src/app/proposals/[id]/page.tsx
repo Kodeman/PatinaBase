@@ -14,6 +14,7 @@ import {
 import { useClientProposal } from '@/hooks/use-proposals-client';
 import { ProposalDocument } from '@/components/proposal-document';
 import { ProposalDeclineDialog } from '@/components/proposals/ProposalDeclineDialog';
+import { ProposalRequestChangeDialog } from '@/components/proposals/ProposalRequestChangeDialog';
 import { ProposalClarifyButton } from '@/components/proposals/ProposalClarifyButton';
 
 function formatDate(iso: string): string {
@@ -39,6 +40,7 @@ export default function ClientProposalDetailPage({
   // RLS restricts board reads to non-draft proposals the client is on.
   const { data: boards } = useBoards(id);
   const [declineOpen, setDeclineOpen] = useState(false);
+  const [requestChangeOpen, setRequestChangeOpen] = useState(false);
 
   if (proposalLoading || sectionsLoading) {
     return (
@@ -176,6 +178,14 @@ export default function ClientProposalDetailPage({
             {proposal.project_id && <ProposalClarifyButton projectId={proposal.project_id} />}
             <button
               type="button"
+              onClick={() => setRequestChangeOpen(true)}
+              className="inline-flex items-center justify-center rounded-[3px] border border-[var(--border-default)] px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] transition hover:bg-[var(--bg-surface)]"
+              data-testid="proposal-request-change-trigger"
+            >
+              Request a change
+            </button>
+            <button
+              type="button"
               onClick={() => setDeclineOpen(true)}
               className="inline-flex items-center justify-center rounded-[3px] border border-[var(--border-default)] px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] transition hover:bg-[var(--bg-surface)]"
               data-testid="proposal-decline-trigger"
@@ -196,6 +206,12 @@ export default function ClientProposalDetailPage({
         proposalId={proposal.id}
         open={declineOpen}
         onOpenChange={setDeclineOpen}
+      />
+
+      <ProposalRequestChangeDialog
+        proposalId={proposal.id}
+        open={requestChangeOpen}
+        onOpenChange={setRequestChangeOpen}
       />
     </div>
   );

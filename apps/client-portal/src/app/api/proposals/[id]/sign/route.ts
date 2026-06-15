@@ -50,30 +50,28 @@ export async function POST(
     }
   }
 
-  const now = new Date().toISOString();
-  const { error: updateError } = await supabase
-    .from('proposals')
-    .update({
-      status: 'accepted',
-      signed_at: now,
-      signed_by_name: signedByName,
-      signed_ip: clientIp,
-      accepted_at: now,
-    })
-    .eq('id', id);
-
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
-  }
-
-  await supabase.from('proposal_engagement').insert({
-    proposal_id: id,
-    viewer_id: user.id,
-    event_type: 'signed',
-    metadata: { signed_by_name: signedByName, signed_ip: clientIp },
+  // Authoritative sign: a single SECURITY DEFINER transaction settles the
+  // approval decision, flips the proposal to "accepted", logs the "signed"
+  // engagement event, and (p_auto_activate) opens the project. The RPC
+  // re-checks ownership / signable status / expiry, so the friendly pre-checks
+  // above are purely for nicer 4xx codes. Idempotent on an already-accepted
+  // proposal.
+  const { error: signError } = await supabase.rpc('sign_proposal', {
+    p_proposal_id: id,
+    p_signed_name: signedByName,
+    p_signed_ip: clientIp,
+    p_auto_activate: true,
   });
 
-  // Fire confirmation email (best-effort — does not block sign success)
+  if (signError) {
+    return NextResponse.json(
+      { error: signError.message || 'sign_failed' },
+      { status: 500 }
+    );
+  }
+
+  // CARRY-FORWARD: sign_proposal does NOT send the confirmation email — fire it
+  // here, best-effort (does not block sign success).
   void supabase.functions
     .invoke('proposal-sign-confirmation', { body: { proposalId: id } })
     .catch(() => {
