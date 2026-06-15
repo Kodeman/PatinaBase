@@ -14,8 +14,16 @@
 -- ════════════════════════════════════════════════════════════════════════════
 
 \set proj   '''b0000000-0000-0000-0000-0000000000d1'''
-\set dc     '''20495f61-5ced-4073-adf8-6dda002acb3c'''
 \set des    '''a0000000-0000-0000-0000-000000000004'''
+
+-- The designer↔client relationship id is regenerated on every `supabase db
+-- reset`, so resolve it dynamically (designer + client auth uids are fixed).
+SELECT quote_literal(id) AS dc
+  FROM designer_clients
+  WHERE designer_id = 'a0000000-0000-0000-0000-000000000004'
+    AND client_id   = 'a0000000-0000-0000-0000-000000000005'
+  ORDER BY created_at
+  LIMIT 1 \gset
 
 begin;
 
