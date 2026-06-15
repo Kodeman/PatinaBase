@@ -14,6 +14,7 @@ import {
   createBrowserClient,
   useApplyDecisionOverride,
   useDecision,
+  useDecisionOverrides,
   useIssueInvoice,
   useInvoice,
   useProjectFFEItems,
@@ -24,6 +25,7 @@ import {
   useUpdateDecision,
   type ConsentMethod,
 } from '@patina/supabase';
+import { useAuth } from '@/hooks/use-auth';
 import { invalidateMarginSurfaces, useSendWeeklyPulse } from '@/hooks/use-margin-items';
 import {
   useEscalateNoteToDecision,
@@ -49,6 +51,65 @@ function Quiet({ children }: { children: React.ReactNode }) {
 
 // ── decision ────────────────────────────────────────────────────────────────
 
+/** The subject-matter taxonomy (00084 decision_type) → a human label for the
+ *  kind-line. Mirrors the composer's taxonomy (R55). */
+const DECISION_TYPE_LABEL: Record<string, string> = {
+  material: 'Material',
+  color: 'Color',
+  product: 'Product',
+  layout: 'Layout',
+  substitution: 'Substitution',
+  budget: 'Budget',
+  approval: 'Approval',
+};
+
+/** The Track-5 workflow shapes (00213 coordination_kind) → a label for the
+ *  kind-line when an item is NOT a plain selection. */
+const COORDINATION_KIND_LABEL: Record<string, string> = {
+  selection: 'Selection',
+  rfi: 'RFI',
+  submittal: 'Submittal',
+  signoff: 'Sign-off',
+  punch: 'Punch',
+};
+
+const COURT_LABEL: Record<string, string> = {
+  designer: 'your court',
+  client: "client's court",
+  gc: 'GC court',
+  vendor: 'vendor court',
+};
+
+/** The lifecycle word the status line shows (R56 legibility). draft never
+ *  reaches the margin (the view filters it). */
+function statusWord(state: string): string {
+  switch (state) {
+    case 'overdue':
+      return 'Overdue';
+    case 'pending':
+      return 'Pending';
+    case 'responded':
+      return 'Resolved';
+    case 'expired':
+      return 'Expired';
+    default:
+      return state;
+  }
+}
+
+/** "in 3 days" style elapsed between sent and responded — the resolution-record
+ *  response time (ported from the /portal detail page). */
+function responseDays(sentAt: string | null, respondedAt: string | null): string | null {
+  if (!sentAt || !respondedAt) return null;
+  const ms = new Date(respondedAt).getTime() - new Date(sentAt).getTime();
+  if (Number.isNaN(ms)) return null;
+  const days = Math.max(0, Math.round(ms / 86_400_000));
+  return days === 0 ? 'same day' : `${days} day${days === 1 ? '' : 's'}`;
+}
+
+const optionValue = (o: AnyRecord): number | null =>
+  o.price != null ? o.price * (o.quantity ?? 1) : null;
+
 export function DecisionBody({
   row,
   projectId,
@@ -59,7 +120,11 @@ export function DecisionBody({
   clientName?: string;
 }) {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const { data: decision } = useDecision(row.item_id) as { data: AnyRecord };
+  // R56: the full resolution audit trail (choice / recorded-by / method /
+  // evidence / timestamp) — previously a date-only "Resolved · date" line.
+  const { data: overrides } = useDecisionOverrides(row.item_id) as { data: AnyRecord[] | undefined };
   const reminder = useSendDecisionReminder();
   const update = useUpdateDecision();
   const override = useApplyDecisionOverride();
@@ -76,27 +141,107 @@ export function DecisionBody({
   const options: AnyRecord[] = decision.options ?? decision.client_decision_options ?? [];
   const actionable = row.state === 'overdue' || row.state === 'pending' || row.state === 'expired';
 
+  // A plain selection carries options + the override-consent record. The other
+  // four Track-5 shapes (rfi/submittal/signoff/punch) resolve in coordination —
+  // apply_decision is selection-only, so the margin shows them read-only (R56).
+  const coordinationKind: string = decision.coordination_kind ?? 'selection';
+  const isSelection = coordinationKind === 'selection';
+
+  // The kind-line: the subject (decision_type) · the shape+court when not a
+  // plain client selection · the approval-gate note.
+  const subjectLabel = DECISION_TYPE_LABEL[decision.decision_type as string] ?? null;
+  const showShape = !(isSelection && (decision.court ?? 'client') === 'client');
+  const kindParts = [
+    subjectLabel,
+    showShape ? COORDINATION_KIND_LABEL[coordinationKind] : null,
+    showShape ? COURT_LABEL[decision.court as string] : null,
+    decision.decision_kind === 'approval' ? 'approval gate' : null,
+  ].filter(Boolean);
+
+  const selectedOption = options.find((o) => o.selected) ?? null;
+
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
-      {options.length > 0 && (
-        <ul className="mb-2.5 space-y-1">
-          {options.map((o) => (
-            <li key={o.id} className="flex items-baseline gap-2 text-[10.5px]">
-              <span className={o.selected ? 'font-semibold text-[var(--color-charcoal)]' : 'text-[var(--text-body)]'}>
-                {o.name}
-              </span>
-              {o.is_recommended && (
-                <span className="font-mono text-[8px] uppercase text-[var(--color-clay)]">your pick</span>
-              )}
-              {o.selected && (
-                <span className="font-mono text-[8px] uppercase text-[#85947C]">chosen</span>
-              )}
-            </li>
-          ))}
+      {/* R56 kind-line + status — the subject, the shape/court, the lifecycle word. */}
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        {kindParts.length > 0 && (
+          <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+            {kindParts.join(' · ')}
+          </span>
+        )}
+        <span className="ml-auto font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          {statusWord(row.state)}
+        </span>
+      </div>
+
+      {/* R56 rich context — ported from the client mirror to the designer's view. */}
+      {decision.context && (
+        <p className="mb-2.5 text-[11px] leading-relaxed text-[var(--text-muted)]">
+          {decision.context}
+        </p>
+      )}
+
+      {/* R56 full option attributes — swatch · name · price · ×qty · note · badges.
+          Selections only (the other shapes don't carry options). */}
+      {isSelection && options.length > 0 && (
+        <ul className="mb-2.5 space-y-1.5">
+          {options.map((o) => {
+            const val = optionValue(o);
+            return (
+              <li key={o.id} className="flex items-start gap-2 text-[10.5px]">
+                {o.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={o.image_url}
+                    alt=""
+                    className="mt-0.5 h-7 w-7 flex-shrink-0 rounded-[3px] border border-[var(--color-pearl)] object-cover"
+                  />
+                ) : (
+                  <span className="mt-0.5 h-7 w-7 flex-shrink-0 rounded-[3px] border border-dashed border-[var(--color-pearl)]" />
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
+                    <span className={o.selected ? 'font-semibold text-[var(--color-charcoal)]' : 'text-[var(--text-body)]'}>
+                      {o.name}
+                    </span>
+                    {val != null && (
+                      <span className="font-mono text-[9px] text-[var(--color-aged-oak)]">
+                        {fmtUsd(val)}
+                        {(o.quantity ?? 1) > 1 ? ` · ×${o.quantity}` : ''}
+                      </span>
+                    )}
+                    {o.is_recommended && (
+                      <span className="font-mono text-[8px] uppercase text-[var(--color-clay)]">your pick</span>
+                    )}
+                    {o.selected && (
+                      <span className="font-mono text-[8px] uppercase text-[#85947C]">chosen</span>
+                    )}
+                  </span>
+                  {o.designer_note && (
+                    <span className="mt-0.5 block text-[9.5px] italic leading-snug text-[var(--text-muted)]">
+                      {o.designer_note}
+                    </span>
+                  )}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
 
-      {actionable && (
+      {/* Non-selection coordination shapes resolve in the coordination band; the
+          margin shows the recorded answer (when any) read-only (R56). */}
+      {!isSelection && (
+        <div className="mb-2.5">
+          {decision.answer ? (
+            <p className="text-[11px] leading-relaxed text-[var(--text-body)]">{decision.answer}</p>
+          ) : (
+            <Quiet>Resolves in coordination — {COURT_LABEL[decision.court as string] ?? 'in court'}.</Quiet>
+          )}
+        </div>
+      )}
+
+      {isSelection && actionable && (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-1.5">
             <button
@@ -193,8 +338,59 @@ export function DecisionBody({
         </div>
       )}
 
+      {/* R56 full resolution audit trail — the choice + recorded-by + consent
+          method + evidence + timestamp (was a date-only "Resolved · date" line). */}
       {row.state === 'responded' && (
-        <Quiet>Resolved{row.payload.responded_at ? ` · ${fmtDay(row.payload.responded_at as string)}` : ''}.</Quiet>
+        <div className="space-y-2 border-t border-dashed border-[var(--color-pearl)] pt-2">
+          <p className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+            Resolution
+          </p>
+          <div className="space-y-0.5 text-[10.5px] text-[var(--text-body)]">
+            {selectedOption && (
+              <p>
+                <span className="text-[var(--text-muted)]">Chosen: </span>
+                <span className="font-medium text-[var(--color-charcoal)]">{selectedOption.name}</span>
+                {optionValue(selectedOption) != null ? ` · ${fmtUsd(optionValue(selectedOption)!)}` : ''}
+              </p>
+            )}
+            {decision.answer && !selectedOption && (
+              <p>
+                <span className="text-[var(--text-muted)]">Answer: </span>
+                {decision.answer}
+              </p>
+            )}
+            {decision.responded_at && (
+              <p className="text-[var(--text-muted)]">
+                {fmtDay(decision.responded_at)}
+                {responseDays(decision.sent_at, decision.responded_at)
+                  ? ` · ${responseDays(decision.sent_at, decision.responded_at)} to decide`
+                  : ''}
+              </p>
+            )}
+          </div>
+
+          {/* The override-consent record(s): how the designer recorded the pick. */}
+          {(overrides ?? []).map((ov) => (
+            <div
+              key={ov.id}
+              className="rounded-[4px] border border-[var(--color-pearl)] px-2 py-1.5"
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-charcoal)]">
+                  {user && ov.acted_by === user.id ? 'You recorded' : 'Recorded'}
+                </span>
+                <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                  {String(ov.consent_method).replace('_', ' ')} · {fmtDay(ov.created_at)}
+                </span>
+              </div>
+              {ov.consent_evidence && (
+                <p className="mt-1 whitespace-pre-wrap text-[10px] leading-snug text-[var(--text-body)]">
+                  {ov.consent_evidence}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

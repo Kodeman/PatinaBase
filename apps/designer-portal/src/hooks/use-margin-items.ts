@@ -33,11 +33,16 @@ export function useMarginItems(projectId: string | null, proposalId: string | nu
   });
 }
 
-/** One act, many surfaces (§5): margin index + Desk + the document's lines. */
+/** One act, many surfaces (§5): margin index + Desk + the document's lines + the
+ *  coordination band (a decision resolved from the margin is the SAME widened
+ *  client_decisions row the band reads — keep it from going stale until refetch). */
 export function invalidateMarginSurfaces(qc: QueryClient, projectId: string | null) {
   void qc.invalidateQueries({ queryKey: ['margin-items'] });
   void qc.invalidateQueries({ queryKey: ['document-state'] });
-  if (projectId) void qc.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
+  if (projectId) {
+    void qc.invalidateQueries({ queryKey: ['project-ffe-items', projectId] });
+    void qc.invalidateQueries({ queryKey: ['coordination-items', projectId] });
+  }
 }
 
 /** The one-act Pulse send (00195): pulse → sent + client-thread mirror in one
