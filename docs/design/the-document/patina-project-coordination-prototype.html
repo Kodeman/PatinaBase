@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · Project Coordination · Open Items & the Ball-in-Court</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --ow:#FAF7F2;--pe:#E5E2DD;--cl:#C4A57B;--ao:#8B7355;--mo:#5C4A3C;--ch:#2C2926;
+  --sa:#A8B5A0;--db:#8B9CAD;--te:#D4A090;--gh:#E8C547;--paper:#FCFAF6;--sheet2:#EFE9DD;
+  --ink:rgba(44,41,38,0.16);--ink-soft:rgba(44,41,38,0.07);
+  --line1:#5C4A3C;--line2:#C4A57B;--line3:#8B9CAD;
+  --fd:'Playfair Display',Georgia,serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace;
+  --bar-h:56px;
+}
+html,body{height:100%}
+body{font-family:var(--fb);background:#1c1a18;color:var(--mo);line-height:1.55;-webkit-font-smoothing:antialiased;overflow:hidden}
+#app{position:fixed;inset:0;overflow:hidden}
+.mono{font-family:var(--fm)}
+
+.frame{position:absolute;top:0;left:0;right:0;height:26px;z-index:300;background:var(--ch);color:rgba(250,247,242,0.7);font-family:var(--fm);font-size:0.54rem;letter-spacing:0.05em;display:flex;align-items:center;gap:0.5rem;padding:0 1.2rem;border-bottom:1px solid rgba(196,165,123,0.22)}
+.frame b{color:var(--cl);font-weight:500}
+.frame .gap{margin-left:auto;color:rgba(250,247,242,0.45)}
+.frame .gap em{color:var(--te);font-style:normal}
+
+/* document shell */
+#doc{position:absolute;inset:0;top:26px;display:flex;background:var(--ow)}
+.spine{width:210px;flex-shrink:0;border-right:1px solid var(--ink-soft);background:rgba(250,247,242,0.5);display:flex;flex-direction:column;padding:1rem 0}
+.sp-back{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);cursor:pointer;padding:0.5rem 1.1rem;margin-bottom:0.6rem}
+.sp-sec{display:flex;align-items:center;gap:0.6rem;padding:0.5rem 1.1rem;position:relative}
+.sp-sec.current{background:rgba(196,165,123,0.1)}
+.sp-mark{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:14px;flex-shrink:0}
+.sp-mark i{display:block;height:2px;border-radius:1px;background:rgba(44,41,38,0.12)}
+.sp-mark i:nth-child(1){width:14px}.sp-mark i:nth-child(2){width:10px}.sp-mark i:nth-child(3){width:6px}
+.sp-mark.settled i{background:var(--cl)}
+.sp-name{font-weight:500;font-size:0.76rem;color:var(--ch);flex:1}
+.sp-sec.faint .sp-name{color:var(--ao);opacity:0.5;font-weight:400}
+.sp-state{font-family:var(--fm);font-size:0.4rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--ao);display:block;margin-top:1px}
+.sp-state.live{color:var(--cl)}
+.sp-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.sp-dot.settled{background:var(--cl)}.sp-dot.active{background:var(--gh)}.sp-dot.faint{background:transparent;border:1px solid rgba(44,41,38,0.15)}
+.spine-foot{margin-top:auto;padding:1rem 1.1rem 0;border-top:1px solid var(--ink-soft)}
+.sf-label{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);margin-bottom:0.5rem}
+.bigmark{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:80px}
+.bigmark i{display:block;height:3px;border-radius:2px;position:relative;background:rgba(44,41,38,0.1)}
+.bigmark i::after{content:'';position:absolute;inset:0;border-radius:2px;transform-origin:left;transform:scaleX(var(--f,0));transition:transform .6s cubic-bezier(.4,0,.2,1)}
+.bigmark i:nth-child(1){width:80px}.bigmark i:nth-child(2){width:62px}.bigmark i:nth-child(3){width:46px;opacity:0.6}
+.bigmark i:nth-child(1)::after{background:var(--line1)}.bigmark i:nth-child(2)::after{background:var(--line2)}.bigmark i:nth-child(3)::after{background:var(--line3)}
+.sf-pct{font-family:var(--fm);font-size:0.5rem;color:var(--ao);margin-top:0.5rem}
+.sf-pct b{font-family:var(--fd);color:var(--ch);font-size:0.82rem}
+
+/* paper */
+.paper{flex:1;overflow-y:auto;background-image:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(139,115,85,0.01) 3px,rgba(139,115,85,0.01) 4px);padding-bottom:calc(var(--bar-h) + 1.5rem)}
+.paper-in{max-width:680px;margin:0 auto;padding:1.8rem 2rem 0}
+.letterhead{border-bottom:1px solid var(--ink-soft);padding-bottom:1rem;margin-bottom:1.1rem}
+.lh-title{font-family:var(--fd);font-weight:500;font-size:1.55rem;color:var(--ch)}
+.lh-sub{font-size:0.7rem;color:var(--ao);margin-top:0.15rem}
+.lh-parties{display:flex;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap}
+.party-chip{display:inline-flex;align-items:center;gap:5px;font-family:var(--fm);font-size:0.46rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--ao);border:1px solid var(--pe);border-radius:20px;padding:2px 8px}
+.party-chip .pd{width:6px;height:6px;border-radius:50%}
+.pd-you{background:var(--cl)}.pd-sarah{background:var(--sa)}.pd-gc{background:var(--db)}.pd-vendor{background:var(--ao)}
+
+.sec-h{display:flex;align-items:baseline;gap:0.8rem;margin:1.4rem 0 0.3rem}
+.sec-t{font-family:var(--fd);font-weight:500;font-size:1.2rem;color:var(--ch)}
+.sec-badge{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;padding:2px 9px;border-radius:3px;transform:rotate(-1.5deg)}
+.b-active{color:#b89a2e;border:1.5px solid #cfae34}
+.sec-meta{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--ao);margin-left:auto}
+
+/* the ball-in-court summary */
+.court-bar{display:flex;gap:0.5rem;margin:0.8rem 0 0.3rem;flex-wrap:wrap;align-items:center}
+.court-pill{display:flex;align-items:center;gap:0.5rem;border:1px solid var(--pe);border-radius:8px;padding:0.5rem 0.8rem;background:#fff;cursor:pointer;transition:all .2s}
+.court-pill:hover{border-color:var(--cl)}
+.court-pill.hot{border-color:var(--cl);background:rgba(196,165,123,0.07)}
+.court-n{font-family:var(--fd);font-weight:500;font-size:1.1rem;color:var(--ch)}
+.court-l{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--ao);line-height:1.3}
+.court-l .pd{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:3px}
+.newitem{margin-left:auto;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:#fff;background:var(--ch);padding:0.5rem 0.85rem;border-radius:6px;cursor:pointer;font-weight:600;border:none}
+.newitem:hover{opacity:0.88}
+
+/* court group */
+.court-group{margin-top:1.3rem}
+.cg-head{display:flex;align-items:baseline;gap:0.6rem;margin-bottom:0.3rem}
+.cg-name{font-family:var(--fd);font-style:italic;font-weight:500;font-size:1rem;color:var(--ch)}
+.cg-name .pd{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
+.cg-meta{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--ao)}
+.cg-your{color:var(--cl)}
+.strata-rule{display:flex;flex-direction:column;gap:2px;margin:0.2rem 0 0.6rem}
+.strata-rule i{display:block;height:1.5px;border-radius:1px;background:var(--cl)}
+.strata-rule i:nth-child(1){width:100%;opacity:0.45}.strata-rule i:nth-child(2){width:55%;opacity:0.26}.strata-rule i:nth-child(3){width:30%;opacity:0.14}
+
+/* open item row */
+.item{display:flex;align-items:center;gap:0.8rem;padding:0.7rem 0.2rem;border-bottom:1px solid var(--ink-soft);cursor:pointer;transition:background .15s}
+.item:hover{background:rgba(196,165,123,0.04)}
+.item-type{font-family:var(--fm);font-size:0.44rem;letter-spacing:0.07em;text-transform:uppercase;font-weight:600;padding:3px 8px;border-radius:3px;flex-shrink:0;border:1.5px solid;width:80px;text-align:center}
+.ty-selection{color:#9a7b2e;border-color:#cfae34;background:rgba(232,197,71,0.08)}
+.ty-rfi{color:var(--db);border-color:var(--db);background:rgba(139,156,173,0.08)}
+.ty-submittal{color:var(--ao);border-color:#cbb48f;background:rgba(139,115,85,0.06)}
+.ty-signoff{color:#b8923a;border-color:#cfae34;background:rgba(232,197,71,0.12)}
+.ty-punch{color:#c4836f;border-color:var(--te);background:rgba(212,160,144,0.08)}
+.item-body{flex:1;min-width:0}
+.item-title{font-weight:500;font-size:0.82rem;color:var(--ch)}
+.item-blocks{font-size:0.62rem;color:var(--ao);margin-top:0.1rem;display:flex;align-items:center;gap:0.4rem}
+.item-blocks .bk{color:#c4836f}
+.item-due{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.04em;text-transform:uppercase;flex-shrink:0;text-align:right}
+.due-soon{color:#c4836f}.due-ok{color:var(--ao)}
+.item-chev{color:var(--ao);font-size:0.7rem;flex-shrink:0}
+.item.resolved{opacity:0.5}
+.item.resolved .item-title{text-decoration:line-through;text-decoration-color:rgba(139,115,85,0.4)}
+
+/* the work block */
+.work{margin:0.8rem 0;border:1px solid var(--pe);border-radius:8px;background:#fff}
+.work-head{display:flex;justify-content:space-between;align-items:center;padding:0.7rem 1rem;border-bottom:1px solid var(--ink-soft)}
+.work-title{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.task{display:flex;align-items:flex-start;gap:0.7rem;padding:0.6rem 1rem;border-bottom:1px solid rgba(229,226,221,0.55)}
+.task:last-of-type{border-bottom:none}
+.tick{width:14px;height:14px;border:1.5px solid #cfc8bb;border-radius:4px;flex-shrink:0;position:relative;cursor:pointer;transition:all .15s;margin-top:1px}
+.tick.done{border-color:var(--sa);background:rgba(168,181,160,0.18)}
+.tick.done::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.55rem;color:var(--sa);font-weight:700}
+.tick.blocked{border-color:rgba(212,160,144,0.5);background:rgba(212,160,144,0.08);cursor:not-allowed}
+.tick.blocked::after{content:'⊘';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.6rem;color:var(--te)}
+.task-body{flex:1;min-width:0}
+.task-text{font-size:0.78rem;color:var(--ch)}
+.task.done .task-text{color:var(--ao);text-decoration:line-through;text-decoration-color:rgba(139,115,85,0.4)}
+.task.blocked .task-text{color:var(--ao)}
+.task-dep{font-size:0.6rem;margin-top:0.15rem;display:flex;align-items:center;gap:0.3rem}
+.dep-blocked{color:#c4836f}.dep-ready{color:#7e8f76}.dep-seq{color:var(--ao)}
+.owner-chip{display:inline-flex;align-items:center;gap:4px;font-family:var(--fm);font-size:0.42rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--ao);flex-shrink:0;margin-top:1px}
+.owner-chip .pd{width:6px;height:6px;border-radius:50%}
+.task-add{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 1rem;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--cl);font-weight:600;cursor:pointer}
+.task-add:hover{color:var(--ao)}
+
+.callout{padding:0.85rem 1.1rem;border:1px solid rgba(196,165,123,0.4);border-radius:8px;background:rgba(196,165,123,0.05);font-size:0.78rem;color:var(--mo);line-height:1.6;margin:0.6rem 0}
+.callout b{color:var(--ch);font-weight:600}
+
+/* margin */
+.margin{width:280px;flex-shrink:0;border-left:1px solid var(--ink-soft);background:rgba(250,247,242,0.4);overflow-y:auto;padding:1rem 0.9rem calc(var(--bar-h) + 1rem)}
+.margin-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.7rem;padding:0 0.3rem}
+.margin-t{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.mi{border:1px solid var(--pe);border-left:3px solid var(--gh);border-radius:6px;padding:0.6rem 0.7rem;margin-bottom:0.5rem;background:#fff;cursor:pointer;transition:all .2s}
+.mi:hover{border-color:var(--cl)}
+.mi.yours{border-left-color:var(--cl)}
+.mi.settled{border-left-color:var(--sa);opacity:0.65}
+.mi-k{font-family:var(--fm);font-size:0.42rem;letter-spacing:0.07em;text-transform:uppercase;font-weight:600;color:var(--ao);display:flex;align-items:center;gap:4px}
+.mi-k .pd{width:5px;height:5px;border-radius:50%}
+.mi-t{font-size:0.72rem;font-weight:500;color:var(--ch);margin:0.12rem 0}
+.mi-d{font-size:0.6rem;color:var(--ao);line-height:1.45}
+
+/* drawer bar */
+.drawer-bar{position:absolute;left:0;right:0;bottom:0;height:var(--bar-h);background:var(--ch);border-top:1px solid rgba(250,247,242,0.14);display:flex;align-items:center;gap:0.4rem;padding:0 1.4rem;z-index:30}
+.book{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.8rem;border-radius:6px;cursor:pointer}
+.book-spine{width:3px;height:16px;border-radius:2px}
+.book-name{font-family:var(--fd);font-weight:500;font-size:0.8rem;color:rgba(250,247,242,0.55)}
+.bar-right{margin-left:auto;font-family:var(--fm);font-size:0.5rem;letter-spacing:0.04em;color:rgba(250,247,242,0.4)}
+
+/* sheets */
+.scrim{position:absolute;inset:0;top:26px;background:rgba(28,26,24,0.45);opacity:0;pointer-events:none;transition:opacity .3s;z-index:40}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;transform:translateY(102%);transition:transform .4s cubic-bezier(.2,.8,.3,1);z-index:50;max-height:88%;overflow-y:auto;border-radius:16px 16px 0 0;background:var(--paper);border-top:1px solid var(--ink)}
+.sheet.on{transform:none}
+.grab{width:38px;height:4px;border-radius:2px;background:var(--pe);margin:10px auto 4px}
+.sheet-in{max-width:600px;margin:0 auto;padding:0.6rem 2rem 2rem}
+.sh-type{display:inline-block;font-family:var(--fm);font-size:0.46rem;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;padding:3px 9px;border-radius:3px;border:1.5px solid;margin-bottom:0.6rem}
+.sh-title{font-family:var(--fd);font-weight:500;font-size:1.5rem;color:var(--ch);line-height:1.15}
+.sh-court{display:flex;align-items:center;gap:0.5rem;margin:0.7rem 0;padding:0.6rem 0.8rem;border-radius:7px;background:rgba(196,165,123,0.06);border:1px solid var(--pe)}
+.sh-court .pd{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sh-court-txt{font-size:0.74rem;color:var(--ch)}
+.sh-court-txt b{font-weight:600}
+.sh-blocks{margin:0.8rem 0;padding:0.7rem 0.9rem;border:1px solid rgba(212,160,144,0.4);border-radius:7px;background:rgba(212,160,144,0.05)}
+.sh-blocks-h{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.08em;text-transform:uppercase;color:#c4836f;font-weight:600;margin-bottom:0.4rem}
+.sh-block-item{font-size:0.74rem;color:var(--mo);padding:0.2rem 0;display:flex;align-items:center;gap:0.4rem}
+.sh-block-item .arr{color:#c4836f}
+
+/* thread */
+.thread{margin:1rem 0}
+.thread-h{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ao);font-weight:600;margin-bottom:0.6rem}
+.msg{display:flex;gap:0.6rem;margin-bottom:0.8rem}
+.msg-av{width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--fm);font-size:0.5rem;font-weight:600;color:#fff}
+.av-you{background:var(--cl)}.av-sarah{background:var(--sa)}.av-gc{background:var(--db)}.av-vendor{background:var(--ao)}
+.msg-body{flex:1;min-width:0}
+.msg-from{font-family:var(--fm);font-size:0.48rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--ao);font-weight:600}
+.msg-from .t{color:var(--ao);opacity:0.6;margin-left:0.4rem;letter-spacing:0;text-transform:none}
+.msg-text{font-size:0.78rem;color:var(--mo);line-height:1.55;margin-top:0.15rem}
+.msg-attach{display:inline-flex;align-items:center;gap:5px;font-family:var(--fm);font-size:0.5rem;color:var(--cl);border:1px solid var(--pe);border-radius:5px;padding:3px 8px;margin-top:0.4rem;background:#fff}
+
+/* options (selection) */
+.opt{display:flex;align-items:center;gap:0.7rem;padding:0.5rem 0.7rem;border:1px solid var(--pe);border-radius:7px;margin-bottom:0.4rem;cursor:pointer;background:#fff;transition:all .15s}
+.opt:hover{border-color:var(--cl)}
+.opt.picked{border-color:var(--sa);background:rgba(168,181,160,0.08)}
+.opt-sw{width:34px;height:34px;border-radius:6px;flex-shrink:0;border:1px solid var(--ink)}
+.opt-name{font-weight:500;font-size:0.78rem;color:var(--ch)}
+.opt-sub{font-size:0.62rem;color:var(--ao)}
+.opt-pick{margin-left:auto;font-family:var(--fm);font-size:0.46rem;letter-spacing:0.05em;text-transform:uppercase;color:var(--sa);font-weight:600}
+
+/* resolve action area */
+.resolve{margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--ink-soft)}
+.resolve-q{font-family:var(--fd);font-style:italic;font-size:0.95rem;color:var(--ch);margin-bottom:0.6rem}
+.field{margin-bottom:0.8rem}
+.field-label{font-family:var(--fm);font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ao);font-weight:600;margin-bottom:0.35rem;display:block}
+.field input,.field textarea,.field select{width:100%;padding:0.6rem 0.8rem;border:1px solid var(--pe);border-radius:6px;font-family:var(--fb);font-size:0.82rem;color:var(--ch);background:#fff}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--cl)}
+.field-row{display:flex;gap:0.6rem}.field-row .field{flex:1}
+.btn{font-family:var(--fm);font-size:0.54rem;letter-spacing:0.06em;text-transform:uppercase;padding:0.6rem 1.1rem;border-radius:6px;cursor:pointer;border:1px solid var(--pe);background:#fff;color:var(--ch);font-weight:600;transition:all .2s}
+.btn:hover{border-color:var(--cl)}
+.btn.primary{background:var(--ch);color:var(--ow);border-color:var(--ch)}.btn.primary:hover{opacity:0.88}
+.btn.gold{background:var(--cl);color:#fff;border-color:var(--cl)}
+.btn.sage{background:var(--sa);color:#fff;border-color:var(--sa)}
+.btn-row{display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center}
+
+/* composer type picker */
+.type-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:0.4rem;margin-bottom:1rem}
+.type-card{border:1px solid var(--pe);border-radius:7px;padding:0.6rem 0.4rem;text-align:center;cursor:pointer;transition:all .15s}
+.type-card:hover{border-color:var(--cl)}
+.type-card.on{border-color:var(--cl);background:rgba(196,165,123,0.08)}
+.tc-name{font-family:var(--fm);font-size:0.48rem;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;color:var(--ch);margin-top:0.2rem}
+.tc-who{font-size:0.56rem;color:var(--ao);margin-top:0.15rem;line-height:1.3}
+.court-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem}
+.court-card{border:1px solid var(--pe);border-radius:7px;padding:0.55rem 0.4rem;text-align:center;cursor:pointer;transition:all .15s}
+.court-card:hover{border-color:var(--cl)}
+.court-card.on{border-color:var(--cl);background:rgba(196,165,123,0.08)}
+.cc-pd{width:9px;height:9px;border-radius:50%;margin:0 auto 0.3rem}
+.cc-name{font-family:var(--fm);font-size:0.46rem;letter-spacing:0.03em;text-transform:uppercase;font-weight:600;color:var(--ch)}
+.block-pick{display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0.6rem;border:1px solid var(--pe);border-radius:6px;margin-bottom:0.35rem;cursor:pointer;font-size:0.74rem;color:var(--ch)}
+.block-pick .bx{width:13px;height:13px;border:1.5px solid #cfc8bb;border-radius:3px;flex-shrink:0;position:relative}
+.block-pick.on{border-color:var(--cl);background:rgba(196,165,123,0.06)}
+.block-pick.on .bx{border-color:var(--cl);background:var(--cl)}
+.block-pick.on .bx::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:#fff}
+.sh-foot{display:flex;gap:0.6rem;align-items:center;margin-top:1.3rem;padding-top:1rem;border-top:1px solid var(--ink-soft)}
+
+/* toast */
+.toast{position:absolute;bottom:calc(var(--bar-h) + 16px);left:50%;transform:translateX(-50%) translateY(10px);background:var(--ch);color:var(--ow);padding:0.7rem 1.2rem;border-radius:8px;font-size:0.74rem;z-index:200;opacity:0;pointer-events:none;transition:all .3s;display:flex;gap:0.6rem;align-items:center;border:1px solid rgba(196,165,123,0.3);max-width:74%}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast .d{width:6px;height:6px;border-radius:50%;background:var(--sa);flex-shrink:0}
+
+@media(max-width:1140px){.margin{display:none}}
+@media(max-width:840px){.spine{display:none}.type-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="frame">
+    <b>Project Coordination</b> · tasks + communications + the decision, generalized — grounded in GC &amp; designer practice
+    <span class="gap">closes gap matrix: <em>Decisions · composition · P0 #1</em></span>
+  </div>
+
+  <div id="doc">
+    <!-- spine -->
+    <div class="spine">
+      <div class="sp-back" onclick="toast('Back to the Desk — this project is one of the folders waiting on your hand.')">← The Desk</div>
+      <div id="spineSecs"></div>
+      <div class="spine-foot">
+        <div class="sf-label">This engagement</div>
+        <div class="bigmark" id="bigmark"><i></i><i></i><i></i></div>
+        <div class="sf-pct"><b id="pctNum">68</b>% · Delivery</div>
+      </div>
+    </div>
+
+    <!-- paper -->
+    <div class="paper">
+      <div class="paper-in">
+        <div class="letterhead">
+          <div class="lh-title">Aspen Loft Refresh</div>
+          <div class="lh-sub">Project · active · week 4 · living-room built-in + furnishings</div>
+          <div class="lh-parties">
+            <span class="party-chip"><span class="pd pd-you"></span>You · Middlewest</span>
+            <span class="party-chip"><span class="pd pd-sarah"></span>Sarah Whitfield · client</span>
+            <span class="party-chip"><span class="pd pd-gc"></span>Reyes Build · GC</span>
+            <span class="party-chip"><span class="pd pd-vendor"></span>Vendors</span>
+          </div>
+        </div>
+
+        <div class="sec-h"><span class="sec-t">Project</span><span class="sec-badge b-active">Active · week 4</span><span class="sec-meta">coordination</span></div>
+
+        <div class="callout"><b>Every open item is a decision with an owner.</b> A client selection, a GC's RFI, a vendor's submittal, a sign-off, a punch item — all the same thing: something in <b>someone's court</b> that <b>blocks</b> downstream work until it's resolved. The job is keeping the ball moving and nothing aging in the dark.</div>
+
+        <!-- ball-in-court summary -->
+        <div class="court-bar" id="courtBar"></div>
+
+        <!-- open items grouped by court -->
+        <div id="courtGroups"></div>
+
+        <!-- the work, with dependencies -->
+        <div class="sec-h" style="margin-top:1.8rem"><span class="sec-t" style="font-size:1.05rem">The work</span><span class="sec-meta" id="workMeta">the dependency web</span></div>
+        <div class="work" id="workBlock"></div>
+        <div style="font-family:var(--fm);font-size:0.56rem;color:var(--ao);margin-top:0.6rem;line-height:1.6">Tasks carry an <b style="color:var(--mo)">owner</b> and what they're <b style="color:var(--mo)">blocked by</b> — a pending decision, or another trade's task that has to finish first. Resolve a blocker and the work downstream comes unblocked.</div>
+      </div>
+    </div>
+
+    <!-- margin (the notification model — same items, anchored) -->
+    <div class="margin">
+      <div class="margin-h"><span class="margin-t">In the margin</span><span class="mono" style="font-size:0.5rem;color:var(--cl);cursor:pointer" onclick="openComposer()">+ New item</span></div>
+      <div id="marginItems"></div>
+    </div>
+
+    <div class="drawer-bar">
+      <div class="book"><span class="book-spine" style="background:var(--cl)"></span><span class="book-name">Library</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--db)"></span><span class="book-name">Orders</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--sa)"></span><span class="book-name">Accounts</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--te)"></span><span class="book-name">People</span></div>
+      <div class="book"><span class="book-spine" style="background:var(--mo)"></span><span class="book-name">Hours</span></div>
+      <div class="bar-right">in hand · the work lives here</div>
+    </div>
+
+    <div class="scrim" id="scrim" onclick="closeAll()"></div>
+    <div class="sheet" id="itemSheet"><div class="grab"></div><div class="sheet-in" id="itemBody"></div></div>
+    <div class="sheet" id="composerSheet"><div class="grab"></div><div class="sheet-in" id="composerBody"></div></div>
+
+    <div class="toast" id="toast"><span class="d"></span><span id="toastMsg"></span></div>
+  </div>
+</div>
+
+<script>
+// ===== parties (ball-in-court) =====
+const PARTY={
+  you:{name:'You · Middlewest',short:'You',pd:'pd-you',av:'av-you',init:'L'},
+  sarah:{name:'Sarah Whitfield',short:'Sarah',pd:'pd-sarah',av:'av-sarah',init:'S'},
+  gc:{name:'Reyes Build · GC',short:'Reyes Build',pd:'pd-gc',av:'av-gc',init:'M'},
+  vendor:{name:'Vendor',short:'Vendor',pd:'pd-vendor',av:'av-vendor',init:'V'},
+};
+const TYPE={
+  selection:{label:'Selection',cls:'ty-selection',who:'client picks'},
+  rfi:{label:'RFI',cls:'ty-rfi',who:'answer a question'},
+  submittal:{label:'Submittal',cls:'ty-submittal',who:'review & approve'},
+  signoff:{label:'Sign-off',cls:'ty-signoff',who:'approval gate'},
+  punch:{label:'Punch',cls:'ty-punch',who:'closeout fix'},
+};
+
+// ===== tasks (the dependency web) =====
+const TASKS={
+  't-sectional':{text:'Place sectional order',owner:'you',done:true,blockedBy:null},
+  't-millwork-fab':{text:'Fabricate living-room built-in',owner:'vendor',done:false,blockedBy:'i-submittal'},
+  't-millwork-install':{text:'Install the built-in on site',owner:'gc',done:false,blockedBy:'i-rfi',seqAfter:'t-millwork-fab'},
+  't-pendant':{text:'Hang the dining pendant',owner:'gc',done:false,blockedBy:'i-rfi'},
+  't-rug-order':{text:'Order the living-room rug',owner:'you',done:false,blockedBy:'i-rug'},
+  't-style':{text:'Style & stage the living room',owner:'you',done:false,blockedBy:null,seqAfter:'t-millwork-install'},
+};
+
+// ===== open items (decisions, generalized) =====
+const ITEMS={
+  'i-rfi':{type:'rfi',title:'Pendant drop vs. built-in soffit height',court:'you',due:'today',dueSoon:true,status:'open',
+    blocks:['t-pendant','t-millwork-install'],
+    thread:[{from:'gc',t:'2d ago',text:"Framing the built-in soffit — it lands at 8'2\". The spec pendant drops 36\", which puts it right at head height over the console run. Need you to confirm the drop or relocate before I close the ceiling. Holding the electrical rough-in on this.",attach:'soffit-condition.jpg'}],
+    resolveKind:'answer'},
+  'i-submittal':{type:'submittal',title:'Built-in millwork — shop drawings',court:'you',due:'Fri',dueSoon:false,status:'open',rev:2,
+    blocks:['t-millwork-fab'],
+    thread:[{from:'vendor',t:'1d ago',text:'Rev 2 attached — corrected the toe-kick height and tightened the floating-shelf reveal to 1/4\" per your markup. Ready to release to the shop on your approval.',attach:'millwork-shopdwg-rev2.pdf'}],
+    resolveKind:'review'},
+  'i-rug':{type:'selection',title:'Living-room rug',court:'sarah',due:'Wed',dueSoon:true,status:'open',
+    blocks:['t-rug-order'],
+    thread:[{from:'you',t:'3d ago',text:'Three that work with the sectional and the oak — all in your warm palette. My pick is the wool-blend Tasara; it photographs beautifully and wears well with the dog.'}],
+    options:[{name:'Tasara · wool blend',sub:'$3,200 · recommended',color:'#C4A57B',rec:true},{name:'Höörn · flatweave',sub:'$2,650',color:'#B8A98C'},{name:'Marle · jute + wool',sub:'$3,900',color:'#D8C9AE'}],
+    resolveKind:'select'},
+  'i-signoff':{type:'signoff',title:'Concept sign-off — Phase 1',court:'sarah',due:'Mon',dueSoon:false,status:'open',
+    blocks:['phase'],
+    thread:[{from:'you',t:'4d ago',text:'The full concept package for your approval — palette, the built-in elevation, and the furniture plan. Once you sign off, we lock it and start ordering in earnest.'}],
+    resolveKind:'approve'},
+  'i-chairs':{type:'selection',title:'Accent chairs — the pair',court:'sarah',due:'Fri',dueSoon:false,status:'open',
+    blocks:[],
+    thread:[{from:'you',t:'2d ago',text:'Now the site visit confirmed the corner dimensions — two options that fit the reading nook.'}],
+    options:[{name:'Hartwell swivel',sub:'$1,400/ea',color:'#A8B5A0',rec:true},{name:'Lound lounge',sub:'$1,650/ea',color:'#8B9CAD'}],
+    resolveKind:'select'},
+};
+let itemOrder=['i-rfi','i-submittal','i-rug','i-signoff','i-chairs'];
+const COURTS=['you','sarah','gc','vendor'];
+const COURT_LABEL={you:'In your court',sarah:'Waiting on Sarah',gc:'Waiting on Reyes Build',vendor:'Waiting on a vendor'};
+
+// ===== render =====
+function render(){ renderCourtBar(); renderGroups(); renderWork(); renderMargin(); }
+
+function openItemsByCourt(court){ return itemOrder.filter(id=>ITEMS[id].court===court && ITEMS[id].status==='open'); }
+
+function renderCourtBar(){
+  const bar=document.getElementById('courtBar');
+  let html=COURTS.map(c=>{
+    const n=openItemsByCourt(c).length;
+    if(n===0 && c!=='you') return '';
+    return `<div class="court-pill ${c==='you'&&n>0?'hot':''}" onclick="scrollToCourt('${c}')">
+      <span class="court-n">${n}</span>
+      <span class="court-l"><span class="pd ${PARTY[c].pd}"></span>${c==='you'?'in your<br>court':'waiting on<br>'+PARTY[c].short}</span></div>`;
+  }).join('');
+  html+=`<button class="newitem" onclick="openComposer()">+ New open item</button>`;
+  bar.innerHTML=html;
+}
+
+function renderGroups(){
+  const wrap=document.getElementById('courtGroups');
+  let html='';
+  COURTS.forEach(c=>{
+    const ids=openItemsByCourt(c);
+    if(ids.length===0) return;
+    html+=`<div class="court-group" id="court-${c}">
+      <div class="cg-head"><span class="cg-name"><span class="pd ${PARTY[c].pd}"></span>${COURT_LABEL[c]}</span><span class="cg-meta ${c==='you'?'cg-your':''}">${ids.length} ${c==='you'?'need your move':'open'}</span></div>
+      <div class="strata-rule"><i></i><i></i><i></i></div>
+      ${ids.map(id=>itemRow(id)).join('')}</div>`;
+  });
+  wrap.innerHTML=html;
+}
+
+function itemRow(id){
+  const it=ITEMS[id]; const blocks=blocksText(it);
+  return `<div class="item" onclick="openItem('${id}')">
+    <span class="item-type ${TYPE[it.type].cls}">${TYPE[it.type].label}${it.rev?' R'+it.rev:''}</span>
+    <span class="item-body"><span class="item-title">${it.title}</span>
+      <span class="item-blocks">${blocks}</span></span>
+    <span class="item-due ${it.dueSoon?'due-soon':'due-ok'}">${it.dueSoon?'due '+it.due:it.due}</span>
+    <span class="item-chev">›</span></div>`;
+}
+function blocksText(it){
+  if(it.blocks.includes('phase')) return '<span class="bk">⊘</span> blocks the phase from advancing';
+  if(it.blocks.length===0) return 'nothing blocked — ahead of the work';
+  const n=it.blocks.length;
+  const names=it.blocks.map(t=>TASKS[t]?TASKS[t].text.toLowerCase():t);
+  return `<span class="bk">⊘</span> blocks ${n} task${n>1?'s':''} · ${names[0]}${n>1?' +'+(n-1):''}`;
+}
+
+function renderWork(){
+  const wb=document.getElementById('workBlock');
+  const ids=Object.keys(TASKS);
+  const doneN=ids.filter(t=>TASKS[t].done).length;
+  document.getElementById('workMeta').textContent=`${doneN} of ${ids.length} done · the dependency web`;
+  let html='';
+  ids.forEach(tid=>{
+    const t=TASKS[tid];
+    const blocked=isBlocked(tid);
+    let depLine='';
+    if(t.done){ depLine=''; }
+    else if(blocked.byItem){ const it=ITEMS[blocked.byItem]; depLine=`<div class="task-dep dep-blocked">⊘ blocked by ${TYPE[it.type].label.toLowerCase()} — "${it.title}" (${PARTY[it.court].short}'s court)</div>`; }
+    else if(blocked.bySeq){ depLine=`<div class="task-dep dep-seq">↳ after "${TASKS[blocked.bySeq].text.toLowerCase()}" — trade sequencing</div>`; }
+    else { depLine=`<div class="task-dep dep-ready">● ready — nothing blocking</div>`; }
+    const tickCls=t.done?'done':(blocked.any?'blocked':'');
+    html+=`<div class="task ${t.done?'done':''} ${blocked.any&&!t.done?'blocked':''}">
+      <span class="tick ${tickCls}" onclick="${t.done||blocked.any?'blockedClick(\''+tid+'\')':'doTask(\''+tid+'\')'}"></span>
+      <span class="task-body"><span class="task-text">${t.text}</span>${depLine}</span>
+      <span class="owner-chip"><span class="pd ${PARTY[t.owner].pd}"></span>${PARTY[t.owner].short}</span></div>`;
+  });
+  html+=`<div class="task-add" onclick="toast('Add a task — assign an owner and, if it waits on something, a blocked-by link.')">+ Task</div>`;
+  wb.innerHTML=html;
+}
+function isBlocked(tid){
+  const t=TASKS[tid];
+  const byItem = t.blockedBy && ITEMS[t.blockedBy] && ITEMS[t.blockedBy].status==='open' ? t.blockedBy : null;
+  const bySeq = t.seqAfter && !TASKS[t.seqAfter].done ? t.seqAfter : null;
+  return {byItem,bySeq,any:!!(byItem||bySeq)};
+}
+
+function renderMargin(){
+  const open=itemOrder.filter(id=>ITEMS[id].status==='open');
+  let html='';
+  // your court first
+  ['you','sarah','gc','vendor'].forEach(c=>{
+    open.filter(id=>ITEMS[id].court===c).forEach(id=>{
+      const it=ITEMS[id];
+      html+=`<div class="mi ${c==='you'?'yours':''}" onclick="openItem('${id}')">
+        <div class="mi-k"><span class="pd ${PARTY[c].pd}"></span>${TYPE[it.type].label} · ${c==='you'?'your move':PARTY[c].short}</div>
+        <div class="mi-t">${it.title}</div>
+        <div class="mi-d">${it.dueSoon?'due '+it.due+' · ':''}${blocksTextPlain(it)}</div></div>`;
+    });
+  });
+  // a settled one for texture
+  html+=`<div class="mi settled"><div class="mi-k"><span class="pd pd-sarah"></span>Selection · resolved</div><div class="mi-t">Sectional &amp; dining table</div><div class="mi-d">Picked &amp; ordered · week 2.</div></div>`;
+  document.getElementById('marginItems').innerHTML=html;
+}
+function blocksTextPlain(it){
+  if(it.blocks.includes('phase')) return 'blocks the phase';
+  if(it.blocks.length===0) return 'ahead of the work';
+  return 'blocks '+it.blocks.length+' task'+(it.blocks.length>1?'s':'');
+}
+
+// ===== item detail =====
+function openItem(id){
+  const it=ITEMS[id];
+  let blocksHtml='';
+  if(it.blocks.length && !it.blocks.includes('phase')){
+    blocksHtml=`<div class="sh-blocks"><div class="sh-blocks-h">⊘ This is blocking</div>${it.blocks.map(t=>`<div class="sh-block-item"><span class="arr">→</span> ${TASKS[t]?TASKS[t].text:t} <span class="owner-chip" style="margin-left:auto"><span class="pd ${PARTY[TASKS[t].owner].pd}"></span>${PARTY[TASKS[t].owner].short}</span></div>`).join('')}</div>`;
+  } else if(it.blocks.includes('phase')){
+    blocksHtml=`<div class="sh-blocks"><div class="sh-blocks-h">⊘ This is blocking</div><div class="sh-block-item"><span class="arr">→</span> Phase 1 can't advance until this is signed</div></div>`;
+  }
+  const threadHtml=it.thread.map(m=>`<div class="msg"><div class="msg-av ${PARTY[m.from].av}">${PARTY[m.from].init}</div><div class="msg-body"><div class="msg-from">${PARTY[m.from].short}<span class="t">${m.t}</span></div><div class="msg-text">${m.text}</div>${m.attach?`<span class="msg-attach">▣ ${m.attach}</span>`:''}</div></div>`).join('');
+
+  const tcolor={selection:'#cfae34',rfi:'var(--db)',submittal:'#cbb48f',signoff:'#cfae34',punch:'var(--te)'}[it.type];
+  document.getElementById('itemBody').innerHTML=`
+    <span class="sh-type ${TYPE[it.type].cls}" style="border-color:${tcolor}">${TYPE[it.type].label}${it.rev?' · Rev '+it.rev:''}</span>
+    <div class="sh-title">${it.title}</div>
+    <div class="sh-court"><span class="pd ${PARTY[it.court].pd}"></span><span class="sh-court-txt">Ball is in <b>${it.court==='you'?'your court':PARTY[it.court].name+"'s court"}</b> · ${it.court==='you'?'your move':'waiting on them'} · due ${it.due}</span></div>
+    ${blocksHtml}
+    <div class="thread"><div class="thread-h">The thread</div>${threadHtml}</div>
+    ${resolveBlock(id)}`;
+  openSheetEl('itemSheet');
+}
+
+function resolveBlock(id){
+  const it=ITEMS[id];
+  if(it.court!=='you' && it.resolveKind!=='select' && it.resolveKind!=='approve'){
+    // waiting on someone else — nudge / extend (already FULL in the matrix)
+    return `<div class="resolve"><div class="resolve-q">Waiting on ${PARTY[it.court].short}. Keep it moving:</div>
+      <div class="btn-row"><button class="btn gold" onclick="nudge('${id}')">Send a nudge</button><button class="btn" onclick="extend('${id}')">Extend the date</button><button class="btn" onclick="reassign('${id}')">Change whose court</button></div></div>`;
+  }
+  if(it.resolveKind==='answer'){ // RFI
+    return `<div class="resolve"><div class="resolve-q">Answer the RFI — your response unblocks the GC.</div>
+      <div class="field"><label class="field-label">Your answer</label><textarea rows="3" id="rfiAns">Relocate the pendant 14" toward the window so it clears the soffit and centers on the table. Keep the 36" drop. Built-in soffit stays as framed.</textarea></div>
+      <div class="btn-row"><button class="btn gold" onclick="resolveItem('${id}','Answered — relocate the pendant 14\\u2033, keep the drop.')">Send answer →</button><button class="btn" onclick="closeAll()">Later</button></div></div>`;
+  }
+  if(it.resolveKind==='review'){ // submittal
+    return `<div class="resolve"><div class="resolve-q">Review the submittal — your action releases (or holds) fabrication.</div>
+      <div class="btn-row"><button class="btn sage" onclick="resolveItem('${id}','Approved — millwork released to the shop.')">Approve</button><button class="btn" onclick="resolveItem('${id}','Approved as noted — minor markups, fabrication proceeds.')">Approve as noted</button><button class="btn" onclick="reviseResubmit('${id}')">Revise &amp; resubmit</button></div></div>`;
+  }
+  if(it.resolveKind==='select'){ // selection
+    const picked=it._picked;
+    const intro = it.court==='sarah' ? "Record Sarah\u2019s pick (she chooses in her mirror):" : "Pick:";
+    const opts = it.options.map((o,i)=>{
+      const tag = picked===i ? '<span class="opt-pick">\u2713 Sarah\u2019s pick</span>' : (o.rec ? '<span class="opt-pick">recommended</span>' : '');
+      return `<div class="opt ${picked===i?'picked':''}" onclick="pickOpt('${id}',${i})"><span class="opt-sw" style="background:${o.color}"></span><span><span class="opt-name">${o.name}</span><span class="opt-sub">${o.sub}</span></span>${tag}</div>`;
+    }).join('');
+    return `<div class="resolve"><div class="resolve-q">${intro}</div>${opts}
+      <div class="btn-row" style="margin-top:0.7rem"><button class="btn gold" onclick="recordSelection('${id}')" ${picked==null?'style="opacity:0.5"':''}>Record selection \u2192</button></div></div>`;
+  }
+  if(it.resolveKind==='approve'){ // sign-off
+    return `<div class="resolve"><div class="resolve-q">The sign-off gate — Sarah approves in her mirror. For the demo:</div>
+      <div class="btn-row"><button class="btn gold" onclick="resolveItem('${id}','Signed off — Phase 1 concept locked, the phase can advance.')">Record her approval →</button><button class="btn" onclick="nudge('${id}')">Nudge her</button></div></div>`;
+  }
+  return '';
+}
+
+function pickOpt(id,i){ ITEMS[id]._picked=i; openItem(id); }
+function recordSelection(id){ const it=ITEMS[id]; if(it._picked==null){toast('Pick an option first.');return;} resolveItem(id,'Selection recorded 2014 '+it.options[it._picked].name+'.'); }
+
+// ===== resolve cascade (one-act-many-surfaces) =====
+function resolveItem(id,msg){
+  const it=ITEMS[id];
+  if(it.resolveKind==='select' && it._picked==null){ toast('Pick an option first.'); return; }
+  it.status='resolved';
+  // cascade: unblock downstream tasks; shift ball to the next party
+  let cascade=[];
+  it.blocks.forEach(t=>{ if(TASKS[t]){ cascade.push(TASKS[t].text); } });
+  closeAll(); render();
+  let extra='';
+  if(it.type==='rfi') extra=' The GC can close the ceiling and hang the pendant — ball moves to Reyes Build.';
+  else if(it.type==='submittal') extra=' Fabrication is released — ball moves to the vendor.';
+  else if(it.type==='selection' && cascade.length) extra=' The rug line is now orderable.';
+  else if(it.type==='signoff') extra=' Phase 1 is locked.';
+  toast(msg+(cascade.length?' Unblocked: '+cascade.join(', ')+'.':'')+extra);
+}
+function nudge(id){ closeAll(); toast(`Nudge sent to ${PARTY[ITEMS[id].court].short}. Logged on the item — nothing ages in the dark.`); }
+function extend(id){ closeAll(); toast('Date extended. The item and the margin update together.'); }
+function reassign(id){ const it=ITEMS[id]; closeAll(); toast('Reassigned — moving the ball to another court. (The ball-in-court is the accountability primitive.)'); }
+function reviseResubmit(id){ closeAll(); ITEMS[id].rev=(ITEMS[id].rev||1)+1; toast('Sent back: revise & resubmit. The submittal carries its revision history (Rev '+ITEMS[id].rev+') — fabrication stays held.'); render(); }
+
+function doTask(tid){ TASKS[tid].done=true; render(); toast(`"${TASKS[tid].text}" done. Anything sequenced after it is now unblocked.`); }
+function blockedClick(tid){ const b=isBlocked(tid); if(TASKS[tid].done){toast('Already done.');return;} if(b.byItem){ openItem(b.byItem); } else if(b.bySeq){ toast(`Blocked — "${TASKS[b.bySeq].text}" has to finish first (trade sequencing).`);} }
+
+// ===== the composer (closes the matrix's #1 decisions gap: create/edit/publish) =====
+let comp={type:'rfi',court:'you',blocks:new Set(),options:[]};
+function openComposer(){
+  comp={type:'selection',court:'sarah',blocks:new Set(),options:[{name:'Option A',sub:''},{name:'Option B',sub:''}]};
+  renderComposer(); openSheetEl('composerSheet');
+}
+function renderComposer(){
+  const taskIds=Object.keys(TASKS).filter(t=>!TASKS[t].done);
+  document.getElementById('composerBody').innerHTML=`
+    <div class="sh-type" style="border-color:var(--cl);color:var(--cl)">New open item</div>
+    <div class="sh-title">Raise something that needs a decision</div>
+    <p style="font-size:0.74rem;color:var(--ao);margin:0.5rem 0 1.1rem;line-height:1.6">This is the matrix's missing piece — <b style="color:var(--mo)">create / edit / publish a decision</b>, generalized. Pick what it is, whose court it's in, and what it blocks.</p>
+
+    <div class="field-label">What kind of item</div>
+    <div class="type-grid">
+      ${Object.keys(TYPE).map(k=>`<div class="type-card ${comp.type===k?'on':''}" onclick="compType('${k}')"><div class="tc-name">${TYPE[k].label}</div><div class="tc-who">${TYPE[k].who}</div></div>`).join('')}
+    </div>
+
+    <div class="field-label">Whose court — who owns the next move</div>
+    <div class="court-grid" style="margin-bottom:1rem">
+      ${COURTS.map(c=>`<div class="court-card ${comp.court===c?'on':''}" onclick="compCourt('${c}')"><div class="cc-pd ${PARTY[c].pd}"></div><div class="cc-name">${c==='you'?'You':PARTY[c].short}</div></div>`).join('')}
+    </div>
+
+    <div class="field"><label class="field-label">${comp.type==='rfi'?'The question':comp.type==='submittal'?'What\u2019s being submitted':comp.type==='punch'?'The punch item':comp.type==='signoff'?'What needs sign-off':'What\u2019s being decided'}</label><textarea rows="2" id="compPrompt" placeholder="${compPlaceholder()}"></textarea></div>
+
+    ${comp.type==='selection'?`<div class="field"><label class="field-label">Options (materialize the choices)</label>
+      ${comp.options.map((o,i)=>`<div style="display:flex;gap:0.4rem;margin-bottom:0.35rem"><input value="${o.name}" oninput="comp.options[${i}].name=this.value" style="flex:1;padding:0.5rem 0.7rem;border:1px solid var(--pe);border-radius:6px;font-size:0.78rem"></div>`).join('')}
+      <div class="task-add" style="padding:0.3rem 0" onclick="comp.options.push({name:'Option '+String.fromCharCode(65+comp.options.length),sub:''});renderComposer()">+ option</div></div>`:''}
+
+    <div class="field-label">What does it block? <span style="text-transform:none;font-weight:400;color:var(--ao)">(the dependency)</span></div>
+    <div style="margin-bottom:0.5rem">
+      ${taskIds.map(t=>`<div class="block-pick ${comp.blocks.has(t)?'on':''}" onclick="compBlock('${t}')"><span class="bx"></span>${TASKS[t].text} <span class="owner-chip" style="margin-left:auto"><span class="pd ${PARTY[TASKS[t].owner].pd}"></span>${PARTY[TASKS[t].owner].short}</span></div>`).join('')}
+      <div class="block-pick ${comp.blocks.has('phase')?'on':''}" onclick="compBlock('phase')"><span class="bx"></span>The phase advancing</div>
+    </div>
+
+    <div class="field-row"><div class="field"><label class="field-label">Due</label><input id="compDue" placeholder="e.g. Friday"></div></div>
+
+    <div class="sh-foot"><button class="btn" onclick="createItem(true)">Save as draft</button><button class="btn gold" onclick="createItem(false)">Publish →</button><span style="font-family:var(--fm);font-size:0.5rem;color:var(--ao);margin-left:auto">${comp.court==='you'?'lands in your court':'sends to '+PARTY[comp.court].short}</span></div>`;
+}
+function compPlaceholder(){return {rfi:'e.g. Confirm the tile layout at the niche before I set it.',submittal:'e.g. Drapery hardware shop drawings for approval.',punch:'e.g. Touch-up paint at the north window return.',signoff:'e.g. Final furniture plan for your approval.',selection:'e.g. Which pendant for the entry?'}[comp.type];}
+function compType(k){ comp.type=k; if(k==='selection'&&comp.options.length===0)comp.options=[{name:'Option A'},{name:'Option B'}]; if(k!=='selection'&&['you'].includes(comp.court)===false){} renderComposer(); }
+function compCourt(c){ comp.court=c; renderComposer(); }
+function compBlock(t){ comp.blocks.has(t)?comp.blocks.delete(t):comp.blocks.add(t); renderComposer(); }
+function createItem(draft){
+  const prompt=document.getElementById('compPrompt').value.trim()||'(untitled '+TYPE[comp.type].label+')';
+  const due=document.getElementById('compDue').value.trim()||'soon';
+  const id='i-new'+Date.now();
+  ITEMS[id]={type:comp.type,title:prompt.length>52?prompt.slice(0,52)+'…':prompt,court:comp.court,due,dueSoon:/today|tomorrow|mon|tue|wed/i.test(due),status:'open',
+    blocks:[...comp.blocks], thread:[{from:'you',t:'now',text:prompt}], resolveKind:({rfi:'answer',submittal:'review',selection:'select',signoff:'approve',punch:'answer'})[comp.type]};
+  if(comp.type==='selection') ITEMS[id].options=comp.options.map(o=>({name:o.name,sub:o.sub||'',color:'#C4A57B'}));
+  // wire the blocking onto the chosen tasks
+  comp.blocks.forEach(t=>{ if(TASKS[t]) TASKS[t].blockedBy=id; });
+  itemOrder.unshift(id);
+  closeAll(); render();
+  toast(draft?`Saved as a draft in your court. Edit and publish when ready.`:`Published — ${comp.court==='you'?'in your court':'sent to '+PARTY[comp.court].short}. It now blocks ${comp.blocks.size} downstream item${comp.blocks.size!==1?'s':''} until resolved.`);
+}
+
+// ===== spine =====
+function renderSpine(){
+  const secs=[['brief','Brief','settled'],['discovery','Discovery','settled'],['direction','Direction','settled'],['proposal','Proposal','settled'],['project','Project','active'],['install','Install','faint'],['care','Care','faint']];
+  document.getElementById('spineSecs').innerHTML=secs.map(([k,n,st])=>`<div class="sp-sec ${st==='faint'?'faint':''} ${k==='project'?'current':''}">
+    <span class="sp-mark ${st==='settled'?'settled':''}"><i></i><i></i><i></i></span>
+    <span class="sp-name">${n}</span>${st==='active'?'<span class="sp-state live">active</span>':st==='settled'?'<span class="sp-state">settled</span>':''}
+    <span class="sp-dot ${st}"></span></div>`).join('');
+}
+function setMarks(){ const m=document.getElementById('bigmark').children; m[0].style.setProperty('--f',1);m[1].style.setProperty('--f',1);m[2].style.setProperty('--f',0.55); }
+
+// ===== plumbing =====
+function scrollToCourt(c){ const el=document.getElementById('court-'+c); if(el)el.scrollIntoView({behavior:'smooth',block:'center'}); }
+function openSheetEl(id){ closeAll(true); document.getElementById('scrim').classList.add('on'); document.getElementById(id).classList.add('on'); }
+function closeAll(keepScrim){ ['itemSheet','composerSheet'].forEach(id=>document.getElementById(id).classList.remove('on')); if(!keepScrim)document.getElementById('scrim').classList.remove('on'); }
+function toast(msg){ const t=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),4400); }
+
+renderSpine(); setMarks(); render();
+</script>
+</body>
+</html>

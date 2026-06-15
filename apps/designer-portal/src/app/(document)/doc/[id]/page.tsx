@@ -28,6 +28,7 @@ import { DocLetterhead } from '@/components/document/doc-letterhead';
 import { SettledBar } from '@/components/document/settled-bar';
 import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-readonly';
 import { FFESection } from '@/components/document/ffe-section';
+import { CoordinationBand } from '@/components/document/coordination/coordination-band';
 import { BriefSection } from '@/components/document/brief-section';
 import { DiscoverySection, CareSection } from '@/components/document/quiet-sections';
 import { MarginRail } from '@/components/document/margin-rail';
@@ -376,19 +377,31 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               </section>
             )}
           {row.active_section === 'project' && row.project_id && (
-            <FFESection
-              projectId={row.project_id}
-              projectName={row.title}
-              mode="project"
-              highlightId={highlightLineId}
-              onAddNote={setPendingNoteAnchor}
-              sectionKey="project"
-              clientUserId={row.client_profile_id}
-              clientName={row.client_name}
-              folioDrop={folioDrop}
-              onFolioDropConsumed={() => setFolioDrop(null)}
-              sectionDragOver={sectionDrag}
-            />
+            <>
+              {/* Track 5 — the coordination band (ball-in-court + dependency web).
+                  The band resolves designerClientId itself from clientUserId
+                  (work-block.tsx pattern); the page passes clientUserId, never a
+                  raw uid. Mounts ABOVE the FF&E section in the project home (D1:
+                  its sheets are band-local overlays, never a route). */}
+              <CoordinationBand
+                projectId={row.project_id}
+                clientUserId={row.client_profile_id}
+                clientName={row.client_name}
+              />
+              <FFESection
+                projectId={row.project_id}
+                projectName={row.title}
+                mode="project"
+                highlightId={highlightLineId}
+                onAddNote={setPendingNoteAnchor}
+                sectionKey="project"
+                clientUserId={row.client_profile_id}
+                clientName={row.client_name}
+                folioDrop={folioDrop}
+                onFolioDropConsumed={() => setFolioDrop(null)}
+                sectionDragOver={sectionDrag}
+              />
+            </>
           )}
           {row.active_section === 'install' && row.project_id && (
             <FFESection

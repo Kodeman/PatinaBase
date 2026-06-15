@@ -126,6 +126,8 @@ export const commsKeys = {
   participants: (threadId: string) => ['comms', 'participants', threadId] as const,
   unread: () => ['comms', 'unread'] as const,
   quickReplies: () => ['comms', 'quick-replies'] as const,
+  /** The per-item coordination thread resolver (Track 5, R50 / 00216). */
+  itemThread: (itemId: string) => ['comms', 'item-thread', itemId] as const,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -834,6 +836,116 @@ export function useStartProjectThread() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['comms', 'threads'] });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COORDINATION ITEM THREAD (Track 5, R50 — 00216)
+//
+// A coordination item's canonical conversation lives in ONE comms_threads row
+// anchored via `coordination_item_id` (partial-unique). This pair resolves and
+// creates that thread for the open-item sheet's inline thread:
+//
+//   · useCoordinationItemThread(itemId) — reads the existing item thread id
+//     (or null). The open-item sheet feeds that id straight into
+//     useThreadMessages / useThreadRealtime.
+//   · useEnsureCoordinationItemThread() — create-on-first-post. There is no
+//     server RPC for an item thread (unlike project/direct), so this uses the
+//     RLS-allowed creator path directly: INSERT the thread with created_by =
+//     me + coordination_item_id set, then seed MYSELF as a participant (the
+//     `comms_threads_insert` + `comms_participants_insert` policies in 00102
+//     permit the creator to do both). The unique partial index guarantees one
+//     thread per item; on a race the second insert 409s and we re-resolve.
+//
+// kind='project' satisfies the `comms_threads_project_kind_link` CHECK by also
+// carrying project_id. Other participants (GC/vendor/client) are added later by
+// the existing participant flows — the designer alone is enough to read + post.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Resolve the existing per-item thread id (00216), or null when none yet. */
+export function useCoordinationItemThread(itemId: string | undefined) {
+  return useQuery({
+    queryKey: itemId ? commsKeys.itemThread(itemId) : ['comms', 'item-thread', null],
+    enabled: !!itemId,
+    queryFn: async (): Promise<string | null> => {
+      if (!itemId) return null;
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('comms_threads')
+        .select('id')
+        .eq('coordination_item_id', itemId)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.id ?? null;
+    },
+    staleTime: 10_000,
+  });
+}
+
+export interface EnsureItemThreadInput {
+  itemId: string;
+  /** The item's project — required by the kind='project' CHECK constraint. */
+  projectId: string;
+}
+
+/**
+ * Resolve-or-create the per-item coordination thread (create-on-first-post).
+ * Returns the thread id. Idempotent: re-resolves if the thread already exists
+ * (including losing a create race against the partial-unique index).
+ */
+export function useEnsureCoordinationItemThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: EnsureItemThreadInput): Promise<string> => {
+      const supabase = getSupabase();
+      const { data: userResp } = await supabase.auth.getUser();
+      const userId = userResp.user?.id;
+      if (!userId) throw new Error('Not authenticated');
+
+      // 1. Idempotent fetch — a thread may already exist for the item.
+      const existing = await supabase
+        .from('comms_threads')
+        .select('id')
+        .eq('coordination_item_id', input.itemId)
+        .maybeSingle();
+      if (existing.error) throw existing.error;
+      if (existing.data?.id) return existing.data.id;
+
+      // 2. Create the thread (RLS: created_by must be me).
+      const { data: created, error: createErr } = await supabase
+        .from('comms_threads')
+        .insert({
+          kind: 'project',
+          project_id: input.projectId,
+          coordination_item_id: input.itemId,
+          created_by: userId,
+        } as never)
+        .select('id')
+        .single();
+
+      if (createErr) {
+        // Lost the create race (unique partial index) — re-resolve the winner.
+        const retry = await supabase
+          .from('comms_threads')
+          .select('id')
+          .eq('coordination_item_id', input.itemId)
+          .maybeSingle();
+        if (retry.data?.id) return retry.data.id;
+        throw createErr;
+      }
+
+      // 3. Seed myself as a participant (RLS: the creator can seed participants).
+      const { error: partErr } = await supabase
+        .from('comms_thread_participants')
+        .insert({ thread_id: created.id, profile_id: userId, role: 'designer' });
+      if (partErr) throw partErr;
+
+      return created.id as string;
+    },
+    onSuccess: (threadId, input) => {
+      qc.setQueryData(commsKeys.itemThread(input.itemId), threadId);
+      qc.invalidateQueries({ queryKey: ['coordination-items'] });
     },
   });
 }

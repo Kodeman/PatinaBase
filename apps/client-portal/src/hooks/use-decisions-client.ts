@@ -43,5 +43,26 @@ export function filterDecisionsByPhase(decisions: ClientDecision[], phase: strin
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Track 5 — the client mirror. client_decisions is now the widened coordination
+// table, so the client can read coordination items that aren't theirs to act on
+// (RFIs, submittals, punch items, or anything sitting in the designer / GC /
+// vendor court). Scope the list so the client's "your move" pile only contains
+// items they actually act on; everything else is shown quietly as read-only.
+//
+// Legacy pure-selection / approval decisions have coordination_kind / court
+// undefined → they default to selection / client → they remain "actionable",
+// so the existing list is unchanged.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A coordination item the client acts on directly: a selection or sign-off in
+ *  their own court. Defaults reproduce the legacy decision exactly. */
+export function isClientActionableDecision(decision: ClientDecision): boolean {
+  const court = decision.court ?? 'client';
+  if (court !== 'client') return false;
+  const kind = decision.coordination_kind ?? 'selection';
+  return kind === 'selection' || kind === 'signoff';
+}
+
 // Re-export for convenience
 export { useSelectDecisionOption };
