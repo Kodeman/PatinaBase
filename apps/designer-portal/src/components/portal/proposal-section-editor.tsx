@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { createBrowserClient } from '@patina/supabase';
 import { IconButton } from '@/components/ui/controls';
 import type { ProposalSection } from '@/hooks/use-proposals';
 import {
@@ -20,6 +19,7 @@ import { UploadZone } from './upload-zone';
 import { ProposalProductItem } from './proposal-product-item';
 import { TimelinePhases } from './timeline-phases';
 import { SignatureBlock } from './signature-block';
+import { uploadProposalAsset } from '@/lib/proposals/upload-proposal-asset';
 
 interface ProposalSectionEditorProps {
   section: ProposalSection;
@@ -45,22 +45,6 @@ interface ProposalSectionEditorProps {
   exclusions?: ProposalExclusion[];
   clientName?: string | null;
   designerName?: string | null;
-}
-
-async function uploadProposalAsset(proposalId: string, file: File): Promise<string | null> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = createBrowserClient() as any;
-  const ext = file.name.split('.').pop() || 'jpg';
-  const path = `${proposalId}/${crypto.randomUUID()}.${ext}`;
-  const { data, error } = await supabase.storage
-    .from('proposal-assets')
-    .upload(path, file, { cacheControl: '3600', upsert: false });
-  if (error || !data) {
-    console.error('Proposal asset upload failed', error);
-    return null;
-  }
-  const { data: pub } = supabase.storage.from('proposal-assets').getPublicUrl(data.path);
-  return pub?.publicUrl ?? null;
 }
 
 export function ProposalSectionEditor({

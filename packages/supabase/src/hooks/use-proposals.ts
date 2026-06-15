@@ -1092,7 +1092,26 @@ export function useDuplicateProposal() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Sign a proposal (client action)
+ * Sign a proposal (CLIENT action).
+ *
+ * Backed by the atomic `sign_proposal` RPC (00210). In one transaction the RPC:
+ *   - settles the linked `client_decisions` approval row (status='responded'),
+ *   - flips `proposals.status='accepted'` + the signature fields
+ *     (signed_at/signed_by_name/signed_ip/accepted_at),
+ *   - logs a 'signed' `proposal_engagement` event,
+ *   - and (with p_auto_activate=true, the default) calls
+ *     `activate_proposal_as_project` so the project opens immediately.
+ * Re-signing an already-'accepted' proposal is a no-op (idempotent).
+ *
+ * ⚠ AUTH: `sign_proposal` is SECURITY DEFINER but only succeeds when the caller
+ * is the proposal's CLIENT (auth.uid() = client_id). It must NOT be invoked from
+ * a designer surface — that call will be rejected. This hook is the client sign
+ * path only.
+ *
+ * ⚠ CARRY-FORWARD: the RPC does NOT send the proposal-sign-confirmation email.
+ * Any caller adopting this hook MUST still invoke the `proposal-sign-confirmation`
+ * edge function afterward (the client-portal `/api/proposals/[id]/sign` route, the
+ * current production sign path, still fires that email itself).
  */
 export function useSignProposal() {
   const queryClient = useQueryClient();
@@ -1110,18 +1129,12 @@ export function useSignProposal() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      const { data, error } = await supabase
-        .from('proposals')
-        .update({
-          status: 'accepted',
-          signed_at: new Date().toISOString(),
-          signed_by_name: signedByName,
-          signed_ip: signedIp || null,
-          accepted_at: new Date().toISOString(),
-        })
-        .eq('id', proposalId)
-        .select()
-        .single();
+      // p_auto_activate defaults to true server-side → the project opens on sign.
+      const { data, error } = await supabase.rpc('sign_proposal', {
+        p_proposal_id: proposalId,
+        p_signed_name: signedByName,
+        p_signed_ip: signedIp || null,
+      });
 
       if (error) throw error;
       return data;
@@ -1130,6 +1143,54 @@ export function useSignProposal() {
       queryClient.invalidateQueries({ queryKey: ['proposals'] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
+      // The sign settles a client_decisions row and (auto-activate) opens the
+      // project, so the desk/document surfaces that read those derived views
+      // must refetch too.
+      queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
+    },
+  });
+}
+
+/**
+ * Request changes to a proposal (CLIENT action).
+ *
+ * Backed by the `request_proposal_change` RPC (00211). The RPC records the
+ * client's feedback on `proposals.client_feedback` WITHOUT terminating the
+ * proposal's status (it stays sent/viewed so the designer can revise in place),
+ * and logs a 'change_requested' `proposal_engagement` event.
+ *
+ * ⚠ AUTH: SECURITY DEFINER, but client-invoked — succeeds only for the
+ * proposal's CLIENT (auth.uid() = client_id).
+ */
+export function useRequestProposalChange() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      proposalId,
+      feedback,
+    }: {
+      proposalId: string;
+      feedback: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { error } = await supabase.rpc('request_proposal_change', {
+        p_proposal_id: proposalId,
+        p_feedback: feedback.trim(),
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: (_, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      // The feedback lands as a 'change_requested' engagement event, so the
+      // engagement timeline and desk/document surfaces should refetch.
+      queryClient.invalidateQueries({ queryKey: ['proposal-engagement', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['document-state'] });
     },
   });
 }

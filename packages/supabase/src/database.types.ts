@@ -806,6 +806,7 @@ export type Database = {
       }
       client_decision_options: {
         Row: {
+          approves: boolean
           client_note: string | null
           cost_delta_cents: number | null
           created_at: string
@@ -823,6 +824,7 @@ export type Database = {
           sort_order: number | null
         }
         Insert: {
+          approves?: boolean
           client_note?: string | null
           cost_delta_cents?: number | null
           created_at?: string
@@ -840,6 +842,7 @@ export type Database = {
           sort_order?: number | null
         }
         Update: {
+          approves?: boolean
           client_note?: string | null
           cost_delta_cents?: number | null
           created_at?: string
@@ -909,6 +912,7 @@ export type Database = {
           client_signature: string | null
           context: string | null
           created_at: string
+          decision_kind: string
           decision_type: string
           designer_client_id: string
           designer_id: string
@@ -922,6 +926,7 @@ export type Database = {
           reminder_sent_at: string | null
           responded_at: string | null
           room_id: string | null
+          section_key: string | null
           selected_by: string | null
           sent_at: string | null
           status: string
@@ -936,6 +941,7 @@ export type Database = {
           client_signature?: string | null
           context?: string | null
           created_at?: string
+          decision_kind?: string
           decision_type?: string
           designer_client_id: string
           designer_id: string
@@ -949,6 +955,7 @@ export type Database = {
           reminder_sent_at?: string | null
           responded_at?: string | null
           room_id?: string | null
+          section_key?: string | null
           selected_by?: string | null
           sent_at?: string | null
           status?: string
@@ -963,6 +970,7 @@ export type Database = {
           client_signature?: string | null
           context?: string | null
           created_at?: string
+          decision_kind?: string
           decision_type?: string
           designer_client_id?: string
           designer_id?: string
@@ -976,6 +984,7 @@ export type Database = {
           reminder_sent_at?: string | null
           responded_at?: string | null
           room_id?: string | null
+          section_key?: string | null
           selected_by?: string | null
           sent_at?: string | null
           status?: string
@@ -1715,6 +1724,8 @@ export type Database = {
       }
       comms_threads: {
         Row: {
+          anchor_id: string | null
+          anchor_kind: string | null
           created_at: string
           created_by: string
           id: string
@@ -1727,6 +1738,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          anchor_id?: string | null
+          anchor_kind?: string | null
           created_at?: string
           created_by: string
           id?: string
@@ -1739,6 +1752,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          anchor_id?: string | null
+          anchor_kind?: string | null
           created_at?: string
           created_by?: string
           id?: string
@@ -2098,6 +2113,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          ffe_item_id: string | null
           id: string
           receiving_inspection_id: string
           resolution_notes: string | null
@@ -2109,6 +2125,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          ffe_item_id?: string | null
           id?: string
           receiving_inspection_id: string
           resolution_notes?: string | null
@@ -2120,6 +2137,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          ffe_item_id?: string | null
           id?: string
           receiving_inspection_id?: string
           resolution_notes?: string | null
@@ -2129,6 +2147,13 @@ export type Database = {
           vendor_notified_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "damage_claims_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "damage_claims_receiving_inspection_id_fkey"
             columns: ["receiving_inspection_id"]
@@ -2682,6 +2707,48 @@ export type Database = {
             columns: ["proposal_item_id"]
             isOneToOne: false
             referencedRelation: "proposal_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      designer_interruption_rules: {
+        Row: {
+          created_at: string
+          designer_id: string
+          enabled: boolean
+          id: string
+          kind: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          designer_id: string
+          enabled?: boolean
+          id?: string
+          kind: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          designer_id?: string
+          enabled?: boolean
+          id?: string
+          kind?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "designer_interruption_rules_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_interruption_rules_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
         ]
@@ -3581,6 +3648,7 @@ export type Database = {
         Row: {
           amount_paid_cents: number
           ar_flagged_at: string | null
+          ar_last_chased_at: string | null
           client_id: string | null
           created_at: string
           currency: string
@@ -3610,6 +3678,7 @@ export type Database = {
         Insert: {
           amount_paid_cents?: number
           ar_flagged_at?: string | null
+          ar_last_chased_at?: string | null
           client_id?: string | null
           created_at?: string
           currency?: string
@@ -3639,6 +3708,7 @@ export type Database = {
         Update: {
           amount_paid_cents?: number
           ar_flagged_at?: string | null
+          ar_last_chased_at?: string | null
           client_id?: string | null
           created_at?: string
           currency?: string
@@ -3883,6 +3953,94 @@ export type Database = {
           website?: string | null
         }
         Relationships: []
+      }
+      margin_notes: {
+        Row: {
+          anchor_id: string | null
+          anchor_kind: string
+          body: string
+          created_at: string
+          designer_id: string
+          due_date: string | null
+          escalated_to_decision_id: string | null
+          escalated_to_scope_change_id: string | null
+          id: string
+          project_id: string | null
+          proposal_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          anchor_id?: string | null
+          anchor_kind?: string
+          body: string
+          created_at?: string
+          designer_id: string
+          due_date?: string | null
+          escalated_to_decision_id?: string | null
+          escalated_to_scope_change_id?: string | null
+          id?: string
+          project_id?: string | null
+          proposal_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          anchor_id?: string | null
+          anchor_kind?: string
+          body?: string
+          created_at?: string
+          designer_id?: string
+          due_date?: string | null
+          escalated_to_decision_id?: string | null
+          escalated_to_scope_change_id?: string | null
+          id?: string
+          project_id?: string | null
+          proposal_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "margin_notes_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "margin_notes_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "margin_notes_escalated_to_decision_id_fkey"
+            columns: ["escalated_to_decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "margin_notes_escalated_to_scope_change_id_fkey"
+            columns: ["escalated_to_scope_change_id"]
+            isOneToOne: false
+            referencedRelation: "scope_change_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "margin_notes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "margin_notes_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       material_compatibility: {
         Row: {
@@ -6054,11 +6212,15 @@ export type Database = {
       }
       project_documents: {
         Row: {
+          anchor_id: string | null
+          anchor_kind: string | null
           category: string | null
+          client_visible: boolean
           created_at: string
           doc_type: string
           id: string
           project_id: string
+          section_key: string | null
           size_bytes: number | null
           status: string | null
           storage_path: string | null
@@ -6067,13 +6229,18 @@ export type Database = {
           uploaded_by: string | null
           url: string | null
           version: string | null
+          version_of: string | null
         }
         Insert: {
+          anchor_id?: string | null
+          anchor_kind?: string | null
           category?: string | null
+          client_visible?: boolean
           created_at?: string
           doc_type?: string
           id?: string
           project_id: string
+          section_key?: string | null
           size_bytes?: number | null
           status?: string | null
           storage_path?: string | null
@@ -6082,13 +6249,18 @@ export type Database = {
           uploaded_by?: string | null
           url?: string | null
           version?: string | null
+          version_of?: string | null
         }
         Update: {
+          anchor_id?: string | null
+          anchor_kind?: string | null
           category?: string | null
+          client_visible?: boolean
           created_at?: string
           doc_type?: string
           id?: string
           project_id?: string
+          section_key?: string | null
           size_bytes?: number | null
           status?: string | null
           storage_path?: string | null
@@ -6097,6 +6269,7 @@ export type Database = {
           uploaded_by?: string | null
           url?: string | null
           version?: string | null
+          version_of?: string | null
         }
         Relationships: [
           {
@@ -6120,10 +6293,18 @@ export type Database = {
             referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "project_documents_version_of_fkey"
+            columns: ["version_of"]
+            isOneToOne: false
+            referencedRelation: "project_documents"
+            referencedColumns: ["id"]
+          },
         ]
       }
       project_ffe_items: {
         Row: {
+          added_via: string | null
           blocked: boolean | null
           blocked_by_decision_id: string | null
           blocked_reason: string | null
@@ -6157,6 +6338,7 @@ export type Database = {
           vendor_name: string | null
         }
         Insert: {
+          added_via?: string | null
           blocked?: boolean | null
           blocked_by_decision_id?: string | null
           blocked_reason?: string | null
@@ -6190,6 +6372,7 @@ export type Database = {
           vendor_name?: string | null
         }
         Update: {
+          added_via?: string | null
           blocked?: boolean | null
           blocked_by_decision_id?: string | null
           blocked_reason?: string | null
@@ -6429,6 +6612,7 @@ export type Database = {
           created_at: string
           due_date: string | null
           id: string
+          invoice_id: string | null
           label: string
           paid_at: string | null
           percentage: number
@@ -6438,6 +6622,8 @@ export type Database = {
           status: string
           stripe_session_id: string | null
           trigger_condition: string | null
+          trigger_kind: string | null
+          trigger_section_key: string | null
           updated_at: string
         }
         Insert: {
@@ -6445,6 +6631,7 @@ export type Database = {
           created_at?: string
           due_date?: string | null
           id?: string
+          invoice_id?: string | null
           label: string
           paid_at?: string | null
           percentage: number
@@ -6454,6 +6641,8 @@ export type Database = {
           status?: string
           stripe_session_id?: string | null
           trigger_condition?: string | null
+          trigger_kind?: string | null
+          trigger_section_key?: string | null
           updated_at?: string
         }
         Update: {
@@ -6461,6 +6650,7 @@ export type Database = {
           created_at?: string
           due_date?: string | null
           id?: string
+          invoice_id?: string | null
           label?: string
           paid_at?: string | null
           percentage?: number
@@ -6470,9 +6660,18 @@ export type Database = {
           status?: string
           stripe_session_id?: string | null
           trigger_condition?: string | null
+          trigger_kind?: string | null
+          trigger_section_key?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_payment_milestones_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_payment_milestones_phase_id_fkey"
             columns: ["phase_id"]
@@ -6775,11 +6974,14 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
+          created_by: string | null
           description: string | null
           due_date: string | null
+          estimate_minutes: number | null
           id: string
           phase_key: string | null
           project_id: string
+          section_key: string | null
           sort_order: number
           status: string
           title: string
@@ -6788,11 +6990,14 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           due_date?: string | null
+          estimate_minutes?: number | null
           id?: string
           phase_key?: string | null
           project_id: string
+          section_key?: string | null
           sort_order?: number
           status?: string
           title: string
@@ -6801,17 +7006,34 @@ export type Database = {
         Update: {
           completed_at?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           due_date?: string | null
+          estimate_minutes?: number | null
           id?: string
           phase_key?: string | null
           project_id?: string
+          section_key?: string | null
           sort_order?: number
           status?: string
           title?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_tasks_project_id_fkey"
             columns: ["project_id"]
@@ -6898,45 +7120,57 @@ export type Database = {
       }
       project_time_entries: {
         Row: {
+          activity: string | null
           billable: boolean
           created_at: string
           duration_minutes: number | null
           hourly_rate_cents: number | null
           id: string
+          idle_seconds: number | null
           invoice_id: string | null
           notes: string | null
           phase_key: string | null
           project_id: string
+          raw_seconds: number | null
+          source: string
           started_at: string
           task_id: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          activity?: string | null
           billable?: boolean
           created_at?: string
           duration_minutes?: number | null
           hourly_rate_cents?: number | null
           id?: string
+          idle_seconds?: number | null
           invoice_id?: string | null
           notes?: string | null
           phase_key?: string | null
           project_id: string
+          raw_seconds?: number | null
+          source?: string
           started_at?: string
           task_id?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          activity?: string | null
           billable?: boolean
           created_at?: string
           duration_minutes?: number | null
           hourly_rate_cents?: number | null
           id?: string
+          idle_seconds?: number | null
           invoice_id?: string | null
           notes?: string | null
           phase_key?: string | null
           project_id?: string
+          raw_seconds?: number | null
+          source?: string
           started_at?: string
           task_id?: string | null
           updated_at?: string
@@ -10990,6 +11224,7 @@ export type Database = {
         Row: {
           brand_story: Json | null
           contact_info: Json | null
+          contact_profile_id: string | null
           created_at: string | null
           default_payment_terms:
             | Database["public"]["Enums"]["purchase_order_payment_pattern"]
@@ -11022,7 +11257,9 @@ export type Database = {
           review_count: number | null
           secondary_categories: string[] | null
           social_links: Json | null
+          trade_account_email: string | null
           trade_account_established_at: string | null
+          trade_portal_url: string | null
           trade_terms: string | null
           updated_at: string | null
           website: string | null
@@ -11030,6 +11267,7 @@ export type Database = {
         Insert: {
           brand_story?: Json | null
           contact_info?: Json | null
+          contact_profile_id?: string | null
           created_at?: string | null
           default_payment_terms?:
             | Database["public"]["Enums"]["purchase_order_payment_pattern"]
@@ -11064,7 +11302,9 @@ export type Database = {
           review_count?: number | null
           secondary_categories?: string[] | null
           social_links?: Json | null
+          trade_account_email?: string | null
           trade_account_established_at?: string | null
+          trade_portal_url?: string | null
           trade_terms?: string | null
           updated_at?: string | null
           website?: string | null
@@ -11072,6 +11312,7 @@ export type Database = {
         Update: {
           brand_story?: Json | null
           contact_info?: Json | null
+          contact_profile_id?: string | null
           created_at?: string | null
           default_payment_terms?:
             | Database["public"]["Enums"]["purchase_order_payment_pattern"]
@@ -11106,12 +11347,28 @@ export type Database = {
           review_count?: number | null
           secondary_categories?: string[] | null
           social_links?: Json | null
+          trade_account_email?: string | null
           trade_account_established_at?: string | null
+          trade_portal_url?: string | null
           trade_terms?: string | null
           updated_at?: string | null
           website?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "vendors_contact_profile_id_fkey"
+            columns: ["contact_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendors_contact_profile_id_fkey"
+            columns: ["contact_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "vendors_nominated_by_fkey"
             columns: ["nominated_by"]
@@ -11316,6 +11573,83 @@ export type Database = {
           },
         ]
       }
+      weekly_pulses: {
+        Row: {
+          anchor_id: string | null
+          anchor_kind: string
+          body: string | null
+          created_at: string
+          designer_id: string
+          id: string
+          project_id: string
+          sent_at: string | null
+          sent_message_id: string | null
+          status: string
+          subject: string | null
+          updated_at: string
+          week_of: string
+        }
+        Insert: {
+          anchor_id?: string | null
+          anchor_kind?: string
+          body?: string | null
+          created_at?: string
+          designer_id: string
+          id?: string
+          project_id: string
+          sent_at?: string | null
+          sent_message_id?: string | null
+          status?: string
+          subject?: string | null
+          updated_at?: string
+          week_of: string
+        }
+        Update: {
+          anchor_id?: string | null
+          anchor_kind?: string
+          body?: string | null
+          created_at?: string
+          designer_id?: string
+          id?: string
+          project_id?: string
+          sent_at?: string | null
+          sent_message_id?: string | null
+          status?: string
+          subject?: string | null
+          updated_at?: string
+          week_of?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_pulses_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_pulses_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_pulses_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_pulses_sent_message_id_fkey"
+            columns: ["sent_message_id"]
+            isOneToOne: false
+            referencedRelation: "comms_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       consumer_funnel: {
@@ -11363,6 +11697,68 @@ export type Database = {
           count: number | null
           step: string | null
           step_order: number | null
+        }
+        Relationships: []
+      }
+      document_state: {
+        Row: {
+          active_section: string | null
+          awaiting_inspection_count: number | null
+          blocked_item_count: number | null
+          client_name: string | null
+          client_profile_id: string | null
+          current_phase: string | null
+          designer_id: string | null
+          draft_po_label: string | null
+          draft_unsent_po_count: number | null
+          due_task_count: number | null
+          due_task_title: string | null
+          earliest_overdue_due: string | null
+          earliest_task_due: string | null
+          engagement_id: string | null
+          engagement_kind: string | null
+          in_flight_count: number | null
+          installed_count: number | null
+          is_archived: boolean | null
+          is_paused: boolean | null
+          item_count: number | null
+          lead_id: string | null
+          lead_response_deadline: string | null
+          lead_status: string | null
+          oldest_draft_po_created_at: string | null
+          oldest_unacked_sent_at: string | null
+          open_claim_count: number | null
+          open_claim_po: string | null
+          overdue_decision_count: number | null
+          project_id: string | null
+          project_status: string | null
+          proposal_id: string | null
+          proposal_sent_at: string | null
+          proposal_status: string | null
+          proposal_updated_at: string | null
+          proposal_viewed_at: string | null
+          pulse_week_of: string | null
+          title: string | null
+          unacked_po_count: number | null
+          unacked_po_label: string | null
+          unsent_pulse_count: number | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
+      margin_items: {
+        Row: {
+          anchor_id: string | null
+          anchor_kind: string | null
+          detail: string | null
+          item_id: string | null
+          kind: string | null
+          payload: Json | null
+          project_id: string | null
+          proposal_id: string | null
+          state: string | null
+          title: string | null
+          ts: string | null
         }
         Relationships: []
       }
@@ -11965,6 +12361,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      chase_invoice: { Args: { p_invoice_id: string }; Returns: string }
       clone_proposal: {
         Args: {
           p_mode?: string
@@ -12033,6 +12430,10 @@ export type Database = {
         Returns: undefined
       }
       demote_to_personal: { Args: { p_product_id: string }; Returns: string }
+      draft_invoice_from_milestone: {
+        Args: { p_milestone_id: string }
+        Returns: string
+      }
       evaluate_collection_rules: {
         Args: { p_collection_id: string }
         Returns: Json
@@ -12077,6 +12478,10 @@ export type Database = {
       flip_pending_balance_to_due: {
         Args: { p_purchase_order_id: string }
         Returns: undefined
+      }
+      generate_milestone_invoice: {
+        Args: { p_milestone_id: string }
+        Returns: string
       }
       get_ab_variant_stats: {
         Args: { p_campaign_id: string }
@@ -12283,6 +12688,7 @@ export type Database = {
         Returns: {
           amount_paid_cents: number
           ar_flagged_at: string | null
+          ar_last_chased_at: string | null
           client_id: string | null
           created_at: string
           currency: string
@@ -12445,6 +12851,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      request_proposal_change: {
+        Args: { p_feedback: string; p_proposal_id: string }
+        Returns: undefined
+      }
       revoke_role_from_user: {
         Args: { p_role_name: string; p_user_id: string }
         Returns: boolean
@@ -12573,6 +12983,30 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      send_weekly_pulse: {
+        Args: { p_body: string; p_pulse_id: string; p_subject?: string }
+        Returns: {
+          anchor_id: string | null
+          anchor_kind: string
+          body: string | null
+          created_at: string
+          designer_id: string
+          id: string
+          project_id: string
+          sent_at: string | null
+          sent_message_id: string | null
+          status: string
+          subject: string | null
+          updated_at: string
+          week_of: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "weekly_pulses"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_nomination_status: {
         Args: {
           p_decline_reason?: string
@@ -12603,6 +13037,60 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sign_proposal: {
+        Args: {
+          p_auto_activate?: boolean
+          p_proposal_id: string
+          p_signed_ip?: string
+          p_signed_name: string
+          p_start_date?: string
+        }
+        Returns: {
+          accepted_at: string | null
+          cc_email: string | null
+          client_feedback: string | null
+          client_id: string | null
+          client_visibility_tier: string | null
+          cover_image: string | null
+          created_at: string
+          decline_reason: string | null
+          declined_at: string | null
+          deposit_percent: number | null
+          description: string | null
+          designer_id: string
+          discount_amount: number | null
+          discount_percent: number | null
+          id: string
+          parent_proposal_id: string | null
+          payment_notes: string | null
+          payment_terms: string | null
+          personal_message: string | null
+          project_address: string | null
+          project_id: string | null
+          revision_summary: string | null
+          sent_at: string | null
+          signed_at: string | null
+          signed_by_name: string | null
+          signed_ip: string | null
+          status: string
+          subtotal: number | null
+          tax_amount: number | null
+          tax_rate: number | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          valid_until: string | null
+          version: number | null
+          viewed_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       user_has_role: {
         Args: { p_role_name: string; p_user_id: string }
         Returns: boolean
@@ -12620,6 +13108,7 @@ export type Database = {
         Returns: {
           amount_paid_cents: number
           ar_flagged_at: string | null
+          ar_last_chased_at: string | null
           client_id: string | null
           created_at: string
           currency: string

@@ -56,6 +56,8 @@ export function isRoomPath(pathname: string): boolean {
     pathname === '/library' ||
     pathname.startsWith('/library/') ||
     pathname === '/compose' ||
-    pathname.startsWith('/compose/')
+    pathname.startsWith('/compose/') ||
+    pathname === '/drafting' ||
+    pathname.startsWith('/drafting/')
   );
 }

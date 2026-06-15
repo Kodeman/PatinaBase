@@ -44,6 +44,9 @@ export interface DocumentStateRow {
   proposal_status: string | null;
   proposal_sent_at: string | null;
   proposal_viewed_at: string | null;
+  /** R45 (00210): last touch on a still-drafting proposal — quiet while it's
+   *  warm, an "untouched Nd" chip once it goes cold. Null until first edit. */
+  proposal_updated_at: string | null;
   lead_response_deadline: string | null;
   lead_status: string | null;
   overdue_decision_count: number;
@@ -132,8 +135,23 @@ export interface DeskFolder {
   need: NeedLine;
 }
 
+/** R45: the in-motion chip's flavor — a stable style/telemetry hook independent
+ *  of the (translatable, count-bearing) display text. `deriveMotion` returns
+ *  one of these alongside `text`; the chip component may key its treatment off
+ *  it (optional — the default chip styling is kind-agnostic). */
+export type MotionKind =
+  | 'drafting'
+  | 'sent_unopened'
+  | 'with_client'
+  | 'in_discovery'
+  | 'paused'
+  | 'in_flight'
+  | 'drift'
+  | 'conflict';
+
 export interface MotionChip {
   row: DocumentStateRow;
+  kind: MotionKind;
   text: string;
 }
 
@@ -147,6 +165,11 @@ const LEAD_URGENT_WINDOW_MS = 24 * 3_600_000;
 // to a needs-your-hand folder at 2 days unopened (act: follow up).
 const SENT_UNOPENED_CHIP_DAYS = 1;
 const SENT_UNOPENED_PROMOTE_DAYS = 2;
+// R45 — PROVISIONAL (Leah-calibration-pending): a still-drafting proposal is
+// quiet while she's actively in it (touched < this many days). Once it goes
+// cold (untouched ≥ this), it surfaces as an "drafting, untouched Nd" in-motion
+// chip — state carried, never a nag. Number stands until Leah confirms.
+const DRAFTING_UNTOUCHED_CHIP_DAYS = 3;
 // R18 send-weave thresholds — FINAL (Leah's numbers, L3 capture): a drafted
 // PO unsent / a sent PO unacknowledged is the designer's own pen / a chase
 // after one day.
@@ -443,39 +466,53 @@ export function deriveNeed(
   return null;
 }
 
-/** One quiet line for an engagement progressing without the designer. */
+/** One quiet line for an engagement progressing without the designer, paired
+ *  with its `kind` (a stable style/telemetry hook). Null = nothing shows. */
 export function deriveMotion(
   row: DocumentStateRow,
   now: Date,
   conflict?: DeskConflictInput | null,
-): string | null {
+): { kind: MotionKind; text: string } | null {
   if (row.is_archived) return null;
-  if (row.is_paused) return 'Paused';
+  if (row.is_paused) return { kind: 'paused', text: 'Paused' };
 
   if (row.engagement_kind === 'proposal') {
-    if (row.proposal_status === 'draft') return 'Proposal drafting';
+    if (row.proposal_status === 'draft') {
+      // R45: actively-drafting is quiet — while she's in it, nothing shows. The
+      // chip only appears once the draft goes cold (untouched ≥ threshold), and
+      // then it carries state, never a nag. Falls back to updated_at when the
+      // view has no proposal-level touch (pre-00210 rows, or never edited).
+      const touchedIso = row.proposal_updated_at ?? row.updated_at;
+      const days = daysBetween(touchedIso, now);
+      if (days >= DRAFTING_UNTOUCHED_CHIP_DAYS) {
+        return { kind: 'drafting', text: `drafting, untouched ${days}d` };
+      }
+      return null;
+    }
     if (row.proposal_status === 'sent' && row.proposal_sent_at && !row.proposal_viewed_at) {
       const days = daysBetween(row.proposal_sent_at, now);
       // R22: the awareness tier — state carried, never a nag. (Promotes to a
       // folder at SENT_UNOPENED_PROMOTE_DAYS, where deriveNeed takes over.)
-      if (days >= SENT_UNOPENED_CHIP_DAYS) return `sent, unopened ${days}d`;
-      return `With client since ${fmtDay(row.proposal_sent_at)}`;
+      if (days >= SENT_UNOPENED_CHIP_DAYS) {
+        return { kind: 'sent_unopened', text: `sent, unopened ${days}d` };
+      }
+      return { kind: 'with_client', text: `With client since ${fmtDay(row.proposal_sent_at)}` };
     }
     if (row.proposal_status === 'sent' || row.proposal_status === 'viewed') {
       const since = row.proposal_sent_at ? ` since ${fmtDay(row.proposal_sent_at)}` : '';
-      return `With client${since}`;
+      return { kind: 'with_client', text: `With client${since}` };
     }
     return null;
   }
 
-  if (row.engagement_kind === 'relationship') return 'In discovery';
+  if (row.engagement_kind === 'relationship') return { kind: 'in_discovery', text: 'In discovery' };
 
   // R28/R22 drift tier: state carried, never a nag.
-  if (conflict?.drift) return conflict.drift;
+  if (conflict?.drift) return { kind: 'drift', text: conflict.drift };
 
   if (row.in_flight_count > 0) {
     const n = row.in_flight_count;
-    return n === 1 ? '1 piece on the way' : `${n} pieces on the way`;
+    return { kind: 'in_flight', text: n === 1 ? '1 piece on the way' : `${n} pieces on the way` };
   }
 
   return null;
@@ -521,7 +558,7 @@ export function partitionDesk(
       continue;
     }
     const motion = deriveMotion(row, now, conflict);
-    if (motion) chips.push({ row, text: motion });
+    if (motion) chips.push({ row, kind: motion.kind, text: motion.text });
   }
 
   folders.sort((a, b) => {

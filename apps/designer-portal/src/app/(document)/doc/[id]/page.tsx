@@ -33,6 +33,7 @@ import { DiscoverySection, CareSection } from '@/components/document/quiet-secti
 import { MarginRail } from '@/components/document/margin-rail';
 import { AccountBand } from '@/components/document/account-band';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
+import { ProposalInstruments } from '@/components/document/proposal-instruments';
 import { FolioLetterhead } from '@/components/document/folio-strip';
 import { DocColophon } from '@/components/document/doc-colophon';
 import { useDocumentRooms } from '@/hooks/use-document-rooms';
@@ -360,6 +361,17 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                     {sections.find((s) => s.key === row.active_section)?.sub}
                   </span>
                 </div>
+                {/* The proposal instruments (gated to engagement_kind
+                    ==='proposal'): the Drafting Room doorway for a draft, the
+                    Send/Preview/Revise overlay row once it's in the client's
+                    hands, and the version-history strip. Local-state overlays
+                    never unmount the document beneath (D1). */}
+                {row.engagement_kind === 'proposal' && (
+                  <ProposalInstruments
+                    proposalId={row.proposal_id}
+                    clientName={row.client_name}
+                  />
+                )}
                 <ProposalBlocksReadOnly proposalId={row.proposal_id} />
               </section>
             )}

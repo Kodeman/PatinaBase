@@ -78,7 +78,13 @@ describe('schedule_conflict need (R28)', () => {
 
   it('drift does not raise a need line — it stays a motion chip', () => {
     expect(deriveNeed(projectRow(), NOW, drift)).toBeNull();
-    expect(deriveMotion(projectRow(), NOW, drift)).toBe('delivery 5d before install');
+    // deriveMotion carries the drift as a structured in-motion chip
+    // ({ kind, text }) — the same return shape the rest of the suite and
+    // partitionDesk read. Drift rides the 'drift' chip kind, never a need line.
+    expect(deriveMotion(projectRow(), NOW, drift)).toEqual({
+      kind: 'drift',
+      text: 'delivery 5d before install',
+    });
   });
 
   it('no conflict input → no conflict need', () => {

@@ -452,7 +452,8 @@ function RoomDropZone({
         isOver ? 'bg-[rgba(122,155,118,0.06)]' : ''
       }`}
       style={{
-        boxShadow: isOver ? '0 0 0 1px var(--accent-primary)' : 'none',
+        outline: isOver ? '1px solid var(--accent-primary)' : 'none',
+        outlineOffset: isOver ? '-1px' : undefined,
       }}
     >
       {children}
