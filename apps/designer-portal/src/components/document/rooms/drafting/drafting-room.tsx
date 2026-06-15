@@ -24,7 +24,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
   useProposal,
@@ -96,6 +96,14 @@ function useFacetRead(proposalId: string) {
     queryKey: ['drafting-facets', proposalId],
     enabled: !!proposalId,
     refetchOnWindowFocus: true,
+    // This composite reads eight child tables; the embedded facet editors mutate
+    // through their own hooks (their own keys), so they don't invalidate THIS
+    // key. A gentle focused-only poll keeps the Strata Mark, facet ticks, and
+    // FF&E type chips live as the designer composes, without wiring every editor.
+    // (The cycle chip also invalidates this key directly for an instant update.)
+    refetchInterval: 2000,
+    refetchIntervalInBackground: false,
+    staleTime: 0,
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = createBrowserClient() as any;
@@ -181,6 +189,7 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   const { data: summary } = useScopeBuilderSummary(proposalId);
   const { data: read } = useFacetRead(proposalId);
   const updateItem = useUpdateProposalItem();
+  const queryClient = useQueryClient();
 
   // Payments needs the running total (Σ FF&E estimate + Σ design fees), like the
   // legacy shell computed for the milestone allocator.
@@ -220,10 +229,20 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
 
   // The FF&E type-cycle chips read off the same facets query; cycling persists
   // via useUpdateProposalItem (which already recomputes line_total_cents).
-  const cycleType = (id: string, current: ProposalItemType | null) => {
+  // useUpdateProposalItem invalidates the item-schedule key, NOT this composite,
+  // so we invalidate it here too — otherwise the chip reads a stale item_type and
+  // a second tap won't advance (fixed→allowance→TBD stalls). Await keeps the
+  // chip, the Strata Mark, and the live preview in lockstep with each tap.
+  const cycleType = async (id: string, current: ProposalItemType | null) => {
     const idx = TYPE_ORDER.indexOf((current ?? 'fixed') as ProposalItemType);
     const next = TYPE_ORDER[(idx + 1) % TYPE_ORDER.length];
-    void updateItem.mutateAsync({ itemId: id, proposalId, updates: { item_type: next } });
+    await updateItem.mutateAsync({ itemId: id, proposalId, updates: { item_type: next } });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['drafting-facets', proposalId] }),
+      // Flip to/from TBD changes what the client sees (R43) — refresh the live
+      // preview immediately rather than waiting for its poll tick.
+      queryClient.invalidateQueries({ queryKey: ['proposal-mirror', proposalId] }),
+    ]);
   };
 
   const title = proposal?.title ?? proposal?.client_name ?? 'A proposal';

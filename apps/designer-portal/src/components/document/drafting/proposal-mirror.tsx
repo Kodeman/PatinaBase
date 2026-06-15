@@ -37,6 +37,15 @@ export function useProposalMirrorData(proposalId: string) {
   return useQuery({
     queryKey: ['proposal-mirror', proposalId],
     enabled: !!proposalId,
+    // "The client's copy · LIVE": this bespoke read spans many child tables that
+    // the facet editors mutate through their own keys (which don't invalidate
+    // this one), so a gentle focused-only poll keeps the preview in step as the
+    // designer composes — e.g. a piece flipped to TBD drops out here within a
+    // tick (R43), an exclusion or a price change reflows the investment total.
+    refetchOnWindowFocus: true,
+    refetchInterval: 2000,
+    refetchIntervalInBackground: false,
+    staleTime: 0,
     queryFn: async () => {
       const supabase = getSupabase();
       const [
