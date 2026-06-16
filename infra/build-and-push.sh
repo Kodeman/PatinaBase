@@ -138,6 +138,13 @@ NEXT_PUBLIC_SUPABASE_URL="${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}"
 # the portal's own origin, where no QR route exists → "Failed to generate QR session".
 NEXT_PUBLIC_QR_AUTH_URL="${NEXT_PUBLIC_QR_AUTH_URL:-https://app.patina.cloud}"
 
+# The Document + procurement workspace are graduated-to-default. Prod has no
+# PostHog key, so useFeatureFlag fails closed and DocumentGate redirects
+# /desk → /portal. NEXT_PUBLIC_FLAG_OVERRIDES (e.g.
+# "the-document-pilot:true,procurement-workspace-pilot:true") is inlined into
+# the bundle and short-circuits the PostHog path. Sourced from infra/.env.
+NEXT_PUBLIC_FLAG_OVERRIDES="${NEXT_PUBLIC_FLAG_OVERRIDES:-}"
+
 # Git SHA for tagging
 GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
@@ -198,6 +205,7 @@ build_nextjs() {
     --build-arg NEXT_PUBLIC_QR_AUTH_URL="${NEXT_PUBLIC_QR_AUTH_URL}" \
     --build-arg NEXT_PUBLIC_POSTHOG_KEY="${POSTHOG_KEY:-}" \
     --build-arg NEXT_PUBLIC_POSTHOG_HOST="${POSTHOG_HOST:-}" \
+    --build-arg NEXT_PUBLIC_FLAG_OVERRIDES="${NEXT_PUBLIC_FLAG_OVERRIDES:-}" \
     -t "${REGISTRY}/${app}:latest" \
     -t "${REGISTRY}/${app}:${GIT_SHA}" \
     -f infra/Dockerfile.nextjs \
