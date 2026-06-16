@@ -4,6 +4,12 @@ _Designer Portal · generated 2026-06-14 · source-verified by a 19-agent codeba
 
 > **Companion artifact:** `portal-vs-desk-feature-gap-matrix.html` (same data, presentable deck).
 
+> **⟳ PARITY UPDATE — 2026-06-16 (folded into `the-document-spec-v1.5.md` §13).** The matrix below is the 2026-06-14 point-in-time audit; two of its P0 clusters have since **CLOSED** — the per-row Status cells are not rewritten here (they remain the verified baseline), but the deltas are authoritative:
+> - **Proposal authoring (the matrix's #1 absent cluster, 20 rows) — CLOSED** by **Track 4** (R42–R45, I35): the 8-tab Scope Builder + block editor → the **Drafting Room** (eight any-order facets, Strata-only progress); "Generate from Scope" dissolved into the live "client's copy" preview; Send/Revise as letterhead instruments; `sign_proposal` settles + auto-opens the project in one act. The list/filter + tracking-dashboard rows stay intentionally **TRANSFORMED** (Desk need-derivation + margin), not rebuilt.
+> - **Decision composition + detail (the matrix's #2 absent cluster, 11 rows) — CLOSED** by **Track 5** (the generalized ball-in-court, R46–R54, I36) + **the Decision Composer** (R55–R56, I37–I38): the create/build/publish authoring half (the margin "+ New" composition sheet, draft→publish→delete, materialize-from-Library, blocking lights the `decision_due` stamp) and the enriched read detail (full option attributes + the resolution audit trail). The override-consent/nudge rows were already FULL.
+>
+> Remaining named P0 candidates (unchanged): **project lifecycle** (create/edit/complete), the **People/CRM book** (still a placeholder), **invoicing depth**, **vendor directory + create**.
+
 ## Executive summary
 
 Across **200 mapped `/portal` capabilities**: **28 FULL · 55 PARTIAL · 14 TRANSFORMED · 103 ABSENT** in `/desk` today — plus **21 Document-native** capabilities with no `/portal` analog.
