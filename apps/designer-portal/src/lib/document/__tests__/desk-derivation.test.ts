@@ -8,7 +8,9 @@ import {
   folderTab,
   deriveMotion,
   partitionDesk,
+  deriveReconnectNeeds,
   type DocumentStateRow,
+  type NurtureLike,
 } from '../desk-derivation';
 
 const NOW = new Date('2026-06-11T12:00:00Z');
@@ -543,6 +545,66 @@ describe('partitionDesk', () => {
     expect(folders[0].need.kind).toBe('overdue_decision');
     expect(folders[0].need.kind).not.toBe('proposal_signed');
     expect(chips).toHaveLength(0);
+  });
+});
+
+describe('deriveReconnectNeeds (R53 — People on the Desk)', () => {
+  const mkEntry = (partial: Partial<NurtureLike>): NurtureLike => ({
+    person: {
+      person_id: 'pe1',
+      role: 'client',
+      display_name: 'Joan Marsh',
+      last_touch_at: daysAgo(240),
+      meta: {},
+    },
+    due: true,
+    reason: '8mo ago since last touch — reconnect now',
+    score: 1_000_000,
+    ...partial,
+  });
+
+  it('surfaces only the DUE band — keep-tending entries never rise to the Desk', () => {
+    const out = deriveReconnectNeeds(
+      [
+        mkEntry({ due: true }),
+        mkEntry({ person: { ...mkEntry({}).person, person_id: 'pe2' }, due: false }),
+      ],
+      NOW,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].personId).toBe('pe1');
+  });
+
+  it('maps the entry onto a quiet reconnect line (name + reason, no stamp)', () => {
+    const out = deriveReconnectNeeds([mkEntry({})], NOW);
+    expect(out[0]).toEqual({
+      personId: 'pe1',
+      role: 'client',
+      name: 'Joan Marsh',
+      reason: '8mo ago since last touch — reconnect now',
+    });
+  });
+
+  it('caps at the strongest few (default 3) — the Desk is focus, not a CRM queue', () => {
+    const entries = Array.from({ length: 7 }, (_, i) =>
+      mkEntry({ person: { ...mkEntry({}).person, person_id: `pe${i}` }, due: true }),
+    );
+    expect(deriveReconnectNeeds(entries, NOW)).toHaveLength(3);
+  });
+
+  it('honors an explicit limit and preserves the queue order (already ranked)', () => {
+    const entries = [
+      mkEntry({ person: { ...mkEntry({}).person, person_id: 'a' }, score: 3 }),
+      mkEntry({ person: { ...mkEntry({}).person, person_id: 'b' }, score: 2 }),
+      mkEntry({ person: { ...mkEntry({}).person, person_id: 'c' }, score: 1 }),
+    ];
+    const out = deriveReconnectNeeds(entries, NOW, 2);
+    expect(out.map((r) => r.personId)).toEqual(['a', 'b']);
+  });
+
+  it('returns [] when nothing is due (the section then never renders)', () => {
+    expect(deriveReconnectNeeds([mkEntry({ due: false })], NOW)).toEqual([]);
+    expect(deriveReconnectNeeds([], NOW)).toEqual([]);
   });
 });
 

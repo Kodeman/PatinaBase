@@ -44,6 +44,12 @@ export interface ClientReview {
 export interface ReviewFilters {
   requestStatus?: string | string[];
   published?: boolean;
+  /**
+   * Scope to a single client's reviews (server-side). When set, the query
+   * filters on `designer_client_id` so callers like the person profile fetch
+   * only that client's rows instead of the whole designer set.
+   */
+  designerClientId?: string;
 }
 
 export interface ReviewStats {
@@ -90,6 +96,10 @@ export function useClientReviews(filters?: ReviewFilters) {
           )
         `)
         .order('created_at', { ascending: false });
+
+      if (filters?.designerClientId) {
+        query = query.eq('designer_client_id', filters.designerClientId);
+      }
 
       if (filters?.requestStatus) {
         if (Array.isArray(filters.requestStatus)) {

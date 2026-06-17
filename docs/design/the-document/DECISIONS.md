@@ -2201,6 +2201,105 @@ Deepened the read-only margin `DecisionBody` (`components/document/margin-bodies
 
 `the-document-spec-v1.5.md` written, **superseding v1.4** and discharging R54's owed "spec fold." A self-contained "supersedes" cut on the v1.4 structure: header bumped (status, authority order `I1–I38 · R1–R56 · L1–L4`, migrations through **00220**, the three new prototypes added); the §2 ratified-decisions table extended **R41–R56**; the existing sections folded in place (§3 the Rooms-shell physics now reusable; §4 the Drafting Room doorway + the Coordination band + the enriched detail; §5 the Decision margin's authoring half + coordination-as-decisions + the band joining the §5 invalidation set; §6 `blocks_kind`↔`blocking_status` + the `decision_due` light/clear hinge; §8/§16 **Track 3 SHIPPED**; §10 zero-shadow across the new surfaces; §11 schema through 00220; §12/§13 the gap-matrix #1/#2 P0 clusters CLOSED). **Three new sections** added (numbers permanent, as §16 was): **§17 Proposal Authoring — the Drafting Room** (R42–R45) · **§18 Project Coordination — the ball-in-court** (R46–R54) · **§19 The Decision Composer** (R55–R56). **§14 open questions** carries §14.15 (Via-Patina rate) and adds §14.16–§14.19 (the Track-4 provisional thresholds + facet order; the sign→project two-step; GC/vendor logins + deferred cycle/PO links; the `decision_type` "Finish" taxonomy call) — all flagged for Leah. The **gap matrix** (`portal-vs-desk-feature-gap-matrix.md`) gains a dated **PARITY UPDATE banner** recording the two closed clusters (the source-verified per-row baseline is left intact, not rewritten). v1.4 is retained as history (the spec is versioned cuts). ⚠ Designer-visible calls flagged in §14.16–§14.19 still route to the design session per the standing protocol.
 
+## Rulings — design session, 2026-06-14 (The People Room)
+
+> Source: `docs/design/the-document/people/patina-people-room-prototype.html` +
+> `…/the-document-people-room-package.md`, against the Feature Gap Matrix
+> CRM/People zone (17 gaps — the placeholder book). Renumbered from the package's
+> R50–R53 to the true next-R (the live repo was at R56 after the Decision
+> Composer; the package's "assume R49" snapshot was stale). Resolves the
+> People-placeholder dependency that the decision ball-in-court (R46–R54) needed:
+> GCs/vendors are first-class via project_parties (00212).
+
+### R57 · The People Room — the unified party directory, as a Room — 2026-06-14 (pkg R50)
+
+The People book opens as a **walk-in Room** (D14 — full-bleed paper, put-down
+returns to the origin stash), NOT a Studio Drawer sheet like Orders/Accounts. Its
+spine is a **unified directory of every party Patina works with — clients,
+makers/vendors, GCs, studio team, and open leads — in one roster**, role-filterable
+(All/Clients/Makers/GCs/Team/Leads), each row carrying a role badge + a
+role-appropriate relationship line + a status dot. A left rail switches between
+six **views** (Strata-ruled, not tabs): Directory · Threads · Nurture · Reviews ·
+Portfolio · Outreach. An **ask bar** queries over people + history (derivation-
+backed v1 — keyword routing + the nurture-derived Engine nudge; semantic people-
+search deferred). New leads enter the directory; lead detail cross-links to the
+Brief. Declined: a clients-only CRM; a sheet form; a separate per-zone contacts
+page.
+
+### R58 · The relationship journey — the role-adaptive profile — 2026-06-14 (pkg R51)
+
+Opening a person opens a **role-adaptive Person Profile** whose heart is the
+**Relationship Journey** — a single woven timeline (inquiry → proposal → project →
+messages → decisions → touchpoints → install → care). **The journey is a
+DERIVATION, not a stored activity log** (`deriveRelationshipJourney`) — woven from
+the person's document history (projects, proposals, decisions), their threads,
+their nurture touchpoints, and their reviews, the same way sections/Desk/margin
+are derived. The pre-existing `client_activity_log` is NOT extended. For
+**clients** the profile also shows **Style DNA — the Engine's read** (taste tags +
+palette + narrative, from `designer_clients.style_tags/style_preferences/
+inspiration_quote` + the `styles` taxonomy; no parallel store), plus Projects,
+Trust & history, Nurture, and a private note. For **makers/GCs/team** the profile
+adapts: makers/GCs cross-link to the Orders book + the coordination view; team
+links to document margin visibility (the colophon).
+
+### R59 · Relationship operations — threads, nurture, reviews, portfolio — 2026-06-14 (pkg R52)
+
+Four operating views over the directory. **Threads** is a unified inbox — every
+conversation in one list, scope-filterable (all/direct/project/vendor), opening to
+a conversation (read + reply) — reusing the `use-comms` shared model: a thread is
+**one conversation surfaced everywhere** (it lives on the person AND on their
+document margin, R27), never duplicated. **Nurture** is the touchpoint queue —
+relationships ranked by dormancy + trust (`deriveNurtureQueue`, a derivation), the
+proposal-hesitating/dormant-high-trust ties floating to "reconnect now". **Reviews**
+is three-state collection (pending/collected/queued). **Portfolio** is the
+finished-rooms gallery (completed projects).
+
+### R60 · Outreach + People on the Desk + the cross-link contract — 2026-06-14 (pkg R53)
+
+**Outreach** is the marketing-ops view: **campaigns** (list/compose/send/stats), an
+**email template library** (browse/author/edit/delete), and **audience segments**
+which **draw from the same directory** (segment by role/status/history/trust).
+**People on the Desk:** nurture-due / reconnect surfaces as a Desk **need-line** (a
+`desk-derivation` extension — a dormant high-trust tie is a need); the inbox
+*notifications* tab + the Sales Pipeline stay TRANSFORMED into the Desk/margin
+model (not rebuilt). **Cross-link contract (not rebuilt here):** maker/GC
+terms+orders live in the Orders book; GC open-items in the coordination view; team
+invite/management stays /portal/team (the colophon handles margin-visibility);
+lead detail cross-links to the Brief. The People Room is the *people* layer over
+those, not a re-home of them.
+
+### I40 · The People Room — Wave 0 architect foundation built (R57–R60) — 2026-06-16
+
+The blocking foundation the four build tracks plug into. **Migration 00221** —
+`public.people_directory`, an **additive security_invoker VIEW** (D7) that
+`UNION ALL`s clients (`designer_clients`) + open leads (`leads`) + makers
+(`vendors` saved via `saved_vendors` or engaged via `project_parties.vendor_id`) +
+GCs (`project_parties` party_kind='gc') + team (`project_team_members`, de-duped to
+one row per teammate) into one roster: `(person_id, role, display_name, email,
+phone, profile_id, project_id, designer_id, status_raw, last_touch_at, meta)`. RLS
+is inherited (security_invoker) + explicit `auth.uid()`/project-ownership filters;
+verified scoping (a designer sees only their own roster). **`people-derivation.ts`**
+freezes the contracts: `DirectoryPerson`, `JourneyEvent`, `NurtureEntry`,
+`JourneyInputs`, tunable thresholds (NURTURE_DUE_DAYS=240, DORMANT=180,
+LEAD_RESPOND_HOURS=24, MAKER_WARM_DAYS=75), the implemented directory helpers
+(`deriveStatusDot`/`deriveRelationshipLine`/`isNurtureDue`/`roleLabel`) + a working
+`deriveNurtureQueue`, and the **stubbed `deriveRelationshipJourney`** (Track B fills
+the body; the input contract is frozen). Key model call: the directory **status
+dot** and the nurture **"due" accent** are SEPARATE signals — a proposal-stage
+client reads a warm dot but is nurture-due (David Chen). **`use-people.ts`**
+(`usePeopleDirectory`/`usePerson`) + barrel + the view added to `database.types.ts`.
+**The Room skeleton:** `(document)/people/page.tsx` + `people-room.tsx` (RoomShell +
+ask bar + Strata-ruled left rail + the live Engine nudge from the nurture queue) +
+the frozen view contract (`types.ts`) + shared primitives (`person-bits.tsx`
+avatar/badge/dot, `view-shell.tsx`) + the minimal-real **Directory** view + stub
+slots for B/C/D. **Drawer flip:** People `weight:'sheet'`→`'room'` in
+`studio-drawer.tsx` + `mobile-sheets.tsx` (the dead generic-sheet placeholder
+removed). **Verified:** view applies + scopes correctly against the live schema;
+supabase pkg tsc clean; designer-portal People files tsc-clean (0 new errors);
+15/15 `people-derivation` Jest tests green. ⚠ Wave 1 (Tracks A–D) builds the view
+bodies + the journey/nurture/desk derivations against these frozen contracts;
+spec-fold of R57–R60 + the gap-matrix CRM parity update are owed post-review (Wave 3).
+
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I39 · R1–R56 · L1–L4 · THE GO · FLIP CONFIRMED · last id = R56*
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I40 · R1–R60 · L1–L4 · THE GO · FLIP CONFIRMED · last id = I40*

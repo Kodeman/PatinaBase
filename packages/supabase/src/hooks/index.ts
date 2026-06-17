@@ -277,6 +277,8 @@ export type {
   UpdateCoordinationItemInput,
   ResolveCoordinationItemInput,
 } from './use-coordination';
+export { usePeopleDirectory, usePerson, peopleKeys } from './use-people';
+export type { PartyRole, PeopleDirectoryRow, PeopleFilters } from './use-people';
 export {
   // Client Reviews
   useClientReviews,

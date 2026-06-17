@@ -35,7 +35,7 @@ const LEDGERS: {
   { key: 'library', name: 'Library', spine: 'var(--color-clay)', count: 'a room · walk in', weight: 'room' },
   { key: 'orders', name: 'Orders', spine: 'var(--color-dusty-blue)', count: 'cross-engagement POs', weight: 'sheet' },
   { key: 'accounts', name: 'Accounts', spine: 'var(--color-sage)', count: 'revenue · A/R', weight: 'sheet' },
-  { key: 'people', name: 'People', spine: 'var(--color-terracotta)', count: 'clients', weight: 'sheet' },
+  { key: 'people', name: 'People', spine: 'var(--color-terracotta)', count: 'a room · walk in', weight: 'room' },
   { key: 'hours', name: 'Hours', spine: 'var(--color-mocha)', count: 'this week', weight: 'sheet' },
 ];
 

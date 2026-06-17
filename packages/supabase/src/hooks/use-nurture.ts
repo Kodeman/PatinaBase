@@ -44,6 +44,12 @@ export interface ClientNurtureTouchpoint {
 export interface NurtureFilters {
   status?: TouchpointStatus | TouchpointStatus[];
   type?: TouchpointType;
+  /**
+   * Scope to a single client's touchpoints (server-side). When set, the query
+   * filters on `designer_client_id` so callers like the person profile fetch
+   * only that client's rows instead of the whole designer set.
+   */
+  designerClientId?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -85,6 +91,10 @@ export function useNurtureTouchpoints(filters?: NurtureFilters) {
           )
         `)
         .order('suggested_date', { ascending: true });
+
+      if (filters?.designerClientId) {
+        query = query.eq('designer_client_id', filters.designerClientId);
+      }
 
       if (filters?.status) {
         if (Array.isArray(filters.status)) {

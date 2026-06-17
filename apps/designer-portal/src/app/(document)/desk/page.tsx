@@ -15,6 +15,7 @@ import { documentEvents } from '@/lib/analytics/document-events';
 import { FolderCard } from '@/components/document/folder-card';
 import { InMotionChip } from '@/components/document/in-motion-chip';
 import { StrataMark } from '@/components/document/strata-mark';
+import { DeskReconnect } from '@/components/document/desk-reconnect';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -117,6 +118,11 @@ export default function DeskPage() {
           </ul>
         </section>
       )}
+
+      {/* R53 — People on the Desk: the quiet reconnect surface. Its own
+          population over the unified directory; renders nothing when no tie is
+          due, so it never adds noise to a clean Desk. */}
+      <DeskReconnect />
     </main>
   );
 }
