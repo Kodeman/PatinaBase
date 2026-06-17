@@ -41,10 +41,9 @@ export async function POST(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function generatePreviewHtml(template: any, data: Record<string, unknown>): string {
-  if (typeof data.html === 'string' && data.html.trim().length > 0) {
-    return data.html;
-  }
-
+  // Render strictly from the stored template + caller-supplied field values.
+  // (No raw-HTML passthrough: the preview must reflect the template, never
+  // arbitrary caller markup.)
   const subject = data.subject || template.subject_default || template.name;
   const body = data.body || 'Preview content will appear here.';
 
