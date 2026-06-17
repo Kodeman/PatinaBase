@@ -31,7 +31,7 @@ const LEDGERS = [
   { key: 'library', name: 'Library', spine: 'var(--color-clay)', weight: 'room', href: '/library' },
   { key: 'orders', name: 'Orders', spine: 'var(--color-dusty-blue)', weight: 'sheet' },
   { key: 'accounts', name: 'Accounts', spine: 'var(--color-sage)', weight: 'sheet' },
-  { key: 'people', name: 'People', spine: 'var(--color-terracotta)', weight: 'sheet' },
+  { key: 'people', name: 'People', spine: 'var(--color-terracotta)', weight: 'room', href: '/people' },
   { key: 'hours', name: 'Hours', spine: 'var(--color-mocha)', weight: 'sheet' },
 ] as const;
 
@@ -181,26 +181,8 @@ export function StudioDrawer() {
           <AccountsBook onClose={() => setOpenLedger(null)} initialContext={sheetContext} />
         )}
         {open?.key === 'hours' && <HoursLedger />}
-        {open &&
-          open.key !== 'orders' &&
-          open.key !== 'accounts' &&
-          open.key !== 'hours' &&
-          open.weight === 'sheet' && (
-          <div className="mx-auto max-w-2xl">
-            <div className="mb-2 flex items-center gap-3">
-              <span
-                aria-hidden
-                className="h-[18px] w-[3px] rounded-[1px]"
-                style={{ background: open.spine }}
-              />
-              <h2 className="font-heading text-xl text-[var(--color-pearl)]">{open.name}</h2>
-            </div>
-            <p className="text-[13px] leading-relaxed text-[rgba(250,247,242,0.55)]">
-              This ledger arrives in a later slice. The drawer and its sheets are in place so
-              the desk feels whole; the {open.name} book itself is still being bound.
-            </p>
-          </div>
-        )}
+        {/* All sheet-weight ledgers (orders/accounts/hours) are bound; People is
+            a Room (R50), so no generic placeholder branch remains. */}
       </DocSheet>
     </>
   );

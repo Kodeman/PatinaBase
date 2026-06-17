@@ -11970,6 +11970,22 @@ export type Database = {
       }
     }
     Views: {
+      people_directory: {
+        Row: {
+          designer_id: string | null
+          display_name: string | null
+          email: string | null
+          last_touch_at: string | null
+          meta: Json | null
+          person_id: string | null
+          phone: string | null
+          profile_id: string | null
+          project_id: string | null
+          role: string | null
+          status_raw: string | null
+        }
+        Relationships: []
+      }
       consumer_funnel: {
         Row: {
           count: number | null
