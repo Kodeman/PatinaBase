@@ -135,6 +135,77 @@ export interface DeskFolder {
   need: NeedLine;
 }
 
+// ─── R53: People on the Desk (the nurture-due / reconnect surface) ──────────
+//
+// A dormant high-trust tie is a need — but a *quiet* one, and one that lives
+// over the unified directory (people_directory), NOT over document_state. So it
+// is kept a SEPARATE Desk population from the engagement folders: it never
+// touches partitionDesk / the project-folder model. The Desk page derives it
+// from the People Room's own nurture queue (deriveNurtureQueue, Track B) and
+// renders it under the in-motion chips as its own small section.
+//
+// The act is not "pick up a document" — it is "reach out" — so the line links
+// into the People Room's Nurture view (/people), the same R22 awareness logic
+// the receivables/send-weave needs use (the act lives where it belongs).
+
+/** The minimal shape `deriveReconnectNeeds` reads off a NurtureEntry — kept
+ *  structural so this module stays dependency-free (no people-derivation
+ *  import, mirroring how DeskConflictInput / ReceivableSignal are passed in). */
+export interface NurtureLike {
+  person: {
+    person_id: string;
+    role: string;
+    display_name: string;
+    last_touch_at: string | null;
+    meta?: Record<string, unknown> | null;
+  };
+  /** Reconnect-now (true) vs warm/keep-tending (false). */
+  due: boolean;
+  /** Why this surfaced (the human reason line). */
+  reason: string;
+  /** Ranking weight — higher sorts first. */
+  score: number;
+}
+
+/** A quiet Desk reconnect line — a person who has drifted past the reconnect
+ *  threshold (a dormant high-trust tie, or a lead owing a reply). Distinct from
+ *  a NeedLine: it carries no stamp and never an urgent outline; it is the
+ *  softest tier on the Desk, below the in-motion chips. */
+export interface ReconnectNeed {
+  personId: string;
+  role: string;
+  /** The person's name (the line's subject). */
+  name: string;
+  /** The human reason — why now. */
+  reason: string;
+}
+
+// R53 — how many reconnect ties surface on the Desk at once. The Desk is a
+// place of focus, not a CRM queue: only the strongest few dormant ties rise;
+// the full ranked list lives in the People Room's Nurture view.
+const MAX_RECONNECT_NEEDS = 3;
+
+/** The Desk's reconnect surface (R53): the strongest few "reconnect now" ties,
+ *  derived from the People Room's nurture queue. Takes the already-ranked
+ *  entries (deriveNurtureQueue output) so the ranking logic stays single-source
+ *  in people-derivation; this only filters to the DUE band and caps the count.
+ *  Returns [] when nothing is due — the section then never renders. */
+export function deriveReconnectNeeds(
+  entries: readonly NurtureLike[],
+  _now: Date,
+  limit: number = MAX_RECONNECT_NEEDS,
+): ReconnectNeed[] {
+  return entries
+    .filter((e) => e.due)
+    .slice(0, Math.max(0, limit))
+    .map((e) => ({
+      personId: e.person.person_id,
+      role: e.person.role,
+      name: e.person.display_name,
+      reason: e.reason,
+    }));
+}
+
 /** R45: the in-motion chip's flavor — a stable style/telemetry hook independent
  *  of the (translatable, count-bearing) display text. `deriveMotion` returns
  *  one of these alongside `text`; the chip component may key its treatment off

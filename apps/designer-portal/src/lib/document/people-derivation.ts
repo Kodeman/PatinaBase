@@ -343,20 +343,150 @@ export interface JourneyInputs {
   }>;
 }
 
+/** A US-month label for the journey date stamp (e.g. "Apr 2026"). A DATE-only
+ *  value (kickoff_date, suggested_date) parses as UTC midnight and shifts back a
+ *  month in negative-offset timezones — coerce it to local midnight first (the
+ *  same guard desk-derivation's fmtDay uses). */
+function fmtMonth(iso: string): string {
+  const coerced = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso;
+  const d = new Date(coerced);
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+/** Dollars from a cents amount, no decimals when round (e.g. "$25,100"). */
+function fmtDollars(cents: number): string {
+  return `$${Math.round(cents / 100).toLocaleString('en-US')}`;
+}
+
+/** Pushes an event when its timestamp is real; silently drops null/garbage. */
+function add(
+  out: JourneyEvent[],
+  type: JourneyType,
+  label: string,
+  text: string,
+  iso: string | null | undefined,
+  href?: string,
+): void {
+  const ms = asMs(iso);
+  if (ms == null) return;
+  out.push({ type, label, text, at: iso as string, sortAt: ms, href });
+}
+
 /**
  * Weave the entire relationship into one ordered timeline (oldest → newest by
- * default; the UI may reverse). DERIVATION — no stored log.
+ * default; the UI may reverse). DERIVATION — no stored log: every event is read
+ * live from an existing surface (proposal, project, decision, thread, touchpoint,
+ * review) the same way the spine derives its sections from project stage.
  *
- * Track B implements the body. The contract (inputs, JourneyEvent[]) is frozen.
+ * Each input is mapped to the JourneyType that best names it:
+ *  · proposals  → `inquiry` (created) + `proposal` (sent) + `proposal` (signed,
+ *    carrying the amount). A signed proposal's signing is the relationship's hinge.
+ *  · projects   → `project` (opened/kickoff) + `install`/`care` (completed:
+ *    a completed project reads as care, an active one as the live project).
+ *  · decisions  → `decision`, anchored at resolution when responded, else creation,
+ *    carrying the chosen option's label when one is selected.
+ *  · threads    → `message`, anchored at the last message, carrying the count.
+ *  · touchpoints→ `touchpoint`, anchored at the send/suggested/created date.
+ *  · reviews    → `review`, anchored at creation, carrying the rating + a snippet.
+ *
+ * A sparse party (a maker/GC/team person with only a project link, no proposals
+ * or decisions) yields a short, honest journey — never a fabricated one. Events
+ * with no real timestamp are dropped, not invented.
  */
 export function deriveRelationshipJourney(
-  _inputs: JourneyInputs,
+  inputs: JourneyInputs,
   _now: Date,
 ): JourneyEvent[] {
-  // Track B (R51) fills this — weave inquiry → proposal → project → messages →
-  // decisions → touchpoints → review → install → care, sorted by sortAt.
-  return [];
+  const out: JourneyEvent[] = [];
+  const { proposals, projects, decisions, threads, touchpoints, reviews } = inputs;
+
+  // ── proposals: inquiry (created) → sent → signed (the hinge) ──────────────
+  for (const p of proposals ?? []) {
+    const href = `/doc/${p.id}`;
+    const title = (p.title ?? '').trim();
+    add(
+      out,
+      'inquiry',
+      'Inquiry',
+      title ? `Proposal drafted — ${title}.` : 'Proposal drafted.',
+      p.created_at,
+      href,
+    );
+    add(out, 'proposal', 'Proposal', 'Proposal sent — awaiting their signature.', p.sent_at, href);
+    if (p.signed_at) {
+      const amount =
+        typeof p.total_cents === 'number' && p.total_cents > 0
+          ? ` — ${fmtDollars(p.total_cents)}`
+          : '';
+      add(out, 'proposal', 'Signed', `Proposal signed${amount}.`, p.signed_at, href);
+    }
+  }
+
+  // ── projects: opened (kickoff/created) → completed (care) ─────────────────
+  for (const pj of projects ?? []) {
+    const href = `/doc/${pj.id}`;
+    const name = (pj.name ?? '').trim() || 'project';
+    const opened = pj.kickoff_date ?? pj.created_at;
+    add(out, 'project', 'Project', `Project opened — ${name}.`, opened, href);
+    if (pj.completed_at) {
+      add(
+        out,
+        'care',
+        'Care',
+        `Project delivered — ${name} complete.`,
+        pj.completed_at,
+        href,
+      );
+    }
+  }
+
+  // ── decisions: resolved (carrying the choice) or still open ───────────────
+  for (const d of decisions ?? []) {
+    const title = (d.title ?? '').trim() || 'A decision';
+    const choice = (d.chosen_label ?? '').trim();
+    const when = d.resolved_at ?? d.created_at;
+    const text =
+      d.resolved_at && choice
+        ? `${title} — chose ${choice}.`
+        : d.resolved_at
+          ? `${title} — resolved.`
+          : `${title} — awaiting a call.`;
+    add(out, 'decision', 'Decision', text, when);
+  }
+
+  // ── threads: the running conversation, anchored at the last word ──────────
+  for (const t of threads ?? []) {
+    const count = typeof t.message_count === 'number' ? t.message_count : 0;
+    const subject = (t.subject ?? '').trim();
+    const lead =
+      count > 0
+        ? `${count} ${count === 1 ? 'message' : 'messages'}`
+        : 'A conversation';
+    const text = subject ? `${lead} — ${subject}.` : `${lead}.`;
+    add(out, 'message', 'Thread', text, t.last_message_at, `/people?thread=${t.id}`);
+  }
+
+  // ── touchpoints: the human reach-outs that keep a tie warm ────────────────
+  for (const tp of touchpoints ?? []) {
+    const reason = (tp.reason ?? '').trim();
+    const kind = tp.touchpoint_type.replace(/_/g, ' ');
+    const text = reason || `${kind} touchpoint.`;
+    const when = tp.status === 'sent' ? (tp.created_at ?? tp.suggested_date) : tp.suggested_date ?? tp.created_at;
+    add(out, 'touchpoint', 'Touchpoint', text, when);
+  }
+
+  // ── reviews: the words that bring the next client ─────────────────────────
+  for (const r of reviews ?? []) {
+    const stars = typeof r.rating === 'number' && r.rating > 0 ? `${'★'.repeat(Math.min(5, Math.round(r.rating)))} ` : '';
+    const snippet = (r.review_text ?? '').trim();
+    const quoted = snippet ? `“${snippet.length > 90 ? `${snippet.slice(0, 88)}…` : snippet}”` : 'Review collected.';
+    add(out, 'review', 'Review', `${stars}${quoted}`, r.created_at);
+  }
+
+  return sortJourney(out);
 }
+
+export { fmtMonth as formatJourneyDate };
 
 /** Stable chronological sort helper for journey events (oldest first). */
 export function sortJourney(events: JourneyEvent[]): JourneyEvent[] {

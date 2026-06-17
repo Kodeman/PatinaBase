@@ -7,21 +7,25 @@
  * + history; the foot carries a live Engine nudge derived from the nurture
  * queue. Zero shadows (D4), typography-first, put-down returns to origin.
  *
- * Wave-0 wires the shell, the navigation contract, and the directory; Tracks
- * A–D fill their view slots (see ./views, ./types).
+ * Track A owns the shell, the ask bar, and the Directory. The Directory's role
+ * filter is LIFTED here (controlled) so the ask bar can route "makers" straight
+ * to the filtered roster. Tracks B–D fill their view slots (see ./views, ./types).
  */
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { usePeopleDirectory, type PartyRole } from '@patina/supabase';
 import { deriveNurtureQueue, humanizeSince } from '@/lib/document/people-derivation';
 import { RoomShell } from '../rooms/room-shell';
-import { DirectoryView } from './views/directory-view';
+import { DirectoryView, type DirectoryRole } from './views/directory-view';
 import { PersonProfile } from './views/person-profile';
 import { ThreadsView } from './views/threads-view';
 import { NurtureView } from './views/nurture-view';
 import { ReviewsView } from './views/reviews-view';
 import { PortfolioView } from './views/portfolio-view';
 import { OutreachView } from './views/outreach-view';
+import { AskBar, routePeopleAsk } from './directory/ask-bar';
+import { AddPersonSheet } from './directory/add-person-sheet';
 import type { PeopleView, PeopleViewProps } from './types';
 
 const VIEWS: Array<{ key: PeopleView; name: string }> = [
@@ -45,11 +49,15 @@ function RailMark() {
 }
 
 export function PeopleRoom() {
+  const router = useRouter();
   const [view, setView] = useState<PeopleView>('directory');
   const [openPerson, setOpenPerson] = useState<{ id: string; role: PartyRole } | null>(null);
   const [pendingThreadId, setPendingThreadId] = useState<string | null>(null);
   const [ask, setAsk] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  // The Directory's role filter lives here (controlled) so the ask bar can set it.
+  const [roleFilter, setRoleFilter] = useState<DirectoryRole>('all');
+  const [addOpen, setAddOpen] = useState(false);
 
   const { data: all } = usePeopleDirectory({ role: 'all' });
   const now = useMemo(() => new Date(), []);
@@ -89,19 +97,38 @@ export function PeopleRoom() {
     notify,
   };
 
+  /** Route the directory to a role filter AND surface the Directory view. */
+  const filterDirectory = (role: DirectoryRole) => {
+    setRoleFilter(role);
+    nav.goView('directory');
+  };
+
   const askEngine = () => {
-    const q = ask.trim().toLowerCase();
-    if (!q) return;
-    if (/(reconnect|quiet|touch|drift|nurture)/.test(q)) {
-      nav.goView('nurture');
-      notify('The Engine surfaced who is drifting out of touch — see the Nurture queue.');
-    } else if (/(maker|vendor|supplier)/.test(q)) {
-      nav.goView('directory');
-      notify('Filter the directory to your makers.');
-    } else {
-      notify(
-        `The Engine searches people, threads, and history for “${ask.trim()}” — and recommends who to reconnect with.`,
-      );
+    const route = routePeopleAsk(ask);
+    if (!route) return;
+    switch (route.kind) {
+      case 'nurture':
+        nav.goView('nurture');
+        notify('The Engine surfaced who is drifting out of touch — see the Nurture queue.');
+        break;
+      case 'directory': {
+        filterDirectory(route.role);
+        const what =
+          route.role === 'maker'
+            ? 'your makers'
+            : route.role === 'gc'
+              ? 'your general contractors'
+              : route.role === 'lead'
+                ? 'your open leads'
+                : 'your roster';
+        notify(`Filtered the directory to ${what}.`);
+        break;
+      }
+      case 'search':
+        notify(
+          `The Engine searches people, threads, and history for “${route.query}” — and recommends who to reconnect with.`,
+        );
+        break;
     }
   };
 
@@ -113,7 +140,7 @@ export function PeopleRoom() {
       {...nav}
     />
   ) : view === 'directory' ? (
-    <DirectoryView {...nav} />
+    <DirectoryView {...nav} role={roleFilter} onRoleChange={setRoleFilter} />
   ) : view === 'threads' ? (
     <ThreadsView {...nav} pendingThreadId={pendingThreadId} />
   ) : view === 'nurture' ? (
@@ -127,24 +154,21 @@ export function PeopleRoom() {
   );
 
   return (
-    <RoomShell title="The People Room" count={all ? `${all.length} people` : undefined}>
+    <RoomShell
+      title="The People Room"
+      count={all ? `${all.length} people` : undefined}
+      action={
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-[5px] border border-[var(--doc-ink-border)] bg-white px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)]"
+        >
+          <span aria-hidden>+</span> Add
+        </button>
+      }
+    >
       {/* Ask bar — over people + history (derivation-backed v1). */}
-      <div className="mx-auto max-w-[1100px] px-4 pt-3 sm:px-6">
-        <div className="flex max-w-[460px] items-center gap-2.5 rounded-[24px] border border-[var(--color-pearl)] bg-white px-4 py-2.5 focus-within:border-[var(--color-clay)]">
-          <span aria-hidden className="text-[0.8rem] text-[var(--color-clay)]">
-            ✦
-          </span>
-          <input
-            value={ask}
-            onChange={(e) => setAsk(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') askEngine();
-            }}
-            placeholder="Find someone — or ask the Engine who to reconnect with"
-            className="min-w-0 flex-1 bg-transparent text-[0.78rem] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--color-aged-oak)]"
-          />
-        </div>
-      </div>
+      <AskBar value={ask} onChange={setAsk} onAsk={askEngine} />
 
       <div className="mx-auto flex max-w-[1100px] gap-0">
         {/* Left rail — Strata-ruled views (not tabs). */}
@@ -192,7 +216,9 @@ export function PeopleRoom() {
                 ✦ The Engine
               </span>
               <span className="block text-[0.66rem] leading-relaxed text-[var(--color-mocha)]">
-                <b className="font-semibold text-[var(--color-charcoal)]">{nudge.count} {nudge.count === 1 ? 'person' : 'people'}</b>{' '}
+                <b className="font-semibold text-[var(--color-charcoal)]">
+                  {nudge.count} {nudge.count === 1 ? 'person' : 'people'}
+                </b>{' '}
                 drifting out of touch. {nudge.name} is your strongest dormant tie ({nudge.since}).
               </span>
             </button>
@@ -204,6 +230,18 @@ export function PeopleRoom() {
           <div className="mx-auto max-w-[760px]">{body}</div>
         </main>
       </div>
+
+      {/* Add a person — a paper sheet over the Room. */}
+      <AddPersonSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onAdded={(message) => {
+          // Land them where they'll show: the Directory, filtered to clients.
+          filterDirectory('client');
+          notify(message);
+        }}
+        onGoToLeads={() => router.push('/portal/pipeline')}
+      />
 
       {toast && (
         <div
