@@ -165,16 +165,27 @@ function ClientProfile({
   const router = useRouter();
   const now = useMemo(() => new Date(), []);
 
+  // Touchpoints and reviews are keyed on `designer_client_id`, so we scope the
+  // fetch server-side (P2). Only a real client has a `designer_clients.id` —
+  // `personId` for a lead is a lead id, so we gate on the role and skip the
+  // filter for leads (the hook then returns nothing, which is correct).
+  const designerClientId = role === 'client' ? personId : undefined;
+
   const { data: client } = useClient(personId);
   const { data: projects } = useClientProjects(personId);
   const { data: proposals } = useProposals(profileId ? { clientId: profileId } : undefined);
   const { data: decisions } = useClientDecisions(personId);
   const { data: allThreads } = useThreads({ scope: 'inbox' });
-  const { data: allTouchpoints } = useNurtureTouchpoints();
-  const { data: allReviews } = useClientReviews();
+  const { data: touchpoints } = useNurtureTouchpoints(
+    designerClientId ? { designerClientId } : undefined,
+  );
+  const { data: reviews } = useClientReviews(
+    designerClientId ? { designerClientId } : undefined,
+  );
   const startDirect = useStartDirectThread();
 
-  // Threads with this person as a participant (profile_id match).
+  // Threads with this person as a participant (profile_id match). Threads have
+  // no `designer_client_id`, so this match stays client-side on profile_id.
   const threads = useMemo(() => {
     if (!profileId) return [];
     return (allThreads ?? []).filter((t) =>
@@ -182,14 +193,8 @@ function ClientProfile({
     );
   }, [allThreads, profileId]);
 
-  const touchpoints = useMemo(
-    () => (allTouchpoints ?? []).filter((t) => t.designer_client_id === personId),
-    [allTouchpoints, personId],
-  );
-  const reviews = useMemo(
-    () => (allReviews ?? []).filter((r) => r.designer_client_id === personId),
-    [allReviews, personId],
-  );
+  const touchpointList = touchpoints ?? [];
+  const reviewList = reviews ?? [];
 
   const journey = useMemo(() => {
     const inputs: JourneyInputs = {
@@ -249,7 +254,7 @@ function ClientProfile({
         message_count: null,
         last_message_at: t.last_message_at,
       })),
-      touchpoints: touchpoints.map((t) => ({
+      touchpoints: touchpointList.map((t) => ({
         id: t.id,
         touchpoint_type: t.touchpoint_type,
         status: t.status,
@@ -257,7 +262,7 @@ function ClientProfile({
         suggested_date: t.suggested_date,
         created_at: t.created_at,
       })),
-      reviews: reviews.map((r) => ({
+      reviews: reviewList.map((r) => ({
         id: r.id,
         rating: r.rating,
         review_text: r.review_text,
@@ -267,7 +272,7 @@ function ClientProfile({
     return deriveRelationshipJourney(inputs, now);
   }, [
     personId, role, name, email, phone, profileId, statusRaw, lastTouchAt, meta,
-    proposals, projects, decisions, threads, touchpoints, reviews, now,
+    proposals, projects, decisions, threads, touchpointList, reviewList, now,
   ]);
 
   // Side-card rows.
@@ -281,7 +286,10 @@ function ClientProfile({
     [projects],
   );
 
-  const trust = useMemo(() => buildClientTrust(client, reviews.length), [client, reviews.length]);
+  const trust = useMemo(
+    () => buildClientTrust(client, reviewList.length),
+    [client, reviewList.length],
+  );
 
   const due = isNurtureDue(
     {
