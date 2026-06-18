@@ -187,6 +187,7 @@ export {
   useMarkLeadViewed,
   useAcceptLead,
   useBeginDiscovery,
+  useNurtureLead,
   useDeclineLead,
 } from './use-leads';
 export type { Lead, LeadFilters } from './use-leads';

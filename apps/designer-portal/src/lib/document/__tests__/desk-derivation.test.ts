@@ -195,9 +195,9 @@ describe('deriveNeed', () => {
     expect(need!.urgent).toBe(false);
   });
 
-  it('contacted (nurtured) lead → NO folder (R61 triage gate)', () => {
+  it('contacted (nurtured) lead with a FUTURE reconnect date → NO folder (R61/R65)', () => {
     // Shape C still surfaces a 'contacted' lead, but Nurture moved it off the
-    // needs-your-hand band into People — it must not produce a new_lead folder.
+    // needs-your-hand band — it stays off until the reconnect date is due.
     expect(
       deriveNeed(
         mkRow({
@@ -211,6 +211,24 @@ describe('deriveNeed', () => {
         NOW,
       ),
     ).toBeNull();
+  });
+
+  it('contacted lead whose reconnect date is DUE → reconnect_due folder (R65)', () => {
+    // R65: a dated touchpoint earns a return — once the reconnect date passes,
+    // the nurtured lead rises again as a needs-your-hand 'reconnect_due' need.
+    const need = deriveNeed(
+      mkRow({
+        engagement_kind: 'lead',
+        active_section: 'brief',
+        project_id: null,
+        lead_id: 'l1',
+        lead_status: 'contacted',
+        lead_response_deadline: daysAgo(1),
+      }),
+      NOW,
+    );
+    expect(need!.kind).toBe('reconnect_due');
+    expect(need!.stamp.label).toBe('RECONNECT');
   });
 
   it('proposal sent 1 day ago, never viewed → NOT a folder (R22 chip tier)', () => {
