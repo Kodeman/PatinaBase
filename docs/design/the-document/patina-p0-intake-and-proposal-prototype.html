@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Patina · P0 proposed functionality · Lead intake + the Proposal action</title>
+<style>
+  :root{
+    --off-white:#FAF7F2;--clay:#C4A57B;--aged-oak:#8B7355;--mocha:#5C4A3C;
+    --charcoal:#2C2926;--sage:#A8B5A0;--dusty-blue:#8B9CAD;--terracotta:#D4A090;--golden:#E8C547;
+    --paper:#FAF7F2;--ink:#2C2926;--rule:#E5DDD0;--rule-strong:#D8CCB8;--muted:#8B7355;
+    --desk-bg:#2C2926;--desk-card:#FAF7F2;--desk-muted:#9d9384;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#1f1c19;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,.serif{font-family:"Playfair Display",Georgia,serif;font-weight:500;letter-spacing:-.01em}
+  .mono{font-family:"DM Mono","SFMono-Regular",Menlo,monospace}
+  /* prototype control */
+  .proto-bar{position:sticky;top:0;z-index:40;background:#181614;color:#cdc4b4;display:flex;align-items:center;gap:18px;
+    padding:10px 26px;border-bottom:1px solid #322d28}
+  .proto-bar .tag{font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--golden)}
+  .proto-bar .switch{display:flex;gap:8px;margin-left:8px}
+  .proto-bar button{font-family:"DM Mono",monospace;font-size:11.5px;letter-spacing:.04em;padding:6px 14px;border-radius:3px;
+    border:1px solid #3c372f;background:none;color:#9d9384;cursor:pointer}
+  .proto-bar button.on{background:#322d28;color:#f0e9da;border-color:#574e41}
+  .proto-bar .legend{margin-left:auto;font-size:11.5px;color:#8a8073;display:flex;gap:16px;align-items:center}
+  .swatch{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;margin-right:5px}
+  .swatch.prop{background:transparent;border:1.5px dashed var(--golden)}
+  .swatch.exist{background:#5a5249}
+  .stage{display:none} .stage.show{display:block}
+  /* strata mark */
+  .strata{display:inline-flex;flex-direction:column;gap:2px;width:30px;vertical-align:middle}
+  .strata i{height:2.5px;border-radius:1px;display:block;background:var(--rule-strong)}
+  .strata i.l1{width:100%}.strata i.l2{width:80%}.strata i.l3{width:60%}
+  .strata i.f1{background:var(--mocha)}.strata i.f2{background:var(--clay)}.strata i.f3{background:var(--dusty-blue)}
+  .strata.on-dark i{background:#4a443c}
+  .strata.on-dark i.f1{background:#8a7350}.strata.on-dark i.f2{background:var(--clay)}.strata.on-dark i.f3{background:var(--dusty-blue)}
+  /* ===== proposed annotation ===== */
+  .proposed{position:relative;border:1.5px dashed var(--golden);border-radius:4px}
+  .proposed-tag{position:absolute;top:-9px;left:14px;background:#181614;color:var(--golden);font-family:"DM Mono",monospace;
+    font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:0 7px}
+  .note{font-family:"DM Mono",monospace;font-size:11px;color:var(--golden);letter-spacing:.02em;margin:8px 0 0;opacity:.9}
+  .stamp{font-family:"DM Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;
+    border:1.5px solid;border-radius:2px;display:inline-block;transform:rotate(-1.5deg)}
+  .stamp.expired{color:var(--terracotta);border-color:#e3c3b4}
+  .stamp.settled{color:var(--sage);border-color:#bcccb4}
+  .stamp.draft{color:var(--aged-oak);border-color:var(--rule-strong)}
+
+  /* ============ G1 — THE DESK (dark) ============ */
+  #g1{background:var(--desk-bg);min-height:100vh;color:#e9e1d4;padding:34px 46px 120px}
+  .desk-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+  .desk-date{font-family:"Playfair Display",serif;font-size:28px;color:#efe7d8}
+  .desk-find{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#8a8073}
+  .desk-find b{border:1px solid #4a443c;border-radius:3px;padding:1px 5px;color:#b8ab97}
+  .capture-cta{margin:16px 0 30px}
+  .capture-cta button{font-family:"DM Mono",monospace;font-size:12px;letter-spacing:.04em;color:#1f1c19;background:var(--clay);
+    border:none;border-radius:3px;padding:9px 16px;cursor:pointer}
+  .capture-cta .hint{font-size:11px;color:#8a8073;margin-left:14px;font-family:"DM Mono",monospace}
+  .band-label{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#8a8073;
+    display:flex;align-items:center;gap:12px;margin:28px 0 16px}
+  .band-label .strata{width:34px}
+  .folders{display:flex;gap:22px;flex-wrap:wrap}
+  .folder{position:relative;background:var(--desk-card);color:var(--ink);border-radius:3px;width:340px;padding:22px 22px 18px;border:1px solid #e7dfd1}
+  .folder .tab{position:absolute;top:-12px;left:20px;background:var(--desk-card);border:1px solid #e7dfd1;border-bottom:none;
+    border-radius:3px 3px 0 0;padding:3px 10px 4px;font-family:"DM Mono",monospace;font-size:9.5px;letter-spacing:.09em;color:var(--mocha);display:flex;align-items:center;gap:7px}
+  .folder h3{font-size:19px;margin:6px 0 1px}
+  .folder .kind{font-size:12.5px;color:var(--muted);margin-bottom:18px}
+  .folder .need{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13.5px;color:#4a443d}
+  .triage{display:flex;gap:8px;margin-top:14px;padding-top:13px;border-top:1px solid var(--rule)}
+  .triage button{flex:1;font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.04em;padding:7px 0;border-radius:2px;
+    border:1px solid var(--rule-strong);background:none;cursor:pointer;color:var(--muted)}
+  .triage .accept{color:var(--mocha);border-color:#cBae86}
+  .triage .accept:hover{background:#f0e7d6}
+  .triage .nurture:hover{color:var(--dusty-blue);border-color:#c2cdd6}
+  .triage .pass:hover{color:var(--terracotta);border-color:#e3c3b4}
+  .chips{display:flex;gap:12px;flex-wrap:wrap}
+  .chip-m{background:#332e29;border:1px solid #443e36;border-radius:3px;padding:8px 13px;font-size:12.5px;color:#cdc4b4}
+  .chip-m b{color:#efe7d8;font-weight:500}
+  /* drawer */
+  .drawer{display:flex;gap:0;padding:0 26px;height:42px;align-items:stretch;background:#211e1b;font-family:"DM Mono",monospace;
+    border-top:1px solid #322d28;position:fixed;bottom:0;left:0;right:0;z-index:20}
+  .drawer .s{align-self:center;font-size:10px;letter-spacing:.12em;color:#6f675b;margin-right:8px}
+  .drawer button{background:none;border:none;color:#9d9384;font-family:inherit;font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+    padding:0 16px;cursor:pointer;display:flex;align-items:center;gap:5px}
+  .drawer button:hover{color:#e9e1d4}
+  .drawer .doorway{font-size:9px;color:var(--clay)}
+  .drawer .right{margin-left:auto;align-self:center;font-size:10px;color:#6f675b;letter-spacing:.06em}
+
+  /* sheet / overlay (shared) */
+  .scrim{position:fixed;inset:0;background:rgba(20,18,16,.55);z-index:60;display:none;align-items:flex-start;justify-content:center;padding:70px 20px;overflow:auto}
+  .scrim.show{display:flex}
+  .sheet{background:var(--paper);color:var(--ink);border-radius:4px;width:560px;max-width:100%;padding:30px 34px 26px;border:1px solid var(--rule-strong)}
+  .sheet .pill{font-family:"DM Mono",monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mocha);
+    border:1px solid var(--rule-strong);border-radius:2px;padding:2px 8px;display:inline-block;margin-bottom:14px}
+  .sheet h2{font-size:25px;margin-bottom:4px}
+  .sheet .sub{color:var(--muted);font-size:14px;margin-bottom:20px}
+  .field{margin-bottom:15px}
+  .field label{font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:5px}
+  .field input,.field textarea,.field select{width:100%;border:none;border-bottom:1px solid var(--rule-strong);background:none;
+    padding:7px 0;font-size:15px;color:var(--ink);font-family:inherit}
+  .field input:focus,.field textarea:focus{outline:none;border-bottom-color:var(--clay)}
+  .field.row{display:flex;gap:18px} .field.row>div{flex:1}
+  .seg{display:flex;gap:7px;flex-wrap:wrap}
+  .seg button{font-family:"DM Mono",monospace;font-size:11px;padding:5px 11px;border:1px solid var(--rule-strong);border-radius:2px;background:none;cursor:pointer;color:var(--muted)}
+  .seg button.on{color:var(--mocha);border-color:var(--clay);background:#f3eee4}
+  .sheet-acts{display:flex;align-items:center;gap:14px;margin-top:22px}
+  .btn{font-family:"DM Mono",monospace;font-size:12px;letter-spacing:.04em;padding:9px 16px;border-radius:3px;border:1px solid var(--rule-strong);background:none;color:var(--ink);cursor:pointer}
+  .btn.primary{background:var(--mocha);color:#f6efe2;border-color:var(--mocha)}
+  .btn.primary:hover{background:#4a3b2f}
+  .btn.ghost{border:none;color:var(--muted)}
+  .sheet-acts .micro{font-size:11px;color:var(--muted);font-family:"DM Mono",monospace}
+
+  /* ============ G2 — THE DOCUMENT (light) ============ */
+  #g2{background:var(--paper);min-height:100vh;color:var(--ink);display:flex}
+  .spine{width:180px;flex:none;padding:30px 0 0 30px;border-right:1px solid var(--rule)}
+  .spine .putdown{font-family:"DM Mono",monospace;font-size:11px;color:var(--muted);margin-bottom:26px;cursor:pointer}
+  .spine .mark{display:flex;gap:11px;align-items:flex-start;margin-bottom:17px;opacity:.5}
+  .spine .mark.active{opacity:1}
+  .spine .mark .lbl{font-size:13px} .spine .mark .st{font-family:"DM Mono",monospace;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .docbody{flex:1;padding:30px 44px 120px;max-width:760px}
+  .lh-strata{margin-bottom:8px}
+  .doctitle{font-size:30px} .docvitals{color:var(--muted);font-size:14px;margin-top:2px}
+  .instruments{display:flex;align-items:center;gap:10px;margin:18px 0 8px;flex-wrap:wrap}
+  .instruments .grp{display:flex;gap:10px;align-items:center}
+  .instruments .sep{width:1px;height:18px;background:var(--rule-strong);margin:0 6px}
+  .inst{font-family:"DM Mono",monospace;font-size:11.5px;letter-spacing:.03em;padding:7px 13px;border-radius:3px;border:1px solid var(--rule-strong);background:none;color:var(--ink);cursor:pointer}
+  .inst:hover{border-color:var(--clay)}
+  .inst.act{border-color:var(--mocha);color:var(--mocha)}
+  .settled-bar{display:flex;justify-content:space-between;align-items:center;background:#f1ebdf;border-radius:2px;padding:11px 16px;margin:7px 0;font-size:13.5px}
+  .settled-bar .nm{color:var(--aged-oak)} .settled-bar .mono{font-size:11px;color:var(--muted)}
+  .prop-sec{margin-top:22px}
+  .prop-sec .h{display:flex;justify-content:space-between;align-items:baseline}
+  .prop-sec h2{font-size:22px}
+  .invest{margin-top:10px}
+  .li{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--rule);font-size:14.5px}
+  .li .sub{font-size:12px;color:var(--muted)}
+  .li .amt{font-family:"DM Mono",monospace}
+  .total{display:flex;justify-content:space-between;padding:13px 0;font-size:15px}
+  .total .amt{font-family:"Playfair Display",serif;font-size:22px}
+  .docmargin{width:250px;flex:none;border-left:1px solid var(--rule);padding:30px 26px}
+  .mh{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+  .mitem{border:1px solid #e7d9c9;border-left:3px solid var(--terracotta);border-radius:2px;padding:11px 13px;margin-top:14px}
+  .mitem .k{font-family:"DM Mono",monospace;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--terracotta)}
+  .mitem .t{font-size:14px;margin-top:3px}
+  /* drafting room */
+  .room{background:var(--paper);width:720px;max-width:100%;padding:0;border-radius:4px;border:1px solid var(--rule-strong);overflow:hidden}
+  .room-top{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--rule);background:#f6f0e6}
+  .room-top .back{font-family:"DM Mono",monospace;font-size:11px;color:var(--muted);cursor:pointer}
+  .room-top .ttl{font-family:"Playfair Display",serif;font-size:17px}
+  .room-body{padding:24px 28px}
+  .room .progress{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  .room .progress .lbl{font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .liedit{display:flex;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--rule)}
+  .liedit input{border:none;border-bottom:1px dashed var(--rule-strong);background:none;font-size:14px;padding:4px 0;font-family:inherit;color:var(--ink)}
+  .liedit .name{flex:1} .liedit .amt{width:110px;text-align:right;font-family:"DM Mono",monospace}
+  .room-foot{display:flex;align-items:center;gap:12px;padding:16px 28px;border-top:1px solid var(--rule);background:#faf7f2}
+  /* send preview */
+  .preview{background:#fff;width:520px;max-width:100%;border:1px solid var(--rule-strong);border-radius:3px;overflow:hidden}
+  .preview .banner{background:var(--charcoal);color:#e9e1d4;font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.05em;padding:9px 18px;text-align:center}
+  .preview .paper{padding:30px 34px}
+  .preview .ph{font-family:"Playfair Display",serif;font-size:22px}
+  .preview .pmono{font-family:"DM Mono",monospace;font-size:11px;color:var(--muted);letter-spacing:.04em}
+  .preview .pline{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--rule);font-size:14px}
+  .closeX{font-family:"DM Mono",monospace;font-size:11px;color:var(--muted);cursor:pointer;border:none;background:none}
+  @media(max-width:900px){#g2{flex-direction:column}.spine,.docmargin{width:100%;border:none}}
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <span class="tag">Patina · proposed — closes the two P0 gaps</span>
+  <div class="switch">
+    <button id="b1" class="on" onclick="mode('g1')">① Lead intake → Brief</button>
+    <button id="b2" onclick="mode('g2')">② The proposal action</button>
+  </div>
+  <div class="legend">
+    <span><span class="swatch prop"></span>proposed (new)</span>
+    <span><span class="swatch exist"></span>exists today</span>
+  </div>
+</div>
+
+<!-- ============================ G1 — THE DESK ============================ -->
+<div id="g1" class="stage show">
+  <div class="desk-head">
+    <div class="desk-date serif">Thursday, June 18</div>
+    <div class="desk-find">FIND ANYTHING <b>⌘K</b></div>
+  </div>
+
+  <div class="capture-cta proposed" style="display:inline-block;padding:14px 16px 12px">
+    <span class="proposed-tag">G1 · new front door</span>
+    <button onclick="openCapture()">＋ Capture a lead</button>
+    <span class="hint">…or ⌘K → "new lead" — both begin a Brief, ≤5s</span>
+  </div>
+
+  <div class="band-label"><span class="strata on-dark"><i class="l1 f1"></i><i class="l2 f2"></i><i class="l3 f3"></i></span> Needs your hand</div>
+  <div class="folders" id="folders">
+    <!-- the new lead folder is injected here on capture -->
+    <div class="folder">
+      <div class="tab"><span class="strata"><i class="l1 f1"></i><i class="l2 f2"></i><i class="l3"></i></span> WHITFIELD</div>
+      <h3>Whitfield — Hillside</h3>
+      <div class="kind">Proposal</div>
+      <div class="need"><span>Opened 2 days ago, unsigned — follow up</span> <span class="stamp draft">sent</span></div>
+    </div>
+  </div>
+
+  <div class="band-label" style="margin-top:34px"><span class="strata on-dark"><i class="l1 f1"></i><i class="l2 f2"></i><i class="l3 f3"></i></span> Worth reconnecting</div>
+  <div class="chips" id="nurtureChips">
+    <div class="chip-m"><b>Priya Shah</b> — 1mo since last touch — reconnect now</div>
+  </div>
+
+  <div class="drawer">
+    <span class="s">STUDIO</span>
+    <button>Library <span class="doorway">↗</span></button><button>Orders</button>
+    <button>Accounts</button><button>People <span class="doorway">↗</span></button><button>Hours</button>
+    <span class="right">IN HAND TODAY · 3h 12m</span>
+  </div>
+</div>
+
+<!-- ============================ G2 — THE DOCUMENT ============================ -->
+<div id="g2" class="stage">
+  <div class="spine">
+    <div class="putdown">← Put down</div>
+    <div class="mark"><span class="strata"><i class="l1 f1"></i></span><div><div class="lbl">Brief</div><div class="st">settled</div></div></div>
+    <div class="mark"><span class="strata"><i class="l1 f1"></i><i class="l2"></i></span><div><div class="lbl">Discovery</div><div class="st">settled · may 5</div></div></div>
+    <div class="mark"><span class="strata"><i class="l1 f1"></i><i class="l2 f2"></i></span><div><div class="lbl">Direction</div><div class="st">settled · may 5</div></div></div>
+    <div class="mark active"><span class="strata"><i class="l1 f1"></i><i class="l2 f2"></i><i class="l3"></i></span><div><div class="lbl">Proposal</div><div class="st" style="color:var(--terracotta)">expired</div></div></div>
+    <div class="mark"><span class="strata"><i class="l1"></i></span><div><div class="lbl">Project</div><div class="st">—</div></div></div>
+    <div class="mark"><span class="strata"><i class="l1"></i></span><div><div class="lbl">Install</div><div class="st">—</div></div></div>
+    <div class="mark"><span class="strata"><i class="l1"></i></span><div><div class="lbl">Care</div><div class="st">—</div></div></div>
+  </div>
+
+  <div class="docbody">
+    <div class="lh-strata"><span class="strata"><i class="l1 f1"></i><i class="l2 f2"></i><i class="l3"></i></span></div>
+    <div class="doctitle serif">Whitfield — Hillside Refresh</div>
+    <div class="docvitals">Sarah Whitfield · $48,000 proposed</div>
+
+    <div class="instruments proposed" style="padding:12px 14px 12px;margin-top:18px">
+      <span class="proposed-tag">G2 · stage-consistent instruments + the proposal act</span>
+      <div class="grp">
+        <button class="inst" onclick="alert('Opens the read-only client mirror — what the Whitfields see.')">View as the client</button>
+        <button class="inst" onclick="openFollow()">Send a note</button>
+      </div>
+      <span class="sep"></span>
+      <div class="grp">
+        <button class="inst act" onclick="openRoom()">Revise</button>
+        <button class="inst act" onclick="openPreview('resend')">Resend</button>
+        <button class="inst act" onclick="openFollow()">Follow up</button>
+      </div>
+    </div>
+    <div class="note" style="margin-bottom:8px">The Desk need-line says "revise or follow up." Now the document offers exactly those acts — no fall-back to the old portal.</div>
+
+    <div class="settled-bar"><span class="nm serif">Brief</span><span class="mono">settled</span></div>
+    <div class="settled-bar"><span class="nm serif">Discovery</span><span class="mono">settled · may 5</span></div>
+    <div class="settled-bar"><span class="nm serif">Direction</span><span class="mono">settled · may 5</span></div>
+
+    <div class="prop-sec">
+      <div class="h"><h2 class="serif">Proposal · v1</h2><span class="stamp expired">expired</span></div>
+      <div class="mono" style="font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-top:10px">Investment</div>
+      <div class="invest">
+        <div class="li"><div><div>Design fee</div><div class="sub">full-home, phased</div></div><div class="amt">$18,000</div></div>
+        <div class="li"><div><div>Furnishings allowance</div><div class="sub">living · dining · primary</div></div><div class="amt">$30,000</div></div>
+        <div class="total"><div>Total proposed</div><div class="amt">$48,000</div></div>
+      </div>
+      <div class="mono" style="font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-top:16px">Payment schedule</div>
+      <p style="font-size:14px;color:#4a443d;margin-top:6px">50% on signing · 25% on production start · 25% on install.</p>
+    </div>
+  </div>
+
+  <div class="docmargin">
+    <div class="mh"><span>In the margin</span><span>+ note</span></div>
+    <div class="mitem">
+      <div class="k">Proposal · expired</div>
+      <div class="t">Sent May 5 · opened twice · expired May 19. A nudge or a revise is overdue.</div>
+    </div>
+    <div class="note">Resolving the proposal here updates the margin, the Desk need-line, and the spine stamp in one act (§5).</div>
+  </div>
+</div>
+
+<!-- shared bottom drawer for G2 -->
+<div class="drawer" id="g2drawer" style="display:none">
+  <span class="s">STUDIO</span>
+  <button>Library <span class="doorway">↗</span></button><button>Orders</button>
+  <button>Accounts</button><button>People <span class="doorway">↗</span></button><button>Hours</button>
+  <span class="right">IN HAND · 00:42</span>
+</div>
+
+<!-- ====== Capture sheet (G1) ====== -->
+<div class="scrim" id="captureScrim">
+  <div class="sheet">
+    <span class="pill">New lead · begin a Brief</span>
+    <h2 class="serif">Who just came in?</h2>
+    <div class="sub">Just enough to begin. The Brief fills in as you go — nothing else is required.</div>
+    <div class="field"><label>Name</label><input id="capName" placeholder="e.g. The Okafors" /></div>
+    <div class="field row">
+      <div><label>Contact</label><input placeholder="email or phone" /></div>
+      <div><label>The project (one line)</label><input placeholder="e.g. Downtown loft refresh" /></div>
+    </div>
+    <div class="field"><label>Where from</label>
+      <div class="seg">
+        <button class="on">Referral</button><button>Website quiz</button><button>Instagram</button><button>Past client</button><button>Other</button>
+      </div>
+    </div>
+    <div class="sheet-acts">
+      <button class="btn primary" onclick="beginBrief()">Begin the Brief →</button>
+      <button class="btn ghost" onclick="closeAll()">Cancel</button>
+      <span class="micro">a Brief document is born on the Desk · R1</span>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Drafting Room (G2 · Revise) ====== -->
+<div class="scrim" id="roomScrim">
+  <div class="room">
+    <div class="room-top">
+      <span class="back" onclick="closeAll()">← put down the draft</span>
+      <span class="ttl">The Drafting Room · Whitfield — Hillside · revising v2</span>
+      <span></span>
+    </div>
+    <div class="room-body">
+      <div class="progress"><span class="lbl">composing</span>
+        <span class="strata" style="width:46px"><i class="l1 f1"></i><i class="l2 f2"></i><i class="l3 f3"></i></span>
+        <span class="mono" style="font-size:12px;color:var(--muted)">88% · ready to send</span></div>
+      <p style="font-size:13.5px;color:#4a443d;margin-bottom:14px">Revise in place — the proposal generates as you compose; nothing converts, the paper just updates. (Track 4)</p>
+      <div class="mono" style="font-size:10.5px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase">Investment</div>
+      <div class="liedit"><input class="name" value="Design fee" /><input class="amt" value="$18,000" /></div>
+      <div class="liedit"><input class="name" value="Furnishings allowance" /><input class="amt" value="$32,000" /></div>
+      <div class="liedit"><input class="name" placeholder="+ add a line…" /><input class="amt" placeholder="$" /></div>
+      <div class="total" style="border-top:1px solid var(--rule);margin-top:4px"><div>Total</div><div class="amt serif">$50,000</div></div>
+    </div>
+    <div class="room-foot">
+      <button class="btn primary" onclick="openPreview('send')">Review &amp; send →</button>
+      <button class="btn" onclick="closeAll()">Save draft</button>
+      <span class="micro mono" style="color:var(--muted);font-size:11px">new version supersedes v1 · the client sees one paper</span>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Send preview (G2 · Send/Resend) ====== -->
+<div class="scrim" id="previewScrim">
+  <div class="preview">
+    <div class="banner">This is what the Whitfields receive — review, then send</div>
+    <div class="paper">
+      <div class="ph serif">Hillside Refresh</div>
+      <div class="pmono">Proposal · Middlewest Studio · for Sarah &amp; Tom Whitfield</div>
+      <div style="margin:18px 0 6px" class="pmono" style="text-transform:uppercase">Investment</div>
+      <div class="pline"><span>Design fee</span><span class="mono">$18,000</span></div>
+      <div class="pline"><span>Furnishings allowance</span><span class="mono">$32,000</span></div>
+      <div class="pline" style="border:none;font-weight:600"><span>Total</span><span class="mono">$50,000</span></div>
+      <p style="font-size:12.5px;color:var(--muted);margin-top:14px">50% on signing · 25% on production · 25% on install</p>
+    </div>
+    <div class="room-foot" style="background:#fff;border-top:1px solid var(--rule)">
+      <button class="btn primary" onclick="sentDone()">Send to the Whitfields</button>
+      <button class="closeX" onclick="closeAll()">cancel</button>
+      <span class="micro mono" style="color:var(--muted);font-size:11px">one act · no dialog stack (R18)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Follow-up nudge (G2) ====== -->
+<div class="scrim" id="followScrim">
+  <div class="sheet" style="width:480px">
+    <span class="pill">Send a note · ad-hoc</span>
+    <h2 class="serif">A quiet nudge</h2>
+    <div class="sub">The Pulse handles Fridays; this is for now. Lands in the Whitfields' thread.</div>
+    <div class="field"><label>To</label><input value="Sarah Whitfield" readonly style="color:var(--muted)" /></div>
+    <div class="field"><label>Note</label><textarea rows="3" placeholder="Circling back on the Hillside proposal — happy to walk it through this week.">Circling back on the Hillside proposal — happy to walk it through this week.</textarea></div>
+    <div class="sheet-acts">
+      <button class="btn primary" onclick="sentDone()">Send the note</button>
+      <button class="btn ghost" onclick="closeAll()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function mode(m){
+    document.getElementById('g1').classList.toggle('show',m==='g1');
+    document.getElementById('g2').classList.toggle('show',m==='g2');
+    document.getElementById('b1').classList.toggle('on',m==='g1');
+    document.getElementById('b2').classList.toggle('on',m==='g2');
+    document.getElementById('g2drawer').style.display = m==='g2' ? 'flex':'none';
+    window.scrollTo(0,0);
+  }
+  function openCapture(){show('captureScrim')}
+  function openRoom(){show('roomScrim')}
+  function openFollow(){show('followScrim')}
+  function openPreview(){show('previewScrim')}
+  function show(id){document.getElementById(id).classList.add('show')}
+  function closeAll(){document.querySelectorAll('.scrim').forEach(s=>s.classList.remove('show'))}
+  // G1: capture → a new lead folder with triage appears on the Desk
+  function beginBrief(){
+    const nm=(document.getElementById('capName').value||'The Okafors').trim();
+    closeAll();
+    const f=document.createElement('div');
+    f.className='folder proposed';
+    f.style.cssText='padding-top:26px';
+    f.innerHTML=`<span class="proposed-tag">just captured</span>
+      <div class="tab"><span class="strata"><i class="l1 f1"></i><i class="l2"></i><i class="l3"></i></span> ${nm.split(' ').pop().toUpperCase()}</div>
+      <h3>${nm} — new lead</h3>
+      <div class="kind">Brief · just arrived</div>
+      <div class="need"><span>Triage — is this a fit?</span> <span class="stamp draft">new</span></div>
+      <div class="triage">
+        <button class="accept" onclick="accept(this,'${nm}')">Accept · begin</button>
+        <button class="nurture" onclick="nurture(this,'${nm}')">Nurture</button>
+        <button class="pass" onclick="pass(this)">Pass</button>
+      </div>`;
+    document.getElementById('folders').prepend(f);
+  }
+  function accept(btn,nm){
+    const f=btn.closest('.folder');
+    f.querySelector('.kind').textContent='Brief · discovery call to schedule';
+    f.querySelector('.need').innerHTML='<span>Schedule the discovery call</span> <span class="stamp settled">brief begun</span>';
+    f.querySelector('.triage').remove();
+    f.querySelector('.proposed-tag').textContent='now an engagement';
+  }
+  function nurture(btn,nm){
+    const f=btn.closest('.folder'); f.remove();
+    const c=document.createElement('div'); c.className='chip-m'; c.innerHTML=`<b>${nm}</b> — touchpoint scheduled · moved to People`;
+    document.getElementById('nurtureChips').prepend(c);
+  }
+  function pass(btn){const f=btn.closest('.folder');f.style.transition='opacity .4s';f.style.opacity='.25';
+    f.querySelector('.need').innerHTML='<span style="color:var(--muted)">Passed — kept in People, no longer on the Desk</span>';f.querySelector('.triage').remove();}
+  function sentDone(){closeAll();
+    const m=document.querySelector('#g2 .mitem');
+    if(m){m.style.borderLeftColor='var(--sage)';m.querySelector('.k').style.color='var(--sage)';
+      m.querySelector('.k').textContent='Proposal · re-sent';
+      m.querySelector('.t').textContent='v2 sent to the Whitfields just now · awaiting signature. The Desk need-line clears.';}
+  }
+</script>
+</body>
+</html>
