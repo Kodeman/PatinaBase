@@ -60,7 +60,11 @@ export function BriefSection({ leadId }: { leadId: string }) {
         <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">Brief</h2>
         {lead.response_deadline && (
           <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-            Respond by {fmtDay(lead.response_deadline)}
+            {/* R65 — response_deadline doubles as the reconnect date once
+                nurtured; the label follows the status. */}
+            {lead.status === 'contacted'
+              ? `Reconnect ${fmtDay(lead.response_deadline)}`
+              : `Respond by ${fmtDay(lead.response_deadline)}`}
           </span>
         )}
       </div>
@@ -126,7 +130,9 @@ export function BriefSection({ leadId }: { leadId: string }) {
           {lead.status === 'accepted'
             ? 'Accepted — now in Discovery'
             : lead.status === 'contacted'
-              ? 'Nurturing — kept in People'
+              ? lead.response_deadline
+                ? `Nurturing — reconnect ${fmtDay(lead.response_deadline)}`
+                : 'Nurturing — kept in People'
               : lead.status === 'declined'
                 ? 'Passed — kept in People'
                 : pretty(String(lead.status))}

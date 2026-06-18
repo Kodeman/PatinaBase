@@ -603,6 +603,47 @@ export function useBeginDiscovery() {
 }
 
 /**
+ * Nurture a lead with a reconnect date (Track 6, ruling R65).
+ *
+ * Distinct from a bare status flip: a nurtured lead earns a *dated* return. It
+ * leaves the Desk's needs-hand band immediately (status='contacted' + the R61
+ * desk-derivation gate) and rises again as a Desk need on/after `reconnectAt`
+ * (desk-derivation 'reconnect_due'). The reconnect date reuses
+ * `leads.response_deadline` — its meaning follows status (respond-by while
+ * new/viewed; reconnect-on while contacted), so no column is added (D7).
+ * An undated nurture is only a hope (R65); the UI always supplies a date.
+ */
+export function useNurtureLead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ leadId, reconnectAt }: { leadId: string; reconnectAt: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase
+        .from('leads')
+        .update({
+          status: 'contacted',
+          contacted_at: new Date().toISOString(),
+          response_deadline: reconnectAt,
+        })
+        .eq('id', leadId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { leadId }) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['lead', leadId] });
+      queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
+    },
+  });
+}
+
+/**
  * Decline a lead
  */
 export function useDeclineLead() {

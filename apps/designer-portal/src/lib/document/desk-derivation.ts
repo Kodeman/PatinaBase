@@ -84,6 +84,7 @@ export type NeedKind =
   | 'proposal_declined'
   | 'proposal_expired'
   | 'new_lead'
+  | 'reconnect_due'
   | 'hesitating_proposal'
   | 'awaiting_inspection'
   | 'schedule_conflict'
@@ -265,6 +266,10 @@ const NEED_RANK: Record<NeedKind, number> = {
   proposal_declined: 4,
   proposal_expired: 5,
   new_lead: 6,
+  // R65: a due reconnect is a real need but a soft one — it sorts just under a
+  // fresh inquiry (a new lead outranks a scheduled touchpoint) and above the
+  // hesitating-proposal nudge. Fractional to stay surgical (sort is numeric).
+  reconnect_due: 6.5,
   hesitating_proposal: 7,
   awaiting_inspection: 8,
   // R28: a schedule collision slots under awaiting-inspection; R33's blessed
@@ -411,11 +416,29 @@ export function deriveNeed(
   }
 
   if (row.engagement_kind === 'lead') {
+    // R65 — a nurtured lead (status='contacted') carries a RECONNECT DATE in
+    // response_deadline. It stays off the needs-hand band until that date, then
+    // rises again here as a 'reconnect_due' need — a dated thing earns a return
+    // (R22). An undated or still-future reconnect → no folder (People's quiet
+    // reconnect band covers the undated case). Reuses response_deadline; the
+    // meaning follows status, so nothing is added (D7).
+    if (row.lead_status === 'contacted') {
+      const reconnectAt = row.lead_response_deadline;
+      if (reconnectAt && new Date(reconnectAt).getTime() <= now.getTime()) {
+        return {
+          kind: 'reconnect_due',
+          text: `Reconnect — touchpoint due ${fmtDay(reconnectAt)}`,
+          stamp: { label: 'RECONNECT', ...STAMP.dustyBlue },
+          urgent: false,
+        };
+      }
+      return null;
+    }
+
     // R61 — the new-lead triage gate. Shape C (`document_state`) still includes
-    // `leads.status='contacted'`, but a nurtured lead has been moved off the
-    // needs-your-hand band into People's nurture/reconnect queue. Only a lead
-    // the designer hasn't yet acted on (new/viewed) is "the one thing today";
-    // 'contacted' falls through to deriveMotion (no folder). Additive, no migration.
+    // `leads.status='contacted'` (handled above); accepted/declined leave Shape
+    // C entirely. Only a lead the designer hasn't yet acted on (new/viewed) is
+    // "the one thing today".
     if (row.lead_status !== 'new' && row.lead_status !== 'viewed') return null;
 
     const deadline = row.lead_response_deadline;
@@ -605,7 +628,8 @@ function needSortKey(folder: DeskFolder): [number, number, number] {
   const date =
     need.kind === 'overdue_decision' && row.earliest_overdue_due
       ? new Date(row.earliest_overdue_due).getTime()
-      : need.kind === 'new_lead' && row.lead_response_deadline
+      : (need.kind === 'new_lead' || need.kind === 'reconnect_due') &&
+          row.lead_response_deadline
         ? new Date(row.lead_response_deadline).getTime()
         : need.kind === 'hesitating_proposal' && row.proposal_sent_at
           ? new Date(row.proposal_sent_at).getTime()
