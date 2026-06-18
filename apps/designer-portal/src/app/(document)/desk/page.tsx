@@ -8,14 +8,15 @@
  * tiles, no badges, no dashboard furniture.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
-import { openCommandBar } from '@/components/document/command-bar';
+import { openCommandBar, captureLeadPending } from '@/components/document/command-bar';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { FolderCard } from '@/components/document/folder-card';
 import { InMotionChip } from '@/components/document/in-motion-chip';
 import { StrataMark } from '@/components/document/strata-mark';
 import { DeskReconnect } from '@/components/document/desk-reconnect';
+import { CaptureLeadSheet } from '@/components/document/overlays/capture-lead-sheet';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -28,6 +29,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export default function DeskPage() {
   const { data, isLoading, isError } = useDeskEngagements();
+  const [captureOpen, setCaptureOpen] = useState(false);
 
   // R21 week-one watch: the Desk's composition on each load (folder/chip
   // counts + need-line kinds) so noise — esp. sent-unacknowledged frequency
@@ -47,6 +49,23 @@ export default function DeskPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deskSig]);
 
+  // ⌘K's "Capture a lead" action dispatches this — open the sheet from there
+  // too, so the front door is reachable by command as well as by the CTA. When
+  // the command was run from another surface, the event fired before this
+  // listener existed; the pending flag carries the intent across the route.
+  useEffect(() => {
+    if (captureLeadPending.value) {
+      captureLeadPending.value = false;
+      setCaptureOpen(true);
+    }
+    const onOpen = () => {
+      captureLeadPending.value = false;
+      setCaptureOpen(true);
+    };
+    window.addEventListener('document:open-capture-lead', onOpen);
+    return () => window.removeEventListener('document:open-capture-lead', onOpen);
+  }, []);
+
   const today = new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     month: 'long',
@@ -57,16 +76,25 @@ export default function DeskPage() {
     <main className="mx-auto w-full max-w-3xl px-6 pb-28 pt-14">
       <header className="mb-12 flex items-baseline justify-between gap-4">
         <h1 className="font-heading text-[1.65rem] italic text-[var(--color-pearl)]">{today}</h1>
-        <button
-          type="button"
-          onClick={openCommandBar}
-          className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--doc-desk-ink)] hover:text-[var(--color-clay)]"
-        >
-          Find anything{' '}
-          <kbd className="rounded-[3px] border border-[var(--doc-desk-ink)] px-1 py-px font-mono">
-            ⌘K
-          </kbd>
-        </button>
+        <div className="flex items-baseline gap-5">
+          <button
+            type="button"
+            onClick={() => setCaptureOpen(true)}
+            className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--doc-desk-ink)] hover:text-[var(--color-clay)]"
+          >
+            ＋ Capture a lead
+          </button>
+          <button
+            type="button"
+            onClick={openCommandBar}
+            className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--doc-desk-ink)] hover:text-[var(--color-clay)]"
+          >
+            Find anything{' '}
+            <kbd className="rounded-[3px] border border-[var(--doc-desk-ink)] px-1 py-px font-mono">
+              ⌘K
+            </kbd>
+          </button>
+        </div>
       </header>
 
       <section aria-labelledby="needs-your-hand">
@@ -123,6 +151,10 @@ export default function DeskPage() {
           population over the unified directory; renders nothing when no tie is
           due, so it never adds noise to a clean Desk. */}
       <DeskReconnect />
+
+      {/* The capture front door (G1 · R62) — an overlay over the Desk, never a
+          route; the Desk beneath does not unmount (D1). */}
+      <CaptureLeadSheet open={captureOpen} onClose={() => setCaptureOpen(false)} />
     </main>
   );
 }

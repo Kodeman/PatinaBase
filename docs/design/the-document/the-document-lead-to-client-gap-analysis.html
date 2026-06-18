@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lead → Client · Live Gap Analysis · The Document</title>
+<style>
+  :root{
+    --off-white:#FAF7F2;--clay:#C4A57B;--aged-oak:#8B7355;--mocha:#5C4A3C;
+    --charcoal:#2C2926;--sage:#A8B5A0;--dusty-blue:#8B9CAD;--terracotta:#D4A090;--golden:#E8C547;
+    --paper:#FAF7F2;--ink:#2C2926;--rule:#E5DDD0;--rule-strong:#D8CCB8;--muted:#8B7355;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:64px 40px 120px}
+  h1,h2,h3{font-family:"Playfair Display",Georgia,serif;font-weight:500;letter-spacing:-.01em}
+  h1{font-size:42px;line-height:1.1} h2{font-size:27px;margin:0 0 6px} h3{font-size:19px}
+  .mono{font-family:"DM Mono","SFMono-Regular",Menlo,monospace}
+  .lede{font-size:18px;color:#4a443d;max-width:64ch}
+  .kicker{font-family:"DM Mono",monospace;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .strata{display:inline-flex;flex-direction:column;gap:3px;width:42px;vertical-align:middle;margin-right:14px}
+  .strata i{height:3px;border-radius:1px;display:block}
+  .strata i.a{width:100%;background:var(--mocha)} .strata i.b{width:80%;background:var(--clay)} .strata i.c{width:60%;background:var(--dusty-blue)}
+  .rule{height:1px;background:var(--rule);margin:38px 0}
+  section{margin:0 0 14px}
+  .block{margin:30px 0}
+  p{margin:0 0 14px;max-width:68ch}
+  .small{font-size:14px;color:var(--muted)}
+  /* summary stat band */
+  .band{display:flex;gap:34px;flex-wrap:wrap;background:#26231F;color:#E9E1D4;border-radius:3px;padding:22px 28px;margin:26px 0}
+  .band .lens{font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:#9a9082;align-self:center}
+  .band .stat .n{font-family:"Playfair Display",serif;font-size:26px;line-height:1}
+  .band .stat .n.sage{color:var(--sage)} .band .stat .n.gold{color:var(--golden)} .band .stat .n.terra{color:var(--terracotta)}
+  .band .stat .l{font-size:12px;color:#a59c8c;margin-top:4px}
+  /* walk list */
+  .walk{list-style:none;margin:14px 0}
+  .walk li{padding:11px 0 11px 0;border-bottom:1px solid var(--rule);display:flex;gap:14px;align-items:baseline}
+  .walk .stage{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mocha);min-width:148px;flex:none}
+  .walk .verdict{flex:1}
+  .ok{color:var(--aged-oak)} .partial{color:#9a7d4e}
+  .chip{font-family:"DM Mono",monospace;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;padding:2px 7px;border-radius:2px;border:1px solid;display:inline-block;vertical-align:middle}
+  .chip.full{color:var(--sage);border-color:#bcccb4} .chip.part{color:#a98a4e;border-color:#e0cda0}
+  /* gap cards */
+  .gap{border:1px solid var(--rule);border-radius:3px;padding:22px 24px;margin:18px 0}
+  .gap .hd{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+  .gap .id{font-family:"DM Mono",monospace;font-size:13px;color:var(--mocha);font-weight:600}
+  .gap h3{flex:1}
+  .sev{font-family:"DM Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid;flex:none}
+  .sev.p0{color:var(--terracotta);border-color:#e3c3b4;background:#fbf2ee}
+  .sev.p1{color:#a98a4e;border-color:#e0cda0;background:#fbf6ea}
+  .sev.p2{color:var(--dusty-blue);border-color:#c2cdd6;background:#eef2f4}
+  .gap .row{margin:9px 0}
+  .gap .lbl{font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:2px}
+  .gap .close{background:#F3EEE4;border-left:2px solid var(--clay);padding:11px 15px;border-radius:0 2px 2px 0;margin-top:10px}
+  .maps{font-size:13px;color:var(--muted);margin-top:8px}
+  /* roadmap */
+  .road{border-top:1px solid var(--rule)}
+  .road .r{display:flex;gap:18px;padding:14px 0;border-bottom:1px solid var(--rule)}
+  .road .when{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.05em;color:var(--mocha);min-width:130px;flex:none;padding-top:2px}
+  .foot{margin-top:44px;font-size:13px;color:var(--muted);font-style:italic}
+  strong{font-weight:600;color:var(--ink)}
+  em.q{font-style:normal;font-family:"DM Mono",monospace;font-size:.92em;background:#F0EADC;padding:1px 5px;border-radius:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="kicker"><span class="strata"><i class="a"></i><i class="b"></i><i class="c"></i></span>Patina · The Document · live audit</div>
+  <h1>Lead → Client, walked live.<br>What's built, and the gaps that remain.</h1>
+  <p class="lede" style="margin-top:18px">A hands-on walk of <span class="mono">app.patina.cloud</span> on June 18, 2026 — testing the full lead-to-client loop inside the new Desk &amp; Document, against the design rulings (R1–R56) and the portal-vs-desk gap matrix.</p>
+
+  <div class="band">
+    <span class="lens">the headline</span>
+    <div class="stat"><div class="n sage">~85%</div><div class="l">of the loop walkable in-Document</div></div>
+    <div class="stat"><div class="n">7</div><div class="l">remaining gaps</div></div>
+    <div class="stat"><div class="n terra">2</div><div class="l">P0 · block the clean loop</div></div>
+    <div class="stat"><div class="n gold">2</div><div class="l">P1 · workaround exists</div></div>
+    <div class="stat"><div class="n">3</div><div class="l">P2 · polish &amp; data</div></div>
+  </div>
+
+  <div class="block">
+    <h2>The surprise: the build has overtaken the map</h2>
+    <p>The portal-vs-desk gap matrix (dated June 14) calls the <strong>People book "a literal placeholder"</strong> and the whole authoring/CRM half "absent." Four days later, on the live app, that is no longer true. Walking it, I found the <strong>People Room built</strong> (a walk-in Room: a directory of everyone — clients, leads, makers, GCs, team — plus Threads, Nurture, Reviews, Portfolio, Outreach, and an Engine reconnection nudge), the <strong>decision composer built</strong> (the R55 sheet — kind picker Selection/RFI/Submittal/Sign-off/Punch, the subject taxonomy, whose-court, materialize-from-Library — ruled in this very session, already live), <strong>coordination / ball-in-court</strong> live in the document, and the full Document grammar (spine, Account band, The Work, FF&amp;E by room, folio, letterhead instruments, colophon, margin, the timer). <strong>The gap matrix is stale; planning from it would mislead.</strong></p>
+    <p>So this analysis is not the matrix's 103 "absent" rows. It's what actually breaks — or is missing — when you try to carry a real lead through to a client today.</p>
+  </div>
+
+  <div class="rule"></div>
+
+  <div class="block">
+    <h2>What we walked</h2>
+    <p class="small">The lead→client loop, stage by stage, with the live verdict.</p>
+    <ul class="walk">
+      <li><span class="stage">The Desk</span><span class="verdict ok">Needs-your-hand folders, in-motion chips, "worth reconnecting" — all render true. <span class="chip full">works</span></span></li>
+      <li><span class="stage">⌘K command bar</span><span class="verdict ok">Jumps to documents + ledgers + "ask the Engine." Clean. <span class="chip full">works</span></span></li>
+      <li><span class="stage">Lead intake</span><span class="verdict partial">No create path from Desk or ⌘K — <em class="q">new lead</em> only offers "ask the Engine." <span class="chip part">gap G1</span></span></li>
+      <li><span class="stage">People Room</span><span class="verdict ok">Directory of everyone, role filters, person journey (Style DNA, timeline, nurture, trust, private note). <span class="chip full">works</span></span></li>
+      <li><span class="stage">Decision / coordination</span><span class="verdict ok">The composer + ball-in-court are live in the document margin. <span class="chip full">works</span></span></li>
+      <li><span class="stage">Proposal (author/revise)</span><span class="verdict partial">Proposal renders read-only — no revise / follow-up / send affordance in the document. <span class="chip part">gap G2</span></span></li>
+      <li><span class="stage">Sign → activate</span><span class="verdict ok">Signed engagements carry into an active Project document (Brief→Care spine). <span class="chip full">works</span></span></li>
+      <li><span class="stage">Client (relationship)</span><span class="verdict ok">Client lands in People with journey, projects, threads. <span class="chip full">works</span></span></li>
+    </ul>
+  </div>
+
+  <div class="rule"></div>
+
+  <div class="block">
+    <h2>The gaps, and how we close them</h2>
+
+    <div class="gap">
+      <div class="hd"><span class="id">G1</span><h3>Lead intake has no Desk / ⌘K front door</h3><span class="sev p0">P0 · funnel front edge</span></div>
+      <div class="row"><span class="lbl">What we saw</span>From the Desk, ⌘K on <em class="q">new lead</em>, <em class="q">new proposal</em>, even <em class="q">new client</em> returns only "Ask the Engine · ask &amp; place" — there is no create/intake action. The funnel's first step (capture a lead, triage accept/decline/pass) has no obvious in-Document home; it lives in the old <span class="mono">/portal/leads</span> or behind People's "+ Add."</div>
+      <div class="row"><span class="lbl">Why it matters</span>Lead→client starts with a lead. If a designer can't intake or triage one without leaving the Document, the very first step breaks the model.</div>
+      <div class="close"><strong>Close it:</strong> a ⌘K + Desk "new lead / capture" that births a <strong>Brief document on the Desk</strong> (R1 — a lead is the lead/Brief shape), and lead triage (Accept → Brief begins · Nurture · Pass) on the Desk and in the People Pipeline. The People Room already has the "Leads" filter and "+ Add" — promote intake to the Desk and ⌘K.</div>
+      <div class="maps">Maps to: R1 (engagement identity), the People Pipeline (just designed), gap-matrix "Lead Intake &amp; Matching" (P1, portal-only actions).</div>
+    </div>
+
+    <div class="gap">
+      <div class="hd"><span class="id">G2</span><h3>The proposal stage is read-only — no revise / follow-up / send</h3><span class="sev p0">P0 · funnel mid</span></div>
+      <div class="row"><span class="lbl">What we saw</span>The Desk need-line promises <em class="q">"Proposal expired — revise or follow up."</em> Opening it, the Proposal · V1 section renders read-only (investment lines + "payment schedule to be confirmed") with <strong>no revise, resend, or follow-up affordance anywhere in the document</strong> — and none of the letterhead instruments (View as / Send a note) that the Project-stage document carries. The action the Desk advertises has no home.</div>
+      <div class="row"><span class="lbl">Why it matters</span>This is the conversion hinge of lead→client. A stalled/expired proposal is exactly where a designer must act — and the document offers no way to.</div>
+      <div class="close"><strong>Close it:</strong> wire proposal authoring (the Drafting Room, Track 4) and a <strong>"revise · resend · follow up" instrument</strong> onto the Proposal section, and make the letterhead instruments (View as the client · Send a note) <strong>stage-consistent</strong> across Brief→Care, not Project-only. The Desk need-line's verb and the document's available act must match.</div>
+      <div class="maps">Maps to: Track 4 (R42–R45 proposal authoring), R27 (letterhead instruments), gap-matrix "Send Proposal / Revise Proposal" (P0).</div>
+    </div>
+
+    <div class="gap">
+      <div class="hd"><span class="id">G3</span><h3>People aren't reachable from ⌘K</h3><span class="sev p1">P1 · navigation</span></div>
+      <div class="row"><span class="lbl">What we saw</span>⌘K finds documents + ledgers + the Engine, but typing a person's name (<em class="q">Priya</em>) returns only "Ask the Engine." You can reach a relationship only by walking into the People Room — there's no jump-to-person.</div>
+      <div class="close"><strong>Close it:</strong> add people to ⌘K results (a "jump to [person] →" line), reusing the People directory query. ⌘K already pre-addresses ledgers; people are the missing noun.</div>
+      <div class="maps">Maps to: R38 (the Engine / ⌘K), the People Room directory.</div>
+    </div>
+
+    <div class="gap">
+      <div class="hd"><span class="id">G4</span><h3>The timer offered a 36-hour, ~2,187 "quiet-minute" close-out</h3><span class="sev p1">P1 · data integrity</span></div>
+      <div class="row"><span class="lbl">What we saw</span>On opening a document, the log strip surfaced a close-out for a different doc — <em class="q">"Lee Townhouse – Kitchen R2 was in hand for 36h 09m … includes ~2187 quiet minutes"</em> — i.e. an abandoned timer that ran ~36 hours, almost entirely idle, offered as a loggable entry.</div>
+      <div class="row"><span class="lbl">Why it matters</span>Write-first close-out (R20) is only honest if the proposed number is sane. A 36-hour idle log is a trust and billing hazard — exactly the kind of thing a designer would have to catch and discard manually.</div>
+      <div class="close"><strong>Close it:</strong> guard abandoned timers — auto-pause on long idle / on session end, cap the chained-out duration, and have the close-out propose the <strong>active</strong> time (idle annotated, not summed). The 1-minute idle threshold (R10/I16) annotates; it should also bound a runaway timer.</div>
+      <div class="maps">Maps to: R20 (write-first close-out), I16 (the time system), D10 (idle annotates, never auto-trims — needs a runaway bound).</div>
+    </div>
+
+    <div class="gap">
+      <div class="hd"><span class="id">G5</span><h3>Cold load flashes the old portal chrome</h3><span class="sev p2">P2 · polish</span></div>
+      <div class="row"><span class="lbl">What we saw</span>Navigating to <span class="mono">app.patina.cloud</span> briefly paints the old zone nav (Today / Pipeline / Procurement / …) before resolving to the Desk.</div>
+      <div class="close"><strong>Close it:</strong> resolve the <span class="mono">/portal→/desk</span> flip server-side (or render the Desk shell first) so the flipped studio never sees the retired chrome, even for a frame.</div>
+      <div class="maps">Maps to: R21 (the flip protocol), the dissolve staging.</div>
+    </div>
+
+    <div class="gap">
+      <div class="hd"><span class="id">G6</span><h3>The decision composer has no obvious dismiss</h3><span class="sev p2">P2 · UX</span></div>
+      <div class="row"><span class="lbl">What we saw</span>The "New decision" composer didn't close on Esc or on backdrop-click; the only exit (Cancel) sits below the fold, past the option builder.</div>
+      <div class="close"><strong>Close it:</strong> Esc-to-close + backdrop-dismiss + a quiet top close affordance, each with an unsaved-draft guard. (The composer itself is excellent — this is purely the exit.)</div>
+      <div class="maps">Maps to: R55 (the composer), D2 (nothing breaks through — applies to dismissal too).</div>
+    </div>
+
+    <div class="gap">
+      <div class="hd"><span class="id">G7</span><h3>Seed / data hygiene muddies the surfaces</h3><span class="sev p2">P2 · data</span></div>
+      <div class="row"><span class="lbl">What we saw</span>Junk proposal content (<em class="q">sdf</em>, <em class="q">qw</em>), a duplicated engagement (<em class="q">Smith Residence — Living Room (seed)</em> and its <em class="q">(Copy)</em>), and "Full Room Design" appearing three times in the In-Motion drafting strip.</div>
+      <div class="close"><strong>Close it:</strong> a seed cleanup / de-dupe pass before the next pilot or demo, so the Desk and People reflect real shapes (and so duplicates aren't masking a real copy/activation bug).</div>
+      <div class="maps">Maps to: pilot data hygiene; verify the proposal-copy / activation path doesn't duplicate engagements.</div>
+    </div>
+  </div>
+
+  <div class="rule"></div>
+
+  <div class="block">
+    <h2>The closure roadmap</h2>
+    <p class="small">Two P0s to make the loop clean; the rest in priority order.</p>
+    <div class="road">
+      <div class="r"><span class="when">First — P0</span><div><strong>The funnel's two open ends.</strong> G1 lead intake/triage (a Desk + ⌘K "new lead" that births a Brief; triage on the Desk &amp; People Pipeline) and G2 the proposal action (wire the Drafting Room + revise/resend/follow-up onto the Proposal section; stage-consistent letterhead instruments). These two make lead→client completable end-to-end inside the Document.</div></div>
+      <div class="r"><span class="when">Next — P1</span><div><strong>Reach &amp; trust.</strong> G3 people in ⌘K (jump-to-person), G4 the runaway-timer guard (sane close-out, bounded idle). Small, high-value.</div></div>
+      <div class="r"><span class="when">Then — P2</span><div><strong>Polish &amp; hygiene.</strong> G5 kill the old-chrome flash, G6 composer dismiss, G7 seed cleanup / de-dupe.</div></div>
+      <div class="r"><span class="when">Also</span><div><strong>Re-run the gap matrix.</strong> The June-14 sweep is stale (People, the composer, coordination are now built). A fresh pass keeps the roadmap honest — and would let us retire the matrix's "People is a placeholder" headline.</div></div>
+    </div>
+  </div>
+
+  <p class="foot">Walked live on app.patina.cloud · June 18, 2026 · against DECISIONS R1–R56, the portal-vs-desk gap matrix, and the-document-spec v1.4. Observations only — no records were created, sent, or modified in the live app.</p>
+
+</div>
+</body>
+</html>

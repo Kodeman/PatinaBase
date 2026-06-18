@@ -16,6 +16,7 @@ import { fillStateForDesk } from '@/lib/document/fill-state';
 import { Stamp } from './stamp';
 import { StrataMark } from './strata-mark';
 import { openLedger } from './command-bar';
+import { TriageBar } from './triage-bar';
 
 const SECTION_LABEL: Record<string, string> = {
   brief: 'Brief',
@@ -124,6 +125,12 @@ function FolderFace({
           <p className="flex-1 text-[12px] leading-relaxed text-[var(--text-body)]">{need.text}</p>
           <Stamp label={need.stamp.label} color={need.stamp.color} ink={need.stamp.ink} />
         </div>
+        {/* R61: a captured lead is the one need whose act is a triage, not a
+            pick-up. The bar's buttons stopPropagation so they never trip the
+            card's link (D1). Shape C always carries lead_id. */}
+        {need.kind === 'new_lead' && row.lead_id && (
+          <TriageBar leadId={row.lead_id} variant="desk" />
+        )}
       </div>
     </>
   );

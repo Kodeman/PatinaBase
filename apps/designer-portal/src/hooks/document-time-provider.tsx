@@ -42,10 +42,17 @@ import {
   closeOutTimer,
   idleSecondsFromPings,
   inHandTodayMinutes,
+  longestIdleGapSeconds,
+  RUNAWAY_IDLE_SECONDS,
+  suggestedMinutes,
   todayStartISO,
   type LogOffer,
   type TimeSource,
 } from '@/lib/document/time-derivation';
+
+// R64 — grace added past the last activity ping when bounding an abandoned
+// timer's end, so a normal trailing pause near the threshold isn't shaved.
+const RUNAWAY_END_GRACE_SECONDS = 60;
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -153,18 +160,29 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
       timer: RunningTimer,
       opts: { offerStrip: boolean; projectName?: string; phaseKey?: string | null },
     ) => {
-      const elapsed = Math.max(
-        0,
-        (Date.now() - new Date(timer.started_at).getTime()) / 1000,
-      );
+      const startMs = new Date(timer.started_at).getTime();
+      const nowMs = Date.now();
+
+      // R64 — auto-pause at last-activity. If nothing pinged for ≥ the runaway
+      // threshold (a tab left open, a closed laptop), the timer was abandoned:
+      // bound the effective end to the last activity ping + a small grace so
+      // raw seconds can't balloon. Normal sessions end at `now` unchanged.
+      const activityMs = pingsRef.current.filter((t) => t >= startMs);
+      const lastActivityMs = activityMs.length ? activityMs[activityMs.length - 1] : startMs;
+      const trailingIdleSeconds = (nowMs - lastActivityMs) / 1000;
+      const endMs =
+        trailingIdleSeconds >= RUNAWAY_IDLE_SECONDS
+          ? Math.min(nowMs, lastActivityMs + RUNAWAY_END_GRACE_SECONDS * 1000)
+          : nowMs;
+
+      const elapsed = Math.max(0, (endMs - startMs) / 1000);
       const source = ((timer as { source?: string }).source ?? 'timer_manual') as TimeSource;
       const ruling = closeOutTimer(source, elapsed);
 
-      // D10: idle gaps inside THIS entry's window, annotation only.
-      const startMs = new Date(timer.started_at).getTime();
-      const idleSeconds = idleSecondsFromPings(
-        [startMs, ...pingsRef.current.filter((t) => t >= startMs), Date.now()],
-      );
+      // D10: idle gaps inside THIS entry's (bounded) window, annotation only.
+      const window = [startMs, ...activityMs.filter((t) => t <= endMs), endMs];
+      const idleSeconds = idleSecondsFromPings(window);
+      const longestGap = longestIdleGapSeconds(window);
       pingsRef.current = [];
 
       if (ruling.action === 'discard_silently') {
@@ -172,6 +190,16 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
         invalidateTimeSurfaces();
         return;
       }
+
+      // R64 — abandonment guard: a single contiguous idle gap ≥ the runaway
+      // threshold proposes ACTIVE time (raw − idle), not the full elapsed.
+      // Normal short idle keeps the shipped full-raw D10 behavior. The sub-60s
+      // discard already happened above (ruling), so the offer is ≥ 1 min.
+      const proposedMinutes = suggestedMinutes({
+        rawSeconds: Math.round(elapsed),
+        idleSeconds,
+        longestIdleGapSeconds: longestGap,
+      });
 
       // R4: phase auto-fills from the document's current phase at log time —
       // only when the row didn't already carry one from start.
@@ -181,7 +209,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
 
       await api.current.stopTimer.mutateAsync({
         entryId: timer.id,
-        durationMinutesOverride: ruling.durationMinutes,
+        durationMinutesOverride: proposedMinutes,
         rawSeconds: Math.round(elapsed),
         idleSeconds,
         ...(autoPhase !== undefined ? { phaseKey: autoPhase } : {}),
@@ -194,7 +222,7 @@ export function DocumentTimeProvider({ children }: { children: React.ReactNode }
           projectId: timer.project_id,
           projectName: opts.projectName ?? timer.project?.name ?? 'this document',
           rawSeconds: Math.round(elapsed),
-          suggestedMinutes: ruling.durationMinutes,
+          suggestedMinutes: proposedMinutes,
           phaseKey: timer.phase_key ?? autoPhase ?? null,
           source,
           idleSeconds,

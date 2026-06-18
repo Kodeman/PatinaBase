@@ -190,6 +190,11 @@ export function useCreateLead() {
       location_state?: string;
       contact_name?: string;
       contact_email?: string;
+      // Optional ISO timestamp. Additive + backward-compatible: the old
+      // `/portal/leads` AddLeadDialog never passes it (stays null there).
+      // The Document's CaptureLeadSheet sets it +1 day (Track 6, R62) so the
+      // new lead rises as a `new_lead` need on the Desk.
+      response_deadline?: string;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -211,6 +216,7 @@ export function useCreateLead() {
           location_state: input.location_state || null,
           contact_name: input.contact_name || null,
           contact_email: input.contact_email || null,
+          response_deadline: input.response_deadline || null,
           // match_score left null — the UI coalesces `match_score || 0`.
         })
         .select()
@@ -445,6 +451,142 @@ export function useAcceptLead() {
               status: 'active',
             });
 
+          if (clientError) throw clientError;
+        }
+      }
+
+      return lead;
+    },
+    onSuccess: (_, leadId) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['lead', leadId] });
+      queryClient.invalidateQueries({ queryKey: ['lead-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
+    },
+  });
+}
+
+/**
+ * Begin Discovery — the Document's "Accept" triage act (Track 6, ruling R61).
+ *
+ * Distinct from {@link useAcceptLead}: the old `/portal/leads` flow jumps a
+ * relationship straight to `status='active'` (it expects you to then build a
+ * proposal/project). The Document model instead wants an accepted lead to
+ * surface as a **Discovery** document on the Desk — `document_state` Shape D,
+ * which requires `designer_clients.status='lead'` AND no live proposal/project.
+ * Verified by SQL smoke: an `active`, project-less relationship is invisible in
+ * `document_state`; the same row at `status='lead'` appears as Discovery.
+ *
+ * One-act-many-surfaces: this flips the lead's Desk folder from Brief (Shape C)
+ * to Discovery (Shape D) in one act. Callers should ALSO invalidate the Desk /
+ * document-state query keys in their own onSuccess so the folder re-derives
+ * without a reload (the desk key lives in the app, not this package).
+ *
+ * `useAcceptLead` is intentionally left untouched (phase-in constraint D7 — the
+ * old zone must keep functioning).
+ */
+export function useBeginDiscovery() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (leadId: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data: lead, error: leadError } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('id', leadId)
+        .single();
+
+      if (leadError) throw leadError;
+
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update({
+          status: 'accepted',
+          accepted_at: new Date().toISOString(),
+        })
+        .eq('id', leadId);
+
+      if (updateError) throw updateError;
+
+      // Upsert the designer_clients relationship at status='lead' (Discovery).
+      // Mirrors useAcceptLead's partial-unique-index handling exactly; the ONLY
+      // difference is the target status ('lead', not 'active').
+      if (lead.homeowner_id) {
+        const { data: existing } = await supabase
+          .from('designer_clients')
+          .select('id')
+          .eq('designer_id', lead.designer_id)
+          .eq('client_id', lead.homeowner_id)
+          .maybeSingle();
+
+        if (existing) {
+          const { error: clientError } = await supabase
+            .from('designer_clients')
+            .update({ source: 'lead', lead_id: leadId, status: 'lead' })
+            .eq('id', existing.id);
+          if (clientError) throw clientError;
+        } else {
+          const { error: clientError } = await supabase
+            .from('designer_clients')
+            .insert({
+              designer_id: lead.designer_id,
+              client_id: lead.homeowner_id,
+              source: 'lead',
+              lead_id: leadId,
+              status: 'lead',
+            });
+          if (clientError) throw clientError;
+        }
+      } else {
+        // Profile-less captured lead — same two partial unique indexes apply
+        // (idx_designer_clients_unique_email on (designer_id, client_email)
+        // WHERE client_id IS NULL). Check-then-write; keep client_id null.
+        const { data: existingByLead } = await supabase
+          .from('designer_clients')
+          .select('id')
+          .eq('lead_id', leadId)
+          .maybeSingle();
+
+        let existingId: string | null = existingByLead?.id ?? null;
+
+        if (!existingId && lead.contact_email) {
+          const { data: existingByEmail } = await supabase
+            .from('designer_clients')
+            .select('id')
+            .eq('designer_id', lead.designer_id)
+            .eq('client_email', lead.contact_email)
+            .is('client_id', null)
+            .maybeSingle();
+          existingId = existingByEmail?.id ?? null;
+        }
+
+        if (existingId) {
+          const { error: clientError } = await supabase
+            .from('designer_clients')
+            .update({
+              client_name: lead.contact_name ?? null,
+              client_email: lead.contact_email ?? null,
+              source: 'lead',
+              lead_id: leadId,
+              status: 'lead',
+            })
+            .eq('id', existingId);
+          if (clientError) throw clientError;
+        } else {
+          const { error: clientError } = await supabase
+            .from('designer_clients')
+            .insert({
+              designer_id: lead.designer_id,
+              client_id: null,
+              client_name: lead.contact_name ?? null,
+              client_email: lead.contact_email ?? null,
+              source: 'lead',
+              lead_id: leadId,
+              status: 'lead',
+            });
           if (clientError) throw clientError;
         }
       }

@@ -2300,6 +2300,77 @@ supabase pkg tsc clean; designer-portal People files tsc-clean (0 new errors);
 bodies + the journey/nurture/desk derivations against these frozen contracts;
 spec-fold of R57–R60 + the gap-matrix CRM parity update are owed post-review (Wave 3).
 
+### R61 · Lead intake triage on the Desk — Accept→Discovery, Nurture, Pass (Track 6 / G1) — 2026-06-18
+
+Closes gap-analysis **G1** (lead intake has no in-Document home). The data layer is
+already complete: `document_state` (00211) unions Shape **C** `lead` (Brief active,
+`leads.status in ('new','viewed','contacted')`) and Shape **D** `relationship`
+(Discovery active, `designer_clients.status='lead'` AND no live proposal/project).
+So a captured lead **already** surfaces as a Brief folder; triage is the missing act.
+
+**The three triage verbs (prototype P0 §G1):**
+- **Accept → Discovery.** New mutation **`useBeginDiscovery`** (`@patina/supabase`,
+  Wave 0): sets `leads.status='accepted'` + upserts `designer_clients.status='lead'`
+  → the folder flips Brief→Discovery ("Schedule the discovery call"). **Conflict
+  found + SQL-verified:** the old-portal `useAcceptLead` sets `status='active'`,
+  which is **invisible** in `document_state` (no project → not Shape A; not 'lead' →
+  not Shape D). Empirically 3 active/no-project rows → 0 visible; flipped to 'lead'
+  → 1 Discovery row. `useAcceptLead` is **left untouched** (D7 — old zone keeps
+  working); the Document uses `useBeginDiscovery`.
+- **Nurture → People (off the Desk).** `useUpdateLeadStatus('contacted')`. Because
+  Shape C still includes `'contacted'`, `desk-derivation` must **gate the `new_lead`
+  needs-hand folder to `status in ('new','viewed')`** so a nurtured lead leaves the
+  needs-hand band and lives in People's nurture/reconnect queue. Additive, no migration.
+- **Pass → declined.** Existing `useDeclineLead` (`status='declined'`) — drops Shape C,
+  stays in People as declined. Works as-is.
+
+**One-act-many-surfaces:** the triage component invalidates the Desk/document-state
+query keys in its own onSuccess (the desk key lives in the app) so the folder
+re-derives without reload. ⚠ Provisional (flag to design): whether Nurture also
+schedules a concrete touchpoint vs. only marks 'contacted'; the post-accept need
+verb ("Schedule the discovery call").
+
+### R62 · The Capture front door + people in ⌘K (Track 6 / G1 capture, G3) — 2026-06-18
+
+A **"＋ Capture a lead"** CTA on the Desk header and a ⌘K **"new lead"** command
+both open a `CaptureLeadSheet` (DocSheet overlay, D1/D4) collecting name · contact ·
+project one-line · source → `useCreateLead`. Set a default `response_deadline`
+(**+1 day**, per R10's "respond within a day" lead window) so the new lead rises as a
+`new_lead` need on the Desk (Shape C already surfaces it). ⌘K filter is **alias-aware**
+("new lead"/"new client"/"capture" all match the command, not only "Ask the Engine").
+**G3:** ⌘K also returns **"jump to [person] →"** rows from `usePeopleDirectory` — the
+missing noun beside documents + ledgers. ⚠ Provisional: the capture source list +
+whether capture routes to `/doc/{leadId}` or stays on the Desk with optimistic insert.
+
+### R63 · The proposal action — expired-state instruments + stage-consistent letterhead (Track 6 / G2) — 2026-06-18
+
+Closes **G2** (the proposal stage is read-only). Root cause: `proposal-instruments.tsx`
+gates its actionable row to `isLive = sent|viewed|accepted|revised` — an **expired**
+(or declined) proposal matches neither `isDraft` nor `isLive`, so **no instrument
+renders**, even though the Desk advertises "Proposal expired — revise or follow up."
+**Close it:** expired/declined offer **Preview · Resend · Revise** (reuse the existing
+`SendSheet`→`send_proposal` and `ReviseSheet`→`clone_proposal`). Make the **letterhead
+instruments stage-consistent** (View as the client · Send a note) across Brief→Care
+instead of project-only. **Follow-up needs no migration:** route "Send a note" through
+the existing **`rpc_start_direct_thread(counterpart)`** (00103) — a designer↔client 1:1
+thread that needs no `project_id` — using the proposal's/relationship's `client_id`.
+(`rpc_start_project_thread` is project-keyed and can't serve a pre-project proposal.)
+
+### R64 · The runaway-timer bound (Track 6 / G4) — 2026-06-18
+
+Closes **G4** (a 36h, ~2,187-quiet-minute timer was offered as a loggable close-out).
+`time-derivation.ts` has `idleSecondsFromPings`/`IDLE_THRESHOLD_SECONDS=60` and
+`LogOffer.idleSeconds`, but **idle is annotation-only (D10) with no runaway bound** —
+`closeOutTimer` proposes the full elapsed regardless. **Extend D10 with an abandonment
+guard** (does NOT reverse it — normal short idle still annotates, never trims): a
+**contiguous idle gap ≥ a runaway threshold** (provisional **30 min**) marks the timer
+abandoned; on abandonment the close-out proposes the **active** duration
+(elapsed − idle), idle annotated, not summed; and `document-time-provider` **auto-pauses
+accumulation** at last-activity (+grace) on long idle / session end so raw seconds can't
+balloon while a tab is closed. ⚠ Provisional + Leah-facing (flag to design): the 30-min
+runaway number and the auto-pause behavior — mirror the IDLE_THRESHOLD "watch with data"
+posture.
+
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I40 · R1–R60 · L1–L4 · THE GO · FLIP CONFIRMED · last id = I40*
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I40 · R1–R64 · L1–L4 · THE GO · FLIP CONFIRMED · last id = R64*

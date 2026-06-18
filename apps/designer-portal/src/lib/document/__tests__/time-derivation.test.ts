@@ -7,6 +7,9 @@ import {
   fmtMinutes,
   inHandTodayMinutes,
   isAdjusted,
+  longestIdleGapSeconds,
+  RUNAWAY_IDLE_SECONDS,
+  suggestedMinutes,
 } from '../time-derivation';
 
 describe('fmtElapsed', () => {
@@ -105,5 +108,101 @@ describe('idle annotation (D10, provisional 8-min)', () => {
   it('never affects the logged number — annotation is a separate field', () => {
     // closeOutTimer ignores idle entirely; this is a guard against regression.
     expect(closeOutTimer('timer_auto', 2820)).toEqual({ action: 'offer', durationMinutes: 47 });
+  });
+});
+
+describe('longestIdleGapSeconds (R64)', () => {
+  const T = (mins: number) => mins * 60_000;
+  const base = 1_000_000_000_000;
+
+  it('is 0 with fewer than two pings', () => {
+    expect(longestIdleGapSeconds([])).toBe(0);
+    expect(longestIdleGapSeconds([base])).toBe(0);
+  });
+
+  it('returns the single largest contiguous gap, not the sum', () => {
+    // gaps: 5m, 40m, 5m — many idle minutes total, but the LONGEST is 40m.
+    const pings = [base, base + T(5), base + T(45), base + T(50)];
+    expect(longestIdleGapSeconds(pings)).toBe(40 * 60);
+  });
+
+  it('sorts unsorted input before measuring', () => {
+    const pings = [base + T(50), base, base + T(45), base + T(5)];
+    expect(longestIdleGapSeconds(pings)).toBe(40 * 60);
+  });
+
+  it('a long run of small gaps never reads as a single runaway gap', () => {
+    // 60 one-minute gaps = 60 idle min total, but no single gap is runaway.
+    const pings = Array.from({ length: 61 }, (_, i) => base + T(i));
+    expect(longestIdleGapSeconds(pings)).toBe(60);
+    expect(longestIdleGapSeconds(pings)).toBeLessThan(RUNAWAY_IDLE_SECONDS);
+  });
+});
+
+describe('suggestedMinutes (R64 — abandonment guard, extends D10)', () => {
+  it('D10 UNCHANGED: a normal entry with brief idle keeps full raw minutes', () => {
+    // 47 min raw, 2 quiet min (annotated), no single gap is runaway → full 47.
+    expect(
+      suggestedMinutes({ rawSeconds: 2820, idleSeconds: 120, longestIdleGapSeconds: 2 * 60 }),
+    ).toBe(47);
+  });
+
+  it('D10 UNCHANGED: idle is never trimmed below the runaway gap threshold', () => {
+    // 90 min raw with 29 contiguous quiet min — still under the 30-min gap → full 90.
+    expect(
+      suggestedMinutes({ rawSeconds: 5400, idleSeconds: 29 * 60, longestIdleGapSeconds: 29 * 60 }),
+    ).toBe(90);
+  });
+
+  it('ABANDONED: a 36h entry with ~35h idle proposes active minutes, not 2000+', () => {
+    const rawSeconds = 36 * 3600 + 9 * 60; // 36h 09m raw = 2169 min, the live-walk runaway
+    const idleSeconds = 2139 * 60; // ~35h39m of quiet — left open overnight
+    const proposed = suggestedMinutes({
+      rawSeconds,
+      idleSeconds,
+      longestIdleGapSeconds: idleSeconds, // one long contiguous gap
+    });
+    // active = raw − idle = 2169 − 2139 ≈ 30 min, NOT the full 2169 raw minutes.
+    const expectedActive = Math.round((rawSeconds - idleSeconds) / 60);
+    expect(proposed).toBe(expectedActive);
+    expect(proposed).toBe(30);
+    expect(proposed).toBeLessThan(200); // nowhere near the full 2169 raw minutes
+  });
+
+  it('ABANDONED: the gap threshold is what trips it, not total idle', () => {
+    // Same total idle, but spread across small gaps (not abandoned) → full raw.
+    const notAbandoned = suggestedMinutes({
+      rawSeconds: 7200,
+      idleSeconds: 40 * 60,
+      longestIdleGapSeconds: 5 * 60,
+    });
+    expect(notAbandoned).toBe(120); // full 2h — D10 holds
+
+    // One contiguous 40-min gap → abandoned → active time only.
+    const abandoned = suggestedMinutes({
+      rawSeconds: 7200,
+      idleSeconds: 40 * 60,
+      longestIdleGapSeconds: 40 * 60,
+    });
+    expect(abandoned).toBe(80); // 120 − 40 active min
+  });
+
+  it('a runaway entry that was ALL idle still proposes at least 1 minute', () => {
+    expect(
+      suggestedMinutes({
+        rawSeconds: 35 * 60,
+        idleSeconds: 35 * 60,
+        longestIdleGapSeconds: 35 * 60,
+      }),
+    ).toBe(1);
+  });
+
+  it('the gap at exactly RUNAWAY_IDLE_SECONDS is treated as abandoned (≥)', () => {
+    const proposed = suggestedMinutes({
+      rawSeconds: 3600,
+      idleSeconds: RUNAWAY_IDLE_SECONDS,
+      longestIdleGapSeconds: RUNAWAY_IDLE_SECONDS,
+    });
+    expect(proposed).toBe(30); // 60 raw − 30 idle = 30 active min
   });
 });

@@ -94,6 +94,53 @@ export function idleSecondsFromPings(pingsMs: number[], thresholdSeconds = IDLE_
   return Math.round(idle);
 }
 
+/**
+ * R64 — the runaway/abandonment bound. A SINGLE contiguous idle gap this long
+ * means the timer was abandoned (a tab left open overnight, a session that
+ * never closed) rather than sketched-through. Provisional 30 min — Leah-facing,
+ * mirror the IDLE_THRESHOLD "watch with data" posture: revisit if it bites
+ * normal long-but-active sessions (a single uninterrupted sketch).
+ */
+// ⚠ PROVISIONAL (Leah-facing, R64). Watch item: flag to design if a real
+// abandonment slips under 30 min, or a genuine deep-work block trips it.
+export const RUNAWAY_IDLE_SECONDS = 30 * 60;
+
+/** The longest SINGLE contiguous idle gap (seconds) in a list of ping ms. */
+export function longestIdleGapSeconds(pingsMs: number[]): number {
+  if (pingsMs.length < 2) return 0;
+  const sorted = [...pingsMs].sort((a, b) => a - b);
+  let longest = 0;
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = (sorted[i] - sorted[i - 1]) / 1000;
+    if (gap > longest) longest = gap;
+  }
+  return Math.round(longest);
+}
+
+/**
+ * R64 — the proposed log duration with the abandonment guard.
+ *
+ * Normal entries (no single gap ≥ RUNAWAY_IDLE_SECONDS): keep the shipped D10
+ * behavior — propose the full raw minutes, idle ANNOTATED, never trimmed. The
+ * designer decides whether quiet minutes were work.
+ *
+ * Abandoned entries (a single contiguous idle gap ≥ RUNAWAY_IDLE_SECONDS):
+ * the timer ran unattended, so proposing the full elapsed would be a lie.
+ * Propose the ACTIVE duration (raw − idle); idle is still annotated, just not
+ * summed into the suggested number. This is an EXTENSION of D10, not a reversal
+ * (R64): only a runaway gap trips it. Min 1 minute.
+ */
+export function suggestedMinutes(args: {
+  rawSeconds: number;
+  idleSeconds: number;
+  longestIdleGapSeconds: number;
+}): number {
+  const { rawSeconds, idleSeconds } = args;
+  const abandoned = args.longestIdleGapSeconds >= RUNAWAY_IDLE_SECONDS;
+  const seconds = abandoned ? Math.max(0, rawSeconds - idleSeconds) : rawSeconds;
+  return Math.max(1, Math.round(seconds / 60));
+}
+
 /** The offer's idle annotation line, or null when nothing was idle. */
 export function idleAnnotation(idleSeconds: number): string | null {
   if (idleSeconds < IDLE_THRESHOLD_SECONDS) return null;

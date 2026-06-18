@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
+import { usePeopleDirectory } from '@patina/supabase';
 import { fillStateForDesk } from '@/lib/document/fill-state';
 import { folderTab } from '@/lib/document/desk-derivation';
 import { StrataMark } from './strata-mark';
@@ -26,10 +27,28 @@ import { EngineResults, type InDocument } from './engine/engine-results';
 type Row =
   | { kind: 'document'; id: string; label: string; sub: string; fill: [number, number, number] }
   | { kind: 'ledger'; ledger: string; label: string; sub: string }
-  | { kind: 'action'; label: string; sub: string; run: () => void }
+  // `keywords` are extra match terms (aliases) folded into the filter only.
+  | { kind: 'action'; label: string; sub: string; run: () => void; keywords?: string }
+  | { kind: 'person'; label: string; sub: string; run: () => void }
   | { kind: 'engine'; label: string; sub: string };
 
 const LEDGERS = ['Library', 'Orders', 'Accounts', 'People', 'Hours'];
+
+/** Set true by {@link openCaptureLead} when the front door is invoked from a
+ *  non-Desk surface; the Desk reads + clears it on mount so the sheet opens
+ *  after the navigation lands (the event fires before the Desk's listener is
+ *  registered). A plain module flag — the Desk and the command bar are the only
+ *  readers. */
+export const captureLeadPending = { value: false };
+
+/** Open the Desk's capture-lead front door from anywhere (the Desk listens).
+ *  The sheet is mounted on the Desk; ⌘K reaches it via this event so "new lead"
+ *  works whether or not you're standing on the Desk. When invoked off the Desk,
+ *  the caller routes there and the pending flag carries the intent across. */
+export function openCaptureLead() {
+  captureLeadPending.value = true;
+  window.dispatchEvent(new CustomEvent('document:open-capture-lead'));
+}
 
 /** R28/R29/R36 pre-addressing: optional context rides the open-ledger event —
  *  e.g. Brief-a-vendor opens the Orders book onto the Vendors page with the
@@ -62,6 +81,10 @@ export function CommandBar() {
   const router = useRouter();
   const pathname = usePathname();
   const { data } = useDeskEngagements();
+  // The missing noun beside documents + ledgers (G3): every party in the
+  // unified directory is ⌘K-reachable. Small per-designer roster — fetched once
+  // and filtered in memory like the rest of the rows.
+  const { data: people } = usePeopleDirectory();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -126,6 +149,20 @@ export function CommandBar() {
       sub: l === 'Library' ? 'room ↗' : 'ledger',
     }));
     const actions: Row[] = [
+      {
+        // G1 capture · R62 — alias-aware so "new lead" / "new client" /
+        // "capture" land here (not only "Ask the Engine"). The sheet lives on
+        // the Desk; route there if we're elsewhere, then open it (the pending
+        // flag carries the intent across the navigation).
+        kind: 'action' as const,
+        label: 'Capture a lead',
+        sub: 'begin a Brief',
+        keywords: 'new lead new client capture prospect intake brief',
+        run: () => {
+          if (pathname !== '/desk') router.push('/desk');
+          openCaptureLead();
+        },
+      },
       { kind: 'action' as const, label: 'The Desk', sub: 'go home', run: () => router.push('/desk') },
       {
         kind: 'action' as const,
@@ -134,16 +171,37 @@ export function CommandBar() {
         run: () => window.dispatchEvent(new CustomEvent('document:open-interruptions')),
       },
     ];
+    // Jump to a person (G3) — the unified directory's parties. Only offered for
+    // a non-empty query so a clean ⌘K isn't flooded with the whole roster.
+    const persons: Row[] =
+      query.trim() && people
+        ? people.slice(0, 40).map((p) => ({
+            kind: 'person' as const,
+            label: p.display_name,
+            sub: `${p.role} · jump to person →`,
+            run: () => {
+              // Land in the People Room; the directory holds the roster. A
+              // deep-link onto the exact profile would need a `?person=` param
+              // honored by the People Room (out of this territory — DECISIONS).
+              router.push('/people');
+            },
+          }))
+        : [];
     const q = query.trim().toLowerCase();
-    const dest = [...docs, ...ledgers, ...actions];
-    const filtered = q ? dest.filter((r) => `${r.label} ${r.sub}`.toLowerCase().includes(q)) : dest;
+    const dest = [...docs, ...ledgers, ...actions, ...persons];
+    const filtered = q
+      ? dest.filter((r) => {
+          const keywords = r.kind === 'action' ? (r.keywords ?? '') : '';
+          return `${r.label} ${r.sub} ${keywords}`.toLowerCase().includes(q);
+        })
+      : dest;
     // R38: the ask is always offered for a non-empty query — destinations jump,
     // a question asks. No mode.
     if (query.trim()) {
       filtered.push({ kind: 'engine', label: 'Ask the Engine', sub: `“${query.trim()}” · ask & place` });
     }
     return filtered;
-  }, [data, query, router]);
+  }, [data, people, query, router]);
 
   // Keep the active row in range as the list changes.
   useEffect(() => {
@@ -246,6 +304,14 @@ export function CommandBar() {
                     <StrataMark size="sm" fill={row.fill} />
                   ) : row.kind === 'engine' ? (
                     <StrataMark size="sm" state="active" />
+                  ) : row.kind === 'person' ? (
+                    // A party reads as a quiet terracotta dot — the People spine
+                    // color (studio-drawer), so the noun's home is legible.
+                    <span
+                      aria-hidden
+                      className="inline-block h-[8px] w-[8px] shrink-0 rounded-full"
+                      style={{ background: 'var(--color-terracotta)' }}
+                    />
                   ) : (
                     <span
                       aria-hidden
