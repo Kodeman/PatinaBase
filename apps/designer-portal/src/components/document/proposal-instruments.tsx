@@ -77,9 +77,15 @@ export function ProposalInstruments({
   const familyLabel = useFamilyLabel(clientName);
   const status: string = proposal?.status ?? 'draft';
   const isDraft = status === 'draft';
-  // The post-draft set the instrument row answers to (declined/expired are
-  // terminal and grow no send/revise affordance here).
+  // The live set: in the client's hands or settled — Preview · Revise (+ Send
+  // again is unnecessary; the chain is already out there).
   const isLive = status === 'sent' || status === 'viewed' || status === 'accepted' || status === 'revised';
+  // The terminal set (G2 / R63): an expired or declined proposal is no longer
+  // in anyone's hands, but the engagement is still live on the Desk ("Proposal
+  // expired — revise or follow up"). It must offer a way back in:
+  // Preview (read what they last saw) · Resend (send_proposal re-sends with a
+  // fresh expiry — 00176 doesn't gate on draft) · Revise (clone → new draft).
+  const isTerminal = status === 'expired' || status === 'declined';
 
   /** Walk into the Drafting Room to compose. Stash the document we're leaving
    *  so the Room returns us here on exit (R39 / D14), then navigate — the held
@@ -130,6 +136,25 @@ export function ProposalInstruments({
             <ProposalVersionHistory proposalId={proposalId} />
           </>
         )}
+
+        {/* Terminal (expired/declined) — R63. Preview · Resend · Revise. Resend
+            re-opens the SAME proposal via send_proposal (which doesn't gate on
+            draft): the SendSheet lets the designer set a fresh expiry, flipping
+            it back to 'sent'. Revise opens a clean v+1 draft instead. */}
+        {isTerminal && (
+          <>
+            <button type="button" onClick={() => setPreviewOpen(true)} className={instrumentCls}>
+              Preview as {familyLabel}
+            </button>
+            <button type="button" onClick={() => setSendOpen(true)} className={instrumentCls}>
+              Resend &middot; new expiry
+            </button>
+            <button type="button" onClick={() => setReviseOpen(true)} className={instrumentCls}>
+              Revise
+            </button>
+            <ProposalVersionHistory proposalId={proposalId} />
+          </>
+        )}
       </div>
 
       {/* Send — the charcoal DocSheet over the open Proposal (D1). */}
@@ -160,8 +185,10 @@ export function ProposalInstruments({
 
 /** The "Preview as the [clients]" full-screen layer. Reuses the proposal-grain
  *  mirror rail and the client-mirror's banner frame so the two previews read
- *  as one session. Esc closes here (stops the document's put-down handler). */
-function ProposalPreview({
+ *  as one session. Esc closes here (stops the document's put-down handler).
+ *  Exported so the (pre-project) letterhead's "View as the client" can mount
+ *  the same proposal-grain mirror when there is no project to mirror (R63). */
+export function ProposalPreview({
   proposalId,
   clientName,
   onClose,

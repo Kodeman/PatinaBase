@@ -257,8 +257,20 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           fill={deriveFillState(sections)}
         />
 
-        {/* R27: the letterhead instruments — one quiet DM-mono row under the
-            subtitle. R24: the folio's letterhead unfold beneath it. */}
+        {/* R27 / R63: the letterhead instruments — one quiet DM-mono row under
+            the subtitle, now STAGE-CONSISTENT. Send-a-note (and, where there's
+            something to mirror, View-as) ride the letterhead across stages,
+            not project-only:
+              · project      — full client mirror + project group thread + folio
+              · proposal      — direct-thread follow-up at the letterhead; the
+                                proposal-grain mirror stays in the Proposal
+                                section's ProposalInstruments (no duplicate
+                                "view as them" under one letterhead)
+              · relationship  — direct-thread follow-up (no artifact to mirror)
+              · brief (lead)  — only when the captured lead has an in-app profile
+            A profile-less captured lead has no counterpart, so the component
+            hides both affordances itself (no empty row). The folio unfold is a
+            project artifact and stays project-only. */}
         {row.engagement_kind === 'project' && row.project_id && (
           <>
             <LetterheadInstruments
@@ -268,6 +280,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             />
             <FolioLetterhead projectId={row.project_id} />
           </>
+        )}
+        {row.engagement_kind !== 'project' && row.client_profile_id && (
+          <LetterheadInstruments
+            clientProfileId={row.client_profile_id}
+            clientName={row.client_name}
+          />
         )}
 
         {/* D13: letterhead-anchored margin items (Pulse, section items) as

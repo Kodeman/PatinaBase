@@ -411,6 +411,13 @@ export function deriveNeed(
   }
 
   if (row.engagement_kind === 'lead') {
+    // R61 — the new-lead triage gate. Shape C (`document_state`) still includes
+    // `leads.status='contacted'`, but a nurtured lead has been moved off the
+    // needs-your-hand band into People's nurture/reconnect queue. Only a lead
+    // the designer hasn't yet acted on (new/viewed) is "the one thing today";
+    // 'contacted' falls through to deriveMotion (no folder). Additive, no migration.
+    if (row.lead_status !== 'new' && row.lead_status !== 'viewed') return null;
+
     const deadline = row.lead_response_deadline;
     const msLeft = deadline ? new Date(deadline).getTime() - now.getTime() : null;
     const closing = msLeft !== null && msLeft < LEAD_URGENT_WINDOW_MS;
@@ -576,7 +583,11 @@ export function deriveMotion(
     return null;
   }
 
-  if (row.engagement_kind === 'relationship') return { kind: 'in_discovery', text: 'In discovery' };
+  // R61: a relationship in Discovery (Shape D — the post-Accept state) carries
+  // its real next act. "Schedule the discovery call" reads more honestly than the
+  // bare "In discovery": it tells the designer what the document is waiting on.
+  if (row.engagement_kind === 'relationship')
+    return { kind: 'in_discovery', text: 'Schedule the discovery call' };
 
   // R28/R22 drift tier: state carried, never a nag.
   if (conflict?.drift) return { kind: 'drift', text: conflict.drift };

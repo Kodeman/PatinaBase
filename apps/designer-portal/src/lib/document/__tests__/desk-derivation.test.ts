@@ -172,6 +172,7 @@ describe('deriveNeed', () => {
         engagement_kind: 'lead',
         active_section: 'brief',
         project_id: null,
+        lead_status: 'new',
         lead_response_deadline: daysAhead(0.5),
       }),
       NOW,
@@ -185,12 +186,31 @@ describe('deriveNeed', () => {
         engagement_kind: 'lead',
         active_section: 'brief',
         project_id: null,
+        lead_status: 'viewed',
         lead_response_deadline: daysAhead(1.5),
       }),
       NOW,
     );
     expect(need!.kind).toBe('new_lead');
     expect(need!.urgent).toBe(false);
+  });
+
+  it('contacted (nurtured) lead → NO folder (R61 triage gate)', () => {
+    // Shape C still surfaces a 'contacted' lead, but Nurture moved it off the
+    // needs-your-hand band into People — it must not produce a new_lead folder.
+    expect(
+      deriveNeed(
+        mkRow({
+          engagement_kind: 'lead',
+          active_section: 'brief',
+          project_id: null,
+          lead_id: 'l1',
+          lead_status: 'contacted',
+          lead_response_deadline: daysAhead(5),
+        }),
+        NOW,
+      ),
+    ).toBeNull();
   });
 
   it('proposal sent 1 day ago, never viewed → NOT a folder (R22 chip tier)', () => {
@@ -465,6 +485,7 @@ describe('partitionDesk', () => {
       engagement_id: 'e-lead',
       engagement_kind: 'lead',
       project_id: null,
+      lead_status: 'new',
       lead_response_deadline: daysAhead(0.5),
     });
     const overdue = mkRow({

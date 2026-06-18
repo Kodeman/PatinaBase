@@ -1,12 +1,16 @@
 'use client';
 
 /**
- * Brief section (active for lead-shaped engagements, R1). Read-only in
- * Slice 2: the lead's stats, ask, and match reasons — no accept/pass.
+ * Brief section (active for lead-shaped engagements, R1). The lead's stats,
+ * ask, and match reasons, plus — Track 6 / R61 — the captured contact, the
+ * source, and the inline Accept / Nurture / Pass triage. The triage affordance
+ * shows only while the lead is still triageable (new / viewed); once it's been
+ * accepted or nurtured the brief reads as a record, not an open decision.
  */
 
 import { useLead } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
+import { TriageBar } from './triage-bar';
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -22,8 +26,10 @@ function Stat({ label, value }: { label: string; value: string }) {
 const pretty = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 export function BriefSection({ leadId }: { leadId: string }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: lead, isLoading } = useLead(leadId) as { data: any; isLoading: boolean };
+  const { data: lead, isLoading } = useLead(leadId) as {
+    data: Record<string, any> | undefined;
+    isLoading: boolean;
+  };
 
   if (isLoading) {
     return <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">Opening the brief…</p>;
@@ -31,6 +37,22 @@ export function BriefSection({ leadId }: { leadId: string }) {
   if (!lead) {
     return <p className="py-3 text-[11.5px] text-[var(--text-muted)]">Brief unavailable.</p>;
   }
+
+  // The captured contact — a joined Patina homeowner if the prospect has a
+  // profile, otherwise the designer-entered contact name/email.
+  const contactName: string | null =
+    lead.homeowner?.full_name ?? lead.contact_name ?? null;
+  const contactEmail: string | null =
+    lead.homeowner?.email ?? lead.contact_email ?? null;
+
+  // The source — derived honestly from what the row actually carries (there is
+  // no `leads.source` column): a joined homeowner means an inbound Patina
+  // prospect; otherwise the designer captured the contact themselves.
+  const source = lead.homeowner_id ? 'Inbound via Patina' : 'Captured by you';
+
+  // The triage gate mirrors desk-derivation (R61): act while new/viewed; once
+  // accepted/nurtured/declined the brief is a record, not an open decision.
+  const triageable = lead.status === 'new' || lead.status === 'viewed';
 
   return (
     <section>
@@ -42,6 +64,22 @@ export function BriefSection({ leadId }: { leadId: string }) {
           </span>
         )}
       </div>
+
+      {/* The captured contact — who reached out, and how they came in. */}
+      {(contactName || contactEmail) && (
+        <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-[var(--color-pearl)] pb-3">
+          <p className="text-[13px] text-[var(--color-charcoal)]">
+            {contactName && <span className="font-medium">{contactName}</span>}
+            {contactName && contactEmail && (
+              <span className="text-[var(--text-muted)]"> · </span>
+            )}
+            {contactEmail && <span className="text-[var(--text-muted)]">{contactEmail}</span>}
+          </p>
+          <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            {source}
+          </span>
+        </div>
+      )}
 
       <div className="mb-3.5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {lead.match_score != null && <Stat label="Match" value={String(lead.match_score)} />}
@@ -76,6 +114,22 @@ export function BriefSection({ leadId }: { leadId: string }) {
           ]
             .filter(Boolean)
             .join(' · ')}
+        </p>
+      )}
+
+      {/* R61: the triage act, in the document. Accept → Discovery, Nurture →
+          People, Pass → declined. Re-derives the Desk in one act (no reload). */}
+      {triageable ? (
+        <TriageBar leadId={leadId} variant="brief" />
+      ) : (
+        <p className="mt-4 border-t border-[var(--color-pearl)] pt-3.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+          {lead.status === 'accepted'
+            ? 'Accepted — now in Discovery'
+            : lead.status === 'contacted'
+              ? 'Nurturing — kept in People'
+              : lead.status === 'declined'
+                ? 'Passed — kept in People'
+                : pretty(String(lead.status))}
         </p>
       )}
     </section>

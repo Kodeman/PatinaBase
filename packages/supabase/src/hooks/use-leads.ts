@@ -190,6 +190,11 @@ export function useCreateLead() {
       location_state?: string;
       contact_name?: string;
       contact_email?: string;
+      // Optional ISO timestamp. Additive + backward-compatible: the old
+      // `/portal/leads` AddLeadDialog never passes it (stays null there).
+      // The Document's CaptureLeadSheet sets it +1 day (Track 6, R62) so the
+      // new lead rises as a `new_lead` need on the Desk.
+      response_deadline?: string;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -211,6 +216,7 @@ export function useCreateLead() {
           location_state: input.location_state || null,
           contact_name: input.contact_name || null,
           contact_email: input.contact_email || null,
+          response_deadline: input.response_deadline || null,
           // match_score left null — the UI coalesces `match_score || 0`.
         })
         .select()
