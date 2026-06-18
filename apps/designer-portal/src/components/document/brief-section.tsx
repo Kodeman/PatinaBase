@@ -45,10 +45,11 @@ export function BriefSection({ leadId }: { leadId: string }) {
   const contactEmail: string | null =
     lead.homeowner?.email ?? lead.contact_email ?? null;
 
-  // The source — derived honestly from what the row actually carries (there is
-  // no `leads.source` column): a joined homeowner means an inbound Patina
-  // prospect; otherwise the designer captured the contact themselves.
-  const source = lead.homeowner_id ? 'Inbound via Patina' : 'Captured by you';
+  // The source — the captured "Where from" (R65, `leads.source`) when present;
+  // otherwise derived honestly from what the row carries (a joined homeowner
+  // means an inbound Patina prospect; else the designer captured it).
+  const source =
+    lead.source ?? (lead.homeowner_id ? 'Inbound via Patina' : 'Captured by you');
 
   // The triage gate mirrors desk-derivation (R61): act while new/viewed; once
   // accepted/nurtured/declined the brief is a record, not an open decision.
