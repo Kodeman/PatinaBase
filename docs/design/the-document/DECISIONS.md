@@ -2373,4 +2373,22 @@ posture.
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I40 · R1–R64 · L1–L4 · THE GO · FLIP CONFIRMED · last id = R64*
+## Rulings — design session, 2026-06-18 (Track 6 provisionals resolved)
+
+### R65 · Track 6 provisionals resolved — intake, capture, the proposal act, the timer bound (resolves the R61–R64 ⚠ flags) — 2026-06-18
+
+Resolves the four "flag to design" provisionals carried in R61–R64, from a design interview. Track 6 is fully specified for build after this.
+
+**R61 — Nurture schedules a touchpoint (not merely 'contacted').** Tapping **Nurture** on a lead captures a **reconnect date**; the lead leaves the Desk's needs-hand band immediately (`useUpdateLeadStatus('contacted')` + the R61 gate to `status in ('new','viewed')`) and **rises again as a Desk need when that date is due** — a dated thing earns a return (R22); an undated nurture is only a hope. A skipped date falls back to shelve-to-People (the Engine's "worth reconnecting" still covers it). Build it as a nurture/touchpoint row `desk-derivation` surfaces on/after its due date. The **post-accept need verb stays "Schedule the discovery call"** (confirmed, not reopened).
+
+**R62 — capture opens the new Brief; the source field is free-text with suggestion chips.** After `useCreateLead`, **route to `/doc/{leadId}`** — the captured lead opens as its Brief document so the designer continues filling it immediately (the sheet is the ≤5s front door; depth continues in the doc). The **"Where from" field is free-text with the common sources as quick chips** (Referral · Website / style quiz · Instagram · Past client · …), flexible for odd channels. **Build note:** store a canonical `source` when a chip is chosen (free text otherwise) so People's pipeline-conversion and referral-rate stats stay clean despite the free entry.
+
+**R63 — confirmed as written; Revise is the primary expired/declined act.** For an expired or declined proposal, **Revise** (a superseding new version via `clone_proposal`) is the prominent instrument; **Preview** and **Resend** are secondary; there is **no distinct "Follow up" button** — follow-up is the letterhead's **"Send a note"** (the 1:1 `rpc_start_direct_thread`, R63). The Desk's "revise or follow up" maps to Revise + Send-a-note. Letterhead instruments stay stage-consistent Brief→Care (R63 stands).
+
+**R64 — confirmed as written.** A **contiguous idle gap ≥ 30 min** marks the timer abandoned; the close-out then proposes the **active** duration (idle annotated, never summed — D10 upheld); `document-time-provider` **auto-pauses accumulation at last-activity (+grace)** on long idle / session end so raw seconds can't balloon while a tab is closed. The 30-min number and the auto-pause both carry the IDLE_THRESHOLD "watch with data" posture — revisit if week-one data shows false pauses.
+
+The spec fold for Track 6 (R61–R65) rides the next cut (v1.7); the prototype `patina-p0-intake-and-proposal-prototype.html` is the look/feel reference for the intake + proposal-action surfaces.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I40 · R1–R65 · L1–L4 · THE GO · FLIP CONFIRMED · last id = R65*
