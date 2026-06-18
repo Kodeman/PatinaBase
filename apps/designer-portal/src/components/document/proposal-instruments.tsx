@@ -37,6 +37,12 @@ import { ProposalPreviewRail } from './drafting/proposal-mirror';
 const instrumentCls =
   'font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]';
 
+/** R65 — the prominent (primary) instrument. The accent clay rather than muted,
+ *  so a terminal proposal's lead act (Revise) reads first and loudest while
+ *  Preview / Resend stay quiet seconds. Typography-only emphasis (no chrome). */
+const primaryInstrumentCls =
+  'font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-mocha)]';
+
 /** "the Whitfields" from a client name; falls back to the raw name. Local to
  *  the proposal instruments — mirrors the project letterhead's family label. */
 function useFamilyLabel(clientName: string): string {
@@ -137,20 +143,27 @@ export function ProposalInstruments({
           </>
         )}
 
-        {/* Terminal (expired/declined) — R63. Preview · Resend · Revise. Resend
-            re-opens the SAME proposal via send_proposal (which doesn't gate on
-            draft): the SendSheet lets the designer set a fresh expiry, flipping
-            it back to 'sent'. Revise opens a clean v+1 draft instead. */}
+        {/* Terminal (expired/declined) — R63/R65. REVISE is the primary act
+            (a superseding new version via clone_proposal); Preview and Resend
+            are quiet seconds. There is no distinct "Follow up" button —
+            follow-up is the letterhead's "Send a note" (1:1 direct thread, R63).
+            Resend re-opens the SAME proposal via send_proposal (which doesn't
+            gate on draft): the SendSheet sets a fresh expiry, flipping it back
+            to 'sent'. */}
         {isTerminal && (
           <>
+            <button
+              type="button"
+              onClick={() => setReviseOpen(true)}
+              className={primaryInstrumentCls}
+            >
+              Revise →
+            </button>
             <button type="button" onClick={() => setPreviewOpen(true)} className={instrumentCls}>
               Preview as {familyLabel}
             </button>
             <button type="button" onClick={() => setSendOpen(true)} className={instrumentCls}>
               Resend &middot; new expiry
-            </button>
-            <button type="button" onClick={() => setReviseOpen(true)} className={instrumentCls}>
-              Revise
             </button>
             <ProposalVersionHistory proposalId={proposalId} />
           </>
