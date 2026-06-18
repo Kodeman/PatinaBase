@@ -2,10 +2,11 @@
 
 /**
  * Brief section (active for lead-shaped engagements, R1). The lead's stats,
- * ask, and match reasons, plus — Track 6 / R61 — the captured contact, the
- * source, and the inline Accept / Nurture / Pass triage. The triage affordance
- * shows only while the lead is still triageable (new / viewed); once it's been
- * accepted or nurtured the brief reads as a record, not an open decision.
+ * ask, and match reasons, plus — Track 6 / R61 / R65 — the captured contact, the
+ * source, and the inline Accept / Nurture / Pass triage. The triage shows while
+ * a lead is actionable: new / viewed AND nurtured ('contacted'), so a
+ * reconnect-due lead can convert / re-date / pass instead of dead-ending. Only
+ * accepted or declined leads read as a terminal record.
  */
 
 import { useLead } from '@patina/supabase';
@@ -51,9 +52,12 @@ export function BriefSection({ leadId }: { leadId: string }) {
   const source =
     lead.source ?? (lead.homeowner_id ? 'Inbound via Patina' : 'Captured by you');
 
-  // The triage gate mirrors desk-derivation (R61): act while new/viewed; once
-  // accepted/nurtured/declined the brief is a record, not an open decision.
-  const triageable = lead.status === 'new' || lead.status === 'viewed';
+  // R61/R65 — act while the lead is live: new/viewed, and again once nurtured
+  // ('contacted') so a reconnect-due lead can convert / re-date / pass rather
+  // than dead-end. The header already carries the reconnect date for context.
+  // Only accepted/declined are terminal records.
+  const triageable =
+    lead.status === 'new' || lead.status === 'viewed' || lead.status === 'contacted';
 
   return (
     <section>
@@ -130,13 +134,9 @@ export function BriefSection({ leadId }: { leadId: string }) {
         <p className="mt-4 border-t border-[var(--color-pearl)] pt-3.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           {lead.status === 'accepted'
             ? 'Accepted — now in Discovery'
-            : lead.status === 'contacted'
-              ? lead.response_deadline
-                ? `Nurturing — reconnect ${fmtDay(lead.response_deadline)}`
-                : 'Nurturing — kept in People'
-              : lead.status === 'declined'
-                ? 'Passed — kept in People'
-                : pretty(String(lead.status))}
+            : lead.status === 'declined'
+              ? 'Passed — kept in People'
+              : pretty(String(lead.status))}
         </p>
       )}
     </section>

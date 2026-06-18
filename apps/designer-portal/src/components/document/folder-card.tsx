@@ -125,10 +125,12 @@ function FolderFace({
           <p className="flex-1 text-[12px] leading-relaxed text-[var(--text-body)]">{need.text}</p>
           <Stamp label={need.stamp.label} color={need.stamp.color} ink={need.stamp.ink} />
         </div>
-        {/* R61: a captured lead is the one need whose act is a triage, not a
-            pick-up. The bar's buttons stopPropagation so they never trip the
-            card's link (D1). Shape C always carries lead_id. */}
-        {need.kind === 'new_lead' && row.lead_id && (
+        {/* R61/R65: a lead is the one need whose act is a triage, not a pick-up
+            — for a new lead AND for a nurtured lead whose reconnect is now due
+            (so reconnecting can convert/re-date/pass without a dead end). The
+            bar's buttons stopPropagation so they never trip the card's link
+            (D1). Shape C always carries lead_id. */}
+        {(need.kind === 'new_lead' || need.kind === 'reconnect_due') && row.lead_id && (
           <TriageBar leadId={row.lead_id} variant="desk" />
         )}
       </div>
