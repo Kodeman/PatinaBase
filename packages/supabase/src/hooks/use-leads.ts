@@ -31,6 +31,8 @@ export interface Lead {
   // Contact details for designer-captured prospects with no homeowner profile
   contact_name: string | null;
   contact_email: string | null;
+  // Track 6 R65 — where the lead came from (canonical chip label or free text).
+  source: string | null;
   // Joined data
   homeowner?: {
     id: string;
@@ -195,6 +197,9 @@ export function useCreateLead() {
       // The Document's CaptureLeadSheet sets it +1 day (Track 6, R62) so the
       // new lead rises as a `new_lead` need on the Desk.
       response_deadline?: string;
+      // Track 6 R65 — "Where from", a canonical chip label or free text.
+      // Stored in its own column (00223) so People's pipeline stats stay clean.
+      source?: string;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -217,6 +222,7 @@ export function useCreateLead() {
           contact_name: input.contact_name || null,
           contact_email: input.contact_email || null,
           response_deadline: input.response_deadline || null,
+          source: input.source || null,
           // match_score left null — the UI coalesces `match_score || 0`.
         })
         .select()

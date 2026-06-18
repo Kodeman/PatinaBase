@@ -1,32 +1,36 @@
 'use client';
 
 /**
- * CaptureLeadSheet (Track 6 · G1 capture · R62) — the Desk-native front door
- * for a new lead. A captured `leads` row surfaces immediately as a Brief folder
- * on the Desk (`document_state` Shape C); this sheet is the only thing that was
- * missing — the way to be the one who starts it.
+ * CaptureLeadSheet (Track 6 · G1 capture · R62 + R65) — the Desk-native front
+ * door for a new lead. A captured `leads` row surfaces immediately as a Brief
+ * folder on the Desk (`document_state` Shape C); this sheet is the ≤5s way to
+ * be the one who starts it.
  *
  * "Just enough to begin. The Brief fills in as you go." (prototype §captureScrim)
  * Name · Contact (email or phone) · The project (one line) · Where from.
  *
  * Built on the DocSheet frame (R3 / I5): charcoal D8 overlay, hairline top
- * border, ZERO shadows (D4). An overlay, never a route — the Desk beneath does
- * not unmount (D1).
+ * border, ZERO shadows (D4). An overlay while open — the Desk beneath does not
+ * unmount (D1).
  *
  * R62: `response_deadline` defaults to +1 day so the new lead rises as a
- * `new_lead` need on the Desk (desk-derivation reads response deadline urgency).
+ * `new_lead` need on the Desk.
+ * R65: on submit the capture **opens the new Brief** (`/doc/{leadId}`) so the
+ * designer keeps filling it in the document; the **"Where from" field is free
+ * text with suggestion chips**, stored in the canonical `leads.source` column
+ * (00223) so People's pipeline / referral stats stay clean.
  */
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useCreateLead } from '@patina/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { DocSheet } from './doc-sheet';
 
-/** The "Where from" segmented control (prototype parity). Free labels — the
- *  `leads` table has no source column, so the chosen source is folded into the
- *  Brief's one-liner (see onSubmit), never written to an invented column. */
-const SOURCES = ['Referral', 'Website quiz', 'Instagram', 'Past client', 'Other'] as const;
-type Source = (typeof SOURCES)[number];
+/** R65 — quick suggestion chips for "Where from". Clicking one fills the
+ *  free-text field with a canonical label; the designer can also type any
+ *  channel. The chosen string lands in `leads.source` (00223). */
+const SOURCE_CHIPS = ['Referral', 'Website quiz', 'Instagram', 'Past client'] as const;
 
 /** Cheap email vs phone discrimination. The table carries `contact_email` only
  *  (no phone column); a phone is preserved in the Brief one-liner instead of
@@ -36,13 +40,14 @@ function looksLikeEmail(v: string): boolean {
 }
 
 export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const router = useRouter();
   const createLead = useCreateLead();
   const queryClient = useQueryClient();
 
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [project, setProject] = useState('');
-  const [source, setSource] = useState<Source>('Referral');
+  const [source, setSource] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   // Fresh form every open; clear any prior error.
@@ -51,7 +56,7 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
       setName('');
       setContact('');
       setProject('');
-      setSource('Referral');
+      setSource('');
       setError(null);
     }
   }, [open]);
@@ -63,12 +68,12 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
     const trimmedContact = contact.trim();
     const contactIsEmail = trimmedContact !== '' && looksLikeEmail(trimmedContact);
 
-    // The Brief one-liner carries the project line, the source, and any
-    // non-email contact (phone) — the table has no `source`/`phone` column, so
-    // these live honestly in the description rather than in invented columns.
+    // The Brief one-liner carries the project line and any non-email contact
+    // (phone) — the table has no `phone` column, so it lives honestly in the
+    // description. The source now has its own column (R65), so it's no longer
+    // folded into the one-liner.
     const descParts: string[] = [];
     if (project.trim()) descParts.push(project.trim());
-    descParts.push(`Source: ${source}`);
     if (trimmedContact && !contactIsEmail) descParts.push(`Contact: ${trimmedContact}`);
     const description = descParts.join(' · ');
 
@@ -78,19 +83,22 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
         // lead has no type chosen yet — 'consultation' is the honest default
         // for "someone just came in"; the Brief refines it as the work begins.
         project_type: 'consultation',
-        project_description: description,
+        project_description: description || undefined,
         contact_name: name.trim() || undefined,
         contact_email: contactIsEmail ? trimmedContact : undefined,
         // R62 — +1 day so the lead rises as a `new_lead` need on the Desk.
         response_deadline: new Date(Date.now() + 86_400_000).toISOString(),
+        // R65 — "Where from" in its own column (00223), not the one-liner.
+        source: source.trim() || undefined,
       },
       {
-        onSuccess: () => {
-          // One-act-many-surfaces: the lead also re-derives onto the Desk via
-          // Shape C. Invalidate the Desk key so the new Brief folder appears
-          // without a reload (useCreateLead already invalidates ['leads']).
+        onSuccess: (lead: { id: string }) => {
+          // R65 — capture opens the new Brief so the designer keeps filling it
+          // in the document. The Desk also re-derives (Shape C) for when they
+          // put it down. (useCreateLead already invalidates ['leads'].)
           queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
           onClose();
+          router.push(`/doc/${lead.id}`);
         },
         onError: (err: Error) => {
           setError(err.message ?? 'Could not begin the Brief. Try again.');
@@ -140,9 +148,10 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
           </div>
 
           <Field label="Where from">
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Where from">
-              {SOURCES.map((s) => {
-                const on = s === source;
+            <Input value={source} onChange={setSource} placeholder="how they found you" />
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {SOURCE_CHIPS.map((s) => {
+                const on = source.trim().toLowerCase() === s.toLowerCase();
                 return (
                   <button
                     key={s}
@@ -185,7 +194,7 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
             Cancel
           </button>
           <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.3)]">
-            a Brief is born on the Desk
+            opens the Brief
           </span>
         </div>
       </form>
