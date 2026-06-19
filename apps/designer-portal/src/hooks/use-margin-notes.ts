@@ -18,6 +18,9 @@ const getSupabase = () => createBrowserClient() as any;
 export interface CreateMarginNoteInput {
   projectId: string | null;
   proposalId: string | null;
+  // R66: the relationship anchor for a pre-project Discovery engagement
+  // (document_state Shape D), where project/proposal are both null.
+  designerClientId?: string | null;
   body: string;
   anchorKind?: 'line' | 'section' | 'letterhead';
   anchorId?: string | null;
@@ -35,6 +38,7 @@ export function useCreateMarginNote() {
         .insert({
           project_id: input.projectId,
           proposal_id: input.proposalId,
+          designer_client_id: input.designerClientId ?? null,
           designer_id: user.id,
           body: input.body,
           anchor_kind: input.anchorKind ?? 'letterhead',
@@ -46,7 +50,12 @@ export function useCreateMarginNote() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (_data, input) => invalidateMarginSurfaces(qc, input.projectId),
+    onSuccess: (_data, input) => {
+      invalidateMarginSurfaces(qc, input.projectId);
+      if (input.designerClientId) {
+        void qc.invalidateQueries({ queryKey: ['discovery-margin', input.designerClientId] });
+      }
+    },
   });
 }
 

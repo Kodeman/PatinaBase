@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Patina · The Discovery Section · capturing a successful discovery</title>
+<style>
+  :root{
+    --clay:#C4A57B;--aged-oak:#8B7355;--mocha:#5C4A3C;--charcoal:#2C2926;
+    --sage:#A8B5A0;--dusty-blue:#8B9CAD;--terracotta:#D4A090;--golden:#E8C547;
+    --paper:#FAF7F2;--ink:#2C2926;--rule:#E5DDD0;--rule-strong:#D8CCB8;--muted:#8B7355;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:15px;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,.serif{font-family:"Playfair Display",Georgia,serif;font-weight:500;letter-spacing:-.01em}
+  .mono{font-family:"DM Mono","SFMono-Regular",Menlo,monospace}
+  .proto-bar{background:#181614;color:#cdc4b4;display:flex;align-items:center;gap:16px;padding:9px 26px}
+  .proto-bar .tag{font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--golden)}
+  .proto-bar .hint{font-size:11.5px;color:#8a8073;margin-left:auto}
+  /* strata mark */
+  .strata{display:inline-flex;flex-direction:column;gap:2px;width:30px;vertical-align:middle}
+  .strata i{height:2.5px;border-radius:1px;display:block;background:var(--rule-strong);transition:background .3s}
+  .strata i.l1{width:100%}.strata i.l2{width:80%}.strata i.l3{width:60%}
+  .strata i.f1{background:var(--mocha)}.strata i.f2{background:var(--clay)}.strata i.f3{background:var(--dusty-blue)}
+  .doc{display:flex;min-height:100vh}
+  /* spine */
+  .spine{width:176px;flex:none;padding:28px 0 0 28px;border-right:1px solid var(--rule)}
+  .spine .pd{font-family:"DM Mono",monospace;font-size:11px;color:var(--muted);margin-bottom:24px;cursor:pointer}
+  .mk{display:flex;gap:11px;align-items:flex-start;margin-bottom:16px;opacity:.5}
+  .mk.active{opacity:1}.mk .lbl{font-size:13px}
+  .mk .st{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .mk .st.ready{color:var(--sage)}
+  /* body */
+  .body{flex:1;padding:30px 44px 130px;max-width:780px}
+  .docttl{font-size:30px}.vitals{color:var(--muted);font-size:14px;margin-top:2px}
+  /* readiness header */
+  .ready-head{display:flex;align-items:center;gap:16px;background:#f1ebdf;border-radius:3px;padding:14px 18px;margin:20px 0 10px;transition:background .3s}
+  .ready-head.go{background:#eef2ec}
+  .ready-head .strata{width:40px}
+  .ready-head .txt{flex:1}
+  .ready-head .lead{font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  .ready-head .big{font-size:16px;margin-top:2px}
+  .ready-head .cta{font-family:"DM Mono",monospace;font-size:11.5px;letter-spacing:.03em;padding:9px 15px;border-radius:3px;border:1px solid var(--rule-strong);background:none;color:var(--muted);cursor:not-allowed}
+  .ready-head.go .cta{border-color:var(--mocha);color:var(--mocha);background:#fff;cursor:pointer}
+  .toolrow{display:flex;gap:10px;margin:6px 0 22px;flex-wrap:wrap}
+  .tool{font-family:"DM Mono",monospace;font-size:11.5px;padding:7px 13px;border-radius:3px;border:1px solid var(--rule-strong);background:none;color:var(--ink);cursor:pointer}
+  .tool:hover{border-color:var(--clay)}
+  .tool.lit{border-color:var(--clay);color:var(--mocha)}
+  .sec-h{font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:24px 0 8px;display:flex;align-items:center;gap:10px}
+  .sec-h .ln{flex:1;height:1px;background:var(--rule)}
+  /* discovery blocks */
+  .block{border:1px solid var(--rule);border-radius:3px;padding:15px 17px;margin:11px 0;cursor:pointer;transition:border-color .2s,background .2s}
+  .block:hover{border-color:var(--clay)}
+  .block.filled{background:#faf8f3;cursor:default}
+  .block .top{display:flex;align-items:center;gap:10px}
+  .block .tick{width:16px;height:16px;border:1.5px solid var(--rule-strong);border-radius:3px;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
+  .block.filled .tick{background:var(--sage);border-color:var(--sage)}
+  .block .name{font-size:15.5px;flex:1}
+  .block .ess{font-family:"DM Mono",monospace;font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--clay);border:1px solid #e2d2b4;border-radius:2px;padding:1px 5px}
+  .block .add{font-family:"DM Mono",monospace;font-size:11px;color:var(--muted)}
+  .block .content{font-size:13.5px;color:#4a443d;margin-top:8px;padding-left:26px;display:none}
+  .block.filled .content{display:block}
+  .block.filled .add{display:none}
+  .block .prompt{font-size:12.5px;color:var(--muted);margin-top:4px;padding-left:26px}
+  .block.filled .prompt{display:none}
+  .fld{display:flex;gap:12px;padding:3px 0;font-size:13.5px}
+  .fld .k{font-family:"DM Mono",monospace;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);min-width:96px;flex:none;padding-top:3px}
+  .fld .v{color:#3a352f}
+  /* folio */
+  .folio{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap}
+  .clip{width:96px;height:68px;border:1px solid var(--rule-strong);border-radius:3px;background:#f3eee4;display:flex;align-items:center;justify-content:center;font-family:"DM Mono",monospace;font-size:9.5px;color:var(--muted);text-align:center;padding:6px}
+  /* margin */
+  .margin{width:236px;flex:none;border-left:1px solid var(--rule);padding:30px 24px}
+  .mh{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .mi{border:1px solid #e7d9c9;border-left:3px solid var(--clay);border-radius:2px;padding:10px 12px;margin-top:13px}
+  .mi .k{font-family:"DM Mono",monospace;font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--aged-oak)}
+  .mi .t{font-size:13px;margin-top:3px}
+  .note{font-family:"DM Mono",monospace;font-size:11px;color:var(--golden);margin-top:14px;line-height:1.5}
+  .gold{color:#9a7d1e}
+  /* drawer */
+  .drawer{position:fixed;bottom:0;left:0;right:0;background:#211e1b;display:flex;gap:0;padding:0 26px;height:42px;align-items:center;font-family:"DM Mono",monospace;border-top:1px solid #322d28}
+  .drawer .s{font-size:10px;letter-spacing:.12em;color:#6f675b;margin-right:8px}
+  .drawer button{background:none;border:none;color:#9d9384;font-family:inherit;font-size:11px;letter-spacing:.07em;text-transform:uppercase;padding:0 16px;cursor:pointer}
+  .drawer .right{margin-left:auto;font-size:10px;color:#6f675b}
+  /* checklist sheet */
+  .scrim{position:fixed;inset:0;background:rgba(20,18,16,.5);z-index:50;display:none;align-items:flex-start;justify-content:center;padding:64px 20px;overflow:auto}
+  .scrim.show{display:flex}
+  .sheet{background:var(--paper);width:560px;max-width:100%;border:1px solid var(--rule-strong);border-radius:4px;padding:28px 32px}
+  .sheet .pill{font-family:"DM Mono",monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mocha);border:1px solid var(--rule-strong);border-radius:2px;padding:2px 8px;display:inline-block;margin-bottom:12px}
+  .sheet h2{font-size:23px;margin-bottom:3px}
+  .sheet .sub{color:var(--muted);font-size:13.5px;margin-bottom:18px}
+  .ci{display:flex;gap:11px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--rule);cursor:pointer}
+  .ci .tick{width:16px;height:16px;border:1.5px solid var(--rule-strong);border-radius:3px;flex:none;margin-top:2px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
+  .ci.done .tick{background:var(--sage);border-color:var(--sage)}
+  .ci .q{font-size:14px}.ci .q .sub{font-size:12px;color:var(--muted)}
+  .sheet-foot{display:flex;gap:12px;margin-top:18px;align-items:center}
+  .btn{font-family:"DM Mono",monospace;font-size:11.5px;padding:8px 15px;border-radius:3px;border:1px solid var(--rule-strong);background:none;color:var(--ink);cursor:pointer}
+  .btn.primary{background:var(--mocha);color:#f6efe2;border-color:var(--mocha)}
+  .micro{font-size:11px;color:var(--muted);font-family:"DM Mono",monospace}
+  @media(max-width:880px){.doc{flex-direction:column}.spine,.margin{width:100%;border:none}}
+</style>
+</head>
+<body>
+<div class="proto-bar">
+  <span class="tag">Patina · proposed — the Discovery section (new body)</span>
+  <span class="hint">click a block to capture it · or "Run the discovery call" · watch the Strata mark fill toward Ready</span>
+</div>
+
+<div class="doc">
+  <!-- spine -->
+  <div class="spine">
+    <div class="pd">← Put down</div>
+    <div class="mk"><span class="strata"><i class="l1 f1"></i></span><div><div class="lbl">Brief</div><div class="st">settled</div></div></div>
+    <div class="mk active" id="spineDisc"><span class="strata" id="spineStrata"><i class="l1"></i><i class="l2"></i><i class="l3"></i></span><div><div class="lbl">Discovery</div><div class="st" id="spineDiscSt">in progress</div></div></div>
+    <div class="mk" id="spineDir"><span class="strata"><i class="l1"></i></span><div><div class="lbl">Direction</div><div class="st">—</div></div></div>
+    <div class="mk"><span class="strata"><i class="l1"></i></span><div><div class="lbl">Proposal</div><div class="st">—</div></div></div>
+    <div class="mk"><span class="strata"><i class="l1"></i></span><div><div class="lbl">Project</div><div class="st">—</div></div></div>
+    <div class="mk"><span class="strata"><i class="l1"></i></span><div><div class="lbl">Install</div><div class="st">—</div></div></div>
+    <div class="mk"><span class="strata"><i class="l1"></i></span><div><div class="lbl">Care</div><div class="st">—</div></div></div>
+  </div>
+
+  <!-- body -->
+  <div class="body">
+    <div class="docttl serif">Okafor — Downtown Loft</div>
+    <div class="vitals">The Okafors · Discovery · accepted from a lead 2 days ago</div>
+
+    <div class="ready-head" id="readyHead">
+      <span class="strata" id="headStrata"><i class="l1"></i><i class="l2"></i><i class="l3"></i></span>
+      <div class="txt">
+        <div class="lead">Discovery</div>
+        <div class="big" id="readyBig"><b id="essCount">0</b> of 5 essentials captured — keep going</div>
+      </div>
+      <button class="cta" id="readyCta" onclick="toDirection()">Begin the Direction →</button>
+    </div>
+    <div class="toolrow">
+      <button class="tool" id="callBtn" onclick="openCall()">▶ Run the discovery call</button>
+      <button class="tool" onclick="fillBlock('scan')">＋ Attach the room scan</button>
+      <button class="tool" onclick="fillBlock('style')">＋ Add inspiration</button>
+      <span class="micro" style="align-self:center">the call checklist writes into the blocks below</span>
+    </div>
+
+    <div class="sec-h"><span>The essentials — structured data · these open &amp; seed the proposal</span><span class="ln"></span></div>
+    <div id="essBlocks"></div>
+
+    <div class="sec-h"><span>Deepen it — sharper proposal, not required to proceed</span><span class="ln"></span></div>
+    <div id="deepBlocks"></div>
+  </div>
+
+  <!-- margin -->
+  <div class="margin">
+    <div class="mh">In the margin</div>
+    <div class="mi"><div class="k">Note · from the call</div><div class="t">She hesitated on budget — wants to "see options first." Watch the range.</div></div>
+    <div class="mi" id="readyMargin" style="display:none;border-left-color:var(--sage)"><div class="k" style="color:var(--sage)">Discovery · ready</div><div class="t">Essentials captured. The Direction can begin — it seeds from this.</div></div>
+    <div class="note"><span class="gold">By design ↘</span><br>· The margin is <b>unstructured notes only</b> (tone, hesitations) — structured facts live in the blocks.<br>· The essentials capture <b>structured data</b> → it <b>auto-seeds</b> the Direction + Drafting Room.<br>· <b>Internal</b> in v1 — no client-confirm; the Direction begins on your readiness.</div>
+  </div>
+</div>
+
+<!-- discovery call checklist -->
+<div class="scrim" id="callScrim">
+  <div class="sheet">
+    <span class="pill">The discovery call · checklist</span>
+    <h2 class="serif">What to draw out</h2>
+    <div class="sub">Tick as you talk — each writes into the matching block. The form captures facts; the call captures the person.</div>
+    <div id="checklist"></div>
+    <div class="sheet-foot">
+      <button class="btn primary" onclick="closeCall()">Done — back to the document</button>
+      <span class="micro">notes &amp; tone land in the margin; facts fill the blocks</span>
+    </div>
+  </div>
+</div>
+
+<div class="drawer"><span class="s">STUDIO</span>
+  <button>Library</button><button>Orders</button><button>Accounts</button><button>People</button><button>Hours</button>
+  <span class="right">IN HAND · 00:24</span>
+</div>
+
+<script>
+  // discovery blocks: 5 essentials + deepening
+  const BLOCKS = {
+    scope:   {ess:true,  name:"Scope & rooms", prompt:"Project type + the rooms in scope (structured).", struct:[["Type","Full refresh"],["Rooms","Living · Dining · Primary · Ensuite"],["Keep as-is","Kitchen"],["Area","~1,450 sq ft"]]},
+    budget:  {ess:true,  name:"Budget comfort", prompt:"A range they're comfortable investing (structured).", struct:[["Range","$60,000 – $80,000"],["Basis","all-in · design + furnishings"],["Flex","soft — see margin note"]]},
+    timeline:{ess:true,  name:"Timeline", prompt:"Target + hard dates (structured).", struct:[["Target","Move-in by Nov 27"],["Hard date","Hosting Dec 14"],["Start","ASAP"]]},
+    style:   {ess:true,  name:"Style & inspiration", prompt:"Style read as tags + a board.", struct:[["Direction","Warm minimal · Organic"],["Materials","oak · bouclé · plaster"],["Avoid","cold · high-contrast"]], folio:true},
+    living:  {ess:true,  name:"How they live", prompt:"Per room: who, and how, daily.", struct:[["Household","2 adults · toddler · dog"],["Living","movie nights · toddler play"],["Dining","hosts 8–10 often"]]},
+    keep:    {ess:false, name:"Keep & avoid", prompt:"Pieces to keep; hard no's.", struct:[["Keep","walnut credenza (heirloom) · art collection"],["Avoid","glass tables · fragile pieces"]]},
+    deciders:{ess:false, name:"Decision-makers", prompt:"Who approves + comms cadence.", struct:[["Approves","both spouses (big spends)"],["Day-to-day","Maya"],["Comms","email + Friday recap"]]},
+    scan:    {ess:false, name:"The site & scan", prompt:"Measurements + the room scan.", struct:[["Scan","iOS RoomPlan ✓"],["Ceilings","9'2\""],["Constraint","two columns in living"]], folio:true},
+  };
+  const ESS_KEYS = Object.keys(BLOCKS).filter(k=>BLOCKS[k].ess);
+  const state = {}; Object.keys(BLOCKS).forEach(k=>state[k]=false);
+
+  function render(){
+    const ess=document.getElementById('essBlocks'), deep=document.getElementById('deepBlocks');
+    ess.innerHTML=''; deep.innerHTML='';
+    for(const k in BLOCKS){
+      const b=BLOCKS[k];
+      const el=document.createElement('div');
+      el.className='block'+(state[k]?' filled':'');
+      el.onclick=()=>fillBlock(k);
+      let folio = b.folio && state[k] ? `<div class="folio">${k==='style'?'<div class="clip">inspiration board · 12 pins</div><div class="clip">palette · oak · bouclé · plaster</div>':'<div class="clip">RoomPlan scan ↗</div><div class="clip">floor plan · dims</div>'}</div>`:'';
+      el.innerHTML=`<div class="top">
+          <span class="tick">${state[k]?'✓':''}</span>
+          <span class="name">${b.name}</span>
+          ${b.ess?'<span class="ess">essential</span>':''}
+          ${state[k]?'':'<span class="add">＋ capture</span>'}
+        </div>
+        <div class="prompt">${b.prompt}</div>
+        <div class="content">${(b.struct||[]).map(f=>'<div class="fld"><span class="k">'+f[0]+'</span><span class="v">'+f[1]+'</span></div>').join('')}${folio}</div>`;
+      (b.ess?ess:deep).appendChild(el);
+    }
+    updateProgress();
+  }
+  function fillBlock(k){ state[k]=true; render(); }
+  function updateProgress(){
+    const essDone=ESS_KEYS.filter(k=>state[k]).length;
+    const total=Object.keys(BLOCKS).length, done=Object.values(state).filter(Boolean).length;
+    document.getElementById('essCount').textContent=essDone;
+    // strata fill: line1 = essentials, line2 = overall depth, line3 = ready
+    const ready = essDone===ESS_KEYS.length;
+    setStrata('headStrata', essDone/ESS_KEYS.length, done/total, ready?1:0);
+    setStrata('spineStrata', essDone/ESS_KEYS.length, done/total, ready?1:0);
+    const head=document.getElementById('readyHead'), cta=document.getElementById('readyCta');
+    if(ready){
+      head.classList.add('go');
+      document.getElementById('readyBig').innerHTML='<b>Ready for Direction</b> — essentials captured';
+      document.getElementById('spineDiscSt').textContent='ready'; document.getElementById('spineDiscSt').className='st ready';
+      document.getElementById('readyMargin').style.display='block';
+    } else {
+      head.classList.remove('go');
+      document.getElementById('readyBig').innerHTML=`<b>${essDone}</b> of 5 essentials captured — keep going`;
+    }
+  }
+  function setStrata(id,f1,f2,f3){
+    const m=document.getElementById(id).children;
+    m[0].className='l1'+(f1>=1?' f1':(f1>0?' f1':'')); m[0].style.opacity=f1>0?Math.max(.4,f1):1;
+    m[1].className='l2'+(f2>0?' f2':''); m[1].style.opacity=f2>0?Math.max(.4,f2):1;
+    m[2].className='l3'+(f3>0?' f3':'');
+  }
+  function toDirection(){
+    if(!ESS_KEYS.every(k=>state[k]))return;
+    document.getElementById('spineDir').classList.add('active');
+    document.getElementById('spineDir').querySelector('.st').textContent='beginning…';
+    document.getElementById('readyBig').innerHTML='<b>Direction begun</b> — seeded from discovery →';
+    alert("The Direction opens, auto-seeded from Discovery: scope, rooms, budget range, style read, and the keep-list flow into the concept and the proposal Drafting Room. Internal — the Direction begins on your readiness, no client confirm.");
+  }
+  // call checklist
+  const CHECK=[
+    {k:'scope', q:"The project & the rooms", sub:"what they want transformed"},
+    {k:'living',q:"How they live each space", sub:"host, work, rest, kids, pets — the daily flow"},
+    {k:'budget',q:"Budget comfort", sub:"set the financial expectation early"},
+    {k:'timeline',q:"Timeline & hard dates", sub:"events, move-in, deadlines"},
+    {k:'style', q:"Style & what they love", sub:"and ask for an inspiration board"},
+    {k:'keep',  q:"Keep & avoid", sub:"sentimental pieces; hard no's"},
+    {k:'deciders',q:"Who decides + how to communicate", sub:"approval roles, cadence"},
+  ];
+  function openCall(){
+    document.getElementById('callBtn').classList.add('lit');
+    const cl=document.getElementById('checklist'); cl.innerHTML='';
+    CHECK.forEach(c=>{
+      const el=document.createElement('div');
+      el.className='ci'+(state[c.k]?' done':'');
+      el.onclick=()=>{ state[c.k]=true; render(); openCall(); };
+      el.innerHTML=`<span class="tick">${state[c.k]?'✓':''}</span><div class="q">${c.q}<div class="sub">${c.sub}</div></div>`;
+      cl.appendChild(el);
+    });
+    document.getElementById('callScrim').classList.add('show');
+  }
+  function closeCall(){ document.getElementById('callScrim').classList.remove('show'); }
+  render();
+</script>
+</body>
+</html>

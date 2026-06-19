@@ -1072,6 +1072,130 @@ export type Database = {
           },
         ]
       }
+      client_discovery: {
+        Row: {
+          avoid_items: Json
+          budget_basis: string | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          created_at: string
+          decision_makers: Json
+          designer_client_id: string
+          designer_id: string
+          hard_date: string | null
+          id: string
+          keep_items: Json
+          lifestyle: Json
+          project_type: string | null
+          ready_at: string | null
+          room_scan_id: string | null
+          rooms: Json
+          seeded_at: string | null
+          seeded_proposal_id: string | null
+          site_notes: string | null
+          start_urgency: string | null
+          style_keywords: string[]
+          style_tag_ids: string[]
+          target_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          avoid_items?: Json
+          budget_basis?: string | null
+          budget_max_cents?: number | null
+          budget_min_cents?: number | null
+          created_at?: string
+          decision_makers?: Json
+          designer_client_id: string
+          designer_id: string
+          hard_date?: string | null
+          id?: string
+          keep_items?: Json
+          lifestyle?: Json
+          project_type?: string | null
+          ready_at?: string | null
+          room_scan_id?: string | null
+          rooms?: Json
+          seeded_at?: string | null
+          seeded_proposal_id?: string | null
+          site_notes?: string | null
+          start_urgency?: string | null
+          style_keywords?: string[]
+          style_tag_ids?: string[]
+          target_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avoid_items?: Json
+          budget_basis?: string | null
+          budget_max_cents?: number | null
+          budget_min_cents?: number | null
+          created_at?: string
+          decision_makers?: Json
+          designer_client_id?: string
+          designer_id?: string
+          hard_date?: string | null
+          id?: string
+          keep_items?: Json
+          lifestyle?: Json
+          project_type?: string | null
+          ready_at?: string | null
+          room_scan_id?: string | null
+          rooms?: Json
+          seeded_at?: string | null
+          seeded_proposal_id?: string | null
+          site_notes?: string | null
+          start_urgency?: string | null
+          style_keywords?: string[]
+          style_tag_ids?: string[]
+          target_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_discovery_designer_client_id_fkey"
+            columns: ["designer_client_id"]
+            isOneToOne: true
+            referencedRelation: "designer_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_discovery_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_discovery_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_discovery_room_scan_id_fkey"
+            columns: ["room_scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_discovery_room_scan_id_fkey"
+            columns: ["room_scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_discovery_seeded_proposal_id_fkey"
+            columns: ["seeded_proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_invitations: {
         Row: {
           accepted_at: string | null
@@ -3935,6 +4059,7 @@ export type Database = {
           project_type: string
           response_deadline: string | null
           room_scan_id: string | null
+          source: string | null
           status: string
           timeline: string | null
           updated_at: string
@@ -3959,6 +4084,7 @@ export type Database = {
           project_type: string
           response_deadline?: string | null
           room_scan_id?: string | null
+          source?: string | null
           status?: string
           timeline?: string | null
           updated_at?: string
@@ -3983,6 +4109,7 @@ export type Database = {
           project_type?: string
           response_deadline?: string | null
           room_scan_id?: string | null
+          source?: string | null
           status?: string
           timeline?: string | null
           updated_at?: string
@@ -4101,6 +4228,7 @@ export type Database = {
           anchor_kind: string
           body: string
           created_at: string
+          designer_client_id: string | null
           designer_id: string
           due_date: string | null
           escalated_to_decision_id: string | null
@@ -4115,6 +4243,7 @@ export type Database = {
           anchor_kind?: string
           body: string
           created_at?: string
+          designer_client_id?: string | null
           designer_id: string
           due_date?: string | null
           escalated_to_decision_id?: string | null
@@ -4129,6 +4258,7 @@ export type Database = {
           anchor_kind?: string
           body?: string
           created_at?: string
+          designer_client_id?: string | null
           designer_id?: string
           due_date?: string | null
           escalated_to_decision_id?: string | null
@@ -4139,6 +4269,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "margin_notes_designer_client_id_fkey"
+            columns: ["designer_client_id"]
+            isOneToOne: false
+            referencedRelation: "designer_clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "margin_notes_designer_id_fkey"
             columns: ["designer_id"]
@@ -6365,9 +6502,10 @@ export type Database = {
           category: string | null
           client_visible: boolean
           created_at: string
+          designer_client_id: string | null
           doc_type: string
           id: string
-          project_id: string
+          project_id: string | null
           section_key: string | null
           size_bytes: number | null
           status: string | null
@@ -6385,9 +6523,10 @@ export type Database = {
           category?: string | null
           client_visible?: boolean
           created_at?: string
+          designer_client_id?: string | null
           doc_type?: string
           id?: string
-          project_id: string
+          project_id?: string | null
           section_key?: string | null
           size_bytes?: number | null
           status?: string | null
@@ -6405,9 +6544,10 @@ export type Database = {
           category?: string | null
           client_visible?: boolean
           created_at?: string
+          designer_client_id?: string | null
           doc_type?: string
           id?: string
-          project_id?: string
+          project_id?: string | null
           section_key?: string | null
           size_bytes?: number | null
           status?: string | null
@@ -6420,6 +6560,13 @@ export type Database = {
           version_of?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "project_documents_designer_client_id_fkey"
+            columns: ["designer_client_id"]
+            isOneToOne: false
+            referencedRelation: "designer_clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_documents_project_id_fkey"
             columns: ["project_id"]
@@ -11970,22 +12117,6 @@ export type Database = {
       }
     }
     Views: {
-      people_directory: {
-        Row: {
-          designer_id: string | null
-          display_name: string | null
-          email: string | null
-          last_touch_at: string | null
-          meta: Json | null
-          person_id: string | null
-          phone: string | null
-          profile_id: string | null
-          project_id: string | null
-          role: string | null
-          status_raw: string | null
-        }
-        Relationships: []
-      }
       consumer_funnel: {
         Row: {
           count: number | null
@@ -12113,6 +12244,22 @@ export type Database = {
           state: string | null
           title: string | null
           ts: string | null
+        }
+        Relationships: []
+      }
+      people_directory: {
+        Row: {
+          designer_id: string | null
+          display_name: string | null
+          email: string | null
+          last_touch_at: string | null
+          meta: Json | null
+          person_id: string | null
+          phone: string | null
+          profile_id: string | null
+          project_id: string | null
+          role: string | null
+          status_raw: string | null
         }
         Relationships: []
       }
@@ -12744,6 +12891,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      begin_direction_from_discovery: {
+        Args: { p_designer_client_id: string }
+        Returns: string
       }
       calculate_engagement_score: {
         Args: { p_user_id: string }
