@@ -2523,4 +2523,25 @@ Modified: `studio-drawer.tsx` (nameplate + divider in place of the "Studio" span
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R67 · L1–L4 · THE GO · FLIP CONFIRMED · last id = R67*
+## The Document — Direction/Proposal flow polish — 2026-06-22
+
+### R68 · The household — view / set / change / edit the client on an open document
+
+The client a document is *for* had no standing surface: it was a passive name in the letterhead vitals, and the only place to attach or change one was the buried `ClientPicker` inside the Send sheet (discovered only when Send failed). Distinct concept from R67 (the **login account** = the maker) and the project money **Account band** — hence named **"the household"**, never "Account".
+
+**Ruling.** A quiet mono `HouseholdChip` rides under the letterhead (project + proposal engagements) showing `For {familyLabel}` — or a clay **"No client linked · attach one"** so the gap is visible at the letterhead, not at send time. It opens a `HouseholdSheet` (a charcoal `DocSheet`, the SendSheet's sibling — D1/D4) with four capabilities:
+- **View** — name · email · phone · relationship status (resolved `useDesignerClientForClientUser` → `useClient`; name renders immediately, contact hydrates on the join).
+- **Set / Change** — the existing `ClientPicker` (carries "+ Add new client" + "Clear selection"). Writes through the new `set_document_client` RPC (00225).
+- **Edit** — the relationship's working name/email (captured clients without a Patina account) + notes (`useUpdateClientContact`). A profiled client's name/email/phone stay read-only — they belong to the client's own account.
+
+**`set_document_client` (00225, additive, `SECURITY DEFINER`):** one act, many surfaces (§5). Re-authorizes ownership (`projects/proposals.designer_id = auth.uid()`), refuses a `client_id` that isn't one of the designer's `designer_clients` (would orphan the relationship resolution), flips the proposal/project `client_id`, and **advances the newly-linked relationship status** in the same transaction — `project → active`, `proposal → at least proposal`. The hook then invalidates `document-state`, `desk-engagements`, `designer-clients`, and the proposal/project keys together.
+
+**Gating.** Changing the client is gated to **draft** for proposals — a `sent`/`accepted` proposal keeps its client so a signature can't be mis-attributed (the sheet says so and points to Revise). Projects and unlinked drafts change freely.
+
+**Open question (non-blocking, shipped conservative).** When a project's client is *changed* mid-engagement, the RPC advances the **new** client's relationship but deliberately does **not** demote the **prior** client's `designer_clients.status` (non-destructive, D7) — the old relationship simply stops being linked. If the design session wants the prior household auto-demoted (e.g. back to `nurture`) or a confirmation step on re-pointing an active project, that's a follow-up ruling.
+
+**The "the Flats" fix.** `useFamilyLabel` had naively pluralized the *last word* of the client name, and `document_state.client_name` is the linked profile's `full_name` — which a seed had set to the project title "Reyes — Garden Flat", yielding "the Flats". Replaced by shared `lib/document/family-label.ts`: take the household part before a `—`/separator, then pluralize the surname with the -es rule ("Reyes" → **"the Reyeses"**), falling back to "the client" for generic/blank names.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R68 · L1–L4 · THE GO · FLIP CONFIRMED · last id = R68*
