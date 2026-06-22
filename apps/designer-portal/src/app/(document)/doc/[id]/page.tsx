@@ -58,9 +58,11 @@ const prettyPhase = (phase: string | null) =>
 type AnyRecord = any;
 
 function vitalsFor(row: DocumentStateRow, project: AnyRecord, proposal: AnyRecord): string {
+  // Project + proposal carry the client as a first-class subtitle (the
+  // HouseholdChip in the title block), so the vitals drop the client name to
+  // avoid showing it twice — they state the phase/target/money only.
   if (row.engagement_kind === 'project') {
     return [
-      row.client_name,
       prettyPhase(row.current_phase),
       project?.target_completion ? `Target ${fmtMonthYear(project.target_completion)}` : null,
       project?.total_amount_cents != null ? fmtUsd(project.total_amount_cents) : null,
@@ -69,10 +71,7 @@ function vitalsFor(row: DocumentStateRow, project: AnyRecord, proposal: AnyRecor
       .join(' · ');
   }
   if (row.engagement_kind === 'proposal') {
-    return [
-      row.client_name,
-      proposal?.total_amount != null ? `${fmtUsd(proposal.total_amount)} proposed` : null,
-    ]
+    return [proposal?.total_amount != null ? `${fmtUsd(proposal.total_amount)} proposed` : null]
       .filter(Boolean)
       .join(' · ');
   }
@@ -281,25 +280,27 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           line unfolds beneath the aside rail and the drawer strip. The z-0
           grain painting over content is imperceptible at 1% alpha. */}
       <main ref={mainRef} className="max-w-[1040px] px-7 pb-32 pt-8 min-[980px]:px-12">
+        {/* The household — who this document is for — is a first-class subtitle
+            in the title block (R68.2): a prominent clickable line directly under
+            the title, not a tiny line tucked below the divider. View / set /
+            change / edit through the household sheet. */}
         <DocLetterhead
           title={row.title}
           vitals={vitalsFor(row, project, liveProposal)}
           fill={deriveFillState(sections)}
+          client={
+            row.engagement_kind === 'project' || row.engagement_kind === 'proposal' ? (
+              <HouseholdChip
+                engagementKind={row.engagement_kind}
+                projectId={row.project_id}
+                proposalId={row.proposal_id}
+                clientProfileId={row.client_profile_id}
+                clientName={row.client_name}
+                proposalStatus={liveProposal?.status ?? null}
+              />
+            ) : undefined
+          }
         />
-
-        {/* The household — who this document is for. A standing line so the
-            client (and the "no client linked" gap) is answerable here, not only
-            discovered inside the Send sheet. View / set / change / edit. */}
-        {(row.engagement_kind === 'project' || row.engagement_kind === 'proposal') && (
-          <HouseholdChip
-            engagementKind={row.engagement_kind}
-            projectId={row.project_id}
-            proposalId={row.proposal_id}
-            clientProfileId={row.client_profile_id}
-            clientName={row.client_name}
-            proposalStatus={liveProposal?.status ?? null}
-          />
-        )}
 
         {/* R27 / R63: the letterhead instruments — one quiet DM-mono row under
             the subtitle, now STAGE-CONSISTENT. Send-a-note (and, where there's

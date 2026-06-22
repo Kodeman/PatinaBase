@@ -35,19 +35,26 @@ export function HouseholdChip({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="-mx-1.5 mb-3 inline-flex items-center gap-1.5 rounded-[3px] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.07em] transition-colors hover:bg-[rgba(196,165,123,0.08)]"
+        className="group mt-1.5 flex items-baseline text-left"
         aria-label="View or change the client this document is for"
       >
         {clientProfileId ? (
-          <>
-            <span className="text-[var(--text-muted)]">For</span>
-            <span className="text-[var(--color-aged-oak)]">{familyLabel(clientName)}</span>
-            <span aria-hidden className="text-[var(--color-clay)] opacity-70">
+          <span className="font-heading text-[1.15rem] italic leading-tight text-[var(--color-aged-oak)] transition-colors group-hover:text-[var(--color-clay)]">
+            for {familyLabel(clientName)}
+            <span
+              aria-hidden
+              className="ml-1.5 align-baseline font-mono text-[11px] not-italic text-[var(--color-clay)] opacity-60 transition-opacity group-hover:opacity-100"
+            >
               ↗
             </span>
-          </>
+          </span>
         ) : (
-          <span className="text-[var(--color-clay)]">No client linked · attach one</span>
+          <span className="font-heading text-[1.15rem] italic leading-tight text-[var(--color-clay)]">
+            No client linked — attach one
+            <span aria-hidden className="ml-1.5 align-baseline font-mono text-[11px] not-italic opacity-70">
+              ↗
+            </span>
+          </span>
         )}
       </button>
 
