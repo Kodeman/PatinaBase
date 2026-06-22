@@ -54,6 +54,7 @@ export function StrataMark({
   breathing = false,
   mono = false,
   ground = 'light',
+  label,
 }: {
   state?: StrataMarkState;
   size?: keyof typeof SIZES;
@@ -65,15 +66,23 @@ export function StrataMark({
   mono?: boolean;
   /** Ghost-track tone — `dark` for charcoal grounds (the spine). */
   ground?: 'light' | 'dark';
+  /** A11y: when the mark CARRIES meaning (spine active marker, letterhead
+   *  progress), give it a text alternative so it isn't silent to AT. Decorative
+   *  instances omit this and stay aria-hidden. */
+  label?: string;
 }) {
   const { w, bar, gap } = SIZES[size];
   const widths = RATIO.map((r) => Math.round(w * r));
   const breath = breathing ? ' doc-breath' : '';
   const track = ground === 'dark' ? 'rgba(250,247,242,0.12)' : 'rgba(44,41,38,0.12)';
+  // Meaning-carrying marks announce; decorative ones stay hidden.
+  const a11y = label
+    ? ({ role: 'img', 'aria-label': label } as const)
+    : ({ 'aria-hidden': true } as const);
 
   if (fill) {
     return (
-      <span aria-hidden className={`strata-mark inline-flex flex-col${breath}`} style={{ gap }}>
+      <span {...a11y} className={`strata-mark inline-flex flex-col${breath}`} style={{ gap }}>
         {widths.map((lw, i) => {
           const hue = mono ? 'var(--color-clay)' : MOVEMENT[i];
           return (
@@ -107,7 +116,7 @@ export function StrataMark({
 
   const color = STATE_COLOR[state];
   return (
-    <span aria-hidden className={`strata-mark inline-flex flex-col${breath}`} style={{ gap }}>
+    <span {...a11y} className={`strata-mark inline-flex flex-col${breath}`} style={{ gap }}>
       {widths.map((lw, i) => (
         <span
           key={i}

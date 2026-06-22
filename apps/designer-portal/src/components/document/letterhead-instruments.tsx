@@ -16,6 +16,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
 import { invalidateMarginSurfaces } from '@/hooks/use-margin-items';
+import { familyLabel } from '@/lib/document/family-label';
 import { DocFileViewer } from './overlays/doc-file-viewer';
 import { ClientMirror } from './client-mirror';
 import { ProposalPreview } from './proposal-instruments';
@@ -121,11 +122,7 @@ export function LetterheadInstruments({
   const { data: scans } = useClientScans(clientProfileId);
 
   const scan = useMemo(() => (scans ?? []).find((s) => s.image_url) ?? null, [scans]);
-  const familyLabel = useMemo(() => {
-    const parts = clientName.trim().split(/\s+/);
-    const surname = parts[parts.length - 1];
-    return surname && surname.toLowerCase() !== 'client' ? `the ${surname}s` : clientName;
-  }, [clientName]);
+  const family = familyLabel(clientName);
 
   // "View as the client" needs a mirror to open: the full project mirror when
   // there's a project, else the proposal-grain mirror when there's a live
@@ -144,7 +141,7 @@ export function LetterheadInstruments({
             onClick={() => setMirrorOpen(true)}
             className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
           >
-            View as {familyLabel}
+            Preview as {family}
           </button>
         )}
         {canSendNote && (
@@ -153,7 +150,7 @@ export function LetterheadInstruments({
             onClick={() => setComposing((v) => !v)}
             className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
           >
-            Send a note
+            Message {family}
           </button>
         )}
         {scan && (

@@ -170,7 +170,7 @@ export function MarginRail({
               onClick={() => setComposer({ mode: 'new' })}
               className="rounded-[3px] border border-transparent px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[rgba(196,165,123,0.35)] hover:text-[var(--color-clay)]"
             >
-              + New
+              + Decision
             </button>
           )}
           <button

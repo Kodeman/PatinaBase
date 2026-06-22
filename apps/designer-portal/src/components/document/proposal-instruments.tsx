@@ -25,45 +25,17 @@
  * shadows (D4).
  */
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useProposal } from '@/hooks/use-proposals';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
+import { familyLabel } from '@/lib/document/family-label';
+import { useDraftingState } from '@/hooks/use-drafting-state';
+import { Instrument, InstrumentRow } from './instrument';
 import { SendSheet } from './overlays/send-sheet';
 import { ReviseSheet } from './overlays/revise-sheet';
 import { ProposalVersionHistory } from './proposal-version-history';
 import { ProposalPreviewRail } from './drafting/proposal-mirror';
-
-const instrumentCls =
-  'font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]';
-
-/** R65 — the prominent (primary) instrument. The accent clay rather than muted,
- *  so a terminal proposal's lead act (Revise) reads first and loudest while
- *  Preview / Resend stay quiet seconds. Typography-only emphasis (no chrome). */
-const primaryInstrumentCls =
-  'font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-mocha)]';
-
-/** "the Whitfields" from a client name; falls back to the raw name. Local to
- *  the proposal instruments — mirrors the project letterhead's family label. */
-function useFamilyLabel(clientName: string): string {
-  return useMemo(() => {
-    const parts = clientName.trim().split(/\s+/);
-    const surname = parts[parts.length - 1];
-    return surname && surname.toLowerCase() !== 'client' ? `the ${surname}s` : clientName;
-  }, [clientName]);
-}
-
-/** The doorway spine-tick (D14): three diminishing clay lines marking "a place
- *  you walk into" — identical grammar to the Library's drawer doorway. */
-function DoorwayTick() {
-  return (
-    <span aria-hidden className="inline-flex flex-col gap-[2px]">
-      <i className="block h-[2px] w-[15px] rounded-[1px] bg-[var(--color-clay)]" />
-      <i className="block h-[2px] w-[11px] rounded-[1px] bg-[var(--color-clay)] opacity-60" />
-      <i className="block h-[2px] w-[7px] rounded-[1px] bg-[var(--color-clay)] opacity-30" />
-    </span>
-  );
-}
 
 export function ProposalInstruments({
   proposalId,
@@ -80,9 +52,13 @@ export function ProposalInstruments({
   const [reviseOpen, setReviseOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  const familyLabel = useFamilyLabel(clientName);
+  const family = familyLabel(clientName);
   const status: string = proposal?.status ?? 'draft';
   const isDraft = status === 'draft';
+  // The shared drafting progress (the SAME mark the Drafting Room shows) — only
+  // polled while a draft, used to weight "Draft" vs "Send" as the lead act.
+  const { state: draftState, pct } = useDraftingState(proposalId, isDraft);
+  const readyToSend = draftState === 'Ready to send';
   // The live set: in the client's hands or settled — Preview · Revise (+ Send
   // again is unnecessary; the chain is already out there).
   const isLive = status === 'sent' || status === 'viewed' || status === 'accepted' || status === 'revised';
@@ -103,72 +79,78 @@ export function ProposalInstruments({
 
   return (
     <>
-      {/* The instrument row — one quiet DM-mono line under the letterhead. */}
-      <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        {/* The doorway into the Drafting Room — a draft is still being written.
-            Distinct from the flat instruments: it wears the Strata tick + ↗. */}
-        {isDraft && (
-          <button
-            type="button"
-            onClick={enterDrafting}
-            className="inline-flex items-center gap-[0.4rem] text-[var(--text-muted)] transition-colors hover:text-[var(--color-clay)]"
-          >
-            <DoorwayTick />
-            <span className="font-mono text-[9px] uppercase tracking-[0.08em]">
-              Into the Drafting Room
-            </span>
-            <span aria-hidden className="font-mono text-[10px] text-[var(--color-clay)] opacity-70">
-              ↗
-            </span>
-          </button>
-        )}
-
-        {isDraft && (
-          <button type="button" onClick={() => setSendOpen(true)} className={instrumentCls}>
-            Send to {familyLabel}
-          </button>
-        )}
-
-        {isLive && (
-          <>
-            <button type="button" onClick={() => setPreviewOpen(true)} className={instrumentCls}>
-              Preview as {familyLabel}
-            </button>
-            <button type="button" onClick={() => setReviseOpen(true)} className={instrumentCls}>
-              Request a change &middot; Revise
-            </button>
-            {/* The version chain reads itself; renders nothing for a v1-only
-                chain (its own guard). */}
+      {/* Draft — ONE weighted lead act that swaps by drafting state (R68): while
+          composing, the Drafting-Room doorway leads; once Ready to send, "Send
+          the proposal" promotes and "keep drafting" steps back. Emphasis is
+          weight + colour, never chrome (D4). The state echo is the doorway's
+          live read of how far along the draft is. */}
+      {isDraft && (
+        <div className="mt-1">
+          <InstrumentRow>
+            {readyToSend ? (
+              <>
+                <Instrument variant="primary" trailing="→" onClick={() => setSendOpen(true)}>
+                  Send the proposal
+                </Instrument>
+                <Instrument variant="secondary" onClick={enterDrafting}>
+                  Keep drafting
+                </Instrument>
+              </>
+            ) : (
+              <>
+                <Instrument variant="doorway" trailing="↗" onClick={enterDrafting}>
+                  {pct === 0 ? 'Start the proposal' : 'Draft the proposal'}
+                </Instrument>
+                <Instrument variant="secondary" onClick={() => setSendOpen(true)}>
+                  Send the proposal
+                </Instrument>
+              </>
+            )}
+            {/* You draft v2 BECAUSE of v1 — keep the chain reachable while drafting. */}
             <ProposalVersionHistory proposalId={proposalId} />
-          </>
-        )}
+          </InstrumentRow>
+          <p className="mt-1 text-[10px] italic text-[var(--text-muted)]">
+            {pct === 0
+              ? 'Nothing drafted yet — open the Drafting Room to begin.'
+              : readyToSend
+                ? 'Fully drafted — ready to send.'
+                : `${pct}% drafted · keep going in the Drafting Room.`}
+          </p>
+        </div>
+      )}
 
-        {/* Terminal (expired/declined) — R63/R65. REVISE is the primary act
-            (a superseding new version via clone_proposal); Preview and Resend
-            are quiet seconds. There is no distinct "Follow up" button —
-            follow-up is the letterhead's "Send a note" (1:1 direct thread, R63).
-            Resend re-opens the SAME proposal via send_proposal (which doesn't
-            gate on draft): the SendSheet sets a fresh expiry, flipping it back
-            to 'sent'. */}
-        {isTerminal && (
-          <>
-            <button
-              type="button"
-              onClick={() => setReviseOpen(true)}
-              className={primaryInstrumentCls}
-            >
-              Revise →
-            </button>
-            <button type="button" onClick={() => setPreviewOpen(true)} className={instrumentCls}>
-              Preview as {familyLabel}
-            </button>
-            <button type="button" onClick={() => setSendOpen(true)} className={instrumentCls}>
-              Resend &middot; new expiry
-            </button>
-            <ProposalVersionHistory proposalId={proposalId} />
-          </>
-        )}
-      </div>
+      {/* In the client's hands or settled — Preview · Revise are quiet seconds. */}
+      {isLive && (
+        <InstrumentRow className="mt-1">
+          <Instrument variant="secondary" onClick={() => setPreviewOpen(true)}>
+            Preview as {family}
+          </Instrument>
+          <Instrument variant="secondary" onClick={() => setReviseOpen(true)}>
+            Request a change · Revise
+          </Instrument>
+          {/* The version chain reads itself; renders nothing for a v1-only chain. */}
+          <ProposalVersionHistory proposalId={proposalId} />
+        </InstrumentRow>
+      )}
+
+      {/* Terminal (expired/declined) — R63/R65. REVISE is the primary act
+          (a superseding new version via clone_proposal); Preview and Resend
+          are quiet seconds. Resend re-opens the SAME proposal via send_proposal
+          (which doesn't gate on draft): the SendSheet sets a fresh expiry. */}
+      {isTerminal && (
+        <InstrumentRow className="mt-1">
+          <Instrument variant="primary" trailing="→" onClick={() => setReviseOpen(true)}>
+            Revise
+          </Instrument>
+          <Instrument variant="secondary" onClick={() => setPreviewOpen(true)}>
+            Preview as {family}
+          </Instrument>
+          <Instrument variant="secondary" onClick={() => setSendOpen(true)}>
+            Resend · new expiry
+          </Instrument>
+          <ProposalVersionHistory proposalId={proposalId} />
+        </InstrumentRow>
+      )}
 
       {/* Send — the charcoal DocSheet over the open Proposal (D1). */}
       <SendSheet proposalId={proposalId} open={sendOpen} onClose={() => setSendOpen(false)} />

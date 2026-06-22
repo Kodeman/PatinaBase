@@ -23,10 +23,9 @@
  * A Room — full-bleed paper, zero shadows (D4); reuses RoomShell's physics.
  */
 
-import { useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
-  createBrowserClient,
   useProposal,
   useScopeBuilderSummary,
   useUpdateProposalItem,
@@ -36,13 +35,7 @@ import { RoomShell } from '../room-shell';
 import { StrataMark } from '../../strata-mark';
 import { FacetSection } from './facet-section';
 import { ProposalPreviewRail } from '../../drafting/proposal-mirror';
-import {
-  draftingFill,
-  draftingPct,
-  draftingStateLabel,
-  draftingGaps,
-  type DraftingFacets,
-} from '@/lib/document/drafting-progress';
+import { useDraftingState } from '@/hooks/use-drafting-state';
 
 // The eight legacy editors — proven, proposalId-addressed, self-persisting.
 import { RoomsInScope } from '@/components/portal/scope-builder/rooms-in-scope';
@@ -68,113 +61,6 @@ const MOVEMENT = {
 
 const num = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n : 0);
 
-/**
- * The facets read — the ONLY thing the room reads itself (the legacy editors own
- * their own reads/writes). One client-grain query layer feeds the done/summary
- * of each facet and the Strata Mark; it mirrors the proposal-mirror's grain so
- * "what's written" agrees with "what the client sees". Refetches on focus so the
- * mark fills as the editors persist below.
- */
-interface FacetRead {
-  facets: DraftingFacets;
-  summary: {
-    rooms: number;
-    ffe: number;
-    palettes: number;
-    boards: number;
-    phases: number;
-    exclusions: number;
-    payments: number;
-    swatches: number;
-    coTerms: boolean;
-  };
-  items: Array<{ id: string; name: string; item_type: ProposalItemType | null; scope_room_id: string | null }>;
-}
-
-function useFacetRead(proposalId: string) {
-  return useQuery<FacetRead>({
-    queryKey: ['drafting-facets', proposalId],
-    enabled: !!proposalId,
-    refetchOnWindowFocus: true,
-    // This composite reads eight child tables; the embedded facet editors mutate
-    // through their own hooks (their own keys), so they don't invalidate THIS
-    // key. A gentle focused-only poll keeps the Strata Mark, facet ticks, and
-    // FF&E type chips live as the designer composes, without wiring every editor.
-    // (The cycle chip also invalidates this key directly for an instant update.)
-    refetchInterval: 2000,
-    refetchIntervalInBackground: false,
-    staleTime: 0,
-    queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const supabase = createBrowserClient() as any;
-      const [
-        { data: rooms },
-        { data: items },
-        { data: palettes },
-        { data: boards },
-        { data: phases },
-        { data: exclusions },
-        { data: payments },
-        { data: coTerms },
-      ] = await Promise.all([
-        supabase.from('proposal_scope_rooms').select('id').eq('proposal_id', proposalId),
-        supabase
-          .from('proposal_items')
-          .select('id, name, item_type, scope_room_id, position')
-          .eq('proposal_id', proposalId)
-          .order('position', { ascending: true }),
-        supabase
-          .from('proposal_palettes')
-          .select('id, swatches:palette_swatches(id)')
-          .eq('proposal_id', proposalId),
-        supabase.from('proposal_boards').select('id, proposal_board_items(count)').eq('proposal_id', proposalId),
-        supabase.from('proposal_phases').select('id').eq('proposal_id', proposalId),
-        supabase.from('proposal_exclusions').select('id').eq('proposal_id', proposalId),
-        supabase.from('proposal_payment_milestones').select('id').eq('proposal_id', proposalId),
-        supabase.from('proposal_change_order_terms').select('process_description').eq('proposal_id', proposalId).maybeSingle(),
-      ]);
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const palRows = (palettes ?? []) as any[];
-      const swatches = palRows.reduce((n: number, p: { swatches?: unknown[] }) => n + (p.swatches?.length ?? 0), 0);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const boardRows = (boards ?? []) as any[];
-      const boardsWithItems = boardRows.filter((b) => (b.proposal_board_items?.[0]?.count ?? 0) > 0).length;
-      const coWritten = !!(coTerms as { process_description?: string } | null)?.process_description?.trim();
-
-      const summary = {
-        rooms: (rooms ?? []).length,
-        ffe: (items ?? []).length,
-        palettes: palRows.length,
-        boards: boardsWithItems,
-        phases: (phases ?? []).length,
-        exclusions: (exclusions ?? []).length,
-        payments: (payments ?? []).length,
-        swatches,
-        coTerms: coWritten,
-      };
-
-      const facets: DraftingFacets = {
-        rooms: summary.rooms > 0,
-        ffe: summary.ffe > 0,
-        phases: summary.phases > 0,
-        exclusions: summary.exclusions > 0,
-        payments: summary.payments > 0,
-        terms: summary.coTerms,
-        palette: summary.swatches > 0,
-        boards: summary.boards > 0,
-      };
-
-      return {
-        facets,
-        summary,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        items: (items ?? []) as any[],
-      };
-    },
-  });
-}
-
 // Cycle order for the FF&E type chip (R42): fixed → allowance → tbd → fixed.
 const TYPE_ORDER: ProposalItemType[] = ['fixed', 'allowance', 'tbd'];
 const TYPE_CHIP: Record<string, { label: string; color: string; bg: string }> = {
@@ -187,7 +73,9 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const { data: summary } = useScopeBuilderSummary(proposalId);
-  const { data: read } = useFacetRead(proposalId);
+  // The shared drafting state — the SAME ['drafting-facets', id] read the open
+  // document's proposal instruments echo, so "what's written" agrees everywhere.
+  const { facets, summary: s, items, fill, pct, state, gaps } = useDraftingState(proposalId);
   const updateItem = useUpdateProposalItem();
   const queryClient = useQueryClient();
 
@@ -195,26 +83,6 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   // legacy shell computed for the milestone allocator.
   const totalProjectCents = num(summary?.totalFFEEstimateCents) + num(summary?.totalDesignFeeCents);
 
-  const facets = useMemo<DraftingFacets>(
-    () =>
-      read?.facets ?? {
-        rooms: false,
-        ffe: false,
-        phases: false,
-        exclusions: false,
-        payments: false,
-        terms: false,
-        palette: false,
-        boards: false,
-      },
-    [read],
-  );
-
-  const s = read?.summary;
-  const fill = draftingFill(facets);
-  const pct = draftingPct(fill);
-  const state = draftingStateLabel(pct);
-  const gaps = draftingGaps(facets);
   const tone = STATE_TONE[state];
 
   // One section open at first paint (Rooms — the natural start); everything is
@@ -258,8 +126,8 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
     <RoomShell
       title="The Drafting Room"
       count={pct > 0 ? `${pct}% drafted` : undefined}
-      backTo={`/portal/proposals/${proposalId}`}
-      backLabel="the proposal"
+      // S10: no backTo — leaving returns to the stashed origin (the document the
+      // designer walked in from, "← the document"), not the legacy proposals route.
     >
       <div className="mx-auto max-w-[1240px] px-6 sm:px-8">
         {/* ── The proposal taking shape — the Strata Mark is the ONLY progress ── */}
@@ -320,13 +188,13 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
               {/* R42: tap-to-cycle the item type per piece (fixed → allowance →
                   tbd). The legacy editor has no inline type toggle, so this strip
                   exposes cycling without touching its internals. */}
-              {read && read.items.length > 0 && (
+              {items.length > 0 && (
                 <div className="mb-4 rounded-[7px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)] px-3 py-2.5">
                   <p className="mb-2 font-mono text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                     Tap a type to cycle it · fixed → allowance → tbd
                   </p>
                   <div className="flex flex-col gap-1">
-                    {read.items.map((it) => {
+                    {items.map((it) => {
                       const t = (it.item_type ?? 'fixed') as ProposalItemType;
                       const chip = TYPE_CHIP[t];
                       return (

@@ -9,7 +9,7 @@
  * presence. Esc puts down (sheet-first priority, §3).
  */
 
-import { use, useEffect, useMemo, useRef, useState } from 'react';
+import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useProjectV2, useProjectPhases } from '@patina/supabase';
@@ -21,7 +21,8 @@ import { rememberDocumentInHand } from '@/lib/analytics/document-events';
 import { useDocumentPresence } from '@/hooks/use-document-presence';
 import { useProposal } from '@/hooks/use-proposals';
 import { deriveSections, type SectionLineage } from '@/lib/document/section-derivation';
-import type { DocumentStateRow } from '@/lib/document/desk-derivation';
+import type { DocumentStateRow, SectionKey } from '@/lib/document/desk-derivation';
+import { sectionAnchorId } from '@/lib/document/section-anchor';
 import { fmtDay, fmtMonthYear, fmtUsd } from '@/lib/document/format';
 import { DocSpine } from '@/components/document/doc-spine';
 import { DocLetterhead } from '@/components/document/doc-letterhead';
@@ -30,12 +31,15 @@ import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-re
 import { FFESection } from '@/components/document/ffe-section';
 import { CoordinationBand } from '@/components/document/coordination/coordination-band';
 import { BriefSection } from '@/components/document/brief-section';
+import { BriefRecap } from '@/components/document/brief-recap';
 import { CareSection } from '@/components/document/quiet-sections';
 import { DiscoverySection } from '@/components/document/discovery/discovery-section';
+import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap';
 import { DiscoveryMargin } from '@/components/document/discovery/discovery-margin';
 import { MarginRail } from '@/components/document/margin-rail';
 import { AccountBand } from '@/components/document/account-band';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
+import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
 import { FolioLetterhead } from '@/components/document/folio-strip';
 import { DocColophon } from '@/components/document/doc-colophon';
@@ -105,13 +109,37 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
       : null,
   );
 
-  const [proposalOpen, setProposalOpen] = useState(false);
+  // Which settled phase is unfolded (R66 review) — generalizes the old
+  // proposal-only unfold so ANY completed phase can be clicked open.
+  const [openSection, setOpenSection] = useState<SectionKey | null>(null);
   const [highlightLineId, setHighlightLineId] = useState<string | null>(null);
   const [pendingNoteAnchor, setPendingNoteAnchor] = useState<string | null>(null);
   // R24: drags anywhere on the active section land in the folio.
   const [sectionDrag, setSectionDrag] = useState(false);
   const [folioDrop, setFolioDrop] = useState<File[] | null>(null);
   const mainRef = useRef<HTMLElement>(null);
+
+  // Click a spine marker (or a settled bar): unfold that phase and scroll to it.
+  // The active phase has no settled bar — the scroll just lands on its section.
+  const jumpToSection = useCallback((key: SectionKey) => {
+    setOpenSection(key);
+    requestAnimationFrame(() => {
+      document
+        .getElementById(sectionAnchorId(key))
+        ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+  }, []);
+
+  // D13: the mobile spine sheet lives outside this React tree — it asks for a
+  // section jump via a CustomEvent (mirrors the account sheet's open-account).
+  useEffect(() => {
+    const onOpenSection = (e: Event) => {
+      const key = (e as CustomEvent).detail as SectionKey | undefined;
+      if (key) jumpToSection(key);
+    };
+    window.addEventListener('document:open-section', onOpenSection);
+    return () => window.removeEventListener('document:open-section', onOpenSection);
+  }, [jumpToSection]);
 
   // R25 rooms (spine-sheet jump rows + headings) · R23 gates (settled stamps).
   const { data: docRooms } = useDocumentRooms(row?.project_id ?? null);
@@ -246,7 +274,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         }}
       />
 
-      <DocSpine sections={sections} others={others} />
+      <DocSpine sections={sections} others={others} onJump={jumpToSection} />
 
       {/* No z-index here: a stacking context on main would trap the fixed
           procurement panels (inspection drawer, Order Assistant) mounted in
@@ -258,6 +286,20 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           vitals={vitalsFor(row, project, liveProposal)}
           fill={deriveFillState(sections)}
         />
+
+        {/* The household — who this document is for. A standing line so the
+            client (and the "no client linked" gap) is answerable here, not only
+            discovered inside the Send sheet. View / set / change / edit. */}
+        {(row.engagement_kind === 'project' || row.engagement_kind === 'proposal') && (
+          <HouseholdChip
+            engagementKind={row.engagement_kind}
+            projectId={row.project_id}
+            proposalId={row.proposal_id}
+            clientProfileId={row.client_profile_id}
+            clientName={row.client_name}
+            proposalStatus={liveProposal?.status ?? null}
+          />
+        )}
 
         {/* R27 / R63: the letterhead instruments — one quiet DM-mono row under
             the subtitle, now STAGE-CONSISTENT. Send-a-note (and, where there's
@@ -298,52 +340,66 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           anchorKind="letterhead"
         />
 
-        {/* Settled bars — letterhead bar + stamp; Proposal unfolds in place. */}
-        {settled.map((s) =>
-          s.key === 'proposal' && unfoldProposalId ? (
+        {/* Settled bars — letterhead bar + stamp; every phase with a read-only
+            body unfolds in place so completed work stays reviewable (R66).
+            Clicked from the spine marker (jumpToSection) or the bar itself. */}
+        {settled.map((s) => {
+          const isOpen = openSection === s.key;
+          const toggle = () => setOpenSection((prev) => (prev === s.key ? null : s.key));
+
+          // R23: a gate-settled section wears the client's grant; the Proposal
+          // wears its signing seal.
+          const approvedGate = (sectionGates ?? []).find(
+            (g) => g.section_key === s.key && gateState(g) === 'approved',
+          );
+          const stamp =
+            s.key === 'proposal' && seal
+              ? { label: `Signed · ${seal.date}`, color: 'var(--color-sage)', ink: '#85947C' }
+              : approvedGate
+                ? {
+                    label: `Approved${approvedGate.responded_at ? ` · ${fmtDay(approvedGate.responded_at)}` : ''}`,
+                    color: 'var(--color-sage)',
+                    ink: '#85947C',
+                  }
+                : undefined;
+
+          // The read-only review body — what the designer reviews on unfold.
+          // Brief → the lead record (triage auto-hides once accepted); Discovery
+          // → the captured facts recap; Direction/Proposal → the proposal blocks.
+          let body: ReactNode = null;
+          if (s.key === 'brief') {
+            body = <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} />;
+          } else if (s.key === 'discovery') {
+            body = <DiscoveryRecap clientProfileId={row.client_profile_id} />;
+          } else if ((s.key === 'direction' || s.key === 'proposal') && unfoldProposalId) {
+            body = (
+              <>
+                <ProposalBlocksReadOnly proposalId={unfoldProposalId} />
+                {s.key === 'proposal' && seal && (
+                  <p className="mt-4 border-t border-[var(--color-pearl)] pt-3 text-[10.5px] text-[var(--text-muted)]">
+                    {seal.by ? `Signed by ${seal.by} · ${seal.date}` : `Signed · ${seal.date}`}
+                  </p>
+                )}
+              </>
+            );
+          }
+
+          return (
             <SettledBar
               key={s.key}
-              name={`Proposal${lineage?.version ? ` · v${lineage.version}` : ''}`}
-              stamp={
-                seal
-                  ? { label: `Signed · ${seal.date}`, color: 'var(--color-sage)', ink: '#85947C' }
-                  : undefined
+              anchorId={sectionAnchorId(s.key)}
+              name={
+                s.key === 'proposal' && lineage?.version ? `Proposal · v${lineage.version}` : s.label
               }
-              open={proposalOpen}
-              onToggle={() => setProposalOpen((v) => !v)}
+              hint={s.key === 'proposal' ? undefined : s.sub}
+              stamp={stamp}
+              open={isOpen}
+              onToggle={body ? toggle : undefined}
             >
-              <ProposalBlocksReadOnly proposalId={unfoldProposalId} />
-              {seal && (
-                <p className="mt-4 border-t border-[var(--color-pearl)] pt-3 text-[10.5px] text-[var(--text-muted)]">
-                  {seal.by ? `Signed by ${seal.by} · ${seal.date}` : `Signed · ${seal.date}`}
-                </p>
-              )}
+              {body}
             </SettledBar>
-          ) : (
-            (() => {
-              // R23: a gate-settled section wears the client's grant.
-              const approvedGate = (sectionGates ?? []).find(
-                (g) => g.section_key === s.key && gateState(g) === 'approved',
-              );
-              return (
-                <SettledBar
-                  key={s.key}
-                  name={s.label}
-                  hint={s.sub}
-                  stamp={
-                    approvedGate
-                      ? {
-                          label: `Approved${approvedGate.responded_at ? ` · ${fmtDay(approvedGate.responded_at)}` : ''}`,
-                          color: 'var(--color-sage)',
-                          ink: '#85947C',
-                        }
-                      : undefined
-                  }
-                />
-              );
-            })()
-          ),
-        )}
+          );
+        })}
 
         {/* R26: the Account Page — engagement money at the top of the
             Project section. Studio eyes only; never mirrored. */}
@@ -353,7 +409,9 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
 
         {/* The active section — exactly one (§4). */}
         <div
+          id={sectionAnchorId(row.active_section)}
           data-active-section
+          className="scroll-mt-24"
           onDragOver={(e) => {
             if (!row.project_id || !e.dataTransfer?.types?.includes('Files')) return;
             e.preventDefault();
@@ -399,6 +457,13 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                     proposalId={row.proposal_id}
                     clientName={row.client_name}
                   />
+                )}
+                {/* S18: name the model — what's below is a read-only preview of
+                    the proposal; the editing happens in the Drafting Room. */}
+                {row.engagement_kind === 'proposal' && liveProposal?.status === 'draft' && (
+                  <p className="mb-2 mt-3 font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+                    Read-only preview · edit in the Drafting Room
+                  </p>
                 )}
                 <ProposalBlocksReadOnly proposalId={row.proposal_id} />
               </section>

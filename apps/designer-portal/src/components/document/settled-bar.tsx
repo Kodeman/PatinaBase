@@ -2,7 +2,10 @@
 
 /**
  * Settled section bar (spec §4): letterhead bar + stamp; unfolds in place,
- * read-only. Only the Proposal bar is expandable in Slice 2 (DECISIONS I10).
+ * read-only. Every settled phase with a read-only body is expandable now — the
+ * designer clicks a completed phase (spine marker or the bar) to review what was
+ * captured (Brief, Discovery, Direction, Proposal). `anchorId` makes the bar the
+ * scroll target for spine jumps.
  */
 
 import { Stamp } from './stamp';
@@ -14,6 +17,7 @@ export function SettledBar({
   open = false,
   onToggle,
   children,
+  anchorId,
 }: {
   name: string;
   hint?: string;
@@ -21,6 +25,8 @@ export function SettledBar({
   open?: boolean;
   onToggle?: () => void;
   children?: React.ReactNode;
+  /** DOM id (sectionAnchorId) so the spine can scroll to this bar. */
+  anchorId?: string;
 }) {
   const expandable = Boolean(onToggle);
   const rowClass =
@@ -42,7 +48,7 @@ export function SettledBar({
   );
 
   return (
-    <div className="mb-2">
+    <div id={anchorId} className="mb-2 scroll-mt-24">
       {expandable ? (
         <button type="button" onClick={onToggle} className={`${rowClass} hover:border-[#CFC8BB]`}>
           {inner}

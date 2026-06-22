@@ -12,8 +12,18 @@ import { StrataMark } from './strata-mark';
 import { SpineTimer } from './spine-timer';
 import { fillStateAtSection } from '@/lib/document/fill-state';
 import type { SpineSection } from '@/lib/document/section-derivation';
+import type { SectionKey } from '@/lib/document/desk-derivation';
 
-export function DocSpine({ sections, others }: { sections: SpineSection[]; others: string[] }) {
+export function DocSpine({
+  sections,
+  others,
+  onJump,
+}: {
+  sections: SpineSection[];
+  others: string[];
+  /** Click a settled/active marker to scroll to (and unfold) that section. */
+  onJump?: (key: SectionKey) => void;
+}) {
   return (
     <aside
       aria-label="Document spine"
@@ -29,43 +39,61 @@ export function DocSpine({ sections, others }: { sections: SpineSection[]; other
       </Link>
 
       <ul className="flex gap-5 min-[980px]:block min-[980px]:gap-0">
-        {sections.map((s) => (
-          <li
-            key={s.key}
-            className="flex shrink-0 items-start gap-2.5 py-1 min-[980px]:py-[0.45rem]"
-          >
-            <span className="mt-[5px]">
-              {/* R35: each marker carries the engagement's fill as of its
-                  section (the filling staircase); R15: only the active one
-                  breathes — "alive" is literally true here. */}
-              <StrataMark
-                fill={fillStateAtSection(s.key)}
-                size="sm"
-                breathing={s.state === 'active'}
-              />
-            </span>
-            <span className={s.state === 'future' ? 'opacity-45' : ''}>
-              <span
-                className={`block text-[11.5px] leading-tight ${
-                  s.state === 'active'
-                    ? 'font-semibold text-[var(--color-charcoal)]'
-                    : s.state === 'settled'
-                      ? 'text-[var(--color-aged-oak)]'
-                      : 'text-[var(--text-muted)]'
-                }`}
-              >
-                {s.label}
+        {sections.map((s) => {
+          const inner = (
+            <>
+              <span className="mt-[5px]">
+                {/* R35: each marker carries the engagement's fill as of its
+                    section (the filling staircase); R15: only the active one
+                    breathes — "alive" is literally true here. */}
+                <StrataMark
+                  fill={fillStateAtSection(s.key)}
+                  size="sm"
+                  breathing={s.state === 'active'}
+                  label={s.state === 'active' ? `${s.label} — ${s.sub}` : undefined}
+                />
               </span>
-              <span
-                className={`mt-px block font-mono text-[8.5px] uppercase tracking-[0.05em] ${
-                  s.state === 'active' ? 'text-[var(--color-clay)]' : 'text-[var(--text-muted)]'
-                }`}
-              >
-                {s.sub}
+              <span className={s.state === 'future' ? 'opacity-45' : ''}>
+                <span
+                  className={`block text-[11.5px] leading-tight ${
+                    s.state === 'active'
+                      ? 'font-semibold text-[var(--color-charcoal)]'
+                      : s.state === 'settled'
+                        ? 'text-[var(--color-aged-oak)]'
+                        : 'text-[var(--text-muted)]'
+                  }`}
+                >
+                  {s.label}
+                </span>
+                <span
+                  className={`mt-px block font-mono text-[8.5px] uppercase tracking-[0.05em] ${
+                    s.state === 'active' ? 'text-[var(--color-clay)]' : 'text-[var(--text-muted)]'
+                  }`}
+                >
+                  {s.sub}
+                </span>
               </span>
-            </span>
-          </li>
-        ))}
+            </>
+          );
+          // Settled + active markers jump to their section; future ones are
+          // inert (nothing to reach yet). The jump button gives keyboard reach.
+          return (
+            <li key={s.key} className="shrink-0">
+              {s.state === 'future' || !onJump ? (
+                <div className="flex items-start gap-2.5 py-1 min-[980px]:py-[0.45rem]">{inner}</div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onJump(s.key)}
+                  title={`Jump to ${s.label}`}
+                  className="flex w-full items-start gap-2.5 rounded-[4px] py-1 text-left transition-colors hover:bg-[rgba(196,165,123,0.08)] min-[980px]:-mx-2 min-[980px]:px-2 min-[980px]:py-[0.45rem]"
+                >
+                  {inner}
+                </button>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       <SpineTimer />

@@ -19,7 +19,7 @@ export function DocLetterhead({
   return (
     <header className="mb-4 border-b border-[var(--color-pearl)] pb-4">
       <div className="mb-2.5">
-        <StrataMark state="active" size="lg" fill={fill} />
+        <StrataMark state="active" size="lg" fill={fill} label={fill ? 'Document progress' : undefined} />
       </div>
       <h1 className="font-heading text-[1.55rem] font-medium leading-tight tracking-[-0.01em] text-[var(--color-charcoal)]">
         {title}

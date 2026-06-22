@@ -180,27 +180,51 @@ export function MobileSheets() {
           ← Put down · back to the Desk
         </button>
         <ul className="mt-1">
-          {(activeDoc?.sections ?? []).map((s) => (
-            <li key={s.key} className="flex items-center gap-2.5 py-2">
-              <StrataMark size="sm" fill={fillStateAtSection(s.key)} breathing={s.state === 'active'} />
-              <span className={s.state === 'future' ? 'opacity-45' : ''}>
-                <span
-                  className={`block text-[13px] ${
-                    s.state === 'active'
-                      ? 'font-semibold text-[var(--color-charcoal)]'
-                      : s.state === 'settled'
-                        ? 'text-[var(--color-aged-oak)]'
-                        : 'text-[var(--text-muted)]'
-                  }`}
-                >
-                  {s.label}
+          {(activeDoc?.sections ?? []).map((s) => {
+            const inner = (
+              <>
+                <StrataMark size="sm" fill={fillStateAtSection(s.key)} breathing={s.state === 'active'} />
+                <span className={s.state === 'future' ? 'opacity-45' : ''}>
+                  <span
+                    className={`block text-[13px] ${
+                      s.state === 'active'
+                        ? 'font-semibold text-[var(--color-charcoal)]'
+                        : s.state === 'settled'
+                          ? 'text-[var(--color-aged-oak)]'
+                          : 'text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {s.label}
+                  </span>
+                  <span className="block font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    {s.sub}
+                  </span>
                 </span>
-                <span className="block font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                  {s.sub}
-                </span>
-              </span>
-            </li>
-          ))}
+              </>
+            );
+            // Settled + active rows jump to (and unfold) their section via the
+            // page's open-section listener; future rows stay inert.
+            return (
+              <li key={s.key}>
+                {s.state === 'future' ? (
+                  <div className="flex items-center gap-2.5 py-2">{inner}</div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeSheet();
+                      window.dispatchEvent(
+                        new CustomEvent('document:open-section', { detail: s.key }),
+                      );
+                    }}
+                    className="flex w-full items-center gap-2.5 py-2 text-left"
+                  >
+                    {inner}
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
 
         {/* R25: room headings as jump rows — tap lands on the heading. */}
