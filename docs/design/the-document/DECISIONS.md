@@ -2480,4 +2480,47 @@ constraint (schema + RLS + UI in place, verified by construction). NOT yet on pr
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I41 · R1–R66 · L1–L4 · THE GO · FLIP CONFIRMED · last id = R66*
+## Rulings — design review, 2026-06-22 (Account visibility in the Desk)
+
+### R67 · The maker's nameplate + the Account sheet — account visibility in the Desk — 2026-06-22
+
+Closes a review finding: the Desk (now the default landing surface) gave the designer **zero account visibility**. You could not tell *what account you were logged into*, and there was **no path** to settings, profile, security, devices, or sign-out from inside the Document model — that machinery existed only on the dissolving `/portal` zone shell (its `AccountMenu` + `/portal/settings/*` pages were never reachable from `/desk`, and ⌘K had no account actions). Ruled in a design review with Kody.
+
+**Account enters the Document vocabulary, not a new top bar (D1).** No utility bar, no header. Identity lives on the one chrome D1 already sanctions — the **Studio Drawer** — and its actions live in a **Drawer-weight sheet** (D14, like Orders/Accounts/Hours). "Date + ⌘K are the only chrome" is a statement about the **Desk page**; the drawer is already-accepted persistent chrome, so the nameplate is consistent with it.
+
+**The maker's nameplate (persistent).** The plain "Studio" micro-label on the drawer becomes the designer's **signature**: monogram (or avatar) + **display name** + the **active studio** + a declared-availability dot. Always visible — it is the at-a-glance answer to "what account is this." Click opens the Account sheet.
+
+**Identity shown = person + studio (the literal question).** Name · email · **studio/org name + role** (the first `design_studio` membership, graceful person-only fallback when there's no org). Structured to carry a multi-studio switcher later; single active studio in v1.
+
+**The Account sheet — settings re-skinned into the language, not linked-out.** A charcoal `DocSheet` with an identity front-matter (person + studio + the availability selector, the same declared-status model as the old AccountMenu) and **R28 page links** (DM-mono, never tabs): **Profile · Notifications · Security · Devices**, plus **Sign out** at the foot. Each page is the *same data layer* as the corresponding `/portal/settings` page — only the presentation moves to charcoal/paper. No bounce back to the old light-theme zone shell.
+
+**Disambiguation (load-bearing).** The drawer's **"Accounts" book is the studio's MONEY ledger** (R36); this is the designer's **LOGIN account**. They never share a label — the login account is reached **only through the nameplate / ⌘K**, never as a drawer book.
+
+**Reachable three ways, one surface.** The sheet is opened by the desktop nameplate, the mobile drawer sheet's identity header (D13), and ⌘K (`Settings`, `Sign out`) — all via a single `document:open-account` event (the InterruptionSettings pattern). The identity is answered by the persistent nameplate; ⌘K carries the *actions*.
+
+**Additive, no migration (D7).** Every data layer already exists (`profiles` incl. `availability_status` 00183, `user_settings`/`notification_preferences` via `/api/user/preferences`, Supabase MFA, `organizations`). The old `/portal/settings/*` routes + portal `AccountMenu` stay untouched during the phase-in; a later dissolve slice can redirect/remove them. **Leah-facing** (a new interaction pattern) — logged here for the spec fold.
+
+---
+
+## Implementation — The Document (Account visibility, R67) — 2026-06-22
+
+### I42 · The maker's nameplate + the Account sheet are live
+
+Built R67 on branch `the-document/account-visibility`, additive, zero migrations. New `components/document/account/`:
+- **`account-sheet.tsx`** — the always-mounted sheet (in `(document)/layout.tsx` beside `InterruptionSettings`); owns `open` state + the `document:open-account` listener and exports `openAccount()`. Identity front-matter + availability selector (reuses `useAvailability`/`useSetAvailability`; the **sole** `useAvailabilityRealtime` subscriber so the channel isn't double-bound) + R28 page links + Sign out.
+- **`account-profile-page.tsx`** — display name/bio (`useUpdateProfile`), avatar (`useUploadAvatar`), password (`useUpdatePassword`).
+- **`account-notifications-page.tsx`** — the four email toggles via the canonical `/api/user/preferences` fetch/PATCH (same endpoint as the old settings + the public preferences page).
+- **`account-security-page.tsx`** — 2FA enroll→scan→verify→unenroll (`useMfaFactors`/`useEnrollMfa`/`useVerifyMfaEnrollment`/`useUnenrollMfa`), charcoal re-skin.
+- **`account-devices-page.tsx`** — reuses `PairDeviceQR` unchanged on a paper card.
+- **`account-nameplate.tsx`** (desktop drawer) + **`mobile-account-header.tsx`** (mobile drawer sheet) — read the shared availability query; the nameplate replaces the drawer's "Studio" label.
+- Shared helper `lib/document/account-identity.ts` (`monogramOf`, `activeStudio`).
+
+Modified: `studio-drawer.tsx` (nameplate + divider in place of the "Studio" span), `mobile/mobile-sheets.tsx` (identity header atop the drawer sheet), `command-bar.tsx` (`Settings` + `Sign out` actions, alias-aware), `(document)/layout.tsx` (mount), and `@patina/supabase` `use-settings.ts` `UserProfile` gained the real `display_name`/`business_name` columns (the old settings page had been casting to `any` to dodge the missing fields).
+
+**Verification:** designer-portal `tsc` clean for every touched file (the only remaining errors are the pre-existing `packages/email` React-email JSX mismatch, untouched here); full monorepo `next build` GREEN (exit 0, `/desk` + `/doc/[id]` compiled); D4 zero-shadow confirmed across the new files. **Live Chrome walk GREEN** (designer@patina.dev = Leah Hartwell · Local Dev Studio · owner, :3000, flag `the-document-pilot:true`): the drawer nameplate renders name + studio + status dot; click → the Account sheet slides over the Desk without unmounting it; front-matter reads "Leah Hartwell · designer@patina.dev · LOCAL DEV STUDIO · OWNER"; availability Busy→Online flips the monogram dot; Profile/Notifications/Security/Devices all render in-language; **2FA enroll fired live** (real QR + secret, Cancel unenrolled the pending factor); the iOS pairing QR rendered; ⌘K `Settings` opened the sheet and `Sign out` showed (not executed); `dialog "Account"` + named radios/links expose cleanly; zero console errors from the new code (only the pre-existing PostHog surveys-script error).
+
+⚠ Owed / provisional: ~390px mobile drawer-sheet walk + desktop ≥1280 / ~390px screenshots to disk (the env's `save_to_disk` yields no file — captures are in-conversation only, as prior tracks); spec fold of R67; org/studio **switcher** deferred (front-matter is switcher-ready); the old `/portal/settings/*` + portal `AccountMenu` left in place for the phase-in. NOT on prod.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R67 · L1–L4 · THE GO · FLIP CONFIRMED · last id = R67*
