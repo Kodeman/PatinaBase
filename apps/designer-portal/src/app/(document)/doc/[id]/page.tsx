@@ -30,7 +30,9 @@ import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-re
 import { FFESection } from '@/components/document/ffe-section';
 import { CoordinationBand } from '@/components/document/coordination/coordination-band';
 import { BriefSection } from '@/components/document/brief-section';
-import { DiscoverySection, CareSection } from '@/components/document/quiet-sections';
+import { CareSection } from '@/components/document/quiet-sections';
+import { DiscoverySection } from '@/components/document/discovery/discovery-section';
+import { DiscoveryMargin } from '@/components/document/discovery/discovery-margin';
 import { MarginRail } from '@/components/document/margin-rail';
 import { AccountBand } from '@/components/document/account-band';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
@@ -367,7 +369,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           }}
         >
           {row.active_section === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
-          {row.active_section === 'discovery' && <DiscoverySection clientName={row.client_name} />}
+          {row.active_section === 'discovery' && row.engagement_id && row.designer_id && (
+            <DiscoverySection
+              engagementId={row.engagement_id}
+              designerId={row.designer_id}
+              clientProfileId={row.client_profile_id}
+              clientName={row.client_name}
+            />
+          )}
           {(row.active_section === 'direction' || row.active_section === 'proposal') &&
             row.proposal_id && (
               <section>
@@ -478,15 +487,21 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         aria-label="Margin"
         className="z-[1] hidden border-t border-dashed border-[var(--color-pearl)] bg-[rgba(250,247,242,0.55)] px-4 pb-24 pt-6 min-[980px]:sticky min-[980px]:top-0 min-[980px]:block min-[980px]:h-screen min-[980px]:overflow-y-auto min-[980px]:border-l min-[980px]:border-t-0"
       >
-        <MarginRail
-          projectId={row.project_id}
-          proposalId={row.proposal_id}
-          clientName={row.client_name}
-          clientUserId={row.client_profile_id}
-          onHoverLine={setHighlightLineId}
-          pendingNoteAnchor={pendingNoteAnchor}
-          onNoteAnchorConsumed={() => setPendingNoteAnchor(null)}
-        />
+        {row.active_section === 'discovery' ? (
+          // R66: at Discovery (Shape D) there is no project/proposal — the
+          // margin is notes-only, keyed on the relationship.
+          <DiscoveryMargin designerClientId={row.engagement_id ?? ''} />
+        ) : (
+          <MarginRail
+            projectId={row.project_id}
+            proposalId={row.proposal_id}
+            clientName={row.client_name}
+            clientUserId={row.client_profile_id}
+            onHoverLine={setHighlightLineId}
+            pendingNoteAnchor={pendingNoteAnchor}
+            onNoteAnchorConsumed={() => setPendingNoteAnchor(null)}
+          />
+        )}
       </aside>
     </div>
   );

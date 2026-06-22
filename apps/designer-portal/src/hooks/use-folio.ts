@@ -160,6 +160,70 @@ export function useSetFolioVisibility(projectId: string | null) {
   });
 }
 
+// ── The Discovery folio (R66) — relationship-keyed, pre-project ──────────────
+// At Discovery (document_state Shape D) there is no project; the inspiration
+// board clips into the same folio table/bucket keyed on designer_client_id
+// (00224 adds the column + the storage relationship leg). Flat list, no
+// version chains — a discovery board is gathering, not revising.
+
+export function useDiscoveryFolioFiles(designerClientId: string | null) {
+  return useQuery<FolioFile[]>({
+    queryKey: ['discovery-folio', designerClientId],
+    enabled: Boolean(designerClientId),
+    queryFn: async () => {
+      const { data, error } = await getSupabase()
+        .from('project_documents')
+        .select(
+          'id, project_id, title, doc_type, storage_path, size_bytes, uploaded_by, anchor_kind, anchor_id, section_key, version_of, client_visible, created_at',
+        )
+        .eq('designer_client_id', designerClientId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as FolioFile[];
+    },
+  });
+}
+
+export function useUploadDiscoveryFolioFile(designerClientId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ file }: { file: File }) => {
+      if (!designerClientId) throw new Error('discovery folio: no engagement');
+      const supabase = getSupabase();
+      const { data: auth } = await supabase.auth.getUser();
+
+      const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+      const storagePath = `${designerClientId}/${Date.now()}-${safeName}`;
+      const { error: upErr } = await supabase.storage
+        .from('project-documents')
+        .upload(storagePath, file, { contentType: file.type || undefined });
+      if (upErr) throw upErr;
+
+      const { data, error } = await supabase
+        .from('project_documents')
+        .insert({
+          project_id: null,
+          designer_client_id: designerClientId,
+          title: file.name,
+          doc_type: docTypeFor(file),
+          storage_path: storagePath,
+          size_bytes: file.size,
+          uploaded_by: auth?.user?.id ?? null,
+          anchor_kind: 'section',
+          section_key: 'discovery',
+          client_visible: false,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as FolioFile;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['discovery-folio', designerClientId] });
+    },
+  });
+}
+
 /** Signed read URL for the paper viewer (the bucket is private). */
 export async function folioSignedUrl(storagePath: string): Promise<string | null> {
   const { data, error } = await getSupabase()

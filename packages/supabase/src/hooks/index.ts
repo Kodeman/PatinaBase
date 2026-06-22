@@ -191,6 +191,17 @@ export {
   useDeclineLead,
 } from './use-leads';
 export type { Lead, LeadFilters } from './use-leads';
+export { useDiscovery, useUpsertDiscovery, useBeginDirection } from './use-discovery';
+export type {
+  ClientDiscovery,
+  DiscoveryRead,
+  DiscoveryRoom,
+  LifestyleRow,
+  KeepItem,
+  AvoidItem,
+  DecisionMaker,
+  UpsertDiscoveryInput,
+} from './use-discovery';
 export {
   useClients,
   useClient,

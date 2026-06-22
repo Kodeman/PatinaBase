@@ -2391,4 +2391,93 @@ The spec fold for Track 6 (R61–R65) rides the next cut (v1.7); the prototype `
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I40 · R1–R65 · L1–L4 · THE GO · FLIP CONFIRMED · last id = R65*
+## Rulings — design session, 2026-06-18 (Track 6 addendum — the Discovery section)
+
+### R66 · The Discovery section — structured capture between intake and the proposal (Track 6 / the lead→proposal gap) — 2026-06-18
+
+Closes the hole between Track 6 intake (lead→Discovery, R61) and the proposal (Track 4): the Discovery section's body — previously an inert spine bar ("Brief/Discovery/Direction bars are inert until their unfolds are designed") — now has a capture method. Grounded in discovery best practice (the written intake captures facts; the call captures hesitation, tone, priorities, decision-making style) and ruled to the Document's grammar in a design interview.
+
+**Discovery is a self-composing section (R40 grammar), designer-captured.** No client-facing questionnaire in v1 — the designer captures Discovery from the intake + the discovery call, one source of truth. The section fills **in any order**, shows its own completion, is usable at any percent, and the **Strata mark is the only progress device** — the anti-wizard pattern, never a SaaS form.
+
+**Structured essentials, unstructured margin — the load-bearing split.** The Discovery blocks capture **structured data**, typed fields rather than freeform prose: project **type** (enum) + a **room list** · a **budget range** · **target / hard dates** · **style tags** (the Aesthete vocabulary) · per-room **lifestyle**. Structured on purpose — the readiness check must be real, and the data must seed the proposal cleanly (field → field). The **margin holds only unstructured notes** — the call's tone, hesitations, the designer's hand (a Note, R14) — and **never** structured discovery facts. Facts live in the blocks; the human read lives in the margin.
+
+**The blocks — five essentials + deepening.** Essentials (structured; they open the proposal): **Scope & rooms · Budget · Timeline · Style & inspiration · How they live** (the per-room lifestyle that makes a proposal specific). Deepening (structured where it helps, not gating): **Keep & avoid · Decision-makers · The site & scan**. The room scan (R27 iOS RoomPlan) and the inspiration board clip into the **folio** (R24).
+
+**The discovery call writes into the structured blocks.** R61's "Schedule the discovery call" need leads to a **call checklist** (scope · how-they-live · budget · timeline · style · keep/avoid · deciders) that records facts into the structured fields; the call's tone and hesitations land in the **margin** as a Note (unstructured).
+
+**"Successful discovery" = essentials filled → ready (soft gate).** When the five structured essentials are captured, Discovery reads **"ready for Direction,"** the spine stamp settles, and Direction/the proposal opens. The fill-state is the Document's native "done" — no sign-off ceremony, no hard block on authoring (R23 gates are reserved for client-granted approvals; discovery is not one).
+
+**Auto-seed (interview ruling).** On readiness, the **structured essentials auto-seed the Direction and the proposal Drafting Room** — type, rooms, budget range, style tags, and the keep-list map field → field into the concept and the proposal draft (clean precisely because they're structured). Not reference-only.
+
+**Internal (interview ruling).** Discovery stays **fully internal in v1** — no client-confirm summary step; the Direction begins on the designer's readiness. A client-facing discovery questionnaire / confirmation can return later if pilots ask for it (flag, not built).
+
+Look/feel: `patina-discovery-section-prototype.html`. Builds onto Track 6 intake (R61–R62), feeds Track 4 (the Drafting Room). **Additive** — the Discovery body is a structured-capture + presentation layer over the existing `leads` / `designer_clients` / engagement shapes (Shape D, R61); the structured essentials map to existing project/proposal fields the auto-seed populates. **Audit-first:** confirm where type / rooms / budget / style / dates already persist before adding columns.
+
+---
+
+## Implementation — The Document, Track 6, Slice 5 (the Discovery section, R66) — 2026-06-19
+
+### I41 · The Discovery section is live — structured capture → seeded draft proposal
+
+Built R66 as `the-document: track6 5 — the Discovery section`, additive, behind
+`the-document-pilot`. The inert `DiscoverySection` stub (quiet-sections.tsx) is replaced
+by a self-composing structured-capture body (`components/document/discovery/`). The data
+layer was genuinely missing (audit-first): the five essentials had no Discovery-stage home.
+
+**Migration `00224_client_discovery.sql` (additive, D7):**
+- `client_discovery` — a 1:1 structured table keyed on `designer_clients.id` (Shape D),
+  NOT enriching the hot `designer_clients` row. Typed scalars (project_type, budget_min/max,
+  target/hard dates, style_tag_ids) + jsonb for the list-shaped fields (rooms, lifestyle,
+  keep/avoid, decision_makers). Designer-scoped RLS via a denormalized `designer_id`.
+- **`begin_direction_from_discovery(designer_client_id)`** — the readiness act: validates the
+  five essentials, creates a seeded DRAFT `proposals` row (+ `proposal_scope_rooms` field→field,
+  a `vision` style section, the budget range on the description), stamps the discovery row.
+  Idempotent. After it commits, the engagement leaves `document_state` Shape D (a proposal now
+  exists) and enters Shape B with `active_section='direction'` (00211) — **the Drafting Room
+  opens pre-seeded**, no view change. Verified live: "Begin the Direction" → the Direction body
+  showed "Seeded from Discovery · budget 60,000–80,000" + PER-ROOM BUDGETS Living/Dining.
+
+**Design rulings resolved (the audit's C1–C4, ratified with Kody):**
+- **C1 / margin at Discovery.** R66's load-bearing split (structured facts in the blocks; the
+  call's tone as an unstructured Note in the margin) needs the margin to work pre-project.
+  `margin_notes` gains a nullable `designer_client_id` (relaxed `chk_margin_notes_engagement`).
+  Since the Note is the *only* margin kind possible at Discovery (no project/proposal → the
+  project/proposal-keyed `margin_items` view can't reach it), the Discovery margin reads
+  relationship-keyed notes **directly** from `margin_notes` (`use-discovery-margin.ts`, mapped to
+  the view's note-branch shape). The rail can only write a Note (no structured-upsert access), so
+  the "margin never holds structured facts" invariant holds by construction.
+- **C2 / folio at Discovery.** `project_documents` gains a nullable `designer_client_id`
+  (`project_id` NOT NULL relaxed; storage policies gain the relationship leg). The inspiration
+  board clips here (`useDiscoveryFolioFiles`/`useUploadDiscoveryFolioFile`, folder = the
+  designer_client_id); the room scan plugs into the existing `room_scans` (no new table).
+- **C3 / the call checklist material.** Added `DocPaperSheet` (centered cream paper, ink
+  hairline, zero shadow) alongside `DocSheet` — the prototype's checklist is paper, not the
+  charcoal bottom-ledger. Same Esc/backdrop/focus semantics (D1).
+- **C4 / style vocabulary.** Style tags read the global `styles` table via `useStyles()` and
+  store `style_tag_ids uuid[]` (matches `product_styles` grain).
+
+**v1-pragmatic seed (flag to design if a richer seed is wanted):** rooms map field→field to
+`proposal_scope_rooms`; the budget range + style read seed the proposal envelope (description +
+a `vision` narrative). Per-room budget allocation and style→palette swatches stay for the
+designer in the Drafting Room.
+
+**Readiness is a soft gate (R66/R23):** authoring the blocks is never blocked; only the
+Begin-the-Direction CTA + the seed RPC require all five essentials. No client sign-off.
+
+**Verification:** SQL smoke 8/8 (`scripts/the-document-discovery-smoke.sql` — Shape D→B flip,
+2 scope rooms, idempotent, not-ready raise); 24 unit tests (`discovery-readiness` + `discovery-seed`);
+designer-portal tsc at the 260 baseline (0 new); **live Chrome walk GREEN** (designer@patina.dev,
+:3000): section renders (0 console errors), blocks open in-place with typed editors, a UI edit
+persists via the debounced upsert, 5 essentials → "Ready for Direction" (StrataMark fills, ticks
+fill, CTA enables), Begin the Direction → Direction opens pre-seeded, and a margin Note persists
+notes-only at Discovery. Migrations now **00191–00224**.
+
+⚠ Owed / provisional: ~390px mobile screenshots; a standalone `next build` was deferred to avoid
+clobbering the live dev server (the dev runtime compiled every new surface — same SWC/webpack
+path — with zero errors); the folio upload couldn't be driven under the env's file-upload
+constraint (schema + RLS + UI in place, verified by construction). NOT yet on prod (prod owes
+00221–00224 + apps).
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I41 · R1–R66 · L1–L4 · THE GO · FLIP CONFIRMED · last id = R66*
