@@ -171,12 +171,17 @@ export function useDesignerClientForClientUser(
 
       const { data, error } = await supabase
         .from('designer_clients')
-        .select('id, designer_id, client_id')
+        .select('id, designer_id, client_id, lead_id')
         .eq('client_id', clientUserId)
         .maybeSingle();
 
       if (error) throw error;
-      return data as { id: string; designer_id: string; client_id: string } | null;
+      return data as {
+        id: string;
+        designer_id: string;
+        client_id: string;
+        lead_id: string | null;
+      } | null;
     },
     enabled: !!clientUserId,
   });
@@ -296,6 +301,51 @@ export function useUpdateClientNotes() {
     onSuccess: (_, { clientId }) => {
       queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
       queryClient.invalidateQueries({ queryKey: ['designer-client', clientId] });
+    },
+  });
+}
+
+/**
+ * Update a client's editable contact fields on the designer's relationship row
+ * (designer_clients): the working name + email (the contact for captured
+ * clients without a Patina account) and notes. The client's OWN Patina profile
+ * (full_name/email/phone) is theirs — not edited here. Invalidates the client
+ * lists AND the document/desk read models so a renamed household shows through
+ * immediately (§5).
+ */
+export function useUpdateClientContact() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      clientId,
+      updates,
+    }: {
+      clientId: string; // designer_clients.id
+      updates: {
+        client_name?: string | null;
+        client_email?: string | null;
+        notes?: string | null;
+      };
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase
+        .from('designer_clients')
+        .update(updates)
+        .eq('id', clientId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { clientId }) => {
+      queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
+      queryClient.invalidateQueries({ queryKey: ['designer-client', clientId] });
+      queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
     },
   });
 }

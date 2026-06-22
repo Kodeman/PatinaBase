@@ -209,6 +209,7 @@ export {
   useClientStats,
   useUpdateClientStatus,
   useUpdateClientNotes,
+  useUpdateClientContact,
   useClientMessages,
   useSendClientMessage,
   useClientProjects,
