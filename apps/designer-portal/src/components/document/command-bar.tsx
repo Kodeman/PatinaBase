@@ -19,6 +19,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { usePeopleDirectory } from '@patina/supabase';
+import { useAuth } from '@/hooks/use-auth';
+import { openAccount } from './account/account-sheet';
 import { fillStateForDesk } from '@/lib/document/fill-state';
 import { folderTab } from '@/lib/document/desk-derivation';
 import { StrataMark } from './strata-mark';
@@ -85,6 +87,9 @@ export function CommandBar() {
   // unified directory is ⌘K-reachable. Small per-designer roster — fetched once
   // and filtered in memory like the rest of the rows.
   const { data: people } = usePeopleDirectory();
+  // Account actions (Settings / Sign out) belong to the "do anything" surface;
+  // the identity itself is answered by the persistent nameplate.
+  const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -170,6 +175,22 @@ export function CommandBar() {
         sub: 'break-through settings',
         run: () => window.dispatchEvent(new CustomEvent('document:open-interruptions')),
       },
+      {
+        kind: 'action' as const,
+        label: 'Settings',
+        sub: 'profile · notifications · security',
+        keywords: 'account profile preferences settings security notifications devices password studio',
+        run: openAccount,
+      },
+      {
+        kind: 'action' as const,
+        label: 'Sign out',
+        sub: user?.email ?? 'end this session',
+        keywords: 'log out logout sign off leave',
+        run: () => {
+          void signOut();
+        },
+      },
     ];
     // Jump to a person (G3) — the unified directory's parties. Only offered for
     // a non-empty query so a clean ⌘K isn't flooded with the whole roster.
@@ -201,7 +222,7 @@ export function CommandBar() {
       filtered.push({ kind: 'engine', label: 'Ask the Engine', sub: `“${query.trim()}” · ask & place` });
     }
     return filtered;
-  }, [data, people, query, router]);
+  }, [data, people, query, router, user?.email, signOut]);
 
   // Keep the active row in range as the list changes.
   useEffect(() => {

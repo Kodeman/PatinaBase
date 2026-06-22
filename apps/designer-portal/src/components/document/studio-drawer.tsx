@@ -25,6 +25,7 @@ import { HoursLedger } from './hours-ledger';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { fmtMinutes } from '@/lib/document/time-derivation';
 import { isRoomPath, rememberRoomOrigin } from '@/lib/document/room-origin';
+import { AccountNameplate } from './account/account-nameplate';
 import type { OpenLedgerContext } from './command-bar';
 
 const LEDGERS = [
@@ -100,9 +101,13 @@ export function StudioDrawer() {
         aria-label="Studio drawer"
         className="fixed inset-x-0 bottom-0 z-40 hidden items-center gap-2 overflow-x-auto border-t border-[rgba(250,247,242,0.14)] bg-[var(--color-charcoal)] px-4 py-[0.55rem] min-[980px]:flex sm:px-6"
       >
-        <span className="mr-1.5 whitespace-nowrap font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[rgba(250,247,242,0.3)]">
-          Studio
-        </span>
+        {/* The maker's nameplate stands where the "Studio" label was — it IS the
+            studio's signature, and the door to the Account sheet. */}
+        <AccountNameplate />
+        <span
+          aria-hidden
+          className="mr-0.5 h-[20px] w-px shrink-0 bg-[rgba(250,247,242,0.12)]"
+        />
         {LEDGERS.map((ledger) => {
           const isRoom = ledger.weight === 'room';
           const here = isRoom && isRoomPath(pathname ?? '');

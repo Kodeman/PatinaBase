@@ -3,6 +3,7 @@ import { StudioDrawer } from '@/components/document/studio-drawer';
 import { LogStrip } from '@/components/document/log-strip';
 import { CommandBar } from '@/components/document/command-bar';
 import { InterruptionSettings } from '@/components/document/interruption-settings';
+import { AccountSheet } from '@/components/document/account/account-sheet';
 import { MobileShellProvider } from '@/components/document/mobile/mobile-shell';
 import { MobileBar } from '@/components/document/mobile/mobile-bar';
 import { MobileSheets } from '@/components/document/mobile/mobile-sheets';
@@ -35,6 +36,9 @@ export default function DocumentLayout({ children }: { children: React.ReactNode
             <CommandBar />
             {/* D2 break-through rules — opened from ⌘K, ships all-off. */}
             <InterruptionSettings />
+            {/* R5 — the Account sheet: identity, status, settings, sign out.
+                Opened from the Studio Drawer nameplate, the mobile drawer, ⌘K. */}
+            <AccountSheet />
             <MobileBar />
             <MobileSheets />
           </MobileShellProvider>

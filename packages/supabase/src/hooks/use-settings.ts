@@ -12,6 +12,9 @@ export interface UserProfile {
   id: string;
   email: string;
   full_name: string | null;
+  /** Preferred display name (takes priority over full_name in the UI). */
+  display_name: string | null;
+  business_name: string | null;
   avatar_url: string | null;
   phone: string | null;
   bio: string | null;

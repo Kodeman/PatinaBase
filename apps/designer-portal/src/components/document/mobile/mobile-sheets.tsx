@@ -22,6 +22,8 @@ import { MarginItemBody } from '../margin-bodies';
 import { StrataMark } from '../strata-mark';
 import { fillStateAtSection } from '@/lib/document/fill-state';
 import { openLedger } from '../command-bar';
+import { openAccount } from '../account/account-sheet';
+import { MobileAccountHeader } from '../account/mobile-account-header';
 import { useMobileShell } from './mobile-shell';
 
 const LEDGERS: {
@@ -93,7 +95,16 @@ export function MobileSheets() {
   if (sheet.kind === 'drawer') {
     return (
       <Sheet tone="dark" onClose={closeSheet}>
-        <h2 className="font-heading text-[1.05rem] text-[var(--color-pearl)]">
+        {/* The maker's nameplate — tap to open the Account sheet (identity,
+            status, settings, sign out). Distinct from the money "Accounts" book
+            in the list below. */}
+        <MobileAccountHeader
+          onOpen={() => {
+            closeSheet();
+            openAccount();
+          }}
+        />
+        <h2 className="mt-3 font-heading text-[1.05rem] text-[var(--color-pearl)]">
           The drawer <em className="italic text-[var(--color-clay)]">· five books</em>
         </h2>
         <p className="mt-0.5 text-[11.5px] text-[rgba(250,247,242,0.45)]">
