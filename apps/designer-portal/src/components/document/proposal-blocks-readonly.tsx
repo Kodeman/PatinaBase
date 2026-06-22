@@ -62,6 +62,26 @@ export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
     return <p className="py-3 text-[11.5px] text-[var(--text-muted)]">Proposal unavailable.</p>;
   }
 
+  // A freshly-seeded draft has nothing written yet — render a quiet line rather
+  // than an empty "$0" husk that visually dominates the prominent work band
+  // above it (R68). A settled/signed proposal always has content, so this never
+  // fires in settled review.
+  const isEmpty =
+    (proposal.items ?? []).length === 0 &&
+    (scopeRooms ?? []).length === 0 &&
+    (phases ?? []).length === 0 &&
+    (exclusions ?? []).length === 0 &&
+    (milestones ?? []).length === 0 &&
+    !proposal.description;
+  if (isEmpty) {
+    return <p className="py-3 text-[11.5px] italic text-[var(--text-muted)]">Nothing drafted yet.</p>;
+  }
+
+  // The Investment + Payment blocks render unconditionally below; gate them so a
+  // draft with no priced items / no milestones doesn't show a "$0" husk (R68.1).
+  const hasInvestment = (proposal.items ?? []).length > 0 || (proposal.total_amount ?? 0) > 0;
+  const hasPayments = (milestones ?? []).length > 0;
+
   return (
     <div className="space-y-6">
       {proposal.description && (
@@ -70,6 +90,7 @@ export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
         </p>
       )}
 
+      {hasInvestment && (
       <div>
         <BlockLabel>Investment</BlockLabel>
         <LineItemsBlock
@@ -101,6 +122,7 @@ export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
           totalCents={proposal.total_amount || 0}
         />
       </div>
+      )}
 
       {(scopeRooms ?? []).length > 0 && (
         <div>
@@ -116,6 +138,7 @@ export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
       )}
 
       {/* PaymentScheduleBlock renders its own heading — no BlockLabel here. */}
+      {hasPayments && (
       <div>
         <PaymentScheduleBlock
           milestones={(milestones ?? []).map((m) => ({
@@ -127,6 +150,7 @@ export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
           totalCents={proposal.total_amount || 0}
         />
       </div>
+      )}
 
       {(phases ?? []).length > 0 && (
         <div>

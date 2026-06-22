@@ -32,6 +32,7 @@ import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { familyLabel } from '@/lib/document/family-label';
 import { useDraftingState } from '@/hooks/use-drafting-state';
 import { Instrument, InstrumentRow } from './instrument';
+import { StrataMark } from './strata-mark';
 import { SendSheet } from './overlays/send-sheet';
 import { ReviseSheet } from './overlays/revise-sheet';
 import { ProposalVersionHistory } from './proposal-version-history';
@@ -57,7 +58,7 @@ export function ProposalInstruments({
   const isDraft = status === 'draft';
   // The shared drafting progress (the SAME mark the Drafting Room shows) — only
   // polled while a draft, used to weight "Draft" vs "Send" as the lead act.
-  const { state: draftState, pct } = useDraftingState(proposalId, isDraft);
+  const { state: draftState, pct, fill } = useDraftingState(proposalId, isDraft);
   const readyToSend = draftState === 'Ready to send';
   // The live set: in the client's hands or settled — Preview · Revise (+ Send
   // again is unnecessary; the chain is already out there).
@@ -79,43 +80,64 @@ export function ProposalInstruments({
 
   return (
     <>
-      {/* Draft — ONE weighted lead act that swaps by drafting state (R68): while
-          composing, the Drafting-Room doorway leads; once Ready to send, "Send
-          the proposal" promotes and "keep drafting" steps back. Emphasis is
-          weight + colour, never chrome (D4). The state echo is the doorway's
-          live read of how far along the draft is. */}
+      {/* Draft — the Direction WORK BAND (R68): a draft is the work to be done,
+          so it earns a prominent, in-language CTA — the same band grammar as
+          Discovery's readiness band (the designer's known "next move" device),
+          with one SOLID filled button. The Strata Mark is the SAME drafting fill
+          the Room shows. Flat: tint + fill, no shadow (D4). The lead act swaps
+          by state — Open the Drafting Room while composing, Send once ready —
+          and the non-lead act steps back to a quiet mono second below. */}
       {isDraft && (
         <div className="mt-1">
+          <div
+            className={`mb-2.5 flex items-center gap-4 rounded-[3px] px-4 py-3.5 transition-colors ${
+              readyToSend ? 'bg-[rgba(168,181,160,0.16)]' : 'bg-[rgba(229,221,208,0.5)]'
+            }`}
+          >
+            <StrataMark size="lg" fill={fill} label={`Drafting the proposal — ${pct}% written`} />
+            <div className="min-w-0 flex-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+                Drafting the proposal
+              </p>
+              <p className="mt-0.5 text-[14px] leading-snug text-[var(--color-charcoal)]">
+                {pct === 0 ? (
+                  <>
+                    <b>Not started yet</b> — open the Drafting Room to write it
+                  </>
+                ) : readyToSend ? (
+                  <>
+                    <b>Ready to send</b> — fully drafted
+                  </>
+                ) : (
+                  <>
+                    <b>A draft taking shape</b> · {pct}% written — keep going
+                  </>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={readyToSend ? () => setSendOpen(true) : enterDrafting}
+              className="shrink-0 rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity hover:opacity-90"
+            >
+              {readyToSend ? 'Send the proposal →' : 'Open the Drafting Room →'}
+            </button>
+          </div>
+
+          {/* The quiet second — the non-lead act stays a mono micro-action; the
+              version chain stays reachable (you draft v2 BECAUSE of v1). */}
           <InstrumentRow>
             {readyToSend ? (
-              <>
-                <Instrument variant="primary" trailing="→" onClick={() => setSendOpen(true)}>
-                  Send the proposal
-                </Instrument>
-                <Instrument variant="secondary" onClick={enterDrafting}>
-                  Keep drafting
-                </Instrument>
-              </>
+              <Instrument variant="secondary" onClick={enterDrafting}>
+                Keep drafting
+              </Instrument>
             ) : (
-              <>
-                <Instrument variant="doorway" trailing="↗" onClick={enterDrafting}>
-                  {pct === 0 ? 'Start the proposal' : 'Draft the proposal'}
-                </Instrument>
-                <Instrument variant="secondary" onClick={() => setSendOpen(true)}>
-                  Send the proposal
-                </Instrument>
-              </>
+              <Instrument variant="secondary" onClick={() => setSendOpen(true)}>
+                Send the proposal
+              </Instrument>
             )}
-            {/* You draft v2 BECAUSE of v1 — keep the chain reachable while drafting. */}
             <ProposalVersionHistory proposalId={proposalId} />
           </InstrumentRow>
-          <p className="mt-1 text-[10px] italic text-[var(--text-muted)]">
-            {pct === 0
-              ? 'Nothing drafted yet — open the Drafting Room to begin.'
-              : readyToSend
-                ? 'Fully drafted — ready to send.'
-                : `${pct}% drafted · keep going in the Drafting Room.`}
-          </p>
         </div>
       )}
 

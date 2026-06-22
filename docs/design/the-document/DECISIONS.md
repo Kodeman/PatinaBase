@@ -2542,6 +2542,14 @@ The client a document is *for* had no standing surface: it was a passive name in
 
 **The "the Flats" fix.** `useFamilyLabel` had naively pluralized the *last word* of the client name, and `document_state.client_name` is the linked profile's `full_name` — which a seed had set to the project title "Reyes — Garden Flat", yielding "the Flats". Replaced by shared `lib/document/family-label.ts`: take the household part before a `—`/separator, then pluralize the surname with the -es rule ("Reyes" → **"the Reyeses"**), falling back to "the client" for generic/blank names.
 
+### R68.1 · The Direction work band — making "draft the proposal" obvious (refinement)
+
+The first cut shipped the draft/send actions as a *weighted* mono row (clay "Draft the proposal" vs muted "Send"). Live smoke confirmed it still read as one more tiny line while the empty **"$0"** proposal preview (`proposal-blocks-readonly.tsx` always renders the Investment + Payment blocks) dominated the eye — typographic weight can't beat a `1.2rem` number.
+
+**Ruling.** The draft state now carries a **work band** — the same grammar as Discovery's readiness band (the designer's known "next move" device): a tinted band (`rgba(229,221,208,0.5)` drafting / `rgba(168,181,160,0.16)` ready) with the `StrataMark size="lg" fill` (the shared drafting fill), a state sentence (**Not started yet** / **A draft taking shape · N% written** / **Ready to send**), and **one SOLID clay-filled CTA** that swaps **"Open the Drafting Room →"** → **"Send the proposal →"** at 100%. The non-lead act steps back to a quiet mono second below; live/terminal states keep their quiet instrument rows untouched. The empty proposal preview now collapses to **"Nothing drafted yet."** instead of the `$0` husk.
+
+**Deviation logged:** this is the **first filled button in the document body** (filled buttons were overlay-only; the body used bordered/hover-fill, e.g. Discovery's "Begin the Direction →"). A deliberate, user-approved push for prominence, scoped to the single "work to be done" moment. Bordered/hover-fill remains the default body grammar.
+
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R68 · L1–L4 · THE GO · FLIP CONFIRMED · last id = R68*
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R68 (+R68.1) · L1–L4 · THE GO · FLIP CONFIRMED · last id = R68.1*
