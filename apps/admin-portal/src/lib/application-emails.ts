@@ -76,7 +76,7 @@ export async function sendApplicationEmail(
     ],
   });
 
-  const { data: logRow } = await (adminClient as any)
+  const { data: logRow, error: logError } = await (adminClient as any)
     .from('application_communications')
     .insert({
       application_type: input.type,
@@ -94,6 +94,15 @@ export async function sendApplicationEmail(
     })
     .select()
     .single();
+
+  if (logError) {
+    // Don't fail the request over a logging miss, but make it visible — a
+    // silently-dropped insert (RLS/constraint) otherwise looks like success.
+    console.error(
+      '[application-email] failed to write application_communications:',
+      logError.message ?? logError,
+    );
+  }
 
   return {
     success: result.success,
