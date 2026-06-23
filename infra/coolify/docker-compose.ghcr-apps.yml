@@ -358,6 +358,10 @@ services:
     image: 'ghcr.io/kodeman/admin-portal:latest'
     restart: unless-stopped
     environment:
+      # Required by the application-email route (packages/email -> Resend HTTPS API).
+      # Without RESEND_API_KEY the admin "send email" action throws -> HTTP 500.
+      RESEND_API_KEY: '${RESEND_API_KEY}'
+      UNSUBSCRIBE_TOKEN_SECRET: '${UNSUBSCRIBE_TOKEN_SECRET}'
       NODE_ENV: production
       PORT: 3000
       NEXT_PUBLIC_SUPABASE_URL: '${NEXT_PUBLIC_SUPABASE_URL:-https://api.patina.cloud}'

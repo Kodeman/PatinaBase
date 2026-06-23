@@ -52,30 +52,47 @@ export async function POST(
     return serverError(err.message ?? 'Application not found');
   }
 
-  const result = await sendApplicationEmail(adminClient, {
-    type,
-    application,
-    subject: body.subject,
-    html: body.html,
-    text: body.text,
-    presetSlug: body.presetSlug ?? null,
-    source: 'admin_applications',
-    sentBy: adminUser.id,
-  });
-
-  await createAuditLog(adminClient, {
-    userId: adminUser.id,
-    action: `application.${type}.email`,
-    resourceType: 'application',
-    resourceId: id,
-    newValues: {
+  let result: Awaited<ReturnType<typeof sendApplicationEmail>>;
+  try {
+    result = await sendApplicationEmail(adminClient, {
+      type,
+      application,
+      subject: body.subject,
+      html: body.html,
+      text: body.text,
       presetSlug: body.presetSlug ?? null,
-      providerId: result.providerId,
-      status: result.success ? 'sent' : 'failed',
-    },
-    ipAddress: getClientIp(request),
-    status: result.success ? 'success' : 'failure',
-  });
+      source: 'admin_applications',
+      sentBy: adminUser.id,
+    });
+  } catch (err: any) {
+    // A thrown error here (e.g. missing RESEND_API_KEY before the send.ts
+    // hardening) used to surface as an opaque 500. Surface it as a clear 502.
+    console.error('[application-email] send threw unexpectedly:', err);
+    return NextResponse.json(
+      { error: err?.message ?? 'Email send failed unexpectedly' },
+      { status: 502 },
+    );
+  }
+
+  // Audit logging is best-effort — a failure here must not turn a completed
+  // (or cleanly-failed) send into a 500.
+  try {
+    await createAuditLog(adminClient, {
+      userId: adminUser.id,
+      action: `application.${type}.email`,
+      resourceType: 'application',
+      resourceId: id,
+      newValues: {
+        presetSlug: body.presetSlug ?? null,
+        providerId: result.providerId,
+        status: result.success ? 'sent' : 'failed',
+      },
+      ipAddress: getClientIp(request),
+      status: result.success ? 'success' : 'failure',
+    });
+  } catch (err) {
+    console.error('[application-email] audit log write failed:', err);
+  }
 
   if (!result.success) {
     return NextResponse.json(

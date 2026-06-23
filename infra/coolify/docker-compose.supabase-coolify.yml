@@ -197,7 +197,11 @@ services:
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: 'postgres://supabase_auth_admin:1c3aabda9b01ff203d297d5ee8cea8a39f7a057ce915a442@db-es8w8g0c00og4gsgg0k8w8o8:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}'
       GOTRUE_SITE_URL: '${SITE_URL:-https://app.patina.cloud}'
-      GOTRUE_URI_ALLOW_LIST: '${ADDITIONAL_REDIRECT_URLS:-https://app.patina.cloud,https://admin.patina.cloud,patina://}'
+      # Use /** wildcards so redirect_to URLs that carry a query string
+      # (e.g. /auth/callback?type=magiclink) still match. A bare path entry
+      # fails the match and GoTrue silently falls back to SITE_URL — which
+      # sent client magic links to the designer portal.
+      GOTRUE_URI_ALLOW_LIST: '${ADDITIONAL_REDIRECT_URLS:-https://app.patina.cloud/**,https://admin.patina.cloud/**,https://client.patina.cloud/**,patina://auth/callback,patina://auth/qr}'
       GOTRUE_DISABLE_SIGNUP: '${DISABLE_SIGNUP:-false}'
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated

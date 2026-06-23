@@ -130,6 +130,89 @@ Alternative: `auth.hook_email_send` → custom edge function → `notification-d
 
 ---
 
+## Two email paths (read this first)
+
+Patina sends email two completely independent ways. A failure in one says
+nothing about the other — they use different credentials in different places.
+
+| Path | Sender | Carries | Credential location |
+|------|--------|---------|---------------------|
+| **GoTrue SMTP** (`smtp.resend.com:587`) | the `auth` (GoTrue) container, directly | **all auth emails**: magic link, signup confirm, recovery, email-change | `GOTRUE_SMTP_PASS` in the **Supabase** stack `.env` / Coolify env |
+| **Resend HTTPS API** (`api.resend.com`) | Next.js routes (`packages/email`) + edge fns (`_shared/send-email.ts`) | invoices, POs, proposals, decisions, campaigns, crons, **admin application emails** | `RESEND_API_KEY` per app/edge runtime env |
+
+The **same `re_…` key** can be used for both, but it lives in different env
+vars in different containers. Sending-scoped Resend keys return **401 on the
+management `/domains` endpoint** yet still send fine — don't treat a `/domains`
+401 as "the key is broken"; check `notification_log` / a real send instead.
+
+### Magic-link redirect: allow-list MUST use `/**` wildcards
+
+`GOTRUE_URI_ALLOW_LIST` (fed by `ADDITIONAL_REDIRECT_URLS`) must use path
+wildcards, e.g. `https://client.patina.cloud/**`. The portals request
+`emailRedirectTo = .../auth/callback?type=magiclink`; a **bare** allow-list
+entry (`…/auth/callback`, no wildcard) fails to match the query-string URL, so
+GoTrue **silently falls back to `SITE_URL`** (`app.patina.cloud`) and the magic
+link sends the **client to the designer portal**. The designer portal appears
+to "work" only because its fallback origin is its own. Verified 2026-06-23.
+
+Confirm what the running container actually has (Coolify env can drift from the
+on-disk `.env`):
+
+```bash
+ssh kody@192.168.1.14 'sudo docker exec auth-es8w8g0c00og4gsgg0k8w8o8 \
+  printenv GOTRUE_URI_ALLOW_LIST'
+# Expect every host as https://<host>/**  (not bare paths)
+```
+
+To change it durably: update the Coolify env var **and** the on-disk `.env`,
+then recreate the container (a plain restart will NOT re-read env):
+
+```bash
+SBD=/data/coolify/services/es8w8g0c00og4gsgg0k8w8o8
+sudo docker compose --project-directory $SBD -f $SBD/docker-compose.yml \
+  -p es8w8g0c00og4gsgg0k8w8o8 up -d --force-recreate --no-deps auth
+```
+
+### Admin (and all portals) need `RESEND_API_KEY` at runtime
+
+The admin **application-email** route (`/api/admin/applications/{type}/{id}/email`)
+sends via `packages/email`. If `RESEND_API_KEY` is unset in the portal's
+container, the send path returns a clean **HTTP 502** (post-hardening
+2026-06-23; it used to throw an opaque **500**). The GHCR compose's
+`admin-portal` service must list `RESEND_API_KEY: '${RESEND_API_KEY}'` in its
+`environment:` block (it has no `env_file`), and the GHCR `.env` / Coolify env
+must define it. Same for `UNSUBSCRIBE_TOKEN_SECRET` (unsubscribe-link parity).
+
+> Coolify API note: `PATCH /api/v1/services/{uuid}` requires `docker_compose_raw`
+> to be **base64-encoded**; the API is fronted by Cloudflare (large PATCH bodies
+> can hit WAF error 1010) — run writes against `http://localhost:8000` on the
+> server to bypass it.
+
+### Known follow-up: auth-email links are `http://`
+
+GoTrue has no `GOTRUE_API_EXTERNAL_URL` set, so it derives mailer links from the
+request → `http://api.patina.cloud/auth/v1/verify?...`. These still work
+(Traefik 301s to https, preserving the token + redirect_to query), but to emit
+`https://` directly, add `GOTRUE_API_EXTERNAL_URL: '${API_EXTERNAL_URL:-https://api.patina.cloud}'`
+to the `auth` service and recreate it. (Note: the prod `.env` `API_EXTERNAL_URL`
+also has a stray `/auth/v1/callback` suffix vs the repo's bare value.)
+
+### Flow test matrix (run after any email change)
+
+Use a monitored inbox; set `EMAIL_DEV_MODE=redirect`+`EMAIL_DEV_REDIRECT_TO`
+on edge fns for bulk/cron tests (note: **GoTrue auth emails bypass that**).
+
+| # | Flow | Path | Verify |
+|---|------|------|--------|
+| 1 | Magic link (client + designer), signup confirm, recovery | GoTrue SMTP | inbox receipt; email `redirect_to` matches the requesting portal |
+| 2 | invoice-send, po-send, proposal-send, client-invite | edge → Resend | `notification_log` delivered + inbox |
+| 3 | Admin application email (designer/maker, each preset) | route → Resend | HTTP 200, `application_communications` row, inbox |
+| 4 | Crons (campaign/automation/price-drop/lead/back-in-stock/decision/invoice/review) | pg_cron → edge | `SELECT invoke_edge_function('<fn>')` + `net._http_response`=200 |
+| 5 | resend-webhook (delivered/opened/bounced/complained) | webhook | `notification_log` status + suppression flip |
+| 6 | Unsubscribe token | all portals | `UNSUBSCRIBE_TOKEN_SECRET` identical edge+portals; `/api/unsubscribe` resolves |
+
+---
+
 ## Deploying
 
 ### Edge functions

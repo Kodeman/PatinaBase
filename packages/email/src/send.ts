@@ -55,9 +55,8 @@ function getResendClient(): Resend {
  * Send a single email via Resend.
  */
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
-  const resend = getResendClient();
-
   try {
+    const resend = getResendClient();
     const { data, error } = await resend.emails.send({
       from: options.from ?? SENDERS.transactional,
       to: Array.isArray(options.to) ? options.to : [options.to],
@@ -97,9 +96,8 @@ export interface SendHtmlEmailOptions {
  * don't have a React Email template.
  */
 export async function sendHtmlEmail(options: SendHtmlEmailOptions): Promise<SendEmailResult> {
-  const resend = getResendClient();
-
   try {
+    const resend = getResendClient();
     const { data, error } = await resend.emails.send({
       from: options.from ?? SENDERS.transactional,
       to: Array.isArray(options.to) ? options.to : [options.to],
