@@ -190,12 +190,15 @@ must define it. Same for `UNSUBSCRIBE_TOKEN_SECRET` (unsubscribe-link parity).
 
 ### Known follow-up: auth-email links are `http://`
 
-GoTrue has no `GOTRUE_API_EXTERNAL_URL` set, so it derives mailer links from the
-request → `http://api.patina.cloud/auth/v1/verify?...`. These still work
-(Traefik 301s to https, preserving the token + redirect_to query), but to emit
-`https://` directly, add `GOTRUE_API_EXTERNAL_URL: '${API_EXTERNAL_URL:-https://api.patina.cloud}'`
-to the `auth` service and recreate it. (Note: the prod `.env` `API_EXTERNAL_URL`
-also has a stray `/auth/v1/callback` suffix vs the repo's bare value.)
+GoTrue derives the mailer link scheme from the **incoming request**, and Kong
+forwards the internal hop as `http`, so verify links are
+`http://api.patina.cloud/auth/v1/verify?...`. They still work — Traefik 301s to
+https, preserving the token + `redirect_to` query (verified). **Setting
+`GOTRUE_API_EXTERNAL_URL=https://api.patina.cloud` does NOT fix this** on GoTrue
+v2.143.0 (tested + reverted 2026-06-23); the real fix is propagating
+`X-Forwarded-Proto: https` through Kong → GoTrue. Cosmetic — deferred.
+(Separately: the prod `.env` `API_EXTERNAL_URL` has a stray `/auth/v1/callback`
+suffix vs the repo's bare value; harmless while Google OAuth is disabled.)
 
 ### Flow test matrix (run after any email change)
 
