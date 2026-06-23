@@ -2,7 +2,8 @@ import 'server-only';
 
 import { cache } from 'react';
 
-import { serverProjectsApi } from '../api-client-server';
+import { createServerClient } from '@patina/supabase/server';
+
 import { env } from '../env';
 import type {
   ClientProjectView,
@@ -343,15 +344,82 @@ const devFallbackProjectView = (projectId: string): ClientProjectView => {
   };
 };
 
-// ── Public API ──
+// ── Phase summarisation (project_phases → progress / current / next) ──
+
+const phaseProgress = (phase: any): number => {
+  const status = String(phase?.status ?? '').toLowerCase();
+  if (phase?.progress != null) return Math.min(Math.max(asNumber(phase.progress), 0), 100);
+  if (status === 'completed') return 100;
+  if (status === 'in_progress' || status === 'in-progress' || status === 'active') return 50;
+  return 0;
+};
+
+const summarisePhases = (
+  phasesInput: unknown,
+): { phases: any[]; progressPercentage: number; currentPhaseLabel: string; completed: number; nextPhase: any | null } => {
+  const phases = asArray<any>(phasesInput)
+    .slice()
+    .sort((a, b) => asNumber(a?.sort_order) - asNumber(b?.sort_order));
+
+  if (phases.length === 0) {
+    return { phases, progressPercentage: 0, currentPhaseLabel: '', completed: 0, nextPhase: null };
+  }
+
+  const sum = phases.reduce((acc, p) => acc + phaseProgress(p), 0);
+  const progressPercentage = Math.round(sum / phases.length);
+  const completed = phases.filter((p) => String(p?.status ?? '').toLowerCase() === 'completed').length;
+  const inProgress = phases.find((p) => {
+    const s = String(p?.status ?? '').toLowerCase();
+    return s === 'in_progress' || s === 'in-progress' || s === 'active';
+  });
+  const nextPhase = inProgress ?? phases.find((p) => String(p?.status ?? '').toLowerCase() !== 'completed') ?? null;
+  return { phases, progressPercentage, currentPhaseLabel: asString(inProgress?.name), completed, nextPhase };
+};
+
+// ── Public API (Supabase-backed; RLS scopes to projects.client_id = auth.uid()) ──
+
+const PROJECT_LIST_SELECT =
+  'id, name, site_address, status, current_phase, brief_document_url, updated_at, ' +
+  'project_phases(id, name, phase_key, status, sort_order, target_end_date, progress)';
+
+const PROJECT_DETAIL_SELECT =
+  'id, name, site_address, status, current_phase, notes, kickoff_message, brief_document_url, ' +
+  'start_date, kickoff_date, target_end_date, expected_completion_date, updated_at, ' +
+  'project_phases(id, name, phase_key, status, sort_order, start_date, target_end_date, completed_at, progress)';
 
 export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> => {
   try {
-    const response = await serverProjectsApi.getProjects();
-    return asArray(response?.data || response).map(mapProjectListItem);
+    const supabase = (await createServerClient()) as any;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select(PROJECT_LIST_SELECT)
+      .eq('client_id', user.id)
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+
+    return asArray<any>(data).map((row) => {
+      const { progressPercentage, currentPhaseLabel, nextPhase } = summarisePhases(row?.project_phases);
+      // approvalsPending / unreadMessages are computed counts — left at 0 for now
+      // (decisions + comms unread are a follow-up); the read path no longer 500s.
+      return mapProjectListItem({
+        id: row?.id,
+        name: row?.name,
+        location: row?.site_address,
+        heroImageUrl: row?.brief_document_url,
+        status: row?.status,
+        currentPhase: currentPhaseLabel || row?.current_phase,
+        progressPercentage,
+        nextMilestoneTitle: nextPhase?.name,
+      });
+    });
   } catch (error) {
     if (env.isDevelopment) {
-      console.warn('[Client Portal] Projects service unavailable — using fallback data');
+      console.warn('[Client Portal] Projects query failed — using fallback data', error);
       return devFallbackProjects;
     }
     throw error;
@@ -360,22 +428,72 @@ export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> =>
 
 export const fetchClientProjectView = cache(async (projectId: string): Promise<ClientProjectView> => {
   try {
-    const response = await serverProjectsApi.getClientView(projectId);
-    const project = mapProjectOverview(response?.project ?? response);
-    const milestonesSource = response?.milestones ?? response?.timeline ?? [];
+    const supabase = (await createServerClient()) as any;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
 
-    const milestones = asArray(milestonesSource)
-      .map((milestone, index) => mapMilestone(milestone, index))
+    const { data: row, error } = await supabase
+      .from('projects')
+      .select(PROJECT_DETAIL_SELECT)
+      .eq('id', projectId)
+      .eq('client_id', user.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!row) throw new Error('Project not found');
+
+    const { phases, progressPercentage, currentPhaseLabel, completed, nextPhase } = summarisePhases(
+      row.project_phases,
+    );
+
+    const milestones: MilestoneDetail[] = phases
+      .map((phase, index) =>
+        mapMilestone(
+          {
+            id: phase?.id,
+            title: phase?.name,
+            phase: phase?.phase_key,
+            status: phase?.status,
+            startDate: phase?.start_date,
+            targetDate: phase?.target_end_date,
+            completionDate: phase?.completed_at,
+            progressPercentage: phaseProgress(phase),
+          },
+          index,
+        ),
+      )
       .sort((a, b) => a.index - b.index);
 
-    return {
-      project,
-      milestones,
-      lastUpdated: asString(response?.lastUpdated || response?.updatedAt),
-    };
+    const project = mapProjectOverview({
+      id: row.id,
+      name: row.name,
+      location: row.site_address,
+      summary: row.kickoff_message || row.notes,
+      currentPhase: currentPhaseLabel || row.current_phase,
+      status: row.status,
+      startDate: row.start_date || row.kickoff_date,
+      projectedCompletionDate: row.target_end_date || row.expected_completion_date,
+      heroImageUrl: row.brief_document_url,
+      progressPercentage,
+      completedMilestones: completed,
+      totalMilestones: phases.length,
+      approvalsPending: 0,
+      unreadMessages: 0,
+      nextMilestone: nextPhase
+        ? {
+            id: nextPhase.id,
+            title: nextPhase.name,
+            targetDate: nextPhase.target_end_date,
+            status: nextPhase.status,
+          }
+        : undefined,
+    });
+
+    return { project, milestones, lastUpdated: asString(row.updated_at) };
   } catch (error) {
     if (env.isDevelopment) {
-      console.warn('[Client Portal] Projects service unavailable — using fallback data for', projectId);
+      console.warn('[Client Portal] Project view query failed — using fallback data for', projectId, error);
       return devFallbackProjectView(projectId);
     }
     throw error;

@@ -68,12 +68,18 @@ export async function postMessageAction(params: {
       return { success: false, error: 'Unable to post message right now. Please try again.' };
     }
 
-    await getProjectsClient().logEngagement(params.projectId, {
-      event: 'client_portal.message_posted',
-      metadata: {
-        threadId: params.threadId,
-      },
-    });
+    // Best-effort engagement log — the message is already saved; a logging
+    // failure (e.g. the legacy projects service) must not fail the post.
+    try {
+      await getProjectsClient().logEngagement(params.projectId, {
+        event: 'client_portal.message_posted',
+        metadata: {
+          threadId: params.threadId,
+        },
+      });
+    } catch (engErr) {
+      console.warn('[client-portal] engagement log failed (non-fatal)', engErr);
+    }
 
     revalidatePath(`/projects/${params.projectId}`);
     return { success: true };
