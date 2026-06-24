@@ -388,7 +388,9 @@ export function useProduct(id: string) {
       const supabase = getSupabase();
       const { data, error } = await supabase
         .from('products')
-        .select('*, vendor:vendors!products_vendor_id_fkey(*), product_styles(style:styles(*))')
+        .select(
+          '*, vendor:vendors!products_vendor_id_fkey(*), retailer:vendors!products_retailer_id_fkey(*), product_styles(style:styles(*))',
+        )
         .eq('id', id)
         .single();
 
