@@ -332,6 +332,7 @@ export {
   useUpdateProposalItem,
   useRemoveProposalItem,
   useSendProposal,
+  useNudgeProposal,
   useDeleteProposal,
   // Sections
   useProposalSections,

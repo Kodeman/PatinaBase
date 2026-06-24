@@ -25,6 +25,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { familyLabel } from '@/lib/document/family-label';
 import { useProposalWatch } from '@/hooks/use-proposal-watch';
+import { useNudgeProposal } from '@/hooks/use-proposals';
+import { useToast } from '@/components/portal/toast-provider';
 import type { ProposalWatchModel } from '@/lib/document/proposal-watch-derivation';
 import { Stamp } from './stamp';
 import { Instrument, InstrumentRow } from './instrument';
@@ -104,7 +106,25 @@ export function ProposalWatch({
   const [resendOpen, setResendOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
 
+  const nudge = useNudgeProposal();
+  const { toast } = useToast();
   const family = familyLabel(clientName);
+
+  // Send the client a gentle reminder. The RPC stamps + cools down; the email is
+  // best-effort (surfaced via _emailDispatched), so we toast the real outcome.
+  const onNudge = async () => {
+    try {
+      const res = await nudge.mutateAsync({ proposalId });
+      toast(
+        res._emailDispatched
+          ? `Reminder sent to ${family}.`
+          : `Nudge recorded, but the email couldn’t be sent — follow up directly.`,
+        res._emailDispatched ? 'success' : 'warning',
+      );
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not send the reminder.', 'error');
+    }
+  };
 
   // Draft (handled by the work band) or still loading — nothing to watch.
   if (!w || (!w.awaitingClient && !w.terminal && !w.settled)) return null;
@@ -224,9 +244,25 @@ export function ProposalWatch({
             </Instrument>
           </>
         ) : (
-          <Instrument variant="secondary" onClick={() => setReviseOpen(true)}>
-            Request a change · Revise
-          </Instrument>
+          <>
+            <Instrument variant="secondary" onClick={() => setReviseOpen(true)}>
+              Request a change · Revise
+            </Instrument>
+            {/* Nudge — a gentle reminder while it's in their hands. After a nudge
+                it rests for the cooldown, reading "Nudged {date}" so the designer
+                sees it's already been done (and can't pester). */}
+            {w.canNudge ? (
+              <Instrument variant="secondary" disabled={nudge.isPending} onClick={onNudge}>
+                {nudge.isPending ? 'Nudging…' : `Nudge ${family}`}
+              </Instrument>
+            ) : (
+              w.lastNudgedAt && (
+                <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                  Nudged {fmtDay(w.lastNudgedAt)}
+                </span>
+              )
+            )}
+          </>
         )}
         <ProposalVersionHistory proposalId={proposalId} />
       </InstrumentRow>

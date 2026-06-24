@@ -620,6 +620,51 @@ export function useSendProposal() {
   });
 }
 
+
+/**
+ * Nudge the client about a sent/viewed proposal — a gentle reminder (R71).
+ * Deliberately NOT a re-send: nudge_proposal (00231) only stamps last_nudged_at
+ * + bumps nudge_count (never re-stamps sent_at or supersedes siblings), and the
+ * proposal-nudge edge function emails a reminder. The RPC enforces ownership,
+ * a sent/viewed state, and a 3-day cooldown server-side. Email is best-effort
+ * (the stamp already landed) and surfaced via `_emailDispatched`.
+ */
+export function useNudgeProposal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ proposalId }: { proposalId: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data: lastNudgedAt, error } = await supabase.rpc('nudge_proposal', {
+        p_proposal_id: proposalId,
+      });
+      if (error) throw error;
+
+      let emailDispatched = true;
+      try {
+        const { error: fnError } = await supabase.functions.invoke('proposal-nudge', {
+          body: { proposalId },
+        });
+        if (fnError) emailDispatched = false;
+      } catch (e) {
+        emailDispatched = false;
+        // eslint-disable-next-line no-console
+        console.warn('proposal-nudge invocation failed', e);
+      }
+
+      return { last_nudged_at: lastNudgedAt as string | null, _emailDispatched: emailDispatched };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['proposal'] });
+      queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
+    },
+  });
+}
+
 /**
  * Delete a draft proposal
  */
