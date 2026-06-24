@@ -2550,6 +2550,18 @@ The first cut shipped the draft/send actions as a *weighted* mono row (clay "Dra
 
 **Deviation logged:** this is the **first filled button in the document body** (filled buttons were overlay-only; the body used bordered/hover-fill, e.g. Discovery's "Begin the Direction →"). A deliberate, user-approved push for prominence, scoped to the single "work to be done" moment. Bordered/hover-fill remains the default body grammar.
 
+## The Document — Time readout polish — 2026-06-23
+
+### R69 · The running-timer readout rests at minute resolution — no per-second motion
+
+Reported live (Kody): with a document open and a timer running, the elapsed clock **re-counted every second** in the always-on chrome — the spine timer (desktop left rail) and the mobile bottom bar both rendered live `mm:ss`. That ticking in the periphery pulled the eye off the text box / dropdown being filled in. The clock is the system's only *unbounded* per-second motion: it's not the breath (R15, a slow bounded swell on the active marker) and not a notification — it's just a counter changing in the corner. It also contradicts the Studio Drawer's own discipline (D8: "no badges, no unread counts, no pulsing"), where "In hand today" already rests at minute granularity for exactly this reason.
+
+**Ruling.** The **at-rest** running readout drops to **minute resolution** (`fmtElapsedQuiet`: "under a min" → "1 min" → "1h 23m", floored, never rounded up) so the digits change at most once a minute — the corner goes still while you type. The sage "In hand" running dot is unchanged, so "it's running" still reads at a glance. The precise `mm:ss` survives only where the timer is opened **on purpose** — the mobile timer sheet (`mobile-sheets.tsx`), a focused view, not peripheral chrome. The provider's 1s tick is untouched (that sheet still wants live seconds when open; the per-second re-render is cheap and confined to timer components — the form inputs never consumed the timer context, so this was always a pure visual-motion issue, not focus theft).
+
+**Scope.** Spine timer + mobile bar only. The **R15 breath stays untouched** (Kody's call — much subtler than the ticking clock, and `prefers-reduced-motion` already stills it; revisit as a separate item only if it still tugs). The old portal header chip (`running-timer-chip.tsx`, with its `animate-ping` dot) and `stop-timer-dialog.tsx` are not rendered inside the `(document)` layout, so they're out of scope here.
+
+**Status.** Directed by Kody from a live report — to confirm with Leah. If she wants the live `mm:ss` back in the spine, the cheapest reversal is swapping `fmtElapsedQuiet` → `fmtElapsed` at the two call sites; a "reveal-on-hover precise time" middle ground was offered and can be added without touching the resting state.
+
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R68 (+R68.1) · L1–L4 · THE GO · FLIP CONFIRMED · last id = R68.1*
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R69 (+R68.1) · L1–L4 · THE GO · FLIP CONFIRMED · last id = R69*

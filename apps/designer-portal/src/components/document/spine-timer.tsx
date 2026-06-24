@@ -9,7 +9,7 @@
 
 import { useState } from 'react';
 import { useDocumentTime } from '@/hooks/document-time-provider';
-import { ACTIVITIES, fmtElapsed } from '@/lib/document/time-derivation';
+import { ACTIVITIES, fmtElapsedQuiet } from '@/lib/document/time-derivation';
 
 const T_BTN =
   'rounded-[3px] border border-[var(--color-pearl)] px-2 py-[3px] font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:border-[var(--color-clay)] hover:text-[var(--color-clay)] disabled:opacity-50';
@@ -52,7 +52,7 @@ export function SpineTimer() {
         In hand{paused ? ' · paused' : ''}
       </p>
       <p className="mb-2 mt-1 font-mono text-[17px] tracking-[0.04em] text-[var(--color-charcoal)]">
-        {fmtElapsed(elapsedSeconds)}
+        {fmtElapsedQuiet(elapsedSeconds)}
       </p>
       <div className="flex flex-wrap gap-1.5">
         {running && (
