@@ -140,6 +140,65 @@ describe('deriveProposalWatch — the record', () => {
   });
 });
 
+describe('deriveProposalWatch — per-open attention (Phase 4)', () => {
+  // section_viewed event in the vocabulary the client portal records.
+  const sview = (at: string, section: string, seconds: number): ProposalEngagementEvent => ({
+    id: `s-${at}-${section}`,
+    proposal_id: 'p1',
+    viewer_id: 'v1',
+    event_type: 'section_viewed',
+    section_type: section,
+    duration_seconds: seconds,
+    metadata: {},
+    created_at: at,
+  });
+  const at = (msFromNow: number) => new Date(NOW.getTime() - msFromNow).toISOString();
+  const HOUR = 3_600_000;
+  const DAY = 86_400_000;
+
+  // Two sessions (events arrive newest-first, as the query returns):
+  //   session 2 (newer, opened 2h ago): selections 120s + vision 30s
+  //   session 1 (older, opened 1d ago):  investment 200s + selections 40s
+  const events: ProposalEngagementEvent[] = [
+    open(at(2 * HOUR)),
+    sview(at(2 * HOUR - 60_000), 'selections', 120),
+    sview(at(2 * HOUR - 120_000), 'vision', 30),
+    open(at(DAY)),
+    sview(at(DAY - 60_000), 'investment', 200),
+    sview(at(DAY - 120_000), 'selections', 40),
+  ];
+
+  it('attributes each session’s minutes + most-dwelt section to its open', () => {
+    const m = deriveProposalWatch(
+      input({ status: 'viewed', sentAt: at(2 * DAY), viewedAt: at(DAY) }),
+      stats({ timesOpened: 2 }),
+      events,
+      NOW,
+    );
+    expect(m.record.map((r) => r.kind)).toEqual(['opened', 'opened', 'dispatched']);
+    // session 2: 150s → 3 min, most-dwelt = Selections (120 > 30)
+    expect(m.record[0].minutes).toBe(3);
+    expect(m.record[0].sectionLabel).toBe('Selections');
+    // session 1: 240s → 4 min, most-dwelt = Investment (200 > 40)
+    expect(m.record[1].minutes).toBe(4);
+    expect(m.record[1].sectionLabel).toBe('Investment');
+    // dispatched line carries no attention
+    expect(m.record[2].minutes).toBeUndefined();
+    expect(m.record[2].sectionLabel).toBeUndefined();
+  });
+
+  it('an open with no section views in its window carries no minutes/section', () => {
+    const m = deriveProposalWatch(
+      input({ status: 'viewed', sentAt: at(DAY), viewedAt: at(0) }),
+      stats({ timesOpened: 1 }),
+      [open(at(0))],
+      NOW,
+    );
+    expect(m.record[0].minutes).toBeUndefined();
+    expect(m.record[0].sectionLabel).toBeUndefined();
+  });
+});
+
 describe('sectionLabel + mostReadSectionLabel', () => {
   it('maps the known section vocabulary', () => {
     expect(sectionLabel('selections')).toBe('Selections');

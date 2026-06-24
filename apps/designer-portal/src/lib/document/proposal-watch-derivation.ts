@@ -30,8 +30,9 @@ export interface WatchStamp {
   ink?: string;
 }
 
-/** One line in "the record" — the per-open log. `minutes`/`sectionLabel` are
- *  filled by Phase 4 (per-section attention); Phase 1 leaves them undefined. */
+/** One line in "the record" — the per-open log. For an 'opened' line,
+ *  `minutes`/`sectionLabel` carry that session's reading time + most-dwelt
+ *  section (R71 Phase 4); undefined when the session recorded no section views. */
 export interface WatchRecordEntry {
   at: string; // ISO timestamp
   kind: 'dispatched' | 'opened';
@@ -130,14 +131,47 @@ function deriveStamp(status: WatchStatus, aged: boolean): WatchStamp {
   }
 }
 
-/** Build the per-open log. `events` arrive newest-first (created_at desc); we
- *  keep that order and append the "dispatched" entry as the oldest line. */
+/**
+ * Build the per-open log. `events` arrive newest-first (created_at desc); we
+ * keep that order and append the "dispatched" entry as the oldest line.
+ *
+ * R71 Phase 4 — per-section attention: each open is enriched with the reading
+ * minutes + the most-dwelt section of THAT viewing session, by windowing the
+ * section_viewed events between consecutive opens. A section_view belongs to the
+ * most recent open at/before its time, so for opens[i] the session runs from its
+ * timestamp up to the next NEWER open (opens[i-1], since the array is desc).
+ */
 function buildRecord(sentAt: string | null, events: ProposalEngagementEvent[]): WatchRecordEntry[] {
-  const opens: WatchRecordEntry[] = events
-    .filter((e) => e.event_type === 'opened')
-    .map((e) => ({ at: e.created_at, kind: 'opened' as const }));
-  if (sentAt) opens.push({ at: sentAt, kind: 'dispatched' });
-  return opens;
+  const opens = events.filter((e) => e.event_type === 'opened'); // newest-first
+  const sections = events.filter((e) => e.event_type === 'section_viewed' && e.section_type);
+  const ms = (iso: string) => new Date(iso).getTime();
+
+  const record: WatchRecordEntry[] = opens.map((o, i) => {
+    const start = ms(o.created_at);
+    const end = i === 0 ? Infinity : ms(opens[i - 1].created_at);
+    const inWindow = sections.filter((s) => {
+      const t = ms(s.created_at);
+      return t >= start && t < end;
+    });
+
+    let minutes: number | undefined;
+    let sectionLabelText: string | undefined;
+    if (inWindow.length) {
+      const totalSec = inWindow.reduce((sum, s) => sum + (s.duration_seconds ?? 0), 0);
+      if (totalSec > 0) minutes = Math.max(1, Math.round(totalSec / 60));
+      // The section they dwelt on most this session.
+      const byType = new Map<string, number>();
+      for (const s of inWindow) {
+        byType.set(s.section_type!, (byType.get(s.section_type!) ?? 0) + (s.duration_seconds ?? 0));
+      }
+      const top = [...byType.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (top && top[1] > 0) sectionLabelText = sectionLabel(top[0]) ?? undefined;
+    }
+    return { at: o.created_at, kind: 'opened' as const, minutes, sectionLabel: sectionLabelText };
+  });
+
+  if (sentAt) record.push({ at: sentAt, kind: 'dispatched' });
+  return record;
 }
 
 /**
