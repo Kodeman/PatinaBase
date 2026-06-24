@@ -11,6 +11,7 @@
  */
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useStyleArchetypes, useAssignStyle, type LayerProductLayer } from '@patina/supabase';
 import { StrataSweep } from '@/components/ui/strata-sweep';
 
@@ -58,7 +59,11 @@ export function LibraryCard({
 
   return (
     <article className="group relative overflow-hidden rounded-[8px] border border-[var(--doc-ink-border)] bg-white transition-colors duration-200 hover:border-[var(--color-clay)]">
-      <div className="relative flex h-[150px] items-center justify-center overflow-hidden bg-[var(--doc-sheet-2)]">
+      <Link
+        href={`/library/${item.id}`}
+        aria-label={`Open ${item.name}`}
+        className="relative flex h-[150px] items-center justify-center overflow-hidden bg-[var(--doc-sheet-2)]"
+      >
         {img ? (
           <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" />
         ) : (
@@ -82,12 +87,15 @@ export function LibraryCard({
             Patina
           </span>
         )}
-      </div>
+      </Link>
 
       <div className="px-3.5 py-3">
-        <div className="text-[0.82rem] font-medium leading-snug text-[var(--color-charcoal)]">
+        <Link
+          href={`/library/${item.id}`}
+          className="block text-[0.82rem] font-medium leading-snug text-[var(--color-charcoal)] transition-colors hover:text-[var(--color-clay)]"
+        >
           {item.name}
-        </div>
+        </Link>
         <div className="mt-0.5 text-[0.66rem] text-[var(--color-aged-oak)]">{sub}</div>
 
         <div className="mt-2.5 flex items-center justify-between gap-2">

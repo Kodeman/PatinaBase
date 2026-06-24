@@ -36,6 +36,20 @@ export function fmtMinutes(minutes: number): string {
   return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
 }
 
+/**
+ * Quiet running readout — the at-rest spine/mobile-bar clock. Minute
+ * resolution so it does NOT re-count every second: a live mm:ss in the corner
+ * pulled the eye off the text box being typed in. Matches the drawer's
+ * "in hand today" granularity; the precise mm:ss survives only where the
+ * timer is opened on purpose (the mobile timer sheet). "under a min" keeps a
+ * freshly-held document from reading a dead "0 min".
+ */
+export function fmtElapsedQuiet(totalSeconds: number): string {
+  const m = Math.floor(Math.max(0, totalSeconds) / 60);
+  if (m < 1) return 'under a min';
+  return fmtMinutes(m);
+}
+
 export type CloseOut =
   | { action: 'discard_silently' }
   | { action: 'offer'; durationMinutes: number };

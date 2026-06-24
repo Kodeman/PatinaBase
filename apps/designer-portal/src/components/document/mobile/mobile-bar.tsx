@@ -10,7 +10,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useDocumentTime } from '@/hooks/document-time-provider';
-import { fmtElapsed, fmtMinutes } from '@/lib/document/time-derivation';
+import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
 import { useMobileShell } from './mobile-shell';
 
 const STRATA = (
@@ -64,7 +64,7 @@ export function MobileBar() {
               className="inline-block h-[5px] w-[5px] rounded-full"
               style={{ background: paused || !running ? 'rgba(250,247,242,0.25)' : 'var(--color-sage)' }}
             />
-            {fmtElapsed(elapsedSeconds)}
+            {fmtElapsedQuiet(elapsedSeconds)}
           </button>
 
           <button

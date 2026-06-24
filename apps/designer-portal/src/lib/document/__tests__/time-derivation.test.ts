@@ -4,6 +4,7 @@ import {
   idleAnnotation,
   idleSecondsFromPings,
   fmtElapsed,
+  fmtElapsedQuiet,
   fmtMinutes,
   inHandTodayMinutes,
   isAdjusted,
@@ -19,6 +20,22 @@ describe('fmtElapsed', () => {
     expect(fmtElapsed(125)).toBe('02:05');
     expect(fmtElapsed(3600)).toBe('1:00:00');
     expect(fmtElapsed(5025)).toBe('1:23:45');
+  });
+});
+
+describe('fmtElapsedQuiet (at-rest readout — minute resolution, no per-second motion)', () => {
+  it('reads sub-minute as "under a min", then minutes/hours like fmtMinutes', () => {
+    expect(fmtElapsedQuiet(0)).toBe('under a min');
+    expect(fmtElapsedQuiet(47)).toBe('under a min');
+    expect(fmtElapsedQuiet(60)).toBe('1 min');
+    expect(fmtElapsedQuiet(125)).toBe('2 min');
+    expect(fmtElapsedQuiet(3600)).toBe('1h 00m');
+    expect(fmtElapsedQuiet(5025)).toBe('1h 23m');
+  });
+
+  it('floors to the elapsed minute (never rounds up) so it cannot show time not yet served', () => {
+    expect(fmtElapsedQuiet(119)).toBe('1 min'); // 1:59 → still the 1st minute
+    expect(fmtElapsedQuiet(-5)).toBe('under a min'); // clamped
   });
 });
 

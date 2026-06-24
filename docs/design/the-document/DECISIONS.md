@@ -2550,6 +2550,40 @@ The first cut shipped the draft/send actions as a *weighted* mono row (clay "Dra
 
 **Deviation logged:** this is the **first filled button in the document body** (filled buttons were overlay-only; the body used bordered/hover-fill, e.g. Discovery's "Begin the Direction →"). A deliberate, user-approved push for prominence, scoped to the single "work to be done" moment. Bordered/hover-fill remains the default body grammar.
 
+## The Document — Time readout polish — 2026-06-23
+
+### R69 · The running-timer readout rests at minute resolution — no per-second motion
+
+Reported live (Kody): with a document open and a timer running, the elapsed clock **re-counted every second** in the always-on chrome — the spine timer (desktop left rail) and the mobile bottom bar both rendered live `mm:ss`. That ticking in the periphery pulled the eye off the text box / dropdown being filled in. The clock is the system's only *unbounded* per-second motion: it's not the breath (R15, a slow bounded swell on the active marker) and not a notification — it's just a counter changing in the corner. It also contradicts the Studio Drawer's own discipline (D8: "no badges, no unread counts, no pulsing"), where "In hand today" already rests at minute granularity for exactly this reason.
+
+**Ruling.** The **at-rest** running readout drops to **minute resolution** (`fmtElapsedQuiet`: "under a min" → "1 min" → "1h 23m", floored, never rounded up) so the digits change at most once a minute — the corner goes still while you type. The sage "In hand" running dot is unchanged, so "it's running" still reads at a glance. The precise `mm:ss` survives only where the timer is opened **on purpose** — the mobile timer sheet (`mobile-sheets.tsx`), a focused view, not peripheral chrome. The provider's 1s tick is untouched (that sheet still wants live seconds when open; the per-second re-render is cheap and confined to timer components — the form inputs never consumed the timer context, so this was always a pure visual-motion issue, not focus theft).
+
+**Scope.** Spine timer + mobile bar only. The **R15 breath stays untouched** (Kody's call — much subtler than the ticking clock, and `prefers-reduced-motion` already stills it; revisit as a separate item only if it still tugs). The old portal header chip (`running-timer-chip.tsx`, with its `animate-ping` dot) and `stop-timer-dialog.tsx` are not rendered inside the `(document)` layout, so they're out of scope here.
+
+**Status.** Directed by Kody from a live report — to confirm with Leah. If she wants the live `mm:ss` back in the spine, the cheapest reversal is swapping `fmtElapsedQuiet` → `fmtElapsed` at the two call sites; a "reveal-on-hover precise time" middle ground was offered and can be added without touching the resting state.
+
+## The Document — The Piece (library item view + edit) — 2026-06-24
+
+### R70 · A piece you walk into — full-screen view & edit of one library item at `/library/[id]`
+
+The Library Room (R32/R39) let you browse three shelves, but tapping a `LibraryCard` did nothing — there was no way to open a single piece and see, let alone edit, the ~35 real columns a `products` row carries (identity, form & material, pricing, sourcing, media, teaching, provenance). **The Piece** closes that: a Room reached by tapping a card's image or title, a sibling of the Composing Page (R40) and the Drafting Room (R42).
+
+**The shape.** A full-bleed paper Room (`RoomShell`, `backTo="/library"`) — not a sheet — at `/library/[id]` (`room-origin` already classifies it as a Room labelled "the Library", so no plumbing). A **letterhead hero** (folio gallery + the piece named in the hand + the Strata Mark *completeness* fill reading **Capture → Draft → Catalog-ready** off the same `pieceFill`) over three Movements reusing the Composing grammar verbatim — **the record** (identity · the piece · the story · categorization) · **the catalog** (commerce · sourcing · listing metadata) · **the eye** (teaching, delegating to the existing `DeepAnalysisSheet`) — and a quiet **colophon** of provenance/lifecycle. System columns (`embedding`, `aesthete_vector`, `search_vector`) are hidden; read-only/derived fields (slug, quality_score, audit) read as quiet metadata.
+
+**Save model.** R40's law applied to an existing row: **every facet self-saves on blur** (chips/toggles immediately), no Save button. New `usePieceField` hook = a raw `products` UPDATE with optimistic write to `['product', id]` + rollback, and the two invalidations `useUpdateProduct` was missing (`['layer-products']`, `['layer-counts']`) so the shelf reflects an edit. RLS 0-row writes (PGRST116) surface as "no permission"; CHECK violations (23514) as "a Studio piece needs this field."
+
+**Permission & layer.** `canEdit` = super_admin OR (personal && owner) OR (studio && **non-guest** member — matched to the `products_studio_update` RLS role gate). Read-only is a **typeset specimen sheet**, not greyed inputs. `layer` is **never** an editable field — only Promote/Nominate move it (the existing rails, `asSheet`). Catalog pieces (read-only for designers; editable only by super_admin) offer **Save to My Library** + **Add to a project** (`usePlaceInDocument`) — Kody's ruling on catalog actions, 2026-06-24.
+
+**Scope ruling (Kody, 2026-06-24).** Expose **only columns that genuinely exist** on the `products` row. The aspirational `@patina/types` `Product` interface lists phantom fields (weight, msrp, currency, sale price, care/assembly, variants) with no column — out of scope, no migration; backlog if studio/catalog curation later needs them.
+
+**Verified.** db reads clean; designer-portal `next build` green + the route in the manifest; type-check clean for all new files; a 6-dimension adversarial review (40 agents) → 15 confirmed findings → 13 fixed, 2 deferred (below); **live Chrome walk green** as `designer@patina.dev`: personal piece editable (SKU self-save persisted to DB), catalog piece read-only specimen sheet + Save/Add rail + correct cents→dollars, Add-to-a-project picker opens. D4 shadow audit clean.
+
+**Deferred (logged, not blocking).**
+- **O1 (still open):** the `Movement`/section-rule device is copied locally into `piece-room.tsx` (≈25 lines) rather than shared with Compose/Drafting — de-dup into `components/document/` later.
+- The `#b89a2e` draft-amber literal (Compose/Drafting/card) wants promoting to a token — pre-existing, untouched here.
+- The **studio** path renders the sourcing bundle with soft "studio needs" hints, but no studio rows are seeded locally to walk it; logic is the same surface, verified by review.
+- Screenshots captured in-conversation only (env `save_to_disk` constraint).
+
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R68 (+R68.1) · L1–L4 · THE GO · FLIP CONFIRMED · last id = R68.1*
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R70 (+R68.1) · L1–L4 · THE GO · FLIP CONFIRMED · last id = R70*
