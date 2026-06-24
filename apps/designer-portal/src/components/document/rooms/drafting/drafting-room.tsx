@@ -24,6 +24,7 @@
  */
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useProposal,
@@ -35,7 +36,10 @@ import { RoomShell } from '../room-shell';
 import { StrataMark } from '../../strata-mark';
 import { FacetSection } from './facet-section';
 import { ProposalPreviewRail } from '../../drafting/proposal-mirror';
+import { SendSheet } from '../../overlays/send-sheet';
 import { useDraftingState } from '@/hooks/use-drafting-state';
+import { familyLabel } from '@/lib/document/family-label';
+import { clearRoomOrigin, readRoomOrigin } from '@/lib/document/room-origin';
 
 // The eight legacy editors — proven, proposalId-addressed, self-persisting.
 import { RoomsInScope } from '@/components/portal/scope-builder/rooms-in-scope';
@@ -70,6 +74,7 @@ const TYPE_CHIP: Record<string, { label: string; color: string; bg: string }> = 
 };
 
 export function DraftingRoom({ proposalId }: { proposalId: string }) {
+  const router = useRouter();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const { data: summary } = useScopeBuilderSummary(proposalId);
@@ -88,6 +93,16 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   // One section open at first paint (Rooms — the natural start); everything is
   // reachable in any order. No required progression.
   const [open, setOpen] = useState<Set<string>>(new Set(['rooms']));
+  // The send flow lives IN the Room now (no need to leave to send): the head
+  // action opens the SendSheet, weighted by readiness. On a successful send the
+  // proposal is out, so we return to the document it lives in — which now shows
+  // the "With the client" watch view.
+  const [sendOpen, setSendOpen] = useState(false);
+  const returnToDocument = () => {
+    const dest = readRoomOrigin();
+    clearRoomOrigin();
+    router.push(dest);
+  };
   const toggle = (id: string) =>
     setOpen((prev) => {
       const next = new Set(prev);
@@ -122,10 +137,32 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
         ? 'Fully drafted. Every facet is written — this proposal is ready to send to the client at full strength.'
         : `Coming together. Still open: ${gaps.slice(0, 3).join(', ')}${gaps.length > 3 ? '…' : ''}. Fill them in any order.`;
 
+  // The Room's single head action: send the proposal. Weighted by readiness —
+  // filled clay once fully drafted, a quiet outline ("send as-is") while still
+  // composing (sending is never blocked, only weighted — mirrors the document's
+  // non-hard-gate). Hidden at 0% — there's nothing to send yet.
+  const clientLabel = proposal?.client_name ? familyLabel(proposal.client_name) : null;
+  const readyToSend = state === 'Ready to send';
+  const sendAction =
+    pct > 0 ? (
+      <button
+        type="button"
+        onClick={() => setSendOpen(true)}
+        className={
+          readyToSend
+            ? 'rounded-[4px] bg-[var(--color-clay)] px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-opacity hover:opacity-90'
+            : 'rounded-[4px] border border-[var(--color-clay)] px-3.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] transition-colors hover:bg-[rgba(196,165,123,0.08)]'
+        }
+      >
+        {readyToSend ? `Send to ${clientLabel ?? 'the client'} →` : 'Send as-is →'}
+      </button>
+    ) : undefined;
+
   return (
     <RoomShell
       title="The Drafting Room"
       count={pct > 0 ? `${pct}% drafted` : undefined}
+      action={sendAction}
       // S10: no backTo — leaving returns to the stashed origin (the document the
       // designer walked in from, "← the document"), not the legacy proposals route.
     >
@@ -323,6 +360,15 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
           </aside>
         </div>
       </div>
+
+      {/* Send — the charcoal DocSheet, opened from the head action. On success
+          it returns us to the document the proposal lives in (the watch view). */}
+      <SendSheet
+        proposalId={proposalId}
+        open={sendOpen}
+        onClose={() => setSendOpen(false)}
+        onSent={returnToDocument}
+      />
     </RoomShell>
   );
 }

@@ -46,10 +46,14 @@ export function SendSheet({
   proposalId,
   open,
   onClose,
+  onSent,
 }: {
   proposalId: string;
   open: boolean;
   onClose: () => void;
+  /** Fired after a successful send, before onClose — lets a caller (e.g. the
+   *  Drafting Room) navigate back to the document the proposal lives in. */
+  onSent?: () => void;
 }) {
   const qc = useQueryClient();
   const { data: proposal } = useProposal(proposalId) as { data: any };
@@ -115,6 +119,7 @@ export function SendSheet({
       // invalidates the proposal keys.)
       void qc.invalidateQueries({ queryKey: ['document-state'] });
       void qc.invalidateQueries({ queryKey: ['desk-engagements'] });
+      onSent?.();
       onClose();
     } catch (err) {
       console.error('Failed to send proposal:', err);
