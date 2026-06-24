@@ -19,7 +19,7 @@ import { invalidateMarginSurfaces } from '@/hooks/use-margin-items';
 import { familyLabel } from '@/lib/document/family-label';
 import { DocFileViewer } from './overlays/doc-file-viewer';
 import { ClientMirror } from './client-mirror';
-import { ProposalPreview } from './proposal-instruments';
+import { ProposalPreview } from './proposal-preview';
 
 const getSupabase = () => createBrowserClient() as any;
 
