@@ -36,6 +36,7 @@ export function useProposalWatch(proposalId: string): {
         sentAt: proposal.sent_at ?? null,
         viewedAt: proposal.viewed_at ?? null,
         acceptedAt: proposal.accepted_at ?? null,
+        lastNudgedAt: proposal.last_nudged_at ?? null,
         version: proposal.version ?? null,
       },
       stats ?? null,

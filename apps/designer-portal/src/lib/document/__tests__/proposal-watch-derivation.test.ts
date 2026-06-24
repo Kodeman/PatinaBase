@@ -6,6 +6,7 @@ import {
   deriveProposalWatch,
   sectionLabel,
   AWAITING_AGED_DAYS,
+  NUDGE_COOLDOWN_DAYS,
   type ProposalWatchInput,
 } from '../proposal-watch-derivation';
 import type { ProposalEngagementEvent, ProposalEngagementStats } from '@patina/supabase';
@@ -196,6 +197,42 @@ describe('deriveProposalWatch — per-open attention (Phase 4)', () => {
     );
     expect(m.record[0].minutes).toBeUndefined();
     expect(m.record[0].sectionLabel).toBeUndefined();
+  });
+});
+
+describe('deriveProposalWatch — nudge eligibility (Phase 3)', () => {
+  it('sent/viewed with no prior nudge → canNudge', () => {
+    expect(deriveProposalWatch(input({ status: 'sent' }), stats(), [], NOW).canNudge).toBe(true);
+    expect(
+      deriveProposalWatch(input({ status: 'viewed', viewedAt: daysAgo(1) }), stats(), [], NOW).canNudge,
+    ).toBe(true);
+  });
+
+  it('within the cooldown → cannot nudge again; lastNudgedAt is surfaced', () => {
+    const m = deriveProposalWatch(
+      input({ status: 'viewed', viewedAt: daysAgo(5), lastNudgedAt: daysAgo(1) }),
+      stats(),
+      [],
+      NOW,
+    );
+    expect(m.canNudge).toBe(false);
+    expect(m.lastNudgedAt).toBe(daysAgo(1));
+  });
+
+  it('past the cooldown → can nudge again', () => {
+    const m = deriveProposalWatch(
+      input({ status: 'viewed', viewedAt: daysAgo(7), lastNudgedAt: daysAgo(NUDGE_COOLDOWN_DAYS) }),
+      stats(),
+      [],
+      NOW,
+    );
+    expect(m.canNudge).toBe(true);
+  });
+
+  it('accepted / declined / expired are not nudgeable', () => {
+    for (const status of ['accepted', 'declined', 'expired'] as const) {
+      expect(deriveProposalWatch(input({ status }), stats(), [], NOW).canNudge).toBe(false);
+    }
   });
 });
 

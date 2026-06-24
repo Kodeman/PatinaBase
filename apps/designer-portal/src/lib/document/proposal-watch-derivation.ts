@@ -46,6 +46,7 @@ export interface ProposalWatchInput {
   sentAt?: string | null;
   viewedAt?: string | null;
   acceptedAt?: string | null;
+  lastNudgedAt?: string | null;
   version?: number | null;
 }
 
@@ -60,6 +61,10 @@ export interface ProposalWatchModel {
   terminal: boolean;
   sentAt: string | null;
   acceptedAt: string | null;
+  /** When the client was last nudged (gentle reminder), and whether a nudge can
+   *  be sent right now — only while in the client's hands and past the cooldown. */
+  lastNudgedAt: string | null;
+  canNudge: boolean;
   openedCount: number;
   lastOpenedAt: string | null;
   readingSeconds: number;
@@ -86,6 +91,10 @@ const MUTED = 'var(--text-muted)';
  * the Desk agree on when a proposal stops being "fresh".
  */
 export const AWAITING_AGED_DAYS = 2;
+
+/** A proposal can be nudged at most once per this many days — a reminder, never
+ *  a pester. Kept in lockstep with the cooldown in 00231 nudge_proposal. */
+export const NUDGE_COOLDOWN_DAYS = 3;
 
 const DAY_MS = 86_400_000;
 
@@ -207,6 +216,13 @@ export function deriveProposalWatch(
     awaitingDays !== null &&
     awaitingDays >= AWAITING_AGED_DAYS;
 
+  // A nudge is offered only while the proposal is in the client's hands
+  // (sent/viewed) and the cooldown since the last nudge has lapsed.
+  const lastNudgedAt = input.lastNudgedAt ?? null;
+  const nudgeable = status === 'sent' || status === 'viewed';
+  const sinceNudge = lastNudgedAt ? daysBetween(lastNudgedAt, now) : null;
+  const canNudge = nudgeable && (sinceNudge === null || sinceNudge >= NUDGE_COOLDOWN_DAYS);
+
   return {
     status,
     stamp: deriveStamp(status, isAwaitingAged),
@@ -215,6 +231,8 @@ export function deriveProposalWatch(
     terminal,
     sentAt,
     acceptedAt: input.acceptedAt ?? null,
+    lastNudgedAt,
+    canNudge,
     openedCount,
     lastOpenedAt,
     readingSeconds,
