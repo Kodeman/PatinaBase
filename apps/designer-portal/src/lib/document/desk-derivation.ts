@@ -47,6 +47,11 @@ export interface DocumentStateRow {
   /** R45 (00211): last touch on a still-drafting proposal — quiet while it's
    *  warm, an "untouched Nd" chip once it goes cold. Null until first edit. */
   proposal_updated_at: string | null;
+  /** R71 (00230): opened-event rollups over proposal_engagement — lets the Desk
+   *  read "Opened 3×, last Jun 22" instead of first-open only. 0/null until the
+   *  client opens it (and only meaningful on the proposal shape). */
+  proposal_open_count: number | null;
+  proposal_last_opened_at: string | null;
   lead_response_deadline: string | null;
   lead_status: string | null;
   overdue_decision_count: number;
@@ -404,9 +409,18 @@ export function deriveNeed(
     if (row.proposal_status === 'viewed' && row.proposal_viewed_at) {
       const days = daysBetween(row.proposal_viewed_at, now);
       if (days >= HESITATION_UNSIGNED_DAYS) {
+        // R71: when they've come back more than once, the count is the signal
+        // (engaged but not committing); a single open keeps the calm first-open
+        // read. proposal_last_opened_at is the freshest touch (00230 rollup).
+        const opens = row.proposal_open_count ?? 0;
+        const lastOpen = row.proposal_last_opened_at ?? row.proposal_viewed_at;
+        const text =
+          opens > 1
+            ? `Opened ${opens}× — last ${fmtDay(lastOpen)}, no signature yet`
+            : `Opened ${fmtDay(lastOpen)} — no signature yet`;
         return {
           kind: 'hesitating_proposal',
-          text: `Opened ${fmtDay(row.proposal_viewed_at)} — no signature yet`,
+          text,
           stamp: { label: 'VIEWED', ...STAMP.dustyBlue },
           urgent: false,
         };
@@ -601,7 +615,11 @@ export function deriveMotion(
     }
     if (row.proposal_status === 'sent' || row.proposal_status === 'viewed') {
       const since = row.proposal_sent_at ? ` since ${fmtDay(row.proposal_sent_at)}` : '';
-      return { kind: 'with_client', text: `With client${since}` };
+      // R71: a fresh viewed proposal that's come back more than once carries the
+      // count quietly (still an awareness chip, never a nag).
+      const opens = row.proposal_open_count ?? 0;
+      const opened = opens > 1 ? ` · opened ${opens}×` : '';
+      return { kind: 'with_client', text: `With client${since}${opened}` };
     }
     return null;
   }

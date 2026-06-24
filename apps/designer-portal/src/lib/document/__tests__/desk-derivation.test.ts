@@ -38,6 +38,8 @@ function mkRow(partial: Partial<DocumentStateRow>): DocumentStateRow {
     proposal_sent_at: null,
     proposal_viewed_at: null,
     proposal_updated_at: null,
+    proposal_open_count: null,
+    proposal_last_opened_at: null,
     lead_response_deadline: null,
     lead_status: null,
     overdue_decision_count: 0,
@@ -291,6 +293,43 @@ describe('deriveNeed', () => {
     expect(need!.kind).toBe('hesitating_proposal');
     expect(need!.text).toMatch(/no signature/i);
     expect(need!.stamp.label).toBe('VIEWED');
+  });
+
+  it('proposal viewed multiple times, unsigned → need carries the open count (R71)', () => {
+    const need = deriveNeed(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_status: 'viewed',
+        proposal_sent_at: daysAgo(5),
+        proposal_viewed_at: daysAgo(3),
+        proposal_open_count: 3,
+        proposal_last_opened_at: daysAgo(1),
+      }),
+      NOW,
+    );
+    expect(need!.kind).toBe('hesitating_proposal');
+    expect(need!.text).toMatch(/Opened 3× — last/);
+    expect(need!.text).toMatch(/no signature/i);
+  });
+
+  it('proposal viewed once, unsigned → keeps the calm first-open read (no count)', () => {
+    const need = deriveNeed(
+      mkRow({
+        engagement_kind: 'proposal',
+        active_section: 'proposal',
+        project_id: null,
+        proposal_status: 'viewed',
+        proposal_sent_at: daysAgo(4),
+        proposal_viewed_at: daysAgo(2),
+        proposal_open_count: 1,
+        proposal_last_opened_at: daysAgo(2),
+      }),
+      NOW,
+    );
+    expect(need!.text).not.toMatch(/×/);
+    expect(need!.text).toMatch(/Opened .* — no signature yet/);
   });
 
   it('proposal viewed yesterday → no need yet (R10 boundary)', () => {
