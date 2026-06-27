@@ -18,11 +18,13 @@ export const metadata: Metadata = {
  * The Document route group. Deliberately minimal: no zone nav, no sub-nav,
  * no utility bar (D1 — the desk and the paper are the only chrome). Auth is
  * enforced by the existing middleware matcher; providers come from the root
- * layout. The charcoal surface is the desk itself (spec v1.1 §10).
+ * layout. The desk surface is off-white paper (Desk light restyle — see
+ * DECISIONS, reverses the v1.1 §10 charcoal desk). The open document paints its
+ * own --doc-paper background over this, so /doc/[id] is unaffected.
  */
 export default function DocumentLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[var(--color-charcoal)]">
+    <div className="min-h-screen bg-[var(--bg-primary)]">
       <DocumentGate>
         {/* One time system above the Desk and every document (R4): the
             log-offer strip rides across navigation inside the provider. */}

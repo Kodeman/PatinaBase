@@ -1,20 +1,20 @@
 'use client';
 
 /**
- * Desk folder card (spec v1.1 §7, §10; prototype v0.3 .folder recipe).
- * Depth = flat stacked sheets + value contrast — never shadows (D4).
- * Picking up = following the link to /doc/[engagement_id] (Slice 2).
+ * Desk folio card (Desk light restyle).
  *
- * R36: a need whose act isn't "pick up the document" (the overdue-invoice need,
- * whose act is "send the reminder") carries `need.ledger` — the card opens that
- * Drawer ledger (the Accounts book's Receivables page) instead of navigating.
+ * The "job document you can pick up": a status-colored folder tab over a white
+ * paper face, with two tinted sheets stacked behind for depth. Picking up =
+ * following the link to /doc/[engagement_id], or — for a need whose act isn't
+ * "open the document" (R36, the overdue-invoice need) — opening that Drawer
+ * ledger. The pickup lift + drop-shadow live in globals.css (`.folio-face`),
+ * gated to no-preference motion, so the D4 shadow-ban lint stays enforced in
+ * TSX everywhere else.
  */
 
 import Link from 'next/link';
 import { folderTab, type DeskFolder } from '@/lib/document/desk-derivation';
-import { fillStateForDesk } from '@/lib/document/fill-state';
-import { Stamp } from './stamp';
-import { StrataMark } from './strata-mark';
+import { StatusChip } from './status-chip';
 import { openLedger } from './command-bar';
 import { TriageBar } from './triage-bar';
 
@@ -36,19 +36,18 @@ function prettyPhase(phase: string | null): string | null {
     .join(' ');
 }
 
-
 export function FolderCard({ folder }: { folder: DeskFolder }) {
   const { row, need } = folder;
+  const section = SECTION_LABEL[row.active_section] ?? row.active_section;
   const phase = prettyPhase(row.current_phase);
-  const stageLine = phase
-    ? `${SECTION_LABEL[row.active_section]} · ${phase}`
-    : SECTION_LABEL[row.active_section];
+  const stageLine = phase ? `${section} · ${phase}` : section;
+  const tabLabel = `${folderTab(row)} · ${section}`;
 
   // R36: the overdue-invoice need opens the Accounts book onto Receivables
   // (where the dunning act lives), not the document. Same paper face either way.
   const cardClassName =
-    'group relative mt-[14px] block w-full rounded-[3px_6px_6px_6px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]';
-  const inner = <FolderFace folder={folder} stageLine={stageLine} />;
+    'group relative mt-[26px] block w-full cursor-grab rounded-[0_8px_8px_8px] text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] active:cursor-grabbing';
+  const inner = <FolderFace folder={folder} stageLine={stageLine} tabLabel={tabLabel} />;
 
   if (need.ledger) {
     return (
@@ -77,62 +76,62 @@ export function FolderCard({ folder }: { folder: DeskFolder }) {
 function FolderFace({
   folder,
   stageLine,
+  tabLabel,
 }: {
   folder: DeskFolder;
   stageLine: string;
+  tabLabel: string;
 }) {
   const { row, need } = folder;
   return (
     <>
-      {/* Flat stacked edges (D4): two offset solid sheets, no blur, ever. */}
+      {/* Two tinted sheets behind the face — the other pages in the folder.
+          Nudged down/right so the folio reads as a stack (depth, not shadow). */}
       <div
         aria-hidden
-        className="absolute bottom-[-5px] left-[5px] right-[-5px] top-[5px] rounded-[4px_7px_7px_7px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-3)]"
+        className="absolute inset-0 translate-x-[10px] translate-y-[10px] rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--doc-sheet-back)]"
       />
       <div
         aria-hidden
-        className="absolute bottom-[-2.5px] left-[2.5px] right-[-2.5px] top-[2.5px] rounded-[4px_7px_7px_7px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-2)]"
+        className="absolute inset-0 translate-x-[5px] translate-y-[5px] rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--doc-sheet-front)]"
       />
 
-      {/* Folder tab — the mark answers "how far" (R15 fill-state) */}
-      <div className="absolute -top-[14px] left-[18px] z-[2] flex items-center gap-1.5 rounded-t-[5px] border border-b-0 border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-3.5 pb-[3px] pt-[4px] font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
-        <StrataMark size="sm" fill={fillStateForDesk(row)} />
-        {folderTab(row)}
-      </div>
-
-      {/* Paper face */}
-      <div
-        className={`relative z-[1] overflow-hidden rounded-[3px_6px_6px_6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-5 py-[1.15rem] transition-transform duration-[180ms] ease-out motion-safe:group-hover:-translate-y-[3px] ${
-          need.urgent
-            ? 'outline outline-[1.5px] outline-offset-[-1.5px] outline-[rgba(232,197,71,0.55)]'
-            : ''
-        }`}
-      >
-        {/* Paper grain — threshold of perception */}
+      {/* The document that lifts on pickup — tab + face together. */}
+      <div className="folio-face relative">
+        {/* Folder tab — status color carries the state; type does the rest. */}
         <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(139,115,85,0.012) 3px, rgba(139,115,85,0.012) 4px)',
-          }}
-        />
-        <h3 className="font-heading text-[1.05rem] font-medium text-[var(--color-charcoal)]">
-          {row.title}
-        </h3>
-        <p className="mb-2.5 mt-0.5 text-[11px] text-[var(--text-muted)]">{stageLine}</p>
-        <div className="flex items-start justify-between gap-3 border-t border-[var(--color-pearl)] pt-2.5">
-          <p className="flex-1 text-[12px] leading-relaxed text-[var(--text-body)]">{need.text}</p>
-          <Stamp label={need.stamp.label} color={need.stamp.color} ink={need.stamp.ink} />
+          className="absolute -top-[26px] left-0 flex h-[26px] items-center rounded-t-[7px] px-3.5 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-white"
+          style={{ background: need.stamp.color }}
+        >
+          {tabLabel}
         </div>
-        {/* R61/R65: a lead is the one need whose act is a triage, not a pick-up
-            — for a new lead AND for a nurtured lead whose reconnect is now due
-            (so reconnecting can convert/re-date/pass without a dead end). The
-            bar's buttons stopPropagation so they never trip the card's link
-            (D1). Shape C always carries lead_id. */}
-        {(need.kind === 'new_lead' || need.kind === 'reconnect_due') && row.lead_id && (
-          <TriageBar leadId={row.lead_id} variant="desk" />
-        )}
+
+        {/* Paper face */}
+        <div
+          className={`rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-7 ${
+            need.urgent
+              ? 'outline outline-[1.5px] outline-offset-[-1.5px] outline-[rgba(232,197,71,0.6)]'
+              : ''
+          }`}
+        >
+          <h3 className="font-heading text-[1.6rem] font-medium leading-tight text-[var(--text-primary)]">
+            {row.title}
+          </h3>
+          <p className="mt-1 text-[12px] text-[var(--text-muted)]">{stageLine}</p>
+          <div className="mt-4 flex items-start justify-between gap-3 border-t border-[var(--border-default)] pt-3.5">
+            <p className="flex-1 text-[13px] leading-relaxed text-[var(--text-body)]">
+              {need.text}
+            </p>
+            <StatusChip label={need.stamp.label} color={need.stamp.color} />
+          </div>
+          {/* R61/R65: a lead is the one need whose act is a triage, not a pick-up
+              — for a new lead AND for a nurtured lead whose reconnect is now due.
+              The bar's buttons stopPropagation so they never trip the card's
+              link (D1). Shape C always carries lead_id. */}
+          {(need.kind === 'new_lead' || need.kind === 'reconnect_due') && row.lead_id && (
+            <TriageBar leadId={row.lead_id} variant="desk" />
+          )}
+        </div>
       </div>
     </>
   );

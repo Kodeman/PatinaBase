@@ -15,7 +15,8 @@
  * (Deep-linking straight to the Nurture view is a follow-up: people-room.tsx —
  * Track A's, frozen — does not yet read a `?view=` param.)
  *
- * Zero shadows (D4); the Desk's pearl-on-charcoal ink, never a card-in-a-card.
+ * Zero shadows (D4); quiet Aged Oak ink on the light Desk, never a
+ * card-in-a-card.
  */
 
 import { useMemo } from 'react';
@@ -23,16 +24,7 @@ import Link from 'next/link';
 import { usePeopleDirectory } from '@patina/supabase';
 import { deriveNurtureQueue } from '@/lib/document/people-derivation';
 import { deriveReconnectNeeds } from '@/lib/document/desk-derivation';
-import { StrataMark } from '@/components/document/strata-mark';
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="mb-4 flex items-center gap-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[rgba(250,247,242,0.35)]">
-      <StrataMark state="active" size="sm" />
-      {children}
-    </h2>
-  );
-}
+import { SectionEyebrow } from '@/components/document/section-eyebrow';
 
 export function DeskReconnect() {
   // R53: the reconnect surface reads the whole directory once (per-designer,
@@ -50,21 +42,19 @@ export function DeskReconnect() {
 
   return (
     <section aria-labelledby="reconnect" className="mt-14">
-      <SectionLabel>
+      <SectionEyebrow count={reconnects.length}>
         <span id="reconnect">Worth reconnecting</span>
-      </SectionLabel>
+      </SectionEyebrow>
       <ul className="space-y-2">
         {reconnects.map((r) => (
           <li key={`${r.role}:${r.personId}`}>
             <Link
               href="/people"
               data-reconnect-role={r.role}
-              className="group flex items-baseline gap-2 text-[13px] leading-snug text-[rgba(250,247,242,0.55)] transition-colors hover:text-[var(--color-pearl)]"
+              className="group flex items-baseline gap-2 text-[13px] leading-snug text-[var(--text-muted)] transition-colors hover:text-[var(--text-body)]"
             >
-              <span className="font-heading italic text-[rgba(250,247,242,0.85)] group-hover:text-[var(--color-off-white)]">
-                {r.name}
-              </span>
-              <span aria-hidden className="text-[rgba(250,247,242,0.3)]">
+              <span className="font-heading italic text-[var(--text-primary)]">{r.name}</span>
+              <span aria-hidden className="text-[var(--text-subtle)]">
                 —
               </span>
               <span>{r.reason}</span>

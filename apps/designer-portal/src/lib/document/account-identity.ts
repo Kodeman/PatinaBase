@@ -15,6 +15,12 @@ export function monogramOf(name: string | null | undefined, email: string): stri
   return source.slice(0, 2).toUpperCase();
 }
 
+/** The given name for the Desk greeting — first word of the name, or a warm
+ *  fallback when no name has resolved yet. */
+export function firstNameOf(name: string | null | undefined): string {
+  return name?.trim().split(/\s+/)[0] || 'there';
+}
+
 export interface ActiveStudio {
   name: string;
   role: string;
