@@ -45,6 +45,7 @@ export type OverlayId =
   | 'S2' // create project inline
   | 'S3' // choose destination
   | 'D2' // merge resolution
+  | 'DEC' // send as client decision (legacy parity)
   | 'A2' // workspace switcher (stubbed)
   | 'U1' // recent captures
   | 'T1' // settings
@@ -61,6 +62,7 @@ export const OVERLAY_IDS: readonly OverlayId[] = [
   'S2',
   'S3',
   'D2',
+  'DEC',
   'A2',
   'U1',
   'T1',

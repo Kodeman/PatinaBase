@@ -6,6 +6,7 @@ import { SavedScreen, InboxSavedScreen, ErrorScreen } from '../screens/TerminalS
 import { VendorScreen } from '../screens/VendorScreen';
 import { ImageSelectSheet } from '../overlays/ImageSelectSheet';
 import { InsightSheet } from '../overlays/InsightSheet';
+import { DecisionSheet } from '../overlays/DecisionSheet';
 
 function Placeholder({ label }: { label: string }) {
   const dispatch = useCaptureDispatch();
@@ -66,6 +67,8 @@ export function OverlayLayer() {
       return <ImageSelectSheet />;
     case 'C5':
       return <InsightSheet />;
+    case 'DEC':
+      return <DecisionSheet />;
     default:
       return null;
   }

@@ -90,6 +90,14 @@ export function CommitBar() {
       >
         {busy === 'inbox' ? 'Saving…' : 'Send to inbox'}
       </button>
+      <button
+        type="button"
+        disabled={!valid || io.isSaving || !user}
+        onClick={() => dispatch({ type: 'OPEN_OVERLAY', overlay: 'DEC' })}
+        className="w-full py-1 text-center font-mono text-[0.62rem] uppercase tracking-[0.08em] text-ink-soft transition-colors hover:text-brass disabled:opacity-40"
+      >
+        Send for client approval →
+      </button>
     </div>
   );
 }
