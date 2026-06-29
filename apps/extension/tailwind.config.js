@@ -4,6 +4,23 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // ── Patina capture palette (T-01) ──────────────────────────────
+        ink: "#211E18",
+        "ink-2": "#3C382F",
+        "ink-soft": "#6B6555",
+        paper: "#E7E5DB",
+        "paper-2": "#DEDBCF",
+        "paper-3": "#F1EFE7",
+        line: "rgba(33,30,24,0.16)",
+        "line-2": "rgba(33,30,24,0.30)",
+        verdigris: "#3C7C6C", // verified / success / primary action
+        "verdigris-2": "#5BA68F",
+        "verdigris-ink": "#22463D",
+        brass: "#A07C38", // trade / decision
+        "brass-2": "#C7A052",
+        rust: "#9A5A3E", // error / missing / friction
+        "rust-2": "#B97A56",
+        // ── Legacy keys — kept aliased so unmigrated components compile ──
         "off-white": "#FAF7F2",
         pearl: "#E5E2DD",
         clay: "#C4A57B",
@@ -17,9 +34,9 @@ module.exports = {
         surface: "#FFFFFF",
       },
       fontFamily: {
-        display: ["Playfair Display", "Georgia", "serif"],
-        body: ["Inter", "system-ui", "sans-serif"],
-        mono: ["DM Mono", "monospace"],
+        display: ["Fraunces", "Georgia", "serif"],
+        body: ["Hanken Grotesk", "system-ui", "sans-serif"],
+        mono: ["IBM Plex Mono", "monospace"],
       },
       borderRadius: {
         DEFAULT: "3px",
