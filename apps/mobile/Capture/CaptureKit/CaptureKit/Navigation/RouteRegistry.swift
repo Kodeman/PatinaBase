@@ -23,6 +23,9 @@ public final class RouteRegistry {
         sheetBuilders[key] = build
     }
 
+    public func hasRoute(_ route: CaptureRoute) -> Bool { routeBuilders[route.registryKey] != nil }
+    public func hasSheet(_ sheet: CaptureSheet) -> Bool { sheetBuilders[sheet.registryKey] != nil }
+
     public func view(for route: CaptureRoute) -> AnyView {
         routeBuilders[route.registryKey]?(route)
             ?? AnyView(MissingScreen(token: route.registryKey))
