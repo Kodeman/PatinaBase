@@ -9,6 +9,8 @@ import { ImageSelectSheet } from '../overlays/ImageSelectSheet';
 import { InsightSheet } from '../overlays/InsightSheet';
 import { DecisionSheet } from '../overlays/DecisionSheet';
 import { CreateProjectSheet } from '../overlays/CreateProjectSheet';
+import { SettingsSheet } from '../overlays/SettingsSheet';
+import { AccountSheet } from '../overlays/AccountSheet';
 
 function Placeholder({ label }: { label: string }) {
   const dispatch = useCaptureDispatch();
@@ -73,6 +75,10 @@ export function OverlayLayer() {
       return <DecisionSheet />;
     case 'S2':
       return <CreateProjectSheet />;
+    case 'T1':
+      return <SettingsSheet />;
+    case 'T2':
+      return <AccountSheet />;
     default:
       return null;
   }

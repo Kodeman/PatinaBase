@@ -5,6 +5,7 @@
  */
 import { useCapture } from '../state/CaptureProvider';
 import { useCaptureController } from '../hooks/use-capture-controller';
+import { useSettingsSync } from '../hooks/use-settings';
 import { ControllerContext } from './controller-context';
 import { ConnectionStrip } from './ConnectionStrip';
 import { CommitBar } from './CommitBar';
@@ -15,6 +16,7 @@ import { LoadingStrata } from '../components/LoadingStrata';
 
 export function PanelShell() {
   const controller = useCaptureController();
+  useSettingsSync();
   const { session } = useCapture();
 
   // Boot — resolving session / adopting the portal cookie.

@@ -1,8 +1,6 @@
 /** Panel header — mark, product/vendor toggle, re-read, sign out. */
-import { useCapture } from '../state/CaptureProvider';
+import { useCapture, useCaptureDispatch } from '../state/CaptureProvider';
 import { useController } from './controller-context';
-import { supabase } from '../lib/supabase';
-import { resetAnalytics } from '../lib/analytics';
 
 function Toggle({
   active,
@@ -28,13 +26,9 @@ function Toggle({
 
 export function ConnectionStrip() {
   const { nav } = useCapture();
+  const dispatch = useCaptureDispatch();
   const { refresh, switchToVendor, switchToProduct, currentUrl } = useController();
   const isVendor = nav.screen === 'vendor';
-
-  const signOut = async () => {
-    resetAnalytics();
-    await supabase.auth.signOut();
-  };
 
   return (
     <header className="border-b border-line px-4 py-3">
@@ -61,10 +55,19 @@ export function ConnectionStrip() {
           </button>
           <button
             type="button"
-            onClick={signOut}
-            className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-ink-soft hover:text-ink"
+            onClick={() => dispatch({ type: 'OPEN_OVERLAY', overlay: 'T1' })}
+            title="Settings"
+            className="text-[0.95rem] text-ink-soft hover:text-ink"
           >
-            Sign out
+            ⚙
+          </button>
+          <button
+            type="button"
+            onClick={() => dispatch({ type: 'OPEN_OVERLAY', overlay: 'T2' })}
+            title="Account"
+            className="flex h-5 w-5 items-center justify-center rounded-full border border-line text-[0.6rem] text-ink-soft hover:border-ink-soft hover:text-ink"
+          >
+            ◓
           </button>
         </div>
       </div>
