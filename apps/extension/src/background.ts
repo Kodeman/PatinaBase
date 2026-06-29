@@ -425,7 +425,7 @@ chrome.commands?.onCommand?.addListener(async command => {
 
 // ─── Context Menu ─────────────────────────────────────────────────────────────
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(details => {
   // Make clicking extension icon open side panel instead of popup
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
@@ -435,6 +435,11 @@ chrome.runtime.onInstalled.addListener(() => {
     title: 'Capture with Patina',
     contexts: ['page', 'image'],
   });
+
+  // First install — open the onboarding tab (O1–O4).
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('tabs/onboarding.html') });
+  }
 
   // Migrate any pre-Wave-2 queue entries forward, then refresh the badge.
   void migrateLegacyQueueIfNeeded().then(() => {
