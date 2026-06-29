@@ -184,12 +184,13 @@ export function captureReducer(
       };
 
     case 'SNAPSHOT_CAPTURED':
+    case 'IMAGE_CAPTURED':
       return {
         ...state,
         draft: {
           ...emptyDraft(action.sourceUrl),
-          captureKind: 'snapshot',
-          snapshotUrl: action.imageUrl,
+          captureKind: action.type === 'SNAPSHOT_CAPTURED' ? 'snapshot' : 'image',
+          snapshotUrl: action.type === 'SNAPSHOT_CAPTURED' ? action.imageUrl : null,
           images: {
             all: [{ url: action.imageUrl, score: 100, width: 0, height: 0, alt: '' }],
             selected: [0],

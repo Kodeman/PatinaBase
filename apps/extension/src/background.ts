@@ -418,6 +418,7 @@ chrome.commands?.onCommand?.addListener(async command => {
     // Open side panel
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
+      await setPendingIntent({ kind: 'capture-page', pageUrl: tab.url });
       chrome.sidePanel.open({ tabId: tab.id });
     }
   }
@@ -429,11 +430,11 @@ chrome.runtime.onInstalled.addListener(details => {
   // Make clicking extension icon open side panel instead of popup
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
-  // Create context menu
-  chrome.contextMenus.create({
-    id: 'capture-with-patina',
-    title: 'Capture with Patina',
-    contexts: ['page', 'image'],
+  // Create targeted context menus (page / image-only X1 / selection X2)
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: 'patina-capture-page', title: 'Capture page with Patina', contexts: ['page'] });
+    chrome.contextMenus.create({ id: 'patina-capture-image', title: 'Capture this image', contexts: ['image'] });
+    chrome.contextMenus.create({ id: 'patina-capture-selection', title: 'Capture selection as product', contexts: ['selection'] });
   });
 
   // First install — open the onboarding tab (O1–O4).
@@ -447,11 +448,26 @@ chrome.runtime.onInstalled.addListener(details => {
   });
 });
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === 'capture-with-patina' && tab?.id) {
-    // Open side panel to capture
-    chrome.sidePanel.open({ tabId: tab.id });
+// sidePanel.open() can't carry params, so the chosen entry hands its intent off
+// out-of-band via chrome.storage.session; the panel reads + clears it on mount.
+async function setPendingIntent(intent: Record<string, unknown>): Promise<void> {
+  try {
+    await chrome.storage.session.set({ patina_pending_intent: { ...intent, ts: Date.now() } });
+  } catch (err) {
+    console.warn('[background] could not set capture intent', err);
   }
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (!tab?.id) return;
+  if (info.menuItemId === 'patina-capture-image') {
+    await setPendingIntent({ kind: 'capture-image', srcUrl: info.srcUrl, pageUrl: tab.url });
+  } else if (info.menuItemId === 'patina-capture-selection') {
+    await setPendingIntent({ kind: 'capture-selection', selectionText: info.selectionText, pageUrl: tab.url });
+  } else {
+    await setPendingIntent({ kind: 'capture-page', pageUrl: tab.url });
+  }
+  chrome.sidePanel.open({ tabId: tab.id });
 });
 
 // ─── Network Status ───────────────────────────────────────────────────────────

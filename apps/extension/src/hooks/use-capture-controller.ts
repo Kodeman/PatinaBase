@@ -14,6 +14,14 @@ import type {
 import { supabase } from '../lib/supabase';
 import { detectModeFromUrl } from '../lib/mode-detection';
 import { bestProductMatch } from '../lib/product-similarity';
+import { ocrTextToFields } from '../lib/ocr';
+
+interface PendingIntent {
+  kind: 'capture-page' | 'capture-image' | 'capture-selection';
+  srcUrl?: string;
+  selectionText?: string;
+  pageUrl?: string;
+}
 import { identifyUser, resetAnalytics, extensionEvents } from '../lib/analytics';
 import { usePortalSession } from './use-portal-session';
 import { useCapture, useCaptureDispatch } from '../state/CaptureProvider';
@@ -32,11 +40,26 @@ export function useCaptureController(): CaptureController {
   const portalSession = usePortalSession();
 
   const [currentUrl, setCurrentUrl] = useState('');
+  const [intentReady, setIntentReady] = useState(false);
   const previousUrlRef = useRef('');
   const nonceRef = useRef(0);
   const exactMatchedRef = useRef(false);
+  const intentRef = useRef<PendingIntent | null>(null);
   const dupeWarnings = state.prefs.dupeWarnings;
   const signedIn = state.session.status === 'signed-in';
+
+  // Read any context-menu / shortcut intent once on mount.
+  useEffect(() => {
+    try {
+      chrome.storage.session.get('patina_pending_intent', (r) => {
+        intentRef.current = (r?.patina_pending_intent as PendingIntent) ?? null;
+        chrome.storage.session.remove('patina_pending_intent');
+        setIntentReady(true);
+      });
+    } catch {
+      setIntentReady(true);
+    }
+  }, []);
 
   // ── Auth ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -346,18 +369,37 @@ export function useCaptureController(): CaptureController {
     [dispatch, checkDuplicate, extractDirectly, onExtracted]
   );
 
-  // ── Drive extraction on URL change ────────────────────────────────────────
+  // ── Drive extraction on URL change (consuming any entry intent first) ─────
   useEffect(() => {
-    if (!signedIn || !currentUrl) return;
+    if (!signedIn || !currentUrl || !intentReady) return;
     if (currentUrl === previousUrlRef.current) return;
     previousUrlRef.current = currentUrl;
+
+    const intent = intentRef.current;
+    intentRef.current = null; // consume — subsequent navigations extract normally
+
+    if (intent?.kind === 'capture-image' && intent.srcUrl) {
+      dispatch({ type: 'IMAGE_CAPTURED', sourceUrl: currentUrl, imageUrl: intent.srcUrl });
+      return;
+    }
+    if (intent?.kind === 'capture-selection' && intent.selectionText) {
+      dispatch({ type: 'MANUAL_START', url: currentUrl });
+      const fields = ocrTextToFields(intent.selectionText);
+      if (fields.name) dispatch({ type: 'FIELD_EDIT', field: 'name', value: fields.name });
+      if (fields.price)
+        dispatch({ type: 'FIELD_EDIT', field: 'price', value: (fields.price.value / 100).toFixed(2) });
+      if (fields.materials?.length)
+        dispatch({ type: 'FIELD_EDIT', field: 'materials', value: fields.materials });
+      return;
+    }
+
     const mode = detectModeFromUrl(currentUrl);
     if (mode.mode === 'vendor') {
       dispatch({ type: 'NAV', screen: 'vendor' });
     } else {
       runProductExtraction(currentUrl);
     }
-  }, [signedIn, currentUrl, dispatch, runProductExtraction]);
+  }, [signedIn, currentUrl, intentReady, dispatch, runProductExtraction]);
 
   const refresh = useCallback(() => {
     if (currentUrl) {

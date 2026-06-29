@@ -145,6 +145,15 @@ describe('captureReducer — extraction lifecycle', () => {
     expect(s.draft?.images.selected).toEqual([0]);
   });
 
+  it('IMAGE_CAPTURED seeds an image draft (OCR-eligible)', () => {
+    let s = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
+    s = captureReducer(s, { type: 'IMAGE_CAPTURED', sourceUrl: 'https://x/p', imageUrl: 'https://cdn/i.jpg' });
+    expect(s.nav.screen).toBe('C2');
+    expect(s.draft?.captureKind).toBe('image');
+    expect(s.draft?.snapshotUrl).toBeNull();
+    expect(s.draft?.images.all[0]?.url).toBe('https://cdn/i.jpg');
+  });
+
   it('EXTRACTION_UNKNOWN routes to R4, EXTRACTION_ERROR routes to R5', () => {
     const base = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
     expect(captureReducer(base, { type: 'EXTRACTION_UNKNOWN' }).nav.screen).toBe('R4');
