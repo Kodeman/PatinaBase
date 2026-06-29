@@ -59,14 +59,22 @@ export function CommitBar() {
 
   if (dedup.match) {
     return (
-      <div className="border-t border-line bg-paper px-4 py-3">
+      <div className="space-y-2 border-t border-line bg-paper px-4 py-3">
         <button
           type="button"
           disabled={disabled}
           onClick={() => run('update')}
           className="w-full rounded-md bg-brass py-3 text-[0.85rem] font-medium text-paper transition-colors hover:bg-brass-2 disabled:opacity-50"
         >
-          {busy === 'update' ? 'Updating…' : 'Update in library'}
+          {busy === 'update' ? 'Updating…' : `Update “${dedup.match.name}”`}
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => run('library')}
+          className="w-full rounded-md border border-line py-2.5 text-[0.82rem] font-medium text-ink-soft transition-colors hover:border-ink-soft hover:text-ink disabled:opacity-50"
+        >
+          {busy === 'library' ? 'Saving…' : 'Save as new instead'}
         </button>
       </div>
     );

@@ -13,6 +13,7 @@ import type {
 } from '@patina/shared';
 import { supabase } from '../lib/supabase';
 import { detectModeFromUrl } from '../lib/mode-detection';
+import { bestProductMatch } from '../lib/product-similarity';
 import { identifyUser, resetAnalytics, extensionEvents } from '../lib/analytics';
 import { usePortalSession } from './use-portal-session';
 import { useCapture, useCaptureDispatch } from '../state/CaptureProvider';
@@ -33,6 +34,8 @@ export function useCaptureController(): CaptureController {
   const [currentUrl, setCurrentUrl] = useState('');
   const previousUrlRef = useRef('');
   const nonceRef = useRef(0);
+  const exactMatchedRef = useRef(false);
+  const dupeWarnings = state.prefs.dupeWarnings;
   const signedIn = state.session.status === 'signed-in';
 
   // ── Auth ────────────────────────────────────────────────────────────────
@@ -105,6 +108,7 @@ export function useCaptureController(): CaptureController {
           .eq('source_url', url)
           .single();
         if (data) {
+          exactMatchedRef.current = true;
           extensionEvents.duplicateDetected('product');
           dispatch({
             type: 'DUPLICATE_MATCHED',
@@ -123,6 +127,50 @@ export function useCaptureController(): CaptureController {
       }
     },
     [dispatch]
+  );
+
+  // Near-match (D1): only when no exact-URL hit and warnings are on.
+  const checkNearMatch = useCallback(
+    async (data: ExtractedProductData) => {
+      if (!dupeWarnings || exactMatchedRef.current || !data.productName) return;
+      const firstToken = data.productName.split(/\s+/)[0];
+      if (!firstToken) return;
+      try {
+        const { data: rows } = await supabase
+          .from('products')
+          .select('id, name, price_retail, vendor_id')
+          .is('deleted_at', null)
+          .ilike('name', `%${firstToken}%`)
+          .limit(50);
+        if (exactMatchedRef.current || !rows?.length) return;
+        const best = bestProductMatch(
+          rows.map((r) => ({
+            id: r.id,
+            name: r.name,
+            priceRetail: r.price_retail,
+            vendorId: r.vendor_id,
+          })),
+          { name: data.productName, priceCents: data.price?.value ?? null, vendorId: null }
+        );
+        if (best && best.score >= 0.85) {
+          extensionEvents.duplicateDetected('product');
+          dispatch({
+            type: 'DUPLICATE_MATCHED',
+            match: {
+              id: best.candidate.id,
+              name: best.candidate.name,
+              imageUrl: null,
+              priceRetail: best.candidate.priceRetail,
+              capturedAt: null,
+            },
+            confidence: best.score,
+          });
+        }
+      } catch {
+        /* best-effort */
+      }
+    },
+    [dispatch, dupeWarnings]
   );
 
   const loadVendorSuggestions = useCallback(
@@ -190,8 +238,9 @@ export function useCaptureController(): CaptureController {
     (data: ExtractedProductData) => {
       dispatch({ type: 'EXTRACTION_SUCCESS', data });
       loadVendorSuggestions(data.manufacturer, data.url);
+      checkNearMatch(data);
     },
-    [dispatch, loadVendorSuggestions]
+    [dispatch, loadVendorSuggestions, checkNearMatch]
   );
 
   const extractDirectly = useCallback(
@@ -277,6 +326,7 @@ export function useCaptureController(): CaptureController {
   const runProductExtraction = useCallback(
     (url: string) => {
       const nonce = ++nonceRef.current;
+      exactMatchedRef.current = false;
       dispatch({ type: 'EXTRACTION_START', url, entry: 'toolbar' });
       extensionEvents.extractionStart('product');
       checkDuplicate(url);

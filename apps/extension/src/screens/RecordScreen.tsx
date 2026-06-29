@@ -22,9 +22,15 @@ export function RecordScreen() {
 
       {dedup.match && (
         <div className="rounded-md border-l-[3px] border-brass bg-brass/5 px-3 py-2">
-          <p className="text-[0.85rem] font-medium text-ink">Already in your library</p>
+          <p className="text-[0.85rem] font-medium text-ink">
+            Looks like one you have
+          </p>
           <p className="mt-0.5 text-[0.78rem] text-ink-soft">
-            Captured {dedup.match.capturedAt ? new Date(dedup.match.capturedAt).toLocaleDateString() : 'earlier'} — saving will update it.
+            “{dedup.match.name}” is already in your library
+            {dedup.match.capturedAt
+              ? ` from ${new Date(dedup.match.capturedAt).toLocaleDateString()}`
+              : ''}
+            . Update it below, or save this as a new piece.
           </p>
         </div>
       )}
