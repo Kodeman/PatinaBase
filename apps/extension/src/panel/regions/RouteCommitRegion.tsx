@@ -19,9 +19,18 @@ export function RouteCommitRegion() {
 
   return (
     <section className="space-y-2 border-t border-line pt-3">
-      <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-soft">
-        Route to
-      </span>
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-ink-soft">
+          Route to
+        </span>
+        <button
+          type="button"
+          onClick={() => dispatch({ type: 'OPEN_OVERLAY', overlay: 'S2' })}
+          className="font-mono text-[0.58rem] uppercase tracking-[0.06em] text-verdigris hover:text-verdigris-ink"
+        >
+          + New project
+        </button>
+      </div>
       <select
         value={destValue}
         onChange={(e) => {

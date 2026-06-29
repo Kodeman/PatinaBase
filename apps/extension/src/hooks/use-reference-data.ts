@@ -20,6 +20,38 @@ export interface ReferenceData {
 
 let cache: ReferenceData | null = null;
 let inflight: Promise<ReferenceData> | null = null;
+const listeners = new Set<() => void>();
+
+function publish(next: ReferenceData) {
+  cache = next;
+  listeners.forEach((l) => l());
+}
+
+/** Insert a project and fold it into the cache so open pickers see it. */
+export async function createProject(name: string): Promise<Project | null> {
+  const { data, error } = await supabase
+    .from('projects')
+    .insert({ name, status: 'active' })
+    .select('id, name, status, notes, created_at, updated_at')
+    .single();
+  if (error || !data) return null;
+  const project: Project = {
+    id: data.id,
+    name: data.name,
+    status: data.status,
+    notes: data.notes,
+    clientProfileId: null,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+  publish({
+    projects: [...(cache?.projects ?? []), project].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    ),
+    styles: cache?.styles ?? [],
+  });
+  return project;
+}
 
 async function fetchReferenceData(): Promise<ReferenceData> {
   const [projectsRes, stylesRes] = await Promise.all([
@@ -69,26 +101,29 @@ export function useReferenceData(): ReferenceData & { loading: boolean } {
   const [loading, setLoading] = useState(!cache);
 
   useEffect(() => {
+    const sync = () => setData(cache);
+    listeners.add(sync);
     if (cache) {
       setData(cache);
       setLoading(false);
-      return;
+    } else {
+      let active = true;
+      setLoading(true);
+      (inflight ??= fetchReferenceData())
+        .then((d) => {
+          publish(d);
+          if (active) setLoading(false);
+        })
+        .catch(() => {
+          if (active) setLoading(false);
+        });
+      return () => {
+        active = false;
+        listeners.delete(sync);
+      };
     }
-    let active = true;
-    setLoading(true);
-    (inflight ??= fetchReferenceData())
-      .then((d) => {
-        cache = d;
-        if (active) {
-          setData(d);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (active) setLoading(false);
-      });
     return () => {
-      active = false;
+      listeners.delete(sync);
     };
   }, []);
 
