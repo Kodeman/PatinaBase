@@ -123,6 +123,54 @@ export function draftFromExtraction(data: ExtractedProductData): DraftSlice {
   };
 }
 
+/** A blank draft for manual entry (R3) — every field starts missing. */
+export function emptyDraft(url: string): DraftSlice {
+  const blank = <T,>(value: T): DraftField<T> => ({
+    value,
+    status: 'missing',
+    source: 'user',
+    original: value,
+  });
+  const raw = {
+    productName: null,
+    description: null,
+    price: null,
+    dimensions: null,
+    materials: [],
+    colors: null,
+    finish: null,
+    availableColors: null,
+    images: [],
+    manufacturer: null,
+    url,
+    extractedAt: '',
+    confidence: 'low',
+  } as unknown as ExtractedProductData;
+
+  return {
+    captureKind: 'unknown',
+    sourceUrl: url,
+    snapshotUrl: null,
+    confidence: 'low',
+    fields: {
+      name: blank(''),
+      price: blank(''),
+      description: blank(''),
+      materials: blank<string[]>([]),
+      colors: blank<string[]>([]),
+      finish: blank(''),
+      dimensions: blank(editableDimensionsFromExtracted(null)),
+    },
+    custom: [],
+    images: { all: [], selected: [], variant: null },
+    manufacturer: { vendor: null, confidence: 'low', status: 'missing' },
+    retailer: { vendor: null, confidence: 'low', status: 'missing' },
+    styleIds: [],
+    note: '',
+    raw,
+  };
+}
+
 export function draftToProductPayload(
   draft: DraftSlice,
   userId: string

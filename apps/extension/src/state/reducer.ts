@@ -5,7 +5,7 @@
  * side effects (extraction, dedup query, the save handlers) live in effects.ts
  * and dispatch these actions.
  */
-import { draftFromExtraction } from './draft';
+import { draftFromExtraction, emptyDraft } from './draft';
 import { INITIAL_NAV } from './screens';
 import type {
   CaptureState,
@@ -173,6 +173,14 @@ export function captureReducer(
         ...state,
         nav: { ...state.nav, screen: 'R5' },
         io: { ...state.io, isExtracting: false, error: action.error },
+      };
+
+    case 'MANUAL_START':
+      return {
+        ...state,
+        draft: emptyDraft(action.url),
+        nav: { ...state.nav, screen: 'C2', overlay: null },
+        io: { ...state.io, isExtracting: false, error: null },
       };
 
     case 'VENDOR_EXTRACTED':

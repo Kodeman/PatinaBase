@@ -121,6 +121,16 @@ describe('captureReducer — extraction lifecycle', () => {
     expect(s.io.isExtracting).toBe(false);
   });
 
+  it('MANUAL_START seeds a blank draft on C2 for hand entry', () => {
+    let s = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
+    s = captureReducer(s, { type: 'MANUAL_START', url: 'https://x/p' });
+    expect(s.nav.screen).toBe('C2');
+    expect(s.draft?.captureKind).toBe('unknown');
+    expect(s.draft?.sourceUrl).toBe('https://x/p');
+    expect(s.draft?.fields.name.status).toBe('missing');
+    expect(s.draft?.images.all).toEqual([]);
+  });
+
   it('EXTRACTION_UNKNOWN routes to R4, EXTRACTION_ERROR routes to R5', () => {
     const base = captureReducer(initialCaptureState(), { type: 'SESSION_RESOLVED', user: fakeUser });
     expect(captureReducer(base, { type: 'EXTRACTION_UNKNOWN' }).nav.screen).toBe('R4');

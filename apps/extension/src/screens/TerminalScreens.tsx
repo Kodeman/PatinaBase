@@ -36,7 +36,7 @@ export function InboxSavedScreen() {
 }
 
 export function ErrorScreen() {
-  const { refresh } = useController();
+  const { refresh, currentUrl } = useController();
   const dispatch = useCaptureDispatch();
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -55,7 +55,7 @@ export function ErrorScreen() {
         </button>
         <button
           type="button"
-          onClick={() => dispatch({ type: 'NAV', screen: 'R3' })}
+          onClick={() => dispatch({ type: 'MANUAL_START', url: currentUrl })}
           className="rounded-md border border-line px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-ink-soft hover:border-ink-soft"
         >
           Add by hand
