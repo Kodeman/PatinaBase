@@ -1,0 +1,81 @@
+/** Panel header — mark, product/vendor toggle, re-read, sign out. */
+import { useCapture } from '../state/CaptureProvider';
+import { useController } from './controller-context';
+import { supabase } from '../lib/supabase';
+import { resetAnalytics } from '../lib/analytics';
+
+function Toggle({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex-1 rounded-md py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.08em] transition-colors ${
+        active ? 'bg-ink text-paper' : 'text-ink-soft hover:text-ink'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function ConnectionStrip() {
+  const { nav } = useCapture();
+  const { refresh, switchToVendor, switchToProduct, currentUrl } = useController();
+  const isVendor = nav.screen === 'vendor';
+
+  const signOut = async () => {
+    resetAnalytics();
+    await supabase.auth.signOut();
+  };
+
+  return (
+    <header className="border-b border-line px-4 py-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 font-display text-[1.05rem] text-ink">
+          <span
+            className="inline-block h-[14px] w-[14px] rounded-sm"
+            style={{
+              background:
+                'conic-gradient(from 210deg, var(--brass-2), var(--verdigris), var(--rust-2), var(--brass-2))',
+            }}
+          />
+          Patina
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={!currentUrl}
+            title="Re-read this page"
+            className="text-[0.95rem] text-ink-soft hover:text-ink disabled:opacity-40"
+          >
+            ⟳
+          </button>
+          <button
+            type="button"
+            onClick={signOut}
+            className="font-mono text-[0.6rem] uppercase tracking-[0.06em] text-ink-soft hover:text-ink"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+      <div className="mt-2 flex gap-1 rounded-md border border-line p-0.5">
+        <Toggle active={!isVendor} onClick={switchToProduct}>
+          Product
+        </Toggle>
+        <Toggle active={isVendor} onClick={switchToVendor}>
+          Vendor
+        </Toggle>
+      </div>
+    </header>
+  );
+}

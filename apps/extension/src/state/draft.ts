@@ -112,7 +112,9 @@ export function draftFromExtraction(data: ExtractedProductData): DraftSlice {
       ),
     },
     custom: [],
-    images: { all: images, selected: images.length > 0 ? [0] : [], variant: null },
+    // Default to keeping every extracted image (legacy parity — the panel saved
+    // all, highest-scored first). The C3 curation sheet narrows this.
+    images: { all: images, selected: images.map((_, i) => i), variant: null },
     manufacturer: { vendor: null, confidence: 'low', status: 'missing' },
     retailer: { vendor: null, confidence: 'low', status: 'missing' },
     styleIds: [],

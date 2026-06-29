@@ -72,10 +72,10 @@ describe('draftFromExtraction', () => {
     expect(draft.confidence).toBe('high');
   });
 
-  it('loads all images and selects the first by default', () => {
+  it('loads and selects all images by default', () => {
     const draft = draftFromExtraction(makeExtraction());
     expect(draft.images.all).toHaveLength(2);
-    expect(draft.images.selected).toEqual([0]);
+    expect(draft.images.selected).toEqual([0, 1]);
   });
 
   it('selects no image when none were extracted', () => {
@@ -92,6 +92,8 @@ describe('draftToProductPayload', () => {
     // user edits the name + price inline (C4)
     draft.fields.name.value = 'Eames Lounge (Walnut)';
     draft.fields.price.value = '5200.00';
+    // user prunes to a single image in the C3 curation sheet
+    draft.images.selected = [0];
 
     const input = draftToProductPayload(draft, 'user-123');
 

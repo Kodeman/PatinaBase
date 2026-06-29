@@ -228,6 +228,7 @@ export type CaptureAction =
   | { type: 'INBOX_TARGET_SET'; proposalId: UUID | null; scopeRoomId: UUID | null; ffeCategorySlug: string | null }
   | { type: 'DECISION_TARGET_SET'; patch: Partial<RoutingSlice['decision']> }
   // dedup
+  | { type: 'DUPLICATE_MATCHED'; match: ExistingProductMatch; confidence: number }
   | { type: 'DUPLICATE_FOUND'; match: ExistingProductMatch; confidence: number }
   | { type: 'DUPLICATE_CLEARED' }
   | { type: 'MERGE_FIELD_PICK'; field: DraftFieldKey; pick: 'existing' | 'new' }

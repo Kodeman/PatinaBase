@@ -324,6 +324,13 @@ export function captureReducer(
       };
 
     // ── dedup ────────────────────────────────────────────────────────────
+    case 'DUPLICATE_MATCHED':
+      // Exact-URL match: surface inline (banner + Update) without interrupting.
+      return {
+        ...state,
+        dedup: { match: action.match, confidence: action.confidence, mergePicks: {} },
+      };
+
     case 'DUPLICATE_FOUND':
       return {
         ...state,

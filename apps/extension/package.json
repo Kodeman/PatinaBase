@@ -39,6 +39,13 @@
     "typescript": "^5.4.0",
     "vitest": "^4.0.17"
   },
+  "alias": {
+    "react": "./node_modules/react/index.js",
+    "react-dom": "./node_modules/react-dom/index.js",
+    "react/jsx-runtime": "./node_modules/react/jsx-runtime.js",
+    "react/jsx-dev-runtime": "./node_modules/react/jsx-dev-runtime.js",
+    "react-dom/client": "./node_modules/react-dom/client.js"
+  },
   "manifest": {
     "permissions": [
       "activeTab",
@@ -52,6 +59,15 @@
     "host_permissions": [
       "https://*/*",
       "http://*/*"
-    ]
+    ],
+    "commands": {
+      "capture-product": {
+        "suggested_key": {
+          "default": "Ctrl+Shift+S",
+          "mac": "Command+Shift+S"
+        },
+        "description": "Capture the current page with Patina"
+      }
+    }
   }
 }
