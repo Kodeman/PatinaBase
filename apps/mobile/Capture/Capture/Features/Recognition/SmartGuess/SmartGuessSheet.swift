@@ -1,0 +1,234 @@
+//  SmartGuessSheet.swift
+//  Capture
+//
+//  N5 · Smart field guess. After capture an on-device vision model proposes
+//  category, material, style and colour. Every value is a labelled "guess" the
+//  designer confirms or corrects — never silently trusted. "Looks right" accepts
+//  the guesses as confirmed fields (source .manual; a corrected value becomes
+//  .edited); tapping a guess opens just that field; "Edit all" opens them all.
+//  Guesses never overwrite a value a tag/scan/measure/human already set.
+
+import SwiftUI
+import CaptureKit
+
+struct SmartGuessSheet: View {
+    let specimenID: UUID
+    let store: CaptureStore
+    let camera: any CameraService
+    let smartGuess: any SmartGuessService
+    let analytics: any CaptureAnalytics
+    let coordinator: CaptureCoordinator?
+
+    @State private var loaded = false
+    @State private var editAll = false
+    @State private var editing: Set<String> = []
+
+    // Working values + the original guesses (to tell a correction from an accept).
+    @State private var categoryRaw = SpecimenCategory.unknown.rawValue
+    @State private var material = ""
+    @State private var style = ""
+    @State private var colour = ""
+    @State private var categoryOriginal = SpecimenCategory.unknown.rawValue
+    @State private var materialOriginal = ""
+    @State private var styleOriginal = ""
+    @State private var colourOriginal = ""
+    @State private var confidence: [String: Double] = [:]
+
+    var body: some View {
+        RecognitionSheetLayout {
+            RecognitionHeader(eyebrow: "From the photo · confirm or fix", title: "Review guesses",
+                              onClose: { coordinator?.dismissSheet() })
+
+            RecognitionCard {
+                categoryRow
+                textGuessRow(label: "Material", value: $material, key: "Material")
+                textGuessRow(label: "Style", value: $style, key: "Style")
+                textGuessRow(label: "Colour", value: $colour, key: "Colour")
+            }
+
+            RecognitionActionBar(
+                secondaryTitle: editAll ? "Collapse" : "Edit all",
+                primaryTitle: "Looks right",
+                onSecondary: { editAll.toggle() },
+                onPrimary: { accept() }
+            )
+            Spacer(minLength: 0)
+        }
+        .accessibilityIdentifier(CaptureScreenID.n5SmartGuess.rawValue)
+        .task { await loadGuess() }
+    }
+
+    // MARK: - Rows
+
+    private var categoryRow: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("Category")
+                        .font(CaptureType.eyebrow).textCase(.uppercase)
+                        .foregroundStyle(CaptureColor.inkSoft)
+                    ProvenanceBadge(.smartGuess)
+                    confidenceTag("Category")
+                }
+                Menu {
+                    ForEach(SpecimenCategory.allCases, id: \.self) { c in
+                        Button(c.rawValue.capitalized) { categoryRaw = c.rawValue }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(SpecimenCategory(rawValue: categoryRaw)?.rawValue.capitalized ?? "Unknown")
+                            .font(CaptureType.bodyEmph)
+                            .foregroundStyle(CaptureColor.brass)
+                        Image(systemName: "chevron.down")
+                            .font(CaptureType.footnote)
+                            .foregroundStyle(CaptureColor.inkSoft)
+                    }
+                }
+            }
+            Spacer()
+        }
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) { Rectangle().fill(CaptureColor.line).frame(height: 1) }
+    }
+
+    @ViewBuilder
+    private func textGuessRow(label: String, value: Binding<String>, key: String) -> some View {
+        let isEditing = editAll || editing.contains(key)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(CaptureType.eyebrow).textCase(.uppercase)
+                    .foregroundStyle(CaptureColor.inkSoft)
+                ProvenanceBadge(.smartGuess)
+                confidenceTag(key)
+                Spacer()
+            }
+            if isEditing {
+                TextField("—", text: value)
+                    .font(CaptureType.body)
+                    .foregroundStyle(CaptureColor.ink)
+            } else {
+                Button { editing.insert(key) } label: {
+                    Text(value.wrappedValue.isEmpty ? "Tap to add" : value.wrappedValue)
+                        .font(CaptureType.bodyEmph)
+                        .foregroundStyle(value.wrappedValue.isEmpty ? CaptureColor.inkSoft : CaptureColor.brass)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) { Rectangle().fill(CaptureColor.line).frame(height: 1) }
+    }
+
+    @ViewBuilder
+    private func confidenceTag(_ key: String) -> some View {
+        if let c = confidence[key], c > 0, c < 0.55 {
+            Text("low")
+                .font(CaptureType.eyebrow).textCase(.uppercase)
+                .foregroundStyle(CaptureColor.rust)
+        }
+    }
+
+    // MARK: - Load + apply
+
+    private func loadGuess() async {
+        guard !loaded, let specimen = store.specimen(id: specimenID) else { return }
+        loaded = true
+        analytics.screen("N5.smart-guess")
+
+        let image = await RecognitionImageLoader.captureImage(for: specimen, store: store, camera: camera)
+        let guess = await smartGuess.guess(image: image, ocr: [], codes: [])
+
+        // Seed working state from the guess, falling back to any existing values.
+        categoryRaw = guess.category == .unknown ? specimen.categoryRaw : guess.category.rawValue
+        confidence["Category"] = guess.categoryConfidence
+        for field in guess.fields {
+            switch field.key {
+            case .material: material = field.value; confidence["Material"] = field.confidence
+            case .colorway: colour = field.value; confidence["Colour"] = field.confidence
+            default: break
+            }
+        }
+        if material.isEmpty { material = specimen.materialNote ?? "" }
+        if colour.isEmpty { colour = specimen.colorway ?? "" }
+        style = specimen.styleTags.first ?? ""
+
+        categoryOriginal = categoryRaw
+        materialOriginal = material
+        styleOriginal = style
+        colourOriginal = colour
+
+        // Persist as unconfirmed guesses so they show badged on the specimen (C3/C5).
+        applyAsGuess(specimen)
+        try? store.save()
+    }
+
+    private func applyAsGuess(_ specimen: Specimen) {
+        if categoryRaw != SpecimenCategory.unknown.rawValue {
+            specimen.setValue(categoryRaw, for: .category, source: .smartGuess)
+            specimen.setConfidence(confidence["Category"] ?? 0, for: .category)
+        }
+        if !material.isEmpty {
+            specimen.setValue(material, for: .material, source: .smartGuess)
+            specimen.setConfidence(confidence["Material"] ?? 0, for: .material)
+        }
+        if !colour.isEmpty {
+            specimen.setValue(colour, for: .colorway, source: .smartGuess)
+            specimen.setConfidence(confidence["Colour"] ?? 0, for: .colorway)
+        }
+        if !style.isEmpty, !specimen.styleTags.contains(style) {
+            specimen.styleTags.append(style)
+        }
+    }
+
+    // MARK: - Accept (promote to confirmed)
+
+    private func accept() {
+        guard let specimen = store.specimen(id: specimenID) else { return }
+        if categoryRaw != SpecimenCategory.unknown.rawValue {
+            specimen.setValue(categoryRaw, for: .category, source: promotedSource(categoryRaw, categoryOriginal))
+        }
+        if !material.isEmpty {
+            specimen.setValue(material, for: .material, source: promotedSource(material, materialOriginal))
+        }
+        if !colour.isEmpty {
+            specimen.setValue(colour, for: .colorway, source: promotedSource(colour, colourOriginal))
+        }
+        // Style has no FieldKey — it lives in styleTags (no per-field provenance).
+        if !style.isEmpty {
+            if let stale = styleOriginal.isEmpty ? nil : specimen.styleTags.firstIndex(of: styleOriginal) {
+                specimen.styleTags[stale] = style
+            } else if !specimen.styleTags.contains(style) {
+                specimen.styleTags.append(style)
+            }
+        }
+        specimen.touch()
+        try? store.save()
+        analytics.event("N5.accept", ["category": categoryRaw])
+        coordinator?.present(.specimenSheet(specimenID))
+    }
+
+    /// Accepted unchanged → .manual (designer-confirmed); corrected → .edited.
+    private func promotedSource(_ value: String, _ original: String) -> ProvenanceSource {
+        value == original ? .manual : .edited
+    }
+}
+
+#if DEBUG
+import CaptureKitMocks
+
+#Preview("N5 · Smart guess") {
+    let store = try! CaptureStore.inMemory()
+    let specimen = store.newDraft()
+    return SmartGuessSheet(
+        specimenID: specimen.id,
+        store: store,
+        camera: MockCameraService(),
+        smartGuess: StubSmartGuessService(),
+        analytics: MockCaptureAnalytics(),
+        coordinator: CaptureCoordinator()
+    )
+}
+#endif

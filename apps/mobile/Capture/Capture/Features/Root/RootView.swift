@@ -25,8 +25,18 @@ struct RootView: View {
         .sheet(item: $coord.sheet) { sheet in
             RouteRegistry.shared.view(for: sheet)
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { coord.onboardingStep != nil },
+            set: { if !$0 { coord.onboardingStep = nil } }
+        )) {
+            OnboardingScreens.view(forStep: coord.onboardingStep ?? 0)
+        }
         .task {
             ScreenRegistry.registerAll(container: container, coordinator: coordinator)
+            if let raw = AppConfiguration.initialScreenRaw,
+               let id = CaptureScreenID.allCases.first(where: { $0.rawValue.hasSuffix(raw) }) {
+                CaptureDeepLink.drive(screen: id, coordinator: coordinator, store: container.store)
+            }
         }
         .onOpenURL { url in
             CaptureDeepLink.handle(url, coordinator: coordinator, store: container.store)

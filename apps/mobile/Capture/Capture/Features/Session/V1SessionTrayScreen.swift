@@ -1,0 +1,148 @@
+//  V1SessionTrayScreen.swift
+//  Capture
+//
+//  V1 · Session tray. Swiping up from the viewfinder reveals everything captured
+//  on this visit, grouped by venue with each record's status. The hub for
+//  finishing a sourcing run in one sitting: tap a row to open its detail (V3),
+//  step through them (V2), or batch-route the lot (S1).
+
+import Foundation
+import SwiftUI
+import CaptureKit
+
+struct V1SessionTrayScreen: View {
+    let store: CaptureStore
+    let coordinator: CaptureCoordinator
+
+    @State private var items: [Specimen] = []
+
+    private var groups: [(venue: String, items: [Specimen])] {
+        let grouped = Dictionary(grouping: items) { specimen in
+            specimen.venue?.placemarkName ?? "This visit"
+        }
+        return grouped
+            .map { (venue: $0.key, items: $0.value.sorted { $0.createdAt > $1.createdAt }) }
+            .sorted { ($0.items.first?.createdAt ?? .distantPast) > ($1.items.first?.createdAt ?? .distantPast) }
+    }
+
+    var body: some View {
+        ZStack {
+            CaptureColor.paper3.ignoresSafeArea()
+
+            if items.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        Text("This visit")
+                            .font(CaptureType.display)
+                            .foregroundStyle(CaptureColor.ink)
+                            .padding(.top, 4)
+
+                        ForEach(groups, id: \.venue) { group in
+                            venueSection(group.venue, group.items)
+                        }
+                    }
+                    .padding(20)
+                    .padding(.bottom, 96)
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if !items.isEmpty { footer }
+        }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .accessibilityIdentifier(CaptureScreenID.v1SessionTray.rawValue)
+        .onAppear { items = store.session() }
+    }
+
+    private func venueSection(_ venue: String, _ specimens: [Specimen]) -> some View {
+        let doneCount = specimens.filter { $0.destination != .undecided }.count
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("\(venue.uppercased()) · \(specimens.count) CAPTURES")
+                    .font(CaptureType.eyebrow)
+                    .foregroundStyle(CaptureColor.inkSoft)
+                Spacer()
+                Text("Done \(doneCount)")
+                    .font(CaptureType.eyebrow)
+                    .foregroundStyle(CaptureColor.verdigris)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(specimens, id: \.id) { specimen in
+                    if specimen.id != specimens.first?.id {
+                        Divider().background(CaptureColor.line)
+                    }
+                    row(specimen)
+                }
+            }
+            .routeCard()
+        }
+    }
+
+    private func row(_ specimen: Specimen) -> some View {
+        Button {
+            coordinator.navigate(to: .specimen(specimen.id))
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(specimen.title ?? "Untitled capture")
+                        .font(CaptureType.bodyEmph)
+                        .foregroundStyle(CaptureColor.ink)
+                    Text("\(RouteFormat.time(specimen.createdAt)) · \(RouteFormat.descriptor(for: specimen).uppercased())")
+                        .font(CaptureType.monoSmall)
+                        .foregroundStyle(CaptureColor.inkSoft)
+                }
+                Spacer()
+                RouteStatusChip(kind: RouteFormat.status(for: specimen))
+                Image(systemName: "chevron.right")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.line2)
+            }
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var footer: some View {
+        HStack(spacing: 10) {
+            RouteActionButton("Review each", systemImage: "rectangle.stack", kind: .secondary) {
+                coordinator.present(.cullDeck)
+            }
+            RouteActionButton("Route all \(items.count)", systemImage: "arrow.up.forward", kind: .primary) {
+                if let first = items.first { coordinator.present(.assignVenue(first.id)) }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(.ultraThinMaterial)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "tray")
+                .font(CaptureType.display)
+                .foregroundStyle(CaptureColor.inkSoft)
+            Text("Nothing captured yet")
+                .font(CaptureType.title2)
+                .foregroundStyle(CaptureColor.ink)
+            Text("Captures from this visit gather here.")
+                .font(CaptureType.callout)
+                .foregroundStyle(CaptureColor.inkSoft)
+        }
+        .padding(24)
+    }
+}
+
+#if DEBUG
+#Preview {
+    let demo = RoutePreviewData.make()
+    return NavigationStack {
+        V1SessionTrayScreen(store: demo.store, coordinator: CaptureCoordinator())
+    }
+}
+#endif

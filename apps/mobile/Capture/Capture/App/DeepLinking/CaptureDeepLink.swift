@@ -27,6 +27,12 @@ enum CaptureDeepLink {
         }
     }
 
+    /// Drive a specific screen directly (launch-arg `-CaptureScreen <id>` and tests).
+    @MainActor
+    static func drive(screen id: CaptureScreenID, coordinator: CaptureCoordinator, store: CaptureStore) {
+        route(for: id, coordinator: coordinator, store: store)
+    }
+
     @MainActor
     private static func route(for id: CaptureScreenID, coordinator: CaptureCoordinator, store: CaptureStore) {
         // A representative specimen so detail/sheet screens have data to show.
@@ -58,8 +64,10 @@ enum CaptureDeepLink {
         case .u2LibrarySearch:  coordinator.navigate(to: .librarySearch)
         case .t1Settings:       coordinator.navigate(to: .settings)
         case .t2Account:        coordinator.navigate(to: .account)
-        case .o1Welcome, .o2Connect, .o3CameraPriming, .o4Ready:
-            break // onboarding is a phase, not a route
+        case .o1Welcome:       coordinator.onboardingStep = 0
+        case .o2Connect:       coordinator.onboardingStep = 1
+        case .o3CameraPriming: coordinator.onboardingStep = 2
+        case .o4Ready:         coordinator.onboardingStep = 3
         }
     }
 }

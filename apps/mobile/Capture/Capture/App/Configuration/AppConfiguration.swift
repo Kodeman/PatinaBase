@@ -24,4 +24,12 @@ public enum AppConfiguration {
     public static var isUITest: Bool {
         ProcessInfo.processInfo.arguments.contains("-CaptureUITest")
     }
+
+    /// `-CaptureScreen <suffix>` drives a screen on launch (deterministic sim/UITest
+    /// verification of the 32-screen matrix), e.g. `-CaptureScreen T1.settings`.
+    public static var initialScreenRaw: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-CaptureScreen"), i + 1 < args.count else { return nil }
+        return args[i + 1]
+    }
 }
