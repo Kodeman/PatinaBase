@@ -11,6 +11,7 @@ import { DecisionSheet } from '../overlays/DecisionSheet';
 import { CreateProjectSheet } from '../overlays/CreateProjectSheet';
 import { SettingsSheet } from '../overlays/SettingsSheet';
 import { AccountSheet } from '../overlays/AccountSheet';
+import { RecentCapturesSheet } from '../overlays/RecentCapturesSheet';
 
 function Placeholder({ label }: { label: string }) {
   const dispatch = useCaptureDispatch();
@@ -79,6 +80,8 @@ export function OverlayLayer() {
       return <SettingsSheet />;
     case 'T2':
       return <AccountSheet />;
+    case 'U1':
+      return <RecentCapturesSheet />;
     default:
       return null;
   }

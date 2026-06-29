@@ -21,6 +21,7 @@ import {
 } from '../lib/payloads';
 import { draftToProductPayload } from './draft';
 import { extensionEvents } from '../lib/analytics';
+import { addRecent, type RecentCapture } from '../lib/recent-captures';
 import type { DraftSlice, RoutingSlice } from './types';
 
 type ProductStatus = 'published' | 'draft';
@@ -133,6 +134,20 @@ function captureAnalytics(draft: DraftSlice, method: 'new' | 'update') {
   });
 }
 
+function recordRecent(
+  draft: DraftSlice,
+  productId: string,
+  target: RecentCapture['target']
+) {
+  void addRecent({
+    productId,
+    name: resolvedName(draft),
+    thumbnail: selectedImageUrls(draft)[0] ?? null,
+    capturedAt: new Date().toISOString(),
+    target,
+  });
+}
+
 // ─── Save effects (thin I/O) ──────────────────────────────────────────────────
 
 /** "Save to library" — products(status='published') + optional project + styles. */
@@ -161,6 +176,7 @@ export async function saveToLibrary(
       .from('product_styles')
       .insert(styleInserts(product.id, draft.styleIds, user.id));
   }
+  recordRecent(draft, product.id, 'library');
   captureAnalytics(draft, 'new');
   return product.id;
 }
@@ -189,6 +205,7 @@ export async function saveToInbox(
     .insert(buildCapturePayload(captureInput(draft, routing, user.id, product.id)));
   if (capErr) throw capErr;
 
+  recordRecent(draft, product.id, 'inbox');
   captureAnalytics(draft, 'new');
   return product.id;
 }
@@ -239,6 +256,7 @@ export async function saveAsDecision(
   if (notifyErr) {
     console.warn('saveAsDecision: notify_decision_required failed', notifyErr);
   }
+  recordRecent(draft, product.id, 'decision');
   captureAnalytics(draft, 'new');
   return product.id;
 }
@@ -291,6 +309,7 @@ export async function updateExisting(
       .from('product_styles')
       .insert(styleInserts(existingId, draft.styleIds, user.id));
   }
+  recordRecent(draft, existingId, 'update');
   captureAnalytics(draft, 'update');
   return existingId;
 }

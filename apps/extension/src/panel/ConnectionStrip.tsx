@@ -55,6 +55,14 @@ export function ConnectionStrip() {
           </button>
           <button
             type="button"
+            onClick={() => dispatch({ type: 'OPEN_OVERLAY', overlay: 'U1' })}
+            title="Recent captures"
+            className="font-mono text-[0.85rem] text-ink-soft hover:text-ink"
+          >
+            ◷
+          </button>
+          <button
+            type="button"
             onClick={() => dispatch({ type: 'OPEN_OVERLAY', overlay: 'T1' })}
             title="Settings"
             className="text-[0.95rem] text-ink-soft hover:text-ink"
