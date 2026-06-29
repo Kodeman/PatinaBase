@@ -212,6 +212,7 @@ export type CaptureAction =
   | { type: 'EXTRACTION_UNKNOWN' }
   | { type: 'EXTRACTION_ERROR'; error: string }
   | { type: 'MANUAL_START'; url: string }
+  | { type: 'SNAPSHOT_CAPTURED'; sourceUrl: string; imageUrl: string }
   | { type: 'VENDOR_EXTRACTED'; data: ExtractedVendorData }
   // draft editing
   | { type: 'FIELD_EDIT'; field: DraftFieldKey; value: DraftFieldValue }

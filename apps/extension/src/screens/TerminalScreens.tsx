@@ -104,10 +104,17 @@ export function ErrorScreen() {
         </button>
         <button
           type="button"
+          onClick={() => dispatch({ type: 'NAV', screen: 'R2' })}
+          className="rounded-md border border-line px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-ink-soft hover:border-ink-soft"
+        >
+          Snapshot
+        </button>
+        <button
+          type="button"
           onClick={() => dispatch({ type: 'MANUAL_START', url: currentUrl })}
           className="rounded-md border border-line px-4 py-2 font-mono text-[0.7rem] uppercase tracking-[0.08em] text-ink-soft hover:border-ink-soft"
         >
-          Add by hand
+          By hand
         </button>
       </div>
     </div>

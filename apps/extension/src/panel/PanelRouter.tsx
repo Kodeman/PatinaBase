@@ -4,6 +4,7 @@ import { ExtractingScreen } from '../screens/ExtractingScreen';
 import { RecordScreen } from '../screens/RecordScreen';
 import { SavedScreen, InboxSavedScreen, ErrorScreen } from '../screens/TerminalScreens';
 import { VendorScreen } from '../screens/VendorScreen';
+import { SnapshotScreen } from '../screens/SnapshotScreen';
 import { ImageSelectSheet } from '../overlays/ImageSelectSheet';
 import { InsightSheet } from '../overlays/InsightSheet';
 import { DecisionSheet } from '../overlays/DecisionSheet';
@@ -42,7 +43,7 @@ export function PanelRouter() {
     case 'vendor':
       return <VendorScreen />;
     case 'R2':
-      return <Placeholder label="Snapshot fallback" />;
+      return <SnapshotScreen />;
     case 'R3':
       return <Placeholder label="Add by hand" />;
     case 'R4':

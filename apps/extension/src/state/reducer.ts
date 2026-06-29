@@ -183,6 +183,23 @@ export function captureReducer(
         io: { ...state.io, isExtracting: false, error: null },
       };
 
+    case 'SNAPSHOT_CAPTURED':
+      return {
+        ...state,
+        draft: {
+          ...emptyDraft(action.sourceUrl),
+          captureKind: 'snapshot',
+          snapshotUrl: action.imageUrl,
+          images: {
+            all: [{ url: action.imageUrl, score: 100, width: 0, height: 0, alt: '' }],
+            selected: [0],
+            variant: null,
+          },
+        },
+        nav: { ...state.nav, screen: 'C2', overlay: null },
+        io: { ...state.io, isExtracting: false, error: null },
+      };
+
     case 'VENDOR_EXTRACTED':
       return {
         ...state,
