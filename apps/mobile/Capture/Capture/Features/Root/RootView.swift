@@ -12,6 +12,11 @@ import CaptureKit
 struct RootView: View {
     @Environment(AppContainer.self) private var container
     @State private var coordinator = CaptureCoordinator()
+    /// Flips true once `ScreenRegistry.registerAll` has run in `.task`. Because
+    /// `RouteRegistry.hasRoute(...)` is a plain lookup (not observable), the root
+    /// would otherwise render the static placeholder once and never swap to the
+    /// real viewfinder. This @State makes `rootContent` re-evaluate post-register.
+    @State private var registered = false
 
     var body: some View {
         @Bindable var coord = coordinator
@@ -33,6 +38,7 @@ struct RootView: View {
         }
         .task {
             ScreenRegistry.registerAll(container: container, coordinator: coordinator)
+            registered = true
             if let raw = AppConfiguration.initialScreenRaw,
                let id = CaptureScreenID.allCases.first(where: { $0.rawValue.hasSuffix(raw) }) {
                 CaptureDeepLink.drive(screen: id, coordinator: coordinator, store: container.store)
@@ -44,7 +50,9 @@ struct RootView: View {
     }
 
     @ViewBuilder private var rootContent: some View {
-        if RouteRegistry.shared.hasRoute(.viewfinder) {
+        // `registered` is read first so this recomputes once registration runs;
+        // the placeholder is only the pre-registration / graceful-fallback state.
+        if registered, RouteRegistry.shared.hasRoute(.viewfinder) {
             RouteRegistry.shared.view(for: .viewfinder)
         } else {
             ViewfinderPlaceholder()
