@@ -2609,4 +2609,20 @@ Directed by Kody (design authority) from a self-contained restyle spec. (R71 is 
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R70 (+R68.1) · R72 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = R72*
+## The Document — the parity re-sweep — 2026-07-01
+
+### I43 · The v2 parity ledger — re-sweep + adversarial verify + live walk
+
+The 2026-06-14 gap matrix had been overtaken by Tracks 4–6, the People Room, the Decision Composer, the Piece, the watch view and the Account sheet. Re-verified all 200 baseline rows (+2 route-delta stubs, +33 Document-native) against HEAD `03537b18` @ migration 00235 with a 23-agent workflow — 10 zone claim agents (three evidence legs per row: surface `file:line` · doorway traced from /desk · data parity) → 10 adversarial verifiers (falsify upgrades, sweep every FULL doorway, audit XFRM sanctions against the ruling index, 25% spot-check) → merge — then a 22-station live Chrome walk (designer@patina.dev, db reset @00235 + demo seeds + new `scripts/the-document-reaudit-walk-seed.sql`).
+
+**Result: FULL 66 · PART 50 · XFRM 51 · ABSENT 33 · RETIRED 2 (+33 NATIVE)** vs the baseline 47/53/14/86. ABSENT collapsed 86→33 — mostly into sanctioned XFRM (14→51). 224 verdicts CONFIRMED, **11 OVERTURNED — every one a downgrade of an over-optimistic claim** (incl. PRJ-01 XFRM→PART: the I7 signed-folder safety net has no activation act; PRC-24: OrderAssistant mounts single-line only; RMS-05, CRM-01, LIB-27 depth caps). Priorities over PART+ABSENT: **P0 6 · P1 39 · P2 38** — the six P0s cluster in exactly two places: **invoice authoring/settlement** (BIL-02 record-payment, BIL-03 line kinds — 00204 drafts header-only invoices, BIL-04 unbilled-time pull-through — the Hours "Export week → Accounts" button is a disabled stub, BIL-05 FF&E-line invoicing, BIL-09 invoice detail acts) and **vendor creation** (PRC-03 — no create-vendor door while the line unfold blocks ordering without one). 45 rows carry drafted ruling questions.
+
+**The walk confirmed the core loop is real** (capture→triage→discovery→drafting→watch→coordination-cascade→FF&E/PO→receiving→chase→hours→People, one-act-many-surfaces held throughout) **and found three P0-grade breaks in the newest funnel**: F2 — Discovery's `project_type` select never persists and the UI ready-gate disagrees with `begin_direction_from_discovery` (00224), dead-ending every new lead at "Begin the Direction"; F7 — the send sheet's ClientPicker silently refuses no-account households (`linkable` gate), so discovery-born proposals cannot be sent (needs a ruling: the no-login send path); F10 — `proposal-watch.tsx` renders "Signed — the project is open." with no existence check and no act. Plus P1/P2: dead `/doc/{leadId}` after accept, budget cents/dollars corruption ("budget 6–850"), self-save keystroke races, flaky Drafting Room doorway button, "New client" titles, toast-shaped errors against D2 (needs an error-grammar ruling).
+
+**Artifacts:** `portal-vs-desk-feature-gap-matrix-v2.md` (+ `.rows.json`, `.html`) · `the-document-parity-backlog-2026-07.md` (the P0+P1 build queue: funnel repair first, then Tracks 7–11 + the Post) · `the-document-needs-ruling-2026-07.md` (45+2 questions, rulings resume at R73) · `the-document-reaudit-walk-2026-07.md` · run data `.claude/runs/parity-reaudit/`. The 2026-06-14 matrix is banner-frozen as the baseline.
+
+⚠ Owed / provisional: screenshots in-conversation only (standing `save_to_disk` constraint); prod catch-up 00230–00235 + `proposal-nudge` fn blocked on LAN access to the prod box; spec v1.7 fold still owed (now R61–R72 + this re-sweep); first workflow run lost its inventory agent to a connection drop — the workflow script was retry-hardened and re-run (23/23 agents, zero errors).
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I43 · R1–R70 (+R68.1) · R72 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = I43 (rulings still end at R72)*

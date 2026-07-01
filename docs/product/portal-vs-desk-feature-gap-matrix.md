@@ -1,5 +1,8 @@
 # Feature Gap Matrix — `/portal` (legacy zones) vs `/desk` (The Document)
 
+> **⛔ SUPERSEDED — frozen baseline.** Re-verified 2026-07-01; replaced by `portal-vs-desk-feature-gap-matrix-v2.md` (canonical copy in `docs/design/the-document/`). Plan from v2.
+
+
 _Designer Portal · generated 2026-06-14 · source-verified by a 19-agent codebase sweep_
 
 > **Companion artifact:** `portal-vs-desk-feature-gap-matrix.html` (same data, presentable deck).
