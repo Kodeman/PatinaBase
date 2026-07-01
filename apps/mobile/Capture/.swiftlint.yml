@@ -1,0 +1,34 @@
+# SwiftLint config for Patina Field Capture.
+# Token ratchet: design values come from CaptureKit/Design, never raw hex/system
+# colours in feature code. Ported from the existing app's custom_rules.
+
+included:
+  - Capture
+  - CaptureKit
+  - CaptureKitMocks
+excluded:
+  - Capture.xcodeproj
+  - CaptureKit/CaptureKit/Resources
+
+custom_rules:
+  raw_hex_color:
+    name: "Raw hex color"
+    regex: 'Color\(hex:\s*0x'
+    match_kinds: [identifier, argument]
+    message: "Use a CaptureColor token, not a raw Color(hex:). (Design layer only.)"
+    severity: warning
+    # The token definitions themselves live in CaptureKit/Design — exclude there.
+  untokenized_font:
+    name: "Untokenized Font.custom"
+    regex: 'Font\.custom\('
+    message: "Use a CaptureType token, not an inline Font.custom."
+    severity: warning
+
+disabled_rules:
+  - todo
+  - line_length
+  - type_body_length
+  - file_length
+
+identifier_name:
+  min_length: 1

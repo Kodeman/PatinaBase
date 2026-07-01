@@ -2584,6 +2584,29 @@ The Library Room (R32/R39) let you browse three shelves, but tapping a `LibraryC
 - The **studio** path renders the sourcing bundle with soft "studio needs" hints, but no studio rows are seeded locally to walk it; logic is the same surface, verified by review.
 - Screenshots captured in-conversation only (env `save_to_disk` constraint).
 
+## The Document — Desk light restyle (the Folio, the white dock) — 2026-06-27
+
+### R72 · The Desk goes to light paper — off-white surface, the lift-on-pickup folio, the white dock
+
+Directed by Kody (design authority) from a self-contained restyle spec. (R71 is the proposal-watch work in the project log; this file had not carried it, so the restyle takes R72.) The Desk (home) moves off the dark charcoal surface onto **light Patina paper** — keeping the "job document you can pick up" metaphor (the **Folio**) but trading flat stacked-paper-on-charcoal for off-white paper, hairline borders, and typographic hierarchy. The shared **Studio Drawer** (dock) moves from charcoal to a white 60px bar. Built against existing tokens only (no invented values). This **reverses two locked decisions** for the Desk + dock surfaces; logged here per the workstream's append-on-deviation rule.
+
+**1 — Charcoal Desk → off-white `#FAF7F2`** (reverses §10 + the `(document)/layout` "the charcoal surface is the desk itself"). The `(document)` layout now paints `--bg-primary`. The open document is unaffected: `/doc/[id]` already paints its own `--doc-paper` full-bleed, which occluded the layout charcoal anyway. The **doc-view restyle is explicitly out of scope** (a follow-up); only the shared chrome (dock, LogStrip) crosses into it, and white-dock / light-strip over doc-paper reads clean.
+
+**2 — D4 (zero shadows) relaxed for exactly two surfaces.** The folio's pickup affordance — `translateY(-10px)` + a drop-shadow growing `0 2px 4px /0.06` → `0 22px 34px /0.18` on hover, `translateY(-4px)` on press, `grab`/`grabbing` cursors — and the dock's hairline surface. Implemented as a **CSS class (`.folio-face`) in `globals.css`**, gated to `prefers-reduced-motion: no-preference`, so the **D4 lint stays unchanged and still bans every shadow literal in TSX** (the ESLint `no-restricted-syntax` selectors only scan TSX string/template literals). Reduced-motion users get a still, shadowless folio. Amends O4/R3 (shadows were overlay-motion-only).
+
+**3 — The folio tab is type-only; R15 fill-state leaves it.** The old tab carried a `StrataMark fill` (R15 "how far along"). The restyle's tab is a **status-colored fill + a DM Mono uppercase label** (`SURNAME · SECTION`, white ink), no mark — type does the work. The fill-state indicator is gone from the Desk folio (it survives on the spine / inside the document). **Flag for Leah:** if she misses the at-a-glance "how far" on the Desk, the cheapest restore is a thin fill bar under the tab.
+
+**4 — Stamp → dot+mono StatusChip on the folio.** The rotated ink `Stamp` (−1.5°, bordered) is replaced on the folio face by a quiet **6px status-dot + DM Mono label** (`StatusChip`) — no pills, no rotation. The `Stamp` is retained inside the document view. New folio sheet tints `--doc-sheet-front #F7F2EB` / `--doc-sheet-back #F1EBE2`; folio body is white (`--bg-surface`) over the prior `--doc-paper`.
+
+**5 — The white dock (shared chrome).** 60px, `--bg-surface`, hairline top border. Left: the **Patina wordmark** (Playfair, `0.2em`, → `/desk`) + a quiet breadcrumb. Center: the five room doors with **Lucide** icons (1.5px), Clay-6% hover, a 2px Clay active underline (per-door correct — matched by href, not the generic `isRoomPath`). Right: the in-hand readout (**"Hands free"** off a document; the day's minutes inside one), a **notification bell** (`Bell` + a Clay dot from `useUnreadInboxCount`, → `/portal/inbox`), and the **identity nameplate** (restyled light) opening the existing `AccountSheet` (per Kody — no new upward popover this pass). `DoorwayTick` and the per-book spine bars retire. The dock renders ≥980px (MobileBar below); no horizontal overflow at 980.
+
+**Provisional / to confirm with Leah.**
+- White tab ink on the lighter status hues (terracotta / clay / golden) is low-contrast for the small mono label — spec-mandated white; revisit if it reads poorly.
+- Bell destination `/portal/inbox` leaves the document model (no doc-model inbox surface exists yet) — provisional.
+- Folio meta line keeps **Section · Phase** (the Desk read model carries no location/budget for the mockup's "Wauwatosa · $15k–$25k").
+
+**Verified.** designer-portal type-check clean for all restyle files (the only `tsc` errors are pre-existing `packages/email` React 18/19 `@types` JSX noise); ESLint clean on the changed set — **the D4 shadow ban stays green** (no shadow literal in TSX). Live Chrome walk: [pending].
+
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R70 (+R68.1) · L1–L4 · THE GO · FLIP CONFIRMED · last id = R70*
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I42 · R1–R70 (+R68.1) · R72 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = R72*

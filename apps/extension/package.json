@@ -13,15 +13,16 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@plasmohq/storage": "^1.15.0",
     "@patina/catalog-ui": "workspace:*",
     "@patina/shared": "workspace:*",
+    "@plasmohq/storage": "^1.15.0",
     "@supabase/supabase-js": "^2.43.0",
     "plasmo": "^0.90.5",
     "posthog-js": "^1.356.1",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "tesseract.js": "^7.0.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
@@ -39,6 +40,13 @@
     "typescript": "^5.4.0",
     "vitest": "^4.0.17"
   },
+  "alias": {
+    "react": "./node_modules/react/index.js",
+    "react-dom": "./node_modules/react-dom/index.js",
+    "react/jsx-runtime": "./node_modules/react/jsx-runtime.js",
+    "react/jsx-dev-runtime": "./node_modules/react/jsx-dev-runtime.js",
+    "react-dom/client": "./node_modules/react-dom/client.js"
+  },
   "manifest": {
     "permissions": [
       "activeTab",
@@ -52,6 +60,24 @@
     "host_permissions": [
       "https://*/*",
       "http://*/*"
+    ],
+    "commands": {
+      "capture-product": {
+        "suggested_key": {
+          "default": "Ctrl+Shift+S",
+          "mac": "Command+Shift+S"
+        },
+        "description": "Capture the current page with Patina"
+      }
+    },
+    "content_security_policy": {
+      "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+    },
+    "web_accessible_resources": [
+      {
+        "resources": ["tesseract/*"],
+        "matches": ["<all_urls>"]
+      }
     ]
   }
 }

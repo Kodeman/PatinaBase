@@ -1,0 +1,10 @@
+# Secrets (real anon key) — copy Secrets.example.swift → Secrets.swift
+Capture/App/Configuration/Secrets.swift
+
+# Xcode user state / build
+*.xcuserdatad
+xcuserdata/
+.build/
+DerivedData/
+*.xcscmblueprint
+*.xccheckout

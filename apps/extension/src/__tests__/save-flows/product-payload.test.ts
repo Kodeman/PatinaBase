@@ -12,6 +12,8 @@ const PRODUCTS_COLUMNS = new Set([
   'category', 'subcategory', 'tags', 'lead_time_weeks',
   // 00015 product colors
   'primary_color', 'secondary_colors',
+  // 00152 three-layer catalog
+  'layer', 'owner_user_id',
 ]);
 
 function makeExtractedData(overrides: Partial<ExtractedProductData> = {}): ExtractedProductData {

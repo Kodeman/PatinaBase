@@ -1,24 +1,44 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..500&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --bg-primary: #FAF7F2;
-  --bg-surface: #FFFFFF;
-  --bg-hover: rgba(196, 165, 123, 0.06);
-  --text-primary: #2C2926;
-  --text-body: #5C4A3C;
-  --text-muted: #8B7355;
-  --accent-primary: #C4A57B;
-  --border-default: #E5E2DD;
-  --border-subtle: rgba(229, 226, 221, 0.6);
+  /* ── Patina capture palette (T-01) ───────────────────────────────────── */
+  --ink: #211e18;
+  --ink-2: #3c382f;
+  --ink-soft: #6b6555;
+  --paper: #e7e5db;
+  --paper-2: #dedbcf;
+  --paper-3: #f1efe7;
+  --line: rgba(33, 30, 24, 0.16);
+  --line-2: rgba(33, 30, 24, 0.3);
+  --verdigris: #3c7c6c; /* verified / success / primary action */
+  --verdigris-2: #5ba68f;
+  --verdigris-ink: #22463d;
+  --brass: #a07c38; /* trade / decision */
+  --brass-2: #c7a052;
+  --rust: #9a5a3e; /* error / missing / friction */
+  --rust-2: #b97a56;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* Legacy aliases — kept so unmigrated components still resolve. */
+  --bg-primary: var(--paper);
+  --bg-surface: #ffffff;
+  --bg-hover: rgba(160, 124, 56, 0.06);
+  --text-primary: var(--ink);
+  --text-body: var(--ink-2);
+  --text-muted: var(--ink-soft);
+  --accent-primary: var(--verdigris);
+  --border-default: var(--line);
+  --border-subtle: var(--line);
 }
 
-/* Apply Inter as default body font */
 body {
-  font-family: 'Inter', system-ui, sans-serif;
-  color: var(--text-primary);
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }

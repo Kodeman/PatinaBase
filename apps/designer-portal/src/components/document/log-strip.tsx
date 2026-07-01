@@ -72,12 +72,12 @@ export function LogStrip() {
     <div
       role="status"
       aria-label="Log time offer"
-      className="fixed inset-x-0 bottom-[56px] z-50 flex flex-wrap items-center justify-center gap-2.5 border-t border-[rgba(196,165,123,0.4)] bg-[#332e29] px-4 py-2 min-[980px]:bottom-[42px]"
+      className="fixed inset-x-0 bottom-[56px] z-50 flex flex-wrap items-center justify-center gap-2.5 border-t border-[var(--color-clay)] bg-[var(--bg-warm)] px-4 py-2 min-[980px]:bottom-[60px]"
     >
-      <p className="text-[12px] text-[rgba(250,247,242,0.8)]">
-        <strong className="font-medium text-[var(--color-pearl)]">{offer.projectName}</strong> was
+      <p className="text-[12px] text-[var(--text-body)]">
+        <strong className="font-medium text-[var(--text-primary)]">{offer.projectName}</strong> was
         in hand for{' '}
-        <strong className="font-medium text-[var(--color-pearl)]">
+        <strong className="font-medium text-[var(--text-primary)]">
           {fmtMinutes(offer.suggestedMinutes)}
         </strong>{' '}
         — log
@@ -86,7 +86,7 @@ export function LogStrip() {
         type="number"
         min={1}
         aria-label="Minutes to log"
-        className="w-[72px] rounded-[4px] border border-[rgba(250,247,242,0.2)] bg-transparent px-2 py-1 text-[12px] text-[var(--color-off-white)] focus:border-[var(--color-clay)] focus:outline-none"
+        className="w-[72px] rounded-[4px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-2 py-1 text-[12px] text-[var(--text-primary)] focus:border-[var(--color-clay)] focus:outline-none"
         value={minutes}
         onChange={(e) => setMinutes(e.target.value)}
         onKeyDown={(e) => {
@@ -95,7 +95,7 @@ export function LogStrip() {
       />
       <select
         aria-label="Activity"
-        className="rounded-[4px] border border-[rgba(250,247,242,0.2)] bg-transparent px-2 py-1 text-[12px] text-[var(--color-off-white)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--color-charcoal)]"
+        className="rounded-[4px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-2 py-1 text-[12px] text-[var(--text-primary)] focus:border-[var(--color-clay)] focus:outline-none"
         value={activity}
         onChange={(e) => setActivity(e.target.value)}
       >
@@ -106,14 +106,14 @@ export function LogStrip() {
         ))}
       </select>
       {adjusted && (
-        <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)]">
+        <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           adjusted from {fmtMinutes(offer.suggestedMinutes)}
         </span>
       )}
       {/* D10: idle is annotated, never trimmed — the designer decides if the
           quiet minutes were work. */}
       {idleAnnotation(offer.idleSeconds) && (
-        <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)]">
+        <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
           {idleAnnotation(offer.idleSeconds)}
         </span>
       )}
@@ -136,7 +136,7 @@ export function LogStrip() {
           });
           void discardOffer();
         }}
-        className="rounded-[4px] border border-[rgba(250,247,242,0.25)] px-3 py-1 text-[12px] text-[rgba(250,247,242,0.75)] hover:border-[var(--color-clay)]"
+        className="rounded-[4px] border border-[var(--border-default)] px-3 py-1 text-[12px] text-[var(--text-body)] hover:border-[var(--color-clay)]"
       >
         Discard
       </button>
