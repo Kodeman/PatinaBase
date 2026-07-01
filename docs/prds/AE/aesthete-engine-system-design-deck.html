@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Aesthete Engine™ — System Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bone:#F1EBDE; --paper:#FBF8F1; --ink:#2A2521; --ink-soft:#5C534A; --ink-faint:#8A8074;
+    --brass:#A67C34; --brass-deep:#8A6526; --sage:#7B8A67; --clay:#9C5B3B;
+    --line:rgba(42,37,33,0.14); --line-strong:rgba(42,37,33,0.26);
+    --serif:"Fraunces",Georgia,"Times New Roman",serif;
+    --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bone);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;overflow:hidden}
+  .deck{position:fixed;inset:0}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:6vh 7vw;opacity:0;visibility:hidden;transform:translateY(14px);
+    transition:opacity .5s ease,transform .5s ease,visibility .5s;overflow-y:auto}
+  .slide.active{opacity:1;visibility:visible;transform:none}
+  .slide-inner{width:100%;max-width:1120px;margin:0 auto}
+  .eyebrow{font-size:.72rem;font-weight:600;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--brass-deep);margin-bottom:1.2rem;display:flex;align-items:center;gap:.7rem}
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--brass)}
+  h1{font-family:var(--serif);font-weight:500;line-height:1.02;letter-spacing:-.01em}
+  h2{font-family:var(--serif);font-weight:500;font-size:clamp(1.7rem,3.6vw,2.7rem);line-height:1.06;letter-spacing:-.01em;margin-bottom:1.1rem}
+  h2 em{font-style:italic;color:var(--clay)}
+  .lede{font-size:clamp(.98rem,1.5vw,1.18rem);line-height:1.55;color:var(--ink-soft);max-width:64ch}
+  p{line-height:1.5}
+  .accent{color:var(--brass-deep);font-weight:600}
+  .sage{color:var(--sage)}
+  .clayc{color:var(--clay)}
+  .pill{display:inline-block;border:1px solid var(--line-strong);border-radius:100px;
+    padding:.34rem .9rem;font-size:.72rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--brass-deep);background:rgba(166,124,52,.06)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:2rem;align-items:start}
+  .cols-3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+  .stack>*+*{margin-top:.9rem}
+  .muted{color:var(--ink-soft)}
+  .faint{color:var(--ink-faint)}
+  .big-num{font-family:var(--serif);font-size:1.3rem;color:var(--brass);font-weight:600}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:1.05rem 1.15rem}
+  .card h3{font-size:.92rem;font-weight:600;margin-bottom:.35rem;display:flex;align-items:center;gap:.5rem}
+  .card p{font-size:.84rem;color:var(--ink-soft);line-height:1.5}
+  .card .tag{margin-left:auto;font-size:.6rem;font-weight:700;letter-spacing:.08em;color:var(--brass-deep);
+    border:1px solid var(--line-strong);border-radius:6px;padding:.1rem .38rem;white-space:nowrap}
+  .card.hl{border-color:var(--clay);background:rgba(156,91,59,.05)}
+  .card.hl h3{color:var(--clay)}
+  .card.sg{border-color:var(--sage);background:rgba(123,138,103,.06)}
+  .card.sg h3{color:var(--sage)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--brass);flex:none}
+  .dot.sage{background:var(--sage)} .dot.clay{background:var(--clay)}
+  .code{font-family:var(--mono);font-size:.76rem;line-height:1.55;background:var(--paper);
+    border:1px solid var(--line);border-radius:12px;padding:.9rem 1.1rem;color:var(--ink);
+    white-space:pre;overflow-x:auto}
+  .code .c{color:var(--ink-faint)} .code .k{color:var(--clay)} .code .s{color:var(--sage)} .code .b{color:var(--brass-deep)}
+  .formula{font-family:var(--serif);font-size:clamp(1rem,1.9vw,1.45rem);text-align:center;line-height:1.6;color:var(--ink)}
+  .formula .w{color:var(--clay);font-style:italic}
+  .formula .hs{color:var(--sage)}
+  .formula .dg{color:var(--brass-deep)}
+  table.spec{width:100%;border-collapse:collapse;font-size:.8rem}
+  table.spec th{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--brass-deep);
+    text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--line-strong)}
+  table.spec td{padding:.42rem .6rem;border-bottom:1px solid var(--line);color:var(--ink-soft);vertical-align:top}
+  table.spec td b{color:var(--ink);font-weight:600}
+  table.spec tr:last-child td{border-bottom:none}
+  table.spec .num{font-family:var(--mono);font-size:.78rem;color:var(--ink);white-space:nowrap}
+  .loop{display:flex;gap:1rem;align-items:flex-start;padding:.6rem 0;border-bottom:1px solid var(--line)}
+  .loop:last-child{border-bottom:none}
+  .loop .n{font-family:var(--serif);font-size:1.05rem;color:var(--brass);font-weight:600;flex:none;width:1.4rem}
+  .loop .t{font-size:.87rem}
+  .loop .t b{font-weight:600}
+  .loop .arrow{color:var(--sage);font-weight:600}
+  .phase{border:1px solid var(--line);border-radius:14px;padding:1rem 1.1rem;background:var(--paper)}
+  .phase.mvp{border-color:var(--brass);background:rgba(166,124,52,.05)}
+  .phase h3{font-family:var(--serif);font-size:1.08rem;font-weight:600;margin-bottom:.6rem;display:flex;align-items:center;gap:.5rem}
+  .phase ul{list-style:none}
+  .phase li{font-size:.8rem;color:var(--ink-soft);line-height:1.45;padding-left:1.05rem;position:relative;margin-bottom:.4rem}
+  .phase li::before{content:"○";position:absolute;left:0;color:var(--ink-faint);font-size:.68rem;top:.14rem}
+  .phase.mvp li::before{content:"★";color:var(--brass)}
+  .star{color:var(--brass)}
+  .two-list{columns:2;column-gap:2.2rem}
+  .two-list .item{break-inside:avoid;margin-bottom:.9rem}
+  .two-list h3{font-size:.88rem;font-weight:600;margin-bottom:.22rem;display:flex;gap:.5rem;align-items:center}
+  .two-list p{font-size:.8rem;color:var(--ink-soft);line-height:1.45}
+  .why{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.6rem}
+  .why span{font-size:.76rem;background:var(--paper);border:1px solid var(--line);border-radius:100px;padding:.3rem .75rem;color:var(--ink-soft)}
+  .title h1{font-size:clamp(2.4rem,6vw,4.6rem)}
+  .title .tm{font-size:.4em;vertical-align:super;color:var(--brass);font-weight:400}
+  .title .sub{font-family:var(--serif);font-style:italic;font-size:clamp(1.15rem,2.2vw,1.7rem);color:var(--clay);margin-top:1.1rem}
+  .title .meta{margin-top:2.2rem;display:flex;gap:1.5rem;flex-wrap:wrap;font-size:.8rem;color:var(--ink-faint)}
+  .title .meta b{color:var(--ink-soft);font-weight:600}
+  .nav{position:fixed;bottom:22px;right:26px;display:flex;align-items:center;gap:14px;z-index:50}
+  .nav button{width:38px;height:38px;border-radius:50%;border:1px solid var(--line-strong);
+    background:var(--paper);color:var(--ink);cursor:pointer;font-size:1rem;
+    display:flex;align-items:center;justify-content:center;transition:.2s}
+  .nav button:hover{background:var(--brass);color:var(--paper);border-color:var(--brass)}
+  .counter{font-size:.8rem;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+  .counter b{color:var(--ink)}
+  .progress{position:fixed;top:0;left:0;height:3px;background:var(--brass);z-index:60;transition:width .5s ease}
+  .dots{position:fixed;bottom:26px;left:26px;display:flex;gap:6px;z-index:50;flex-wrap:wrap;max-width:40vw}
+  .dots i{width:7px;height:7px;border-radius:50%;background:var(--line-strong);cursor:pointer;transition:.2s}
+  .dots i.on{background:var(--brass);transform:scale(1.25)}
+  .hint{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);font-size:.72rem;color:var(--ink-faint);z-index:40}
+  .kbd{border:1px solid var(--line-strong);border-radius:4px;padding:.05rem .35rem;font-size:.68rem}
+  @media (max-width:760px){.cols,.cols-3{grid-template-columns:1fr}.two-list{columns:1}.slide{padding:7vh 6vw}.hint{display:none}}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="deck" id="deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide title active">
+    <div class="slide-inner">
+      <div class="pill">Designer-Taught Intelligence · System Design</div>
+      <h1 style="margin-top:1.3rem">The Aesthete Engine<span class="tm">™</span></h1>
+      <div class="sub">The engine is the database.</div>
+      <p class="lede" style="margin-top:1.5rem">The complete engineering design — one shared aesthetic space for products, clients &amp; designers, built Supabase-first on the infrastructure Patina actually runs.</p>
+      <div class="meta">
+        <span><b>Patina</b> · Engineering</span>
+        <span>Designs to: aesthete-engine-product-brief.md</span>
+        <span>v1.0 · July 2026</span>
+        <span>Full detail: aesthete-engine-system-design.md</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · FIVE DECISIONS -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The shape of the design</div>
+      <h2>Five decisions <em>everything else follows from</em></h2>
+      <div class="cols-3" style="margin-top:.6rem">
+        <div class="card"><h3><span class="dot"></span>One 768-d shared space</h3><p>nomic-embed <b>text + vision v1.5</b> aligned pair (Apache-2.0, CPU-viable). Quiz answers, product photos, portfolios and asks — one cosine. Keeps every existing vector(768) column and all five 00008 RPCs.</p></div>
+        <div class="card hl"><h3><span class="dot clay"></span>The hot path is pure SQL</h3><p>Quiz → top-10 makes <b>zero inference calls</b>. Quiz imagery pre-embedded; client vector assembled in-DB from anchors; matching is one RPC. Inference down = non-event for the demo.</p></div>
+        <div class="card"><h3><span class="dot"></span>Taste is ~94 readable numbers</h3><p>Bradley–Terry preference weights over an <b>interpretable basis</b> — not a raw-768 vector 300 judgments could never train. Makes "Your Eye" readable and deviation-from-house free.</p></div>
+        <div class="card"><h3><span class="dot"></span>Scores &amp; vectors never fight</h3><p>Embeddings are immutable model outputs. Designer edits flow through a deterministic <b>caption re-embed</b>; spectrums are their own scoring channel — sliders change matches instantly.</p></div>
+        <div class="card"><h3><span class="dot"></span>One new runtime piece</h3><p>A slim stateless <b>ONNX inference worker</b> for ingestion-time embeddings. Everything else: Postgres RPCs, Deno edge fns on the existing pg_cron bridge, one shared quiz package.</p></div>
+        <div class="card sg"><h3><span class="dot sage"></span>And one deletion</h3><p>The never-deployed Python service dies. Salvage: scoring-weight priors, MMR diversifier, rule-predicate schema, the score-breakdown shape. Its mocks, dim bug &amp; OpenSearch stub die with it.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · REALITY CHECK -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Reality check · verified 2026-07-01</div>
+      <h2>The codebase is further along <em>than the brief assumes</em></h2>
+      <div class="cols" style="margin-top:.6rem">
+        <div class="stack">
+          <div class="card sg"><h3>Already shipped — build on it</h3><p>The <b>six spectrums are a live table</b> (product_style_spectrum, −1..1, with calibration anchors). Full teaching system: queue auto-trigger, sessions, 3-touch validations, portal UI with the 6-slider deep editor. A <b>quiz→recs path already serves iOS</b> (process_style_quiz + get_recommendations — signatures frozen). A behavioral stream already flows (interactions → engagement_events). Three-layer catalog RLS + the v_aesthete_*_input read-contract views.</p></div>
+          <div class="card hl"><h3>Half-wired — finish it</h3><p>products.embedding vector(768) exists but <b>nothing generates it</b> (the hooks point at routes that don't exist). aesthete_vector vector(1536) is unindexed, unpopulated — free to re-type. Spectrums unpopulated. designer_teaching_stats.accuracy_score has readers but <b>no writer</b>.</p></div>
+        </div>
+        <div class="stack">
+          <div class="card"><h3>Aspirational — decide honestly</h3><p><b>No Typesense, Qdrant, or OpenSearch exists anywhere</b> — the brief's "Typesense alongside" is doc-ware. Decision: Postgres FTS (already live) behind a single <span class="accent">aesthete_search() seam</span> Typesense can replace in Phase 2 without touching callers.</p></div>
+          <div class="card"><h3>The constraints that bind</h3><p>Single Coolify host, <b>no GPU</b>. Redis capped at 256 MB. pg_cron → edge-function bridge with a 60-second window. Product law from The Document: engine-as-presence, de-gamified, <b>"Designer-Taught Intelligence" — never "AI."</b></p></div>
+          <div class="card"><h3>Scale honesty</h3><p>Products 10³–10⁴ · clients 10³ · designers 10¹ · judgments 10³–10⁴. The whole vector working set fits in shared_buffers. Design for these numbers; keep seams for 10×.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · THE SPACE -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The aesthetic space</div>
+      <h2>Every entity is <em>one aesthetic point</em></h2>
+      <div class="code" style="margin-top:.4rem">A = ( <span class="b">v</span>,  <span class="b">s</span>,  <span class="b">c</span>,  <span class="b">a</span>,  <span class="b">m</span>,  <span class="b">β</span> )
+      <span class="c">│   │   │   │   │   └─ budget posture (clients only — never a taste feature)</span>
+      <span class="c">│   │   │   │   └───── material affinities {wood: .8, metal: .2, …}</span>
+      <span class="c">│   │   │   └───────── archetype weights over the 12 seeded styles</span>
+      <span class="c">│   │   └───────────── per-dimension confidence ∈ [0,1]⁶</span>
+      <span class="c">│   └───────────────── six spectrums ∈ [−1,1]⁶ — the shipped table</span>
+      <span class="c">└───────────────────── unit dense vector ∈ S⁷⁶⁷ (nomic v1.5 space)</span></div>
+      <div class="cols-3" style="margin-top:1.1rem">
+        <div class="card"><h3>Products</h3><p><span class="accent">v = normalize(0.65·mean(images) + 0.35·caption)</span> — the caption is a deterministic template from DNA fields, not retailer SEO text. Canonical spectrums stay designer-owned.</p></div>
+        <div class="card"><h3>Clients</h3><p>Assembled in SQL: chosen quiz-image embeddings (pre-computed) blended 50/50 with archetype centroids. <b>No model in the loop.</b></p></div>
+        <div class="card"><h3>Designers &amp; house</h3><p>Portfolio <b>geometric median</b> seeds v_D; judgments refine θ_D nightly. House = curated exemplar centroid, then earned consensus.</p></div>
+      </div>
+      <p class="muted" style="font-size:.82rem;margin-top:1rem">Category dominance (CLIP sees <em>what</em>, not <em>how it reads</em>) is neutralized by category-conditioned matching + the fused caption now, and a learned 768→64 <span class="accent">style projection</span> in Phase 2 — which also makes "slider nudges the vector" real via concept directions.</p>
+    </div>
+  </section>
+
+  <!-- 5 · TOPOLOGY -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">System overview</div>
+      <h2>Topology: <em>Postgres at the center</em></h2>
+      <div class="space-diagram" style="display:flex;justify-content:center;margin-top:.3rem">
+        <svg viewBox="0 0 880 360" width="100%" style="max-width:880px">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8A8074"/>
+            </marker>
+          </defs>
+          <!-- center: postgres -->
+          <rect x="300" y="90" width="280" height="180" rx="16" fill="#FBF8F1" stroke="#A67C34" stroke-width="1.5"/>
+          <text x="440" y="118" text-anchor="middle" font-family="Fraunces,serif" font-size="17" fill="#2A2521">Supabase Postgres</text>
+          <text x="440" y="140" text-anchor="middle" font-family="Inter" font-size="11" fill="#8A6526">the engine</text>
+          <text x="440" y="165" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10.5" fill="#5C534A">submit_style_quiz · get_aesthete_matches</text>
+          <text x="440" y="183" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10.5" fill="#5C534A">taste θ · house · product_dna · spectrums</text>
+          <text x="440" y="201" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10.5" fill="#5C534A">aesthete_jobs (outbox) · match_events</text>
+          <text x="440" y="224" text-anchor="middle" font-family="Inter" font-size="10.5" fill="#8A8074">pgvector 768 · FTS · RLS · pg_cron</text>
+          <text x="440" y="248" text-anchor="middle" font-family="Inter" font-size="10.5" fill="#7B8A67">hot path: pure SQL</text>
+          <!-- left: clients -->
+          <g font-family="Inter" font-size="11.5" fill="#2A2521">
+            <rect x="30" y="60" width="180" height="40" rx="10" fill="#FBF8F1" stroke="rgba(42,37,33,.2)"/>
+            <text x="120" y="84" text-anchor="middle">marketing site · anon</text>
+            <rect x="30" y="115" width="180" height="40" rx="10" fill="#FBF8F1" stroke="rgba(42,37,33,.2)"/>
+            <text x="120" y="139" text-anchor="middle">client portal · authed</text>
+            <rect x="30" y="170" width="180" height="40" rx="10" fill="#FBF8F1" stroke="rgba(42,37,33,.2)"/>
+            <text x="120" y="194" text-anchor="middle">iOS · frozen RPCs</text>
+            <rect x="30" y="225" width="180" height="40" rx="10" fill="#FBF8F1" stroke="rgba(42,37,33,.2)"/>
+            <text x="120" y="249" text-anchor="middle">designer ⌘K · librarian</text>
+          </g>
+          <line x1="210" y1="80" x2="300" y2="120" stroke="#8A8074" stroke-width="1.1" marker-end="url(#arr)"/>
+          <line x1="210" y1="135" x2="300" y2="150" stroke="#8A8074" stroke-width="1.1" marker-end="url(#arr)"/>
+          <line x1="210" y1="190" x2="300" y2="180" stroke="#8A8074" stroke-width="1.1" marker-end="url(#arr)"/>
+          <line x1="210" y1="245" x2="300" y2="215" stroke="#8A8074" stroke-width="1.1" marker-end="url(#arr)"/>
+          <!-- right: edge fns + worker + claude -->
+          <g font-family="Inter" font-size="11.5" fill="#2A2521">
+            <rect x="660" y="55" width="190" height="52" rx="10" fill="#FBF8F1" stroke="#7B8A67"/>
+            <text x="755" y="76" text-anchor="middle">edge fns (Deno)</text>
+            <text x="755" y="93" text-anchor="middle" font-size="9.5" fill="#8A8074">embed · dna-draft · nightly · ask · audit</text>
+            <rect x="660" y="150" width="190" height="52" rx="10" fill="#FBF8F1" stroke="#9C5B3B"/>
+            <text x="755" y="171" text-anchor="middle">aesthete-inference</text>
+            <text x="755" y="188" text-anchor="middle" font-size="9.5" fill="#8A8074">ONNX int8 · /embed/text · /embed/image</text>
+            <rect x="660" y="245" width="190" height="52" rx="10" fill="#FBF8F1" stroke="#A67C34"/>
+            <text x="755" y="266" text-anchor="middle">Claude API</text>
+            <text x="755" y="283" text-anchor="middle" font-size="9.5" fill="#8A8074">Haiku 4.5 bulk · Sonnet escalate</text>
+          </g>
+          <line x1="580" y1="120" x2="660" y2="85" stroke="#8A8074" stroke-width="1.1" marker-end="url(#arr)" marker-start="url(#arr)"/>
+          <line x1="755" y1="107" x2="755" y2="150" stroke="#8A8074" stroke-width="1.1" marker-end="url(#arr)"/>
+          <line x1="755" y1="202" x2="755" y2="245" stroke="none"/>
+          <line x1="700" y1="107" x2="700" y2="245" stroke="#8A8074" stroke-width="1.1" stroke-dasharray="3 4" marker-end="url(#arr)"/>
+          <text x="640" y="130" text-anchor="middle" font-family="Inter" font-size="9.5" fill="#8A8074">pg_cron → invoke_edge_function</text>
+        </svg>
+      </div>
+      <p class="muted" style="font-size:.82rem;text-align:center;margin-top:.4rem">16 runtime pieces total — 13 of them are SQL functions, edge functions, or a package. One new container.</p>
+    </div>
+  </section>
+
+  <!-- 6 · HOT PATH -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The demo-critical property</div>
+      <h2>Quiz → top 10: <em>zero inference calls</em></h2>
+      <div class="code" style="margin-top:.5rem"><span class="c">1.</span> POST /rest/v1/rpc/<span class="b">submit_style_quiz</span>   <span class="c">(anon key · session_key = client uuid)</span>
+   <span class="c">→ loadings table → six spectrums + confidence + archetypes + budget</span>
+   <span class="c">→ v_client = normalize( 0.5·mean(chosen quiz-image embeddings) + 0.5·Σ aⱼ·centroidⱼ )</span>
+   <span class="s">→ 200 · full profile JSON · p95 &lt; 300 ms</span>
+
+<span class="c">2.</span> POST /rest/v1/rpc/<span class="b">get_aesthete_matches</span>  <span class="c">(same session key)</span>
+   <span class="c">→ hard filters → ANN top-200 → 10-term score → 8 exploit + 2 explore → whys</span>
+   <span class="s">→ ranked 10 with reasons · p95 &lt; 250 ms in SQL, &lt; 1 s end-to-end</span></div>
+      <div class="cols-3" style="margin-top:1.1rem">
+        <div class="card"><h3>One wire contract, two hosts</h3><p>The RPC <b>is</b> the interface — identical from the external marketing repo and the client portal. The shared <span class="accent">packages/aesthete-quiz</span> (plain-fetch, no supabase-js dep) is convenience.</p></div>
+        <div class="card"><h3>Anon done right</h3><p>Waitlist philosophy: anon can <b>cause</b> rows, never read tables. Session key = bearer capability; <span class="accent">claim_quiz_session</span> merges on signup and bridges iOS signals.</p></div>
+        <div class="card sg"><h3>Worker down? Non-event</h3><p>Nothing on this path touches the inference worker. ⌘K asks degrade to FTS with <em>"the Engine is resting."</em> Jobs queue and drain on recovery.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · DATA MODEL -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Data model · migrations 00236–00243</div>
+      <h2>New state, <em>and what it reuses</em></h2>
+      <div class="cols" style="margin-top:.5rem">
+        <div>
+          <table class="spec">
+            <tr><th>New</th><th>Holds</th></tr>
+            <tr><td class="num">product_dna (+drafts, vocab)</td><td>10 attribute families — typed columns for every scoreable axis, jsonb for narrative, per-attribute confidence/source maps</td></tr>
+            <tr><td class="num">client_style_profiles</td><td>the client's point: vector + six spectrums + confidence + archetypes + budget posture; session-keyed, claimable</td></tr>
+            <tr><td class="num">designer_taste_profiles<br>+ snapshots, style_confidence</td><td>v_D, θ_D (94-d), reliability ρ, confidence map, deviation-from-house; append-only history</td></tr>
+            <tr><td class="num">taste_judgments · corrections<br>portfolio_items · taste_rules</td><td>the four learning streams, all append-only — θ is a cache, judgments are truth</td></tr>
+            <tr><td class="num">house_taste · signature_biases</td><td>versioned house rows (draft→active, lead-approved); named biases as a view+override layer</td></tr>
+            <tr><td class="num">aesthete_jobs · match_events<br>weight_profiles · why_phrases</td><td>one outbox for machine work; every match logged with per-term contributions; weights &amp; copy as data</td></tr>
+          </table>
+        </div>
+        <div class="stack">
+          <div class="card sg"><h3>Reused, not duplicated</h3><p>product_style_spectrum (canonical six, designer-owned) · teaching_queue/sessions/validations · interactions → engagement_events · quiz_sessions · styles taxonomy (the single archetype enum — also kills the portal's hardcoded lists) · v_aesthete_*_input views recreated verbatim.</p></div>
+          <div class="card"><h3>aesthete_vector: 1536 → 768</h3><p>The empty column re-types into the canonical space; products.embedding gets populated too — the five 00008 similarity RPCs come alive for free. HNSW index if prod pgvector allows, ivfflat fallback, exact scan acceptable at MVP scale.</p></div>
+          <div class="card"><h3>Rejected</h3><p>Polymorphic aesthetic_profiles table (RLS minefield) · EAV DNA (join fan-out in the hot path) · reusing teaching_queue for machine work (different lifecycle).</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · INGESTION + DRAFT-FILL -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Ingestion &amp; enrichment</div>
+      <h2>Capture → <em>the Engine's first read</em> → teaching</h2>
+      <div class="code" style="margin-top:.4rem">capture <span class="c">(extension · iOS field capture · manual · URL paste — unchanged)</span>
+  └─▶ products INSERT ──▶ teaching_queue        <span class="c">(existing trigger)</span>
+        └─▶ <span class="b">aesthete_jobs</span>: embed_text + embed_fused + dna_draft
+              ├─ cron 1 min ▶ embed-worker ▶ ONNX ▶ <span class="s">vectors upserted</span>
+              └─ cron 2 min ▶ dna-draft ▶ <span class="b">Claude</span> ▶ <span class="s">draft DNA + ml_predicted styles</span>
+                    └─▶ teaching UI prefills sliders · designer confirms · <span class="s">canonical</span></div>
+      <div class="cols-3" style="margin-top:1rem">
+        <div class="card"><h3>Model &amp; cost</h3><p><b>Haiku 4.5</b> bulk ≈ $0.011–0.013/product; <b>Sonnet</b> escalation when confidence &lt; 0.6; Batches API for backfill — a 5k catalog ≈ <span class="accent">$40–75 one-time</span>. Daily spend ledger parks the queue at budget.</p></div>
+        <div class="card"><h3>Calibrated, not vibes</h3><p>Cached system prefix carries the six spectrum definitions, the 12-archetype taxonomy, and <b>few-shot anchor products with gold scores</b> — the cross-product consistency mechanism. Monthly anchor re-score; affine post-correction once validations accumulate.</p></div>
+        <div class="card hl"><h3>Drafts never become canon</h3><p>Claude writes <b>product_dna_drafts</b> + ml_predicted styles — never the designer-owned spectrum row. Scorer reads canonical-else-draft at reduced confidence, so the whole catalog matches while the queue is worked.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 · TASTE MATH -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The centerpiece, made trainable</div>
+      <h2>Your eye is <em>~94 numbers you can read</em></h2>
+      <p class="lede">A designer produces hundreds of judgments, not millions. So taste is a Bradley–Terry preference weighting over an interpretable basis — not a raw-768 vector that 300 pairs could never train.</p>
+      <div class="code" style="margin-top:.9rem">φ(p) = [ spectrums·conf (6) · archetypes (12) · materials (10) · patina (1) · craft (1) · zₚ (64) ]
+<span class="c">— no price, no budget features: taste can never learn to proxy budget —</span>
+
+P( i ≻ j │ designer D ) = σ( <span class="b">θ_D</span>ᵀ (φᵢ − φⱼ) )
+
+<span class="b">nightly refit:</span>  θ_D = argmin Σ wₜ·log(1+exp(−yₜ·θᵀΔφₜ)) + λ‖θ − <span class="s">θ_H</span>‖²
+<span class="c">   wₜ = weight·exp(−Δt/180d) — corrections count 2×, taste drifts, old pairs fade</span>
+<span class="c">   prior mean = the house  ⇒  deviation-from-house = θ_D − θ_H, for free</span></div>
+      <div class="why" style="margin-top:.9rem">
+        <span>judgments are truth · θ is a cache · refits are replayable</span>
+        <span>online preview moves "Your Eye" today, overwritten tonight</span>
+        <span>explicit rules stay rules <em>and</em> emit 0.5-weight pseudo-pairs</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 · RELIABILITY -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">How much a designer's vote counts</div>
+      <h2>Reliability = <em>predictability</em>, not low variance</h2>
+      <div class="cols" style="margin-top:.6rem">
+        <div class="stack">
+          <div class="card"><h3><span class="dot"></span>ρ_D — can the model predict them?</h3><p>Temporal-blocked cross-validation: fit on earlier judgments, score later ones → pairwise AUC, shrunk hard at low n. A designer with strong, wide-ranging taste is not "unreliable" — an unpredictable one is.</p></div>
+          <div class="card"><h3><span class="dot"></span>Blind repeat probes</h3><p>~1 in 25 pairs is a previously judged pair, order-reversed, ≥ 14 days later. Agreement blends in at 25%. Invisible — no "consistency check!" copy (de-gamified law).</p></div>
+          <div class="card"><h3><span class="dot"></span>Drift is a feature</h3><p>Recent-vs-trailing θ divergence surfaces as <em>"your eye is shifting"</em> in Your Eye — never a silent overwrite. Idle confidence decays; the portfolio seed never does.</p></div>
+        </div>
+        <div class="card" style="background:var(--bone)">
+          <h3 style="color:var(--brass-deep)">Confidence by style — finally with a writer</h3>
+          <p style="margin-bottom:.8rem">Per archetype: local held-out accuracy blended with teaching-validation consensus, shrunk by n. Expert ≥ 0.7 · Advanced ≥ 0.4 · Learning below. This same nightly computation gives <span class="accent">designer_teaching_stats.accuracy_score</span> and <span class="accent">match_impact_count</span> their long-missing writers.</p>
+          <div class="code" style="font-size:.72rem">c_D(g) = n_g/(n_g+10) · [ ½·AUC_g' + ½·consensus_g ]</div>
+          <p style="margin-top:.8rem;font-size:.8rem" class="muted">Named biases ride on top: standardized deviation ≥ 1σ, sign-stable across bootstrap refits, template-named ("Warms up cool pieces"), designer-editable — <b>edits never write back into θ</b>. A view + override layer; machine state stays honest.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 · THE DIAL -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The feature</div>
+      <h2>The dial, <em>made precise</em></h2>
+      <div class="formula" style="margin-top:1rem">
+        <span class="w">w_eff</span> = <span class="w">w</span> · ρ_D · c_D(style) &nbsp;&nbsp;·&nbsp;&nbsp; θ_blend = <span class="hs">θ_H</span> + <span class="w">w_eff</span> · (<span class="dg">θ_D</span> − <span class="hs">θ_H</span>)
+      </div>
+      <p class="muted" style="text-align:center;font-size:.82rem;margin-top:.5rem">Blend at the preference-weight level — where confidence has clean semantics — not by averaging unit vectors. The dense blend tints only the ANN query.</p>
+      <div class="cols-3" style="margin-top:1.4rem">
+        <div class="card"><h3><span class="dot sage"></span>Three stops</h3><p><b>House / Blended / Designer's eye</b> → w ∈ {0, 0.35, 0.9}. Anonymous quiz starts at pure house; an assigned designer raises it; "show me their eye" pushes high.</p></div>
+        <div class="card"><h3><span class="dot"></span>Self-limiting cold start</h3><p>A new designer floors at ρ ≈ 0.15 (portfolio-only), so even w = 0.9 yields w_eff ≤ 0.14. The dial exists from day one — it bends results only as fast as the vector becomes real.</p></div>
+        <div class="card hl"><h3><span class="dot clay"></span>It earns its clicks</h3><p>The 0.9 stop unlocks per-designer only when θ_D beats θ_H on their <b>own held-out judgments by ≥ 5 points</b>. The eval metric and the product gate are the same number.</p></div>
+      </div>
+      <p class="lede" style="margin-top:1.2rem">And the hard bound: taste enters scoring only through one additive term at weight 0.12. <span class="accent">"Amplifies, never overrules" is a weight cap</span> — not policy prose.</p>
+    </div>
+  </section>
+
+  <!-- 12 · HOUSE TASTE -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Middle West's signature</div>
+      <h2>House taste: <em>curated first, consensus when earned</em></h2>
+      <div class="cols" style="margin-top:.6rem">
+        <div class="card mvp phase" style="border-color:var(--brass);background:rgba(166,124,52,.05)">
+          <h3><span class="star">★</span> MVP · week 5 — "the House Hundred"</h3>
+          <ul>
+            <li>v_H = geometric median of ~100 lead-curated exemplar products that <em>are</em> the Middle West look</li>
+            <li>s_H hand-set in a one-hour calibration session against the anchor products</li>
+            <li>Versioned row; the cold-start answer for every anonymous quiz</li>
+            <li>Honest: at week 6 nobody has judgment histories — consensus math would be theater</li>
+          </ul>
+        </div>
+        <div class="card phase">
+          <h3>Phase 2 — earned consensus</h3>
+          <ul>
+            <li>Per archetype: 10%-trimmed mean of θ_D, weighted by ρ_D · c_D(g)</li>
+            <li>Eligibility: ρ ≥ 0.3 and n ≥ 50 — the newest hire can't drag it</li>
+            <li><b>No designer exceeds 0.35 of the mass</b> — runaway-capture guardrail, monitored weekly</li>
+            <li>Consensus lands as a <em>draft</em>; activation is human (lead approves)</li>
+            <li>Curation ops as versioned rows: PIN · NUDGE · PROTECT · RESEED — rollback = reactivate</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 · THE MATCH -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">One honest query</div>
+      <h2>The match: <em>ten terms, one RPC</em></h2>
+      <div class="cols" style="margin-top:.4rem;gap:2.2rem">
+        <table class="spec">
+          <tr><th>Term</th><th>w</th><th>Reads</th></tr>
+          <tr><td><b>Style (dense)</b></td><td class="num">.30</td><td>calibrated cos(v_client, v_p)</td></tr>
+          <tr><td><b>Spectrum</b></td><td class="num">.15</td><td>confidence-weighted 6-axis distance; warmth &amp; boldness read loudest</td></tr>
+          <tr><td><b>Taste</b> <span class="clayc">(the dial)</span></td><td class="num">.12</td><td>σ(θ_blendᵀ φ_p) — capped: reorders, never overrules</td></tr>
+          <tr><td><b>Material + color</b></td><td class="num">.10</td><td>affinity dot + temperature agreement</td></tr>
+          <tr><td><b>Budget</b></td><td class="num">.10</td><td>perception bell (below)</td></tr>
+          <tr><td><b>Function</b></td><td class="num">.08</td><td>honest kids/pets/high-traffic tags vs Q2</td></tr>
+          <tr><td><b>Context</b></td><td class="num">.05</td><td>room utilization curve (salvaged)</td></tr>
+          <tr><td><b>Patina</b></td><td class="num">.05</td><td>potential × client patina affinity — the brand term</td></tr>
+          <tr><td><b>Behavioral</b></td><td class="num">.05</td><td>Laplace-smoothed save rate — new pieces protected</td></tr>
+          <tr><td><b>Penalty</b></td><td class="num">−.30</td><td>stock · lead-time · blocked leaks</td></tr>
+        </table>
+        <div class="stack">
+          <div class="card"><h3>Budget as perception, not a wall</h3><p>Log-space bell around anchor √(Bmin·Bmax); investment-minded clients center <em>above</em> anchor with wider tolerance. A provenance story + real craftsmanship softens over-anchor prices — and the why says so. <b>Budget never touches style or taste terms.</b></p></div>
+          <div class="card"><h3>Weights are data</h3><p>match_weight_profiles version rows, seeded from the old service's priors. Loop 4 tunes by shipping a new row — never by editing scorer code. Missing terms drop out and weights renormalize; row confidence reflects what was actually known.</p></div>
+          <div class="card sg"><h3>Then MMR + two stretch slots</h3><p>Diversify (≤3/brand, ≤5/color), then 8 exploit + 2 explore sampled Boltzmann-with-novelty from ranks 20–80 — deterministic per session per day, honest in copy: <em>"a step outside your usual — worth a look."</em></p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 · WHY -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Explainability</div>
+      <h2>No unexplained <em>score path</em></h2>
+      <p class="lede">The whys are computed in the same query that scores. Per-term contributions land in match_events for audit and replay; the top three render through a phrase table — one string source for web, iOS, and marketing, with the copy law enforced where the strings live.</p>
+      <div class="code" style="margin-top:1rem">"why": {
+  "terms": { "style_dense": .27, "spectrum": .13, "budget": .10, "patina": .05, … },
+  "top_reasons": [
+    { "term": "spectrum", "phrase": <span class="s">"Matches your warm, natural-material leaning"</span> },
+    { "term": "budget",   "phrase": <span class="s">"Comfortably within your range"</span> },
+    { "term": "patina",   "phrase": <span class="s">"The kind of oak that only gets better"</span> } ],
+  "cautions": [ { "term": "context", "phrase": <span class="s">"On the larger side for your room"</span> } ],
+  "blend": { "w": .35, "w_effective": .18, "house_version": 1 }
+}</div>
+      <div class="why" style="margin-top:.9rem">
+        <span>≤ 3 reasons · ≥ 1 concrete</span>
+        <span>never numbers in copy · never "AI"</span>
+        <span>confidence shows as early read / good / strong — never a percent</span>
+        <span>⌘K ask text is never persisted</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 · LEARNING LOOPS -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">How it gets smarter</div>
+      <h2>Five loops, <em>five mechanisms</em></h2>
+      <div style="margin-top:.6rem">
+        <div class="loop"><div class="n">1</div><div class="t"><b>Client implicit signals</b> — interactions → engagement_events (already flowing) <span class="arrow">→</span> capped behavioral nudges: quiz answers outweigh one restless scroll</div></div>
+        <div class="loop"><div class="n">2</div><div class="t"><b>Designer teaching</b> <span class="star">★</span> — confirm/correct drafts + side-by-side judgments <span class="arrow">→</span> DNA confidence now, θ_D nightly. <b>Every action does double duty — structurally</b></div></div>
+        <div class="loop"><div class="n">3</div><div class="t"><b>Portfolio ingestion</b> — private bucket → embed → geometric median <span class="arrow">→</span> v_D0, the cold-start seed that never decays</div></div>
+        <div class="loop"><div class="n">4</div><div class="t"><b>Field outcomes</b> — match_events × saves × purchases <span class="arrow">→</span> offline replay; weight changes ship as version rows, gated on non-regression</div></div>
+        <div class="loop"><div class="n">5</div><div class="t"><b>Consensus &amp; conflict</b> — the existing 3-touch validation path <span class="arrow">→</span> confidence upgrades + Phase-2 house consensus with the 0.35 cap</div></div>
+      </div>
+      <p class="lede" style="margin-top:1.2rem">All five write to <span class="accent">append-only stores</span> — judgments, corrections, events. Learned state is always a cache that can be refit from truth.</p>
+    </div>
+  </section>
+
+  <!-- 16 · RUNTIME & OPS -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Runtime &amp; operations</div>
+      <h2>Boring on purpose</h2>
+      <div class="cols-3" style="margin-top:.6rem">
+        <div class="card"><h3>One outbox, one claim pattern</h3><p>aesthete_jobs + FOR UPDATE SKIP LOCKED, drained by cron-invoked edge fns in re-entrant batches sized for the 60-second pg_net window. No pgmq, no per-row webhooks, no delivery semantics to babysit.</p></div>
+        <div class="card"><h3>The worker, sized</h3><p>2 CPU / 2 GB, int8 ONNX, weights baked into the image (atomic rollback, content-addressed model version). 429 past depth 8 — callers re-enqueue, never spin. ~200–350 ms/image; 5k backfill ≈ 2 h off-peak.</p></div>
+        <div class="card"><h3>Redis discipline</h3><p>256 MB is shared — cache <b>only</b> ⌘K query embeddings (≤ 10 MB). Rec results are &lt; 100 ms of SQL; caching them buys invalidation bugs. Rate counters live in Postgres.</p></div>
+        <div class="card"><h3>Nightly, in phases</h3><p>02:30 — taste refit → house draft → stats writers → centroids + behavior matview. Deterministic recompute-from-scratch: seconds of work at this scale, perfectly auditable.</p></div>
+        <div class="card"><h3>Observability substrate</h3><p>match_events logs every call with contributions — debugging, audits, and Loop-4 ground truth in one table. PostHog funnels + edge-fn events; Logflare structured lines. Engine asks: latency only, no text.</p></div>
+        <div class="card"><h3>Model migrations</h3><p>aesthete_model_version on every vector; re-embeds enqueue gradually; mixed states are detectable and scoring compares within-version. A model bump is maintenance, not a migration crisis.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 17 · GUARDRAILS -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Bias, held responsibly — as mechanisms</div>
+      <h2>Guardrails you can <em>grep for</em></h2>
+      <div class="two-list" style="margin-top:1rem">
+        <div class="item"><h3><span class="dot"></span>No runaway house capture</h3><p>0.35 weight cap + trimmed mean in the consensus SQL; drafts need lead activation; max-share alarmed weekly.</p></div>
+        <div class="item"><h3><span class="dot"></span>Taste ≠ budget-shaming</h3><p>Structural: no price features in φ; budget never multiplies style. Audited weekly: craftsmanship served across budget tiers → aesthete_audit.</p></div>
+        <div class="item"><h3><span class="dot"></span>Against the filter bubble</h3><p>Exploration floor enforced in the RPC and audited from match_events; novelty-weighted stretch; the client holds the dial.</p></div>
+        <div class="item"><h3><span class="dot"></span>Human in the loop</h3><p>Contraindications are hard filters. Drafts never write canon. House activation is a human act. High-stakes stays on designer surfaces.</p></div>
+        <div class="item"><h3><span class="dot"></span>Explainable by default</h3><p>Whys computed in the scoring query — an unexplained score is structurally impossible. Your Eye is inspectable; the blend ships in every payload.</p></div>
+        <div class="item"><h3><span class="dot"></span>The designer's asset</h3><p>export_designer_taste / retire_designer_taste ship in <b>week 0</b> — portability and departure are RPCs before they're contract clauses. Raw vectors never reach a client role.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 18 · EVAL -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Evaluation</div>
+      <h2>Measured against <em>designers, not vibes</em></h2>
+      <div class="cols" style="margin-top:.6rem">
+        <div class="stack">
+          <div class="card"><h3>Golden sets first — human ceiling first</h3><p><b>G1:</b> 150 products scored by 2–3 designers; Krippendorff's α per dimension <em>before</em> any model is blamed (α &lt; 0.6 → fix the definition). Model bar: MAE ≤ 0.20/dim. <b>G2:</b> "closest 5 of 20" neighborhoods + the category-leak metric that gates the Phase-2 projection.</p></div>
+          <div class="card"><h3>Does Ana's vector predict Ana?</h3><p>Chronological backtest: ≥ 65% pairwise accuracy at 100 judgments, ≥ 72% at 300. θ_D must beat θ_H by ≥ 5 points on her own held-out pairs — or her dial's high stop stays locked.</p></div>
+          <div class="card"><h3>Offline replay, no MLflow</h3><p>match_events replayed under candidate weights; NDCG vs realized saves. A notebook and a table.</p></div>
+        </div>
+        <div class="card" style="background:var(--bone)">
+          <h3 style="color:var(--brass-deep)">The week-6 demo bar</h3>
+          <div class="stack" style="margin-top:.6rem">
+            <p style="font-size:.85rem">✓ Zero category errors, zero budget violations across 4 real-client personas</p>
+            <p style="font-size:.85rem">✓ ≥ 6 of 10 endorsed by the designer panel; ≥ 1 <em>"wouldn't have thought of it — but yes"</em></p>
+            <p style="font-size:.85rem">✓ A plain-language why on every card, passing copy law</p>
+            <p style="font-size:.85rem">✓ p95 quiz → results &lt; 2 s on the all-SQL path</p>
+            <p style="font-size:.85rem">✓ The dial visibly changes the set — house vs a seeded designer's eye</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 19 · ROLLOUT -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">22 weeks · weeks 0–6 to the week</div>
+      <h2>Rollout: <em>demo by week 6, honestly</em></h2>
+      <div class="cols-3" style="margin-top:.6rem;align-items:stretch">
+        <div class="phase mvp">
+          <h3><span class="star">★</span> Weeks 0–6 · the spine</h3>
+          <ul>
+            <li><b>0</b> — migrations 00236–241 · old service deleted · worker scaffold · <b>prod pgvector verified</b></li>
+            <li><b>1</b> — embed pipeline + catalog backfill</li>
+            <li><b>2</b> — quiz v2 + shared package (anon curl → profile)</li>
+            <li><b>3</b> — match RPC + iOS shim (contract test green)</li>
+            <li><b>4</b> — Claude draft-fill + <b>designer validation sprint (300–500 products)</b></li>
+            <li><b>5</b> — client-portal quiz · House Hundred · dial plumbing</li>
+            <li><b>6</b> — <b>DEMO: quiz → top 10</b>, §14 bar met</li>
+          </ul>
+        </div>
+        <div class="phase">
+          <h3>Weeks 7–14 · taste becomes real</h3>
+          <ul>
+            <li>Side-by-side judgments UI + probes</li>
+            <li>Portfolio ingestion → centroid seeds</li>
+            <li>"Your Eye" v1 · stats writers · behavioral matview <span class="star">★</span> completes the MVP list</li>
+            <li>Nightly BT refit + confidence-scaled dial</li>
+            <li>⌘K vector upgrade — <em>deliberately after</em> vectors are validated</li>
+          </ul>
+        </div>
+        <div class="phase">
+          <h3>Weeks 15–22 · the payoffs</h3>
+          <ul>
+            <li>House consensus + lead curation UI</li>
+            <li>Client ↔ designer alignment surfaces</li>
+            <li>Full drift-audit suite green 2 weeks running</li>
+            <li>Typesense seam validated (interface only)</li>
+            <li>Marketing-site quiz GA · iOS parity soak · cleanup</li>
+          </ul>
+        </div>
+      </div>
+      <p class="muted" style="font-size:.8rem;margin-top:.8rem;text-align:center">Frozen contracts: process_style_quiz · get_recommendations · v_aesthete_*_input · the 00008 RPCs. <b>iOS ships nothing.</b></p>
+    </div>
+  </section>
+
+  <!-- 20 · RECONCILIATION + RISKS -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Loose ends, tied</div>
+      <h2>Reconciliation <em>&amp; the risks that matter</em></h2>
+      <div class="cols" style="margin-top:.6rem">
+        <div class="card"><h3>Every artifact gets a fate</h3>
+          <p style="margin-bottom:.5rem">The design doc's §16 disposition table covers all of it:</p>
+          <p class="muted" style="font-size:.8rem;line-height:1.6">old Python service → <b>deleted W0</b> (ideas salvaged) · dead use-embeddings hooks + phantom routes → deleted · /api/search/similar heuristic → real vector RPC · keyword-only ⌘K → aesthete-ask (W11, after vectors are worth meeting) · archetype matcher → retained as teaching data, superseded as matcher · hardcoded style lists → the styles taxonomy · stale CLAUDE.md claims → corrected in the W0 PR</p>
+        </div>
+        <div class="card hl"><h3>Top risks, mitigated</h3>
+          <p class="muted" style="font-size:.8rem;line-height:1.6"><b>Prod pgvector unknown</b> → W0 check; exact scan viable regardless · <b>cold-start quality</b> → W4 human validation sprint; demo serves validated products only · <b>nomic weak on aesthetics</b> → spectrums carry the interpretable half; Phase-2 projection is the planned fix · <b>Claude cost runaway</b> → daily ledger parks the queue · <b>single-host contention</b> → hard limits + 429 backpressure + off-peak batches · <b>spectrum inter-rater too low</b> → measure α first, fix definitions before models</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 21 · CLOSING -->
+  <section class="slide title">
+    <div class="slide-inner">
+      <div class="pill">Designer-Taught Intelligence</div>
+      <h1 style="margin-top:1.3rem;font-size:clamp(1.9rem,4.6vw,3.4rem)">Taste as data. Learning as history.<br>Matching as <span style="font-style:italic;color:var(--clay)">one honest query.</span></h1>
+      <p class="lede" style="margin-top:1.5rem;max-width:62ch">Built where Patina lives — the six spectrums that already shipped, the teaching loop that already runs, one new worker, eight migrations. And every designer action doing double duty, exactly as promised.</p>
+      <div class="meta" style="margin-top:2.2rem;font-size:.8rem;color:var(--ink-faint)">
+        <span>The Aesthete Engine™ · Patina Engineering</span>
+        <span>Full design: aesthete-engine-system-design.md</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="dots" id="dots"></div>
+<div class="hint"><span class="kbd">←</span> <span class="kbd">→</span> to navigate</div>
+<div class="nav">
+  <button id="prev" aria-label="Previous">‹</button>
+  <span class="counter"><b id="cur">1</b> / <span id="tot">21</span></span>
+  <button id="next" aria-label="Next">›</button>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const dotsWrap = document.getElementById('dots');
+  const progress = document.getElementById('progress');
+  const curEl = document.getElementById('cur');
+  document.getElementById('tot').textContent = slides.length;
+  let i = 0;
+  slides.forEach((_, n) => {
+    const d = document.createElement('i');
+    d.addEventListener('click', () => go(n));
+    dotsWrap.appendChild(d);
+  });
+  const dots = Array.from(dotsWrap.children);
+  function go(n){
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, n2) => s.classList.toggle('active', n2 === i));
+    dots.forEach((d, n2) => d.classList.toggle('on', n2 === i));
+    curEl.textContent = i + 1;
+    progress.style.width = ((i + 1) / slides.length * 100) + '%';
+  }
+  function next(){ go(i + 1); }
+  function prev(){ go(i - 1); }
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', prev);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown'){ e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp'){ e.preventDefault(); prev(); }
+    if (e.key === 'Home'){ go(0); }
+    if (e.key === 'End'){ go(slides.length - 1); }
+  });
+  let x0 = null;
+  document.addEventListener('touchstart', e => x0 = e.touches[0].clientX, {passive:true});
+  document.addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 50){ dx < 0 ? next() : prev(); }
+    x0 = null;
+  }, {passive:true});
+  go(0);
+</script>
+</body>
+</html>
