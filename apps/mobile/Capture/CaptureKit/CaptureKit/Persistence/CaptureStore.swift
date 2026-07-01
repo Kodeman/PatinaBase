@@ -22,7 +22,7 @@ public struct SpecimenQuery: Sendable {
 
 @MainActor
 public final class CaptureStore {
-    public static let appGroupID = "group.cloud.patina.capture"
+    public nonisolated(unsafe) static let appGroupID = "group.cloud.patina.capture"
 
     public static let schema = Schema([
         Specimen.self, CapturePhoto.self, CaptureMeasurement.self, CaptureProjectRef.self
