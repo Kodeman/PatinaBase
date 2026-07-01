@@ -87,3 +87,12 @@ apps/mobile/Patina/.codex/
 # Repo-root scratch
 _tmp_*
 _test_reports/
+
+# design-sync (claude.ai/design) transient artifacts
+.design-sync/sb-reference/
+.design-sync/learnings/
+.design-sync/.cache/
+.design-sync/node_modules
+.ds-sync/
+ds-bundle/
+packages/patina-design-system/.dssync-tailwind.css
