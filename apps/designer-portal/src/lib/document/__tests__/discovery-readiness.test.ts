@@ -1,6 +1,8 @@
 import {
   deriveDiscoveryReadiness,
   deriveBlockDone,
+  capturedRooms,
+  capturedLifestyle,
   ESSENTIAL_KEYS,
   type DiscoveryFacts,
 } from '../discovery-readiness';
@@ -59,9 +61,46 @@ describe('deriveBlockDone — each essential gate', () => {
     expect(deriveBlockDone(EMPTY).style).toBe(false);
   });
 
-  it('lifestyle needs ≥1 row', () => {
-    expect(deriveBlockDone({ ...EMPTY, lifestyle: [{ room: 'Living' }] }).lifestyle).toBe(true);
+  it('lifestyle needs ≥1 row WITH content (who or how) — F5', () => {
+    expect(
+      deriveBlockDone({ ...EMPTY, lifestyle: [{ room: 'Living', who: '2 adults' }] }).lifestyle
+    ).toBe(true);
+    expect(
+      deriveBlockDone({ ...EMPTY, lifestyle: [{ room: 'Living', how: 'movie nights' }] }).lifestyle
+    ).toBe(true);
+    // A room selection alone (or a fully empty row) says nothing about how they live.
+    expect(deriveBlockDone({ ...EMPTY, lifestyle: [{ room: 'Living' }] }).lifestyle).toBe(false);
+    expect(deriveBlockDone({ ...EMPTY, lifestyle: [{}] }).lifestyle).toBe(false);
     expect(deriveBlockDone(EMPTY).lifestyle).toBe(false);
+  });
+
+  it('F5 — empty rows never satisfy scope or lifestyle', () => {
+    // Three "+ Add a room" clicks with no names is NOT "3 rooms".
+    const emptyRows = {
+      ...EMPTY,
+      project_type: 'full_room',
+      rooms: [{}, {}, {}],
+      lifestyle: [{}, {}, {}],
+    };
+    const done = deriveBlockDone(emptyRows);
+    expect(done.scope).toBe(false);
+    expect(done.lifestyle).toBe(false);
+    // Whitespace-only names don't count either.
+    expect(
+      deriveBlockDone({ ...emptyRows, rooms: [{ name: '   ' }] }).scope
+    ).toBe(false);
+    // One real row among empties is enough.
+    expect(
+      deriveBlockDone({ ...emptyRows, rooms: [{}, { name: 'Living' }] }).scope
+    ).toBe(true);
+  });
+
+  it('capturedRooms / capturedLifestyle count only content-bearing rows', () => {
+    expect(capturedRooms([{}, { name: 'Living' }, { name: ' ' }])).toHaveLength(1);
+    expect(capturedRooms([])).toHaveLength(0);
+    expect(
+      capturedLifestyle([{ room: 'Household' }, { room: 'Living', who: 'kids' }, {}])
+    ).toHaveLength(1);
   });
 
   it('deepening: keep/avoid, deciders, site & scan', () => {

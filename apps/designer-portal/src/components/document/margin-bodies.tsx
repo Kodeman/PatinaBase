@@ -473,8 +473,8 @@ export function MessageBody({ row, projectId }: { row: MarginItemRow; projectId:
 export function InvoiceBody({ row, projectId }: { row: MarginItemRow; projectId: string | null }) {
   const qc = useQueryClient();
   const { data: invoice } = useInvoice(row.item_id) as { data: AnyRecord };
-  const issue = useIssueInvoice();
-  const send = useSendInvoice();
+  const issue = useIssueInvoice({ errorSurface: 'inline' });
+  const send = useSendInvoice({ errorSurface: 'inline' });
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

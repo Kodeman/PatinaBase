@@ -527,3 +527,65 @@ export function useAddClient() {
     },
   });
 }
+
+/**
+ * Invite-and-link an EXISTING designer_clients row (R73 — invite-on-send).
+ *
+ * useAddClient always INSERTS a new designer_clients row; a captured household
+ * (client_id NULL, client_email set — the R46/R62 no-login normal case) needs
+ * the inverse: create-and-invite the Patina account for the email already on
+ * file, then set client_id on the SAME row. Delegates to the same
+ * /api/clients/invite route with `designerClientId`, which:
+ *  - links an existing profile by email if one exists (no email sent), or
+ *  - inviteUserByEmail (Supabase Auth magic-link) + creates profile/user_roles,
+ *  - then UPDATEs designer_clients.client_id (client_email/client_name kept
+ *    for provenance) and writes a client_activity_log row.
+ *
+ * Carries `meta.errorSurface = 'inline'` (R83): callers render failures as a
+ * quiet inline band at the act site (the picker row) — the designer portal's
+ * global mutation onError raises no toast for this mutation.
+ */
+export function useInviteAndLinkClient() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    meta: { errorSurface: 'inline' },
+    mutationFn: async ({
+      designerClientId,
+      clientEmail,
+      clientName,
+    }: {
+      /** The existing designer_clients.id to link. */
+      designerClientId: string;
+      /** Email to invite — defaults server-side to the row's client_email. */
+      clientEmail?: string;
+      clientName?: string;
+    }) => {
+      const response = await fetch('/api/clients/invite', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ designerClientId, clientEmail, clientName, invite: true }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body?.error ?? `Request failed with status ${response.status}`);
+      }
+
+      return response.json() as Promise<{
+        designerClientId: string;
+        profileId: string | null;
+        invited: boolean;
+        alreadyExists: boolean;
+      }>;
+    },
+    onSuccess: (_data, { designerClientId }) => {
+      queryClient.invalidateQueries({ queryKey: ['designer-clients'] });
+      queryClient.invalidateQueries({ queryKey: ['designer-client', designerClientId] });
+      queryClient.invalidateQueries({ queryKey: ['designer-client-for-user'] });
+      queryClient.invalidateQueries({ queryKey: ['client-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['client-activity'] });
+    },
+  });
+}

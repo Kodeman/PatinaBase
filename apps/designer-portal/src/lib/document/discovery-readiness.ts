@@ -9,7 +9,12 @@
  *
  * Pure: derives each block's done-state, the essential count, readiness, and
  * the local Strata fill for the readiness header. Mirrors the server gate in
- * begin_direction_from_discovery (00224) so the UI and the RPC agree.
+ * begin_direction_from_discovery (00224) so the UI and the RPC agree:
+ * project_type non-null · rooms non-empty · budget_max set · target OR hard
+ * date · style tags OR keywords · lifestyle non-empty. The one deliberate
+ * difference (F5, walk 2026-07): the UI excludes CONTENT-EMPTY rows from
+ * rooms/lifestyle, so it is strictly TIGHTER than the RPC's raw jsonb length —
+ * UI-ready always implies RPC-ready, never the reverse.
  */
 
 import type { FillState } from './fill-state';
@@ -60,14 +65,35 @@ function len(v: unknown[]): number {
   return Array.isArray(v) ? v.length : 0;
 }
 
+const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
+/**
+ * F5 (walk 2026-07): an EMPTY row must not satisfy an essential — clicking
+ * "+ Add a room" three times is not "3 rooms". A room row counts only when it
+ * has a name; a lifestyle row only when it says something (who / how).
+ * Deepening blocks keep raw counts — they never gate readiness.
+ */
+export function capturedRooms(rooms: unknown[]): unknown[] {
+  if (!Array.isArray(rooms)) return [];
+  return rooms.filter((r) => text((r as Record<string, unknown>)?.name).length > 0);
+}
+
+export function capturedLifestyle(rows: unknown[]): unknown[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter((r) => {
+    const row = r as Record<string, unknown>;
+    return text(row?.who).length > 0 || text(row?.how).length > 0;
+  });
+}
+
 /** Each block's done-state. Essentials gate readiness; deepening never does. */
 export function deriveBlockDone(f: DiscoveryFacts): Record<BlockKey, boolean> {
   return {
-    scope: !!(f.project_type && f.project_type.trim()) && len(f.rooms) > 0,
+    scope: !!(f.project_type && f.project_type.trim()) && capturedRooms(f.rooms).length > 0,
     budget: f.budget_max_cents != null,
     timeline: !!(f.target_date || f.hard_date),
     style: (f.style_tag_ids?.length ?? 0) > 0 || (f.style_keywords?.length ?? 0) > 0,
-    lifestyle: len(f.lifestyle) > 0,
+    lifestyle: capturedLifestyle(f.lifestyle).length > 0,
     keep_avoid: len(f.keep_items) > 0 || len(f.avoid_items) > 0,
     deciders: len(f.decision_makers) > 0,
     site_scan: !!f.room_scan_id || !!(f.site_notes && f.site_notes.trim()),

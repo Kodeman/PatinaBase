@@ -26,6 +26,8 @@ import { StrataMark } from '../strata-mark';
 import { FacetSection } from '../rooms/drafting/facet-section';
 import {
   deriveDiscoveryReadiness,
+  capturedRooms,
+  capturedLifestyle,
   type BlockKey,
   type DiscoveryFacts,
 } from '@/lib/document/discovery-readiness';
@@ -83,8 +85,12 @@ function toFacts(d: DiscoveryDraft): DiscoveryFacts {
 
 function statusFor(block: BlockKey, d: DiscoveryDraft): string {
   switch (block) {
-    case 'scope':
-      return d.rooms.length ? `${d.rooms.length} room${d.rooms.length > 1 ? 's' : ''}` : 'not yet';
+    case 'scope': {
+      // F5: only rooms WITH a name count — three empty "+ Add a room" rows
+      // must not read as "3 rooms".
+      const rooms = capturedRooms(d.rooms).length;
+      return rooms ? `${rooms} room${rooms > 1 ? 's' : ''}` : 'not yet';
+    }
     case 'budget':
       return d.budget_max_cents != null
         ? formatBudgetRange(d.budget_min_cents, d.budget_max_cents)
@@ -95,8 +101,10 @@ function statusFor(block: BlockKey, d: DiscoveryDraft): string {
       return d.style_tag_ids.length || d.style_keywords.length
         ? `${d.style_tag_ids.length + d.style_keywords.length} tags`
         : 'not yet';
-    case 'lifestyle':
-      return d.lifestyle.length ? `${d.lifestyle.length} captured` : 'not yet';
+    case 'lifestyle': {
+      const rows = capturedLifestyle(d.lifestyle).length;
+      return rows ? `${rows} captured` : 'not yet';
+    }
     case 'keep_avoid':
       return d.keep_items.length || d.avoid_items.length
         ? `${d.keep_items.length} keep · ${d.avoid_items.length} avoid`
@@ -131,7 +139,44 @@ export function DiscoverySection({
   const [draft, setDraft] = useState<DiscoveryDraft>(EMPTY_DRAFT);
   const [open, setOpen] = useState<Set<BlockKey>>(new Set());
   const [callOpen, setCallOpen] = useState(false);
+  // R83 (F2, walk 2026-07): a failed Begin-the-Direction explains itself in a
+  // quiet inline band AT the act — never a toast.
+  const [beginError, setBeginError] = useState<string | null>(null);
   const hydrated = useRef(false);
+
+  // Debounced, SERIALIZED self-persist (no Save button) — F3/F4 (walk 2026-07).
+  // The pending patch accrues; each flush CHAINS onto the previous write so
+  // saves land at the DB in commit order. Before this, concurrent in-flight
+  // upserts could land out of order and a mid-typing prefix ("600" of "60000")
+  // became the last write — the budget-corruption / lost-keystroke family.
+  const pending = useRef<Partial<DiscoveryDraft>>({});
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  // mutateAsync is referentially stable across renders (React Query), unlike
+  // the `upsert` result object — depending on the latter re-created `flush`
+  // every render and made the unmount-flush effect fire per keystroke.
+  const upsertAsync = upsert.mutateAsync;
+
+  const flush = useCallback((): Promise<unknown> => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (Object.keys(pending.current).length === 0) return chain.current;
+    const patch = { ...pending.current };
+    pending.current = {};
+    // F5: content-empty rows never persist — they don't count toward the
+    // essentials, and the seed RPC would otherwise turn a stray "+ Add a room"
+    // click into a phantom "Room" in the proposal's scope.
+    if (patch.rooms) patch.rooms = capturedRooms(patch.rooms) as DiscoveryDraft['rooms'];
+    if (patch.lifestyle)
+      patch.lifestyle = capturedLifestyle(patch.lifestyle) as DiscoveryDraft['lifestyle'];
+    chain.current = chain.current
+      .catch(() => undefined) // an earlier failed write must not wedge the chain
+      .then(() => upsertAsync({ designerClientId: engagementId, designerId, patch }))
+      .catch(() => undefined); // surfaced by the mutation's own error handling
+    return chain.current;
+  }, [engagementId, designerId, upsertAsync]);
 
   // Hydrate the draft once from the row (or the lead prefill) when it arrives.
   useEffect(() => {
@@ -139,19 +184,21 @@ export function DiscoverySection({
     hydrated.current = true;
     const base = read.row ?? read.prefill ?? {};
     setDraft({ ...EMPTY_DRAFT, ...(base as Partial<DiscoveryDraft>) });
-  }, [read]);
-
-  // Debounced self-persist (no Save button). Pending patch accrues + flushes.
-  const pending = useRef<Partial<DiscoveryDraft>>({});
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flush = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-    if (Object.keys(pending.current).length === 0) return;
-    const patch = pending.current;
-    pending.current = {};
-    upsert.mutate({ designerClientId: engagementId, designerId, patch });
-  }, [engagementId, designerId, upsert]);
+    // F2 (walk 2026-07): the lead-derived prefill was DISPLAYED but never
+    // persisted — project_type stayed NULL server-side, so the RPC rejected
+    // ("discovery not ready") while the UI read "Ready". Blur-save law: what
+    // the blocks show is what the row holds — persist the non-null prefill
+    // facts on first render so the shown values exist in client_discovery.
+    if (!read.row && read.prefill) {
+      const seeded = Object.fromEntries(
+        Object.entries(read.prefill).filter(([, v]) => v != null)
+      ) as Partial<DiscoveryDraft>;
+      if (Object.keys(seeded).length > 0) {
+        pending.current = { ...seeded, ...pending.current };
+        void flush();
+      }
+    }
+  }, [read, flush]);
 
   const commit = useCallback(
     (patch: Partial<DiscoveryDraft>) => {
@@ -163,8 +210,16 @@ export function DiscoverySection({
     [flush]
   );
 
-  // Flush any pending edit on unmount so nothing is lost.
-  useEffect(() => () => flush(), [flush]);
+  // Flush any pending edit on TRUE unmount so nothing is lost (via a ref —
+  // an effect keyed on `flush` would run its cleanup on every dep change).
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(
+    () => () => {
+      void flushRef.current();
+    },
+    []
+  );
 
   const { done, essentialsDone, ready, fill } = deriveDiscoveryReadiness(toFacts(draft));
   const alreadySeeded = Boolean(read?.row?.seeded_proposal_id);
@@ -183,13 +238,23 @@ export function DiscoverySection({
     });
   const openBlock = (b: BlockKey) => setOpen((prev) => new Set(prev).add(b));
 
-  const begin = () => {
-    flush(); // persist any in-flight edit before seeding
+  const begin = async () => {
+    setBeginError(null);
+    // AWAIT the serialized save chain — the server gate must read the FINAL
+    // facts, not race a still-in-flight edit (F2).
+    await flush();
     beginDirection.mutate(
       { designerClientId: engagementId },
       {
         onSuccess: (proposalId) => {
           if (proposalId) router.push(`/doc/${proposalId}`);
+        },
+        onError: (err) => {
+          // R83: the failure is explained in place, with a retry act. The RPC
+          // rejects with a PostgrestError (message-shaped, not always an
+          // instanceof Error) — read .message off whatever arrived.
+          const message = (err as { message?: string } | null)?.message;
+          setBeginError(message || 'Something went wrong beginning the Direction.');
         },
       }
     );
@@ -224,7 +289,14 @@ export function DiscoverySection({
   ];
 
   return (
-    <section>
+    // Blur-save law (F4): focusout bubbles here from every block editor, so
+    // leaving ANY field flushes the debounce with the field's final value —
+    // the last write is always the completed entry, never a typing prefix.
+    <section
+      onBlur={() => {
+        void flush();
+      }}
+    >
       <div className="mb-1.5 mt-5 flex items-baseline justify-between">
         <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
           Discovery
@@ -259,7 +331,7 @@ export function DiscoverySection({
         </div>
         <button
           type="button"
-          onClick={begin}
+          onClick={() => void begin()}
           disabled={!ready || beginDirection.isPending}
           className={`shrink-0 rounded-[3px] border px-3.5 py-2 font-mono text-[11px] tracking-[0.03em] transition-colors ${
             ready
@@ -274,6 +346,26 @@ export function DiscoverySection({
               : 'Begin the Direction →'}
         </button>
       </div>
+
+      {/* R83 (F2): the act's failure, inline AT the act — a quiet terracotta
+          band with the server's reason and a retry. Never a toast. */}
+      {beginError && (
+        <div className="mb-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[3px] border-l-2 border-[var(--color-terracotta)] bg-[rgba(212,160,144,0.10)] px-4 py-2.5">
+          <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[#C4836F]">
+            Couldn&rsquo;t begin the Direction
+          </span>
+          <span className="text-[12px] leading-snug text-[var(--color-charcoal)]">
+            {beginError}
+          </span>
+          <button
+            type="button"
+            onClick={() => void begin()}
+            className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] underline-offset-2 transition-colors hover:text-[var(--color-mocha)] hover:underline"
+          >
+            Try again →
+          </button>
+        </div>
+      )}
 
       {/* Toolrow — the call checklist + the two clip-ins. */}
       <div className="mb-5 flex flex-wrap items-center gap-2.5">

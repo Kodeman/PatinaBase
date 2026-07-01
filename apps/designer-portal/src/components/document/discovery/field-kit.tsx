@@ -256,17 +256,36 @@ export function RowListEditor({
   onChange: (rows: RowValue[]) => void;
   addLabel: string;
 }) {
+  const listRef = React.useRef<HTMLDivElement>(null);
+  const focusRow = React.useRef<number | null>(null);
+
   const setCell = (i: number, key: string, val: string | number | boolean | null) => {
     const next = rows.map((r, idx) => (idx === i ? { ...r, [key]: val } : r));
     onChange(next);
   };
   const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
-  const add = () => onChange([...rows, {}]);
+  const add = () => {
+    focusRow.current = rows.length; // the index the new row will render at
+    onChange([...rows, {}]);
+  };
+
+  // F5 (walk 2026-07): after "+ Add a row" the focus stayed on the button, so
+  // typing went nowhere — land it in the new row's first TEXT input (the name /
+  // who field), falling back to whatever control the row leads with.
+  React.useEffect(() => {
+    if (focusRow.current == null) return;
+    const row = listRef.current?.querySelectorAll<HTMLElement>('[data-row]')[focusRow.current];
+    focusRow.current = null;
+    const target =
+      row?.querySelector<HTMLElement>('input[type="text"]') ??
+      row?.querySelector<HTMLElement>('input, select, textarea');
+    target?.focus();
+  }, [rows.length]);
 
   return (
-    <div>
+    <div ref={listRef}>
       {rows.map((row, i) => (
-        <div key={i} className="mb-1.5 flex flex-wrap items-center gap-1.5">
+        <div key={i} data-row className="mb-1.5 flex flex-wrap items-center gap-1.5">
           {columns.map((c) => {
             const v = row[c.key];
             if (c.type === 'checkbox') {

@@ -288,11 +288,17 @@ export function useCreateProposal() {
 
 /**
  * Update proposal details
+ *
+ * Document-surface callers that render failures inline (R83 — the error
+ * grammar) pass `{ errorSurface: 'inline' }` so the designer portal's global
+ * mutation onError raises no toast. Legacy portal callers omit it and keep
+ * the toast until dissolve.
  */
-export function useUpdateProposal() {
+export function useUpdateProposal(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       proposalId,
       updates,
@@ -560,11 +566,14 @@ export function useRemoveProposalItem() {
 
 /**
  * Send a proposal to the client
+ *
+ * `{ errorSurface: 'inline' }` — see useUpdateProposal (R83).
  */
-export function useSendProposal() {
+export function useSendProposal(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       proposalId,
       personalMessage,

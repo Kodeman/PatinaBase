@@ -20,7 +20,7 @@
  * shadows (D4).
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useProposal } from '@/hooks/use-proposals';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
@@ -44,6 +44,9 @@ export function ProposalInstruments({
   const { data: proposal } = useProposal(proposalId) as { data: any };
 
   const [sendOpen, setSendOpen] = useState(false);
+  // F6 (walk 2026-07): walking into the Room is a real transition, not an
+  // instant swap — acknowledge the act and make it idempotent.
+  const [entering, setEntering] = useState(false);
 
   const status: string = proposal?.status ?? 'draft';
   const isDraft = status === 'draft';
@@ -52,9 +55,29 @@ export function ProposalInstruments({
   const { state: draftState, pct, fill } = useDraftingState(proposalId, isDraft);
   const readyToSend = draftState === 'Ready to send';
 
+  // F6: the doorway is a <button> (D1 — documents carry no nav links), so
+  // Next.js never prefetches the Room route the way a <Link> would. The push
+  // then pays a cold route fetch with zero visual acknowledgment — which reads
+  // as a dead click. Prefetch the Room while the draft band is showing so the
+  // walk-in is immediate.
+  useEffect(() => {
+    if (isDraft) router.prefetch(`/drafting/${proposalId}`);
+  }, [isDraft, proposalId, router]);
+
+  // F6: if the navigation stalls (slow route fetch), release the act after a
+  // beat so the doorway can be walked again instead of wedging on "Opening…".
+  useEffect(() => {
+    if (!entering) return;
+    const t = setTimeout(() => setEntering(false), 8000);
+    return () => clearTimeout(t);
+  }, [entering]);
+
   /** Walk into the Drafting Room to compose. Stash the document we're leaving so
-   *  the Room returns us here on exit (R39 / D14), then navigate. */
+   *  the Room returns us here on exit (R39 / D14), then navigate. Idempotent:
+   *  re-clicks while the transition is in flight don't re-fire the push (F6). */
   const enterDrafting = () => {
+    if (entering) return;
+    setEntering(true);
     rememberRoomOrigin(pathname);
     router.push(`/drafting/${proposalId}`);
   };
@@ -99,10 +122,19 @@ export function ProposalInstruments({
           </div>
           <button
             type="button"
-            onClick={readyToSend ? () => setSendOpen(true) : enterDrafting}
+            aria-busy={entering || undefined}
+            onClick={() => {
+              if (entering) return;
+              if (readyToSend) setSendOpen(true);
+              else enterDrafting();
+            }}
             className="shrink-0 rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity hover:opacity-90"
           >
-            {readyToSend ? 'Send the proposal →' : 'Open the Drafting Room →'}
+            {entering
+              ? 'Opening…'
+              : readyToSend
+                ? 'Send the proposal →'
+                : 'Open the Drafting Room →'}
           </button>
         </div>
 

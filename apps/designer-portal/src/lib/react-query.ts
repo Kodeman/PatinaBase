@@ -8,6 +8,26 @@ import {
   handleAuthExpiry,
 } from './error-handler';
 
+/**
+ * R83 — the error grammar. Mutations on (document) surfaces render failures as
+ * a quiet inline band at the act site (terracotta, with the reason and a retry
+ * act) and must NOT also raise the global red toast. A mutation opts out of
+ * the toast by declaring `meta: { errorSurface: 'inline' }` — the global
+ * MutationCache onError below respects it (errors are still logged, and an
+ * expired session still routes to sign-in). Mutations without the meta keep
+ * the old toast behavior — the legacy portal pages rely on it until dissolve.
+ */
+declare module '@tanstack/react-query' {
+  interface Register {
+    mutationMeta: {
+      /** 'inline' = the caller renders the failure inline (R83); no global toast. */
+      errorSurface?: 'inline';
+      successMessage?: string;
+      [key: string]: unknown;
+    };
+  }
+}
+
 // Create query cache with error handling
 const queryCache = new QueryCache({
   onError: (error, query) => {
@@ -51,6 +71,10 @@ const mutationCache = new MutationCache({
   onError: (error, _variables, _context, mutation) => {
     const appError = handleApiError(error);
 
+    // R83 — mutations that render their own inline error band opt out of the
+    // global toast (see the meta contract at the top of this file).
+    const inlineErrorSurface = mutation.meta?.errorSurface === 'inline';
+
     // Log error for monitoring
     logError(appError, {
       mutationKey: mutation.options.mutationKey,
@@ -64,13 +88,22 @@ const mutationCache = new MutationCache({
       if (handleAuthExpiry(error)) {
         return;
       }
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
+      if (
+        !inlineErrorSurface &&
+        typeof window !== 'undefined' &&
+        !window.location.pathname.startsWith('/auth')
+      ) {
         console.warn('Authentication error in mutation:', mutation.options.mutationKey);
         showErrorToast({
           code: 'AUTHENTICATION_REQUIRED',
           message: 'Please sign in to continue',
         });
       }
+      return;
+    }
+
+    // Inline-surface mutations render the failure at the act site — no toast.
+    if (inlineErrorSurface) {
       return;
     }
 

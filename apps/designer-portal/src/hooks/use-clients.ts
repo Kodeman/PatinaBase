@@ -16,6 +16,7 @@ export {
   useSendClientMessage,
   useClientProjects,
   useAddClient,
+  useInviteAndLinkClient,
 } from '@patina/supabase';
 
 export type {

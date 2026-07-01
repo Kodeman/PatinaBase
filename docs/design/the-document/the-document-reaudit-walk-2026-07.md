@@ -51,3 +51,23 @@ Not walked: /compose (Composing Page — L4-validated previously), client-portal
 - **Obs-3** People Engine nudge calls a 1-hour-old client the "strongest dormant tie" — §14.20 threshold tuning.
 - **Obs-4** Desk/⌘K walk-through confirmed: project create/complete, invoice create/record/void/print, vendor add, XLSX import, teaching validate, team mgmt, scan viewer have NO Document doorway (P0/P1 gap set confirmed).
 - **Obs-5** Bell → /portal/inbox exits the Document (R72 provisional, walk-proven; Track 10).
+
+---
+
+## Re-walk — 2026-07-01 evening (funnel repair verified)
+
+All findings fixed and re-walked live on a fresh db reset @00236 + seeds (designer@patina.dev):
+
+| Finding | Fix | Re-walk |
+|---|---|---|
+| F2 | `project_type` (+ all lead prefills) persist at first hydration; UI ready-gate now strictly tighter than the RPC's; saves serialized + blur-flushed | **PASS** — Begin the Direction succeeded first click, no SQL crutch |
+| F3/F4 | Root cause was write ordering (unstable mutation object in effect deps → racing upserts), fixed in the shared save helper; dollars→cents correct | **PASS** — "budget 50,000–100,000" renders in Direction |
+| F5 | Content-bearing rows only; new-row autofocus | **PASS** — typed text lands in the new row; empty rows don't capture |
+| F6 | Route prefetch + "Opening…" acknowledgment + idempotent push (cold-compile feedback gap, not a dead handler) | **PASS** — first-click doorway |
+| F1 | Accepted-lead fallback in use-document-state (mirrors R6) | **PASS** — /doc/{leadId} redirects to the relationship doc |
+| F8 | Migration 00236: relationship title coalesces designer_clients.client_name | **PASS** — doc titled "Priya Nair" |
+| F7/R73 | ClientPicker invite-and-link (service-role invite → link same dc row) | **PASS, fully live** — "INVITE & LINK" row created the account, linked, recipient resolved, **proposal SENT** |
+| F10 | SignedSeal reads project existence; act calls `activate_proposal_as_project` (the R44/I7 safety net) | **PASS** — one click → Project · ACTIVE · WEEK 1 |
+| F2b/R83 | `meta.errorSurface='inline'` global toast opt-out; inline bands at acts; nudge outcome inline | **PASS** — zero toasts through the whole re-walk |
+
+The lead→proposal→project funnel is now walkable end-to-end in the Document with no fallback to /portal and no SQL intervention: capture → triage → discovery (5 essentials) → Begin the Direction → Drafting Room → invite & link a no-account household → send → watch view → (sign) → open the project.

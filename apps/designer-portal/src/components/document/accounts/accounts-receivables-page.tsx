@@ -88,8 +88,11 @@ function ReceivableRow({
   highlight: boolean;
   onOpenDocument: (projectId: string | null) => void;
 }) {
-  const send = useSendInvoice();
-  const chase = useChaseInvoice();
+  // R83 — the chase renders its failure inline (the `note` under the row);
+  // errorSurface:'inline' keeps the global mutation toast from duplicating it
+  // (walk finding F2b).
+  const send = useSendInvoice({ errorSurface: 'inline' });
+  const chase = useChaseInvoice({ errorSurface: 'inline' });
   const qc = useQueryClient();
   const [note, setNote] = useState<string | null>(null);
   const ref = useRef<HTMLLIElement>(null);

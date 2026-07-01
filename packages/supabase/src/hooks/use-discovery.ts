@@ -170,10 +170,13 @@ export function useUpsertDiscovery() {
 }
 
 /** The readiness act (R66): seed a draft proposal from the five essentials.
- *  Returns the new proposal id; the engagement re-derives Discovery→Direction. */
+ *  Returns the new proposal id; the engagement re-derives Discovery→Direction.
+ *  R83: the caller (DiscoverySection) renders failures as a quiet inline band
+ *  at the act — `errorSurface: 'inline'` opts out of the global error toast. */
 export function useBeginDirection() {
   const qc = useQueryClient();
   return useMutation({
+    meta: { errorSurface: 'inline' },
     mutationFn: async ({ designerClientId }: { designerClientId: string }) => {
       const supabase = getSupabase();
       const { data, error } = await supabase.rpc('begin_direction_from_discovery', {

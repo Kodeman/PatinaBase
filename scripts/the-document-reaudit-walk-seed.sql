@@ -10,6 +10,7 @@
 --
 -- document_state is a VIEW — no document rows to seed; the Desk derives.
 --
+-- Project ids resolve by name (the dev seed regenerates them per reset).
 -- Run:  docker exec -i supabase_db_supabase psql -U postgres -d postgres < scripts/the-document-reaudit-walk-seed.sql
 
 BEGIN;
@@ -42,15 +43,15 @@ INSERT INTO public.invoices
   (id, project_id, designer_id, client_id, invoice_number, status,
    issue_date, due_date, sent_at, subtotal_cents, total_cents, memo)
 VALUES
-  ('cc000004-0000-0000-0000-000000000001', '38bc73b0-d391-404d-8234-3437123e2923',
+  ('cc000004-0000-0000-0000-000000000001', (SELECT id FROM public.projects WHERE name = 'Chen Residence' LIMIT 1),
    'a0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000005',
    NULL, 'draft', NULL, NULL, NULL, 175000, 175000,
    'Walk seed — draft invoice (design fee, phase 2)'),
-  ('cc000004-0000-0000-0000-000000000002', '38bc73b0-d391-404d-8234-3437123e2923',
+  ('cc000004-0000-0000-0000-000000000002', (SELECT id FROM public.projects WHERE name = 'Chen Residence' LIMIT 1),
    'a0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000005',
    'INV-2026-W01', 'sent', current_date - 10, current_date + 20, now() - interval '10 days',
    240000, 240000, 'Walk seed — sent, not yet due'),
-  ('cc000004-0000-0000-0000-000000000003', '38bc73b0-d391-404d-8234-3437123e2923',
+  ('cc000004-0000-0000-0000-000000000003', (SELECT id FROM public.projects WHERE name = 'Chen Residence' LIMIT 1),
    'a0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000005',
    'INV-2026-W02', 'sent', current_date - 45, current_date - 15, now() - interval '45 days',
    380000, 380000, 'Walk seed — 15 days overdue (receivables chase)')
@@ -72,16 +73,16 @@ INSERT INTO public.project_time_entries
   (id, project_id, user_id, phase_key, started_at, duration_minutes, notes,
    billable, hourly_rate_cents, invoice_id, source, activity)
 VALUES
-  ('dd000004-0000-0000-0000-000000000001', '38bc73b0-d391-404d-8234-3437123e2923',
+  ('dd000004-0000-0000-0000-000000000001', (SELECT id FROM public.projects WHERE name = 'Chen Residence' LIMIT 1),
    'a0000000-0000-0000-0000-000000000004', 'design', now() - interval '2 hours', 45,
    'Walk seed — sketch review', true, 15000, NULL, 'manual_entry', 'design'),
-  ('dd000004-0000-0000-0000-000000000002', '38bc73b0-d391-404d-8234-3437123e2923',
+  ('dd000004-0000-0000-0000-000000000002', (SELECT id FROM public.projects WHERE name = 'Chen Residence' LIMIT 1),
    'a0000000-0000-0000-0000-000000000004', 'design', now() - interval '1 day 3 hours', 90,
    'Walk seed — client presentation prep', true, 15000, NULL, 'manual_entry', 'client'),
-  ('dd000004-0000-0000-0000-000000000003', '04d5631a-f1df-485c-87de-d9fcca907fc9',
+  ('dd000004-0000-0000-0000-000000000003', (SELECT id FROM public.projects WHERE name = 'Olsen Lake House' LIMIT 1),
    'a0000000-0000-0000-0000-000000000004', 'design', now() - interval '2 days 5 hours', 60,
    'Walk seed — sourcing pass', true, 15000, NULL, 'manual_entry', 'sourcing'),
-  ('dd000004-0000-0000-0000-000000000004', '04d5631a-f1df-485c-87de-d9fcca907fc9',
+  ('dd000004-0000-0000-0000-000000000004', (SELECT id FROM public.projects WHERE name = 'Olsen Lake House' LIMIT 1),
    'a0000000-0000-0000-0000-000000000004', 'design', now() - interval '3 days', 30,
    'Walk seed — vendor call', true, 15000, NULL, 'manual_entry', 'admin')
 ON CONFLICT (id) DO NOTHING;

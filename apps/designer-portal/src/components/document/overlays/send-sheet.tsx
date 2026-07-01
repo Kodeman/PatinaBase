@@ -58,8 +58,10 @@ export function SendSheet({
   const qc = useQueryClient();
   const { data: proposal } = useProposal(proposalId) as { data: any };
   const { data: versions } = useProposalVersions(proposalId);
-  const sendProposal = useSendProposal();
-  const updateProposal = useUpdateProposal();
+  // R83 — this sheet renders failures inline at the act site (sendError /
+  // linkError bands below); the global mutation toast stays quiet.
+  const sendProposal = useSendProposal({ errorSurface: 'inline' });
+  const updateProposal = useUpdateProposal({ errorSurface: 'inline' });
   const { toast } = useToast();
 
   // A sibling version already accepted? Sending this one won't affect it.
@@ -73,6 +75,7 @@ export function SendSheet({
   const [personalMessage, setPersonalMessage] = useState('');
   const [showAltAddress, setShowAltAddress] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   const clientEmail: string | undefined = proposal?.client?.email ?? undefined;
 
@@ -163,15 +166,35 @@ export function SendSheet({
                 <div className="max-w-[320px]">
                   <ClientPicker
                     value={null}
-                    onChange={(clientId) =>
-                      updateProposal.mutate({
-                        proposalId,
-                        updates: { client_id: clientId },
-                      })
-                    }
+                    onChange={(clientId) => {
+                      setLinkError(null);
+                      updateProposal.mutate(
+                        {
+                          proposalId,
+                          updates: { client_id: clientId },
+                        },
+                        {
+                          // R83 — inline at the act, in the banner that owns it.
+                          onError: (err) =>
+                            setLinkError(
+                              err instanceof Error
+                                ? err.message
+                                : 'Could not link the client. Try again.',
+                            ),
+                        },
+                      );
+                    }}
                     placeholder="Link a client…"
                   />
                 </div>
+                {linkError && (
+                  <p
+                    role="alert"
+                    className="mt-2 text-[11px] leading-snug text-[var(--color-terracotta)]"
+                  >
+                    {linkError} <span className="opacity-80">Pick the client again to retry.</span>
+                  </p>
+                )}
               </div>
             )}
 

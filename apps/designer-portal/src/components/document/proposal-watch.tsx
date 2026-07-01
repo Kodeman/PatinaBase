@@ -12,8 +12,11 @@
  *   · awaiting (sent / viewed / revised) — the full watch (figures · the client's
  *     copy as sent · the record · acts).
  *   · terminal (expired / declined) — the same watch, acts lead with Revise.
- *   · settled (accepted) — collapses to a one-line SIGNED seal (the project is
- *     open; the document has advanced).
+ *   · settled (accepted) — collapses to a one-line SIGNED seal. The seal READS
+ *     whether a project actually exists (F10, walk 2026-07): if it does, "the
+ *     project is open" is a doorway into it; if not (a sign that didn't
+ *     auto-activate), the seal carries the act itself — Open the project →
+ *     via activate_proposal_as_project, the R44 two-step safety net (I7).
  *
  * All state lives in the figures strip + the record (the engagement log). Flat:
  * left-accent + hairlines, zero shadows (D4); no motion (the breath stays on the
@@ -23,10 +26,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { useActivateProposal } from '@patina/supabase';
 import { familyLabel } from '@/lib/document/family-label';
 import { useProposalWatch } from '@/hooks/use-proposal-watch';
+import { useProposalProject } from '@/hooks/use-proposal-project';
 import { useNudgeProposal } from '@/hooks/use-proposals';
-import { useToast } from '@/components/portal/toast-provider';
 import type { ProposalWatchModel } from '@/lib/document/proposal-watch-derivation';
 import { Stamp } from './stamp';
 import { Instrument, InstrumentRow } from './instrument';
@@ -107,41 +112,41 @@ export function ProposalWatch({
   const [recordOpen, setRecordOpen] = useState(false);
 
   const nudge = useNudgeProposal();
-  const { toast } = useToast();
   const family = familyLabel(clientName);
 
   // Send the client a gentle reminder. The RPC stamps + cools down; the email is
-  // best-effort (surfaced via _emailDispatched), so we toast the real outcome.
+  // best-effort (surfaced via _emailDispatched). The outcome reads inline at the
+  // act (R83 — no toasts on Document surfaces).
+  const [nudgeNote, setNudgeNote] = useState<{ text: string; tone: 'ok' | 'warn' | 'err' } | null>(
+    null,
+  );
   const onNudge = async () => {
+    setNudgeNote(null);
     try {
       const res = await nudge.mutateAsync({ proposalId });
-      toast(
+      setNudgeNote(
         res._emailDispatched
-          ? `Reminder sent to ${family}.`
-          : `Nudge recorded, but the email couldn’t be sent — follow up directly.`,
-        res._emailDispatched ? 'success' : 'warning',
+          ? { text: `Reminder sent to ${family}.`, tone: 'ok' }
+          : {
+              text: 'Nudge recorded, but the email couldn’t be sent — follow up directly.',
+              tone: 'warn',
+            },
       );
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not send the reminder.', 'error');
+      setNudgeNote({
+        text: e instanceof Error ? e.message : 'Could not send the reminder.',
+        tone: 'err',
+      });
     }
   };
 
   // Draft (handled by the work band) or still loading — nothing to watch.
   if (!w || (!w.awaitingClient && !w.terminal && !w.settled)) return null;
 
-  // Settled (accepted) — the document advanced; collapse to a quiet seal.
+  // Settled (accepted) — collapse to a quiet seal that reads whether the
+  // project actually exists (F10) and carries the doorway or the act.
   if (w.settled) {
-    return (
-      <div className="mt-1 flex items-center gap-3 rounded-[5px] border border-[var(--color-pearl)] bg-[rgba(168,181,160,0.12)] px-4 py-3">
-        <Stamp label="SIGNED" color="var(--color-sage)" />
-        <p className="text-[12.5px] text-[var(--color-charcoal)]">
-          Signed{w.acceptedAt ? ` ${fmtDay(w.acceptedAt)}` : ''} — the project is open.
-        </p>
-        <span className="ml-auto">
-          <ProposalVersionHistory proposalId={proposalId} />
-        </span>
-      </div>
-    );
+    return <SignedSeal proposalId={proposalId} acceptedAt={w.acceptedAt} />;
   }
 
   return (
@@ -267,6 +272,24 @@ export function ProposalWatch({
         <ProposalVersionHistory proposalId={proposalId} />
       </InstrumentRow>
 
+      {/* The nudge outcome — quiet, inline at the act (R83/R51 grammar). */}
+      {nudgeNote && (
+        <p
+          role={nudgeNote.tone === 'err' ? 'alert' : 'status'}
+          className="mt-2 font-mono text-[10px] uppercase tracking-[0.06em]"
+          style={{
+            color:
+              nudgeNote.tone === 'ok'
+                ? 'var(--color-sage)'
+                : nudgeNote.tone === 'warn'
+                  ? 'var(--color-aged-oak)'
+                  : '#C77B6E',
+          }}
+        >
+          {nudgeNote.text}
+        </p>
+      )}
+
       {/* Overlays — local state over the still-mounted document (D1). */}
       <ReviseSheet
         proposalId={proposalId}
@@ -281,6 +304,97 @@ export function ProposalWatch({
           clientName={clientName}
           onClose={() => setPreviewOpen(false)}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * SignedSeal — the settled (accepted) band (F10, walk 2026-07). The old seal
+ * statically claimed "the project is open"; a sign that did not auto-activate
+ * (sign_proposal with p_auto_activate=false, or the legacy route) has no
+ * project, so the Desk's "Signed — open the project" need (I7) dead-ended here.
+ *
+ * Now the seal reads the truth (useProposalProject, whole chain):
+ *   · project exists — "the project is open →" is a doorway into `/doc/{id}`.
+ *   · no project — the seal carries the act: one solid quiet button calling
+ *     activate_proposal_as_project (the SAME activation sign_proposal delegates
+ *     to — the R44 two-step safety net). One act, many surfaces: on success the
+ *     Desk grain is invalidated (the proposal_signed folder derives away, the
+ *     engagement becomes shape A) and we walk into the new document.
+ *   · failure — a quiet inline terracotta line at the act site (R83, no toast);
+ *     the button stays as the retry.
+ */
+function SignedSeal({
+  proposalId,
+  acceptedAt,
+}: {
+  proposalId: string;
+  acceptedAt: string | null;
+}) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const { data: link, isLoading } = useProposalProject(proposalId);
+  const activate = useActivateProposal();
+  const [activateError, setActivateError] = useState<string | null>(null);
+
+  const projectId = link?.projectId ?? null;
+  const signedLine = `Signed${acceptedAt ? ` ${fmtDay(acceptedAt)}` : ''}`;
+
+  const onOpenProject = async () => {
+    setActivateError(null);
+    try {
+      const newProjectId = await activate.mutateAsync({ proposalId });
+      // The Desk reads document_state under its own keys — clear the grain so
+      // the signed folder re-derives away, then walk into the new document.
+      void qc.invalidateQueries({ queryKey: ['document-state'] });
+      void qc.invalidateQueries({ queryKey: ['proposal-project', proposalId] });
+      router.push(`/doc/${newProjectId}`);
+    } catch (e) {
+      setActivateError(e instanceof Error ? e.message : 'the activation did not go through');
+    }
+  };
+
+  return (
+    <div className="mt-1 rounded-[5px] border border-[var(--color-pearl)] bg-[rgba(168,181,160,0.12)] px-4 py-3">
+      <div className="flex items-center gap-3">
+        <Stamp label="SIGNED" color="var(--color-sage)" />
+        <p className="text-[12.5px] text-[var(--color-charcoal)]">
+          {projectId ? (
+            <>
+              {signedLine} —{' '}
+              <button
+                type="button"
+                onClick={() => router.push(`/doc/${projectId}`)}
+                className="font-medium text-[var(--color-clay)] underline decoration-[rgba(196,165,123,0.45)] underline-offset-2 transition-colors hover:text-[var(--color-mocha)]"
+              >
+                the project is open →
+              </button>
+            </>
+          ) : isLoading ? (
+            signedLine
+          ) : (
+            `${signedLine} — waiting on your hand to open the project.`
+          )}
+        </p>
+        <span className="ml-auto flex shrink-0 items-center gap-3">
+          {!isLoading && !projectId && (
+            <button
+              type="button"
+              disabled={activate.isPending}
+              onClick={() => void onOpenProject()}
+              className="rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {activate.isPending ? 'Opening…' : 'Open the project →'}
+            </button>
+          )}
+          <ProposalVersionHistory proposalId={proposalId} />
+        </span>
+      </div>
+      {activateError && (
+        <p role="alert" className="mt-2 text-[11.5px] text-[#C77B6E]">
+          Could not open the project — {activateError}. Try again.
+        </p>
       )}
     </div>
   );

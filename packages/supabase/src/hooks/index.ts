@@ -214,6 +214,7 @@ export {
   useSendClientMessage,
   useClientProjects,
   useAddClient,
+  useInviteAndLinkClient,
 } from './use-clients';
 export type { DesignerClient, ClientLifecycleStage, ClientMessage, ClientFilters } from './use-clients';
 export {

@@ -705,9 +705,10 @@ export function useDeleteDraftInvoice() {
  * sequential number, recomputes totals, flips linked pending milestones to
  * outstanding. Pass projectId so milestone/financial caches refresh.
  */
-export function useIssueInvoice() {
+export function useIssueInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       invoiceId,
       dueDate,
@@ -780,10 +781,16 @@ export function useRecordPayment() {
  * Pass type: 'reminder' for a designer-initiated manual nudge (A/R page):
  * renders the overdue-notice template instead of invoice_sent and leaves the
  * automated cadence counters (reminder_count / last_reminder_at) untouched.
+ *
+ * Document-surface callers that render failures inline (R83 — the error
+ * grammar) pass `{ errorSurface: 'inline' }` so the designer portal's global
+ * mutation onError raises no toast. Legacy portal callers omit it and keep
+ * the toast until dissolve.
  */
-export function useSendInvoice() {
+export function useSendInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       invoiceId,
       message,
@@ -833,10 +840,13 @@ export function useSendInvoice() {
  * act — the email goes through useSendInvoice({ type:'reminder' }); chasing
  * leaves the timestamp the Desk reads so the overdue-invoice need clears.
  * Returns the new timestamp (null when the invoice isn't the caller's).
+ *
+ * `{ errorSurface: 'inline' }` — see useSendInvoice (R83).
  */
-export function useChaseInvoice() {
+export function useChaseInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       invoiceId,
     }: {

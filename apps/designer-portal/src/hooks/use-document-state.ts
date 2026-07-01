@@ -5,8 +5,14 @@
  * The id accepts ANY of the engagement's keys (engagement_id / project_id /
  * proposal_id / lead_id) and canonicalizes to the view row — the resolver
  * blessed by spec §3, logged as DECISIONS.md I8. The URL is not rewritten,
- * with ONE exception (R6): an activated proposal's id resolves to a redirect
- * to `/doc/[projectId]` so pre-signing links survive the signing moment.
+ * with TWO exceptions where the document's identity moves across a threshold:
+ *   · R6 — an activated proposal's id resolves to a redirect to
+ *     `/doc/[projectId]` so pre-signing links survive the signing moment.
+ *   · F1 (walk 2026-07) — an ACCEPTED lead's id resolves to a redirect to
+ *     `/doc/[designerClientId]`: Accept moves the identity to the
+ *     designer_clients relationship row (shape D keys engagement_id on it,
+ *     and shape C excludes status 'accepted'), so pre-accept links survive
+ *     the intake moment the same way.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -20,7 +26,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export type DocumentResolution =
   | { kind: 'engagement'; row: DocumentStateRow }
-  | { kind: 'redirect'; projectId: string } // activated proposal id (R6)
+  // The target document id: an activated proposal's project (R6) or an
+  // accepted lead's designer_clients relationship (F1). The consumer just
+  // replaces the URL with `/doc/${projectId}` either way.
+  | { kind: 'redirect'; projectId: string }
   | { kind: 'missing' };
 
 export function useDocumentEngagement(id: string) {
@@ -48,6 +57,27 @@ export function useDocumentEngagement(id: string) {
         .maybeSingle();
       if (propError) throw propError;
       if (prop?.project_id) return { kind: 'redirect', projectId: prop.project_id };
+
+      // F1: the document grew across the INTAKE moment — Accept converts the
+      // lead into a designer_clients relationship (00224), whose row is the
+      // document's new identity (shape D). Mirror R6: one extra lookup on the
+      // miss path only, then redirect so the pre-accept link keeps answering.
+      const { data: lead, error: leadError } = await supabase
+        .from('leads')
+        .select('id, status')
+        .eq('id', id)
+        .maybeSingle();
+      if (leadError) throw leadError;
+      if (lead?.status === 'accepted') {
+        const { data: rels, error: relError } = await supabase
+          .from('designer_clients')
+          .select('id')
+          .eq('lead_id', id)
+          .limit(1);
+        if (relError) throw relError;
+        const rel = (rels ?? [])[0] as { id: string } | undefined;
+        if (rel?.id) return { kind: 'redirect', projectId: rel.id };
+      }
 
       return { kind: 'missing' };
     },

@@ -4,7 +4,12 @@ import * as React from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Command as CommandPrimitive } from 'cmdk';
 import { ChevronDown, Plus, Check } from 'lucide-react';
-import { useClients, useAddClient, type DesignerClient } from '@/hooks/use-clients';
+import {
+  useClients,
+  useAddClient,
+  useInviteAndLinkClient,
+  type DesignerClient,
+} from '@/hooks/use-clients';
 import { cn } from '@/lib/utils';
 
 export interface ClientPickerProps {
@@ -52,9 +57,16 @@ export function ClientPicker({
   const [search, setSearch] = React.useState('');
   const [adding, setAdding] = React.useState(false);
   const [addError, setAddError] = React.useState<string | null>(null);
+  // R73 invite-on-send: which not-yet-linkable row is mid-invite, and the
+  // inline (R83) failure reason for the row that last failed.
+  const [invitingId, setInvitingId] = React.useState<string | null>(null);
+  const [inviteError, setInviteError] = React.useState<{ id: string; message: string } | null>(
+    null,
+  );
 
   const { data: clients, isLoading } = useClients();
   const addClient = useAddClient();
+  const inviteAndLink = useInviteAndLinkClient();
 
   // Only contacts that are linkable carry a non-null client_id (a profiles.id).
   const labelFor = React.useCallback((dc: DesignerClient) => {
@@ -116,6 +128,43 @@ export function ClientPicker({
     }
   };
 
+  // R73 — invite-on-send. A captured household (client_id NULL, client_email
+  // set) can't be linked directly; selecting its row invites the email on file
+  // (create-and-link the Patina account via useInviteAndLinkClient → the
+  // /api/clients/invite designerClientId path) and then proceeds exactly like
+  // a normal selection with the new profile id. Failures render inline at the
+  // row (R83) — the mutation carries meta.errorSurface='inline', so the global
+  // toast stays quiet; re-selecting the row is the retry act.
+  const handleInviteAndLink = async (dc: DesignerClient) => {
+    if (disabled || invitingId || !dc.client_email) return;
+    setInvitingId(dc.id);
+    setInviteError(null);
+    try {
+      const result = await inviteAndLink.mutateAsync({
+        designerClientId: dc.id,
+        clientEmail: dc.client_email,
+        clientName: dc.client_name ?? undefined,
+      });
+      if (result.profileId) {
+        onChange(result.profileId);
+        setSearch('');
+        setOpen(false);
+      } else {
+        setInviteError({
+          id: dc.id,
+          message: 'The invite went out but no account came back.',
+        });
+      }
+    } catch (err) {
+      setInviteError({
+        id: dc.id,
+        message: err instanceof Error ? err.message : 'Could not invite this client.',
+      });
+    } finally {
+      setInvitingId(null);
+    }
+  };
+
   const triggerLabel = selected
     ? labelFor(selected)
     : isLoading
@@ -160,7 +209,7 @@ export function ClientPicker({
           <PopoverPrimitive.Content
             align="start"
             sideOffset={4}
-            className="z-50 w-[var(--radix-popover-trigger-width)] min-w-[260px] rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] shadow-md outline-none"
+            className="z-50 w-[var(--radix-popover-trigger-width)] min-w-[260px] rounded-md border border-[var(--border-subtle)] bg-[var(--bg-surface)] outline-none"
           >
             <CommandPrimitive shouldFilter={false} className="flex flex-col overflow-hidden">
               <div className="flex items-center border-b border-[var(--border-subtle)] px-3">
@@ -198,53 +247,93 @@ export function ClientPicker({
 
                 {filtered.map((dc) => {
                   const linkable = !!dc.client_id;
+                  // R73: a captured row with an email on file is invitable —
+                  // selecting it invites & links, then proceeds like a normal
+                  // selection. Only an email-less row stays truly disabled.
+                  const invitable = !linkable && !!dc.client_email;
+                  const isInviting = invitingId === dc.id;
                   const isSelected = linkable && dc.client_id === value;
                   const subtitle = subtitleFor(dc);
                   return (
-                    <CommandPrimitive.Item
-                      key={dc.id}
-                      value={dc.id}
-                      data-testid={`client-picker-option-${dc.client_id ?? dc.id}`}
-                      disabled={!linkable}
-                      onSelect={() => {
-                        if (disabled || !linkable) return;
-                        onChange(dc.client_id);
-                        setSearch('');
-                        setOpen(false);
-                      }}
-                      className={cn(
-                        'relative flex select-none items-center gap-2 rounded-md px-2 py-1.5 text-[0.85rem] outline-none transition-colors',
-                        linkable
-                          ? 'cursor-pointer aria-selected:bg-[var(--bg-hover)]'
-                          : 'cursor-not-allowed opacity-60 data-[disabled=true]:opacity-60'
-                      )}
-                      style={{ fontFamily: 'var(--font-body)' }}
-                    >
-                      <span
+                    <React.Fragment key={dc.id}>
+                      <CommandPrimitive.Item
+                        value={dc.id}
+                        data-testid={`client-picker-option-${dc.client_id ?? dc.id}`}
+                        disabled={!linkable && !invitable}
+                        onSelect={() => {
+                          if (disabled || invitingId) return;
+                          if (linkable) {
+                            onChange(dc.client_id);
+                            setSearch('');
+                            setOpen(false);
+                          } else if (invitable) {
+                            void handleInviteAndLink(dc);
+                          }
+                        }}
                         className={cn(
-                          'flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border',
-                          isSelected
-                            ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-white'
-                            : 'border-[var(--color-pearl)]'
+                          'group relative flex select-none items-center gap-2 rounded-md px-2 py-1.5 text-[0.85rem] outline-none transition-colors',
+                          linkable || invitable
+                            ? 'cursor-pointer aria-selected:bg-[var(--bg-hover)]'
+                            : 'cursor-not-allowed opacity-60 data-[disabled=true]:opacity-60'
                         )}
-                        aria-hidden
+                        style={{ fontFamily: 'var(--font-body)' }}
                       >
-                        {isSelected && <Check className="h-3 w-3" />}
-                      </span>
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate text-[var(--text-primary)]">{labelFor(dc)}</span>
-                        {subtitle && (
-                          <span className="truncate text-[0.7rem] text-[var(--text-muted)]">
-                            {subtitle}
+                        <span
+                          className={cn(
+                            'flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border',
+                            isSelected
+                              ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)] text-white'
+                              : 'border-[var(--color-pearl)]'
+                          )}
+                          aria-hidden
+                        >
+                          {isSelected && <Check className="h-3 w-3" />}
+                        </span>
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="truncate text-[var(--text-primary)]">{labelFor(dc)}</span>
+                          {subtitle && (
+                            <span className="truncate text-[0.7rem] text-[var(--text-muted)]">
+                              {subtitle}
+                            </span>
+                          )}
+                        </span>
+                        {!linkable && (
+                          <span
+                            className={cn(
+                              'shrink-0 rounded-sm bg-[var(--bg-hover)] px-1.5 py-0.5 text-[0.6rem] uppercase tracking-wide',
+                              isInviting ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'
+                            )}
+                          >
+                            {isInviting ? (
+                              'Inviting…'
+                            ) : invitable ? (
+                              // The tag reads "No Patina account" at rest and
+                              // becomes the act — "Invite & link" — when the row
+                              // is hovered/highlighted (cmdk sets aria-selected).
+                              <>
+                                <span className="group-aria-selected:hidden">No Patina account</span>
+                                <span className="hidden text-[var(--accent-primary)] group-aria-selected:inline">
+                                  Invite &amp; link
+                                </span>
+                              </>
+                            ) : (
+                              'No email on file'
+                            )}
                           </span>
                         )}
-                      </span>
-                      {!linkable && (
-                        <span className="shrink-0 rounded-sm bg-[var(--bg-hover)] px-1.5 py-0.5 text-[0.6rem] uppercase tracking-wide text-[var(--text-muted)]">
-                          No Patina account
-                        </span>
+                      </CommandPrimitive.Item>
+                      {/* R83 — quiet inline reason at the act site; no toast. */}
+                      {inviteError?.id === dc.id && !isInviting && (
+                        <div
+                          role="alert"
+                          data-testid={`client-picker-invite-error-${dc.id}`}
+                          className="px-2 pb-1 pt-0.5 text-[0.7rem] leading-snug text-[var(--color-terracotta)]"
+                        >
+                          {inviteError.message}
+                          <span className="opacity-80"> Select the row again to retry.</span>
+                        </div>
                       )}
-                    </CommandPrimitive.Item>
+                    </React.Fragment>
                   );
                 })}
 
