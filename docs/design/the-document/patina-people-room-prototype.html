@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Patina · The People Room · the studio's relationships</title>
+<style>
+  /* ============ Patina · The People Room (canonical look/feel) ============
+     Typography-first. No box-shadows anywhere (D4). Strata rules, not tabs.
+     Brand tokens only. A walk-in Room (D14): full-bleed paper, drawer persists. */
+  :root{
+    --off-white:#FAF7F2; --clay:#C4A57B; --aged-oak:#8B7355; --mocha:#5C4A3C;
+    --charcoal:#2C2926; --sage:#A8B5A0; --dusty-blue:#8B9CAD; --terracotta:#D4A090;
+    --golden:#E8C547;
+    --ink:#2C2926; --paper:#FAF7F2; --rule:#E5DDD0; --rule-strong:#D8CcB8;
+    --muted:#8B7355;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--paper);color:var(--ink);
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,.serif{font-family:"Playfair Display",Georgia,"Times New Roman",serif;font-weight:500}
+  .mono{font-family:"DM Mono","SFMono-Regular",Menlo,Consolas,monospace}
+  a{color:inherit}
+  /* ---- Room shell ---- */
+  .room{min-height:100vh;display:flex;flex-direction:column;background:
+    linear-gradient(var(--paper),var(--paper)) padding-box;}
+  .room-head{display:flex;align-items:baseline;gap:18px;padding:22px 34px 0;}
+  .back{font-size:13px;color:var(--muted);letter-spacing:.02em;cursor:pointer;border:none;background:none}
+  .back:hover{color:var(--ink)}
+  .room-ident{font-size:13px;color:var(--muted)}
+  .room-title{font-size:30px;letter-spacing:-.01em;padding:2px 34px 0;}
+  .room-sub{padding:2px 34px 0;color:var(--muted);font-size:13.5px;max-width:62ch}
+  /* ---- view links (DM-mono page links, never tabs) ---- */
+  .views{display:flex;gap:26px;padding:18px 34px 0;align-items:center}
+  .view-link{font-family:"DM Mono",monospace;font-size:12.5px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--muted);cursor:pointer;padding-bottom:8px;border:none;background:none}
+  .view-link.active{color:var(--ink)}
+  .view-link .tick{display:inline-block;width:0;height:0;border-left:3px solid transparent;
+    border-right:3px solid transparent;border-top:4px solid var(--clay);margin-right:6px;vertical-align:middle;opacity:0}
+  .view-link.active .tick{opacity:1}
+  .head-rule{height:1px;background:var(--rule);margin:14px 34px 0}
+  /* ---- body ---- */
+  .body{flex:1;padding:20px 34px 96px;}
+  /* front-matter band (I23 grammar) */
+  .frontmatter{display:flex;gap:40px;flex-wrap:wrap;background:#26231F;color:#E9E1D4;
+    border-radius:2px;padding:16px 22px;margin-bottom:22px}
+  .fm-lens{font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+    color:#9a9082;align-self:center;margin-right:6px}
+  .fm-stat .n{font-family:"Playfair Display",serif;font-size:22px;line-height:1}
+  .fm-stat .l{font-size:11px;color:#a59c8c;letter-spacing:.03em;margin-top:3px}
+  .fm-stat .n.sage{color:var(--sage)} .fm-stat .n.terra{color:var(--terracotta)}
+  /* ---- two-pane: directory | threads ---- */
+  .two-pane{display:grid;grid-template-columns:1.05fr 1fr;gap:0;border-top:1px solid var(--rule)}
+  .pane{padding:18px 0}
+  .pane.left{padding-right:30px;border-right:1px solid var(--rule)}
+  .pane.right{padding-left:30px}
+  .pane-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .pane-title{font-family:"DM Mono",monospace;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .pane-count{font-size:12px;color:var(--muted)}
+  .search{width:100%;border:none;border-bottom:1px solid var(--rule-strong);background:none;
+    padding:7px 0;font-size:14px;color:var(--ink);margin-bottom:6px;font-family:inherit}
+  .search:focus{outline:none;border-bottom-color:var(--clay)}
+  .scopes{display:flex;gap:16px;margin:8px 0 4px}
+  .scope{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.05em;color:var(--muted);cursor:pointer;border:none;background:none}
+  .scope.active{color:var(--ink);border-bottom:1px solid var(--clay)}
+  /* person row */
+  .person{display:flex;align-items:flex-start;gap:12px;padding:13px 6px 13px 2px;
+    border-bottom:1px solid var(--rule);cursor:pointer}
+  .person:hover{background:#F3EEE4}
+  .person.sel{background:#F0EADC}
+  .ini{width:30px;height:30px;border-radius:50%;border:1px solid var(--rule-strong);
+    display:flex;align-items:center;justify-content:center;font-family:"DM Mono",monospace;
+    font-size:12px;color:var(--mocha);flex:none;margin-top:1px}
+  .p-main{flex:1;min-width:0}
+  .p-name{font-size:15px;display:flex;align-items:center;gap:8px}
+  .p-meta{font-size:12.5px;color:var(--muted);margin-top:1px}
+  .role{font-family:"DM Mono",monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
+    padding:1px 6px;border:1px solid var(--rule-strong);border-radius:2px;color:var(--aged-oak)}
+  .role.client{color:var(--mocha);border-color:#D9C3A3}
+  .role.gc{color:var(--dusty-blue);border-color:#C2CDD6}
+  .role.vendor{color:var(--aged-oak);border-color:#D8CcB8}
+  .role.rep{color:var(--muted)}
+  /* strata mark (3 descending lines, fill = relationship stage) */
+  .strata{display:inline-flex;flex-direction:column;gap:2px;width:34px;flex:none;margin-top:5px}
+  .strata i{height:2.5px;border-radius:1px;background:var(--rule-strong);display:block}
+  .strata i.l1{width:100%} .strata i.l2{width:80%} .strata i.l3{width:60%}
+  .strata i.f1{background:var(--mocha)} .strata i.f2{background:var(--clay)} .strata i.f3{background:var(--dusty-blue)}
+  /* thread row */
+  .thread{padding:13px 6px;border-bottom:1px solid var(--rule);cursor:pointer}
+  .thread:hover{background:#F3EEE4}
+  .th-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .th-who{font-size:14px}
+  .th-when{font-size:11.5px;color:var(--muted);font-family:"DM Mono",monospace;flex:none}
+  .th-prev{font-size:13px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .awaiting{font-family:"DM Mono",monospace;font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--terracotta);border:1px solid #E3C3B4;border-radius:2px;padding:1px 5px;margin-left:8px}
+  /* ---- profile (journey) ---- */
+  .profile{border-top:1px solid var(--rule);padding-top:20px;display:none}
+  .profile.show{display:block}
+  .prof-head{display:flex;align-items:baseline;gap:14px}
+  .prof-name{font-size:26px}
+  .prof-dna{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0 18px}
+  .dna{font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.05em;padding:2px 8px;
+    border:1px solid var(--rule-strong);border-radius:2px;color:var(--aged-oak);background:#F3EEE4}
+  .prof-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:34px}
+  .mini-rule{display:flex;align-items:center;gap:8px;margin:4px 0 10px}
+  .mini-rule .lbl{font-family:"DM Mono",monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .mini-rule .ln{flex:1;height:1px;background:var(--rule)}
+  .tl{position:relative;padding-left:16px}
+  .tl-item{position:relative;padding:0 0 13px 0;font-size:13.5px}
+  .tl-item:before{content:"";position:absolute;left:-16px;top:6px;width:5px;height:5px;border-radius:50%;background:var(--clay)}
+  .tl-date{font-family:"DM Mono",monospace;font-size:11px;color:var(--muted);margin-right:8px}
+  .stamp{font-family:"DM Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    padding:1px 6px;border:1.5px solid var(--mocha);border-radius:2px;color:var(--mocha);
+    display:inline-block;transform:rotate(-1.5deg)}
+  .signal{display:flex;justify-content:space-between;font-size:13px;padding:7px 0;border-bottom:1px solid var(--rule)}
+  .signal .v{color:var(--muted);font-family:"DM Mono",monospace;font-size:12px}
+  .act-row{display:flex;gap:10px;margin-top:16px}
+  .btn{font-family:"DM Mono",monospace;font-size:11.5px;letter-spacing:.05em;padding:7px 13px;
+    border:1px solid var(--rule-strong);border-radius:2px;background:none;color:var(--ink);cursor:pointer}
+  .btn:hover{border-color:var(--clay)}
+  .btn.primary{border-color:var(--mocha);color:var(--mocha)}
+  .link-across{font-size:12px;color:var(--dusty-blue);cursor:pointer}
+  /* ---- pipeline funnel ---- */
+  .funnel{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--rule)}
+  .stage{padding:16px 18px;border-right:1px solid var(--rule)}
+  .stage:last-child{border-right:none}
+  .stage-h{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--muted);display:flex;justify-content:space-between}
+  .stage-h .c{color:var(--ink)}
+  .card{padding:10px 0;border-bottom:1px solid var(--rule);font-size:13.5px}
+  .card .nm{display:block}
+  .card .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .triage{display:flex;gap:8px;margin-top:7px}
+  .triage button{font-family:"DM Mono",monospace;font-size:10px;letter-spacing:.05em;padding:3px 8px;
+    border:1px solid var(--rule-strong);border-radius:2px;background:none;cursor:pointer;color:var(--muted)}
+  .triage .accept:hover{color:var(--sage);border-color:var(--sage)}
+  .triage .pass:hover{color:var(--muted)}
+  .triage .decline:hover{color:var(--terracotta);border-color:var(--terracotta)}
+  /* ---- outreach ---- */
+  .outreach{border-top:1px solid var(--rule);padding-top:18px;display:grid;grid-template-columns:1.3fr 1fr;gap:34px}
+  .camp{padding:12px 0;border-bottom:1px solid var(--rule)}
+  .camp-h{display:flex;justify-content:space-between;align-items:baseline}
+  .camp-name{font-size:14.5px}
+  .camp-stat{font-family:"DM Mono",monospace;font-size:11px;color:var(--muted)}
+  .seg{display:flex;justify-content:space-between;font-size:13px;padding:7px 0;border-bottom:1px solid var(--rule)}
+  .tmpl{font-size:13px;padding:6px 0;border-bottom:1px dotted var(--rule);color:var(--muted)}
+  /* ---- drawer strip (persists, D8) ---- */
+  .drawer{position:fixed;bottom:0;left:0;right:0;background:#26231F;color:#CFC6B6;
+    display:flex;gap:0;padding:0 28px;height:42px;align-items:stretch;font-family:"DM Mono",monospace}
+  .drawer button{background:none;border:none;color:#A89E8E;font-family:inherit;font-size:11.5px;
+    letter-spacing:.07em;text-transform:uppercase;padding:0 18px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .drawer button:hover{color:#E9E1D4}
+  .drawer .here{color:#E9E1D4}
+  .drawer .here:after{content:"· here";color:var(--clay);margin-left:4px;text-transform:none;letter-spacing:0}
+  .doorway{font-size:9px;color:var(--clay)}
+  .hide{display:none}
+  .note{font-size:12px;color:var(--muted);font-style:italic;margin:10px 0 0}
+  @media(max-width:840px){.two-pane,.prof-grid,.outreach{grid-template-columns:1fr}
+    .pane.left{border-right:none;border-bottom:1px solid var(--rule);padding-right:0}
+    .pane.right{padding-left:0}.funnel{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="room">
+  <div class="room-head">
+    <button class="back">← The Desk</button>
+    <span class="room-ident mono">a Room · you walked in · the document is put down</span>
+  </div>
+  <h1 class="room-title">The People</h1>
+  <div class="room-sub">Everyone the studio works with — clients, their reps, the GCs, the makers — and every conversation, in one place. Walk in to find a relationship; the Desk still surfaces whatever needs your hand.</div>
+
+  <div class="views">
+    <button class="view-link active" data-v="home"><span class="tick"></span>Directory &amp; Threads</button>
+    <button class="view-link" data-v="pipeline"><span class="tick"></span>Pipeline</button>
+    <button class="view-link" data-v="outreach"><span class="tick"></span>Outreach</button>
+  </div>
+  <div class="head-rule"></div>
+
+  <div class="body">
+
+    <!-- ============ HOME: directory + threads ============ -->
+    <section data-view="home">
+      <div class="frontmatter">
+        <span class="fm-lens">the studio · this quarter</span>
+        <div class="fm-stat"><div class="n">38</div><div class="l">people</div></div>
+        <div class="fm-stat"><div class="n sage">31%</div><div class="l">lead → project</div></div>
+        <div class="fm-stat"><div class="n">$420k</div><div class="l">lifetime revenue</div></div>
+        <div class="fm-stat"><div class="n sage">4.8</div><div class="l">satisfaction</div></div>
+        <div class="fm-stat"><div class="n">42%</div><div class="l">referral rate</div></div>
+      </div>
+
+      <div class="two-pane">
+        <!-- DIRECTORY -->
+        <div class="pane left">
+          <div class="pane-head"><span class="pane-title">Directory</span><span class="pane-count" id="dirCount">38 people</span></div>
+          <input class="search" id="dirSearch" placeholder="Search people, companies, roles…" />
+          <div class="scopes">
+            <button class="scope active" data-scope="all">All</button>
+            <button class="scope" data-scope="client">Clients</button>
+            <button class="scope" data-scope="gc">GCs</button>
+            <button class="scope" data-scope="vendor">Vendors</button>
+            <button class="scope" data-scope="rep">Reps</button>
+          </div>
+          <div id="dirList">
+            <div class="person sel" data-role="client" data-name="Sarah Whitfield" data-co="Aspen Loft Refresh">
+              <div class="strata"><i class="l1 f1"></i><i class="l2 f2"></i><i class="l3 f3"></i></div>
+              <div class="p-main"><div class="p-name">Sarah Whitfield <span class="role client">Client</span></div>
+                <div class="p-meta">Aspen Loft Refresh · active · week 4 · last touch 2d</div></div>
+            </div>
+            <div class="person" data-role="gc" data-name="Reyes Build" data-co="Aspen Loft">
+              <div class="strata"><i class="l1 f1"></i><i class="l2 f2"></i><i class="l3"></i></div>
+              <div class="p-main"><div class="p-name">Marcus Reyes <span class="role gc">GC</span></div>
+                <div class="p-meta">Reyes Build · Aspen Loft · 2 open RFIs · login-less party</div></div>
+            </div>
+            <div class="person" data-role="vendor" data-name="Sawkille Co" data-co="maker">
+              <div class="strata"><i class="l1 f1"></i><i class="l2 f2"></i><i class="l3"></i></div>
+              <div class="p-main"><div class="p-name">Sawkille Co <span class="role vendor">Vendor</span></div>
+                <div class="p-meta">Maker · 3 open POs · <span class="link-across">terms &amp; orders → Orders ↗</span></div></div>
+            </div>
+            <div class="person" data-role="client" data-name="The Hartmanns" data-co="Lakeside">
+              <div class="strata"><i class="l1 f1"></i><i class="l2 f2"></i><i class="l3 f3"></i></div>
+              <div class="p-main"><div class="p-name">The Hartmanns <span class="role client">Client</span></div>
+                <div class="p-meta">Lakeside Residence · completed Mar · review collected ★</div></div>
+            </div>
+            <div class="person" data-role="rep" data-name="Dana Cole" data-co="Whitfield">
+              <div class="strata"><i class="l1 f1"></i><i class="l2"></i><i class="l3"></i></div>
+              <div class="p-main"><div class="p-name">Dana Cole <span class="role rep">Rep</span></div>
+                <div class="p-meta">Sarah Whitfield's assistant · cc on all comms</div></div>
+            </div>
+            <div class="person" data-role="client" data-name="Priya Anand" data-co="lead">
+              <div class="strata"><i class="l1 f1"></i><i class="l2"></i><i class="l3"></i></div>
+              <div class="p-main"><div class="p-name">Priya Anand <span class="role client">Lead</span></div>
+                <div class="p-meta">Hillside new-build · match 92 · nurture due in 3d</div></div>
+            </div>
+            <div class="person" data-role="vendor" data-name="Apparatus" data-co="maker">
+              <div class="strata"><i class="l1 f1"></i><i class="l2 f2"></i><i class="l3"></i></div>
+              <div class="p-main"><div class="p-name">Apparatus <span class="role vendor">Vendor</span></div>
+                <div class="p-meta">Maker · lighting · <span class="link-across">terms &amp; orders → Orders ↗</span></div></div>
+            </div>
+          </div>
+          <p class="note">Vendors live here as relationships; their terms, POs, and commerce stay in the Orders book — one link across, never two homes for the same number.</p>
+        </div>
+
+        <!-- THREADS HUB -->
+        <div class="pane right">
+          <div class="pane-head"><span class="pane-title">Threads · the inbox</span><span class="pane-count">2 awaiting you</span></div>
+          <input class="search" id="thSearch" placeholder="Search all conversations…" />
+          <div class="scopes">
+            <button class="scope active">All</button><button class="scope">Clients</button>
+            <button class="scope">GCs</button><button class="scope">Vendors</button>
+          </div>
+          <div id="thList">
+            <div class="thread">
+              <div class="th-top"><span class="th-who">Marcus Reyes — Reyes Build <span class="awaiting">awaiting you</span></span><span class="th-when">1h</span></div>
+              <div class="th-prev">RFI: confirm the built-in's outlet placement before we close the wall…</div>
+            </div>
+            <div class="thread">
+              <div class="th-top"><span class="th-who">Sarah Whitfield <span class="awaiting">awaiting you</span></span><span class="th-when">2d</span></div>
+              <div class="th-prev">Loved the latest render — one question on the dining chairs…</div>
+            </div>
+            <div class="thread">
+              <div class="th-top"><span class="th-who">Sawkille Co</span><span class="th-when">3d</span></div>
+              <div class="th-prev">PO-00014 acknowledged — lead time 9 weeks, ships to your warehouse…</div>
+            </div>
+            <div class="thread">
+              <div class="th-top"><span class="th-who">Priya Anand</span><span class="th-when">5d</span></div>
+              <div class="th-prev">Thanks for the intro call — looking forward to the proposal…</div>
+            </div>
+            <div class="thread">
+              <div class="th-top"><span class="th-who">The Hartmanns</span><span class="th-when">Mar 18</span></div>
+              <div class="th-prev">The install looks stunning. We'll absolutely refer you…</div>
+            </div>
+          </div>
+          <p class="note">One hub, every conversation. A reply here updates the same thread the document's margin shows — one act, both surfaces (§5). Anything awaiting your reply also rises on the Desk.</p>
+        </div>
+      </div>
+
+      <!-- PERSON PROFILE (opens from a directory row) -->
+      <div class="profile show" id="profile">
+        <div class="prof-head"><span class="prof-name serif" id="profName">Sarah Whitfield</span>
+          <span class="role client">Client</span>
+          <span class="mono" style="font-size:12px;color:var(--muted)">Aspen Loft Refresh · since Aug 2025</span></div>
+        <div class="prof-dna">
+          <span class="dna">Warm minimalism</span><span class="dna">Organic materials</span>
+          <span class="dna">Decisive</span><span class="dna">Budget $$$</span><span class="dna">Email-first</span>
+        </div>
+        <div class="prof-grid">
+          <div>
+            <div class="mini-rule"><span class="lbl">The relationship</span><span class="ln"></span></div>
+            <div class="tl">
+              <div class="tl-item"><span class="tl-date">2d</span>Replied on dining-chair selection — <span class="stamp">decision due</span></div>
+              <div class="tl-item"><span class="tl-date">wk 4</span>Procurement underway · 3 POs sent</div>
+              <div class="tl-item"><span class="tl-date">Sep</span>Proposal signed — <span class="stamp">activated</span></div>
+              <div class="tl-item"><span class="tl-date">Aug</span>Discovery call · room scan · lead match 94</div>
+            </div>
+          </div>
+          <div>
+            <div class="mini-rule"><span class="lbl">Signals</span><span class="ln"></span></div>
+            <div class="signal"><span>Engagement</span><span class="v">Aspen Loft Refresh →</span></div>
+            <div class="signal"><span>Next nurture</span><span class="v">post-install follow-up · Jul</span></div>
+            <div class="signal"><span>Review</span><span class="v">queued for Care</span></div>
+            <div class="signal"><span>Lifetime value</span><span class="v">$148k</span></div>
+            <div class="signal"><span>Referrals</span><span class="v">2 (the Hartmanns)</span></div>
+            <div class="act-row">
+              <button class="btn primary">Open the conversation</button>
+              <button class="btn">Open the document →</button>
+              <button class="btn">Log a touch</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PIPELINE ============ -->
+    <section data-view="pipeline" class="hide">
+      <div class="frontmatter">
+        <span class="fm-lens">the funnel · this quarter</span>
+        <div class="fm-stat"><div class="n">6</div><div class="l">leads</div></div>
+        <div class="fm-stat"><div class="n">3</div><div class="l">proposals out</div></div>
+        <div class="fm-stat"><div class="n">5</div><div class="l">active</div></div>
+        <div class="fm-stat"><div class="n sage">31%</div><div class="l">lead → project</div></div>
+        <div class="fm-stat"><div class="n terra">2</div><div class="l">hesitating</div></div>
+      </div>
+      <div class="funnel">
+        <div class="stage">
+          <div class="stage-h"><span>Prospects · Leads</span><span class="c">6</span></div>
+          <div class="card"><span class="nm">Priya Anand</span><span class="sub">Hillside new-build · match 92 · 5d ago</span>
+            <div class="triage"><button class="accept">Accept</button><button class="pass">Nurture</button><button class="decline">Pass</button></div></div>
+          <div class="card"><span class="nm">The Okafors</span><span class="sub">Downtown loft · match 78 · 1d ago</span>
+            <div class="triage"><button class="accept">Accept</button><button class="pass">Nurture</button><button class="decline">Pass</button></div></div>
+        </div>
+        <div class="stage">
+          <div class="stage-h"><span>Proposals out</span><span class="c">3</span></div>
+          <div class="card"><span class="nm">J. Vance</span><span class="sub">sent 1d · unopened <span class="stamp">in motion</span></span></div>
+          <div class="card"><span class="nm">M. Bryce</span><span class="sub">opened 2d · unsigned · hesitating</span></div>
+        </div>
+        <div class="stage">
+          <div class="stage-h"><span>Active</span><span class="c">5</span></div>
+          <div class="card"><span class="nm">Sarah Whitfield</span><span class="sub">Aspen Loft · wk 4 · Delivery</span></div>
+          <div class="card"><span class="nm">The Delgados</span><span class="sub">Ridge House · wk 11 · Install</span></div>
+        </div>
+        <div class="stage">
+          <div class="stage-h"><span>Completed</span><span class="c">12</span></div>
+          <div class="card"><span class="nm">The Hartmanns</span><span class="sub">Lakeside · Mar · ★ review · referred 1</span></div>
+        </div>
+      </div>
+      <p class="note">The browse-all funnel the Desk deliberately lacks. Triage (Accept / Nurture / Pass) happens here; an accepted lead is born as a Brief document, and urgent leads still rise on the Desk as need-lines (R22) — the Desk stays the action surface.</p>
+    </section>
+
+    <!-- ============ OUTREACH ============ -->
+    <section data-view="outreach" class="hide">
+      <div class="frontmatter">
+        <span class="fm-lens">outreach · last 30 days</span>
+        <div class="fm-stat"><div class="n">3</div><div class="l">campaigns sent</div></div>
+        <div class="fm-stat"><div class="n sage">61%</div><div class="l">open rate</div></div>
+        <div class="fm-stat"><div class="n">4</div><div class="l">audiences</div></div>
+        <div class="fm-stat"><div class="n">9</div><div class="l">templates</div></div>
+      </div>
+      <div class="outreach">
+        <div>
+          <div class="mini-rule"><span class="lbl">Campaigns</span><span class="ln"></span></div>
+          <div class="camp"><div class="camp-h"><span class="camp-name">Spring studio update</span><span class="camp-stat">sent · 64% open · 1 reply</span></div></div>
+          <div class="camp"><div class="camp-h"><span class="camp-name">Past-client check-in</span><span class="camp-stat">scheduled · Jul 1 · Past &amp; Network</span></div></div>
+          <div class="camp"><div class="camp-h"><span class="camp-name">Founding-circle invite</span><span class="camp-stat">draft</span></div></div>
+          <button class="btn primary" style="margin-top:14px">+ Compose a campaign</button>
+        </div>
+        <div>
+          <div class="mini-rule"><span class="lbl">Audiences</span><span class="ln"></span></div>
+          <div class="seg"><span>Active clients</span><span class="v">5</span></div>
+          <div class="seg"><span>Past clients</span><span class="v">12</span></div>
+          <div class="seg"><span>Warm leads</span><span class="v">6</span></div>
+          <div class="seg"><span>Makers / vendors</span><span class="v">15</span></div>
+          <div class="mini-rule" style="margin-top:18px"><span class="lbl">Templates</span><span class="ln"></span></div>
+          <div class="tmpl">Proposal follow-up</div>
+          <div class="tmpl">Post-install thank-you + review request</div>
+          <div class="tmpl">Quarterly studio note</div>
+          <p class="note">Audiences are saved filters over the same directory — message a shelf or a segment. Built on the existing campaigns / templates / audience-segment tables; this is the Document home for them, not a new engine.</p>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /body -->
+
+  <!-- drawer strip (persists in every Room, D8) -->
+  <div class="drawer">
+    <button>Library <span class="doorway">↗</span></button>
+    <button>Orders</button>
+    <button>Accounts</button>
+    <button class="here">People <span class="doorway">↗</span></button>
+    <button>Hours</button>
+  </div>
+</div>
+
+<script>
+  // view switching (DM-mono page links, never tabs)
+  const views = document.querySelectorAll('.view-link');
+  const sections = document.querySelectorAll('section[data-view]');
+  views.forEach(v=>v.addEventListener('click',()=>{
+    views.forEach(x=>x.classList.remove('active')); v.classList.add('active');
+    const t=v.dataset.v;
+    sections.forEach(s=>s.classList.toggle('hide', s.dataset.view!==t));
+  }));
+  // directory search + scope filter
+  const dirSearch=document.getElementById('dirSearch');
+  const scopes=document.querySelectorAll('.pane.left .scope');
+  let scope='all';
+  function filterDir(){
+    const q=(dirSearch.value||'').toLowerCase();
+    let n=0;
+    document.querySelectorAll('#dirList .person').forEach(p=>{
+      const hay=(p.dataset.name+' '+p.dataset.co+' '+p.dataset.role).toLowerCase();
+      const show=(scope==='all'||p.dataset.role===scope)&&hay.includes(q);
+      p.style.display=show?'':'none'; if(show)n++;
+    });
+    document.getElementById('dirCount').textContent=n+' '+(n===1?'person':'people');
+  }
+  dirSearch.addEventListener('input',filterDir);
+  scopes.forEach(s=>s.addEventListener('click',()=>{
+    scopes.forEach(x=>x.classList.remove('active')); s.classList.add('active');
+    scope=s.dataset.scope||'all'; filterDir();
+  }));
+  // select a person → (prototype) updates the profile name + shows it
+  document.querySelectorAll('#dirList .person').forEach(p=>p.addEventListener('click',e=>{
+    if(e.target.classList.contains('link-across'))return;
+    document.querySelectorAll('#dirList .person').forEach(x=>x.classList.remove('sel'));
+    p.classList.add('sel');
+    document.getElementById('profName').textContent=p.dataset.name;
+    document.getElementById('profile').classList.add('show');
+    document.getElementById('profile').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }));
+  // thread search
+  const thSearch=document.getElementById('thSearch');
+  thSearch.addEventListener('input',()=>{
+    const q=thSearch.value.toLowerCase();
+    document.querySelectorAll('#thList .thread').forEach(t=>{
+      t.style.display=t.textContent.toLowerCase().includes(q)?'':'none';
+    });
+  });
+</script>
+</body>
+</html>
