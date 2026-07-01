@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Aesthete Engine™ — Attribute & Taste Model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bone:#F1EBDE;
+    --paper:#FBF8F1;
+    --ink:#2A2521;
+    --ink-soft:#5C534A;
+    --ink-faint:#8A8074;
+    --brass:#A67C34;
+    --brass-deep:#8A6526;
+    --sage:#7B8A67;
+    --clay:#9C5B3B;
+    --line:rgba(42,37,33,0.14);
+    --line-strong:rgba(42,37,33,0.26);
+    --serif:"Fraunces",Georgia,"Times New Roman",serif;
+    --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bone);
+    color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+
+  /* ---------- deck frame ---------- */
+  .deck{position:fixed;inset:0}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:6vh 8vw;
+    opacity:0;visibility:hidden;
+    transform:translateY(14px);
+    transition:opacity .5s ease,transform .5s ease,visibility .5s;
+    overflow-y:auto;
+  }
+  .slide.active{opacity:1;visibility:visible;transform:none}
+  .slide-inner{width:100%;max-width:1060px;margin:0 auto}
+
+  .eyebrow{
+    font-family:var(--sans);
+    font-size:.72rem;font-weight:600;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--brass-deep);margin-bottom:1.4rem;
+    display:flex;align-items:center;gap:.7rem;
+  }
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--brass)}
+
+  h1{font-family:var(--serif);font-weight:500;line-height:1.02;letter-spacing:-.01em}
+  h2{font-family:var(--serif);font-weight:500;font-size:clamp(1.9rem,4vw,3rem);line-height:1.06;letter-spacing:-.01em;margin-bottom:1.4rem}
+  h2 em{font-style:italic;color:var(--clay)}
+  .lede{font-size:clamp(1.02rem,1.6vw,1.28rem);line-height:1.55;color:var(--ink-soft);max-width:60ch}
+  p{line-height:1.55}
+  .accent{color:var(--brass-deep);font-weight:600}
+  .sage{color:var(--sage)}
+
+  /* ---------- title slide ---------- */
+  .title h1{font-size:clamp(2.6rem,7vw,5.4rem)}
+  .title .tm{font-size:.4em;vertical-align:super;color:var(--brass);font-weight:400}
+  .title .sub{font-family:var(--serif);font-style:italic;font-size:clamp(1.2rem,2.4vw,1.8rem);color:var(--clay);margin-top:1.2rem}
+  .title .meta{margin-top:2.6rem;display:flex;gap:1.6rem;flex-wrap:wrap;font-size:.82rem;color:var(--ink-faint);letter-spacing:.02em}
+  .title .meta span{display:flex;align-items:center;gap:.5rem}
+  .title .meta b{color:var(--ink-soft);font-weight:600}
+  .pill{
+    display:inline-block;border:1px solid var(--line-strong);border-radius:100px;
+    padding:.34rem .9rem;font-size:.72rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--brass-deep);
+    background:rgba(166,124,52,.06);
+  }
+
+  /* ---------- generic layout helpers ---------- */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:2.4rem;align-items:start}
+  .cols-3{display:grid;grid-template-columns:repeat(3,1fr);gap:1.1rem}
+  .stack>*+*{margin-top:1.05rem}
+  .muted{color:var(--ink-soft)}
+  .big-num{font-family:var(--serif);font-size:1.4rem;color:var(--brass);font-weight:600}
+
+  .card{
+    background:var(--paper);border:1px solid var(--line);border-radius:14px;
+    padding:1.15rem 1.25rem;
+  }
+  .card h3{font-family:var(--sans);font-size:.94rem;font-weight:600;letter-spacing:.01em;margin-bottom:.35rem;display:flex;align-items:center;gap:.5rem}
+  .card p{font-size:.86rem;color:var(--ink-soft);line-height:1.5}
+  .card .tag{margin-left:auto;font-size:.62rem;font-weight:700;letter-spacing:.08em;color:var(--brass-deep);border:1px solid var(--line-strong);border-radius:6px;padding:.1rem .38rem}
+  .card.hl{border-color:var(--clay);background:rgba(156,91,59,.05)}
+  .card.hl h3{color:var(--clay)}
+
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--brass);flex:none}
+  .dot.sage{background:var(--sage)}
+  .dot.clay{background:var(--clay)}
+
+  /* ---------- three profiles diagram ---------- */
+  .space-diagram{display:flex;justify-content:center;margin-top:.5rem}
+
+  /* ---------- spectrum sliders ---------- */
+  .spectrum{margin:.55rem 0}
+  .spectrum .row{display:flex;justify-content:space-between;font-size:.78rem;color:var(--ink-faint);margin-bottom:.28rem}
+  .spectrum .name{font-weight:600;color:var(--ink);font-size:.82rem;letter-spacing:.04em;text-transform:uppercase}
+  .track{position:relative;height:3px;background:var(--line);border-radius:3px}
+  .track::before{content:"";position:absolute;left:50%;top:-3px;width:1px;height:9px;background:var(--line-strong)}
+  .knob{position:absolute;top:50%;width:13px;height:13px;border-radius:50%;background:var(--brass);transform:translate(-50%,-50%);border:2px solid var(--paper);box-shadow:0 0 0 1px var(--brass)}
+
+  /* ---------- the dial ---------- */
+  .dial-wrap{display:flex;align-items:center;gap:2.2rem;flex-wrap:wrap;justify-content:center}
+  .formula{
+    font-family:var(--serif);font-size:clamp(1.1rem,2.1vw,1.6rem);text-align:center;
+    line-height:1.5;color:var(--ink);
+  }
+  .formula .w{color:var(--clay);font-style:italic}
+  .formula .hs{color:var(--sage)}
+  .formula .dg{color:var(--brass-deep)}
+  .dialbar{margin-top:1.6rem}
+  .dialbar .track{height:5px}
+  .dialbar .ends{display:flex;justify-content:space-between;font-size:.76rem;margin-top:.5rem;color:var(--ink-soft)}
+  .dialbar .ends b{color:var(--ink);font-weight:600}
+
+  /* ---------- match "why" chips ---------- */
+  .why{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.6rem}
+  .why span{font-size:.78rem;background:var(--paper);border:1px solid var(--line);border-radius:100px;padding:.32rem .8rem;color:var(--ink-soft)}
+
+  /* ---------- loops list ---------- */
+  .loop{display:flex;gap:1rem;align-items:flex-start;padding:.7rem 0;border-bottom:1px solid var(--line)}
+  .loop:last-child{border-bottom:none}
+  .loop .n{font-family:var(--serif);font-size:1.1rem;color:var(--brass);font-weight:600;flex:none;width:1.5rem}
+  .loop .t{font-size:.9rem}
+  .loop .t b{font-weight:600}
+  .loop .arrow{color:var(--sage);font-weight:600}
+
+  /* ---------- MVP columns ---------- */
+  .phase{border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.2rem;background:var(--paper)}
+  .phase.mvp{border-color:var(--brass);background:rgba(166,124,52,.05)}
+  .phase h3{font-family:var(--serif);font-size:1.15rem;font-weight:600;margin-bottom:.7rem;display:flex;align-items:center;gap:.5rem}
+  .phase ul{list-style:none}
+  .phase li{font-size:.83rem;color:var(--ink-soft);line-height:1.45;padding-left:1.1rem;position:relative;margin-bottom:.45rem}
+  .phase li::before{content:"○";position:absolute;left:0;color:var(--ink-faint);font-size:.7rem;top:.15rem}
+  .phase.mvp li::before{content:"★";color:var(--brass)}
+  .star{color:var(--brass)}
+
+  /* ---------- stream cards ---------- */
+  .stream{display:grid;grid-template-columns:auto 1fr;gap:.9rem 1rem;align-items:baseline}
+  .stream .rank{font-family:var(--serif);font-weight:600;color:var(--brass);font-size:.95rem;white-space:nowrap}
+  .stream .txt{font-size:.9rem;color:var(--ink-soft);line-height:1.5;padding-bottom:.85rem;border-bottom:1px solid var(--line)}
+  .stream .txt b{color:var(--ink);font-weight:600}
+  .stream>div:nth-last-child(-n+2) .txt,.stream>div:last-child{border-bottom:none}
+
+  .two-list{columns:2;column-gap:2.4rem}
+  .two-list .item{break-inside:avoid;margin-bottom:1rem}
+  .two-list h3{font-size:.9rem;font-weight:600;margin-bottom:.25rem;display:flex;gap:.5rem;align-items:center}
+  .two-list p{font-size:.82rem;color:var(--ink-soft);line-height:1.45}
+
+  /* ---------- navigation ---------- */
+  .nav{position:fixed;bottom:22px;right:26px;display:flex;align-items:center;gap:14px;z-index:50}
+  .nav button{
+    width:38px;height:38px;border-radius:50%;border:1px solid var(--line-strong);
+    background:var(--paper);color:var(--ink);cursor:pointer;font-size:1rem;
+    display:flex;align-items:center;justify-content:center;transition:.2s;
+  }
+  .nav button:hover{background:var(--brass);color:var(--paper);border-color:var(--brass)}
+  .counter{font-size:.8rem;color:var(--ink-faint);font-variant-numeric:tabular-nums;letter-spacing:.05em}
+  .counter b{color:var(--ink)}
+  .progress{position:fixed;top:0;left:0;height:3px;background:var(--brass);z-index:60;transition:width .5s ease}
+  .dots{position:fixed;bottom:26px;left:26px;display:flex;gap:7px;z-index:50}
+  .dots i{width:7px;height:7px;border-radius:50%;background:var(--line-strong);cursor:pointer;transition:.2s}
+  .dots i.on{background:var(--brass);transform:scale(1.25)}
+  .hint{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);font-size:.72rem;color:var(--ink-faint);z-index:40;letter-spacing:.03em}
+  .kbd{border:1px solid var(--line-strong);border-radius:4px;padding:.05rem .35rem;font-family:var(--sans);font-size:.68rem}
+
+  @media (max-width:760px){
+    .cols,.cols-3{grid-template-columns:1fr}
+    .two-list{columns:1}
+    .slide{padding:8vh 7vw}
+    .hint{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="deck" id="deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide title active">
+    <div class="slide-inner">
+      <div class="pill">Designer-Taught Intelligence</div>
+      <h1 style="margin-top:1.4rem">The Aesthete Engine<span class="tm">™</span></h1>
+      <div class="sub">Refined taste, mechanized.</div>
+      <p class="lede" style="margin-top:1.6rem">The attribute &amp; taste model — everything the engine tracks, how it matches, and how each designer keeps their own eye inside a shared system.</p>
+      <div class="meta">
+        <span><b>Patina</b> · Product Brief</span>
+        <span>For: Product · Engineering · Designers</span>
+        <span>Draft · July 2026</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · PROBLEM -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The problem</div>
+      <h2>Everyone can filter.<br>A designer <em>reads.</em></h2>
+      <div class="cols" style="margin-top:1.2rem">
+        <div class="card">
+          <h3><span class="dot"></span>Filtering treats attributes as walls</h3>
+          <p>Type "mid-century walnut table under $2k" and get a thousand results sorted by nothing that matters. Attributes exclude what doesn't fit — and stop there.</p>
+        </div>
+        <div class="card hl">
+          <h3><span class="dot clay"></span>A designer treats attributes as language</h3>
+          <p>In ten seconds they read a piece's silhouette, its stance, the honesty of its materials — and a specific client's face appears. That read has never been capturable.</p>
+        </div>
+      </div>
+      <p class="lede" style="margin-top:1.8rem">The Aesthete Engine's job is to capture it: encode the attributes a designer actually reads, and <span class="accent">learn the weighting each designer applies</span> when they read them.</p>
+    </div>
+  </section>
+
+  <!-- 3 · BIG IDEA -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The big idea</div>
+      <h2>Three profiles, <em>one shared space</em></h2>
+      <p class="lede">A product, a person, and a designer are each described by the same vocabulary of taste. Once everything speaks one language, every match is the same operation — measuring distance in that space.</p>
+      <div class="space-diagram">
+        <svg viewBox="0 0 720 300" width="100%" style="max-width:680px;margin-top:.5rem">
+          <defs>
+            <radialGradient id="field" cx="50%" cy="50%" r="60%">
+              <stop offset="0%" stop-color="#A67C34" stop-opacity="0.10"/>
+              <stop offset="100%" stop-color="#A67C34" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <ellipse cx="360" cy="150" rx="330" ry="130" fill="url(#field)"/>
+          <ellipse cx="360" cy="150" rx="330" ry="130" fill="none" stroke="#2A2521" stroke-opacity="0.12" stroke-dasharray="3 6"/>
+          <line x1="200" y1="110" x2="360" y2="205" stroke="#7B8A67" stroke-opacity="0.5" stroke-width="1.2"/>
+          <line x1="360" y1="205" x2="530" y2="105" stroke="#7B8A67" stroke-opacity="0.5" stroke-width="1.2"/>
+          <line x1="200" y1="110" x2="530" y2="105" stroke="#7B8A67" stroke-opacity="0.28" stroke-width="1.2" stroke-dasharray="2 5"/>
+          <!-- product -->
+          <g>
+            <circle cx="200" cy="110" r="12" fill="#A67C34"/>
+            <text x="200" y="78" text-anchor="middle" font-family="Fraunces,serif" font-size="17" fill="#2A2521">Product DNA</text>
+            <text x="200" y="150" text-anchor="middle" font-family="Inter,sans-serif" font-size="11.5" fill="#8A8074">what a piece <tspan font-style="italic">is</tspan></text>
+          </g>
+          <!-- client -->
+          <g>
+            <circle cx="530" cy="105" r="12" fill="#9C5B3B"/>
+            <text x="530" y="73" text-anchor="middle" font-family="Fraunces,serif" font-size="17" fill="#2A2521">Client Profile</text>
+            <text x="530" y="145" text-anchor="middle" font-family="Inter,sans-serif" font-size="11.5" fill="#8A8074">what a person <tspan font-style="italic">loves</tspan></text>
+          </g>
+          <!-- designer -->
+          <g>
+            <circle cx="360" cy="205" r="12" fill="#7B8A67"/>
+            <text x="360" y="245" text-anchor="middle" font-family="Fraunces,serif" font-size="17" fill="#2A2521">Designer Taste</text>
+            <text x="360" y="263" text-anchor="middle" font-family="Inter,sans-serif" font-size="11.5" fill="#8A8074">how a designer <tspan font-style="italic">sees</tspan></text>
+          </g>
+        </svg>
+      </div>
+      <p class="muted" style="font-size:.82rem;margin-top:.6rem;text-align:center">Stored two ways: <span class="accent">interpretable scores</span> a designer can read &amp; edit, and dense <span class="accent">embeddings</span> for similarity search on pgvector.</p>
+    </div>
+  </section>
+
+  <!-- 4 · PRODUCT DNA -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Product DNA · what a piece is</div>
+      <h2>Ten families of attributes</h2>
+      <div class="cols-3" style="margin-top:.4rem">
+        <div class="card"><h3>1 · Identity &amp; provenance <span class="tag">MVP</span></h3><p>Maker, era, origin, and the provenance story — because some clients buy the story and others never will.</p></div>
+        <div class="card"><h3>2 · Form &amp; silhouette <span class="tag">MVP</span></h3><p>Line, scale, proportion, symmetry — plus leg style, arm profile, negative space. Style's biggest tell.</p></div>
+        <div class="card"><h3>3 · Material &amp; construction <span class="tag">MVP</span></h3><p>Materials, joinery, finish, texture, craftsmanship tier — and honest maintenance reality.</p></div>
+        <div class="card"><h3>4 · Color &amp; finish <span class="tag">MVP</span></h3><p>Palette family, value, saturation, temperature, sheen, pattern — as named palettes and histograms.</p></div>
+        <div class="card hl"><h3>5 · Patina &amp; aging</h3><p>Does it grow more beautiful with use, or just wear out? The dimension no competitor tracks.</p></div>
+        <div class="card"><h3>6 · Style signature <span class="tag">MVP</span></h3><p>Primary + weighted secondary archetypes, and the six shared spectrums the whole engine pivots on.</p></div>
+        <div class="card"><h3>7 · Function &amp; ergonomics <span class="tag">MVP</span></h3><p>Comfort, flexibility, storage, and durability for the <em>actual</em> use — kids, pets, high traffic.</p></div>
+        <div class="card"><h3>8 · Context &amp; compatibility</h3><p>Room fit, lighting, architecture — and pairs-with / clashes-with relationships that compose rooms.</p></div>
+        <div class="card"><h3>9 · Commercial <span class="tag">MVP</span></h3><p>Price &amp; tier, value story, lead time, sustainability — paired with a perception model.</p></div>
+      </div>
+      <p class="muted" style="font-size:.82rem;margin-top:1rem"><span class="big-num" style="font-size:1rem">10 ·</span> <b style="color:var(--ink)">Learned &amp; behavioral</b> — appeal/avoidance signals, save &amp; purchase rates, seasonal &amp; trend shifts, and the validation history that drives each piece's confidence score.</p>
+    </div>
+  </section>
+
+  <!-- 5 · SIX SPECTRUMS -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The shared language</div>
+      <h2>Six spectrums every product, client &amp; designer share</h2>
+      <p class="lede">These are the common tongue. Because a product's warmth and a client's warmth sit on the same scale, matching is a distance calculation — not a lookup table.</p>
+      <div class="cols" style="margin-top:1.4rem;gap:3rem">
+        <div>
+          <div class="spectrum"><div class="name">Warmth</div><div class="row"><span>Cool · metal, glass</span><span>Warm · wood, earth</span></div><div class="track"><div class="knob" style="left:72%"></div></div></div>
+          <div class="spectrum"><div class="name">Complexity</div><div class="row"><span>Minimal</span><span>Ornate</span></div><div class="track"><div class="knob" style="left:32%"></div></div></div>
+          <div class="spectrum"><div class="name">Formality</div><div class="row"><span>Casual</span><span>Formal</span></div><div class="track"><div class="knob" style="left:40%"></div></div></div>
+        </div>
+        <div>
+          <div class="spectrum"><div class="name">Timelessness</div><div class="row"><span>Trendy</span><span>Classic</span></div><div class="track"><div class="knob" style="left:78%"></div></div></div>
+          <div class="spectrum"><div class="name">Boldness</div><div class="row"><span>Subtle</span><span>Statement</span></div><div class="track"><div class="knob" style="left:38%"></div></div></div>
+          <div class="spectrum"><div class="name">Craftsmanship</div><div class="row"><span>Mass-made</span><span>Artisan</span></div><div class="track"><div class="knob" style="left:85%"></div></div></div>
+        </div>
+      </div>
+      <p class="muted" style="font-size:.82rem;margin-top:1.6rem;text-align:center">Above: one piece's reading — <span class="accent">warm, clean-lined, timeless, quietly crafted.</span> A Modern Organic credenza.</p>
+    </div>
+  </section>
+
+  <!-- 6 · PATINA DIMENSION -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The signature dimension</div>
+      <h2>Patina — the attribute <em>nobody else tracks</em></h2>
+      <p class="lede">The brand is named for materials that age gracefully. So graceful aging is a first-class matching signal, not a footnote under "materials."</p>
+      <div class="cols-3" style="margin-top:1.4rem">
+        <div class="card hl"><h3>Patina potential</h3><p>Does this piece grow more beautiful with use — or just wear out? Leather that deepens vs. laminate that chips.</p></div>
+        <div class="card hl"><h3>Material honesty</h3><p>Does it age as what it truly is, or is it a finish pretending to be something else?</p></div>
+        <div class="card hl"><h3>Character trajectory</h3><p>Brass that mellows, oak that silvers. The story a material tells over a decade of living.</p></div>
+      </div>
+      <p class="lede" style="margin-top:1.8rem">It's both a <span class="accent">matching signal</span> and a <span class="accent">values filter</span> — because some clients want a piece with a future, and the engine should know who they are.</p>
+    </div>
+  </section>
+
+  <!-- 7 · CLIENT PROFILE -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Client profile · what a person loves</div>
+      <h2>Starts light. Deepens with trust.</h2>
+      <div class="cols" style="margin-top:.6rem;gap:3rem">
+        <div class="stack">
+          <div><span class="big-num">01</span> <b>Five questions <span class="star">★</span></b><p class="muted" style="font-size:.88rem">A short quiz that feels like play — each question quietly measures several dimensions at once, landing a basic profile on the shared spectrums.</p></div>
+          <div><span class="big-num">02</span> <b>The deep dive</b><p class="muted" style="font-size:.88rem">Once someone's invested: color psychology, spatial philosophy, heritage, and sustainability values.</p></div>
+          <div><span class="big-num">03</span> <b>Learning from behavior</b><p class="muted" style="font-size:.88rem">Dwell, zoom, save-clusters, swipe velocity, price exploration — quiet signals that keep nudging the profile.</p></div>
+          <div><span class="big-num">04</span> <b>The designer's margin notes</b><p class="muted" style="font-size:.88rem">Contraindications and nuance a quiz can't reach — where the human eye corrects the machine.</p></div>
+        </div>
+        <div class="card">
+          <h3 style="color:var(--brass-deep)">The five, and what they really measure</h3>
+          <div class="stack" style="margin-top:.7rem">
+            <p style="font-size:.85rem"><b>"Which room speaks to you?"</b><br><span class="muted">→ warmth · complexity · formality · era</span></p>
+            <p style="font-size:.85rem"><b>"How do you actually live here?"</b><br><span class="muted">→ function · social vs. private · durability</span></p>
+            <p style="font-size:.85rem"><b>"What texture calls to you?"</b><br><span class="muted">→ tactile · natural vs. made · patina appreciation</span></p>
+            <p style="font-size:.85rem"><b>"Let's talk investment."</b><br><span class="muted">→ budget · value orientation · quality vs. quantity</span></p>
+            <p style="font-size:.85rem"><b>"What's driving this?"</b><br><span class="muted">→ readiness · urgency · project scope (the lead tell)</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · DESIGNER TASTE INTRO -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="pill">The centerpiece</div>
+      <h2 style="margin-top:1.2rem;font-size:clamp(2.2rem,5vw,3.6rem)">Your eye is <em>a vector.</em></h2>
+      <p class="lede" style="max-width:64ch">Everyone else builds one model and calls designers "reviewers." Patina treats each designer as a <span class="accent">first-class taste</span> — a learnable fingerprint of how they see — and gives the studio a dial for how much of that fingerprint colors any recommendation.</p>
+      <p class="lede" style="margin-top:1.2rem;max-width:64ch">Taste isn't a list of rules. It's a <span class="sage" style="font-weight:600">direction in a high-dimensional space</span>: a personal weighting of shared aesthetic building blocks, learned from what a designer actually does — not from what they're assigned.</p>
+    </div>
+  </section>
+
+  <!-- 9 · TASTE VECTOR SOURCES -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Where the fingerprint comes from</div>
+      <h2>Four streams, strongest first</h2>
+      <div class="stream" style="margin-top:1rem">
+        <div class="rank">01 · Judgments</div>
+        <div class="txt"><b>Side-by-side "this over that."</b> Preference between two pieces is the cleanest read of taste — far more reliable than a slider. The primary fuel for the vector.</div>
+        <div class="rank">02 · Corrections</div>
+        <div class="txt"><b>Overrides while teaching.</b> "Too industrial — those metal legs fight her brass." A correction is directional: it tells the vector <em>which way</em> to move.</div>
+        <div class="rank">03 · Portfolio</div>
+        <div class="txt"><b>Past projects, at onboarding.</b> Embed their rooms; the centroid is their aesthetic home base — a warm start before they've taught a single match.</div>
+        <div class="rank">04 · Tagging</div>
+        <div class="txt"><b>Behavior &amp; rules.</b> Which attributes they reach for, the vocabulary they emphasize, the explicit rules they author — all inform the fingerprint.</div>
+      </div>
+      <p class="muted" style="font-size:.84rem;margin-top:1.2rem"><span class="accent">Every designer action does double duty</span> — it fixes today's match <em>and</em> teaches the engine that designer's eye for every future one.</p>
+    </div>
+  </section>
+
+  <!-- 10 · SIGNATURE BIASES -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">"Your Eye" profile</div>
+      <h2>A raw vector is opaque. So we <em>name the biases.</em></h2>
+      <p class="lede">Designers are recruited on the promise their expertise stays theirs — so the fingerprint surfaces as named, editable "signature moves." Never a black box.</p>
+      <div class="cols" style="margin-top:1.3rem;gap:2.4rem">
+        <div class="stack">
+          <div class="card"><h3><span class="dot clay"></span>"Warms up cool pieces"</h3><p>Consistently nudges cold materials toward brass &amp; wood accents.</p></div>
+          <div class="card"><h3><span class="dot clay"></span>"Reads scale conservatively"</h3><p>Assumes pieces look bigger in the room than in photos.</p></div>
+          <div class="card"><h3><span class="dot clay"></span>"Distrusts performance-fabric claims"</h3><p>Discounts stated pet-durability. Learned the hard way.</p></div>
+          <div class="card"><h3><span class="dot clay"></span>"Patina-first"</h3><p>Over-weights material honesty and graceful aging.</p></div>
+        </div>
+        <div class="card" style="background:var(--bone)">
+          <h3 style="color:var(--brass-deep)">Confidence by style</h3>
+          <p style="margin-bottom:.9rem">A designer isn't equally expert everywhere. This map scales how strongly their taste counts — full weight where they're strong, a light touch where they're still learning.</p>
+          <div class="spectrum"><div class="row"><span class="name" style="text-transform:none;font-size:.85rem">Modern Organic</span><span class="accent">Expert</span></div><div class="track"><div class="knob" style="left:95%"></div></div></div>
+          <div class="spectrum"><div class="row"><span class="name" style="text-transform:none;font-size:.85rem">Transitional</span><span style="color:var(--sage);font-weight:600">Advanced</span></div><div class="track"><div class="knob" style="left:68%;background:var(--sage);box-shadow:0 0 0 1px var(--sage)"></div></div></div>
+          <div class="spectrum"><div class="row"><span class="name" style="text-transform:none;font-size:.85rem">Scandinavian</span><span class="muted">Learning</span></div><div class="track"><div class="knob" style="left:30%;background:var(--ink-faint);box-shadow:0 0 0 1px var(--ink-faint)"></div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 · THE DIAL -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The feature</div>
+      <h2>The dial: blend the designer &amp; the house</h2>
+      <div class="formula" style="margin-top:1.4rem">
+        influence &nbsp;=&nbsp; <span class="w">w</span> · <span class="dg">designer's taste</span> &nbsp;+&nbsp; <span>(1 − <span class="w">w</span>)</span> · <span class="hs">house taste</span>
+      </div>
+      <div class="dialbar" style="max-width:760px;margin:2.2rem auto 0">
+        <div class="track" style="height:6px"><div class="knob" style="left:38%;width:18px;height:18px;background:var(--clay);box-shadow:0 0 0 1px var(--clay)"></div></div>
+        <div class="ends">
+          <span><b>w = 0</b> · pure house taste<br>safe, on-brand · cold-start default</span>
+          <span style="text-align:right"><b>w = 1</b> · pure designer eye<br>bends fully to the guiding designer</span>
+        </div>
+      </div>
+      <div class="cols-3" style="margin-top:2rem">
+        <div class="card"><h3><span class="dot sage"></span>House taste</h3><p>A reliability-weighted aggregate of designer vectors, lead-curated so it stays deliberately Middle West.</p></div>
+        <div class="card"><h3><span class="dot"></span>Context-aware w</h3><p>Anonymous quiz starts low; an assigned designer raises it; "show me their eye" pushes it high.</p></div>
+        <div class="card"><h3><span class="dot clay"></span>Scaled by confidence</h3><p>Influence is <span class="w" style="font-style:italic">w</span> × expertise — strong where the designer is strong, deferring where they're learning.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 · CLIENT ↔ DESIGNER MATCH -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The business payoff</div>
+      <h2>Match a person to the <em>right designer</em></h2>
+      <p class="lede">Because clients and designers share the space, "find the designer whose taste fits you" is a one-line calculation. It's the most natural, least salesy path to a qualified design-services lead — which is Patina's real product.</p>
+      <div class="card" style="max-width:560px;margin:1.8rem auto 0;text-align:center;padding:2rem">
+        <div style="font-family:var(--serif);font-size:1.5rem;color:var(--ink);line-height:1.35">"You'll love working with <span style="color:var(--clay)">Ana.</span><br>Her eye aligns with yours <span class="accent">91%</span>."</div>
+        <div class="track" style="margin-top:1.4rem;max-width:320px;margin-left:auto;margin-right:auto"><div class="knob" style="left:91%"></div></div>
+        <p class="muted" style="font-size:.8rem;margin-top:.9rem">similarity( client.embedding , designer.tasteVector )</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 · THE MATCH -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">The match</div>
+      <h2>How one recommendation gets built</h2>
+      <div class="cols" style="margin-top:.6rem;gap:2.6rem">
+        <div class="stack">
+          <p style="font-size:.9rem"><span class="dot"></span> <b>Style-space fit</b> — client ↔ product distance, <em>warped by the designer/house blend.</em> The backbone.</p>
+          <p style="font-size:.9rem"><span class="dot"></span> <b>Material, color &amp; function fit</b> — the concrete affinities and practical needs.</p>
+          <p style="font-size:.9rem"><span class="dot"></span> <b>Budget fit</b> — scored on <em>perceived</em> value, not just dollars. The same price reads as shock or bargain.</p>
+          <p style="font-size:.9rem"><span class="dot"></span> <b>Context fit</b> — room, light, lifestyle, and designer contraindications (some are hard filters).</p>
+          <p style="font-size:.9rem"><span class="dot"></span> <b>Behavioral priors</b> — what similar clients actually saved &amp; bought.</p>
+          <p style="font-size:.9rem"><span class="dot clay"></span> <b>Exploration</b> — a deliberate dose of "not the safest pick," so discovery stays alive and the profile keeps learning.</p>
+        </div>
+        <div class="card" style="background:var(--bone)">
+          <h3 style="color:var(--brass-deep)">Out comes a ranked list — with an honest "why"</h3>
+          <p class="muted" style="margin:.6rem 0 0">Explainability isn't decoration. It's how a client trusts the match and a designer audits it.</p>
+          <div class="why">
+            <span>warm-organic leaning ✓</span>
+            <span>perfect scale for your dining room ✓</span>
+            <span>within budget ✓</span>
+            <span>oak that only gets better ✓</span>
+          </div>
+          <p style="margin-top:1.4rem;font-family:var(--serif);font-size:1.05rem;color:var(--ink)">Week-6 milestone:<br><span class="accent" style="font-size:1.2rem">quiz → top 10 recommendations <span class="star">★</span></span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 · LEARNING LOOPS -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">How it gets smarter</div>
+      <h2>Five learning loops</h2>
+      <div style="margin-top:.8rem">
+        <div class="loop"><div class="n">1</div><div class="t"><b>Client implicit signals</b> — views, saves, swipes, zoom, purchases <span class="arrow">→</span> refine the <b>Client Profile</b></div></div>
+        <div class="loop"><div class="n">2</div><div class="t"><b>Designer teaching</b> — queue, judgments, rules, nuance <span class="arrow">→</span> refine <b>Product DNA</b> &amp; the <b>Taste Vector</b> <span class="star">★</span></div></div>
+        <div class="loop"><div class="n">3</div><div class="t"><b>Portfolio ingestion</b> — onboarding <span class="arrow">→</span> seed the <b>Taste Vector</b></div></div>
+        <div class="loop"><div class="n">4</div><div class="t"><b>Field outcomes</b> — presented → saved → purchased → satisfaction <span class="arrow">→</span> tune <b>match weights</b> for everyone</div></div>
+        <div class="loop"><div class="n">5</div><div class="t"><b>Consensus &amp; conflict resolution</b> — peer review, three-touch validation <span class="arrow">→</span> refine <b>House Taste</b></div></div>
+      </div>
+      <p class="lede" style="margin-top:1.6rem">The compounding asset: a designer's expertise <span class="accent">becomes eternal</span> — learned once, applied a thousand times, rather than evaporating when they log off.</p>
+    </div>
+  </section>
+
+  <!-- 15 · MVP VS ROADMAP -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">What ships when · 22-week timeline</div>
+      <h2>Vision now, north star flagged</h2>
+      <div class="cols-3" style="margin-top:.6rem;align-items:stretch">
+        <div class="phase mvp">
+          <h3><span class="star">★</span> MVP · Weeks 0–22</h3>
+          <ul>
+            <li>Five-question quiz → basic profile</li>
+            <li>Product DNA via designer tagging + vision draft-fill</li>
+            <li>Spectrum matching on pgvector; search on Typesense</li>
+            <li>quiz → top 10 with "why" (Week 6)</li>
+            <li>Teaching queue + rule builder</li>
+            <li>Lightweight taste: portfolio start + named biases + the dial, live from day one</li>
+          </ul>
+        </div>
+        <div class="phase">
+          <h3>Phase 2 · Taste learning</h3>
+          <ul>
+            <li>Behavioral signals feeding the profile</li>
+            <li>Full taste vectors from judgments &amp; corrections</li>
+            <li>House-taste consensus computation</li>
+            <li>Client ↔ designer matching</li>
+            <li>Advanced client profile</li>
+          </ul>
+        </div>
+        <div class="phase">
+          <h3>Phase 3 · Predictive</h3>
+          <ul>
+            <li>Room composition from relationships</li>
+            <li>Seasonal &amp; trend adaptation</li>
+            <li>Life-stage prediction</li>
+            <li>"In the style of designer X"</li>
+          </ul>
+        </div>
+      </div>
+      <p class="muted" style="font-size:.8rem;margin-top:1rem;text-align:center">The dial, the house vector, and the "Your Eye" profile exist from day one — so the taste mechanism is real, never retrofitted.</p>
+    </div>
+  </section>
+
+  <!-- 16 · GUARDRAILS -->
+  <section class="slide">
+    <div class="slide-inner">
+      <div class="eyebrow">Guardrails</div>
+      <h2>Bias, held <em>responsibly</em></h2>
+      <p class="lede">"Bias" is the honest word for what we're learning. So it comes with commitments.</p>
+      <div class="two-list" style="margin-top:1.4rem">
+        <div class="item"><h3><span class="dot"></span>No runaway house capture</h3><p>Reliability-weighted &amp; lead-curated, so one loud designer can't quietly become the whole studio.</p></div>
+        <div class="item"><h3><span class="dot"></span>Taste ≠ budget-shaming</h3><p>A learned aesthetic must never become a proxy for treating a smaller budget as lesser taste.</p></div>
+        <div class="item"><h3><span class="dot"></span>Against the filter bubble</h3><p>Exploration and client controls broaden, rather than narrow someone into one look they never chose.</p></div>
+        <div class="item"><h3><span class="dot"></span>Human in the loop</h3><p>Contraindications and high-stakes matches stay under human authority. The engine amplifies; it doesn't overrule.</p></div>
+        <div class="item"><h3><span class="dot"></span>Explainable by default</h3><p>Every match carries its reasons; every designer can inspect their own fingerprint; clients can steer the blend.</p></div>
+        <div class="item"><h3><span class="dot"></span>The designer's asset</h3><p>A taste vector is a professional signature — with clear terms on how it's stored, used, and what follows a designer out the door.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 17 · CLOSING -->
+  <section class="slide title">
+    <div class="slide-inner">
+      <div class="pill">Designer-Taught Intelligence</div>
+      <h1 style="margin-top:1.4rem;font-size:clamp(2rem,5vw,3.8rem)">Not a smarter filter.<br>A studio's <span style="font-style:italic;color:var(--clay)">eye,</span> made scalable.</h1>
+      <p class="lede" style="margin-top:1.6rem;max-width:60ch">Every attribute a designer reads. Every bias a designer carries. Learned once, and applied a thousand times — while each designer keeps their own eye, and the house keeps its signature.</p>
+      <div class="meta" style="margin-top:2.4rem;font-size:.82rem;color:var(--ink-faint)">
+        <span>The Aesthete Engine™ · Patina</span>
+        <span>Full detail: aesthete-engine-product-brief.md</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- chrome -->
+<div class="dots" id="dots"></div>
+<div class="hint"><span class="kbd">←</span> <span class="kbd">→</span> to navigate</div>
+<div class="nav">
+  <button id="prev" aria-label="Previous">‹</button>
+  <span class="counter"><b id="cur">1</b> / <span id="tot">17</span></span>
+  <button id="next" aria-label="Next">›</button>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const dotsWrap = document.getElementById('dots');
+  const progress = document.getElementById('progress');
+  const curEl = document.getElementById('cur');
+  document.getElementById('tot').textContent = slides.length;
+  let i = 0;
+
+  slides.forEach((_, n) => {
+    const d = document.createElement('i');
+    d.addEventListener('click', () => go(n));
+    dotsWrap.appendChild(d);
+  });
+  const dots = Array.from(dotsWrap.children);
+
+  function go(n){
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, n2) => s.classList.toggle('active', n2 === i));
+    dots.forEach((d, n2) => d.classList.toggle('on', n2 === i));
+    curEl.textContent = i + 1;
+    progress.style.width = ((i + 1) / slides.length * 100) + '%';
+  }
+  function next(){ go(i + 1); }
+  function prev(){ go(i - 1); }
+
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', prev);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown'){ e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp'){ e.preventDefault(); prev(); }
+    if (e.key === 'Home'){ go(0); }
+    if (e.key === 'End'){ go(slides.length - 1); }
+  });
+  // swipe
+  let x0 = null;
+  document.addEventListener('touchstart', e => x0 = e.touches[0].clientX, {passive:true});
+  document.addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 50){ dx < 0 ? next() : prev(); }
+    x0 = null;
+  }, {passive:true});
+
+  go(0);
+</script>
+</body>
+</html>
