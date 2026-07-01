@@ -1,5 +1,7 @@
 # Needs a Ruling — 2026-07-01 (from the parity re-sweep + live walk)
 
+> **✅ ALL ANSWERED — 2026-07-01, same day.** Kody ruled every question in a one-at-a-time session; the nineteen rulings are logged as **R73–R91** in `DECISIONS.md` (invite-on-send · invoice folio+composer · export-opens-composer · bill-from-the-line · full Hours ledger · makers-in-People/trade-in-Orders · OpenProjectSheet · self-save vitals+Care band · the Amendment sheet · the Post · inline errors · the procurement eight · proposal depth trio · portal-copy-canonical · extend-revives · library acts · ⌘K help · scan sheet · P2 defers). This file is kept as the question record; build from DECISIONS.
+
 _Every reconception or reduction the re-sweep could not tie to an existing ruling ID, plus the walk's two design questions. 45 matrix rows + 2 walk items. Grouped by the track that would build them; each carries the verifier's drafted question. Rulings resume at **R73** (DECISIONS.md last id = R72). Companion to `the-document-parity-backlog-2026-07.md`._
 
 ## From the live walk

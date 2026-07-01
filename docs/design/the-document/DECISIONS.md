@@ -2625,4 +2625,88 @@ The 2026-06-14 gap matrix had been overtaken by Tracks 4–6, the People Room, t
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I43 · R1–R70 (+R68.1) · R72 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = I43 (rulings still end at R72)*
+## The Document — the ruling round — 2026-07-01
+
+Nineteen rulings from Kody's session over `the-document-needs-ruling-2026-07.md` (45 matrix rows + 2 walk items → every question answered). Asked one at a time, multiple-choice; the recommended shape was taken in all but one (R-execution: full send). These rulings authorize funnel repair + Tracks 7–11.
+
+### R73 · Invite-on-send — the no-login household send path
+
+Linking a no-account household to a proposal (or a decision, or any client-facing act) sends a **magic-link invite carrying the document**; the client-portal account is created when they open it. The ClientPicker's dead "NO PATINA ACCOUNT" rows become a live **"invite & link"** act (the `client-invite` edge fn + `useAddClient(invite:true)` machinery exist). Signing stays in the client portal — `sign_proposal` unchanged. One identity model, one new email leg. Resolves walk F7 and the DEC verifier's systemic profile-less-authoring gap.
+
+### R74 · The Invoice folio + the composer — where money is written
+
+Invoice detail = an **Invoice folio** (paper DocSheet) opened from Accounts-ledger rows, margin MONEY items, and ⌘K — carrying **Issue & send · Record payment · Resend · Void · Print**, reusing `useInvoice/useIssueInvoice/useSendInvoice/useRecordPayment/useVoidInvoice` + the `invoice-send` edge fn 1:1. Print = the folio with a print stylesheet. Authoring = an **anti-wizard composer sheet** with self-composing pull-through sections (**milestones · unbilled time · FF&E · ad-hoc**, typed line kinds per 00178/00187), totals via `computeInvoiceTotals`. Closes BIL-02/03/09 (P0).
+
+### R75 · Export opens the composer — the time→invoice pull-through
+
+The Hours ledger's "Export week → Accounts" stub comes alive: it opens the R74 composer with that week's unbilled entries **pre-claimed as a time section** (per-entry include/exclude, resolved rates shown) — one act, review before draft. The composer's time section also works standalone per project. Closes BIL-04 (P0).
+
+### R76 · Bill from the line — FF&E invoicing
+
+The FF&E line unfold (and section multi-select) gains a quiet **"Bill →"** act opening the R74 composer prefilled — the Document descendant of `?ffeItemIds=`. Coverage stamps (invoiced/paid/unpriced) render on the line via the existing 00187 bridge. Closes BIL-05 (P0).
+
+### R77 · The full Hours ledger
+
+Week paging through history; an **all-time unbilled balance** with a "bill it" handoff into R75's flow; a **per-document lens** (the Account band links in pre-filtered); **delete-with-confirm on unbilled entries** (billed entries stay immutable). Retires `/portal/time` and `/portal/projects/[id]/time`. Closes PRJ-14/BIL-11/BIL-12.
+
+### R78 · Makers in People, trade in Orders — vendor creation & the roster
+
+The People Room's **'+ Add' grows a maker path** (vendor creation — closes P0 PRC-03); discovery/search/category browse + **save-as-admission** live in a People **Makers marketplace lens**; the role-adaptive maker profile carries products/reviews/quote-request; the Orders book Vendors page keeps terms/POs/threads and cross-links both ways (R60's split upheld). Closes PRC-01/02/04.
+
+### R79 · The OpenProjectSheet — projects that skip the proposal
+
+A capture-lead-sheet sibling on the Desk header + ⌘K ("open a project"): essentials only — household (R73 machinery), title, budget band, start date — one RPC, then compose in `/doc/[id]`. The old wizard's Step06 client-visibility-tier choice becomes a letterhead instrument. **The 7-step wizard does not port.** Closes PRJ-01's manual-creation half (the signed-safety-net act is walk bug F10, built in funnel repair).
+
+### R80 · Self-save vitals + the Care band — edit and close the project
+
+Letterhead vitals and phase hour estimates become **blur-save fields** (R40/R70 law), estimates beside actuals in the Work block. Completion = the **Care section's work band**: closure checklist + portfolio snapshot → one "Close the book" act (one transaction; reuses closure-checklist + portfolio-snapshot logic). Change history = the settled fold. Closes PRJ-02/03.
+
+### R81 · The Amendment sheet — scope changes
+
+An **Amendment** paper DocSheet (revise-sheet sibling) opened from the R14 margin escalation and the Account band: compose with fee/timeline impacts (`use-scope-changes` + the old impact math), send, apply-on-approval. Applied amendments settle into the fold + Account-band history; open ones ride the margin as MONEY items. **No list page — the margin and band ARE the status tracking.** Closes PRJ-04/05/06.
+
+### R82 · The Post — what the bell opens
+
+A Drawer-weight charcoal sheet with two R28 page links: **Letters** (`useInboxMessages`, rows deep-link to People threads / margin anchors) and **the Record** (a dated quiet ledger over `useInboxNotifications`). Rows whose subject already derives a Desk need render as cross-references ("on your Desk") — never duplicate acts. Read-on-open; the clay dot stays awareness-not-count (D8). Retires `/portal/inbox`; resolves the R72 provisional.
+
+### R83 · Inline at the act — the error grammar
+
+Failures render as a **quiet inline band at the act site** — R51's success grammar in terracotta, with the reason and a retry act (the receivables chase already does it right). **The toast layer is removed from (document) surfaces entirely.** Closes D2's open error path; resolves walk F2b.
+
+### R84 · The procurement eight — all of them
+
+Ack-logging (PO preview/ledger rows) · damage-claim creation/notify (Receiving + line unfold) · single-PO ETA quick-edit (the unfold's Movement cell) · **multi-line Order Assistant** (from the Orders vendor page) · mark-sent mode in PoPreview (phone/fax orders) · project+payment facets as quiet DM-mono lenses on the ledger · order-all on the vendor page · the receiving KPI strip. Closes PRC-06/07/09/10/11/12/24/27.
+
+### R85 · Proposal depth — ad-hoc draft · Folio on proposals · free-text terms; templates retired
+
+⌘K **"draft a proposal"** for an existing household (skips lead/discovery for repeat clients; R73 linking). The **Folio mounts on proposal-stage documents** (space plans reach the client copy pre-project). The Terms facet gains the **free-text agreement body** (the old TermsSection is still client-rendered — the designer must be able to author it). **Proposal templates are retired** — the seeded-from-Discovery path covers the job. Closes PRO-01/03/07.
+
+### R86 · The portal copy is canonical — tier-governed preview
+
+The client portal's rendering (itemized lines, payment schedule) is what the client sees, governed by the existing `client_visibility_tier`. The Drafting mirror upgrades to render **the same component at the chosen tier** — preview-is-truth (R44's law extends to the mirror). Closes PRO-25.
+
+### R87 · Extend revives; delete stays draft-only — decision edges
+
+Extend on a stored-expired decision runs the expired→pending recovery so the client can respond again. Published/pending decisions are never deleted — only expired or resolved; the R56 audit trail stays intact. Closes DEC-11/03.
+
+### R88 · The Library's working acts — import · validate · find; collections deferred
+
+My Library gains a shelf-header **"Import…"** act (existing XLSX/CSV parse; pieces land as raw captures needing teaching). The **validation queue** becomes a teach-fold lens beside Quick Tags/Deep Analysis. The librarian bar gains **field-grain search** (name/SKU/maker/category) beside the Engine's ask. **Collections/categories defer to P2** as possible shelf-pins later — boards + projects cover curation. Closes LIB-01/10/12; LIB-04..08 deferred with destiny.
+
+### R89 · ⌘K help + ambient — the help affordance
+
+⌘K gains an alias-aware **"Help…"** row opening the contextual panel scoped to the current surface; SurfaceKeys mount across (document) surfaces; the browsable Help Center re-homes to `/help` (outside the portal tree, paper-styled) at dissolve. Closes LIB-15/RMS-11 and defines R5's long-owed "help affordance".
+
+### R90 · The scan opens as a sheet
+
+The interactive 3D `RoomScanViewer` opens as a doc-file-viewer-sibling sheet from Discovery/Brief artifacts and the Folio — the WebGL component reused as-is. Retires `/portal/rooms/[id]`. Closes RMS-02 (parity-map C-6).
+
+### R91 · The P2 basket defers — with destinies logged
+
+Full notification-settings depth (RMS-07), sessions & sign-out-others (RMS-09), declined-lead history in People (CRM-20 — noting it contradicts R61's letter today), bulk archive (PRJ-12), and the LIB-13/17/27 library-depth trio all **defer**: none block the dissolve; each folds in when its track touches the surface. The public email-unsubscribe landing (RMS-10) survives the dissolve as a standalone page regardless.
+
+**Execution ruling (Kody):** *full send* — funnel repair first, then Wave 0 seam freeze, then Tracks 7 · 8 · 9 · 11-M as parallel worktree builds, then Wave 2 (the Post · 11-R), then the R21 dissolve.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I43 · R1–R70 (+R68.1) · R72–R91 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = R91*
