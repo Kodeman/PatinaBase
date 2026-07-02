@@ -2755,3 +2755,43 @@ Branch `the-document/track8-accounts-writes`, four slices, ZERO migrations (0017
 ---
 
 *Entries: D1–D14 · O1–O7 (resolved) · I1–I46 · R1–R70 (+R68.1) · R72–R91 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = I46 (rulings end at R91)*
+
+---
+
+## The Document — Wave 2 · Proposal depth + the tier mirror (R85 · R86) — 2026-07-02
+
+### I47 · Proposal depth + the tier mirror built (R85 · R86)
+
+Worktree branch, four slices, **one additive migration (00252)**.
+
+**R85a — the Terms free-text agreement body.** The Drafting Room's Terms facet now carries the free-text agreement prose ABOVE the structured `ChangeOrderTermsEditor` (both render; the structured editor is untouched). New `terms-agreement-body.tsx` persists to `proposal_sections.body` (type `terms`) via `useUpsertProposalSection` — the SAME row the client's proposal copy already renders (proposal-document.tsx shows `section.body` for the terms section), so what the designer writes is what the client signs. Debounced self-save, `errorSurface:'inline'` (R83, no toast). `useUpsertProposalSection` gained an additive `{ errorSurface }` option.
+
+**R85b — the Folio mounts on proposal-stage documents.** Migration **00252** adds `project_documents.proposal_id` (nullable) + widens the owner CHECK + a designer read/manage RLS pair (proposals.designer_id) mirroring 00224's discovery legs, PLUS a **client read leg** (`client_visible AND proposals.client_id = auth.uid()`) so flagged space plans reach the client's proposal copy pre-project — the discovery folio had no client leg; the proposal folio does, because the client sees the proposal. Storage object policies for both legs (folder[1] = proposal_id). `use-folio.ts` gains `useProposalFolioFiles` / `useUploadProposalFolioFile` / `useSetProposalFolioVisibility` (keyed on `proposal_id`, version chaining like the project folio); `ProposalFolioStrip` mounts on the proposal render in `doc/[id]/page.tsx` (engagement_kind==='proposal' branch). **Folio proposal leg is keyed on `proposal_id`; files live under `project-documents/{proposal_id}/…`.**
+
+**R85c — ad-hoc "draft a proposal" for an existing household.** `useOpenDraftProposal()` → `openDraftProposal({ clientId, clientName? }): Promise<string /* proposalId */>` creates an EMPTY draft (no template) linked to the household, stashes the room origin, and walks into `/drafting/[id]`. `DraftProposalSheet({ open, onClose })` reuses the R73 `ClientPicker` (invite-and-link included) so the ⌘K cold start can pick the household. `useCreateProposal` gained the additive `{ errorSurface:'inline' }` option (toast-free on the Document surface). **The ⌘K "draft a proposal" row is left to integration** (command-bar untouched per ownership).
+
+**Templates retired (R85).** The ad-hoc + Discovery-seeded paths are both template-free. The legacy `/portal/proposals/new` template picker is **left untouched per D7** (old zones keep functioning until the dissolve) — retirement is the posture, not a deletion of the phased-out zone page.
+
+**R86 — the portal copy is canonical, tier-governed.** A single pure law — `proposalTierVisibility(tier)` in **`@patina/utils`** (imported by BOTH the client render and the mirror; the two provably cannot drift) — decides which blocks render. The Drafting mirror (`proposal-mirror.tsx`) now renders the **same shared @patina/design-system blocks** the client renders (LineItemsBlock · PaymentScheduleBlock · ScopeRoomsBlock · ExclusionsBlock · TimelinePhasesBlock), gated by the tier, plus a **tier setter instrument** on the preview (reuses `useUpdateProposal` `client_visibility_tier`, `errorSurface:'inline'`). The client render (`proposal-document.tsx`) gates the same blocks on the same law.
+
+**The tier-gating contract — what each tier hides:**
+| block | full | milestone | curated |
+|---|---|---|---|
+| itemized line items (per-line prices) | shown | **hidden** | **hidden** |
+| per-room budgets | shown | **hidden** | **hidden** |
+| payment schedule (milestone amounts) | shown | shown | **hidden** |
+| timeline · exclusions · scope-room names · the one rolled-up total | shown | shown | shown |
+
+`lineItems`/`roomBudgets` mirror the shipped `isClientHidden('cost', tier)` (full shows, milestone/curated hide). At milestone/curated `LineItemsBlock` is handed no items, so it renders the single rolled-up **Total** row (preview = truth). ⚠ **Design call a designer would notice (flagged for ruling):** `paymentSchedule` shows at milestone but hides at curated — that is NOT derivable from `isClientHidden` (which treats milestone==curated); it is the R86 refinement giving the three tiers a monotonically-narrowing render. If curated should also show the schedule (or milestone should hide it), change the one table in `packages/utils/src/proposal-visibility.ts` and both surfaces follow.
+
+**R43 contract refined for R86.** The mirror now DOES carry the client-facing SELL figures the client sees at 'full' (line_total_cents, allowance ranges, per-room budgets) — tier-gated, not forbidden. The refined `proposal-mirror-contract.test.ts` still forbids the truly-internal columns the client sees at NO tier (trade cost, markup, margin, design_fee), still filters `tbd`, still bans stray writes in the projection. New `proposal-tier-gating.test.ts` pins the per-tier table AND asserts both surfaces import the shared law (anti-drift). **Consistency fix:** the client itemized list now also filters `tbd` pieces (R43's "the client must never see tbd" belongs on the canonical client render), and the legacy `SelectionsList` hides per-item prices when `lineItems` is gated off.
+
+**Verified.** 00252 applied locally clean (column + widened owner CHECK + 3 table policies + 2 storage policies; proposal-anchored insert smoke-tested with project_id null). designer-portal + client-portal tsc: **zero errors in every touched file** (remaining app errors are the pre-existing unbuilt-`@patina/api-routes` / demo-page baseline). 334 designer document jest green incl. the two proposal contracts (12 assertions). D4 shadow grep clean on all touched files. No toasts — every new Document mutation carries `errorSurface:'inline'`.
+
+**Provisional / owed (integration):**
+- ⌘K "draft a proposal" row → mount `DraftProposalSheet` + trigger it (command-bar left to integration).
+- The client's proposal copy does not yet RENDER the flagged proposal-folio files — 00252 opens the client read leg (the data path is ready); a small flagged-file list on `apps/client-portal proposals/[id]` is the remaining leg of "space plans reach the client copy."
+- `proposalTierVisibility`'s `paymentSchedule`-at-curated call awaits a design ruling (see the ⚠ above).
+- `@patina/utils` + `@patina/design-system` dist were rebuilt so client-portal (dist-resolved) type-checks; a clean CI runs `pnpm build` first anyway.
+
+*Entries add: I47 · migration 00252 · last id = I47*
