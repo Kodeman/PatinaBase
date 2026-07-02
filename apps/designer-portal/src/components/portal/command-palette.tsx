@@ -30,6 +30,7 @@ import { useStartableProjects } from '@/hooks/use-startable-projects';
 import { useRunningTimer, useStartTimer } from '@/hooks/use-time-tracking';
 import { useToast } from '@/components/portal/toast-provider';
 import { StopTimerDialog } from '@/components/portal/time/stop-timer-dialog';
+import { EngineResults } from '@/components/document/engine/engine-results';
 
 export function CommandPalette() {
   const { isOpen, close } = useCommandPalette();
@@ -37,6 +38,10 @@ export function CommandPalette() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [stopTimerOpen, setStopTimerOpen] = useState(false);
+  // R31/R38 — the Engine speaks here too, with no mode: any query offers
+  // "Ask the Engine" as a row; choosing it answers inline in paper
+  // result-lines (aesthete-ask; the ask never persists — only a placement).
+  const [asking, setAsking] = useState<string | null>(null);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedSearch(search.trim()), 150);
@@ -47,6 +52,7 @@ export function CommandPalette() {
     if (!isOpen) {
       setSearch('');
       setDebouncedSearch('');
+      setAsking(null);
     }
   }, [isOpen]);
 
@@ -87,10 +93,36 @@ export function CommandPalette() {
     <>
     <CommandDialog open={isOpen} onOpenChange={(open) => !open && close()}>
       <CommandInput
-        placeholder="Search projects, products, clients, decisions..."
+        placeholder="Search projects, products, clients, decisions — or ask the Engine..."
         value={search}
-        onValueChange={setSearch}
+        onValueChange={(value) => {
+          setSearch(value);
+          if (asking) setAsking(null); // typing returns to the result list
+        }}
       />
+      {asking ? (
+        <div className="max-h-[400px] overflow-y-auto px-4 pb-3 pt-2">
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-clay)]">
+              The Engine · “{asking}”
+            </span>
+            <button
+              type="button"
+              onClick={() => setAsking(null)}
+              className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-charcoal)]"
+            >
+              ← results
+            </button>
+          </div>
+          <EngineResults
+            query={asking}
+            inDocument={null}
+            onPlaced={(pieceName, whereName) =>
+              toast(`${pieceName} placed in ${whereName}`, 'success')
+            }
+          />
+        </div>
+      ) : (
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
 
@@ -220,7 +252,31 @@ export function CommandPalette() {
             Settings
           </CommandItem>
         </CommandGroup>
+
+        {/* The Engine — offered for any query; destinations jump, a question
+            asks (R38, no mode). The value embeds the query so cmdk's filter
+            always keeps the row. */}
+        {debouncedSearch.length >= 2 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="The Engine">
+              <CommandItem
+                value={`ask-the-engine-${debouncedSearch}`}
+                onSelect={() => setAsking(debouncedSearch)}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                <div className="flex flex-col">
+                  <span className="text-sm">Ask the Engine</span>
+                  <span className="type-meta-small text-[var(--text-muted)]">
+                    “{debouncedSearch}” · ask & place
+                  </span>
+                </div>
+              </CommandItem>
+            </CommandGroup>
+          </>
+        )}
       </CommandList>
+      )}
     </CommandDialog>
 
     {/* Stop-timer dialog (palette-owned instance — the chip owns its own).

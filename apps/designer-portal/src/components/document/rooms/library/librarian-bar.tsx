@@ -6,6 +6,10 @@
  * paper result-lines from your own shelves, each carrying one act: Place →. No
  * thread, no history, no avatar — the ask leaves nothing behind; only the
  * placement persists. "Designer-Taught Intelligence," never "AI."
+ *
+ * Aesthete Wave 3C: the answer comes through the shared EngineResults, now
+ * backed by the aesthete-ask edge fn (vector + keyword union, 1.5 s budget →
+ * "the Engine is resting" FTS fallback). This bar owns only the ask box.
  */
 
 import { useState } from 'react';

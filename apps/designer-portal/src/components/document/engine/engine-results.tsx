@@ -8,17 +8,26 @@
  * placement does (with a "via the Engine" mark). While the Engine reads, the
  * R35 Strata sweep stands in for a spinner.
  *
- * Placeable source: a non-persisting cross-layer catalog search. (The companion
- * edge backend persists conversation + its product extraction is stubbed, so it
- * is NOT used for the ask — see DECISIONS I30; LLM-curated ranking via a
- * non-persisting path is a follow-up.)
+ * Aesthete Wave 3C: the ask now runs through the `aesthete-ask` edge function
+ * (design §3.2 #14) — ask-text embedding + vector kNN unioned with the FTS
+ * seam, RLS-transitive across the designer's three layers, ranked by RRF,
+ * with matched-on chips. Nothing about the ask persists server-side either
+ * (match_events logs latency + result count only, by shape — R31/R38).
+ *
+ * Degradation (§12.1 rung 2): when the inference worker can't answer inside
+ * its 1.5 s budget the fn returns FTS-only results with { degraded: true } and
+ * this surface says "the Engine is resting" — quietly, results still shown.
+ * When the fn itself is unreachable (not deployed / network), the old
+ * cross-layer keyword search stands in client-side under the same resting
+ * line, so the librarian never goes silent.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import {
   useCrossLayerSearch,
+  useEngineAsk,
   useProjects,
-  type LayerProductRow,
+  type EngineAskMatchSource,
 } from '@patina/supabase';
 import { StrataSweep } from '@/components/ui/strata-sweep';
 import { usePlaceInDocument } from '@/hooks/use-place-in-document';
@@ -27,6 +36,22 @@ export interface InDocument {
   projectId: string;
   projectName: string;
 }
+
+/** One paper result-line — the LayerProductRow display subset, plus the
+ *  Engine's matched-on chips when the line came from an ask. */
+interface EnginePiece {
+  id: string;
+  name: string;
+  brand: string | null;
+  price_retail: number | null;
+  price_trade: number | null;
+  images: string[] | null;
+  category: string | null;
+  layer: string;
+  matched_on?: EngineAskMatchSource[];
+}
+
+const RESULT_LIMIT = 6;
 
 export function EngineResults({
   query,
@@ -38,7 +63,10 @@ export function EngineResults({
   inDocument?: InDocument | null;
   onPlaced?: (pieceName: string, whereName: string) => void;
 }) {
-  const { data, isLoading } = useCrossLayerSearch({ query });
+  const ask = useEngineAsk({ ask: query, limit: RESULT_LIMIT });
+  // Client-side stand-in ONLY when the ask fn itself is unreachable — the
+  // server already degrades to FTS on a resting worker (items still arrive).
+  const fallback = useCrossLayerSearch({ query, enabled: ask.isError });
   const place = usePlaceInDocument();
   const { data: projects } = useProjects();
 
@@ -64,13 +92,27 @@ export function EngineResults({
   const targetName =
     inDocument?.projectName ?? targets.find((t) => t.id === targetId)?.name ?? 'the document';
 
-  // Proven first (studio), then the marketplace (catalog), then raw captures.
-  const pieces = useMemo<LayerProductRow[]>(() => {
-    if (!data) return [];
-    return [...data.byLayer.studio, ...data.byLayer.catalog, ...data.byLayer.personal].slice(0, 6);
-  }, [data]);
+  const pieces = useMemo<EnginePiece[]>(() => {
+    // The Engine's answer arrives ranked — keep its order.
+    if (ask.data) return ask.data.items.slice(0, RESULT_LIMIT);
+    if (ask.isError && fallback.data) {
+      // Keyword stand-in: proven first (studio), then the marketplace
+      // (catalog), then raw captures — the pre-3C ordering.
+      const d = fallback.data;
+      return [...d.byLayer.studio, ...d.byLayer.catalog, ...d.byLayer.personal].slice(
+        0,
+        RESULT_LIMIT,
+      );
+    }
+    return [];
+  }, [ask.data, ask.isError, fallback.data]);
 
-  const doPlace = async (piece: LayerProductRow) => {
+  // Resting = the worker missed its budget (server says so) OR the fn itself
+  // was unreachable (client fell back to keyword search).
+  const resting = ask.data?.degraded === true || ask.isError;
+  const isLoading = ask.isLoading || (ask.isError && fallback.isLoading);
+
+  const doPlace = async (piece: EnginePiece) => {
     if (!targetId) return;
     setPlaceError(null);
     try {
@@ -103,16 +145,27 @@ export function EngineResults({
     );
   }
 
+  const restingNote = resting ? (
+    <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] opacity-80">
+      the Engine is resting — keyword results for now
+    </p>
+  ) : null;
+
   if (pieces.length === 0) {
     return (
-      <p className="py-5 font-heading text-[13px] italic text-[var(--text-muted)]">
-        Nothing on your shelves answers that yet — teach more, and the Engine sees more.
-      </p>
+      <div className="py-5">
+        {restingNote}
+        <p className="font-heading text-[13px] italic text-[var(--text-muted)]">
+          Nothing on your shelves answers that yet — teach more, and the Engine sees more.
+        </p>
+      </div>
     );
   }
 
   return (
     <div className="py-1">
+      {restingNote}
+
       {/* Place target — the held document, or a quiet picker (R38 Place →). */}
       {!inDocument && (
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
@@ -163,7 +216,8 @@ export function EngineResults({
                   {piece.name}
                 </span>
                 <span className="block truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
-                  {piece.brand ?? piece.layer} · {LAYER_NOTE[piece.layer]}
+                  {piece.brand ?? piece.layer} · {LAYER_NOTE[piece.layer] ?? piece.layer}
+                  {matchNote(piece.matched_on)}
                 </span>
               </span>
               {placed ? (
@@ -194,6 +248,13 @@ export function EngineResults({
       </p>
     </div>
   );
+}
+
+/** Matched-on chip copy (copy law: never "AI"; the vector leg is the Engine's
+ *  own read, the FTS leg is a plain keyword match). */
+function matchNote(matchedOn?: EngineAskMatchSource[]): string {
+  if (!matchedOn || matchedOn.length === 0) return '';
+  return matchedOn.includes('vector') ? ' · the Engine’s read' : ' · keyword match';
 }
 
 const LAYER_NOTE: Record<string, string> = {
