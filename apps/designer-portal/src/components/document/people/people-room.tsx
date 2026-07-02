@@ -70,16 +70,23 @@ export function PeopleRoom() {
 
   // Deep-link entry (R78/R60): /people?person=<id>&role=<role> opens straight
   // onto a profile — the Orders book's "relationship & profile →" cross-link
-  // lands here. Read once on mount from the location itself (the Room is
-  // client-only; no Suspense-bound useSearchParams needed).
+  // lands here. R82: /people?thread=<id> lands on the Threads view with that
+  // conversation open — the Post's Letters carry the designer here (never a
+  // copy; the same shared thread the margin renders). Read once on mount from
+  // the location itself (the Room is client-only; no Suspense-bound
+  // useSearchParams needed).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const person = params.get('person');
     const role = params.get('role');
+    const thread = params.get('thread');
     const roles: PartyRole[] = ['client', 'lead', 'maker', 'gc', 'team'];
     if (person && role && (roles as string[]).includes(role)) {
       setOpenPerson({ id: person, role: role as PartyRole });
       if (role === 'maker') setRoleFilter('maker');
+    } else if (thread) {
+      setPendingThreadId(thread);
+      setView('threads');
     }
   }, []);
 

@@ -23,6 +23,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { BookOpen, Package, Receipt, Users, Clock, Bell } from 'lucide-react';
 import { useUnreadInboxCount } from '@patina/supabase';
 import { DocSheet } from './overlays/doc-sheet';
+import { PostSheet, openPost } from './overlays/post-sheet';
 import { OrdersLedger } from './orders-ledger';
 import { AccountsBook } from './accounts/accounts-book';
 import { HoursLedger } from './hours-ledger';
@@ -194,8 +195,8 @@ export function StudioDrawer() {
 
           <button
             type="button"
-            onClick={() => router.push('/portal/inbox')}
-            aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+            onClick={openPost}
+            aria-label={unread > 0 ? `The Post, ${unread} unread` : 'The Post'}
             className="relative inline-flex h-9 w-9 items-center justify-center rounded-[3px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
           >
             <Bell className="h-4 w-4" strokeWidth={1.5} aria-hidden />
@@ -227,6 +228,12 @@ export function StudioDrawer() {
         {/* All sheet-weight ledgers (orders/accounts/hours) are bound; People is
             a Room (R50), so no generic placeholder branch remains. */}
       </DocSheet>
+
+      {/* R82 — the Post: what the bell opens. A Drawer-weight charcoal sheet
+          (Letters · the Record), a peer of the ledger sheets. Owns its own open
+          state + the `document:open-post` listener (so ⌘K and the mobile bar
+          reach it for free), exactly like the Account sheet. */}
+      <PostSheet />
     </>
   );
 }
