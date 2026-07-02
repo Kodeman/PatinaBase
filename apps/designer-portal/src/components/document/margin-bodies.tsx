@@ -33,7 +33,7 @@ import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type AnyRecord = any;
 
 const BTN =
@@ -188,7 +188,7 @@ export function DecisionBody({
             return (
               <li key={o.id} className="flex items-start gap-2 text-[10.5px]">
                 {o.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+                   
                   <img
                     src={o.image_url}
                     alt=""
@@ -408,7 +408,7 @@ export function MessageBody({ row, projectId }: { row: MarginItemRow; projectId:
   useEffect(() => {
     if (markedRef.current) return;
     markedRef.current = true;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const supabase = createBrowserClient() as any;
     void supabase
       .rpc('rpc_mark_thread_read', { p_thread_id: threadId })

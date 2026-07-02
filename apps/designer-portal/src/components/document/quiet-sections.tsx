@@ -18,7 +18,7 @@
 import { useProjectV2 } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type AnyRecord = any;
 
 export function CareSection({

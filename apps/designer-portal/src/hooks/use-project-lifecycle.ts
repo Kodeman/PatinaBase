@@ -20,7 +20,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { createBrowserClient, useUpdateProject } from '@patina/supabase';
 import type { ClosureItem, PortfolioSnapshot } from '@/lib/document/closure-derivation';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 const getSupabase = () => createBrowserClient() as any;
 
 /** One-act invalidation sweep for a project-document write (§5): the open

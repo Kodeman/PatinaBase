@@ -24,9 +24,9 @@ import {
 import { invalidateMarginSurfaces } from '@/hooks/use-margin-items';
 import { roomToStoredShape } from '@/lib/document/amendment-derivation';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 const getSupabase = () => createBrowserClient() as any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type AnyRecord = any;
 
 /** One-act sweep after an amendment moves: the sheet's list, the open

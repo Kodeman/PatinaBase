@@ -200,7 +200,6 @@ function Input({
   return (
     <input
       type="text"
-      // eslint-disable-next-line jsx-a11y/no-autofocus
       autoFocus={autoFocus}
       inputMode={inputMode}
       value={value}

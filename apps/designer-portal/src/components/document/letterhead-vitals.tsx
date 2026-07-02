@@ -26,7 +26,7 @@ import {
 } from '@/hooks/use-project-lifecycle';
 import { centsToDollarString, dollarsToCents } from '@/lib/document/closure-derivation';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type AnyRecord = any;
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';

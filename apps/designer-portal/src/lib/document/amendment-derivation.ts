@@ -10,7 +10,7 @@
  * applied_at marking an approved change that has landed on the project.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type AnyRecord = any;
 
 export interface AmendmentImpacts {

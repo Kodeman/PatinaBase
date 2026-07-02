@@ -34,7 +34,7 @@ import {
 } from '@/lib/document/closure-derivation';
 import { StrataMark } from './strata-mark';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type AnyRecord = any;
 
 const FIELD_CLS =

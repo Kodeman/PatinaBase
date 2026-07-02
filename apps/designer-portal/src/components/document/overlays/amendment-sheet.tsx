@@ -42,7 +42,7 @@ import { familyLabel } from '@/lib/document/family-label';
 import { fmtDay } from '@/lib/document/format';
 import { DocSheet } from './doc-sheet';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 type AnyRecord = any;
 
 const labelCls =

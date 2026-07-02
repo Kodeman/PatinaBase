@@ -263,7 +263,7 @@ export function LetterheadInstruments({
  * the vitals save channel and folds the panel; failures read inline (R83).
  */
 function SharingTierInstrument({ projectId }: { projectId: string }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const { data: project } = useProjectV2(projectId) as { data: any };
   const save = useSaveProjectVitals(projectId);
   const [open, setOpen] = useState(false);
