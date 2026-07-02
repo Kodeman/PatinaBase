@@ -4,6 +4,7 @@ import { LogStrip } from '@/components/document/log-strip';
 import { CommandBar } from '@/components/document/command-bar';
 import { InterruptionSettings } from '@/components/document/interruption-settings';
 import { AccountSheet } from '@/components/document/account/account-sheet';
+import { InvoiceOverlays } from '@/components/document/accounts/invoice-overlays';
 import { MobileShellProvider } from '@/components/document/mobile/mobile-shell';
 import { MobileBar } from '@/components/document/mobile/mobile-bar';
 import { MobileSheets } from '@/components/document/mobile/mobile-sheets';
@@ -41,6 +42,9 @@ export default function DocumentLayout({ children }: { children: React.ReactNode
             {/* R5 — the Account sheet: identity, status, settings, sign out.
                 Opened from the Studio Drawer nameplate, the mobile drawer, ⌘K. */}
             <AccountSheet />
+            {/* R74 — the Invoice folio + composer, openable from any surface
+                (Accounts rows, Account band, margin, Hours, FF&E, ⌘K). */}
+            <InvoiceOverlays />
             <MobileBar />
             <MobileSheets />
           </MobileShellProvider>

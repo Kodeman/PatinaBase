@@ -24,6 +24,7 @@ import {
 } from '@patina/supabase';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
+import { openInvoiceFolio } from './invoice-overlays';
 
 export function AccountsReceivablesPage({
   aging,
@@ -138,12 +139,21 @@ function ReceivableRow({
       }`}
     >
       <div className="min-w-0">
-        <p className="truncate text-[12.5px] font-medium text-[var(--color-off-white)]">
+        {/* Folio-first (R74): the receivable itself opens the Invoice folio —
+            record payment / resend / void live there; the chase stays here. */}
+        <button
+          type="button"
+          onClick={() => openInvoiceFolio(invoice.id)}
+          className="block w-full truncate rounded-[3px] text-left text-[12.5px] font-medium text-[var(--color-off-white)] hover:bg-[rgba(250,247,242,0.04)]"
+        >
           {invoice.invoice_number ? `Invoice ${invoice.invoice_number}` : 'Draft invoice'}
           <span className="ml-2 font-mono text-[10px] font-medium text-[var(--color-off-white)]">
             {fmtUsd(balance)}
           </span>
-        </p>
+          <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+            folio →
+          </span>
+        </button>
         <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
           {[
             invoice.project?.name ?? 'Project',
@@ -186,7 +196,7 @@ function ReceivableRow({
         onClick={() => onOpenDocument(invoice.project_id)}
         className="whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline"
       >
-        open →
+        document ↗
       </button>
     </li>
   );

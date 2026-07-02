@@ -508,10 +508,14 @@ export function useArAging() {
  * Creates a draft invoice header + its initial lines, then stamps draft
  * totals. The JS client cannot wrap these in one transaction, so a failed
  * line insert triggers a compensating header delete (lines CASCADE).
+ *
+ * `{ errorSurface: 'inline' }` — see useSendInvoice (R83). The Document's
+ * invoice composer renders failures inline; legacy callers keep the toast.
  */
-export function useCreateDraftInvoice() {
+export function useCreateDraftInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (input: CreateDraftInvoiceInput): Promise<Invoice> => {
       const supabase = getSupabase() as any;
 
@@ -676,10 +680,13 @@ export function useDeleteLineItem() {
  * safe client-side (issued invoices are voided, never deleted). Used by the
  * composer as a compensating delete when claiming time entries fails after
  * the draft was created.
+ *
+ * `{ errorSurface: 'inline' }` — see useSendInvoice (R83).
  */
-export function useDeleteDraftInvoice() {
+export function useDeleteDraftInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       invoiceId,
     }: {
@@ -734,10 +741,14 @@ export function useIssueInvoice(options?: { errorSurface?: 'inline' }) {
 /**
  * Records a manual (non-Stripe) payment via the record_invoice_payment RPC.
  * The DB trigger applies rollup/status/earnings/milestone effects atomically.
+ *
+ * `{ errorSurface: 'inline' }` — see useSendInvoice (R83). The Invoice folio
+ * (R74) records payments inline; legacy portal callers keep the toast.
  */
-export function useRecordPayment() {
+export function useRecordPayment(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       invoiceId,
       amountCents,
@@ -906,10 +917,13 @@ export function useStartCheckout() {
 /**
  * Voids an uncollected invoice via the void_invoice RPC: releases linked
  * milestones (back to pending) and any attached time entries.
+ *
+ * `{ errorSurface: 'inline' }` — see useSendInvoice (R83).
  */
-export function useVoidInvoice() {
+export function useVoidInvoice(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       invoiceId,
       reason,

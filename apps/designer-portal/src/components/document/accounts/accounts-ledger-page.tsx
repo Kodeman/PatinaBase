@@ -1,17 +1,21 @@
 'use client';
 
 /**
- * The Accounts book · Ledger (R36): every invoice in the studio's book, newest
- * first — draft / sent / partially-paid / paid / void — narrated as paper rows,
- * not a dashboard. The old Billing list, re-housed. One act per row: open the
- * document it belongs to (the leaf Account Page is where the invoice is made
- * and sent; the book only sums and points).
+ * The Accounts book · Ledger (R36, R74): every invoice in the studio's book,
+ * newest first — draft / sent / partially-paid / paid / void — narrated as
+ * paper rows, not a dashboard. The old Billing list, re-housed.
+ *
+ * R74 made the book WRITE: rows are folio-first (the row opens the Invoice
+ * folio, where issue/send/record/void/print live), with a quiet doorway to
+ * the document kept on the tail; the page head carries "Draw an invoice"
+ * (the R74b composer).
  */
 
 import type { Invoice } from '@patina/supabase';
 import { Stamp } from '../stamp';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
+import { openInvoiceComposer, openInvoiceFolio } from './invoice-overlays';
 
 // Dark-sheet palette (the book renders on charcoal, like the Orders book).
 const INVOICE_STAMP: Record<string, { label: string; color: string; ink?: string }> = {
@@ -29,14 +33,37 @@ export function AccountsLedgerPage({
   invoices: Invoice[];
   onOpenDocument: (projectId: string | null) => void;
 }) {
-  if (invoices.length === 0) {
-    return (
-      <p className="py-5 font-heading text-[13px] italic text-[rgba(250,247,242,0.5)]">
-        No invoices yet — the book opens when the first one is drafted.
-      </p>
-    );
-  }
+  return (
+    <div>
+      {/* R74b — the book learns to write: draw an invoice from the page head. */}
+      <div className="mb-2 flex items-baseline justify-end">
+        <button
+          type="button"
+          onClick={() => openInvoiceComposer()}
+          className="whitespace-nowrap rounded-[4px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white"
+        >
+          Draw an invoice →
+        </button>
+      </div>
 
+      {invoices.length === 0 ? (
+        <p className="py-5 font-heading text-[13px] italic text-[rgba(250,247,242,0.5)]">
+          No invoices yet — the book opens when the first one is drawn.
+        </p>
+      ) : (
+        <InvoiceRows invoices={invoices} onOpenDocument={onOpenDocument} />
+      )}
+    </div>
+  );
+}
+
+function InvoiceRows({
+  invoices,
+  onOpenDocument,
+}: {
+  invoices: Invoice[];
+  onOpenDocument: (projectId: string | null) => void;
+}) {
   return (
     <ul>
       {invoices.map((inv) => {
@@ -60,9 +87,18 @@ export function AccountsLedgerPage({
             key={inv.id}
             className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-[rgba(250,247,242,0.08)] px-1 py-2.5"
           >
-            <div className="min-w-0">
+            {/* Folio-first (R74): the row opens the Invoice folio — the acts
+                live there. The document doorway stays on the tail. */}
+            <button
+              type="button"
+              onClick={() => openInvoiceFolio(inv.id)}
+              className="min-w-0 rounded-[3px] text-left hover:bg-[rgba(250,247,242,0.04)]"
+            >
               <p className="truncate text-[12.5px] font-medium text-[var(--color-off-white)]">
                 {inv.invoice_number ? `Invoice ${inv.invoice_number}` : 'Draft invoice'}
+                <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
+                  folio →
+                </span>
               </p>
               <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
                 {[
@@ -73,7 +109,7 @@ export function AccountsLedgerPage({
                   .filter(Boolean)
                   .join(' · ')}
               </p>
-            </div>
+            </button>
             <span className="whitespace-nowrap font-mono text-[10px] text-[rgba(250,247,242,0.55)]">
               {tail}
             </span>
@@ -83,7 +119,7 @@ export function AccountsLedgerPage({
               onClick={() => onOpenDocument(inv.project_id)}
               className="whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline"
             >
-              open document →
+              document ↗
             </button>
           </li>
         );

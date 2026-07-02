@@ -34,6 +34,7 @@ import {
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
+import { openInvoiceFolio } from './accounts/invoice-overlays';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
@@ -514,11 +515,22 @@ export function InvoiceBody({ row, projectId }: { row: MarginItemRow; projectId:
           <span>{fmtUsd(invoice.total_cents ?? 0)}</span>
         </li>
       </ul>
-      {row.state === 'draft' && (
-        <button type="button" className={BTN_CLAY} disabled={sending} onClick={reviewAndSend}>
-          {sending ? 'Sending…' : 'Review & send invoice'}
+      <div className="flex flex-wrap items-baseline gap-3">
+        {row.state === 'draft' && (
+          <button type="button" className={BTN_CLAY} disabled={sending} onClick={reviewAndSend}>
+            {sending ? 'Sending…' : 'Review & send invoice'}
+          </button>
+        )}
+        {/* R74a — the folio is where the full invoice lives (record payment,
+            resend, void, print); the margin keeps the one-glance narration. */}
+        <button
+          type="button"
+          onClick={() => openInvoiceFolio(row.item_id)}
+          className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+        >
+          open the folio →
         </button>
-      )}
+      </div>
       {row.state !== 'draft' && (
         <Quiet>
           Sent{invoice.sent_at ? ` · ${fmtDay(invoice.sent_at)}` : ''} · awaiting payment
