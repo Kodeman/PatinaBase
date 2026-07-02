@@ -21,6 +21,7 @@ import { InMotionChip } from '@/components/document/in-motion-chip';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import { DeskReconnect } from '@/components/document/desk-reconnect';
 import { CaptureLeadSheet } from '@/components/document/overlays/capture-lead-sheet';
+import { OpenProjectSheet } from '@/components/document/overlays/open-project-sheet';
 
 export default function DeskPage() {
   const { data, isLoading, isError } = useDeskEngagements();
@@ -28,6 +29,7 @@ export default function DeskPage() {
   const { data: profile } = useProfile();
   const hydrated = useHydrated();
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [openProjectOpen, setOpenProjectOpen] = useState(false);
 
   // R21 week-one watch: the Desk's composition on each load (folder/chip
   // counts + need-line kinds) so noise — esp. sent-unacknowledged frequency
@@ -105,6 +107,15 @@ export default function DeskPage() {
           >
             ＋ Capture a lead
           </button>
+          {/* R79 — the quiet secondary act beside capture: a project that
+              skips the proposal (a repeat client, handshake work). */}
+          <button
+            type="button"
+            onClick={() => setOpenProjectOpen(true)}
+            className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
+          >
+            ＋ Open a project
+          </button>
           <button
             type="button"
             onClick={openCommandBar}
@@ -176,6 +187,9 @@ export default function DeskPage() {
       {/* The capture front door (G1 · R62) — an overlay over the Desk, never a
           route; the Desk beneath does not unmount (D1). */}
       <CaptureLeadSheet open={captureOpen} onClose={() => setCaptureOpen(false)} />
+
+      {/* R79 — the no-proposal front door: same overlay contract as capture. */}
+      <OpenProjectSheet open={openProjectOpen} onClose={() => setOpenProjectOpen(false)} />
     </main>
   );
 }

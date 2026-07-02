@@ -1,0 +1,415 @@
+'use client';
+
+/**
+ * LetterheadVitals (Track 7 · R80) — the project letterhead's vitals become
+ * blur-save fields per the R40/R70 self-save law: start date · target date ·
+ * budget band write ONE column on blur with a quiet per-field status (the
+ * Piece's facet-field grammar, compacted to the letterhead's one-line scale).
+ * The phase word and the contract total stay static — they are derived facts,
+ * not editables.
+ *
+ * Below the line, a quiet "Phases" fold: each project phase's hour estimate
+ * (project_phases.estimated_hours, 00177) as an editable mono field beside its
+ * logged actual — estimates beside actuals, where the hours truly live.
+ *
+ * Zero shadows (D4); failures read inline at the field (R83). Renders only on
+ * project documents (the page passes projectId).
+ */
+
+import { useEffect, useRef, useState } from 'react';
+import { useProjectV2, useProjectPhases } from '@patina/supabase';
+import { useUpdatePhaseEstimates } from '@/hooks/use-time-tracking';
+import {
+  usePhaseActualMinutes,
+  useSaveProjectVitals,
+  type ProjectVitalsPatch,
+} from '@/hooks/use-project-lifecycle';
+import { centsToDollarString, dollarsToCents } from '@/lib/document/closure-derivation';
+
+
+type AnyRecord = any;
+
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+const prettyPhase = (phase: string | null) =>
+  phase
+    ? phase
+        .split('_')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ')
+    : null;
+
+const fmtHours = (minutes: number) => {
+  const h = minutes / 60;
+  return Number.isInteger(h) ? `${h}h` : `${h.toFixed(1)}h`;
+};
+
+/** One save channel per field — mutation + a transient quiet status (the
+ *  Piece's useFacetSave, retargeted at the project vitals write). */
+function useVitalSave(projectId: string) {
+  const mutation = useSaveProjectVitals(projectId);
+  const [state, setState] = useState<SaveState>('idle');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const timer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  const save = async (patch: ProjectVitalsPatch) => {
+    setState('saving');
+    setErrorMsg(null);
+    try {
+      await mutation.mutateAsync(patch);
+      setState('saved');
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => setState('idle'), 1800);
+    } catch (e) {
+      setState('error');
+      setErrorMsg(e instanceof Error ? e.message : 'Could not save just now.');
+    }
+  };
+
+  return { save, state, errorMsg };
+}
+
+function SaveDot({ state, errorMsg }: { state: SaveState; errorMsg: string | null }) {
+  if (state === 'idle') return null;
+  return (
+    <span
+      role="status"
+      aria-live="polite"
+      className={`ml-1 font-mono text-[8px] uppercase tracking-[0.05em] ${
+        state === 'error' ? 'text-[var(--color-terracotta)]' : 'text-[var(--color-sage)]'
+      }`}
+    >
+      {state === 'saving' && '· saving…'}
+      {state === 'saved' && '✓'}
+      {state === 'error' && `· ${errorMsg ?? "couldn't save"}`}
+    </span>
+  );
+}
+
+/** Blur-save date vital, styled as quiet mono text until focused. */
+function VitalDate({
+  projectId,
+  column,
+  serverValue,
+  label,
+}: {
+  projectId: string;
+  column: 'start_date' | 'target_end_date';
+  serverValue: string | null;
+  label: string;
+}) {
+  const [value, setValue] = useState(serverValue ?? '');
+  const focused = useRef(false);
+  const lastServer = useRef(serverValue ?? '');
+  const { save, state, errorMsg } = useVitalSave(projectId);
+
+  useEffect(() => {
+    const incoming = serverValue ?? '';
+    if (incoming !== lastServer.current) {
+      lastServer.current = incoming;
+      if (!focused.current) setValue(incoming);
+    }
+  }, [serverValue]);
+
+  const commit = () => {
+    focused.current = false;
+    if (value !== (serverValue ?? '')) void save({ [column]: value || null });
+  };
+
+  return (
+    <span className="inline-flex items-baseline gap-1">
+      <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+        {label}
+      </span>
+      <input
+        type="date"
+        aria-label={label}
+        value={value}
+        onFocus={() => (focused.current = true)}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        disabled={state === 'saving'}
+        className="border-b border-transparent bg-transparent font-mono text-[10px] text-[var(--text-muted)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
+      />
+      <SaveDot state={state} errorMsg={errorMsg} />
+    </span>
+  );
+}
+
+/** Blur-save money vital (dollars in, cents stored). */
+function VitalMoney({
+  projectId,
+  column,
+  serverCents,
+  ariaLabel,
+  placeholder,
+}: {
+  projectId: string;
+  column: 'budget_min' | 'budget_max';
+  serverCents: number | null;
+  ariaLabel: string;
+  placeholder: string;
+}) {
+  const serverDollars = centsToDollarString(serverCents);
+  const [value, setValue] = useState(serverDollars);
+  const focused = useRef(false);
+  const lastServer = useRef(serverDollars);
+  const { save, state, errorMsg } = useVitalSave(projectId);
+
+  useEffect(() => {
+    if (serverDollars !== lastServer.current) {
+      lastServer.current = serverDollars;
+      if (!focused.current) setValue(serverDollars);
+    }
+  }, [serverDollars]);
+
+  const commit = () => {
+    focused.current = false;
+    const cents = dollarsToCents(value);
+    if (cents !== serverCents) void save({ [column]: cents });
+  };
+
+  return (
+    <span className="inline-flex items-baseline">
+      <input
+        type="text"
+        inputMode="decimal"
+        aria-label={ariaLabel}
+        value={value}
+        placeholder={placeholder}
+        onFocus={() => (focused.current = true)}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.currentTarget.blur();
+          } else if (e.key === 'Escape') {
+            e.stopPropagation();
+            e.currentTarget.blur();
+          }
+        }}
+        disabled={state === 'saving'}
+        size={Math.max(4, value.length + 1)}
+        className="border-b border-transparent bg-transparent text-right font-mono text-[10px] text-[var(--text-muted)] placeholder:text-[var(--color-aged-oak)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none disabled:opacity-50"
+      />
+      <SaveDot state={state} errorMsg={errorMsg} />
+    </span>
+  );
+}
+
+/** The phases fold — estimate fields (blur-save, 00177) beside logged actuals. */
+function PhasesFold({ projectId }: { projectId: string }) {
+  const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
+  const { data: actualMinutes } = usePhaseActualMinutes(projectId);
+  const updateEstimates = useUpdatePhaseEstimates();
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [rowError, setRowError] = useState<string | null>(null);
+
+  if (!phases || phases.length === 0) return null;
+
+  const valueFor = (p: AnyRecord) =>
+    values[p.id] ?? (p.estimated_hours != null ? String(p.estimated_hours) : '');
+
+  const commit = (p: AnyRecord) => {
+    const raw = valueFor(p).trim();
+    const parsed = raw === '' ? null : Math.round(parseFloat(raw) * 10) / 10;
+    if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0)) return;
+    const current = p.estimated_hours != null ? Number(p.estimated_hours) : null;
+    if (parsed === current) return;
+    setRowError(null);
+    updateEstimates.mutate(
+      { projectId, changes: [{ phaseId: p.id as string, estimatedHours: parsed }] },
+      {
+        onError: (err) =>
+          setRowError(err instanceof Error ? err.message : 'Could not save the estimate.'),
+      },
+    );
+  };
+
+  return (
+    <div className="mt-1.5">
+      <table className="text-left">
+        <caption className="sr-only">Phase hour estimates beside logged actuals</caption>
+        <tbody>
+          {phases.map((p) => {
+            const logged = actualMinutes?.[p.phase_key ?? ''] ?? 0;
+            return (
+              <tr key={p.id}>
+                <td className="pr-4 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                  {p.name ?? prettyPhase(p.phase_key)}
+                </td>
+                <td className="pr-2 text-right font-mono text-[9px] text-[var(--text-muted)]">
+                  {logged > 0 ? fmtHours(logged) : '—'}
+                </td>
+                <td className="pr-1 font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
+                  of
+                </td>
+                <td>
+                  <input
+                    value={valueFor(p)}
+                    aria-label={`${p.name ?? prettyPhase(p.phase_key)} — estimated hours`}
+                    placeholder="est"
+                    inputMode="decimal"
+                    onChange={(e) =>
+                      setValues((prev) => ({
+                        ...prev,
+                        [p.id]: e.target.value.replace(/[^0-9.]/g, ''),
+                      }))
+                    }
+                    onBlur={() => commit(p)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                      } else if (e.key === 'Escape') {
+                        e.stopPropagation();
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    className="w-10 border-b border-transparent bg-transparent text-right font-mono text-[9px] text-[var(--text-muted)] placeholder:text-[var(--color-aged-oak)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:text-[var(--color-charcoal)] focus:outline-none"
+                  />
+                  <span className="font-mono text-[9px] text-[var(--text-muted)]">h est.</span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {rowError && (
+        <p role="alert" className="mt-0.5 text-[10px] text-[var(--color-terracotta)]">
+          {rowError}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function LetterheadVitals({ projectId }: { projectId: string }) {
+  const { data: project } = useProjectV2(projectId) as { data: AnyRecord };
+  const [phasesOpen, setPhasesOpen] = useState(false);
+
+  if (!project) return null;
+
+  const phaseWord = prettyPhase(project.current_phase);
+  const total = project.total_amount_cents ?? null;
+
+  return (
+    <div className="mt-1">
+      <p className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] text-[var(--text-muted)]">
+        {phaseWord && <span>{phaseWord}</span>}
+        <VitalDate
+          projectId={projectId}
+          column="start_date"
+          serverValue={project.start_date ?? null}
+          label="Start"
+        />
+        <VitalDate
+          projectId={projectId}
+          column="target_end_date"
+          serverValue={project.target_end_date ?? null}
+          label="Target"
+        />
+        <span className="inline-flex items-baseline gap-0.5">
+          <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+            Band
+          </span>
+          <span className="font-mono text-[10px] text-[var(--text-muted)]">$</span>
+          <VitalMoney
+            projectId={projectId}
+            column="budget_min"
+            serverCents={project.budget_min ?? null}
+            ariaLabel="Budget band minimum (dollars)"
+            placeholder="from"
+          />
+          <span className="font-mono text-[10px] text-[var(--text-muted)]">–</span>
+          <VitalMoney
+            projectId={projectId}
+            column="budget_max"
+            serverCents={project.budget_max ?? null}
+            ariaLabel="Budget band maximum (dollars)"
+            placeholder="to"
+          />
+        </span>
+        {total != null && (
+          <span className="font-mono text-[10px]">
+            ${Math.round(total / 100).toLocaleString('en-US')}
+          </span>
+        )}
+        <button
+          type="button"
+          aria-expanded={phasesOpen}
+          onClick={() => setPhasesOpen((v) => !v)}
+          className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
+        >
+          Phases {phasesOpen ? '▾' : '▸'}
+        </button>
+      </p>
+      {phasesOpen && <PhasesFold projectId={projectId} />}
+    </div>
+  );
+}
+
+/** The letterhead title as a blur-save field (R80): Playfair, borderless at
+ *  rest — the heading IS the input. Used by DocLetterhead on project docs. */
+export function LetterheadTitle({
+  projectId,
+  serverTitle,
+}: {
+  projectId: string;
+  serverTitle: string;
+}) {
+  const [value, setValue] = useState(serverTitle);
+  const focused = useRef(false);
+  const lastServer = useRef(serverTitle);
+  const { save, state, errorMsg } = useVitalSave(projectId);
+
+  useEffect(() => {
+    if (serverTitle !== lastServer.current) {
+      lastServer.current = serverTitle;
+      if (!focused.current) setValue(serverTitle);
+    }
+  }, [serverTitle]);
+
+  const commit = () => {
+    focused.current = false;
+    const next = value.trim();
+    if (next === '') {
+      setValue(serverTitle); // a document keeps its name — blank never saves
+      return;
+    }
+    if (next !== serverTitle) void save({ name: next });
+  };
+
+  return (
+    <h1 className="flex items-baseline gap-2 font-heading text-[1.55rem] font-medium leading-tight tracking-[-0.01em] text-[var(--color-charcoal)]">
+      <input
+        type="text"
+        aria-label="Project title"
+        value={value}
+        onFocus={() => (focused.current = true)}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.currentTarget.blur();
+          } else if (e.key === 'Escape') {
+            e.stopPropagation();
+            e.currentTarget.blur();
+          }
+        }}
+        disabled={state === 'saving'}
+        className="min-w-0 flex-1 border-b border-transparent bg-transparent font-heading text-[1.55rem] font-medium leading-tight tracking-[-0.01em] text-[var(--color-charcoal)] hover:border-[var(--color-pearl)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-60"
+      />
+      <SaveDot state={state} errorMsg={errorMsg} />
+    </h1>
+  );
+}

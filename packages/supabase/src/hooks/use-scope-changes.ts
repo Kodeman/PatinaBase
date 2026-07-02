@@ -47,9 +47,12 @@ export function useScopeChangeRequest(requestId: string) {
 // DESIGNER MUTATIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function useCreateScopeChangeRequest() {
+export function useCreateScopeChangeRequest(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    // R83: document surfaces render failures inline at the act site and pass
+    // { errorSurface: 'inline' } to keep the global error toast quiet.
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       projectId,
       proposalId,
@@ -106,9 +109,11 @@ export function useCreateScopeChangeRequest() {
   });
 }
 
-export function useSendScopeChangeRequest() {
+export function useSendScopeChangeRequest(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    // R83 — see useCreateScopeChangeRequest.
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       requestId,
       projectId,

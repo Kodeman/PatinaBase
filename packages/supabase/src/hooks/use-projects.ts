@@ -70,10 +70,13 @@ export function useCreateProject() {
   });
 }
 
-export function useUpdateProject() {
+export function useUpdateProject(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // R83: document surfaces render failures inline at the act site and pass
+    // { errorSurface: 'inline' } to keep the global error toast quiet.
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       projectId,
       data,
