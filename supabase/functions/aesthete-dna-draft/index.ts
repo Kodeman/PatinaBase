@@ -39,6 +39,7 @@ import {
 } from './lib.ts';
 import { createDb } from './db.ts';
 import { createClaudeCaller } from './claude.ts';
+import { captureServerEvent } from '../_shared/aesthete-events.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -85,6 +86,19 @@ Deno.serve(async (req: Request) => {
       now: () => new Date(),
       log,
     });
+    // §12.4 server event (tokens+usd) — only for passes that worked jobs;
+    // parked/idle cron ticks stay log-only. Best-effort by contract.
+    if (summary.claimed > 0) {
+      await captureServerEvent('aesthete-dna-draft', 'dna_draft_done', {
+        claimed: summary.claimed,
+        drafted: summary.drafted,
+        escalated: summary.escalated,
+        failed: summary.failed ?? 0,
+        usd: summary.usd,
+        input_tokens: summary.input_tokens ?? 0,
+        output_tokens: summary.output_tokens ?? 0,
+      });
+    }
     return json(summary);
   } catch (err) {
     // Pass-level failure (spend read, claim RPC, …) — log and 500 so the

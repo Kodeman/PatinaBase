@@ -1,10 +1,14 @@
 # Running the Aesthete eval harness
 
-> **Status: specification.** The runnable harness lands in **Wave 3D** (see
-> `docs/prds/AE/aesthete-engine-delivery-plan.md`). This file freezes the
-> invocation surface so Wave 3D implements to it rather than inventing one.
+> **Status: implemented (Wave 3D).** This file froze the invocation surface in
+> Wave 0A; `run-eval.sh` dispatches to `run-eval.ts` (deno). `personas` runs
+> the §14.7 mechanical bars today; `g1`/`g2` activate when the week-4 designer
+> labels land in `golden/`; `backtest` waits on Wave 4A's `/fit/taste`;
+> `replay` waits on logged realized outcomes. Extra env knob:
+> `EVAL_MATCH_SAMPLES` (default 4) — repeated match calls per persona that
+> widen the p95 latency pool without tripping the 10/IP/hour quiz backstop.
 
-## Invocation (Wave 3D implements this)
+## Invocation
 
 ```bash
 # From the repo root, against the local stack (supabase db reset + demo seed applied):
@@ -42,8 +46,10 @@ docker exec -i supabase_db_supabase psql -U postgres -d postgres \
 wave barriers G2+ and before the week-6 demo. The gate stays fast and binary;
 the harness is allowed to be slow and numeric.
 
-## Until Wave 3D
+## Fixture status
 
-Only `personas.json` and this spec exist. The golden-set fixtures are produced
-by the week-4 designer validation sprint (G1/G2 labels are designer output,
-never synthesized), and `run-eval.sh` + `out/` reporting land with Wave 3D.
+The golden-set fixtures are produced by the week-4 designer validation sprint
+(G1/G2 labels are designer output, never synthesized) — labeling sheets at
+`golden/g1-spectrums.template.csv` / `golden/g2-neighborhoods.template.csv`,
+conversion instructions in the README. Until they exist, `g1`/`g2` SKIP with
+pointers; `backtest`/`replay` SKIP until Wave 4A / logged outcomes.

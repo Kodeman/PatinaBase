@@ -58,6 +58,41 @@ function Quiz() {
 
 Everything is also reachable headlessly — `useStyleQuiz` exposes the raw machine state, and the components are optional. Style via `className` props and the `data-quiz-*` attributes.
 
+## Analytics — the §12.4 quiz funnel (PostHog, wired by the PORTAL)
+
+The package has **no posthog dependency** — `useStyleQuiz` takes an optional
+`onEvent` tap and the portal passes its own capture fn. The hook emits
+`quiz_started`, `question_answered` (per committed step, including the final
+one on submit), and `quiz_completed`; `matches_viewed` / `match_saved` belong
+to the results surface the portal renders and must be fired there with the
+SAME event names (funnel: quiz_started → question_answered ×5 →
+quiz_completed → matches_viewed → match_saved).
+
+**Client-portal wiring (Wave 3A — the pieces already exist).** The portal has
+a PostHog provider (`src/lib/analytics/PostHogProvider.tsx`, key
+`NEXT_PUBLIC_POSTHOG_KEY`) and an `aestheteQuizEvents` group in
+`src/lib/analytics/events.ts` (Wave 3D) that maps 1:1 onto this vocabulary and
+respects the portal's `isAnalyticsEnabled()` guard:
+
+```tsx
+import { aestheteQuizEvents } from '@/lib/analytics/events';
+
+const quiz = useStyleQuiz({
+  onEvent: (e) => aestheteQuizEvents.fromQuizHook(e), // quiz_started / question_answered / quiz_completed
+  onComplete: (profile) => router.push('/quiz/results'),
+});
+
+// on the results surface:
+useEffect(() => { aestheteQuizEvents.matchesViewed({ sessionKey, resultCount: rows.length }); }, []);
+// on a card save:
+aestheteQuizEvents.matchSaved({ sessionKey, productId, isExploration });
+```
+
+Also pass PostHog's distinct id into the submit attribution so the anon funnel
+stitches to the profile row: `<QuizProvider attribution={{ posthog_distinct_id: posthog.get_distinct_id() }} …>`.
+Product law reminder: never put quiz free-text or PII in event properties —
+the shipped events carry only option keys, step numbers, and ids.
+
 ## Usage — no React (marketing site, scripts, tests)
 
 ```ts

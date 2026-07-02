@@ -31,6 +31,7 @@
 //           { skipped: 'inference_unconfigured' | 'inference_unavailable', … }.
 
 import { adminClient, createInferenceClient, logLine } from '../_shared/aesthete.ts';
+import { captureServerEvent } from '../_shared/aesthete-events.ts';
 import { type DbLike, parseBatchSize, runEmbedBatch } from './lib.ts';
 
 const FN = 'aesthete-embed-worker';
@@ -79,6 +80,18 @@ Deno.serve(async (req: Request) => {
       batchSize,
       log: (event, fields) => logLine(FN, event, fields),
     });
+    // §12.4 server event — only for batches that actually worked jobs (the
+    // every-minute idle cron tick would be noise). Best-effort by contract.
+    if (result.claimed > 0) {
+      await captureServerEvent(FN, 'embed_batch_done', {
+        claimed: result.claimed,
+        done: result.done,
+        failed: result.failed,
+        ms: result.ms,
+        embed_text_done: result.kinds.embed_text.done,
+        embed_fused_done: result.kinds.embed_fused.done,
+      });
+    }
     return json(result);
   } catch (err) {
     const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
