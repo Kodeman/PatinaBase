@@ -12,7 +12,9 @@
 #   db      `supabase db reset` + every supabase/tests/aesthete/*.sql via
 #           docker exec psql (ON_ERROR_STOP). --no-reset runs suites without
 #           resetting (worktree agents: the wave's migration owner owns resets).
-#   edge    `deno test` over each supabase/functions/aesthete-*/ that has tests
+#   edge    `deno test` over each supabase/functions/aesthete-*/ that has tests,
+#           plus supabase/functions/_shared/ (G3 decision #3: the shared-helper
+#           suites — aesthete-events et al — must ride the same tier)
 #   worker  pytest in services/aesthete-inference (honors a Makefile `test` target)
 #   ts      pnpm turbo type-check (whole repo)
 #   walk    seeded curl-level e2e: anon submit_style_quiz -> get_aesthete_matches
@@ -105,6 +107,12 @@ gate_edge() {
   shopt -s nullglob
   local dirs=("$ROOT"/supabase/functions/aesthete-*/)
   shopt -u nullglob
+
+  # _shared rides the edge tier too (G3 decision #3 → Wave 4C): its helpers
+  # (aesthete.ts, aesthete-events.ts, …) are imported by every aesthete fn.
+  if [ -d "$ROOT/supabase/functions/_shared" ]; then
+    dirs+=("$ROOT/supabase/functions/_shared/")
+  fi
 
   if [ "${#dirs[@]}" -eq 0 ]; then
     tier_skip edge "no aesthete-* edge functions yet (arrive Wave 2)"

@@ -137,8 +137,12 @@ BEGIN
   ASSERT v_row.space_density = 'curated', 'user_style_signals keeps legacy investment density';
 
   -- ── 3. get_recommendations (authed): signals-bridge + 0–100 scores ──
-  -- No engine profile exists for this user (process_style_quiz does not
-  -- create one) → the shim must bridge user_style_signals to 'derived'.
+  -- The bridge premise is "no CURRENT engine profile for this user"
+  -- (process_style_quiz does not create one). A demo-seeded DB gives
+  -- client@patina.dev a claimed quiz profile, so the premise is pinned
+  -- INSIDE the transaction (rolled back): retire any current profiles —
+  -- the shim must then bridge user_style_signals to 'derived'.
+  UPDATE client_style_profiles SET is_current = false WHERE user_id = u_client;
   PERFORM pg_temp.assume_user(u_client);
   SELECT count(*) INTO v_count FROM get_recommendations(p_limit := 8);
   ASSERT v_count > 0, 'get_recommendations must return rows for the bridged profile';

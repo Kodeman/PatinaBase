@@ -34,13 +34,35 @@ import { adminClient, createInferenceClient, logLine } from '../_shared/aesthete
 import {
   ASK_EMBED_TIMEOUT_MS,
   type AdminDb,
+  type AskEmbedCache,
+  type CacheDb,
   type CallerDb,
+  createAskEmbedCache,
   parseAskRequest,
   peekJwt,
   runAsk,
 } from './lib.ts';
 
 const FN = 'aesthete-ask';
+
+// §12.3 ask-embed cache (00250 ask_embed_cache — see the 00250 header for
+// the Redis-intent deviation note). Module-scoped so the learned
+// model_version survives across requests of a warm isolate; created lazily
+// so a missing service-role env degrades to "no cache", never a crash.
+let askCache: AskEmbedCache | null | undefined;
+function getAskCache(): AskEmbedCache | null {
+  if (askCache === undefined) {
+    try {
+      askCache = createAskEmbedCache(adminClient() as unknown as CacheDb);
+    } catch (err) {
+      logLine(FN, 'cache_unavailable', {
+        reason: err instanceof Error ? err.message : String(err),
+      });
+      askCache = null;
+    }
+  }
+  return askCache;
+}
 
 // Browser-invoked (supabase.functions.invoke from the designer portal) — the
 // invoice-send/companion CORS idiom.
@@ -109,6 +131,7 @@ Deno.serve(async (req: Request) => {
       caller: caller as unknown as CallerDb,
       admin: adminClient() as unknown as AdminDb,
       inference,
+      cache: getAskCache(),
       request: parsed,
       userId: sub,
       log: (event, fields) => logLine(FN, event, fields),

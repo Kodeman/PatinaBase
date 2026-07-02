@@ -47,6 +47,27 @@ BEGIN;
 
 -- ─── fixtures ──────────────────────────────────────────────────────────────
 
+-- (Wave 4C) Premise pin: this suite exercises first-judgment profile-shell
+-- creation and deterministic consensus/RLS math over the fixture designers.
+-- A live DB may already carry learned taste state for them (demo judgments,
+-- a nightly refit's profiles/snapshots/confidence rows). Clear the fixture
+-- designers' taste state INSIDE the transaction (rolled back) so the suite
+-- is exact on ANY baseline — bare reset, demo-seeded, or post-nightly.
+DELETE FROM taste_probe_queue
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM taste_judgments
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM taste_corrections
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM signature_biases
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM designer_style_confidence
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM designer_taste_snapshots
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM designer_taste_profiles
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+
 -- Catalog products for judgments + one for the centroid recompute.
 INSERT INTO products (id, name, source_url, captured_by, captured_at, layer, patina_managed, status)
 VALUES
@@ -123,6 +144,11 @@ DECLARE
   v_uuid uuid;
   v_style uuid;
   v_norm double precision;
+  v_ver int;
+  v_expected int;
+  v_house_before int;
+  v_prev_active_ver int;
+  v_prev_formality real;
 BEGIN
   -- Case 0: preconditions.
   SELECT count(*) INTO v_count FROM auth.users WHERE id IN (u_lead, u_mgr, u_designer);
@@ -158,15 +184,20 @@ BEGIN
     'FAIL 1b3: sources.judgments should be 2 after second submit, got ' || (v_json->'sources'->>'judgments');
   PERFORM pg_temp.reset_role();
 
+  -- (Wave 4C: scoped to the fixture pair — a demo-seeded DB carries other
+  -- judgments/probes for the same designer.)
   SELECT count(*) INTO v_count FROM taste_judgments
-   WHERE designer_id = u_designer AND kind = 'judgment';
+   WHERE designer_id = u_designer AND kind = 'judgment'
+     AND product_a IN (p1, p2) AND product_b IN (p1, p2);
   ASSERT v_count = 2,
     'FAIL 1b4: two judgment rows expected, got ' || v_count;
   SELECT count(*) INTO v_count FROM taste_judgments
-   WHERE designer_id = u_designer AND latency_ms = 850;
+   WHERE designer_id = u_designer AND product_a = p1 AND product_b = p2
+     AND latency_ms = 850;
   ASSERT v_count = 1,
     'FAIL 1b5: latency_ms should persist, got ' || v_count || ' rows carrying it';
-  SELECT count(*) INTO v_count FROM taste_probe_queue;
+  SELECT count(*) INTO v_count FROM taste_probe_queue
+   WHERE product_a IN (p1, p2) AND product_b IN (p1, p2);
   ASSERT v_count = 0,
     'FAIL 1b6: probe lottery pinned to 0 must enqueue nothing, got ' || v_count;
 
@@ -204,7 +235,8 @@ BEGIN
 
   -- Case 2b: a due probe pair is answered as kind=probe and closed.
   UPDATE taste_probe_queue SET due_at = now() - interval '1 minute'
-   WHERE designer_id = u_designer AND status = 'pending';
+   WHERE designer_id = u_designer AND status = 'pending'
+     AND product_a = p2 AND product_b = p1;
   PERFORM set_config('aesthete.probe_rate', '0', true);
   PERFORM pg_temp.assume_user(u_designer);
   v_json := submit_taste_judgment(jsonb_build_object('a', p2, 'b', p1), 'neither');
@@ -217,7 +249,8 @@ BEGIN
   ASSERT v_count = 1,
     'FAIL 2b2: the probe row should be answered + linked, got ' || v_count;
   SELECT count(*) INTO v_count FROM taste_judgments
-   WHERE designer_id = u_designer AND kind = 'probe';
+   WHERE designer_id = u_designer AND kind = 'probe'
+     AND product_a IN (p1, p2) AND product_b IN (p1, p2);
   ASSERT v_count = 1,
     'FAIL 2b3: exactly one probe-kind judgment expected, got ' || v_count;
 
@@ -279,14 +312,20 @@ BEGIN
   ASSERT v_json ? 'profile' AND v_json ? 'snapshots' AND v_json ? 'judgments'
      AND v_json ? 'corrections' AND v_json ? 'biases',
     'FAIL 5a1: export must carry profile/snapshots/judgments/corrections/biases';
-  ASSERT jsonb_array_length(v_json->'judgments') = 4,
-    'FAIL 5a2: export should carry all 4 judgments, got ' || jsonb_array_length(v_json->'judgments');
-  ASSERT jsonb_array_length(v_json->'snapshots') = 1,
-    'FAIL 5a3: export should carry the snapshot, got ' || jsonb_array_length(v_json->'snapshots');
-  ASSERT jsonb_array_length(v_json->'corrections') = 1,
-    'FAIL 5a4: export should carry the correction, got ' || jsonb_array_length(v_json->'corrections');
-  ASSERT jsonb_array_length(v_json->'biases') = 1,
-    'FAIL 5a5: export should carry the bias, got ' || jsonb_array_length(v_json->'biases');
+  -- (Wave 4C: "all rows" is the property — the absolute totals differ on a
+  -- demo-seeded DB. The fixture floor keeps the assertions non-vacuous.)
+  SELECT count(*) INTO v_count FROM taste_judgments WHERE designer_id = u_designer;
+  ASSERT jsonb_array_length(v_json->'judgments') = v_count AND v_count >= 4,
+    'FAIL 5a2: export should carry ALL ' || v_count || ' judgments, got ' || jsonb_array_length(v_json->'judgments');
+  SELECT count(*) INTO v_count FROM designer_taste_snapshots WHERE designer_id = u_designer;
+  ASSERT jsonb_array_length(v_json->'snapshots') = v_count AND v_count >= 1,
+    'FAIL 5a3: export should carry ALL ' || v_count || ' snapshots, got ' || jsonb_array_length(v_json->'snapshots');
+  SELECT count(*) INTO v_count FROM taste_corrections WHERE designer_id = u_designer;
+  ASSERT jsonb_array_length(v_json->'corrections') = v_count AND v_count >= 1,
+    'FAIL 5a4: export should carry ALL ' || v_count || ' corrections, got ' || jsonb_array_length(v_json->'corrections');
+  SELECT count(*) INTO v_count FROM signature_biases WHERE designer_id = u_designer;
+  ASSERT jsonb_array_length(v_json->'biases') = v_count AND v_count >= 1,
+    'FAIL 5a5: export should carry ALL ' || v_count || ' biases, got ' || jsonb_array_length(v_json->'biases');
   ASSERT (v_json->'profile') IS NOT NULL AND jsonb_typeof(v_json->'profile') = 'object',
     'FAIL 5a6: export profile section should be the profile row';
 
@@ -315,17 +354,25 @@ BEGIN
   END;
   PERFORM pg_temp.reset_role();
 
+  -- (Wave 4C) Consensus scope pin: compute_house_taste_draft is global —
+  -- on a baseline where OTHER designers carry eligible learned profiles
+  -- (e.g. after a nightly refit) the fixture weight math below would shift.
+  -- Retire everyone but the two fixture designers INSIDE the transaction.
+  UPDATE designer_taste_profiles SET retired_at = now()
+   WHERE designer_id NOT IN (u_designer, u_mgr) AND retired_at IS NULL;
+
   -- Case 6b: with no eligible designers it no-ops gracefully (NULL, no row).
   -- (The designer's profile exists from the submits but sits at the default
   -- reliability 0.15 with 4 judgments — ineligible on both counts.)
+  SELECT count(*) INTO v_house_before FROM house_taste;
   PERFORM pg_temp.assume_user(u_lead);
   v_uuid := compute_house_taste_draft();
   ASSERT v_uuid IS NULL,
     'FAIL 6b1: no eligible designers should return NULL, got ' || COALESCE(v_uuid::text, 'NULL');
   PERFORM pg_temp.reset_role();
   SELECT count(*) INTO v_count FROM house_taste;
-  ASSERT v_count = 1,
-    'FAIL 6b2: no draft row should be created, house_taste count = ' || v_count;
+  ASSERT v_count = v_house_before,
+    'FAIL 6b2: no draft row should be created, house_taste count went ' || v_house_before || ' -> ' || v_count;
 
   -- Case 6c: two eligible designers → deterministic consensus draft.
   -- designer: reliability .9, theta [1,0,.5], vector e1, warmth .5
@@ -342,15 +389,16 @@ BEGIN
   VALUES
     (u_mgr, 0.6, ARRAY[0, 1, 0.5]::real[], v_e2, -0.5, 0.2, 0.3, 0.4, '{"judgments": 60}'::jsonb);
 
+  SELECT COALESCE(max(version), 0) + 1 INTO v_ver FROM house_taste;
   PERFORM pg_temp.assume_user(u_lead);
   v_uuid := compute_house_taste_draft();
   ASSERT v_uuid IS NOT NULL, 'FAIL 6c1: two eligible designers should produce a draft';
   PERFORM pg_temp.reset_role();
 
   SELECT count(*) INTO v_count FROM house_taste
-   WHERE id = v_uuid AND version = 2 AND status = 'draft';
+   WHERE id = v_uuid AND version = v_ver AND status = 'draft';
   ASSERT v_count = 1,
-    'FAIL 6c2: the draft should land as version 2 / status draft, got ' || v_count;
+    'FAIL 6c2: the draft should land as version ' || v_ver || ' / status draft, got ' || v_count;
   SELECT count(*) INTO v_count FROM house_taste h
    WHERE h.id = v_uuid
      AND h.computed_from ? u_designer::text
@@ -378,14 +426,15 @@ BEGIN
   -- Case 7a: activation is lead-gated.
   PERFORM pg_temp.assume_user(u_designer);
   BEGIN
-    PERFORM activate_house_taste(2);
+    PERFORM activate_house_taste(v_ver);
     RAISE EXCEPTION 'FAIL 7a: non-lead activate_house_taste should be refused';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
   PERFORM pg_temp.reset_role();
 
   -- Case 7b: curated overrides — PIN warmth 0.55, NUDGE boldness −0.1,
-  -- PROTECT formality (keeps the ACTIVE v1 coordinate, which is 0).
+  -- PROTECT formality (keeps the previously-ACTIVE coordinate — captured
+  -- below rather than assumed to be v1's 0, Wave 4C).
   UPDATE house_taste
      SET curated_overrides = '{
        "warmth":    {"op": "pin",     "value": 0.55},
@@ -394,43 +443,67 @@ BEGIN
      }'::jsonb
    WHERE id = v_uuid;
 
+  SELECT version, COALESCE(formality, 0) INTO v_prev_active_ver, v_prev_formality
+    FROM house_taste WHERE status = 'active';
+
   PERFORM pg_temp.assume_user(u_lead);
-  PERFORM activate_house_taste(2);
+  PERFORM activate_house_taste(v_ver);
   PERFORM pg_temp.reset_role();
 
   SELECT count(*) INTO v_count FROM house_taste WHERE status = 'active';
   ASSERT v_count = 1,
     'FAIL 7b1: exactly one active house after activation, got ' || v_count;
-  SELECT count(*) INTO v_count FROM house_taste WHERE version = 1 AND status = 'retired';
-  ASSERT v_count = 1,
-    'FAIL 7b2: v1 should be retired by the activation, got ' || v_count;
   SELECT count(*) INTO v_count FROM house_taste
-   WHERE version = 2 AND status = 'active'
-     AND abs(warmth - 0.55) < 0.001          -- PIN
-     AND abs(boldness - 0.1) < 0.001         -- 0.2 NUDGEd by −0.1
-     AND abs(formality - 0.0) < 0.001        -- PROTECTed at v1's 0
-     AND abs(craftsmanship - 0.4) < 0.001;   -- untouched consensus value
+   WHERE version = v_prev_active_ver AND status = 'retired';
   ASSERT v_count = 1,
-    'FAIL 7b3: PIN/NUDGE/PROTECT should land exactly (warmth .55, boldness .1, formality 0, craftsmanship .4), got ' || v_count;
+    'FAIL 7b2: the previously-active version should be retired by the activation, got ' || v_count;
+  SELECT count(*) INTO v_count FROM house_taste
+   WHERE version = v_ver AND status = 'active'
+     AND abs(warmth - 0.55) < 0.001                          -- PIN
+     AND abs(boldness - 0.1) < 0.001                         -- 0.2 NUDGEd by −0.1
+     AND abs(COALESCE(formality, 0) - v_prev_formality) < 0.001  -- PROTECTed
+     AND abs(craftsmanship - 0.4) < 0.001;                   -- untouched consensus value
+  ASSERT v_count = 1,
+    'FAIL 7b3: PIN/NUDGE/PROTECT should land exactly (warmth .55, boldness .1, formality protected, craftsmanship .4), got ' || v_count;
 
   -- Case 8: refresh_style_centroids — designer-confirmed published catalog
-  -- vectors only; archetypes without vectors are skipped.
-  SELECT id INTO v_style FROM styles WHERE is_archetype = TRUE ORDER BY name LIMIT 1;
-  ASSERT v_style IS NOT NULL, 'FAIL 8a: no archetype styles seeded (00006 missing?)';
+  -- vectors only; archetypes without vectors are skipped. (Wave 4C: the
+  -- fixture targets an archetype with NO qualifying products, and totals are
+  -- computed against the fn's own predicate — exact on any baseline.)
+  SELECT s.id INTO v_style FROM styles s
+   WHERE s.is_archetype = TRUE
+     AND NOT EXISTS (
+       SELECT 1 FROM product_styles ps
+         JOIN products p ON p.id = ps.product_id
+        WHERE ps.style_id = s.id
+          AND ps.source IN ('manual', 'validated')
+          AND p.layer = 'catalog' AND p.status = 'published'
+          AND p.aesthete_vector IS NOT NULL)
+   ORDER BY s.name LIMIT 1;
+  ASSERT v_style IS NOT NULL,
+    'FAIL 8a: no qualifying-vector-free archetype style available (00006 missing?)';
   UPDATE products SET aesthete_vector = v_e1 WHERE id = pc1;
   INSERT INTO product_styles (product_id, style_id, assigned_by, source)
   VALUES (pc1, v_style, u_designer, 'validated');
 
+  SELECT count(DISTINCT s.id) INTO v_expected
+    FROM styles s
+    JOIN product_styles ps ON ps.style_id = s.id AND ps.source IN ('manual', 'validated')
+    JOIN products p ON p.id = ps.product_id
+   WHERE s.is_archetype = TRUE
+     AND p.layer = 'catalog' AND p.status = 'published'
+     AND p.aesthete_vector IS NOT NULL;
+
   v_count := refresh_style_centroids();
-  ASSERT v_count = 1,
-    'FAIL 8b: exactly one archetype carries a qualifying vector, refresh wrote ' || v_count;
+  ASSERT v_count = v_expected,
+    'FAIL 8b: refresh should write one row per qualifying archetype (' || v_expected || '), wrote ' || v_count;
   SELECT count(*) INTO v_count FROM style_centroids;
-  ASSERT v_count = 1,
-    'FAIL 8c: style_centroids should hold exactly one row (others skipped), got ' || v_count;
+  ASSERT v_count = v_expected,
+    'FAIL 8c: style_centroids should hold exactly the qualifying archetypes, got ' || v_count;
   SELECT abs(vector_norm(centroid) - 1.0), n_products INTO v_norm, v_count
     FROM style_centroids WHERE style_id = v_style;
   ASSERT v_norm < 0.001 AND v_count = 1,
-    'FAIL 8d: centroid should be unit-norm over 1 product, |norm-1|=' || v_norm || ' n=' || v_count;
+    'FAIL 8d: our archetype''s centroid should be unit-norm over exactly the fixture product, |norm-1|=' || v_norm || ' n=' || v_count;
 
   -- Case 9a: retire is owner/admin — another designer is refused.
   PERFORM pg_temp.assume_user(u_mgr);
@@ -464,9 +537,13 @@ BEGIN
   ASSERT v_count = 0,
     'FAIL 9b5: probe rows delete on retire, got ' || v_count;
   SELECT count(*) INTO v_count FROM designer_taste_snapshots
-   WHERE designer_id = u_designer AND taste_vector IS NULL AND theta IS NULL;
-  ASSERT v_count = 1,
-    'FAIL 9b6: snapshot rows survive but their payloads tombstone, got ' || v_count;
+   WHERE designer_id = u_designer AND (taste_vector IS NOT NULL OR theta IS NOT NULL);
+  ASSERT v_count = 0,
+    'FAIL 9b6a: every surviving snapshot payload must be tombstoned, ' || v_count || ' still carry state';
+  SELECT count(*) INTO v_count FROM designer_taste_snapshots
+   WHERE designer_id = u_designer;
+  ASSERT v_count >= 1,
+    'FAIL 9b6b: snapshot rows must survive the retire (audit trail), got ' || v_count;
 
   -- Case 9c: the retired designer is excluded from the next consensus.
   PERFORM pg_temp.assume_user(u_lead);

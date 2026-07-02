@@ -82,6 +82,11 @@ $$ LANGUAGE plpgsql;
 
 -- ─── fixtures ──────────────────────────────────────────────────────────────
 
+-- Cases 2j/6 premise: vector assembly starts from an EMPTY style_centroids.
+-- A bare reset satisfies that; a demo-seeded / nightly-refreshed DB may not —
+-- pin it inside the transaction (rolled back).
+DELETE FROM style_centroids;
+
 -- Products for the janitor's engagement-reference case (a judgment citing an
 -- anon profile must protect it from the purge).
 INSERT INTO products (id, name, source_url, captured_by, captured_at, layer, patina_managed, status)
@@ -130,7 +135,7 @@ BEGIN
     'FAIL 0c: seeded designer↔client pair missing (designer-clients.sql), got ' || v_count;
   SELECT count(*) INTO v_count FROM style_centroids;
   ASSERT v_count = 0,
-    'FAIL 0d: style_centroids should be empty on a fresh local reset, got ' || v_count;
+    'FAIL 0d: style_centroids must be empty here (pinned by the fixture DELETE), got ' || v_count;
 
   SELECT id INTO v_wm FROM styles WHERE name = 'Warm Modern';
   SELECT id INTO v_jp FROM styles WHERE name = 'Japandi';
@@ -445,7 +450,11 @@ BEGIN
   PERFORM pg_temp.reset_role();
 
   PERFORM pg_temp.assume_user(u_designer);
-  SELECT count(*) INTO v_count FROM client_style_profiles WHERE user_id = u_client;
+  -- (Wave 4C: was an unscoped count of 5, which broke once the demo seed
+  -- claimed a profile for the same client — now asserts the property on the
+  -- suite's own rows: the assigned designer reads ALL 5 key1 versions.)
+  SELECT count(*) INTO v_count FROM client_style_profiles
+   WHERE user_id = u_client AND session_key = key1;
   ASSERT v_count = 5,
     'FAIL 8g: the assigned designer should read the client''s profiles, got ' || v_count;
   PERFORM pg_temp.reset_role();
@@ -486,11 +495,14 @@ BEGIN
   VALUES (md5('198.51.100.7'), now() - interval '2 days', 4);
 
   v_json := aesthete_quiz_janitor();
-  ASSERT (v_json->>'profiles')::int = 1,
-    'FAIL 10a: exactly the unengaged old anon profile should purge, got ' || (v_json->>'profiles');
-  ASSERT (v_json->>'sessions')::int = 1,
-    'FAIL 10b: exactly the unengaged old anon session should purge, got ' || (v_json->>'sessions');
-  ASSERT (v_json->>'rate_rows')::int = 1,
+  -- (Wave 4C: the janitor's counters are global — a live DB may carry other
+  -- purgeable rows. The exactly-these-rows semantics are 10d/10e/10f below;
+  -- the totals assert at-least-ours.)
+  ASSERT (v_json->>'profiles')::int >= 1,
+    'FAIL 10a: the unengaged old anon profile should purge, got ' || (v_json->>'profiles');
+  ASSERT (v_json->>'sessions')::int >= 1,
+    'FAIL 10b: the unengaged old anon session should purge, got ' || (v_json->>'sessions');
+  ASSERT (v_json->>'rate_rows')::int >= 1,
     'FAIL 10c: the stale rate row should purge, got ' || (v_json->>'rate_rows');
   SELECT count(*) INTO v_count FROM client_style_profiles WHERE session_key = key_janitor;
   ASSERT v_count = 0,
