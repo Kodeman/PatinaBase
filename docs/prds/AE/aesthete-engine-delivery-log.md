@@ -5,6 +5,16 @@ One entry per wave barrier: what merged, gate results, decisions/deviations, fla
 
 ---
 
+## 2026-07-02 — Barrier G3 (Wave 3 complete): the surfaces
+
+**Merged** (3A → 3C → 3D → 3B): client-portal **/quiz + results** (package-driven, playwright-specced, claim path proven; middleware allowlist) · **aesthete-ask** + ⌘K/librarian vector upgrade (RRF blend, 1.5 s → FTS degrade, no-ask-text proven in DB; migration **00247** invoker kNN — taken unreserved, no collision) · **demo seed + eval harness** (34/34 mechanical bars, idempotent seed ×3, dead seed URL fixed, PostHog client+server events w/ fallbacks) · **teaching prefill + judgments + Your Eye v1** (probe loop proven live; prefill marker retires on canonical save; corrections chips; de-gamified — removed a legacy daily-goal meter; hooks batch + barrel resolved with 3C's append).
+
+**Barrier verification:** db 8/8 suites on bare reset · edge 3 suites · worker · ts 24/24 · walk 83 ms · eval personas green · copy-law grep clean on all Wave-3 surfaces. Live walks: 3A (client, + committed playwright) and 3B (designer, incl. probe/prefill/Your-Eye loops) walked their surfaces against the live stack; conductor visual pass folded into Wave-5 hardening.
+
+**Decisions/incidents:** ① Gate ordering rule ratified: **db suites certify the bare reset baseline; demo seed applies after** (4 suites still carry absolute-count assertions that break on a seeded DB — seed-robustness sweep assigned to 4C). ② Barrel conflict resolved keeping both 3B+3C blocks. ③ `_shared` edge tests sit outside the gate's glob — fold into edge tier (4C/5A). ④ Why-phrase library is thin on exploit rows ("Sits right where your taste settles" dominates) — phrase-breadth pass owed (5A). ⑤ Local-stack contention bit agents mid-walk twice (concurrent resets) — future waves keep single-DB-owner discipline.
+
+**Rolled forward:** ANTHROPIC_API_KEY still unprovisioned · stale-running jobs janitor (4C) · portfolio embeddings + Your-Eye real data (4A/4B) · `SpectrumValues` type home inconsistency (@patina/shared vs types — 5A tidy) · optional nav entries for judgments/your-eye (Kody call).
+
 ## 2026-07-02 — Barrier G2: THE DEMO GATE (Wave 2 complete) ★
 
 **FULL GATE GREEN — all five tiers PASS.** `walk`: anon quiz → six-spectrum profile → **top-10 matches with whys in 86 ms** (budget 2000 ms). Match RPC p95 12 ms over 20 calls. The brief's week-6 milestone is live on the local stack, end to end.
