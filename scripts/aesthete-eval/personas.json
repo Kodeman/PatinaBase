@@ -1,5 +1,5 @@
 {
-  "$comment": "4 fixed quiz->rec personas per design Sec.14.3. Answer option keys are the documented Sec.7.1/Sec.7.2 vocabulary; 'expected' fields are directional placeholders until the week-4 designer calibration. The catalyst vocabulary beyond 'new_home' lands with the Wave-1B quiz_option_loadings seed.",
+  "$comment": "4 fixed quiz->rec personas per design Sec.14.3. Answer option keys are the documented Sec.7.1/Sec.7.2 vocabulary; catalyst vocab per 00243 loadings seed: new_home | moving | milestone | refresh | just_looking. 'expected' fields are directional placeholders until the week-4 designer calibration.",
   "version": "0.1-skeleton",
   "personas": [
     {
@@ -7,15 +7,31 @@
       "description": "Young family in a new build — warm, calm, durable; willing to buy once and keep it.",
       "answers": {
         "visual_resonance": "warm_minimal",
-        "lifestyle": ["family", "entertaining"],
+        "lifestyle": [
+          "family",
+          "entertaining"
+        ],
         "material": "weathered_oak",
         "investment": "heirloom",
         "catalyst": "new_home"
       },
       "expected": {
-        "budget_band": { "label": "Heirloom", "min_cents": 500000, "max_cents": 1500000, "value_orientation": 0.7 },
-        "style_leanings": ["Warm Modern", "Japandi", "Scandinavian"],
-        "spectrum_direction": { "warmth": "+", "complexity": "-", "craftsmanship": "+" },
+        "budget_band": {
+          "label": "Heirloom",
+          "min_cents": 500000,
+          "max_cents": 1500000,
+          "value_orientation": 0.7
+        },
+        "style_leanings": [
+          "Warm Modern",
+          "Japandi",
+          "Scandinavian"
+        ],
+        "spectrum_direction": {
+          "warmth": "+",
+          "complexity": "-",
+          "craftsmanship": "+"
+        },
         "notes": "Kids/pets durability is a near-hard filter (Q2 family); patina affinity positive via weathered_oak (+0.4)."
       }
     },
@@ -24,15 +40,30 @@
       "description": "Downtown loft, hosts often, undecided on spend — cool-toned, editorial, low clutter. A lead-signal persona (investment = discuss).",
       "answers": {
         "visual_resonance": "cool_modern",
-        "lifestyle": ["entertaining"],
+        "lifestyle": [
+          "entertaining"
+        ],
         "material": "brushed_metal",
         "investment": "discuss",
-        "catalyst": "new_home"
+        "catalyst": "moving"
       },
       "expected": {
-        "budget_band": { "label": "Discuss", "min_cents": null, "max_cents": null, "value_orientation": 0.2, "lead_signal": true },
-        "style_leanings": ["Soft Contemporary", "Modern Industrial"],
-        "spectrum_direction": { "warmth": "-", "complexity": "-", "boldness": "+" },
+        "budget_band": {
+          "label": "Discuss",
+          "min_cents": null,
+          "max_cents": null,
+          "value_orientation": 0.2,
+          "lead_signal": true
+        },
+        "style_leanings": [
+          "Soft Contemporary",
+          "Modern Industrial"
+        ],
+        "spectrum_direction": {
+          "warmth": "-",
+          "complexity": "-",
+          "boldness": "+"
+        },
         "notes": "Null budget range must NOT become a price filter; metal affinity ~0.9."
       }
     },
@@ -41,15 +72,27 @@
       "description": "First real furniture budget after years of hand-me-downs — classic, comfortable, built to be lived on.",
       "answers": {
         "visual_resonance": "classic_comfort",
-        "lifestyle": ["family"],
+        "lifestyle": [
+          "family"
+        ],
         "material": "aged_leather",
         "investment": "starter",
-        "catalyst": "new_home"
+        "catalyst": "refresh"
       },
       "expected": {
-        "budget_band": { "label": "Starter", "value_orientation": -0.6 },
-        "style_leanings": ["Traditional", "Transitional"],
-        "spectrum_direction": { "warmth": "+", "timelessness": "+", "formality": "+" },
+        "budget_band": {
+          "label": "Starter",
+          "value_orientation": -0.6
+        },
+        "style_leanings": [
+          "Traditional",
+          "Transitional"
+        ],
+        "spectrum_direction": {
+          "warmth": "+",
+          "timelessness": "+",
+          "formality": "+"
+        },
         "notes": "Zero budget violations is the hard bar here; aged_leather carries patina affinity (+0.5)."
       }
     },
@@ -58,15 +101,30 @@
       "description": "Collector's eye — layered, story-driven rooms; buys single statement pieces for keeps.",
       "answers": {
         "visual_resonance": "eclectic_curated",
-        "lifestyle": ["entertaining"],
+        "lifestyle": [
+          "entertaining"
+        ],
         "material": "aged_leather",
         "investment": "heirloom",
-        "catalyst": "new_home"
+        "catalyst": "milestone"
       },
       "expected": {
-        "budget_band": { "label": "Heirloom", "min_cents": 500000, "max_cents": 1500000, "value_orientation": 0.7 },
-        "style_leanings": ["Bohemian", "Maximalist", "Mid-Century Modern"],
-        "spectrum_direction": { "complexity": "+", "boldness": "+", "craftsmanship": "+" },
+        "budget_band": {
+          "label": "Heirloom",
+          "min_cents": 500000,
+          "max_cents": 1500000,
+          "value_orientation": 0.7
+        },
+        "style_leanings": [
+          "Bohemian",
+          "Maximalist",
+          "Mid-Century Modern"
+        ],
+        "spectrum_direction": {
+          "complexity": "+",
+          "boldness": "+",
+          "craftsmanship": "+"
+        },
         "notes": "The '>=1 wouldn't-have-thought-of-it' exploration bar is most testable on this persona."
       }
     }
