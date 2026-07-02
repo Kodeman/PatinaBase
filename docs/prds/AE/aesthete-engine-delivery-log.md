@@ -5,6 +5,18 @@ One entry per wave barrier: what merged, gate results, decisions/deviations, fla
 
 ---
 
+## 2026-07-02 — Barrier G4 (Wave 4 complete): the engine learns
+
+**Merged** (4A → 4C → 4B, migration order 00248 → 00249 → 00250): **00248** taste refit — worker `/fit/taste` + `/fit/taste/backtest` (pure-numpy BT MAP, damped Newton), `aesthete-nightly` (per-phase + per-designer isolation: refit → ρ/confidence-map → **designer_teaching_stats writers** → house draft → centroids/decay), `preview_taste_update` · **00250** guardrails — `aesthete-drift-audit` (4 §13 checks), stale-`running` jobs janitor, UNLOGGED `ask_embed_cache`, seed-robust conversions of the 4 brittle suites, `_shared` folded into the gate edge tier · **00249** house/portfolio — portfolio bucket + embed drain + Weiszfeld geometric-median centroid seed, `seed_house_from_validated_catalog` (draft-only), `derive_signature_biases` (never touches confirmed/edited/muted), `match_designers_for_client`, own 03:15 SQL cron.
+
+**Barrier verification (integrated main):** full gate green — **db 11 suites** (seed-robust: all pass on demo-seeded state, the real 4C×4B integration test), edge 6 suites, worker, whole-repo ts, walk 94 ms. Nightly SQL pieces + drift audit run clean; **drift audit 4/4 checks pass** (house-capture trivial pre-consensus, budget-dignity 0.69 craftsmanship within 0.15 tol, exploration share 0.20 = floor, why-coverage 0 violations) and **idempotent** (2nd run → 4 rows). Live two-run refit idempotency proven by 4A; drill 6/6 + load p95 57 ms by 4C; portfolio centroid + house draft + minted bias by 4B.
+
+**Learning proofs (4A, live):** θ landed 94-d for designer@patina.dev (snapshot v2), backtest folds 0.86/0.88/0.83, **dial-unlock verdict TRUE** (θ_D 0.875 vs θ_H 0.5, Δ 0.375 ≥ 0.05), match_impact_count loop closed. φ-ordering parity guaranteed by construction (worker never assembles φ; payload RPC calls 00244's `_aesthete_phi`).
+
+**Incidents/decisions:** ① Two agents hit the account session limit (killed pre-work) + two stopped by the user mid-run; all four relaunched as fresh finishers adopting the uncommitted work (backed up to scratchpad) — zero rework lost. ② 4A found + fixed a PostgREST bare-`DELETE` trap (pg-safeupdate) in 00242's `refresh_style_centroids`; 4B audited 00249 clean of the same. ③ Ask-cache = UNLOGGED postgres table (Redis-from-edge has no repo seam; documented vs §12.3). ④ plpgsql_check pldbgapi2 concurrency race (local CLI image only) tolerated narrowly by load-sanity (signature-matched, ≤ cap). ⑤ 4C merged before 4B (independent files, 00250 doesn't reference 00249) to de-risk the barrier.
+
+**Rolled forward to Wave 5:** ANTHROPIC_API_KEY still unprovisioned (2C/4B name seam park gracefully) · house stays pre-consensus/neutral-θ until real judgments or the House-Hundred (5B/human) · why-phrase library thin on exploit rows (5A) · SpectrumValues type-home (@patina/shared vs types) tidy (5A) · design-system compiled-artifact cleanup + turbo type-check ^build ordering (5A) · deploy registrations for aesthete-nightly + aesthete-drift-audit already in the script.
+
 ## 2026-07-02 — Wave 4 IN FLIGHT, interrupted by account session limit (resets 02:10 America/Chicago)
 
 Wave 4 launched post-G3 as three worktree agents; **4A died at the session limit before doing real work; 4B/4C presumed dead the same way.** No Wave-4 code exists on main. To RESUME (fresh session, conductor role — read delivery plan + this log + memory `aesthete-engine-delivery-program`):
