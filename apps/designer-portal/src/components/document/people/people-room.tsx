@@ -17,7 +17,7 @@ import { useRouter } from 'next/navigation';
 import { usePeopleDirectory, type PartyRole } from '@patina/supabase';
 import { deriveNurtureQueue, humanizeSince } from '@/lib/document/people-derivation';
 import { RoomShell } from '../rooms/room-shell';
-import { DirectoryView, type DirectoryRole } from './views/directory-view';
+import { DirectoryView, type DirectoryRole, type MakerLens } from './views/directory-view';
 import { PersonProfile } from './views/person-profile';
 import { ThreadsView } from './views/threads-view';
 import { NurtureView } from './views/nurture-view';
@@ -61,6 +61,9 @@ export function PeopleRoom() {
   // R51/R83 — the quiet inline confirmation band the Directory shows after an
   // add (never a toast). Cleared when the designer moves on (view/filter).
   const [notice, setNotice] = useState<string | null>(null);
+  // R78 — the Makers filter's lens (roster | marketplace), lifted so walking
+  // into a profile and back doesn't drop the designer out of the marketplace.
+  const [makerLens, setMakerLens] = useState<MakerLens>('roster');
 
   const { data: all } = usePeopleDirectory({ role: 'all' });
   const now = useMemo(() => new Date(), []);
@@ -152,6 +155,8 @@ export function PeopleRoom() {
         setRoleFilter(r);
       }}
       notice={notice}
+      makerLens={makerLens}
+      onMakerLens={setMakerLens}
     />
   ) : view === 'threads' ? (
     <ThreadsView {...nav} pendingThreadId={pendingThreadId} />
