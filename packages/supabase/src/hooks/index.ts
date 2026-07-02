@@ -1128,3 +1128,14 @@ export type {
   FfeItemCoverage,
   FfeInvoiceCoverageMap,
 } from './use-invoices';
+
+// 3C — the Engine's ask path (aesthete-ask edge fn). Appended at the END per
+// the wave-3 barrel contention rule (3B owns this file's body this wave;
+// conductor resolves the export list on merge).
+export { useEngineAsk } from './use-engine-ask';
+export type {
+  EngineAskItem,
+  EngineAskMatchSource,
+  EngineAskResult,
+  UseEngineAskOptions,
+} from './use-engine-ask';
