@@ -1,0 +1,90 @@
+{
+  "identity": {
+    "era": null,
+    "origin_country": null,
+    "provenance_candidate": null,
+    "conf": 0.2
+  },
+  "form": {
+    "silhouette": "possibly a lounge chair, angle obscured",
+    "line_quality": 0.2,
+    "visual_scale": null,
+    "negative_space": null,
+    "leg_style": null,
+    "arm_profile": null,
+    "back_profile": null,
+    "symmetry": null,
+    "conf": 0.35
+  },
+  "material": {
+    "primary": null,
+    "materials": [],
+    "finish": null,
+    "joinery": null,
+    "surface_texture": "textured upholstery, fiber unclear",
+    "solidity": null,
+    "craftsmanship_tier": null,
+    "conf": 0.3
+  },
+  "color": {
+    "dominant_hex": "#B9AFA3",
+    "palette_family": "warm neutral",
+    "temperature": 0.2,
+    "value": 0.3,
+    "saturation": 0.2,
+    "sheen": null,
+    "pattern_density": null,
+    "conf": 0.45
+  },
+  "patina": {
+    "potential": null,
+    "material_honesty": null,
+    "trajectory": null,
+    "conf": 0.2
+  },
+  "style": {
+    "primary_archetype": "Soft Contemporary",
+    "secondary": [],
+    "spectrums": {
+      "warmth": 0.2,
+      "complexity": -0.2,
+      "formality": -0.2,
+      "timelessness": 0.1,
+      "boldness": -0.3,
+      "craftsmanship": 0.0
+    },
+    "spectrum_conf": {
+      "warmth": 0.4,
+      "complexity": 0.35,
+      "formality": 0.3,
+      "timelessness": 0.3,
+      "boldness": 0.4,
+      "craftsmanship": 0.25
+    },
+    "mood_keywords": ["soft"],
+    "ambiance": null,
+    "conf": 0.4
+  },
+  "function": {
+    "primary_use": null,
+    "comfort": null,
+    "flexibility": null,
+    "durability_for": [],
+    "conf": 0.25
+  },
+  "context": {
+    "min_room_feel": null,
+    "conf": 0.15
+  },
+  "commercial": {
+    "price_tier_estimate": null,
+    "value_story_draft": null,
+    "conf": 0.2
+  },
+  "overall_confidence": 0.45,
+  "uncertainties": [
+    "single low-resolution image",
+    "product partially cropped",
+    "cannot distinguish fabric from bouclé blend"
+  ]
+}

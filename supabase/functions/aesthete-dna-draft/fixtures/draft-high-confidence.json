@@ -1,0 +1,88 @@
+{
+  "identity": {
+    "era": "contemporary",
+    "origin_country": null,
+    "provenance_candidate": null,
+    "conf": 0.6
+  },
+  "form": {
+    "silhouette": "low-slung credenza with recessed plinth base",
+    "line_quality": -0.5,
+    "visual_scale": 0.2,
+    "negative_space": 0.1,
+    "leg_style": "plinth",
+    "arm_profile": null,
+    "back_profile": null,
+    "symmetry": "symmetrical",
+    "conf": 0.85
+  },
+  "material": {
+    "primary": "walnut",
+    "materials": ["walnut", "brass"],
+    "finish": "natural oil",
+    "joinery": "mitred corners",
+    "surface_texture": "open-grain wood",
+    "solidity": 0.6,
+    "craftsmanship_tier": 0.75,
+    "conf": 0.8
+  },
+  "color": {
+    "dominant_hex": "#6B4F3A",
+    "palette_family": "warm earth",
+    "temperature": 0.6,
+    "value": -0.2,
+    "saturation": 0.4,
+    "sheen": 0.2,
+    "pattern_density": 0.15,
+    "conf": 0.8
+  },
+  "patina": {
+    "potential": 0.8,
+    "material_honesty": 0.9,
+    "trajectory": "walnut deepens and brass softens to a warm haze",
+    "conf": 0.75
+  },
+  "style": {
+    "primary_archetype": "Warm Modern",
+    "secondary": [
+      { "archetype": "Mid-Century Modern", "weight": 0.4 }
+    ],
+    "spectrums": {
+      "warmth": 0.6,
+      "complexity": -0.4,
+      "formality": -0.1,
+      "timelessness": 0.5,
+      "boldness": -0.2,
+      "craftsmanship": 0.55
+    },
+    "spectrum_conf": {
+      "warmth": 0.85,
+      "complexity": 0.8,
+      "formality": 0.7,
+      "timelessness": 0.7,
+      "boldness": 0.75,
+      "craftsmanship": 0.7
+    },
+    "mood_keywords": ["grounded", "quiet", "warm"],
+    "ambiance": "Refined Casual",
+    "conf": 0.82
+  },
+  "function": {
+    "primary_use": "media and dining storage",
+    "comfort": 0.5,
+    "flexibility": 0.6,
+    "durability_for": ["kids"],
+    "conf": 0.7
+  },
+  "context": {
+    "min_room_feel": "reads best with breathing room on a long wall",
+    "conf": 0.4
+  },
+  "commercial": {
+    "price_tier_estimate": "mid_premium",
+    "value_story_draft": "Solid walnut with visible joinery at a mid-premium price — built to outlast trend cycles.",
+    "conf": 0.55
+  },
+  "overall_confidence": 0.82,
+  "uncertainties": ["back panel construction not visible"]
+}
