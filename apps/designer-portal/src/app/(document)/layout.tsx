@@ -5,6 +5,7 @@ import { CommandBar } from '@/components/document/command-bar';
 import { InterruptionSettings } from '@/components/document/interruption-settings';
 import { AccountSheet } from '@/components/document/account/account-sheet';
 import { InvoiceOverlays } from '@/components/document/accounts/invoice-overlays';
+import { DraftProposalOverlay } from '@/components/document/rooms/drafting/draft-proposal-opener';
 import { DocumentHelpProvider } from '@/components/document/help/document-help';
 import { MobileShellProvider } from '@/components/document/mobile/mobile-shell';
 import { MobileBar } from '@/components/document/mobile/mobile-bar';
@@ -51,6 +52,8 @@ export default function DocumentLayout({ children }: { children: React.ReactNode
               {/* R74 — the Invoice folio + composer, openable from any surface
                   (Accounts rows, Account band, margin, Hours, FF&E, ⌘K). */}
               <InvoiceOverlays />
+              {/* R85 — the ⌘K "draft a proposal" household-picker cold start. */}
+              <DraftProposalOverlay />
               <MobileBar />
               <MobileSheets />
             </DocumentHelpProvider>

@@ -61,6 +61,7 @@ export function PeopleRoom() {
   // The Directory's role filter lives here (controlled) so the ask bar can set it.
   const [roleFilter, setRoleFilter] = useState<DirectoryRole>('all');
   const [addOpen, setAddOpen] = useState(false);
+  const [addKind, setAddKind] = useState<'client' | 'maker'>('client');
   // R51/R83 — the quiet inline confirmation band the Directory shows after an
   // add (never a toast). Cleared when the designer moves on (view/filter).
   const [notice, setNotice] = useState<string | null>(null);
@@ -83,6 +84,7 @@ export function PeopleRoom() {
     const person = params.get('person');
     const role = params.get('role');
     const thread = params.get('thread');
+    const add = params.get('add');
     const roles: PartyRole[] = ['client', 'lead', 'maker', 'gc', 'team'];
     if (person && role && (roles as string[]).includes(role)) {
       setOpenPerson({ id: person, role: role as PartyRole });
@@ -90,6 +92,10 @@ export function PeopleRoom() {
     } else if (thread) {
       setPendingThreadId(thread);
       setView('threads');
+    } else if (add === 'maker' || add === 'client') {
+      // R78 — ⌘K "Add a maker" lands here and cold-starts the add sheet.
+      setAddKind(add);
+      setAddOpen(true);
     }
   }, []);
 
@@ -276,6 +282,7 @@ export function PeopleRoom() {
       {/* Add a person — a paper sheet over the Room. */}
       <AddPersonSheet
         open={addOpen}
+        initialKind={addKind}
         onClose={() => setAddOpen(false)}
         onAdded={(message, kind) => {
           // Land them where they'll show: the Directory, filtered to the kind

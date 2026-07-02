@@ -142,3 +142,21 @@ export function DraftProposalSheet({
     </div>
   );
 }
+
+/** Open the household-picker cold start from anywhere (⌘K). The overlay is
+ *  layout-mounted, so this is the always-mounted-listener pattern
+ *  (openInvoiceComposer), not the Desk pending-flag one. */
+export function openDraftProposalPicker() {
+  window.dispatchEvent(new CustomEvent('document:open-draft-proposal'));
+}
+
+/** The layout host for the ⌘K "draft a proposal" cold start. */
+export function DraftProposalOverlay() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener('document:open-draft-proposal', onOpen);
+    return () => window.removeEventListener('document:open-draft-proposal', onOpen);
+  }, []);
+  return <DraftProposalSheet open={open} onClose={() => setOpen(false)} />;
+}

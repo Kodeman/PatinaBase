@@ -20,7 +20,7 @@
  * re-implementing it.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useAddClient,
@@ -75,9 +75,12 @@ export function AddPersonSheet({
   onClose,
   onAdded,
   onGoToLeads,
+  initialKind = 'client',
 }: {
   open: boolean;
   onClose: () => void;
+  /** The kind the sheet opens on (⌘K "Add a maker" cold-starts on 'maker'). */
+  initialKind?: AddedPersonKind;
   /** Fired with a confirmation line + the kind, so the Room can land the
    *  directory on the right role filter and show the line inline (no toast). */
   onAdded?: (message: string, kind: AddedPersonKind) => void;
@@ -90,7 +93,11 @@ export function AddPersonSheet({
   const findOrCreateVendor = useFindOrCreateVendor({ errorSurface: 'inline' });
   const saveVendor = useSaveVendor({ errorSurface: 'inline' });
 
-  const [kind, setKind] = useState<AddedPersonKind>('client');
+  const [kind, setKind] = useState<AddedPersonKind>(initialKind);
+  // Re-seed the kind each time the sheet opens (⌘K may cold-start on 'maker').
+  useEffect(() => {
+    if (open) setKind(initialKind);
+  }, [open, initialKind]);
   // Client fields.
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');

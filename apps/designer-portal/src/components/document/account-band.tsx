@@ -128,7 +128,13 @@ function MilestoneRow({ m, projectId }: { m: AccountMilestone; projectId: string
   );
 }
 
-export function AccountBand({ projectId }: { projectId: string }) {
+export function AccountBand({
+  projectId,
+  clientName,
+}: {
+  projectId: string;
+  clientName?: string | null;
+}) {
   const { data } = useAccountPage(projectId);
   const [open, setOpen] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
@@ -297,7 +303,7 @@ export function AccountBand({ projectId }: { projectId: string }) {
       )}
       <AmendmentSheet
         projectId={projectId}
-        clientName=""
+        clientName={clientName ?? ''}
         open={amendmentOpen}
         onClose={() => setAmendmentOpen(false)}
       />

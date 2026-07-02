@@ -22,6 +22,9 @@ import { usePeopleDirectory } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { openAccount } from './account/account-sheet';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
+import { openPost } from './overlays/post-sheet';
+import { openHelp } from '@/lib/help-system/open-help';
+import { openDraftProposalPicker } from './rooms/drafting/draft-proposal-opener';
 import { fillStateForDesk } from '@/lib/document/fill-state';
 import { folderTab } from '@/lib/document/desk-derivation';
 import { StrataMark } from './strata-mark';
@@ -197,6 +200,40 @@ export function CommandBar() {
         sub: 'milestones · time · FF&E · ad-hoc',
         keywords: 'invoice bill new invoice draw invoice billing money',
         run: () => openInvoiceComposer(),
+      },
+      {
+        // R85 · PRO-01 — draft a proposal for an existing household (skips
+        // lead/discovery). The picker cold-starts; templates are retired.
+        kind: 'action' as const,
+        label: 'Draft a proposal',
+        sub: 'for an existing household',
+        keywords: 'new proposal draft proposal quote estimate propose',
+        run: () => openDraftProposalPicker(),
+      },
+      {
+        // R78 — add a maker (the Wave-1 owed doorway): the People Room's
+        // add-a-person sheet in maker mode.
+        kind: 'action' as const,
+        label: 'Add a maker',
+        sub: 'a vendor on your roster',
+        keywords: 'new vendor add vendor add maker supplier manufacturer trade',
+        run: () => router.push('/people?add=maker'),
+      },
+      {
+        // R82 — the Post: Letters (messages) + the Record (system notices).
+        kind: 'action' as const,
+        label: 'The Post',
+        sub: 'letters · the record',
+        keywords: 'inbox notifications messages mail the post letters record bell',
+        run: () => openPost(),
+      },
+      {
+        // R89 — the contextual help panel, scoped to the current surface.
+        kind: 'action' as const,
+        label: 'Help…',
+        sub: 'about this surface',
+        keywords: 'help guide docs how to support question learn',
+        run: () => openHelp(),
       },
       { kind: 'action' as const, label: 'The Desk', sub: 'go home', run: () => router.push('/desk') },
       {

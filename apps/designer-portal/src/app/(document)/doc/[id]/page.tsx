@@ -411,7 +411,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         {/* R26: the Account Page — engagement money at the top of the
             Project section. Studio eyes only; never mirrored. */}
         {row.engagement_kind === 'project' && row.project_id && (
-          <AccountBand projectId={row.project_id} />
+          <AccountBand projectId={row.project_id} clientName={row.client_name} />
         )}
 
         {/* The active section — exactly one (§4). */}
