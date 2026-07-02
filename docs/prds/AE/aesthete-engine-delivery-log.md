@@ -5,6 +5,18 @@ One entry per wave barrier: what merged, gate results, decisions/deviations, fla
 
 ---
 
+## 2026-07-02 — Wave 5 build complete → AWAITING HUMAN DEPLOY GATE
+
+**Merged 5A** (runbook + hardening) + **5B report on disk**. Migrations now **00239–00251** (5A added 00251 why-phrase breadth). Full gate green on integrated + seeded main: **db 12 suites**, edge 6, worker, **ts 26/26** (after `pnpm install` — SpectrumValues move added @patina/types as a packages/supabase dep), walk. This is the last build wave; **nothing deploys without Kody's go.**
+
+**5A delivered:** `aesthete-engine-runbook.md` (deploy order migrations→edge→worker→portals→smoke, full env/secret + cron-GUC inventory, Coolify worker def, §15.3 DoD checklist 7 done/4 human-gated), **00251** why-phrase breadth (STAGED in `why_phrase_alts` + `_ae_pick_why_phrase` selector — deliberately NOT wired into the frozen match RPC; a documented 3-line follow-up owns going live, kept out of hardening to protect the crown-jewel RPC), 192 stale DS compiled artifacts dropped + ignore, SpectrumValues→@patina/types (no cycle). Judgment calls verified sound: turbo.json already had `dependsOn:["^build"]` (the cold-dist gotcha was direct-tsc bypassing turbo — no change needed).
+
+**5B delivered:** `aesthete-engine-prod-readiness.md` — **GO, conditional.** pgvector on prod = **0.7.0** (image-tag evidence → HNSW builds; risk #1 resolved, operator confirms live at deploy; safe-either-way since 00239 fails-fast+rolls-back on old pgvector). Prod migration tip **00229** → deploy applies **00230–00250 (21 migrations), 9 non-AE ride along** (proposal-watch 00230/31 — 00231 needs the proposal-nudge edge fn; iOS field-capture 00232–35; The Document 00236–38 — brief those owners). **Required at deploy (all ops, no code):** LAN/SSH to the box (currently timing out — same reason The Document 00230/31 are stuck), migrations apply clean, worker service stood up on Coolify (its image never built end-to-end — build on the host, has egress), cron GUCs + INFERENCE_URL/TOKEN wired. **Env name mismatches found on the functions container:** it has `CLAUDE_API_KEY`/`POSTHOG_API_KEY` but the fns read `ANTHROPIC_API_KEY`/`POSTHOG_KEY`; INFERENCE_* absent. **NOT blockers (ship-and-degrade):** ANTHROPIC_API_KEY (dna-draft parks), House Hundred (neutral θ), real judgments (synthetic-proven) — the quiz→matches money path is pure SQL.
+
+**Flags:** admin-portal + designer-portal carry the same committed-compiled-artifact class 5A cleaned from the design system (future sweep). why-phrase variety live-in-output is a post-deploy follow-up (library staged).
+
+**Deferred to the human gate / Kody:** the go/no-go itself; getting on the LAN; generating INFERENCE_TOKEN; renaming the two env vars (or setting the aliases); optionally ANTHROPIC_API_KEY.
+
 ## 2026-07-02 — Barrier G4 (Wave 4 complete): the engine learns
 
 **Merged** (4A → 4C → 4B, migration order 00248 → 00249 → 00250): **00248** taste refit — worker `/fit/taste` + `/fit/taste/backtest` (pure-numpy BT MAP, damped Newton), `aesthete-nightly` (per-phase + per-designer isolation: refit → ρ/confidence-map → **designer_teaching_stats writers** → house draft → centroids/decay), `preview_taste_update` · **00250** guardrails — `aesthete-drift-audit` (4 §13 checks), stale-`running` jobs janitor, UNLOGGED `ask_embed_cache`, seed-robust conversions of the 4 brittle suites, `_shared` folded into the gate edge tier · **00249** house/portfolio — portfolio bucket + embed drain + Weiszfeld geometric-median centroid seed, `seed_house_from_validated_catalog` (draft-only), `derive_signature_biases` (never touches confirmed/edited/muted), `match_designers_for_client`, own 03:15 SQL cron.
