@@ -32,6 +32,7 @@ import { FFESection } from '@/components/document/ffe-section';
 import { CoordinationBand } from '@/components/document/coordination/coordination-band';
 import { BriefSection } from '@/components/document/brief-section';
 import { BriefRecap } from '@/components/document/brief-recap';
+import { CareBand } from '@/components/document/care-band';
 import { CareSection } from '@/components/document/quiet-sections';
 import { DiscoverySection } from '@/components/document/discovery/discovery-section';
 import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap';
@@ -287,6 +288,8 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
         <DocLetterhead
           title={row.title}
           vitals={vitalsFor(row, project, liveProposal)}
+          // R80: project vitals self-save at the letterhead (blur-save law).
+          projectId={row.engagement_kind === 'project' ? row.project_id : null}
           fill={deriveFillState(sections)}
           client={
             row.engagement_kind === 'project' || row.engagement_kind === 'proposal' ? (
@@ -494,22 +497,30 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 onFolioDropConsumed={() => setFolioDrop(null)}
                 sectionDragOver={sectionDrag}
               />
+              {/* R80: the Care band — closure stays reachable from an active
+                  project (a quiet folded line until install nears). */}
+              <CareBand projectId={row.project_id} />
             </>
           )}
           {row.active_section === 'install' && row.project_id && (
-            <FFESection
-              projectId={row.project_id}
-              projectName={row.title}
-              mode="install"
-              highlightId={highlightLineId}
-              onAddNote={setPendingNoteAnchor}
-              sectionKey="install"
-              clientUserId={row.client_profile_id}
-              clientName={row.client_name}
-              folioDrop={folioDrop}
-              onFolioDropConsumed={() => setFolioDrop(null)}
-              sectionDragOver={sectionDrag}
-            />
+            <>
+              <FFESection
+                projectId={row.project_id}
+                projectName={row.title}
+                mode="install"
+                highlightId={highlightLineId}
+                onAddNote={setPendingNoteAnchor}
+                sectionKey="install"
+                clientUserId={row.client_profile_id}
+                clientName={row.client_name}
+                folioDrop={folioDrop}
+                onFolioDropConsumed={() => setFolioDrop(null)}
+                sectionDragOver={sectionDrag}
+              />
+              {/* R80: at install the band opens unfolded — closing out IS the
+                  work of this stage. */}
+              <CareBand projectId={row.project_id} />
+            </>
           )}
           {row.active_section === 'care' && (
             <>
@@ -517,6 +528,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                 completedLabel={
                   project?.target_completion ? fmtMonthYear(project.target_completion) : null
                 }
+                projectId={row.project_id}
               />
               {row.project_id && (
                 <FFESection
