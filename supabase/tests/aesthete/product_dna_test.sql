@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Product DNA tests (migration 00238)
+-- Product DNA tests (migration 00240)
 --
 -- Exercises design §5.2 + §5.6:
 --   1. CHECK constraints reject out-of-range scoring axes.

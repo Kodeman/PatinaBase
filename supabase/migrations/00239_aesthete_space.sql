@@ -1,10 +1,10 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Migration 00237: Aesthete space — vector columns, helpers, ANN index
+-- Migration 00239: Aesthete space — vector columns, helpers, ANN index
 --
 -- Design contract: docs/prds/AE/aesthete-engine-system-design.md §5.1
 -- (§15.4 row "00236 aesthete_space" — shifted +1 because 00236 was taken by
 -- 00236_document_state_relationship_title.sql after the design doc was
--- written; the whole 00236–00243 block in §15.4 becomes 00237–00244).
+-- written; final numbering: aesthete block is 00239–00241 (00236–00238 taken by The Document tracks); later waves continue from 00242.
 --
 -- What this does:
 --   1. Asserts pgvector ≥ 0.5.0 (needed for sum(vector) aggregate and

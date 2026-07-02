@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Aesthete space tests (migration 00237)
+-- Aesthete space tests (migration 00239)
 --
 -- Exercises design §5.1:
 --   1. products.aesthete_vector is vector(768); the three bookkeeping

@@ -1,8 +1,8 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Migration 00238: Product DNA — canonical attributes, drafts, vocabulary
+-- Migration 00240: Product DNA — canonical attributes, drafts, vocabulary
 --
 -- Design contract: docs/prds/AE/aesthete-engine-system-design.md §5.2 + §5.6
--- (§15.4 row "00237 product_dna" — shifted +1, see 00237 header).
+-- (§15.4 row "00237 product_dna" — final number 00240, see 00239 header).
 --
 -- Shape decisions (from the design doc, not re-litigated here):
 --   • One 1:1 table with typed columns for every axis the scorer touches,

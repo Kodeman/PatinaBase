@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Aesthete jobs queue tests (migration 00239)
+-- Aesthete jobs queue tests (migration 00241)
 --
 -- Exercises design §5.5 (jobs part) + §6.1 + §12.2:
 --   1. A products INSERT enqueues exactly 3 jobs (embed_text, embed_fused,

@@ -1,11 +1,11 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Migration 00239: Aesthete jobs — outbox, claim RPCs, triggers, crons
+-- Migration 00241: Aesthete jobs — outbox, claim RPCs, triggers, crons
 --
 -- Design contract: docs/prds/AE/aesthete-engine-system-design.md §5.5 (jobs
 -- part only — match_weight_profiles / why_phrases / match_events ship with
 -- the match RPC in a later wave), §5.6 (RLS), §6.1 (trigger/enqueue flow),
--- §12.2 (orchestration). (§15.4 row "00238 aesthete_jobs" — shifted +1, see
--- 00237 header.)
+-- §12.2 (orchestration). (§15.4 row "00238 aesthete_jobs" — final number 00241, see
+-- 00239 header.)
 --
 -- One outbox (aesthete_jobs), one claim pattern (FOR UPDATE SKIP LOCKED via
 -- claim_aesthete_jobs), cron-driven drains through the existing
@@ -279,6 +279,6 @@ SELECT cron.schedule(
 -- supabase_admin on self-hosted, so a postgres-run migration may lack
 -- privilege).
 DO $$ BEGIN
-  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: see cron.job for the full registry. Aesthete engine (00239): aesthete-embed (every minute → aesthete-embed-worker edge fn), aesthete-dna-draft (every 2 min → aesthete-dna-draft edge fn). Earlier: decision-reminders-daily, expire-decisions-daily, invoice-reminders-daily, po-payments-due-daily, delivery-this-week-weekly, review-requests, proposal, digest, A/B winner, margin pulse crons.'$C$;
+  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: see cron.job for the full registry. Aesthete engine (00241): aesthete-embed (every minute → aesthete-embed-worker edge fn), aesthete-dna-draft (every 2 min → aesthete-dna-draft edge fn). Earlier: decision-reminders-daily, expire-decisions-daily, invoice-reminders-daily, po-payments-due-daily, delivery-this-week-weekly, review-requests, proposal, digest, A/B winner, margin pulse crons.'$C$;
 EXCEPTION WHEN insufficient_privilege THEN NULL;
 END $$;
