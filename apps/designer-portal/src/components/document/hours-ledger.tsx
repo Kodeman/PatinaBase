@@ -2,20 +2,40 @@
 
 /**
  * The Hours ledger (D9: capture in the document, review in the drawer;
- * spec v1.2 §9): this week's entries across every engagement — document ·
- * activity · phase · source · duration, inline-editable until an invoice
- * claims them (00177 guard) — with today/week totals and a batch-add row.
- * "Export week → Accounts" arrives with the Accounts book (Slice 6).
+ * spec v1.2 §9; R77 full depth): a week of entries across every engagement —
+ * document · activity · phase · source · duration, inline-editable until an
+ * invoice claims them (00177 guard) — with today/week totals and a batch-add
+ * row.
+ *
+ * R77 gave the ledger its history and its balance:
+ *  - WEEK PAGING — ‹ earlier / later › walks back through past weeks.
+ *  - ALL-TIME UNBILLED BALANCE — the studio's unclaimed hours as money
+ *    (project_unbilled_time, view-resolved rates), with a "bill it →"
+ *    handoff into the R74b composer.
+ *  - PER-DOCUMENT LENS — an optional OpenLedgerContext prop scopes the whole
+ *    ledger to one document (the Account band links in pre-filtered once the
+ *    drawer passes its sheet context through).
+ *  - DELETE WITH CONFIRM on unbilled entries; billed entries stay immutable.
+ *
+ * R75: "Export week → Accounts" opens the composer with the shown week's
+ * unbilled entries pre-ticked (per-entry include/exclude + resolved rates
+ * live there; one act, review before draft). Failures render inline (R83).
  */
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '@patina/supabase';
-import { useCreateTimeEntry, useUpdateTimeEntry } from '@/hooks/use-time-tracking';
+import {
+  useCreateTimeEntry,
+  useDeleteTimeEntry,
+  useUpdateTimeEntry,
+} from '@/hooks/use-time-tracking';
 import { ACTIVITIES, fmtMinutes } from '@/lib/document/time-derivation';
-import { fmtDay } from '@/lib/document/format';
+import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { LedgerFrontMatter } from './ledger-front-matter';
 import { hoursUtilization } from '@/lib/document/ledger-summary';
+import { openInvoiceComposer } from './accounts/invoice-overlays';
+import type { OpenLedgerContext } from './command-bar';
 
 type AnyRecord = any;
 
@@ -27,30 +47,56 @@ const SOURCE_LABEL: Record<string, string> = {
   manual_entry: 'typed',
 };
 
-function weekStartISO(): string {
+const TERRACOTTA_INK = '#C4836F';
+
+/** Local Monday 00:00 of the week `offset` weeks before the current one. */
+function weekRange(offset: number): { start: Date; end: Date } {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday
-  return d.toISOString();
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - offset * 7); // back to Monday
+  const end = new Date(d);
+  end.setDate(end.getDate() + 7);
+  return { start: d, end };
 }
 
-export function HoursLedger() {
-  const updateEntry = useUpdateTimeEntry();
-  const createEntry = useCreateTimeEntry();
+interface UnbilledInfo {
+  amount_cents: number;
+  project_id: string;
+}
+
+export function HoursLedger({
+  initialContext = null,
+}: {
+  /** R77 — the per-document lens: `{ projectId }` scopes the ledger. (The
+   *  studio drawer passes its sheet context through post-merge wiring.) */
+  initialContext?: OpenLedgerContext | null;
+}) {
+  const updateEntry = useUpdateTimeEntry({ errorSurface: 'inline' });
+  const createEntry = useCreateTimeEntry({ errorSurface: 'inline' });
+
+  // ── The lens + the page ───────────────────────────────────────────────────
+  const [lensProjectId, setLensProjectId] = useState<string | null>(
+    initialContext?.projectId ?? null,
+  );
+  const [weekOffset, setWeekOffset] = useState(0);
+  const { start: weekStart, end: weekEnd } = useMemo(() => weekRange(weekOffset), [weekOffset]);
 
   const { data: entries, refetch } = useQuery({
-    queryKey: ['document-hours-week'],
+    queryKey: ['document-hours-week', weekOffset, lensProjectId],
     queryFn: async () => {
       const supabase = getSupabase();
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user?.id) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from('project_time_entries')
         .select('*, project:projects(name)')
         .eq('user_id', userData.user.id)
-        .gte('started_at', weekStartISO())
+        .gte('started_at', weekStart.toISOString())
+        .lt('started_at', weekEnd.toISOString())
         .not('duration_minutes', 'is', null)
         .order('started_at', { ascending: false });
+      if (lensProjectId) query = query.eq('project_id', lensProjectId);
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as AnyRecord[];
     },
@@ -87,10 +133,44 @@ export function HoursLedger() {
     },
   });
 
-  const [addProject, setAddProject] = useState('');
+  // R77 — the all-time unbilled balance (00177 view: billable, completed,
+  // unclaimed, view-resolved rates). A balance, not a flow — it deliberately
+  // ignores the shown week; the lens scopes it like everything else.
+  const { data: unbilledRows, refetch: refetchUnbilled } = useQuery({
+    queryKey: ['document-hours-unbilled', lensProjectId],
+    queryFn: async () => {
+      let query = getSupabase()
+        .from('project_unbilled_time')
+        .select('id, project_id, duration_minutes, amount_cents');
+      if (lensProjectId) query = query.eq('project_id', lensProjectId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as AnyRecord[];
+    },
+  });
+
+  const unbilledById = useMemo(() => {
+    const map = new Map<string, UnbilledInfo>();
+    for (const row of unbilledRows ?? [])
+      map.set(row.id, { amount_cents: row.amount_cents ?? 0, project_id: row.project_id });
+    return map;
+  }, [unbilledRows]);
+  const unbilledMinutes = (unbilledRows ?? []).reduce(
+    (s, r) => s + (r.duration_minutes ?? 0),
+    0,
+  );
+  const unbilledCents = (unbilledRows ?? []).reduce((s, r) => s + (r.amount_cents ?? 0), 0);
+  const unbilledProjects = useMemo(
+    () => [...new Set((unbilledRows ?? []).map((r) => r.project_id as string))],
+    [unbilledRows],
+  );
+
+  const [addProject, setAddProject] = useState(initialContext?.projectId ?? '');
   const [addMinutes, setAddMinutes] = useState('');
   const [addActivity, setAddActivity] = useState('design');
   const [addBusy, setAddBusy] = useState(false);
+  /** R83 — the ledger's quiet inline note (add/delete failures, never a toast). */
+  const [note, setNote] = useState<string | null>(null);
 
   const days = useMemo(() => {
     const byDay = new Map<string, AnyRecord[]>();
@@ -108,12 +188,23 @@ export function HoursLedger() {
   const weekMin = (entries ?? []).reduce((s, e) => s + (e.duration_minutes ?? 0), 0);
   const util = hoursUtilization(entries ?? []);
 
+  // R75 — the shown week's exportable share: billable, completed, unclaimed.
+  const weekUnbilled = useMemo(
+    () => (entries ?? []).filter((e) => e.billable && !e.invoice_id),
+    [entries],
+  );
+  const weekUnbilledProjects = useMemo(
+    () => [...new Set(weekUnbilled.map((e) => e.project_id as string))],
+    [weekUnbilled],
+  );
+
   const parsedAdd = parseInt(addMinutes, 10);
   const addValid = addProject && Number.isFinite(parsedAdd) && parsedAdd >= 1;
 
   const batchAdd = async () => {
     if (!addValid || addBusy) return;
     setAddBusy(true);
+    setNote(null);
     try {
       await createEntry.mutateAsync({
         projectId: addProject,
@@ -123,6 +214,9 @@ export function HoursLedger() {
       });
       setAddMinutes('');
       void refetch();
+      void refetchUnbilled();
+    } catch (e) {
+      setNote(`Could not add — ${e instanceof Error ? e.message : 'try again'}`);
     } finally {
       setAddBusy(false);
     }
@@ -131,48 +225,145 @@ export function HoursLedger() {
   const commit = (entry: AnyRecord, updates: AnyRecord) => {
     updateEntry.mutate(
       { id: entry.id, projectId: entry.project_id, updates },
-      { onSuccess: () => void refetch() },
+      {
+        onSuccess: () => {
+          void refetch();
+          void refetchUnbilled();
+        },
+        onError: (e) =>
+          setNote(`Could not save — ${e instanceof Error ? e.message : 'try again'}`),
+      },
     );
   };
+
+  const lensName =
+    lensProjectId != null
+      ? ((projects ?? []).find((p) => p.id === lensProjectId)?.name ??
+        (entries ?? []).find((e) => e.project_id === lensProjectId)?.project?.name ??
+        'one document')
+      : null;
+
+  const weekLabel =
+    weekOffset === 0
+      ? 'this week'
+      : `week of ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-4 flex items-baseline justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h2 className="font-heading text-xl text-[var(--color-pearl)]">
-            Hours <em className="italic text-[var(--color-clay)]">· this week</em>
+            Hours <em className="italic text-[var(--color-clay)]">· {weekLabel}</em>
+            {lensName && (
+              <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.55)]">
+                · {lensName}
+                <button
+                  type="button"
+                  onClick={() => setLensProjectId(null)}
+                  className="ml-1.5 text-[var(--color-clay)] hover:opacity-80"
+                >
+                  all documents ×
+                </button>
+              </span>
+            )}
           </h2>
           <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.07em] text-[rgba(250,247,242,0.45)]">
-            Today · {fmtMinutes(todayMin)} &nbsp;·&nbsp; Week · {fmtMinutes(weekMin)}
+            {weekOffset === 0 && <>Today · {fmtMinutes(todayMin)} &nbsp;·&nbsp; </>}
+            Week · {fmtMinutes(weekMin)}
+            {/* R77 — week paging: walk the history, quietly. */}
+            <button
+              type="button"
+              onClick={() => setWeekOffset((o) => o + 1)}
+              className="ml-3 text-[var(--color-clay)] hover:opacity-80"
+            >
+              ‹ earlier
+            </button>
+            {weekOffset > 0 && (
+              <button
+                type="button"
+                onClick={() => setWeekOffset((o) => Math.max(0, o - 1))}
+                className="ml-2 text-[var(--color-clay)] hover:opacity-80"
+              >
+                later ›
+              </button>
+            )}
           </p>
         </div>
         <button
           type="button"
-          disabled
-          title="Arrives with the Accounts book (Slice 6)"
-          className="whitespace-nowrap rounded-[3px] border border-[rgba(250,247,242,0.15)] px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.07em] text-[rgba(250,247,242,0.3)]"
+          disabled={weekUnbilled.length === 0}
+          title={
+            weekUnbilled.length === 0
+              ? 'Nothing unbilled this week'
+              : 'Open the invoice composer with this week ticked'
+          }
+          onClick={() =>
+            openInvoiceComposer({
+              // One document → land scoped; several → the composer asks and
+              // ticks that document's share of the week (R75).
+              projectId: weekUnbilledProjects.length === 1 ? weekUnbilledProjects[0] : undefined,
+              initialTimeEntryIds: weekUnbilled.map((e) => e.id),
+            })
+          }
+          className="whitespace-nowrap rounded-[3px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:border-[rgba(250,247,242,0.15)] disabled:text-[rgba(250,247,242,0.3)] disabled:hover:bg-transparent"
         >
           Export week → Accounts
         </button>
       </div>
 
-      {/* Front-matter (R5): utilization — the week's logged time + billable share. */}
+      {/* Front-matter (R5): utilization — the shown week + the balance. */}
       <LedgerFrontMatter
         caption="utilization"
         stats={[
-          { label: 'logged this week', value: fmtMinutes(util.totalMinutes) },
+          { label: `logged ${weekLabel}`, value: fmtMinutes(util.totalMinutes) },
           ...(util.billablePct !== null
             ? [{ label: 'billable', value: `${util.billablePct}%` }]
             : []),
-          ...((openEstimateMinutes ?? 0) > 0
+          ...((openEstimateMinutes ?? 0) > 0 && weekOffset === 0
             ? [{ label: 'of open work est.', value: fmtMinutes(openEstimateMinutes ?? 0) }]
             : []),
         ]}
       />
 
+      {/* R77 — the all-time unbilled balance, with its one act. */}
+      {unbilledMinutes > 0 && (
+        <div className="-mt-2 mb-4 flex flex-wrap items-baseline gap-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)]">
+          <span className="text-[var(--color-clay)]">unbilled · all time</span>
+          <span className="text-[var(--color-off-white)]">
+            {fmtUsd(unbilledCents)} · {fmtMinutes(unbilledMinutes)}
+          </span>
+          {unbilledProjects.length > 1 && <span>· {unbilledProjects.length} documents</span>}
+          <button
+            type="button"
+            onClick={() =>
+              openInvoiceComposer({
+                projectId:
+                  lensProjectId ??
+                  (unbilledProjects.length === 1 ? unbilledProjects[0] : undefined),
+                initialTimeEntryIds: (unbilledRows ?? []).map((r) => r.id as string),
+              })
+            }
+            className="text-[var(--color-clay)] hover:opacity-80"
+          >
+            bill it →
+          </button>
+        </div>
+      )}
+
+      {note && (
+        <p
+          className="mb-3 rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1.5 font-mono text-[9px] uppercase tracking-[0.05em]"
+          style={{ color: TERRACOTTA_INK }}
+        >
+          {note}
+        </p>
+      )}
+
       {days.length === 0 && (
         <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">
-          Nothing logged this week — pick up a document and the time follows.
+          {weekOffset === 0
+            ? 'Nothing logged this week — pick up a document and the time follows.'
+            : 'Nothing logged that week.'}
         </p>
       )}
 
@@ -185,64 +376,18 @@ export function HoursLedger() {
             </span>
           </p>
           <ul>
-            {rows.map((e) => {
-              const billed = Boolean(e.invoice_id);
-              return (
-                <li
-                  key={e.id}
-                  className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-[rgba(250,247,242,0.08)] px-1 py-2"
-                >
-                  <div>
-                    <p className="text-[12.5px] font-medium text-[var(--color-off-white)]">
-                      {e.project?.name ?? 'Project'}
-                    </p>
-                    <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
-                      {[e.phase_key, SOURCE_LABEL[e.source] ?? e.source].filter(Boolean).join(' · ')}
-                    </p>
-                  </div>
-                  <select
-                    aria-label="Activity"
-                    disabled={billed}
-                    className="rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-1.5 py-1 text-[10.5px] text-[rgba(250,247,242,0.75)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-40 [&_option]:bg-[var(--color-charcoal)]"
-                    value={e.activity ?? ''}
-                    onChange={(ev) => commit(e, { activity: ev.target.value || null })}
-                  >
-                    <option value="">—</option>
-                    {ACTIVITIES.map((a) => (
-                      <option key={a.key} value={a.key}>
-                        {a.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    min={1}
-                    aria-label="Duration (minutes)"
-                    disabled={billed}
-                    className="w-[64px] rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-1.5 py-1 text-right text-[11px] text-[var(--color-off-white)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-40"
-                    defaultValue={e.duration_minutes}
-                    onBlur={(ev) => {
-                      const v = parseInt(ev.target.value, 10);
-                      if (Number.isFinite(v) && v >= 1 && v !== e.duration_minutes)
-                        commit(e, { duration_minutes: v });
-                    }}
-                  />
-                  <span
-                    className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] font-mono text-[8px] uppercase tracking-[0.06em]"
-                    style={
-                      billed
-                        ? { borderColor: 'var(--color-sage)', color: 'var(--color-sage)' }
-                        : {
-                            borderColor: 'rgba(250,247,242,0.2)',
-                            color: 'rgba(250,247,242,0.45)',
-                          }
-                    }
-                  >
-                    {billed ? 'Billed' : e.billable ? 'Unbilled' : 'Non-bill'}
-                  </span>
-                </li>
-              );
-            })}
+            {rows.map((e) => (
+              <EntryRow
+                key={e.id}
+                entry={e}
+                unbilled={unbilledById.get(e.id)}
+                onCommit={commit}
+                onDeleted={() => {
+                  void refetch();
+                  void refetchUnbilled();
+                }}
+              />
+            ))}
           </ul>
         </section>
       ))}
@@ -293,5 +438,137 @@ export function HoursLedger() {
         </button>
       </div>
     </div>
+  );
+}
+
+/** One entry line — inline-editable until billed; unbilled lines carry their
+ *  view-resolved money and the R77 delete-with-confirm. */
+function EntryRow({
+  entry: e,
+  unbilled,
+  onCommit,
+  onDeleted,
+}: {
+  entry: AnyRecord;
+  unbilled: UnbilledInfo | undefined;
+  onCommit: (entry: AnyRecord, updates: AnyRecord) => void;
+  onDeleted: () => void;
+}) {
+  const deleteEntry = useDeleteTimeEntry({ errorSurface: 'inline' });
+  const [confirming, setConfirming] = useState(false);
+  const [rowNote, setRowNote] = useState<string | null>(null);
+  const billed = Boolean(e.invoice_id);
+
+  const doDelete = async () => {
+    setRowNote(null);
+    try {
+      await deleteEntry.mutateAsync({ id: e.id, projectId: e.project_id });
+      onDeleted();
+    } catch (err) {
+      setRowNote(err instanceof Error ? err.message : 'Could not delete');
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <li className="border-b border-[rgba(250,247,242,0.08)] px-1 py-2">
+      <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[12.5px] font-medium text-[var(--color-off-white)]">
+            {e.project?.name ?? 'Project'}
+          </p>
+          <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+            {[
+              e.phase_key,
+              SOURCE_LABEL[e.source] ?? e.source,
+              // The money the 00177 view resolved for this entry (BIL-08).
+              unbilled && unbilled.amount_cents > 0 ? fmtUsd(unbilled.amount_cents) : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        </div>
+        <select
+          aria-label="Activity"
+          disabled={billed}
+          className="rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-1.5 py-1 text-[10.5px] text-[rgba(250,247,242,0.75)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-40 [&_option]:bg-[var(--color-charcoal)]"
+          value={e.activity ?? ''}
+          onChange={(ev) => onCommit(e, { activity: ev.target.value || null })}
+        >
+          <option value="">—</option>
+          {ACTIVITIES.map((a) => (
+            <option key={a.key} value={a.key}>
+              {a.label}
+            </option>
+          ))}
+        </select>
+        <input
+          type="number"
+          min={1}
+          aria-label="Duration (minutes)"
+          disabled={billed}
+          className="w-[64px] rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-1.5 py-1 text-right text-[11px] text-[var(--color-off-white)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-40"
+          defaultValue={e.duration_minutes}
+          onBlur={(ev) => {
+            const v = parseInt(ev.target.value, 10);
+            if (Number.isFinite(v) && v >= 1 && v !== e.duration_minutes)
+              onCommit(e, { duration_minutes: v });
+          }}
+        />
+        <span
+          className="whitespace-nowrap rounded-[3px] border px-1.5 py-[2px] font-mono text-[8px] uppercase tracking-[0.06em]"
+          style={
+            billed
+              ? { borderColor: 'var(--color-sage)', color: 'var(--color-sage)' }
+              : {
+                  borderColor: 'rgba(250,247,242,0.2)',
+                  color: 'rgba(250,247,242,0.45)',
+                }
+          }
+        >
+          {billed ? 'Billed' : e.billable ? 'Unbilled' : 'Non-bill'}
+        </span>
+        {/* R77 — delete-with-confirm; a billed entry is history, immutable. */}
+        {!billed ? (
+          confirming ? (
+            <span className="flex items-baseline gap-1.5 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.05em]">
+              <span className="text-[rgba(250,247,242,0.5)]">delete?</span>
+              <button
+                type="button"
+                disabled={deleteEntry.isPending}
+                onClick={() => void doDelete()}
+                className="hover:opacity-80 disabled:opacity-40"
+                style={{ color: TERRACOTTA_INK }}
+              >
+                {deleteEntry.isPending ? '…' : 'yes'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                className="text-[rgba(250,247,242,0.5)] hover:text-[rgba(250,247,242,0.8)]"
+              >
+                no
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              aria-label="Delete entry"
+              onClick={() => setConfirming(true)}
+              className="text-[13px] leading-none text-[rgba(250,247,242,0.35)] hover:text-[#C4836F]"
+            >
+              ×
+            </button>
+          )
+        ) : (
+          <span aria-hidden className="w-[13px]" />
+        )}
+      </div>
+      {rowNote && (
+        <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.05em]" style={{ color: TERRACOTTA_INK }}>
+          {rowNote}
+        </p>
+      )}
+    </li>
   );
 }

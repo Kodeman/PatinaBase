@@ -14,9 +14,17 @@
  * as polish later — DECISIONS I25).
  *
  * R23/R24: the section head carries The Work block and the folio strip.
+ *
+ * R76: the schedule can BILL — the section head carries a quiet "Bill →" act
+ * opening the R74b invoice composer with every uninvoiced priced line
+ * pre-ticked (the Document descendant of ?ffeItemIds=), and each line wears
+ * its 00187 coverage truth (invoiced · N° / paid / unpriced) as a quiet
+ * mono note under the maker line. (The per-line Bill act rides the line
+ * unfold — Track 11-M's surface — wired post-merge.)
  */
 
-import { useProjectFFEItems } from '@patina/supabase';
+import { useFfeInvoiceCoverage, useProjectFFEItems, type FfeItemCoverage } from '@patina/supabase';
+import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { MobileMarginChips } from './mobile/mobile-margin-chips';
 import { STAGE_CONFIG } from '@/components/portal/ffe/stages';
 import type { FFEStageKey } from '@patina/types';
@@ -89,6 +97,23 @@ interface LineRow {
   stamp: LineStamp;
 }
 
+/** R76 — the line's billing truth (00187), a quiet mono note: SAGE paid,
+ *  dusty-blue invoiced, muted unpriced. Never a second loud stamp. */
+function coverageNote(
+  item: FFERow,
+  coverage: FfeItemCoverage | undefined,
+): { text: string; color: string } | null {
+  if (coverage && coverage.coverage === 'paid') return { text: 'paid', color: '#85947C' };
+  if (coverage && coverage.coverage === 'invoiced')
+    return {
+      text: coverage.invoiceNumber ? `invoiced · ${coverage.invoiceNumber}` : 'invoiced',
+      color: '#7E8FA6',
+    };
+  if (item.unit_price_cents === null || item.unit_price_cents === undefined)
+    return { text: 'unpriced', color: 'var(--text-muted)' };
+  return null;
+}
+
 function FFELine({
   item,
   stamp,
@@ -99,6 +124,7 @@ function FFELine({
   onToggle,
   onAddNote,
   showRoom = false,
+  coverage,
 }: LineRow & {
   projectId: string;
   projectName: string;
@@ -107,9 +133,11 @@ function FFELine({
   onToggle: () => void;
   onAddNote: (lineId: string) => void;
   showRoom?: boolean;
+  coverage?: FfeItemCoverage;
 }) {
   const sp = stampProps(stamp);
   const line = vendorLine(item, stamp, showRoom);
+  const billing = coverageNote(item, coverage);
   return (
     <li className="border-b border-[var(--color-pearl)]">
       <button
@@ -130,6 +158,15 @@ function FFELine({
             {item.quantity > 1 ? ` · ×${item.quantity}` : ''}
           </p>
           {line && <p className="mt-px text-[10.5px] text-[var(--text-muted)]">{line}</p>}
+          {/* R76: the coverage stamp — the 00187 bridge's per-line truth. */}
+          {billing && (
+            <p
+              className="mt-px font-mono text-[8px] uppercase tracking-[0.08em]"
+              style={{ color: billing.color }}
+            >
+              {billing.text}
+            </p>
+          )}
           {/* R38: the quiet, honest footprint of a piece the Engine placed. */}
           {item.added_via === 'engine' && (
             <p className="mt-px font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-clay)] opacity-70">
@@ -311,11 +348,22 @@ export function FFESection({
     isLoading: boolean;
   };
   const { data: rooms } = useDocumentRooms(mode === 'project' ? projectId : null);
+  // R76 — per-line billing truth (00187 bridge). Invalidated by every invoice
+  // mutation that moves money, so the stamps stay honest without a poll.
+  const { data: coverage } = useFfeInvoiceCoverage(projectId);
 
   const rows: LineRow[] = (items ?? []).map((item) => ({ item, stamp: deriveLineStamp(item) }));
   const total = rows.length;
   const underway = rows.filter((r) => UNDERWAY.has(r.stamp.kind)).length;
   const installed = rows.filter((r) => r.stamp.kind === 'installed').length;
+
+  // R76 — what the section-level Bill act would carry: priced lines not yet
+  // on a live invoice (the composer re-partitions; this is the offer).
+  const billableUninvoiced = (items ?? []).filter((it) => {
+    if (it.unit_price_cents === null || it.unit_price_cents === undefined) return false;
+    const cov = coverage?.[it.id];
+    return !cov || cov.coverage === 'uninvoiced';
+  });
 
   const meta =
     mode === 'install'
@@ -341,6 +389,7 @@ export function FFESection({
     onToggle: () => setOpenLineId(openLineId === row.item.id ? null : row.item.id),
     onAddNote,
     showRoom: !groupByRoom,
+    coverage: coverage?.[row.item.id],
   });
 
   // R25 grouping (project mode): rooms in sort order, then Throughout.
@@ -357,15 +406,33 @@ export function FFESection({
 
   return (
     <section>
-      <div className="mb-1.5 mt-5 flex items-baseline justify-between">
+      <div className="mb-1.5 mt-5 flex items-baseline justify-between gap-3">
         <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
           {mode === 'install' ? 'Install' : 'Project · FF&E'}
         </h2>
-        {meta && (
-          <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-            {meta}
-          </span>
-        )}
+        <span className="flex items-baseline gap-3">
+          {meta && (
+            <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+              {meta}
+            </span>
+          )}
+          {/* R76 — bill the schedule: the composer opens FF&E-prefilled with
+              every uninvoiced priced line ticked (untick there to narrow). */}
+          {billableUninvoiced.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                openInvoiceComposer({
+                  projectId,
+                  initialFfeItemIds: billableUninvoiced.map((it) => it.id as string),
+                })
+              }
+              className="whitespace-nowrap font-mono text-[9px] font-semibold uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+            >
+              Bill {billableUninvoiced.length} uninvoiced →
+            </button>
+          )}
+        </span>
       </div>
 
       {/* R23: the quiet work block under the section head. */}
