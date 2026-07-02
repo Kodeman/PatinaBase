@@ -9,6 +9,35 @@ const getSupabase = () => createBrowserClient();
 const PRODUCT_FIELDS =
   'id, name, brand, price_retail, price_trade, images, source_url, status, category, layer, owner_user_id, studio_id, created_at';
 
+/**
+ * The columns field-grain search can match on (R88). `brand` IS the maker
+ * column the Library shows as a piece's maker, so "search by maker" filters
+ * `brand`. All four are plain `ilike` substring matches, unioned in one `.or()`.
+ */
+export type CrossLayerSearchField = 'name' | 'brand' | 'sku' | 'category';
+
+/** name · maker(brand) · SKU · category — the Library's field-grain default. */
+export const DEFAULT_CROSS_LAYER_FIELDS: CrossLayerSearchField[] = [
+  'name',
+  'brand',
+  'sku',
+  'category',
+];
+
+/**
+ * Build the PostgREST `.or()` filter for a cross-layer search — one
+ * `<field>.ilike.<term>` clause per requested field, comma-joined. Pure and
+ * exported so the field set is a testable contract (R88 slice 4). `term`
+ * should already carry its `%…%` wildcards.
+ */
+export function buildCrossLayerOrFilter(
+  term: string,
+  fields: CrossLayerSearchField[] = DEFAULT_CROSS_LAYER_FIELDS,
+): string {
+  const safe = fields.length > 0 ? fields : DEFAULT_CROSS_LAYER_FIELDS;
+  return safe.map((f) => `${f}.ilike.${term}`).join(',');
+}
+
 export interface CrossLayerSearchResult {
   /** Items keyed by layer. RLS removes anything the caller can't see. */
   byLayer: Record<LayerProductLayer, LayerProductRow[]>;
@@ -23,6 +52,12 @@ export interface UseCrossLayerSearchOptions {
   query: string;
   /** Per-layer cap. Default 25 — enough for a search results page section. */
   perLayerLimit?: number;
+  /**
+   * Which columns to match. Defaults to name · maker(brand) · SKU · category
+   * (R88 field-grain search). The Engine's keyword fallback and the legacy
+   * search route both take the default, so they gain SKU/category matching too.
+   */
+  fields?: CrossLayerSearchField[];
   enabled?: boolean;
 }
 
@@ -47,11 +82,11 @@ const EMPTY_RESULT: CrossLayerSearchResult = {
 export function useCrossLayerSearch(
   options: UseCrossLayerSearchOptions,
 ): ReturnType<typeof useQuery<CrossLayerSearchResult, Error>> {
-  const { query, perLayerLimit = 25, enabled = true } = options;
+  const { query, perLayerLimit = 25, fields = DEFAULT_CROSS_LAYER_FIELDS, enabled = true } = options;
   const trimmed = query.trim();
 
   return useQuery<CrossLayerSearchResult, Error>({
-    queryKey: ['cross-layer-search', trimmed, { perLayerLimit }],
+    queryKey: ['cross-layer-search', trimmed, { perLayerLimit, fields }],
     enabled: enabled && trimmed.length > 0,
     queryFn: async (): Promise<CrossLayerSearchResult> => {
       if (trimmed.length === 0) return EMPTY_RESULT;
@@ -67,7 +102,7 @@ export function useCrossLayerSearch(
       const { data, error } = await supabase
         .from('products')
         .select(PRODUCT_FIELDS)
-        .or(`name.ilike.${term},brand.ilike.${term}`)
+        .or(buildCrossLayerOrFilter(term, fields))
         .order('created_at', { ascending: false })
         .limit(overallLimit);
 
