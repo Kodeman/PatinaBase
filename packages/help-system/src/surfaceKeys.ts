@@ -561,6 +561,29 @@ export const SurfaceKeys = {
         Channel: 'designer-portal/inbox/concept/channel',
       },
     },
+    // ─── The Document (R89) ─────────────────────────────────────────────────────
+    //
+    // The zone-nav replacement — the (document) route group. Unlike the legacy
+    // portal surfaces above, the Document has NO utility bar (the "help
+    // affordance" R5 long owed): the help panel rides ⌘K's alias-aware "Help…"
+    // row and a ContextualHelpPanel mounted once in the (document) layout.
+    //
+    // Each main Document surface declares its key via `useSetSurfaceKey`
+    // (apps/designer-portal/src/lib/help-system/use-document-surface.ts). The
+    // layout also derives a pathname fallback so the panel always resolves a key
+    // (…/lib/help-system/document-pathname-to-surface-key.ts, which mirrors these
+    // constants). The two agree by construction.
+    //
+    // Format holds: portal/section/component — section = `document`.
+    Document: {
+      Root:     'designer-portal/document',
+      Desk:     'designer-portal/document/desk',
+      Doc:      'designer-portal/document/doc',
+      Library:  'designer-portal/document/library',
+      People:   'designer-portal/document/people',
+      Drafting: 'designer-portal/document/drafting',
+      Compose:  'designer-portal/document/compose',
+    },
   },
   /**
    * Admin Portal — operator workspace surfaces (Sprint 3 Stream F2).

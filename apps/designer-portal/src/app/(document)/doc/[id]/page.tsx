@@ -38,6 +38,8 @@ import { DiscoverySection } from '@/components/document/discovery/discovery-sect
 import { DiscoveryRecap } from '@/components/document/discovery/discovery-recap';
 import { DiscoveryMargin } from '@/components/document/discovery/discovery-margin';
 import { MarginRail } from '@/components/document/margin-rail';
+import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountBand } from '@/components/document/account-band';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { HouseholdChip } from '@/components/document/household-chip';
@@ -83,6 +85,7 @@ function vitalsFor(row: DocumentStateRow, project: AnyRecord, proposal: AnyRecor
 }
 
 export default function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+  useDocumentSurface(DOCUMENT_SURFACE_KEYS.doc); // R89 — scope help to the open document
   const { id } = use(params);
   const router = useRouter();
 

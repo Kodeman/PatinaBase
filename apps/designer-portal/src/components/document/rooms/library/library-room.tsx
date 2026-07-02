@@ -25,8 +25,11 @@ import { CaptureSheet } from './capture-sheet';
 import { DeepAnalysisSheet } from './deep-analysis-sheet';
 import { PromoteToStudioModal } from '@/components/products/promotion/promote-to-studio-modal';
 import { NominateToCatalogModal } from '@/components/products/nomination/nominate-to-catalog-modal';
+import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 
 export function LibraryRoom() {
+  useDocumentSurface(DOCUMENT_SURFACE_KEYS.library); // R89 — scope help to the Library room
   const router = useRouter();
   const { data: counts } = useLayerCounts();
   const { data: queue } = useTeachingQueue();

@@ -27,6 +27,8 @@ import { OutreachView } from './views/outreach-view';
 import { AskBar, routePeopleAsk } from './directory/ask-bar';
 import { AddPersonSheet } from './directory/add-person-sheet';
 import type { PeopleView, PeopleViewProps } from './types';
+import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 
 const VIEWS: Array<{ key: PeopleView; name: string }> = [
   { key: 'directory', name: 'Directory' },
@@ -49,6 +51,7 @@ function RailMark() {
 }
 
 export function PeopleRoom() {
+  useDocumentSurface(DOCUMENT_SURFACE_KEYS.people); // R89 — scope help to the People room
   const router = useRouter();
   const [view, setView] = useState<PeopleView>('directory');
   const [openPerson, setOpenPerson] = useState<{ id: string; role: PartyRole } | null>(null);

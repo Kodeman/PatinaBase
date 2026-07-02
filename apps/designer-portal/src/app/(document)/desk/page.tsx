@@ -26,8 +26,11 @@ import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import { DeskReconnect } from '@/components/document/desk-reconnect';
 import { CaptureLeadSheet } from '@/components/document/overlays/capture-lead-sheet';
 import { OpenProjectSheet } from '@/components/document/overlays/open-project-sheet';
+import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 
 export default function DeskPage() {
+  useDocumentSurface(DOCUMENT_SURFACE_KEYS.desk); // R89 — scope help to the Desk
   const { data, isLoading, isError } = useDeskEngagements();
   const { user } = useAuth();
   const { data: profile } = useProfile();
