@@ -9,8 +9,11 @@
  */
 
 import { usePathname } from 'next/navigation';
+import { Bell } from 'lucide-react';
+import { useUnreadInboxCount } from '@patina/supabase';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
+import { openPost } from '../overlays/post-sheet';
 import { useMobileShell } from './mobile-shell';
 
 const STRATA = (
@@ -21,10 +24,33 @@ const STRATA = (
   </span>
 );
 
+/** The Post bell (R82) — the mobile twin of the Studio Drawer bell. Dispatches
+ *  the same `document:open-post` event; the clay dot is awareness, not a count
+ *  (D8), reading the same `useUnreadInboxCount` as the desktop bell. */
+function MobileBell({ unread }: { unread: number }) {
+  return (
+    <button
+      type="button"
+      onClick={openPost}
+      aria-label={unread > 0 ? `The Post, ${unread} unread` : 'The Post'}
+      className="relative flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[5px] border border-[rgba(250,247,242,0.14)] bg-[rgba(250,247,242,0.06)]"
+    >
+      <Bell className="h-[15px] w-[15px] text-[var(--color-clay)]" strokeWidth={1.5} aria-hidden />
+      {unread > 0 && (
+        <span
+          aria-hidden
+          className="absolute right-[6px] top-[6px] h-1.5 w-1.5 rounded-full bg-[var(--color-clay)]"
+        />
+      )}
+    </button>
+  );
+}
+
 export function MobileBar() {
   const pathname = usePathname();
   const { activeDoc, openSpine, openTimer, openDrawer } = useMobileShell();
   const { inHandToday, running, paused, elapsedSeconds } = useDocumentTime();
+  const { data: unread = 0 } = useUnreadInboxCount();
 
   const inDocument = pathname?.startsWith('/doc/') && activeDoc !== null;
   const activeSection = activeDoc?.sections.find((s) => s.state === 'active');
@@ -67,6 +93,8 @@ export function MobileBar() {
             {fmtElapsedQuiet(elapsedSeconds)}
           </button>
 
+          <MobileBell unread={unread} />
+
           <button
             type="button"
             onClick={openDrawer}
@@ -105,6 +133,7 @@ export function MobileBar() {
               {inHandToday > 0 ? fmtMinutes(inHandToday) : '—'}
             </span>
           </span>
+          <MobileBell unread={unread} />
         </>
       )}
     </nav>
