@@ -98,7 +98,10 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
   const active = queue[0] ?? null;
 
   // Catalog vendors keep their Patina-handled path (W1.5.5) — no manual POs.
-  if (vendor.is_patina_catalog || orderable.length === 0) return null;
+  // NOTE: a live queue keeps the mount alive even as the created POs drain
+  // the orderable list (invalidateFfeCaches refetches mid-walk) — otherwise
+  // the assistant's created step would vanish under the designer.
+  if (vendor.is_patina_catalog || (orderable.length === 0 && !active)) return null;
 
   const orderAll = () => {
     const assistantVendor: OrderAssistantVendor = {
@@ -141,16 +144,18 @@ function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
 
   return (
     <>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <button
-          type="button"
-          onClick={orderAll}
-          className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
-        >
-          Order all — {orderable.length} item{orderable.length === 1 ? '' : 's'} →
-        </button>
-        <span className={MONO_LABEL}>approved · unordered</span>
-      </div>
+      {orderable.length > 0 && (
+        <div className="mb-2 flex items-baseline justify-between gap-3">
+          <button
+            type="button"
+            onClick={orderAll}
+            className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+          >
+            Order all — {orderable.length} item{orderable.length === 1 ? '' : 's'} →
+          </button>
+          <span className={MONO_LABEL}>approved · unordered</span>
+        </div>
+      )}
       {/* D4 inside the book: the shared assistant carries shadow-xl in the
           old zones — strip it here without touching it (the R3/line-unfold
           precedent). */}
@@ -501,8 +506,9 @@ export function VendorsBookPage({
       {/* ── Orders page: open POs, PO-anchored, deep-link into documents ── */}
       {page === 'orders' && (
         <>
-        {/* PRC-24: the whole approved-unordered queue, one act. */}
-        <VendorOrderAll vendor={vendor} />
+        {/* PRC-24: the whole approved-unordered queue, one act. Keyed so a
+            vendor switch never carries another vendor's queue along. */}
+        <VendorOrderAll key={vendor.id} vendor={vendor} />
         <ul>
           {openPos.map((po) => {
             const stamp = PO_STAMP[po.status] ?? PO_STAMP.draft;

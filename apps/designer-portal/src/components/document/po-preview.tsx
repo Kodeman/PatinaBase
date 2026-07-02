@@ -101,7 +101,7 @@ export function LogAckInline({
       setDone(true);
       onLogged?.();
     } catch (e) {
-      setError(poSendErrorMessage((e as Error).message ?? 'unknown error'));
+      setError((e as Error).message || 'The acknowledgment could not be logged.');
     }
   };
 
