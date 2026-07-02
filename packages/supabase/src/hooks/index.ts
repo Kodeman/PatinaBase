@@ -25,8 +25,11 @@ export {
 } from './use-promotion-candidates';
 export {
   useCrossLayerSearch,
+  buildCrossLayerOrFilter,
+  DEFAULT_CROSS_LAYER_FIELDS,
   type CrossLayerSearchResult,
   type UseCrossLayerSearchOptions,
+  type CrossLayerSearchField,
 } from './use-cross-layer-search';
 export {
   usePromoteToStudio,

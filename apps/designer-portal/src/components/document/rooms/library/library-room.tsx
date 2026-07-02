@@ -14,14 +14,17 @@ import { useRouter } from 'next/navigation';
 import {
   useLayerCounts,
   useTeachingQueue,
+  useValidationQueue,
   useOrganizations,
   createBrowserClient,
 } from '@patina/supabase';
 import { RoomShell } from '../room-shell';
 import { LibrarianBar } from './librarian-bar';
+import { FieldSearch } from './field-search';
 import { LibraryShelf } from './library-shelf';
 import { LibraryFoot } from './library-foot';
 import { CaptureSheet } from './capture-sheet';
+import { ImportSheet } from './import-sheet';
 import { DeepAnalysisSheet } from './deep-analysis-sheet';
 import { PromoteToStudioModal } from '@/components/products/promotion/promote-to-studio-modal';
 import { NominateToCatalogModal } from '@/components/products/nomination/nominate-to-catalog-modal';
@@ -30,6 +33,7 @@ export function LibraryRoom() {
   const router = useRouter();
   const { data: counts } = useLayerCounts();
   const { data: queue } = useTeachingQueue();
+  const { data: validationQueue } = useValidationQueue();
   const { data: orgs } = useOrganizations();
 
   // R40: authoring a new piece walks into the Composing Page (a nested Room);
@@ -51,9 +55,19 @@ export function LibraryRoom() {
     );
   }, [queue]);
 
+  // The validation queue (status='needs_validation') is a DISTINCT set from the
+  // teaching queue — these pieces have a read awaiting a second eye (R88).
+  const validationIds = useMemo(() => {
+    const rows = (validationQueue ?? []) as Array<Record<string, unknown>>;
+    return new Set(
+      rows.map((r) => (r.product_id ?? r.id) as string | undefined).filter(Boolean) as string[],
+    );
+  }, [validationQueue]);
+
   const total = counts ? counts.personal + counts.studio + counts.catalog : null;
 
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [deep, setDeep] = useState<{ id: string; name: string } | null>(null);
   const [promoteId, setPromoteId] = useState<string | null>(null);
   const [nominateVendorId, setNominateVendorId] = useState<string | null>(null);
@@ -118,22 +132,35 @@ export function LibraryRoom() {
           }
         />
 
-        <div className="px-6 sm:px-9">
+        {/* The exact-find companion to the librarian's semantic ask (R88). */}
+        <FieldSearch />
+
+        <div className="mt-6 px-6 sm:px-9">
           <LibraryShelf
             layer="personal"
             name="My Library"
             meta="raw captures · from the extension, photos, paste"
             teachingIds={teachingIds}
+            validationIds={validationIds}
             onDeep={(id, name) => setDeep({ id, name })}
             onPromote={(id) => setPromoteId(id)}
             actions={
-              <button
-                type="button"
-                onClick={() => setCaptureOpen(true)}
-                className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-aged-oak)]"
-              >
-                + Capture
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setImportOpen(true)}
+                  className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-aged-oak)]"
+                >
+                  Import…
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCaptureOpen(true)}
+                  className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)] hover:text-[var(--color-aged-oak)]"
+                >
+                  + Capture
+                </button>
+              </>
             }
           />
 
@@ -142,6 +169,7 @@ export function LibraryRoom() {
             name="Studio Library"
             meta="proven · promoted from captures"
             teachingIds={teachingIds}
+            validationIds={validationIds}
             onDeep={(id, name) => setDeep({ id, name })}
             onNominate={(id) => void handleNominate(id)}
           />
@@ -151,6 +179,7 @@ export function LibraryRoom() {
             name="Patina Catalog"
             meta="maker pieces · order through Patina · nominate a maker"
             teachingIds={teachingIds}
+            validationIds={validationIds}
             onDeep={(id, name) => setDeep({ id, name })}
           />
         </div>
@@ -163,6 +192,17 @@ export function LibraryRoom() {
         open={captureOpen}
         onClose={() => setCaptureOpen(false)}
         onCaptured={(name) => setToast(`Captured → My Library. “${name}” is on your shelf, raw.`)}
+      />
+
+      {/* Import… — bring a maker's spreadsheet onto My Library, raw (R88). */}
+      <ImportSheet
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={(count) =>
+          setToast(
+            `${count} piece${count === 1 ? '' : 's'} landed in My Library — raw, ready to teach.`,
+          )
+        }
       />
 
       {/* Deep analysis — a paper sheet over the Room. */}

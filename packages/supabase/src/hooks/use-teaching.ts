@@ -386,10 +386,19 @@ export function useValidationQueue() {
   });
 }
 
-export function useSubmitValidation() {
+/**
+ * Submit a validation vote (Agree/Disagree) over a piece's read.
+ *
+ * The Library's in-card validate lens (R88) passes `{ errorSurface: 'inline' }`
+ * so a failed vote renders at the act site and does NOT raise the designer
+ * portal's global red toast (R83/D2). The dedicated /teaching/validate page
+ * calls it with no options and keeps the legacy toast behavior unchanged.
+ */
+export function useSubmitValidation(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       productId,
       vote,
