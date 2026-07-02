@@ -5,6 +5,18 @@ One entry per wave barrier: what merged, gate results, decisions/deviations, fla
 
 ---
 
+## 2026-07-02 — Barrier G2: THE DEMO GATE (Wave 2 complete) ★
+
+**FULL GATE GREEN — all five tiers PASS.** `walk`: anon quiz → six-spectrum profile → **top-10 matches with whys in 86 ms** (budget 2000 ms). Match RPC p95 12 ms over 20 calls. The brief's week-6 milestone is live on the local stack, end to end.
+
+**Merged** (2D → 2B → 2C → 2A): `@patina/aesthete-quiz` + `WIRE-CONTRACT.md` (46 tests; live smoke; marketing-repo handover ready) · `_shared/aesthete.ts` + `aesthete-embed-worker` (43 deno tests; **live-drained the seed catalog through the real ONNX worker — 12/12 products carry embedding + fused aesthete_vector + style_caption**; backoff/trigger-resurrect proven live) · `aesthete-dna-draft` (22 tests; spend governor + park-on-no-key verified live; drafts structurally cannot touch canonical spectrums) · **00244–00246**: `get_aesthete_matches` (full §10 pipeline: canonical-else-draft spectrums, θ-blend dial w/ NULL degradation, budget log-bell, MMR, deterministic 8+2 exploration, 26 copy-law-verified why phrases, match_events by-shape no-ask-text), `aesthete_search` seam, behavior-stats matview, **both iOS contracts byte-compatible** (signatures string-asserted vs 00067) + deterministic ranking suite. Demo seed registered in config.toml (conductor single-touch) + both edge fns in the deploy script.
+
+**Decisions:** 2A's property-fix to 0B's RLS assertion approved · 2C keeps its own port seams instead of _shared (same RPC contract; consolidation optional later) · `supabase/functions/deno.json` (2B) is the edge-tier config — gate patched.
+
+**Fold into design doc (v1.0.3, owed):** T_taste weight×w_eff reading + both-NULL drop-and-renormalize; T_behavioral affine calibration (/0.2); exploration-pool fallback below rank 20; φ archetype ordering contract = `styles.display_order NULLS LAST, name` (**4A refit MUST match**); shim strictness on unknown option keys.
+
+**Rolled-forward to-dos:** stale-`running` jobs janitor (→ 4C) · `material_compatibility` vocab is a guess + table empty (→ 3D seed or 4B) · dead seed image URL products.sql:12 (→ 3D) · 2B's local-networking notes (host LAN IP not host.docker.internal; worker on :8321; HS256 JWT for functions-serve curl; ONE `functions serve` at a time) (→ 3C/3D briefs) · turbo type-check ^build ordering (→ 5A) · ANTHROPIC_API_KEY still unprovisioned (2C parks gracefully).
+
 ## 2026-07-02 — Barrier G1 (Wave 1 complete) + Wave 2 rolling start
 
 **Merged** (1A → 1B → 1D → 1C): **00242** taste foundation (all §5.4 tables, RLS, judgment/correction/export/retire/house RPCs, `taste_probe_queue` 4% GUC-tunable probes, provisional ACTIVE house v0) · **00243** client quiz (client_style_profiles, 22-row loadings seed, `submit_style_quiz`/`claim_quiz_session`, quiz_sessions RLS fix, 00242's deferred FKs, janitor cron) — **anon wire proof green over Kong** (quiz → full six-spectrum profile) · **1D repo-health**: whole-repo type-check baseline **fully burned down, 24/24 green** (email @types/react→19, shared vitest, api-routes fixes incl. a provably-broken zero-caller compose chain, design-system/extension/client-portal) — baseline file now a green marker · **1C** `services/aesthete-inference` (ONNX int8 nomic pair, 22 tests incl. 4 golden vs committed vectors, p50 8.7 ms text / 66 ms image, 429 backpressure, worker gate tier PASS).
