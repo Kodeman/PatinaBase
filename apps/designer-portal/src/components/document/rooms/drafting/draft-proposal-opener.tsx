@@ -1,0 +1,144 @@
+'use client';
+
+/**
+ * Draft a proposal for an existing household (R85 · PRO-01) — the ad-hoc entry
+ * to the Drafting Room that SKIPS lead → discovery for a repeat client. It
+ * creates an EMPTY draft proposal (no template — proposal templates are retired
+ * per R85; the Discovery-seeded path covers the seeded case) linked to the
+ * chosen household, then walks straight into `/drafting/[id]`.
+ *
+ * Two exports:
+ *   • `useOpenDraftProposal()` — the primitive opener. Integration (the ⌘K
+ *     "draft a proposal" row) calls `openDraftProposal({ clientId, clientName })`
+ *     when it already knows the household.
+ *   • `DraftProposalSheet` — a paper overlay that reuses the R73 ClientPicker
+ *     (invite-and-link a captured household included) to pick the household,
+ *     then calls the primitive. Mount it from the ⌘K row (integration owns the
+ *     row itself).
+ *
+ * Zero shadows (D4); Esc closes; failures render inline (R83 — no toast).
+ */
+
+import { useCallback, useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useCreateProposal } from '@/hooks/use-proposals';
+import { useClients } from '@/hooks/use-clients';
+import { ClientPicker } from '@/components/portal/client-picker';
+import { rememberRoomOrigin } from '@/lib/document/room-origin';
+
+export interface OpenDraftProposalArgs {
+  /** The household's profiles.id (designer_clients.client_id) — a linked client. */
+  clientId: string;
+  /** Optional display name for the draft's title; falls back to "New proposal". */
+  clientName?: string | null;
+}
+
+/**
+ * The primitive opener. Creates an empty draft proposal for the household and
+ * navigates into the Drafting Room. Returns the new proposal id.
+ *
+ * Signature: `openDraftProposal(args: OpenDraftProposalArgs) => Promise<string>`
+ */
+export function useOpenDraftProposal() {
+  const router = useRouter();
+  const pathname = usePathname();
+  // Document surface — failures render inline in the sheet, never as a toast (R83).
+  const createProposal = useCreateProposal({ errorSurface: 'inline' });
+
+  const openDraftProposal = useCallback(
+    async ({ clientId, clientName }: OpenDraftProposalArgs): Promise<string> => {
+      const trimmed = clientName?.trim();
+      const title = trimmed ? `${trimmed} — new proposal` : 'New proposal';
+      // No templateId → an empty draft (templates retired, R85). The draft is
+      // real from the first keystroke; the Drafting Room self-saves every facet.
+      const proposal = await createProposal.mutateAsync({ title, clientId });
+      // Stash where we came from so "← back" out of the Room returns here.
+      rememberRoomOrigin(pathname);
+      router.push(`/drafting/${proposal.id}`);
+      return proposal.id as string;
+    },
+    [createProposal, router, pathname],
+  );
+
+  return { openDraftProposal, isCreating: createProposal.isPending };
+}
+
+/**
+ * The household-picker overlay for the ⌘K "draft a proposal" cold start.
+ * Integration toggles `open`; on household selection it opens the draft.
+ */
+export function DraftProposalSheet({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { openDraftProposal, isCreating } = useOpenDraftProposal();
+  const { data: clients } = useClients();
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const handlePick = async (clientId: string | null) => {
+    if (!clientId) return;
+    setError(null);
+    const household = (clients ?? []).find((dc) => dc.client_id === clientId);
+    const clientName =
+      household?.client?.full_name ?? household?.client_name ?? household?.client_email ?? null;
+    try {
+      await openDraftProposal({ clientId, clientName });
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start the draft. Try again.');
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-start justify-center bg-[rgba(28,25,23,0.28)] px-4 pt-[18vh]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Draft a proposal for an existing household"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-[420px] rounded-[8px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] px-5 py-5">
+        <p className="font-heading text-[1.15rem] text-[var(--color-charcoal)]">
+          Draft a proposal
+        </p>
+        <p className="mb-4 mt-1 text-[0.78rem] text-[var(--color-aged-oak)]">
+          For an existing household — no lead, no discovery. Pick the client and the Drafting Room
+          opens on a fresh draft.
+        </p>
+        <ClientPicker
+          value={null}
+          onChange={handlePick}
+          placeholder={isCreating ? 'Opening the draft…' : 'Search or add a household…'}
+          disabled={isCreating}
+        />
+        {error && (
+          <div
+            role="alert"
+            className="mt-3 rounded-[3px] border border-[var(--color-terracotta,#c77b6e)] bg-[rgba(199,123,110,0.06)] px-2.5 py-1.5 text-[0.72rem] leading-snug text-[var(--color-terracotta,#c77b6e)]"
+          >
+            {error}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
