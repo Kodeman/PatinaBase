@@ -20,8 +20,21 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { useRoomScan } from '@patina/supabase';
-import { RoomScanViewer } from '@/components/rooms/viewer';
+import dynamic from 'next/dynamic';
+import { useRoomScan, type RoomScan } from '@patina/supabase';
+import { ErrorBoundary } from '@patina/design-system';
+
+// The 3D viewer pulls @react-three/fiber (a WebGL/three stack). Load it ONLY
+// when this sheet mounts. A static import drags fiber into every doc's module
+// graph, and fiber@8's reconciler throws at init under React 19 (it reads the
+// removed React internal ReactCurrentOwner) — that white-screened every
+// /doc/[id]. dynamic({ ssr: false }) code-splits it out of the doc bundle; the
+// ErrorBoundary around it catches the fiber-vs-React-19 crash on open and shows
+// the scan still instead (the pre-R90 behavior) until fiber is upgraded to v9.
+const RoomScanViewer = dynamic(
+  () => import('@/components/rooms/viewer').then((m) => m.RoomScanViewer),
+  { ssr: false, loading: () => <ViewerLoading /> },
+);
 
 export function ScanViewerSheet({
   scanId,
@@ -59,8 +72,11 @@ export function ScanViewerSheet({
       className="fixed inset-0 z-[60] flex flex-col bg-[var(--doc-paper)] motion-safe:animate-[doc-fade_200ms_ease-out]"
     >
       {scan ? (
-        // The viewer brings its own full-height charcoal chrome + close ✕.
-        <RoomScanViewer scan={scan} onClose={onClose} />
+        // The viewer brings its own full-height charcoal chrome + close ✕. If
+        // it can't run (fiber@8 under React 19), degrade to the still (R90 fix).
+        <ErrorBoundary fallback={<ScanStill scan={scan} onClose={onClose} />}>
+          <RoomScanViewer scan={scan} onClose={onClose} />
+        </ErrorBoundary>
       ) : (
         <>
           <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-7 py-3">
@@ -83,5 +99,54 @@ export function ScanViewerSheet({
         </>
       )}
     </div>
+  );
+}
+
+/** The lazy viewer's loading state while its (heavy) chunk downloads. */
+function ViewerLoading() {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+      <p className="text-[12px] italic text-[var(--text-muted)]">Opening the 3D scan…</p>
+    </div>
+  );
+}
+
+/**
+ * The degrade path: when the interactive viewer can't run, show the scan's
+ * still (hero frame / thumbnail) — the pre-R90 door — with a quiet note. Stops
+ * a scan-open from white-screening; retires when fiber is upgraded to v9.
+ */
+function ScanStill({ scan, onClose }: { scan: RoomScan; onClose: () => void }) {
+  const still = scan.thumbnail_url;
+  return (
+    <>
+      <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-7 py-3">
+        <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
+          {scan.name ?? 'Room scan'}
+        </p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+        >
+          ← Back to the document
+        </button>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6">
+        {still ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={still}
+            alt={scan.name ?? 'Room scan'}
+            className="max-h-full max-w-full object-contain"
+          />
+        ) : (
+          <p className="text-[12px] italic text-[var(--text-muted)]">No preview image for this scan.</p>
+        )}
+        <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          The interactive 3D preview is being updated.
+        </p>
+      </div>
+    </>
   );
 }
