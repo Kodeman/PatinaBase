@@ -14,13 +14,13 @@
  * acknowledgment claim (R16: a batch ETA is not a vendor act).
  */
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePurchaseOrders, useUpdatePurchaseOrderETA, useVendors } from '@patina/supabase';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
 import { Stamp } from './stamp';
-import { PoPreview } from './po-preview';
+import { LogAckInline, PoPreview } from './po-preview';
 import { LedgerFrontMatter } from './ledger-front-matter';
 import { ordersThroughput } from '@/lib/document/ledger-summary';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
@@ -89,6 +89,8 @@ export function OrdersLedger({
   const [selected, setSelected] = useState<string[]>([]);
   const [truckEta, setTruckEta] = useState(todayYmd());
   const [batchBusy, setBatchBusy] = useState(false);
+  // PRC-07 (R84): the row whose log-acknowledgment band is unfolded.
+  const [ackPoId, setAckPoId] = useState<string | null>(null);
 
   const vendorById = useMemo(() => {
     const map = new Map<string, AnyRecord>();
@@ -215,9 +217,17 @@ export function OrdersLedger({
               <ul>
                 {g.pos.map((po) => {
                   const stamp = PO_STAMP[po.status] ?? PO_STAMP.draft;
+                  // PRC-07 (R84): the ack act lives where the row narrates
+                  // "no ack" — sent, unacknowledged, non-catalog, not
+                  // cancelled (the portal popover's gate, vendor-section-card).
+                  const canAck =
+                    Boolean(po.sent_at) &&
+                    !po.acknowledged_at &&
+                    !po.is_patina_catalog &&
+                    po.status !== 'cancelled';
                   return (
+                    <Fragment key={po.id}>
                     <li
-                      key={po.id}
                       className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-3 border-b border-[rgba(250,247,242,0.08)] px-1 py-2.5"
                     >
                       <input
@@ -245,6 +255,21 @@ export function OrdersLedger({
                               ? `sent ${fmtDay(po.sent_at)}${po.acknowledged_at ? ' · ack' : ' · no ack'}`
                               : 'not sent',
                           ].join(' · ')}
+                          {canAck && (
+                            <>
+                              {' · '}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setAckPoId((cur) => (cur === po.id ? null : po.id))
+                                }
+                                aria-expanded={ackPoId === po.id}
+                                className="uppercase tracking-[0.05em] text-[var(--color-clay)] hover:underline"
+                              >
+                                log ack {ackPoId === po.id ? '↑' : '↓'}
+                              </button>
+                            </>
+                          )}
                         </p>
                       </div>
                       <Stamp
@@ -282,6 +307,20 @@ export function OrdersLedger({
                         open document →
                       </button>
                     </li>
+                    {/* PRC-07: the unfolded log-acknowledgment band — quiet
+                        act under the row, closed by logging or refolding. */}
+                    {canAck && ackPoId === po.id && (
+                      <li className="border-b border-[rgba(250,247,242,0.08)] py-2.5 pl-8 pr-1">
+                        <LogAckInline
+                          purchaseOrderId={po.id}
+                          vendorPoNumber={po.vendor_po_number}
+                          confirmedEta={po.confirmed_eta}
+                          sentAt={po.sent_at}
+                          tone="book"
+                        />
+                      </li>
+                    )}
+                    </Fragment>
                   );
                 })}
               </ul>
@@ -299,6 +338,11 @@ export function OrdersLedger({
           vendorEmailHint={clientVendorEmailHint(vendorById.get(previewPo.vendor_id))}
           mode={previewPo.sent_at ? 'resend' : 'send'}
           onSent={() => setPreviewPo(null)}
+          // PRC-07: the resend paper offers the ack act for unacked sends.
+          sentAt={previewPo.sent_at}
+          acknowledgedAt={previewPo.acknowledged_at}
+          vendorPoNumber={previewPo.vendor_po_number}
+          confirmedEta={previewPo.confirmed_eta}
         />
       )}
 
