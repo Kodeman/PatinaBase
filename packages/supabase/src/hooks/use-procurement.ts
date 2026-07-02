@@ -1861,10 +1861,15 @@ function poSendUrl(): string {
  * Invalidates: ['purchase-orders'], ['purchase-order', id],
  *              ['procurement-items'] (the By Status rows surface
  *              po_number / sent_at off the joined PO).
+ *
+ * Document-surface callers (R83 error grammar) pass `{ errorSurface:
+ * 'inline' }` so the designer portal's global mutation toast stays quiet —
+ * see useSendInvoice for the precedent.
  */
-export function useSendPurchaseOrder() {
+export function useSendPurchaseOrder(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (
       input: SendPurchaseOrderInput
     ): Promise<SendPurchaseOrderResult> => {

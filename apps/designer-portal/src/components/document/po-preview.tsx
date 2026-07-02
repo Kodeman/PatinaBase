@@ -178,12 +178,15 @@ export function PoPreview({
   confirmedEta,
 }: PoPreviewProps) {
   const qc = useQueryClient();
-  const sendPo = useSendPurchaseOrder();
+  // R83: failures render inline on this paper — no global toast (D2).
+  const sendPo = useSendPurchaseOrder({ errorSurface: 'inline' });
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [poNumber, setPoNumber] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  // PRC-27 (R84): the manual sent-stamp for phone / fax / trade-portal orders.
+  const [marking, setMarking] = useState(false);
   const previewedFor = useRef<string | null>(null);
 
   // Render + store the PDF the moment the paper lifts (mode 'preview'
@@ -212,15 +215,19 @@ export function PoPreview({
 
   if (!open) return null;
 
-  const send = async () => {
-    if (sending) return;
-    setSending(true);
+  // One runner, two stamps (PRC-27): 'send' emails the vendor; 'mark_sent'
+  // stamps sent_at without emailing — the phone / fax / trade-portal path
+  // ported from po-send-actions. Both clear the Desk's po_unsent nag through
+  // the same invalidations (the derivation reads document-state).
+  const stamp = async (sendMode: 'send' | 'mark_sent') => {
+    if (sending || marking) return;
+    (sendMode === 'send' ? setSending : setMarking)(true);
     setError(null);
     try {
       const r = await sendPo.mutateAsync({
         purchaseOrderId,
-        mode: 'send',
-        recipientEmail: vendorEmailHint ?? undefined,
+        mode: sendMode,
+        recipientEmail: sendMode === 'send' ? (vendorEmailHint ?? undefined) : undefined,
       });
       const stamped = new Date().toISOString();
       // One act, many surfaces (§5): PO cell, Orders row, Desk, margin.
@@ -234,9 +241,10 @@ export function PoPreview({
     } catch (e) {
       setError(poSendErrorMessage((e as Error).message));
     } finally {
-      setSending(false);
+      (sendMode === 'send' ? setSending : setMarking)(false);
     }
   };
+  const send = () => stamp('send');
 
   return (
     <div role="dialog" aria-label="Purchase order preview" className="fixed inset-0 z-[60]">
@@ -302,12 +310,26 @@ export function PoPreview({
           {warning && !error && (
             <p className="text-[11px] text-[var(--text-muted)]">{warning}</p>
           )}
+          {/* PRC-27: the manual path — always available on an unsent PO
+              (deliberately not gated on the PDF or a vendor email: an
+              out-of-sync PO's fix is exactly "mark it sent manually"). */}
+          {mode === 'send' && (
+            <button
+              type="button"
+              disabled={sending || marking}
+              onClick={() => void stamp('mark_sent')}
+              title="For orders placed through a vendor portal, phone, or showroom — stamps the sent date without emailing."
+              className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-clay)] disabled:opacity-50"
+            >
+              {marking ? 'Marking…' : 'ordered by phone / portal — mark as sent'}
+            </button>
+          )}
           <span className="ml-auto text-[11px] text-[var(--text-muted)]">
             {vendorEmailHint ? `to ${vendorEmailHint}` : 'no vendor email on file'}
           </span>
           <button
             type="button"
-            disabled={!signedUrl || !vendorEmailHint || sending}
+            disabled={!signedUrl || !vendorEmailHint || sending || marking}
             onClick={() => void send()}
             className="rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
