@@ -12,7 +12,7 @@ import type {
   ValidationVote,
   SpectrumValues,
   ProductTeachingInput,
-} from '@patina/shared';
+} from '@patina/types';
 
 // Lazy client getter to avoid module-level initialization during SSR
 // Uses createBrowserClient for proper cookie-based session handling

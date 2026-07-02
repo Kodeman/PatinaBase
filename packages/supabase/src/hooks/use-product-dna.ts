@@ -20,10 +20,12 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
-// SpectrumValues comes from @patina/shared here (the package's existing type
-// source — see use-teaching.ts); @patina/types re-exports the same shape for
-// app-side consumers.
-import type { SpectrumValues } from '@patina/shared';
+// SpectrumValues is a domain type — its canonical home is @patina/types (the
+// same shape app-side consumers import). Wave 5A reconciled the aesthete/
+// teaching hooks off @patina/shared's duplicate onto the one home (delivery-log
+// G3/G4 SpectrumValues flag; plan convention #3: @patina/shared is not for
+// domain types).
+import type { SpectrumValues } from '@patina/types';
 
 const getSupabase = () => createBrowserClient();
 
