@@ -16,6 +16,9 @@ import {
   useFolioFiles,
   useSetFolioVisibility,
   useUploadFolioFile,
+  useProposalFolioFiles,
+  useSetProposalFolioVisibility,
+  useUploadProposalFolioFile,
   type FolioAnchor,
   type FolioChain,
   type FolioFile,
@@ -215,6 +218,82 @@ export function FolioStrip({
       {viewingScanId && (
         <ScanViewerSheet scanId={viewingScanId} onClose={() => setViewingScanId(null)} />
       )}
+    </>
+  );
+}
+
+/**
+ * The Proposal folio (R85) — the folio strip on a proposal-stage document,
+ * before a project exists. Keyed on proposals.id (00252). Space plans clipped
+ * here reach the client's proposal copy once flagged 'shared' (the client read
+ * leg in 00252). A drop-anywhere target + a file picker; re-uploads stack as
+ * versions, exactly like the project strip. Files open in the paper viewer.
+ */
+export function ProposalFolioStrip({ proposalId }: { proposalId: string }) {
+  const { data: files } = useProposalFolioFiles(proposalId);
+  const upload = useUploadProposalFolioFile(proposalId);
+  const setVisibility = useSetProposalFolioVisibility(proposalId);
+  const [dragOver, setDragOver] = useState(false);
+  const [viewing, setViewing] = useState<FolioFile | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const chains = buildChains(files ?? []);
+
+  return (
+    <>
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          for (const file of Array.from(e.dataTransfer.files ?? [])) {
+            upload.mutate({ file });
+          }
+        }}
+        className={`my-1.5 flex flex-wrap items-center gap-2 rounded-[3px] px-1 py-1 transition-colors ${
+          dragOver
+            ? 'border border-dashed border-[var(--color-clay)] bg-[rgba(196,165,123,0.06)]'
+            : 'border border-dashed border-transparent'
+        }`}
+      >
+        <span className="font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+          Folio{chains.length > 0 ? ` · ${chains.length}` : ''}
+        </span>
+        {chains.map((chain) => (
+          <FileChip
+            key={chain.head.id}
+            chain={chain}
+            onOpen={setViewing}
+            onToggleVisibility={(f) =>
+              setVisibility.mutate({ fileId: f.id, clientVisible: !f.client_visible })
+            }
+          />
+        ))}
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+        >
+          {dragOver ? 'drop to clip it here' : upload.isPending ? 'clipping…' : '+ file'}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            for (const file of Array.from(e.target.files ?? [])) {
+              upload.mutate({ file });
+            }
+            e.target.value = '';
+          }}
+        />
+      </div>
+      {viewing && <DocFileViewer file={viewing} onClose={() => setViewing(null)} />}
     </>
   );
 }

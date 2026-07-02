@@ -1,33 +1,41 @@
 'use client';
 
 /**
- * The proposal-grain client mirror (R43) — "Sarah's copy": the live preview
- * of what the CLIENT's copy of a *draft proposal* carries, rendered while the
- * designer composes. The project-grain mirror (../client-mirror.tsx) keys off a
- * project; a draft proposal has no project yet, so this is a NEW projection
- * keyed off the proposal.
+ * The proposal-grain client mirror (R43 · R86) — "Sarah's copy": the live
+ * preview of what the CLIENT's copy of a *draft proposal* carries, rendered
+ * while the designer composes. A draft proposal has no project yet, so this is a
+ * projection keyed off the proposal.
  *
- * This component is the enforceable projection (the R26 precedent, held by a CI
- * test — proposal-mirror-contract.test.ts). It renders ONLY client-safe grain:
- *   • the rooms in scope (names + room type);
- *   • the palette as swatch NAMES and COLORS only;
- *   • the pieces by NAME / ROOM / CATEGORY only — never a unit price, sell
- *     price, line total, budget range, markup, or margin — and never a `tbd`
- *     placeholder piece (those are studio-side scaffolding the client must not
- *     see);
- *   • the exclusions (what's not included);
- *   • and ONE rolled-up investment total — the proposal total — and nothing
- *     else money-shaped.
+ * R86 — "the portal copy is canonical, tier-governed." The mirror renders the
+ * SAME shared blocks the client portal renders (LineItemsBlock,
+ * PaymentScheduleBlock, ScopeRoomsBlock, ExclusionsBlock, TimelinePhasesBlock
+ * from @patina/design-system), GATED by the proposal's `client_visibility_tier`
+ * through the ONE shared law — `proposalTierVisibility` (@patina/utils) — that
+ * the client render also obeys. Preview IS truth: what shows here is exactly
+ * what the client sees at the chosen tier, and the two cannot drift (the R86
+ * contract test pins the shared gate; a source contract pins that both surfaces
+ * import it).
  *
- * It selects ONLY client-safe columns at the query layer (defence in depth: the
- * forbidden columns never enter the component's data at all) and calls NO write
- * method. Read-only by construction. Reuses the client-mirror section/divider
- * grammar; zero shadows (D4).
+ * R43 lines still held: `tbd` placeholder pieces (studio scaffolding) never
+ * reach the client copy, the projection selects NO trade/cost/markup/margin
+ * column (those the client sees at no tier), and it is read-only by construction
+ * (no insert/update/delete/upsert/rpc). The tier SETTER lives beside the preview
+ * and writes through useUpdateProposal — a mutation, but the preview render
+ * itself stays a pure projection.
+ *
+ * Zero shadows (D4).
  */
 
-import { useQuery } from '@tanstack/react-query';
-import { createBrowserClient } from '@patina/supabase';
-import { fmtUsd } from '@/lib/document/format';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { createBrowserClient, useUpdateProposal } from '@patina/supabase';
+import { proposalTierVisibility, type ClientVisibilityTier } from '@patina/utils';
+import {
+  LineItemsBlock,
+  PaymentScheduleBlock,
+  ScopeRoomsBlock,
+  ExclusionsBlock,
+  TimelinePhasesBlock,
+} from '@patina/design-system';
 
 const getSupabase = () => createBrowserClient() as any;
 
@@ -40,8 +48,8 @@ export function useProposalMirrorData(proposalId: string) {
     // "The client's copy · LIVE": this bespoke read spans many child tables that
     // the facet editors mutate through their own keys (which don't invalidate
     // this one), so a gentle focused-only poll keeps the preview in step as the
-    // designer composes — e.g. a piece flipped to TBD drops out here within a
-    // tick (R43), an exclusion or a price change reflows the investment total.
+    // designer composes — a piece flipped to TBD drops out here within a tick,
+    // an exclusion / price / tier change reflows immediately.
     refetchOnWindowFocus: true,
     refetchInterval: 2000,
     refetchIntervalInBackground: false,
@@ -54,31 +62,35 @@ export function useProposalMirrorData(proposalId: string) {
         { data: rawPieces },
         { data: palettes },
         { data: exclusions },
+        { data: milestones },
+        { data: phases },
       ] = await Promise.all([
-        // The one rolled-up investment number is proposals.total_amount. We
-        // select NO trade/cost/margin column off the proposal row.
+        // The rolled-up investment number is proposals.total_amount, plus the
+        // tier that governs the whole render (R86). NO trade/cost/margin column.
         supabase
           .from('proposals')
-          .select('title, total_amount')
+          .select('title, total_amount, client_visibility_tier')
           .eq('id', proposalId)
           .single(),
-        // Rooms in scope — name + type only (per-room budget stays studio-side).
+        // Rooms in scope — name + type + the client-facing per-room budget
+        // (shown only at 'full' via the tier gate; never a trade/cost column).
         supabase
           .from('proposal_scope_rooms')
-          .select('id, name, room_type, sort_order')
+          .select('id, name, room_type, budget_cents, sort_order')
           .eq('proposal_id', proposalId)
           .order('sort_order', { ascending: true }),
-        // Pieces — NAME / ROOM / CATEGORY ONLY. We never select any pricing,
-        // cost, per-line total, budget-range, markup, or margin column — those
-        // forbidden columns simply never enter the projection. `tbd`
-        // placeholders are filtered out below.
+        // Pieces — name / room / category + the client-facing SELL figures the
+        // itemized block renders (line_total_cents + allowance range). We select
+        // NO trade cost, markup, or margin column — those the client sees at no
+        // tier. `tbd` placeholders are filtered out below (R43).
         supabase
           .from('proposal_items')
-          .select('id, name, category, ffe_category, scope_room_id, item_type, position')
+          .select(
+            'id, name, category, ffe_category, scope_room_id, item_type, position, quantity, unit_price, line_total_cents, budget_min_cents, budget_max_cents',
+          )
           .eq('proposal_id', proposalId)
           .order('position', { ascending: true }),
-        // Palette — swatch NAMES + COLORS only (the swatch select carries hex +
-        // name, nothing else identifying a vendor or cost).
+        // Palette — swatch NAMES + COLORS only.
         supabase
           .from('proposal_palettes')
           .select('id, name, sort_order, swatches:palette_swatches(id, name, hex, sort_order)')
@@ -89,22 +101,46 @@ export function useProposalMirrorData(proposalId: string) {
           .select('id, description, category, sort_order')
           .eq('proposal_id', proposalId)
           .order('sort_order', { ascending: true }),
+        // Payment schedule — label / percentage / amount / trigger (client-facing).
+        supabase
+          .from('proposal_payment_milestones')
+          .select('label, percentage, amount_cents, trigger_condition, sort_order')
+          .eq('proposal_id', proposalId)
+          .order('sort_order', { ascending: true }),
+        // Timeline phases — name + duration only.
+        supabase
+          .from('proposal_phases')
+          .select('name, duration_weeks, sort_order')
+          .eq('proposal_id', proposalId)
+          .order('sort_order', { ascending: true }),
       ]);
 
       const roomNameById = new Map<string, string>(
         ((rooms ?? []) as AnyRow[]).map((r) => [r.id, r.name]),
       );
 
-      // The client never sees a `tbd` placeholder piece — those are the
-      // studio's own "to be decided" scaffolding. Filter them at the projection.
-      const pieces = ((rawPieces ?? []) as AnyRow[])
-        .filter((p) => p.item_type !== 'tbd')
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          category: p.ffe_category || p.category || null,
-          room: p.scope_room_id ? roomNameById.get(p.scope_room_id) ?? null : null,
-        }));
+      // The client never sees a `tbd` placeholder piece (R43) — filter them from
+      // both the itemized list and the name list at the projection.
+      const nonTbd = ((rawPieces ?? []) as AnyRow[]).filter((p) => p.item_type !== 'tbd');
+
+      // The itemized LineItemsBlock shape (client-facing sell figures only).
+      const lineItems = nonTbd.map((p) => ({
+        id: p.id as string,
+        name: p.name as string,
+        item_type: (p.item_type ?? undefined) as string | undefined,
+        quantity: (p.quantity ?? 1) as number,
+        unit_price: (p.unit_price ?? 0) as number,
+        line_total_cents: (p.line_total_cents ?? 0) as number,
+        budget_min_cents: (p.budget_min_cents ?? null) as number | null,
+        budget_max_cents: (p.budget_max_cents ?? null) as number | null,
+      }));
+
+      const pieces = nonTbd.map((p) => ({
+        id: p.id,
+        name: p.name,
+        category: p.ffe_category || p.category || null,
+        room: p.scope_room_id ? roomNameById.get(p.scope_room_id) ?? null : null,
+      }));
 
       const palette = ((palettes ?? []) as AnyRow[]).map((pal) => ({
         id: pal.id,
@@ -117,11 +153,14 @@ export function useProposalMirrorData(proposalId: string) {
 
       return {
         proposal,
+        tier: ((proposal as AnyRow)?.client_visibility_tier ?? 'milestone') as ClientVisibilityTier,
         rooms: (rooms ?? []) as AnyRow[],
+        lineItems,
         pieces,
         palette,
         exclusions: (exclusions ?? []) as AnyRow[],
-        // The single client-facing money figure.
+        milestones: (milestones ?? []) as AnyRow[],
+        phases: (phases ?? []) as AnyRow[],
         totalCents: (proposal as AnyRow)?.total_amount ?? 0,
       };
     },
@@ -133,6 +172,71 @@ function MirrorSectionLabel({ children }: { children: React.ReactNode }) {
     <h2 className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
       {children}
     </h2>
+  );
+}
+
+const TIER_LABEL: Record<ClientVisibilityTier, string> = {
+  full: 'Full',
+  milestone: 'Milestones',
+  curated: 'Curated',
+};
+
+/**
+ * The tier setter (R86) — the designer chooses the visibility tier and the
+ * preview (and the client's copy) reflow to it in lockstep. Writes through
+ * useUpdateProposal (client_visibility_tier); failures render inline (R83).
+ */
+function TierInstrument({
+  proposalId,
+  tier,
+}: {
+  proposalId: string;
+  tier: ClientVisibilityTier;
+}) {
+  const update = useUpdateProposal({ errorSurface: 'inline' });
+  const qc = useQueryClient();
+
+  const choose = (next: ClientVisibilityTier) => {
+    if (next === tier || update.isPending) return;
+    update.mutate(
+      { proposalId, updates: { client_visibility_tier: next } },
+      {
+        onSuccess: () => {
+          // Reflow the preview immediately rather than waiting for its poll tick.
+          void qc.invalidateQueries({ queryKey: ['proposal-mirror', proposalId] });
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="mb-5">
+      <p className="mb-1.5 font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        What the client sees
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {(['full', 'milestone', 'curated'] as ClientVisibilityTier[]).map((t) => {
+          const active = t === tier;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => choose(t)}
+              disabled={update.isPending}
+              aria-pressed={active}
+              className="rounded-[3px] border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em] transition-colors disabled:opacity-50"
+              style={{
+                color: active ? 'var(--color-charcoal)' : 'var(--text-muted)',
+                borderColor: active ? 'var(--color-clay)' : 'var(--doc-ink-border)',
+                background: active ? 'rgba(196,165,123,0.12)' : 'transparent',
+              }}
+            >
+              {TIER_LABEL[t]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -153,6 +257,8 @@ export function ProposalPreviewRail({
     );
   }
 
+  // The ONE shared law both this preview and the client's copy obey (R86).
+  const gate = proposalTierVisibility(data.tier);
   const hasPalette = data.palette.some((p) => p.swatches.length > 0);
 
   return (
@@ -161,6 +267,8 @@ export function ProposalPreviewRail({
       data-testid="proposal-preview-rail"
       aria-label={clientName ? `What ${clientName} sees` : 'What the client sees'}
     >
+      <TierInstrument proposalId={proposalId} tier={data.tier} />
+
       <h1 className="font-heading text-[1.35rem] font-medium text-[var(--color-charcoal)]">
         {data.proposal?.title ?? 'Your proposal'}
       </h1>
@@ -168,22 +276,34 @@ export function ProposalPreviewRail({
         {clientName ? `Prepared for ${clientName}` : 'Prepared for you'}
       </p>
 
+      {/* In scope — names + types always (scope shape survives every tier); the
+          per-room budget column shows only at the tier that reveals it. */}
       {data.rooms.length > 0 && (
         <section className="mb-6">
           <MirrorSectionLabel>In scope</MirrorSectionLabel>
-          {(data.rooms as AnyRow[]).map((r) => (
-            <div
-              key={r.id}
-              className="flex items-baseline justify-between border-b border-dashed border-[var(--color-pearl)] py-1.5"
-            >
-              <span className="text-[12px] text-[var(--color-charcoal)]">{r.name}</span>
-              {r.room_type && (
-                <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                  {r.room_type}
-                </span>
-              )}
-            </div>
-          ))}
+          {gate.roomBudgets ? (
+            <ScopeRoomsBlock
+              rooms={(data.rooms as AnyRow[]).map((r) => ({
+                name: r.name,
+                room_type: r.room_type,
+                budget_cents: r.budget_cents ?? 0,
+              }))}
+            />
+          ) : (
+            (data.rooms as AnyRow[]).map((r) => (
+              <div
+                key={r.id}
+                className="flex items-baseline justify-between border-b border-dashed border-[var(--color-pearl)] py-1.5"
+              >
+                <span className="text-[12px] text-[var(--color-charcoal)]">{r.name}</span>
+                {r.room_type && (
+                  <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    {r.room_type}
+                  </span>
+                )}
+              </div>
+            ))
+          )}
         </section>
       )}
 
@@ -194,9 +314,7 @@ export function ProposalPreviewRail({
             .filter((pal) => pal.swatches.length > 0)
             .map((pal) => (
               <div key={pal.id} className="mb-3 last:mb-0">
-                {pal.name && (
-                  <p className="mb-1 text-[10.5px] text-[var(--text-muted)]">{pal.name}</p>
-                )}
+                {pal.name && <p className="mb-1 text-[10.5px] text-[var(--text-muted)]">{pal.name}</p>}
                 <div className="flex flex-wrap gap-x-4 gap-y-2">
                   {pal.swatches.map((s) => (
                     <div key={s.id} className="flex items-center gap-1.5">
@@ -205,9 +323,7 @@ export function ProposalPreviewRail({
                         className="h-3.5 w-3.5 rounded-full border border-[var(--color-pearl)]"
                         style={{ backgroundColor: s.hex }}
                       />
-                      <span className="text-[11px] text-[var(--color-charcoal)]">
-                        {s.name ?? s.hex}
-                      </span>
+                      <span className="text-[11px] text-[var(--color-charcoal)]">{s.name ?? s.hex}</span>
                     </div>
                   ))}
                 </div>
@@ -216,61 +332,51 @@ export function ProposalPreviewRail({
         </section>
       )}
 
-      {data.pieces.length > 0 && (
+      {/* Investment — the SAME LineItemsBlock the client renders. Itemized at
+          'full'; at 'milestone'/'curated' the gate hands it no items, so it
+          renders the single rolled-up Total row (preview = truth). */}
+      <section className="mb-6">
+        <MirrorSectionLabel>Investment</MirrorSectionLabel>
+        <LineItemsBlock items={gate.lineItems ? data.lineItems : []} totalCents={data.totalCents} />
+      </section>
+
+      {gate.paymentSchedule && data.milestones.length > 0 && (
         <section className="mb-6">
-          <MirrorSectionLabel>Pieces</MirrorSectionLabel>
-          {data.pieces.map((p) => (
-            <div
-              key={p.id}
-              className="grid grid-cols-[1fr_auto] items-baseline gap-3 border-b border-dashed border-[var(--color-pearl)] py-1.5"
-            >
-              <span className="text-[12px] text-[var(--color-charcoal)]">
-                {p.name}
-                {p.room && (
-                  <span className="ml-2 text-[10.5px] text-[var(--text-muted)]">{p.room}</span>
-                )}
-              </span>
-              {p.category && (
-                <span className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                  {p.category}
-                </span>
-              )}
-            </div>
-          ))}
+          <PaymentScheduleBlock
+            milestones={(data.milestones as AnyRow[]).map((m) => ({
+              label: m.label,
+              percentage: m.percentage,
+              amount_cents: m.amount_cents,
+              trigger_condition: m.trigger_condition,
+            }))}
+            totalCents={data.totalCents}
+          />
         </section>
       )}
 
-      {data.exclusions.length > 0 && (
+      {gate.timeline && data.phases.length > 0 && (
+        <section className="mb-6">
+          <MirrorSectionLabel>Timeline</MirrorSectionLabel>
+          <TimelinePhasesBlock
+            phases={(data.phases as AnyRow[]).map((p) => ({
+              name: p.name,
+              duration_weeks: p.duration_weeks,
+            }))}
+          />
+        </section>
+      )}
+
+      {gate.exclusions && data.exclusions.length > 0 && (
         <section className="mb-6">
           <MirrorSectionLabel>Not included</MirrorSectionLabel>
-          {(data.exclusions as AnyRow[]).map((e) => (
-            <p
-              key={e.id}
-              className="border-b border-dashed border-[var(--color-pearl)] py-1.5 text-[11.5px] text-[var(--color-charcoal)]"
-            >
-              {e.description}
-              {e.category && (
-                <span className="ml-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                  {e.category}
-                </span>
-              )}
-            </p>
-          ))}
+          <ExclusionsBlock
+            exclusions={(data.exclusions as AnyRow[]).map((e) => ({
+              description: e.description,
+              category: e.category,
+            }))}
+          />
         </section>
       )}
-
-      {/* The single rolled-up investment line — the proposal total, nothing
-          itemized, no margin or trade figure. */}
-      <section className="mt-8 border-t border-[var(--color-charcoal)] pt-3">
-        <div className="flex items-baseline justify-between">
-          <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)]">
-            Investment
-          </span>
-          <span className="font-heading text-[1.05rem] text-[var(--color-charcoal)]">
-            {fmtUsd(data.totalCents)}
-          </span>
-        </div>
-      </section>
     </div>
   );
 }

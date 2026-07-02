@@ -19,6 +19,7 @@ import {
   ExclusionsBlock,
   ScopeRoomsBlock,
 } from '@patina/design-system';
+import { proposalTierVisibility } from '@patina/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { StrataMark } from '@/components/strata-mark';
 import { BoardsBlock } from '@/components/board-block';
@@ -161,7 +162,13 @@ export function ProposalDocument({
     };
   }, [trackEngagement, sections, recordEvent, boardCount]);
 
-  const items = proposal.items ?? [];
+  // R86 — the client copy is canonical, tier-governed. The SAME shared gate the
+  // Drafting-Room mirror obeys (proposalTierVisibility) decides which money
+  // blocks render here, so preview = truth. `tbd` placeholder pieces are studio
+  // scaffolding and never reach the client (R43), so they fall out of the
+  // itemized list at every tier.
+  const gate = proposalTierVisibility(proposal.client_visibility_tier);
+  const items = (proposal.items ?? []).filter((it) => it.item_type !== 'tbd');
 
   // Mood boards render after the `concept` section when one exists, else just
   // before `selections`, else after the last section. A negative index means
@@ -264,13 +271,19 @@ export function ProposalDocument({
             )}
 
             {section.type === 'selections' && items.length > 0 && (
-              <SelectionsList items={items} />
+              <SelectionsList items={items} showPrices={gate.lineItems} />
             )}
 
             {section.type === 'investment' && (
               <div className="mt-2">
-                <LineItemsBlock items={items} totalCents={proposal.total_amount || 0} />
-                {scopeRooms.length > 0 && (
+                {/* Itemized at 'full'; at 'milestone'/'curated' the gate hands
+                    LineItemsBlock no items, so it renders the single rolled-up
+                    Total row (R86). */}
+                <LineItemsBlock
+                  items={gate.lineItems ? items : []}
+                  totalCents={proposal.total_amount || 0}
+                />
+                {gate.roomBudgets && scopeRooms.length > 0 && (
                   <div className="mt-6">
                     <p
                       className="mb-1 type-meta-small text-[var(--text-muted)]"
@@ -287,15 +300,17 @@ export function ProposalDocument({
                     />
                   </div>
                 )}
-                <PaymentScheduleBlock
-                  milestones={paymentMilestones.map((m) => ({
-                    label: m.label,
-                    percentage: m.percentage,
-                    amount_cents: m.amount_cents,
-                    trigger_condition: m.trigger_condition,
-                  }))}
-                  totalCents={proposal.total_amount || 0}
-                />
+                {gate.paymentSchedule && (
+                  <PaymentScheduleBlock
+                    milestones={paymentMilestones.map((m) => ({
+                      label: m.label,
+                      percentage: m.percentage,
+                      amount_cents: m.amount_cents,
+                      trigger_condition: m.trigger_condition,
+                    }))}
+                    totalCents={proposal.total_amount || 0}
+                  />
+                )}
                 {exclusions.length > 0 && (
                   <div className="mt-6">
                     <p
@@ -394,7 +409,13 @@ function SpacePlanBlock({ metadata }: { metadata: Record<string, unknown> }) {
   );
 }
 
-function SelectionsList({ items }: { items: ProposalItem[] }) {
+function SelectionsList({
+  items,
+  showPrices = true,
+}: {
+  items: ProposalItem[];
+  showPrices?: boolean;
+}) {
   return (
     <ul className="mt-4 space-y-3">
       {items.map((item) => (
@@ -426,9 +447,11 @@ function SelectionsList({ items }: { items: ProposalItem[] }) {
               </p>
             )}
           </div>
-          <span className="type-meta text-[var(--text-primary)]">
-            {formatCurrency((item.line_total_cents || 0) / 100)}
-          </span>
+          {showPrices && (
+            <span className="type-meta text-[var(--text-primary)]">
+              {formatCurrency((item.line_total_cents || 0) / 100)}
+            </span>
+          )}
         </li>
       ))}
     </ul>

@@ -207,11 +207,16 @@ export function useProposalStats() {
 
 /**
  * Create a new proposal
+ *
+ * Document-surface callers (e.g. the ad-hoc "draft a proposal" opener, R85)
+ * pass `{ errorSurface: 'inline' }` so a failure renders inline rather than in
+ * the global toast (R83). Legacy portal callers omit it and keep the toast.
  */
-export function useCreateProposal() {
+export function useCreateProposal(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       title,
       description,
@@ -742,11 +747,17 @@ export function useProposalSections(proposalId: string) {
 
 /**
  * Create or update a proposal section (auto-save)
+ *
+ * Document-surface callers (e.g. the Drafting Room's Terms agreement body)
+ * pass `{ errorSurface: 'inline' }` so the designer portal's global mutation
+ * onError raises no toast (R83 — the error grammar). Legacy portal callers omit
+ * it and keep the toast until the zone dissolve.
  */
-export function useUpsertProposalSection() {
+export function useUpsertProposalSection(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       id,
       proposalId,

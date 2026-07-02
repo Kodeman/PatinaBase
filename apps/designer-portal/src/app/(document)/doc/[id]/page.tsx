@@ -44,7 +44,7 @@ import { AccountBand } from '@/components/document/account-band';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
-import { FolioLetterhead } from '@/components/document/folio-strip';
+import { FolioLetterhead, ProposalFolioStrip } from '@/components/document/folio-strip';
 import { DocColophon } from '@/components/document/doc-colophon';
 import { useDocumentRooms } from '@/hooks/use-document-rooms';
 import { gateState, useSectionGates } from '@/hooks/use-section-work';
@@ -471,6 +471,12 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                   <p className="mb-2 mt-3 font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
                     Read-only preview · edit in the Drafting Room
                   </p>
+                )}
+                {/* R85 — the Folio mounts on proposal-stage documents (space
+                    plans/drawings clip here pre-project; flagged files reach the
+                    client's proposal copy via 00252's client read leg). */}
+                {row.engagement_kind === 'proposal' && (
+                  <ProposalFolioStrip proposalId={row.proposal_id} />
                 )}
                 <ProposalBlocksReadOnly proposalId={row.proposal_id} />
               </section>

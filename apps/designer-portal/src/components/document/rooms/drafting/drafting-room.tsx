@@ -52,6 +52,7 @@ import { PaymentMilestonesBuilder } from '@/components/portal/scope-builder/paym
 import { ChangeOrderTermsEditor } from '@/components/portal/scope-builder/change-order-terms-editor';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { TermsAgreementBody } from './terms-agreement-body';
 
 const STATE_TONE: Record<string, { color: string; bg: string }> = {
   Outline: { color: 'var(--color-aged-oak)', bg: 'transparent' },
@@ -341,6 +342,10 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
               open={open.has('terms')}
               onToggle={() => toggle('terms')}
             >
+              {/* R85 — the free-text agreement body (persists to
+                  proposal_sections.body, the row the client copy renders),
+                  above the structured change-order terms. */}
+              <TermsAgreementBody proposalId={proposalId} />
               <ChangeOrderTermsEditor proposalId={proposalId} />
             </FacetSection>
 

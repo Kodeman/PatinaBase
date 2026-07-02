@@ -224,6 +224,99 @@ export function useUploadDiscoveryFolioFile(designerClientId: string | null) {
   });
 }
 
+// ── The Proposal folio (R85) — proposal-keyed, pre-project ───────────────────
+// R85 mounts the Folio on proposal-stage documents: space plans and drawings
+// clip to the proposal before a project exists (00252 adds the proposal_id
+// anchor + the client read leg, so a FLAGGED file reaches the client's proposal
+// copy). Keyed on proposals.id; version chains work exactly like the project
+// folio (a re-upload of the same title stacks behind its predecessor).
+
+export function useProposalFolioFiles(proposalId: string | null) {
+  return useQuery<FolioFile[]>({
+    queryKey: ['proposal-folio', proposalId],
+    enabled: Boolean(proposalId),
+    queryFn: async () => {
+      const { data, error } = await getSupabase()
+        .from('project_documents')
+        .select(
+          'id, project_id, title, doc_type, storage_path, size_bytes, uploaded_by, anchor_kind, anchor_id, section_key, version_of, client_visible, created_at',
+        )
+        .eq('proposal_id', proposalId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as FolioFile[];
+    },
+  });
+}
+
+export function useUploadProposalFolioFile(proposalId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ file }: { file: File }) => {
+      if (!proposalId) throw new Error('proposal folio: no proposal');
+      const supabase = getSupabase();
+      const { data: auth } = await supabase.auth.getUser();
+
+      const safeName = file.name.replace(/[^\w.\-]+/g, '_');
+      const storagePath = `${proposalId}/${Date.now()}-${safeName}`;
+      const { error: upErr } = await supabase.storage
+        .from('project-documents')
+        .upload(storagePath, file, { contentType: file.type || undefined });
+      if (upErr) throw upErr;
+
+      // Same title on the same proposal = a new version stacking behind the
+      // current chain head (R24's literal versioning, scoped to the proposal).
+      const { data: prior } = await supabase
+        .from('project_documents')
+        .select('id, version_of, title')
+        .eq('proposal_id', proposalId)
+        .eq('title', file.name)
+        .order('created_at', { ascending: false });
+      const supersededIds = new Set((prior ?? []).map((p: any) => p.version_of).filter(Boolean));
+      const chainHead = (prior ?? []).find((p: any) => !supersededIds.has(p.id));
+
+      const { data, error } = await supabase
+        .from('project_documents')
+        .insert({
+          project_id: null,
+          proposal_id: proposalId,
+          title: file.name,
+          doc_type: docTypeFor(file),
+          storage_path: storagePath,
+          size_bytes: file.size,
+          uploaded_by: auth?.user?.id ?? null,
+          anchor_kind: 'section',
+          section_key: 'proposal',
+          version_of: chainHead?.id ?? null,
+          client_visible: false,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as FolioFile;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['proposal-folio', proposalId] });
+    },
+  });
+}
+
+export function useSetProposalFolioVisibility(proposalId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ fileId, clientVisible }: { fileId: string; clientVisible: boolean }) => {
+      const { error } = await getSupabase()
+        .from('project_documents')
+        .update({ client_visible: clientVisible })
+        .eq('id', fileId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['proposal-folio', proposalId] });
+    },
+  });
+}
+
 /** Signed read URL for the paper viewer (the bucket is private). */
 export async function folioSignedUrl(storagePath: string): Promise<string | null> {
   const { data, error } = await getSupabase()
