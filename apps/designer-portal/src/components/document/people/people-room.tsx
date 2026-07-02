@@ -12,7 +12,7 @@
  * to the filtered roster. Tracks B–D fill their view slots (see ./views, ./types).
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeopleDirectory, type PartyRole } from '@patina/supabase';
 import { deriveNurtureQueue, humanizeSince } from '@/lib/document/people-derivation';
@@ -67,6 +67,21 @@ export function PeopleRoom() {
 
   const { data: all } = usePeopleDirectory({ role: 'all' });
   const now = useMemo(() => new Date(), []);
+
+  // Deep-link entry (R78/R60): /people?person=<id>&role=<role> opens straight
+  // onto a profile — the Orders book's "relationship & profile →" cross-link
+  // lands here. Read once on mount from the location itself (the Room is
+  // client-only; no Suspense-bound useSearchParams needed).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const person = params.get('person');
+    const role = params.get('role');
+    const roles: PartyRole[] = ['client', 'lead', 'maker', 'gc', 'team'];
+    if (person && role && (roles as string[]).includes(role)) {
+      setOpenPerson({ id: person, role: role as PartyRole });
+      if (role === 'maker') setRoleFilter('maker');
+    }
+  }, []);
 
   // The live Engine nudge: the strongest dormant tie from the nurture queue.
   const nudge = useMemo(() => {

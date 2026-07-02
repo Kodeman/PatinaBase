@@ -7,9 +7,13 @@
  *  · client      → Style DNA + the woven journey + Projects / Trust & history /
  *    Nurture / Private-note side cards; actions Message, Schedule a touchpoint,
  *    View as them (the client mirror).
- *  · maker / gc  → the (sparser) journey + Engagements / Track record cards +
- *    cross-links to the Orders book and the coordination view — we link, never
- *    rebuild those surfaces.
+ *  · maker       → MakerProfile (../profile/maker-profile, R78/PRC-02): products
+ *    carried, reviews, request-a-quote, roster save/unsave, and the Orders-book
+ *    cross-link. Renders even for a maker not yet on the roster (the
+ *    marketplace lens walks in pre-admission), so it loads from the vendor
+ *    book, not the directory view.
+ *  · gc          → the (sparser) journey + Engagements / Track record cards +
+ *    a cross-link to the coordination view — we link, never rebuild.
  *  · team        → the margin-visibility colophon: which documents the teammate
  *    sees, their studio role, no Style DNA / nurture.
  *
@@ -42,8 +46,9 @@ import {
   roleLabel,
   type JourneyInputs,
 } from '@/lib/document/people-derivation';
-import { Avatar, RoleBadge } from '../person-bits';
 import type { PersonProfileProps } from '../types';
+import { ActionButton, BackLink, ProfileHead } from '../profile/profile-shell';
+import { MakerProfile } from '../profile/maker-profile';
 import { RelationshipJourney } from '../profile/relationship-journey';
 import { StyleDna } from '../profile/style-dna';
 import {
@@ -53,78 +58,6 @@ import {
   TrustCard,
   type ProfileProjectRow,
 } from '../profile/profile-cards';
-
-// ─── shared shell ───────────────────────────────────────────────────────────
-
-function ActionButton({
-  label,
-  onClick,
-  tone = 'plain',
-}: {
-  label: string;
-  onClick: () => void;
-  tone?: 'plain' | 'dark';
-}) {
-  const cls =
-    tone === 'dark'
-      ? 'border-[var(--color-charcoal)] bg-[var(--color-charcoal)] text-white hover:bg-[var(--color-mocha)]'
-      : 'border-[var(--color-pearl)] bg-white text-[var(--color-charcoal)] hover:border-[var(--color-clay)]';
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-[6px] border px-[0.9rem] py-[0.55rem] font-mono text-[0.5rem] font-semibold uppercase tracking-[0.06em] transition-colors ${cls}`}
-    >
-      {label}
-    </button>
-  );
-}
-
-/** The shared profile head: avatar, name, role badge, contact, action row. */
-function ProfileHead({
-  name,
-  role,
-  email,
-  phone,
-  actions,
-}: {
-  name: string;
-  role: PartyRole;
-  email: string | null;
-  phone: string | null;
-  actions: React.ReactNode;
-}) {
-  const contact = [email, phone].filter(Boolean).join(' · ');
-  return (
-    <div className="flex items-start gap-5 border-b border-[var(--doc-ink-border)] pb-5">
-      <Avatar name={name} role={role} size={64} />
-      <div className="flex-1">
-        <h1 className="font-heading text-[1.7rem] font-medium leading-tight text-[var(--color-charcoal)]">
-          {name}
-        </h1>
-        <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
-          <RoleBadge role={role} />
-          {contact && (
-            <span className="text-[0.72rem] text-[var(--color-aged-oak)]">{contact}</span>
-          )}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">{actions}</div>
-      </div>
-    </div>
-  );
-}
-
-function BackLink({ onBack }: { onBack: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onBack}
-      className="mb-4 inline-block font-mono text-[0.52rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]"
-    >
-      ← Directory
-    </button>
-  );
-}
 
 /** The winning option's label on a resolved selection decision, if any. */
 function chosenLabel(d: ClientDecision): string | null {
@@ -673,6 +606,13 @@ export function PersonProfile({
 }: PersonProfileProps) {
   const { data: person, isLoading } = usePerson(personId, role);
 
+  // Makers read from the vendor book itself (R78/PRC-02) — richer than the
+  // directory row, and it must open PRE-admission too (the marketplace lens
+  // walks into makers who aren't on the roster, so have no directory row).
+  if (role === 'maker') {
+    return <MakerProfile vendorId={personId} onBack={onBack} notify={notify} />;
+  }
+
   if (isLoading || !person) {
     return (
       <>
@@ -703,7 +643,7 @@ export function PersonProfile({
     );
   }
 
-  if (person.role === 'maker' || person.role === 'gc') {
+  if (person.role === 'gc') {
     return <NetworkProfile {...common} projectId={person.project_id} />;
   }
 
