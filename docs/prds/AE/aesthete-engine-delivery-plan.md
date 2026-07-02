@@ -17,7 +17,7 @@
 
 ### Contention rules (load-bearing)
 
-1. `supabase/migrations/` — **the spine.** Migration files parallelize ONLY when numbers are pre-assigned, files are disjoint, and neither references the other's objects; otherwise serial. (Wave 1: 00239 ∥ 00240 is safe; 00241 waits for both.)
+1. `supabase/migrations/` — **the spine.** Migration files parallelize ONLY when numbers are pre-assigned, files are disjoint, and neither references the other's objects; otherwise serial. (Wave 1: 00242 ∥ 00243 is safe; 00244 waits for both.) **Numbering is RESERVED on main via placeholder files** (G0 landed 00242–00246 as no-op `SELECT 1` reservations, replaced in place by the owning wave BEFORE any prod deploy) — because concurrent programs on this repo consume numbers: The Document tracks took 00236–00238 mid-wave-0, forcing a renumber (aesthete spine landed as **00239–00241**). Conductors: re-fetch main and re-check numbering at every fork and barrier.
 2. `packages/supabase/src/hooks/index.ts` (append-only barrel, ~76 hooks; vitest in `__tests__/`) — all new hooks for a wave batched into ONE agent; conductor resolves the export list on merge.
 3. **Domain types:** extend the existing `packages/types/src/aesthete.ts` / `style-profile.ts` / `teaching.ts`. Never create parallel type homes; `@patina/shared` is not for domain types.
 4. `supabase/functions/_shared/` — extended only by the FIRST edge agent of a wave; later edge agents rebase. Edge-fn test convention: pure `lib.ts` + `deno test <fn>/index.test.ts` (std@0.168.0 asserts).
@@ -52,7 +52,7 @@ merge (fixed order) → full gate on main → conventional commit `feat(aesthete
 | Agent | Territory | Builds (design §§) | DoD |
 |---|---|---|---|
 | **0A** | `scripts/` | `aesthete-gate.sh` (6 tiers, skip-with-notice) + `scripts/aesthete-eval/` skeleton + `scripts/aesthete-demo-seed.sql` skeleton | gate green on current tree (non-db tiers; db tier verified by conductor) |
-| **0B** | `supabase/migrations/` + `supabase/tests/aesthete/` | **00236** space re-type→768 + vec helpers + HNSW-else-ivfflat + 00157 views recreated verbatim (§5.1); **00237** product_dna + drafts + vocab + spectrum columns + RLS (§5.2); **00238** aesthete_jobs + triggers + claim RPCs + crons (§5.5) + SQL suites | `db` tier green; view-contract check |
+| **0B** | `supabase/migrations/` + `supabase/tests/aesthete/` | **00239** space re-type→768 + vec helpers + HNSW-else-ivfflat + 00157 views recreated verbatim (§5.1); **00240** product_dna + drafts + vocab + spectrum columns + RLS (§5.2); **00241** aesthete_jobs + triggers + claim RPCs + crons (§5.5) + SQL suites *(landed; renumbered from 00236–00238 at G0)* | `db` tier green; view-contract check |
 | **0C** | deletions + docs | write `docs/prds/AE/aesthete-engine-salvage.md` (weights, MMR, rule predicates, score_breakdown shape — verbatim from the old service) → `git rm services/aesthete-engine`; delete `use-embeddings.ts` + call sites + barrel exports; `/api/search/similar` → `find_similar_products` stub; fix stale CLAUDE.md ×2 + supabase/CLAUDE.md (§16) | greps prove zero references; `ts` green |
 
 **Barrier G0:** merge 0B → 0C → 0A · full gate · commit+push.
@@ -61,8 +61,8 @@ merge (fixed order) → full gate on main → conventional commit `feat(aesthete
 
 | Agent | Territory | Builds | DoD |
 |---|---|---|---|
-| **1A** | migration **00239** | §5.4 taste tables + RLS + export/retire + house curation RPCs + `style_centroids` + house-v0 seed slot | `db` green; RLS suite (own/lead/anon denials) |
-| **1B** | migration **00240** | `client_style_profiles`, `submit_style_quiz` + `_compute_quiz_profile()`, `claim_quiz_session`, `quiz_option_loadings` seed (§7.2), rate limits, janitor, quiz_sessions RLS fix (§5.3, §7) | anon curl → full profile JSON |
+| **1A** | migration **00242** (replaces its reservation in place) | §5.4 taste tables + RLS + export/retire + house curation RPCs + `style_centroids` + house-v0 seed slot | `db` green; RLS suite (own/lead/anon denials) |
+| **1B** | migration **00243** (replaces its reservation in place) | `client_style_profiles`, `submit_style_quiz` + `_compute_quiz_profile()`, `claim_quiz_session`, `quiz_option_loadings` seed (§7.2), rate limits, janitor, quiz_sessions RLS fix (§5.3, §7) | anon curl → full profile JSON |
 | **1C** | `services/aesthete-inference/` (new) | §12.1 complete: ONNX export build, FastAPI /embed/text /embed/image /healthz, task-prefix client, int8, 429 backpressure, pytest + golden-cosine, Dockerfile. No package.json (Python services are pnpm/turbo-invisible by design; Docker is the build path) | `worker` green; container builds; p50 recorded |
 
 **Barrier G1:** conductor workspace single-touch · quiz curl demo · db reset through 00240.
@@ -71,7 +71,7 @@ merge (fixed order) → full gate on main → conventional commit `feat(aesthete
 
 | Agent | Territory | Builds | DoD |
 |---|---|---|---|
-| **2A** *(xhigh)* | migrations **00241–00243** | `get_aesthete_matches` (§10 complete: filters, ANN, 10-term scoring, θ_blend dial, MMR, exploration slots, why payload, match_events), `aesthete_search` seam, weights + why_phrases seeds, `get_recommendations` shim, 00242 matview, 00243 quiz bridge; **deterministic ranking SQL suite** | `db` green; iOS contract test green |
+| **2A** *(xhigh)* | migrations **00244–00246** (replace reservations in place) | `get_aesthete_matches` (§10 complete: filters, ANN, 10-term scoring, θ_blend dial, MMR, exploration slots, why payload, match_events), `aesthete_search` seam, weights + why_phrases seeds, `get_recommendations` shim, 00245 matview, 00246 quiz bridge; **deterministic ranking SQL suite** | `db` green; iOS contract test green |
 | **2B** | `_shared/aesthete*` + `aesthete-embed-worker/` | shared edge helper (claim/complete, worker client, backoff) + embed drain fn + deno tests; live local embed of seed catalog through 1C's worker | seed products carry vectors; `edge` green |
 | **2C** | `aesthete-dna-draft/` | §6.2–6.3: Claude structured-output draft-fill (Haiku→Sonnet escalation), spend ledger, triage; deno tests on golden fixtures (mocked API); real smoke behind env flag | drafts land on seed data |
 | **2D** | `packages/aesthete-quiz/` (new) | §3.2#16: /core (questions, types, plain-fetch PostgREST wire client) + /react + tests + `WIRE-CONTRACT.md` | package tests green; contract = §7.1 verbatim |

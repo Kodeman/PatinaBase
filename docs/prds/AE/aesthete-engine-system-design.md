@@ -4,9 +4,10 @@
 
 ---
 
-**Status:** v1.0 — designed for review
+**Status:** v1.0.1 — in delivery (see `aesthete-engine-delivery-plan.md` + delivery log)
 **Owner:** Kody / Patina Engineering
 **Last updated:** 2026-07-01
+**v1.0.1 amendments (from Wave 0 build):** §5.1 helper bodies corrected (`(1 − w)::real` cast in `vec_lerp`; `vector_norm()` not `l2_norm()` — the latter doesn't exist for `vector` in pgvector ≤ 0.8); migration numbering shifted — the foundation block landed as **00239–00241** and later blocks are reserved as **00242–00246** (The Document tracks consumed 00236–00238 concurrently); `aesthete_jobs` dedupe uses resurrect-on-conflict (`DO UPDATE … WHERE status IN ('done','failed')`) rather than plain `DO NOTHING` so re-embeds per §6.1 actually re-enqueue.
 **Designs to:** `aesthete-engine-product-brief.md` (2026-07-01) + `aesthete-engine-deck.html`
 **Supersedes:** `docs/specs/Redesign/patina-aesthete-engine-design.html` (March 2026 UX design) and the deferred `services/aesthete-engine` Python service (Dec 2025) — see §16 Reconciliation
 **Companion:** `aesthete-engine-system-design-deck.html` (presentation form)
@@ -234,15 +235,17 @@ ALTER TABLE products
   ADD COLUMN aesthete_model_version text;           -- e.g. 'nomic-v1.5-onnx-int8-r1'
 
 -- 3. Vector helpers (IMMUTABLE; pgvector has no scalar-multiply operator)
+--    (v1.0.1: bodies as actually shipped in 00239 — real-cast in lerp;
+--     vector_norm(), since l2_norm() doesn't exist for `vector` in pgvector ≤ 0.8)
 CREATE FUNCTION vec_scale(v vector, k real) RETURNS vector AS $$
   SELECT (SELECT array_agg(x * k) FROM unnest(v::real[]) AS x)::vector
 $$ LANGUAGE sql IMMUTABLE;
 CREATE FUNCTION vec_lerp(a vector, b vector, w real) RETURNS vector AS $$
-  SELECT vec_scale(a, w) + vec_scale(b, 1 - w)
+  SELECT vec_scale(a, w) + vec_scale(b, (1 - w)::real)
 $$ LANGUAGE sql IMMUTABLE;
 CREATE FUNCTION vec_normalize(v vector) RETURNS vector AS $$
-  SELECT CASE WHEN l2_norm(v) = 0 THEN v
-              ELSE vec_scale(v, (1.0 / l2_norm(v))::real) END
+  SELECT CASE WHEN vector_norm(v) = 0 THEN v
+              ELSE vec_scale(v, (1.0 / vector_norm(v))::real) END
 $$ LANGUAGE sql IMMUTABLE;
 
 -- 4. ANN index: HNSW preferred, ivfflat fallback, partial on the catalog layer
@@ -1041,14 +1044,16 @@ Anon + authed quiz green on both hosts; match RPC with whys/exploration/budget-b
 
 | # | Contents |
 |---|---|
-| **00236** `aesthete_space` | pgvector version assert; `aesthete_vector` re-type → 768 (views dropped/recreated **verbatim**); `style_caption`, `aesthete_vector_at`, `aesthete_model_version`; vec helpers; HNSW-else-ivfflat index block |
-| **00237** `product_dna` | `product_dna`, `product_dna_drafts`, `dna_vocab` (+seed), spectrum additive columns, RLS |
-| **00238** `aesthete_jobs` | queue + claim RPCs, product/DNA triggers, embed/draft crons, catalog backfill enqueue |
-| **00239** `taste_foundation` | all §5.4 tables + RLS; export/retire + house curation RPCs; house v0 seed slot; `style_centroids` |
-| **00240** `client_style_profiles` | table + `submit_style_quiz` + `claim_quiz_session` + `quiz_option_loadings` seed + rate limits + janitor + **quiz_sessions RLS fix** |
-| **00241** `match_rpc` | `match_weight_profiles` (+v1 seed), `why_phrases` (+seed), `get_aesthete_matches`, `aesthete_search`, `get_recommendations` shim |
-| **00242** `behavior_stats` | matview + nightly refresh cron |
-| **00243** `quiz_bridge` | `process_style_quiz` internals → `_compute_quiz_profile()` (signature + GRANT frozen) |
+| **00239** `aesthete_space` *(shipped)* | pgvector version assert; `aesthete_vector` re-type → 768 (views dropped/recreated **verbatim**); `style_caption`, `aesthete_vector_at`, `aesthete_model_version`; vec helpers; HNSW-else-ivfflat index block |
+| **00240** `product_dna` *(shipped)* | `product_dna`, `product_dna_drafts`, `dna_vocab` (+seed), spectrum additive columns, RLS |
+| **00241** `aesthete_jobs` *(shipped)* | queue + claim RPCs, product/DNA triggers, embed/draft crons, catalog backfill enqueue |
+| **00242** `taste_foundation` *(reserved)* | all §5.4 tables + RLS; export/retire + house curation RPCs; house v0 seed slot; `style_centroids` |
+| **00243** `client_style_profiles` *(reserved)* | table + `submit_style_quiz` + `claim_quiz_session` + `quiz_option_loadings` seed + rate limits + janitor + **quiz_sessions RLS fix** |
+| **00244** `match_rpc` *(reserved)* | `match_weight_profiles` (+v1 seed), `why_phrases` (+seed), `get_aesthete_matches`, `aesthete_search`, `get_recommendations` shim |
+| **00245** `behavior_stats` *(reserved)* | matview + nightly refresh cron |
+| **00246** `quiz_bridge` *(reserved)* | `process_style_quiz` internals → `_compute_quiz_profile()` (signature + GRANT frozen) |
+
+*(v1.0.1: numbering shifted +3 from the original 00236–00243 — The Document tracks consumed 00236–00238 while Wave 0 was in flight; reservations pin the rest.)*
 
 **Guarantees:** the five 00008 similarity RPCs are untouched (and newly functional once `embedding` populates); `v_aesthete_*_input` names/columns identical; `process_style_quiz`/`get_recommendations` signatures frozen; `user_style_signals` still written on claim (iOS reads live). Phase-2 migrations (relationships, learned-taste crons, `match_designers_for_client`, `designer_clients` margin-note columns) are numbered when they ship.
 

@@ -1,0 +1,13 @@
+# Pre-existing whole-repo type-check failures (baseline recorded at Barrier G0, 2026-07-01).
+# The aesthete gate's `ts` tier fails only on NEW failing tasks beyond this list.
+# Burn-down owned outside the AE program (root causes: @patina/email typed against
+# @types/react 18 under React 19 — cascades into both portals; @patina/shared missing
+# vitest devDep; small own-src errors in api-routes/design-system/extension).
+# Remove lines as they're fixed; delete this file when the repo is green.
+@patina/api-routes#type-check
+@patina/client-portal#type-check
+@patina/design-system#type-check
+@patina/designer-portal#type-check
+@patina/email#type-check
+@patina/extension#type-check
+@patina/shared#type-check

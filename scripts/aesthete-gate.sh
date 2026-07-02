@@ -174,13 +174,39 @@ gate_worker() {
 }
 
 # ── ts ───────────────────────────────────────────────────────────────────────
+# Baseline-delta: the repo has pre-existing type-check failures recorded in
+# scripts/aesthete-ts-baseline.txt (G0 decision, delivery log 2026-07-01).
+# PASS iff the set of failing tasks is a subset of the baseline; any NEW
+# failing task fails the tier. Green repo (exit 0) always passes.
 gate_ts() {
-  if run pnpm turbo type-check; then
-    tier_pass ts "pnpm turbo type-check green"
-  else
-    tier_fail ts "pnpm turbo type-check failed"
+  local baseline="$ROOT/scripts/aesthete-ts-baseline.txt"
+  local out
+  out="$(mktemp)"
+  if pnpm turbo type-check --continue >"$out" 2>&1; then
+    tier_pass ts "whole-repo type-check green"
+    rm -f "$out"
+    return 0
+  fi
+  local failed
+  failed="$(sed -n 's/^[[:space:]]*Failed:[[:space:]]*//p' "$out" | tr -d ' ' | tr ',' '\n' | sort -u | sed '/^$/d')"
+  if [ -z "$failed" ]; then
+    tier_fail ts "type-check failed but no Failed: summary parsed — inspect $out"
     return 1
   fi
+  local new_failures=""
+  while IFS= read -r task; do
+    if ! grep -qxF "$task" "$baseline" 2>/dev/null; then
+      new_failures="${new_failures}${task} "
+    fi
+  done <<< "$failed"
+  rm -f "$out"
+  if [ -n "$new_failures" ]; then
+    tier_fail ts "NEW type-check failures beyond baseline: ${new_failures}"
+    return 1
+  fi
+  local n
+  n="$(printf '%s\n' "$failed" | wc -l | tr -d ' ')"
+  tier_pass ts "no new failures (${n} pre-existing baseline failures — see aesthete-ts-baseline.txt)"
 }
 
 # ── walk ─────────────────────────────────────────────────────────────────────
