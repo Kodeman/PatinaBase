@@ -5,7 +5,13 @@
  * spec v1.2 §9): this week's entries across every engagement — document ·
  * activity · phase · source · duration, inline-editable until an invoice
  * claims them (00177 guard) — with today/week totals and a batch-add row.
- * "Export week → Accounts" arrives with the Accounts book (Slice 6).
+ *
+ * R75: "Export week → Accounts" is alive — it opens the R74b invoice
+ * composer with the week's unbilled entries pre-ticked in the time section
+ * (per-entry include/exclude and view-resolved rates live there; one act,
+ * review before draft). When the week's unbilled hours span several
+ * documents, the composer asks which document first and ticks that
+ * document's share.
  */
 
 import { useMemo, useState } from 'react';
@@ -16,6 +22,7 @@ import { ACTIVITIES, fmtMinutes } from '@/lib/document/time-derivation';
 import { fmtDay } from '@/lib/document/format';
 import { LedgerFrontMatter } from './ledger-front-matter';
 import { hoursUtilization } from '@/lib/document/ledger-summary';
+import { openInvoiceComposer } from './accounts/invoice-overlays';
 
 type AnyRecord = any;
 
@@ -108,6 +115,16 @@ export function HoursLedger() {
   const weekMin = (entries ?? []).reduce((s, e) => s + (e.duration_minutes ?? 0), 0);
   const util = hoursUtilization(entries ?? []);
 
+  // R75 — the week's exportable share: billable, completed, unclaimed.
+  const weekUnbilled = useMemo(
+    () => (entries ?? []).filter((e) => e.billable && !e.invoice_id),
+    [entries],
+  );
+  const weekUnbilledProjects = useMemo(
+    () => [...new Set(weekUnbilled.map((e) => e.project_id as string))],
+    [weekUnbilled],
+  );
+
   const parsedAdd = parseInt(addMinutes, 10);
   const addValid = addProject && Number.isFinite(parsedAdd) && parsedAdd >= 1;
 
@@ -148,9 +165,21 @@ export function HoursLedger() {
         </div>
         <button
           type="button"
-          disabled
-          title="Arrives with the Accounts book (Slice 6)"
-          className="whitespace-nowrap rounded-[3px] border border-[rgba(250,247,242,0.15)] px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.07em] text-[rgba(250,247,242,0.3)]"
+          disabled={weekUnbilled.length === 0}
+          title={
+            weekUnbilled.length === 0
+              ? 'Nothing unbilled this week'
+              : 'Open the invoice composer with this week ticked'
+          }
+          onClick={() =>
+            openInvoiceComposer({
+              // One document → land scoped; several → the composer asks and
+              // ticks that document's share of the week (R75).
+              projectId: weekUnbilledProjects.length === 1 ? weekUnbilledProjects[0] : undefined,
+              initialTimeEntryIds: weekUnbilled.map((e) => e.id),
+            })
+          }
+          className="whitespace-nowrap rounded-[3px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:border-[rgba(250,247,242,0.15)] disabled:text-[rgba(250,247,242,0.3)] disabled:hover:bg-transparent"
         >
           Export week → Accounts
         </button>
