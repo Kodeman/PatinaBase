@@ -20,7 +20,6 @@ import {
   useUpdateDamageClaim,
 } from '@patina/supabase';
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
-import { LedgerFrontMatter } from './ledger-front-matter';
 import { Stamp } from './stamp';
 import { receivingFrontMatter } from '@/lib/document/ledger-summary';
 import { fmtDay } from '@/lib/document/format';
@@ -30,6 +29,29 @@ type AnyRecord = any;
 
 const isoOffsetDays = (days: number) =>
   new Date(Date.now() + days * 86_400_000).toISOString();
+
+/**
+ * PRC-10 (R84): one figure of the receiving KPI strip — the proposal-watch
+ * figures-strip grammar (divided columns, mono label over heading numeral),
+ * inked for the charcoal book.
+ */
+function Figure({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="flex-1 px-4 first:pl-0">
+      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[rgba(250,247,242,0.45)]">
+        {label}
+      </p>
+      <p className="mt-1 truncate font-heading text-[1.05rem] leading-none text-[var(--color-off-white)]">
+        {value}
+      </p>
+      {sub && (
+        <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.4)]">
+          {sub}
+        </p>
+      )}
+    </div>
+  );
+}
 
 /**
  * PRC-11 (R84): one open damage claim — DamageClaimDrawer's lifecycle ported
@@ -249,7 +271,33 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
         </h2>
       </div>
 
-      {!isLoading && <LedgerFrontMatter caption="receiving" stats={stats} />}
+      {/* PRC-10 (R84): the four-figure KPI strip — arriving · awaiting log ·
+          open claims · received (30d) — in the proposal-watch figures-strip
+          grammar. Counts derive from the queries the page already holds
+          (receivingFrontMatter, R5-pure). */}
+      {!isLoading && (
+        <div className="mb-4 flex items-stretch divide-x divide-[rgba(250,247,242,0.12)] border-y border-[rgba(250,247,242,0.12)] py-3">
+          <Figure
+            label="Arriving"
+            value={stats.find((s) => s.label === 'Arriving')?.value ?? '0'}
+            sub="next 7 days"
+          />
+          <Figure
+            label="Awaiting log"
+            value={stats.find((s) => s.label === 'Awaiting log')?.value ?? '0'}
+          />
+          <Figure label="Open claims" value={String(openClaimCount)} />
+          <Figure
+            label="Received · 30d"
+            value={String((inspections ?? []).length)}
+            sub={
+              stats.find((s) => s.label === '30-day pass')
+                ? `${stats.find((s) => s.label === '30-day pass')!.value} clean`
+                : undefined
+            }
+          />
+        </div>
+      )}
 
       {isLoading ? (
         <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">Opening the book…</p>
