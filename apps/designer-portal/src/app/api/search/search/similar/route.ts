@@ -30,8 +30,11 @@ function snakeToCamel(product: Record<string, unknown>) {
 }
 
 // GET /api/search/search/similar - Products related to a given product.
-// v1 heuristic: same category, excluding the source product. (Vector
-// similarity lives in a deferred service; this keeps real data flowing.)
+// Primary path: pgvector similarity via find_products_similar_to (migration
+// 00008). Embeddings are unpopulated until the Aesthete jobs pipeline lands
+// (docs/prds/AE/aesthete-engine-system-design.md §16), so we fall back to the
+// v1 same-category heuristic whenever the RPC yields no rows — preserving
+// today's behavior. Response shape is unchanged.
 export async function GET(request: NextRequest) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generated types not yet updated for new columns
@@ -45,6 +48,43 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data: { products: [] } });
     }
 
+    // ── Primary: vector similarity (00008) ─────────────────────────────────
+    // Returns thin rows (id, name, images, price_retail, similarity) ordered
+    // by similarity; empty when the source product has no embedding yet.
+    const { data: similarRows, error: rpcError } = await supabase.rpc('find_products_similar_to', {
+      product_id: productId,
+      match_count: limit,
+    });
+
+    if (!rpcError && Array.isArray(similarRows) && similarRows.length > 0) {
+      const ids = similarRows.map((row: { id: string }) => row.id);
+
+      const { data: fullRows, error: fetchError } = await supabase
+        .from('products')
+        .select('*')
+        .in('id', ids)
+        .eq('status', 'published');
+
+      if (!fetchError && fullRows && fullRows.length > 0) {
+        // Preserve the RPC's similarity ordering.
+        const byId = new Map(
+          (fullRows as Record<string, unknown>[]).map((row) => [row.id as string, row])
+        );
+        const ordered = ids
+          .map((id: string) => byId.get(id))
+          .filter((row: Record<string, unknown> | undefined): row is Record<string, unknown> =>
+            Boolean(row)
+          );
+
+        if (ordered.length > 0) {
+          return NextResponse.json({ data: { products: ordered.map(snakeToCamel) } });
+        }
+      }
+      // Similarity hits existed but none were published/fetchable — fall
+      // through to the heuristic rather than returning an empty set.
+    }
+
+    // ── Fallback: same-category heuristic (pre-embedding behavior) ─────────
     const { data: target, error: targetError } = await supabase
       .from('products')
       .select('id, category')

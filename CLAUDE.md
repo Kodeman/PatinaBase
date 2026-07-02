@@ -71,7 +71,7 @@ patina/
 │   ├── orders/                # NestJS — Stripe payments, EasyPost shipping (port 3015)
 │   ├── media/                 # NestJS — image processing, MinIO/S3 storage (port 3014)
 │   ├── projects/              # NestJS — real-time collab, WebSocket (port 3016)
-│   └── aesthete-engine/       # Python/FastAPI ML (deferred, not deployed)
+│   └── aesthete-inference/    # Python/FastAPI embedding worker (Wave 1 — see docs/prds/AE/)
 ├── packages/
 │   ├── supabase/              # Supabase client + 35 React Query hooks + generated types
 │   ├── types/                 # Shared TypeScript domain types
@@ -86,13 +86,13 @@ patina/
 │   └── shared/                # Shared types for Chrome extension (@patina/shared)
 ├── supabase/
 │   ├── migrations/            # 52 SQL migrations
-│   ├── functions/             # 11 Deno edge functions
+│   ├── functions/             # 33+ Deno edge functions
 │   ├── seed/                  # Development seed data
 │   └── config.toml            # Supabase project config
 ├── infra/
 │   ├── docker-compose.supabase.yml    # Production Supabase stack (Coolify)
 │   ├── docker-compose.services.yml    # Production services (Coolify)
-│   ├── docker-compose.backend-infra.yml # Redis, Typesense, Qdrant, MinIO
+│   ├── coolify/docker-compose.infra.yml # Redis + MinIO (prod backend infra)
 │   ├── cloudflare-tunnel-config.yml   # Cloudflare Tunnel routing
 │   └── Dockerfile.nextjs             # Multi-stage Next.js Dockerfile
 ├── docker-compose.yml         # Local dev infrastructure (Redis, MinIO, Mailhog)

@@ -17,7 +17,7 @@ Sequential numbered files in `migrations/`. Never modify existing migrations - a
 
 - Prices in cents (integers)
 - RLS enabled on all tables
-- pgvector for embeddings (1536 dimensions)
+- pgvector for embeddings — 768-dim canonical aesthetic space (see `docs/prds/AE/aesthete-engine-system-design.md`); the Aesthete Engine delivery program is tracked in `docs/prds/AE/aesthete-engine-delivery-plan.md`
 - Use `created_at` and `updated_at` timestamps
 
 ## Project money columns (post-00139)
