@@ -5,6 +5,7 @@ import { CommandBar } from '@/components/document/command-bar';
 import { InterruptionSettings } from '@/components/document/interruption-settings';
 import { AccountSheet } from '@/components/document/account/account-sheet';
 import { InvoiceOverlays } from '@/components/document/accounts/invoice-overlays';
+import { DocumentHelpProvider } from '@/components/document/help/document-help';
 import { MobileShellProvider } from '@/components/document/mobile/mobile-shell';
 import { MobileBar } from '@/components/document/mobile/mobile-bar';
 import { MobileSheets } from '@/components/document/mobile/mobile-sheets';
@@ -32,21 +33,27 @@ export default function DocumentLayout({ children }: { children: React.ReactNode
         <DocumentTimeProvider>
           {/* D13: the phone's physics live in the shell (below 980px). */}
           <MobileShellProvider>
-            {children}
-            <LogStrip />
-            <StudioDrawer />
-            {/* ⌘K from anywhere in the document model (spec §3). */}
-            <CommandBar />
-            {/* D2 break-through rules — opened from ⌘K, ships all-off. */}
-            <InterruptionSettings />
-            {/* R5 — the Account sheet: identity, status, settings, sign out.
-                Opened from the Studio Drawer nameplate, the mobile drawer, ⌘K. */}
-            <AccountSheet />
-            {/* R74 — the Invoice folio + composer, openable from any surface
-                (Accounts rows, Account band, margin, Hours, FF&E, ⌘K). */}
-            <InvoiceOverlays />
-            <MobileBar />
-            <MobileSheets />
+            {/* R89 — the help affordance's only home (no utility bar): a
+                SurfaceKeyProvider seeded from the pathname wraps the shell, and
+                the ContextualHelpPanel mounts once inside it. Additive provider
+                wrap; children/siblings keep their order. */}
+            <DocumentHelpProvider>
+              {children}
+              <LogStrip />
+              <StudioDrawer />
+              {/* ⌘K from anywhere in the document model (spec §3). */}
+              <CommandBar />
+              {/* D2 break-through rules — opened from ⌘K, ships all-off. */}
+              <InterruptionSettings />
+              {/* R5 — the Account sheet: identity, status, settings, sign out.
+                  Opened from the Studio Drawer nameplate, the mobile drawer, ⌘K. */}
+              <AccountSheet />
+              {/* R74 — the Invoice folio + composer, openable from any surface
+                  (Accounts rows, Account band, margin, Hours, FF&E, ⌘K). */}
+              <InvoiceOverlays />
+              <MobileBar />
+              <MobileSheets />
+            </DocumentHelpProvider>
           </MobileShellProvider>
         </DocumentTimeProvider>
       </DocumentGate>

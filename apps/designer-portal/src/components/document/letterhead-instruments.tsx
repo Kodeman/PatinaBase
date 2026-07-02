@@ -8,8 +8,8 @@
  *   · Send a note — the Pulse's ad-hoc sibling: compose → comms post →
  *     letterhead-anchored message item. No new schema (00193 anchors:
  *     NULL = letterhead).
- *   · The scan — Discovery artifact (iOS RoomPlan hero image), opening in
- *     the folio's paper viewer. The first physical iOS↔portal handshake.
+ *   · The scan — Discovery artifact (iOS RoomPlan capture), opening the
+ *     interactive 3D scan sheet (R90). The first physical iOS↔portal handshake.
  *   · Sharing tier (R79) — the old wizard's Step06 visibility choice, now a
  *     letterhead instrument on project documents: what the client's mirror
  *     shows (full / milestone / curated) is set where the mirror is opened.
@@ -21,7 +21,7 @@ import { createBrowserClient, useProjectV2 } from '@patina/supabase';
 import { invalidateMarginSurfaces } from '@/hooks/use-margin-items';
 import { useSaveProjectVitals } from '@/hooks/use-project-lifecycle';
 import { familyLabel } from '@/lib/document/family-label';
-import { DocFileViewer } from './overlays/doc-file-viewer';
+import { ScanViewerSheet } from './overlays/scan-viewer-sheet';
 import { ClientMirror } from './client-mirror';
 import { ProposalPreview } from './proposal-preview';
 
@@ -241,16 +241,11 @@ export function LetterheadInstruments({
           />
         ) : null)}
 
+      {/* R90 — "The scan" now opens the interactive 3D viewer (a doc-file-viewer
+          sibling), not the static hero image. The sheet fetches the RoomScan by
+          id; we already hold it from useClientScans. */}
       {viewingScan && (
-        <DocFileViewer
-          file={{
-            title: viewingScan.name ?? 'Room scan',
-            doc_type: 'img',
-            created_at: viewingScan.created_at,
-          }}
-          url={viewingScan.image_url}
-          onClose={() => setViewingScan(null)}
-        />
+        <ScanViewerSheet scanId={viewingScan.id} onClose={() => setViewingScan(null)} />
       )}
     </>
   );

@@ -21,6 +21,7 @@ import {
   type FolioFile,
 } from '@/hooks/use-folio';
 import { DocFileViewer } from './overlays/doc-file-viewer';
+import { ScanViewerSheet } from './overlays/scan-viewer-sheet';
 import { fmtDay } from '@/lib/document/format';
 
 const SECTION_LABELS: Record<string, string> = {
@@ -132,6 +133,15 @@ export function FolioStrip({
   const setVisibility = useSetFolioVisibility(projectId);
   const [dragOver, setDragOver] = useState(false);
   const [viewing, setViewing] = useState<FolioFile | null>(null);
+  // R90 — a scan clipped into the folio opens the interactive 3D sheet, not the
+  // paper file viewer. No producer writes scan chips yet (doc_type is
+  // img/pdf/…), so this door is dormant today; a scan chip would carry the
+  // room_scan id in storage_path. Real files keep the DocFileViewer door.
+  const [viewingScanId, setViewingScanId] = useState<string | null>(null);
+  const openFolioFile = (f: FolioFile) => {
+    if (f.doc_type === 'scan' && f.storage_path) setViewingScanId(f.storage_path);
+    else setViewing(f);
+  };
   const inputRef = useRef<HTMLInputElement>(null);
 
   const chains = buildChains((files ?? []).filter((f) => matchesAnchor(f, anchor)));
@@ -174,7 +184,7 @@ export function FolioStrip({
           <FileChip
             key={chain.head.id}
             chain={chain}
-            onOpen={setViewing}
+            onOpen={openFolioFile}
             onToggleVisibility={(f) =>
               setVisibility.mutate({ fileId: f.id, clientVisible: !f.client_visible })
             }
@@ -201,6 +211,10 @@ export function FolioStrip({
         />
       </div>
       {viewing && <DocFileViewer file={viewing} onClose={() => setViewing(null)} />}
+      {/* R90 — the interactive scan door (see openFolioFile above). */}
+      {viewingScanId && (
+        <ScanViewerSheet scanId={viewingScanId} onClose={() => setViewingScanId(null)} />
+      )}
     </>
   );
 }
@@ -211,6 +225,13 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
   const setVisibility = useSetFolioVisibility(projectId);
   const [open, setOpen] = useState(false);
   const [viewing, setViewing] = useState<FolioFile | null>(null);
+  // R90 — same interactive scan door as FolioStrip (dormant until a scan chip
+  // exists; real files keep the DocFileViewer door).
+  const [viewingScanId, setViewingScanId] = useState<string | null>(null);
+  const openFolioFile = (f: FolioFile) => {
+    if (f.doc_type === 'scan' && f.storage_path) setViewingScanId(f.storage_path);
+    else setViewing(f);
+  };
 
   const all = files ?? [];
   if (all.length === 0) return null;
@@ -250,7 +271,7 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
                 <FileChip
                   key={chain.head.id}
                   chain={chain}
-                  onOpen={setViewing}
+                  onOpen={openFolioFile}
                   onToggleVisibility={(f) =>
                     setVisibility.mutate({ fileId: f.id, clientVisible: !f.client_visible })
                   }
@@ -261,6 +282,10 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
         </div>
       )}
       {viewing && <DocFileViewer file={viewing} onClose={() => setViewing(null)} />}
+      {/* R90 — the interactive scan door (see openFolioFile above). */}
+      {viewingScanId && (
+        <ScanViewerSheet scanId={viewingScanId} onClose={() => setViewingScanId(null)} />
+      )}
     </div>
   );
 }
