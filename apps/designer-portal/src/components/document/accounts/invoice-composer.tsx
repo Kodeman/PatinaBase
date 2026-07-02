@@ -57,7 +57,7 @@ const CHECK = 'relative top-[1px] accent-[var(--color-clay)]';
 const ROW =
   'flex cursor-pointer items-baseline gap-2.5 border-b border-dashed border-[var(--color-pearl)] py-1.5';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Untyped hook rows (house style — database.types.ts not regenerated).
 type AnyRecord = any;
 
 export function InvoiceComposer({
