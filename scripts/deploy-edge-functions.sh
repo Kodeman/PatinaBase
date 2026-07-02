@@ -18,6 +18,7 @@ PATTERN="${1:-}"
 JWT_PROTECTED=(
   aesthete-embed-worker
   aesthete-dna-draft
+  aesthete-ask
   notification-dispatch
   campaign-dispatch
   campaign-scheduler
