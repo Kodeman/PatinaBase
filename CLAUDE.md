@@ -200,6 +200,7 @@ pnpm test           # Run tests
 
 ## Important Conventions
 
+- **Using Fable**: When model is set to fable use fable to plan and orchestrate, do not use fable to execute.  Execution should be done with Sonnet and Opus Subagents, upon completion Fable should do an adversary review and tehn either reurn to user or instruct subagents further. 
 - **Auth**: Always use Supabase Auth. Never add NextAuth.
 - **Data access**: Use `@patina/supabase` hooks for Supabase data. Use `@patina/api-routes` proxy for NestJS service data.
 - **Types**: Import from `@patina/types`, never redefine.
