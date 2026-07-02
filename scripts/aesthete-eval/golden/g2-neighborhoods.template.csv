@@ -1,0 +1,2 @@
+seed_product_id,seed_name,candidate_product_id,candidate_name,is_closest_5,designer,notes
+a0000000-0000-0000-0000-000000000001,Heirloom Oak Dining Table,a0000000-0000-0000-0000-000000000003,Live-Edge Coffee Table,1,leah,EXAMPLE ROW — delete before the sprint. 20 candidate rows per seed; exactly 5 with is_closest_5=1.

@@ -1,20 +1,70 @@
 # Aesthete Engine — evaluation harness
 
-Skeleton laid down in **Wave 0A**; the runnable harness lands in **Wave 3D**.
+Skeleton laid down in **Wave 0A**; the runnable harness landed in **Wave 3D**.
 Contract: `docs/prds/AE/aesthete-engine-system-design.md` §14 (evaluation
 framework) and §14.7 (the week-6 demo bar). The labeled sets are built as a
 by-product of the week-4 designer validation sprint — this directory holds the
 harness, the fixtures, and the bars; it never invents ground truth.
+
+## Quick start
+
+```bash
+# seed the local stack first (idempotent):
+docker exec -i supabase_db_supabase psql -U postgres -d postgres \
+  < scripts/aesthete-demo-seed.sql
+
+# the §14.7 mechanical bars + persona sheets + human panel checklist:
+bash scripts/aesthete-eval/run-eval.sh personas
+
+# everything (g1/g2 SKIP until designer labels exist; backtest/replay Wave 4A+):
+bash scripts/aesthete-eval/run-eval.sh all
+```
+
+Markdown report to stdout; per-run JSON + persona top-10 sheets to `out/`
+(gitignored); non-zero exit on any missed mechanical bar. Env knobs in
+`run-eval.md` (`SUPABASE_REST_URL`, `SUPABASE_ANON_KEY`, `WALK_BUDGET_MS`,
+`EVAL_MATCH_SAMPLES`, `AESTHETE_EVAL_OUT`).
+
+> ⚠ The quiz's in-DB rate backstop (§7.1) allows **10 submits/IP/hour** and
+> each harness run submits 4 (one per persona) — so at most two runs per hour
+> share a window with any `aesthete-gate.sh walk` calls. On a trip the report
+> says so explicitly (it is not an engine failure); local-dev unblock:
+> `docker exec supabase_db_supabase psql -U postgres -d postgres -c 'DELETE FROM quiz_rate_limits;'`.
 
 ## What lives here
 
 | File | Role |
 |---|---|
 | `README.md` | this document — the suites and their bars |
-| `personas.json` | the 4 fixed quiz→rec personas (§14.3) — placeholder answers now, calibrated with designers in week 4 |
-| `run-eval.md` | how the harness is invoked (spec now; implementation Wave 3D) |
-| `golden/g1-spectrums.json` | *(Wave 3D)* G1 spectrum golden set — 150 products × 2–3 designer scores |
-| `golden/g2-neighborhoods.json` | *(Wave 3D)* G2 neighborhood set — 30 seeds × "closest 5 of 20" picks |
+| `personas.json` | the 4 fixed quiz→rec personas (§14.3) + per-persona `eval` knobs (category probe) |
+| `run-eval.md` | the frozen invocation surface |
+| `run-eval.sh` / `run-eval.ts` | the harness (bash dispatcher → deno implementation) |
+| `golden/g1-spectrums.template.csv` | labeling sheet for the G1 sprint (see below) |
+| `golden/g2-neighborhoods.template.csv` | labeling sheet for the G2 sprint (see below) |
+| `golden/g1-spectrums.json` | *(week-4 output)* G1 spectrum golden set — 150 products × 2–3 designer scores |
+| `golden/g2-neighborhoods.json` | *(week-4 output)* G2 neighborhood set — 30 seeds × "closest 5 of 20" picks |
+| `out/` | per-run reports (gitignored) |
+
+## The designer labeling sprint (week 4) — how to produce the golden sets
+
+**G1 (spectrums).** Duplicate `golden/g1-spectrums.template.csv` per designer
+(or share one sheet with a `designer` column, as shipped). 150 products — a
+superset of the calibration anchors — each scored INDEPENDENTLY by 2–3
+designers on the six spectrums in [-1, +1], plus primary/secondary archetype
+names from the `styles` taxonomy. No conferring; disagreement is signal
+(Krippendorff's α is measured before the model is). Convert to
+`golden/g1-spectrums.json` as an array of
+`{product_id, designer, scores: {warmth, …}, archetype_primary, archetype_secondary}`.
+
+**G2 (neighborhoods).** For each of 30 seed products, the sheet lists 20
+candidates; each designer marks EXACTLY 5 as `is_closest_5=1` ("closest in
+feel", not same category). Convert to `golden/g2-neighborhoods.json` as
+`[{seed_product_id, candidates: [{product_id, is_closest_5}]}]` (one entry per
+seed per designer, or majority-merged — note which in the PR).
+
+CSV→JSON conversion is deliberately manual/scripted-at-sprint-time: the person
+converting must eyeball the labels once. The harness refuses to run G1/G2
+without these files — it never synthesizes ground truth.
 
 ## The suites (design §14)
 

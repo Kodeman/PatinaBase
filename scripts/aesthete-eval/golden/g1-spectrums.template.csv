@@ -1,0 +1,2 @@
+product_id,product_name,designer,warmth,complexity,formality,timelessness,boldness,craftsmanship,archetype_primary,archetype_secondary,notes
+a0000000-0000-0000-0000-000000000001,Heirloom Oak Dining Table,leah,0.7,-0.2,0.1,0.8,-0.1,0.9,Warm Modern,Japandi,EXAMPLE ROW — delete before the sprint. One row per designer per product; scores in [-1..1].

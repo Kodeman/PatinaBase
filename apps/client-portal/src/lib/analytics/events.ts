@@ -197,6 +197,34 @@ export const helpEvents = {
   search: helpSearch,
 } as const;
 
+// ---------------------------------------------------------------------------
+// aestheteQuizEvents — the §12.4 quiz funnel (Aesthete Engine, Wave 3D).
+// Event names are the design-doc vocabulary verbatim (quiz_started /
+// question_answered / quiz_completed / matches_viewed / match_saved) so
+// dashboards aggregate across portals + the marketing site. Wire-up note:
+// packages/aesthete-quiz/README.md ("Analytics"). Never put quiz free-text or
+// PII in properties (product law).
+// ---------------------------------------------------------------------------
+
+export const aestheteQuizEvents = {
+  /** Pass-through tap for useStyleQuiz({ onEvent }) — see the package README. */
+  fromQuizHook: (e: { name: string; properties: Record<string, unknown> }) =>
+    track(e.name, { ...e.properties, platform: 'client' }),
+  matchesViewed: (p: { sessionKey: string | null; resultCount: number }) =>
+    track('matches_viewed', {
+      session_key: p.sessionKey,
+      result_count: p.resultCount,
+      platform: 'client',
+    }),
+  matchSaved: (p: { sessionKey: string | null; productId: string; isExploration?: boolean }) =>
+    track('match_saved', {
+      session_key: p.sessionKey,
+      product_id: p.productId,
+      is_exploration: p.isExploration ?? false,
+      platform: 'client',
+    }),
+};
+
 export const proposalClientEvents = {
   viewedByClient: (p: { proposalId: string }) =>
     track('proposal_viewed_by_client', { proposal_id: p.proposalId, platform: 'client' }),

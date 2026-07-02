@@ -30,9 +30,35 @@ import { getOrCreateSessionKey } from '../core/session-key';
 import { submitStyleQuiz } from '../core/wire-client';
 import { useQuizConfig } from './provider';
 
+/**
+ * The §12.4 client-side quiz funnel vocabulary. The hook emits the first
+ * three; `matches_viewed` / `match_saved` belong to the results surface the
+ * portal renders AFTER the quiz — fire them through the same capture fn when
+ * the match grid mounts / a card is saved (names must match exactly so
+ * PostHog dashboards aggregate across surfaces).
+ */
+export type AestheteQuizEventName =
+  | 'quiz_started'
+  | 'question_answered'
+  | 'quiz_completed'
+  | 'matches_viewed'
+  | 'match_saved';
+
+export interface AestheteQuizEvent {
+  name: AestheteQuizEventName;
+  properties: Record<string, unknown>;
+}
+
 export interface UseStyleQuizOptions {
   /** Called once on a successful submit with the full profile. */
   onComplete?: (profile: StyleQuizProfile) => void;
+  /**
+   * Optional analytics tap (§12.4 quiz funnel). The package deliberately has
+   * NO posthog dependency — portals pass their own capture fn, e.g.
+   * `onEvent: (e) => posthog.capture(e.name, e.properties)`. Errors thrown by
+   * the callback are swallowed: analytics must never break the quiz.
+   */
+  onEvent?: (event: AestheteQuizEvent) => void;
 }
 
 export interface UseStyleQuizResult {
@@ -65,6 +91,22 @@ export function useStyleQuiz(options: UseStyleQuizOptions = {}): UseStyleQuizRes
   const [sessionKey, setSessionKey] = useState<string | null>(null);
   const onCompleteRef = useRef(options.onComplete);
   onCompleteRef.current = options.onComplete;
+  const onEventRef = useRef(options.onEvent);
+  onEventRef.current = options.onEvent;
+
+  // Analytics tap (§12.4) — best-effort by contract; a throwing capture fn
+  // must never break the quiz.
+  const emit = useCallback((name: AestheteQuizEventName, properties: Record<string, unknown>) => {
+    try {
+      onEventRef.current?.({ name, properties: { source: config.source ?? 'web', ...properties } });
+    } catch {
+      /* analytics must never break the quiz */
+    }
+  }, [config.source]);
+
+  // Submit/next read live state via a ref so their identities stay stable.
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // Resolve the persisted session key client-side only (SSR-safe), and start
   // the first question's dwell clock once mounted.
@@ -76,7 +118,9 @@ export function useStyleQuiz(options: UseStyleQuizOptions = {}): UseStyleQuizRes
     if (!startedRef.current) {
       startedRef.current = true;
       dispatch({ type: 'RESET', at: Date.now() });
+      emit('quiz_started', { total_steps: QUIZ_QUESTIONS.length });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const select = useCallback((selection: QuizSelection) => {
@@ -87,17 +131,28 @@ export function useStyleQuiz(options: UseStyleQuizOptions = {}): UseStyleQuizRes
     dispatch({ type: 'TOGGLE_OPTION', question: 'lifestyle', option });
   }, []);
 
-  const next = useCallback(() => dispatch({ type: 'NEXT', at: Date.now() }), []);
+  const next = useCallback(() => {
+    const current = stateRef.current;
+    // Mirror the reducer's NEXT guard: emit only when the step will advance.
+    if (current.status !== 'submitting' && !selectIsLastQuestion(current) && selectCanAdvance(current)) {
+      emit('question_answered', {
+        question: selectCurrentQuestion(current).key,
+        step: current.step + 1,
+      });
+    }
+    dispatch({ type: 'NEXT', at: Date.now() });
+  }, [emit]);
   const back = useCallback(() => dispatch({ type: 'BACK', at: Date.now() }), []);
   const reset = useCallback(() => dispatch({ type: 'RESET', at: Date.now() }), []);
-
-  // Submit reads live state via a ref so its identity stays stable.
-  const stateRef = useRef(state);
-  stateRef.current = state;
 
   const submit = useCallback(async () => {
     const current = stateRef.current;
     if (current.status === 'submitting' || !selectIsComplete(current)) return;
+    // The final question is committed by submit, not next() (§12.4 funnel).
+    emit('question_answered', {
+      question: selectCurrentQuestion(current).key,
+      step: current.step + 1,
+    });
     dispatch({ type: 'SUBMIT_START', at: Date.now() });
     try {
       const profile = await submitStyleQuiz({
@@ -112,6 +167,13 @@ export function useStyleQuiz(options: UseStyleQuizOptions = {}): UseStyleQuizRes
         attribution: config.attribution,
       });
       dispatch({ type: 'SUBMIT_SUCCESS', result: profile });
+      emit('quiz_completed', {
+        session_key: profile.session_key,
+        profile_version: profile.version,
+        archetype_primary: profile.archetype?.primary ?? null,
+        budget_label: profile.budget?.label ?? null,
+        catalyst: profile.catalyst,
+      });
       onCompleteRef.current?.(profile);
     } catch (cause) {
       const error =
@@ -120,7 +182,7 @@ export function useStyleQuiz(options: UseStyleQuizOptions = {}): UseStyleQuizRes
           : new AestheteQuizError('network', cause instanceof Error ? cause.message : String(cause));
       dispatch({ type: 'SUBMIT_ERROR', error });
     }
-  }, [config, sessionKey]);
+  }, [config, sessionKey, emit]);
 
   return useMemo(
     () => ({

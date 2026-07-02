@@ -1,6 +1,6 @@
 {
-  "$comment": "4 fixed quiz->rec personas per design Sec.14.3. Answer option keys are the documented Sec.7.1/Sec.7.2 vocabulary; catalyst vocab per 00243 loadings seed: new_home | moving | milestone | refresh | just_looking. 'expected' fields are directional placeholders until the week-4 designer calibration.",
-  "version": "0.1-skeleton",
+  "$comment": "4 fixed quiz->rec personas per design Sec.14.3. Answer option keys are the documented Sec.7.1/Sec.7.2 vocabulary; catalyst vocab per 00243 loadings seed: new_home | moving | milestone | refresh | just_looking. 'expected' fields are directional placeholders until the week-4 designer calibration. 'eval' blocks are Wave-3D harness knobs: category_probe drives the zero-category-errors bar (a second, category-constrained get_aesthete_matches call whose every card must match).",
+  "version": "0.2-harness",
   "personas": [
     {
       "name": "The Hendersons",
@@ -33,6 +33,9 @@
           "craftsmanship": "+"
         },
         "notes": "Kids/pets durability is a near-hard filter (Q2 family); patina affinity positive via weathered_oak (+0.4)."
+      },
+      "eval": {
+        "category_probe": "table"
       }
     },
     {
@@ -65,6 +68,9 @@
           "boldness": "+"
         },
         "notes": "Null budget range must NOT become a price filter; metal affinity ~0.9."
+      },
+      "eval": {
+        "category_probe": "lighting"
       }
     },
     {
@@ -94,6 +100,9 @@
           "formality": "+"
         },
         "notes": "Zero budget violations is the hard bar here; aged_leather carries patina affinity (+0.5)."
+      },
+      "eval": {
+        "category_probe": "chair"
       }
     },
     {
@@ -126,6 +135,9 @@
           "craftsmanship": "+"
         },
         "notes": "The '>=1 wouldn't-have-thought-of-it' exploration bar is most testable on this persona."
+      },
+      "eval": {
+        "category_probe": "decor"
       }
     }
   ]

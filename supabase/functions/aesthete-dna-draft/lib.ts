@@ -756,6 +756,9 @@ export interface PassSummary {
   usd: number;
   reason?: string;
   failed?: number;
+  /** Present on worked passes (claimed > 0) — §12.4 dna_draft_done carries tokens+usd. */
+  input_tokens?: number;
+  output_tokens?: number;
 }
 
 export function utcDay(date: Date): string {
@@ -946,6 +949,11 @@ export async function runDnaDraftPass(deps: PassDeps): Promise<PassSummary> {
     parked: false,
     usd: delta.usd,
     ...(counters.failed > 0 ? { failed: counters.failed } : {}),
+    // tokens ride only on worked passes so the parked-pass summaries (and
+    // their exact-shape tests) stay byte-stable (§12.4 dna_draft_done).
+    ...(jobs.length > 0
+      ? { input_tokens: delta.input_tokens, output_tokens: delta.output_tokens }
+      : {}),
   };
   log('pass_complete', { ...summary });
   return summary;
