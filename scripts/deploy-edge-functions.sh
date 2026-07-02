@@ -19,6 +19,7 @@ JWT_PROTECTED=(
   aesthete-embed-worker
   aesthete-dna-draft
   aesthete-ask
+  aesthete-nightly
   notification-dispatch
   campaign-dispatch
   campaign-scheduler
