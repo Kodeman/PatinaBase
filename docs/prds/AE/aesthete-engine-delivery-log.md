@@ -5,6 +5,10 @@ One entry per wave barrier: what merged, gate results, decisions/deviations, fla
 
 ---
 
+## 2026-07-02 — PROGRAM BUILD-COMPLETE · HELD AT MAIN (Kody's call)
+
+Human deploy gate: **Kody chose HOLD AT MAIN.** The full engine is on main, all gates green; prod deploy is deferred to Kody on the LAN using `aesthete-engine-runbook.md`. No prod mutation performed. Program build phase closed: Waves 0–5 done, migrations 00239–00251, 5 edge fns, the inference worker, the quiz package, both portals wired, eval harness + guardrail audits live. To deploy later: follow the runbook (migrations 00230–00250 apply the 21-migration prod gap; set INFERENCE_TOKEN + fix the ANTHROPIC_API_KEY/POSTHOG_KEY env names; stand up the Coolify worker; smoke anon quiz→matches). To wire why-phrase variety into served output: the documented 3-line `_ae_pick_why_phrase` swap in a reviewed match-RPC revision.
+
 ## 2026-07-02 — Wave 5 build complete → AWAITING HUMAN DEPLOY GATE
 
 **Merged 5A** (runbook + hardening) + **5B report on disk**. Migrations now **00239–00251** (5A added 00251 why-phrase breadth). Full gate green on integrated + seeded main: **db 12 suites**, edge 6, worker, **ts 26/26** (after `pnpm install` — SpectrumValues move added @patina/types as a packages/supabase dep), walk. This is the last build wave; **nothing deploys without Kody's go.**
