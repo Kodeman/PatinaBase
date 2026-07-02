@@ -183,7 +183,7 @@ export function createMultiMethodHandler(options: {
     if (handler) {
       // Compose middleware with handler
       const composedHandler = middleware.length > 0
-        ? compose(...middleware, handler)
+        ? compose(...middleware, () => handler)
         : handler;
 
       result[method] = createRouteHandler(composedHandler, {
