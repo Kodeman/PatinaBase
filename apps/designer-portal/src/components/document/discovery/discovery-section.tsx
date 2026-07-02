@@ -45,6 +45,7 @@ import {
   type DiscoveryDraft,
 } from './editors';
 import { DiscoveryCallSheet } from './discovery-call-sheet';
+import { ScanViewerSheet } from '../overlays/scan-viewer-sheet';
 
 const EMPTY_DRAFT: DiscoveryDraft = {
   project_type: null,
@@ -142,6 +143,8 @@ export function DiscoverySection({
   // R83 (F2, walk 2026-07): a failed Begin-the-Direction explains itself in a
   // quiet inline band AT the act — never a toast.
   const [beginError, setBeginError] = useState<string | null>(null);
+  // R90 — open the attached room scan in the interactive 3D sheet.
+  const [scanSheetOpen, setScanSheetOpen] = useState(false);
   const hydrated = useRef(false);
 
   // Debounced, SERIALIZED self-persist (no Save button) — F3/F4 (walk 2026-07).
@@ -383,6 +386,16 @@ export function DiscoverySection({
         >
           ＋ Attach the room scan
         </button>
+        {/* R90 — once a scan is attached, open it in the interactive 3D sheet. */}
+        {draft.room_scan_id && (
+          <button
+            type="button"
+            onClick={() => setScanSheetOpen(true)}
+            className="rounded-[3px] border border-[var(--color-clay)] px-3 py-1.5 font-mono text-[11px] text-[var(--color-clay)] transition-colors hover:bg-[rgba(196,165,123,0.08)]"
+          >
+            View the scan →
+          </button>
+        )}
         <button
           type="button"
           onClick={() => openBlock('style')}
@@ -437,6 +450,14 @@ export function DiscoverySection({
         }}
         designerClientId={engagementId}
       />
+
+      {/* R90 — the attached room scan, opened interactively. */}
+      {scanSheetOpen && draft.room_scan_id && (
+        <ScanViewerSheet
+          scanId={draft.room_scan_id}
+          onClose={() => setScanSheetOpen(false)}
+        />
+      )}
     </section>
   );
 }
