@@ -19,7 +19,7 @@ pnpm db:studio     # Open Supabase Studio
 
 use-auth, use-products, use-projects, use-vendors, use-clients,
 use-earnings, use-leads, use-proposals, use-room-scans, use-settings,
-use-styles, use-teaching, use-similarity, use-embeddings
+use-styles, use-teaching, use-similarity
 
 ## Patterns
 

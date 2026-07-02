@@ -1,3 +1,0 @@
-"""
-Observability setup for OpenTelemetry.
-"""

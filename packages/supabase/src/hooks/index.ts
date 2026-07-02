@@ -160,12 +160,6 @@ export {
   useProductsForStyle,
 } from './use-similarity';
 export {
-  useGenerateProductEmbedding,
-  useBatchGenerateEmbeddings,
-  useCheckOllamaHealth,
-  useGenerateTextEmbedding,
-} from './use-embeddings';
-export {
   useVendors,
   useVendor,
   useVendorProducts,
