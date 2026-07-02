@@ -512,10 +512,15 @@ export function useCreatePurchaseOrder() {
  *
  * Invalidates: ['purchase-orders'], ['purchase-order', id],
  *              ['procurement-items'].
+ *
+ * Document-surface callers (R83 error grammar) pass `{ errorSurface:
+ * 'inline' }` so the designer portal's global mutation toast stays quiet —
+ * see useSendInvoice for the precedent.
  */
-export function useLogPOAcknowledgment() {
+export function useLogPOAcknowledgment(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (input: LogPOAcknowledgmentInput): Promise<PurchaseOrder> => {
       const supabase = getSupabase() as any;
 
@@ -615,10 +620,15 @@ export function useLogPaymentPaid() {
  * Invalidates: ['purchase-orders'], ['purchase-order', poId],
  *              ['delivery-calendar'] (so the unified calendar view picks
  *              up the new ETA on its next render).
+ *
+ * Document-surface callers (R83 error grammar) pass `{ errorSurface:
+ * 'inline' }` so the designer portal's global mutation toast stays quiet —
+ * see useSendInvoice for the precedent.
  */
-export function useUpdatePurchaseOrderETA() {
+export function useUpdatePurchaseOrderETA(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       purchaseOrderId,
       newEta,
@@ -1498,10 +1508,15 @@ export function useCreateReceivingInspection() {
  *
  * Invalidates: ['damage-claims'], ['receiving-inspections'],
  *              ['today-procurement-counts']
+ *
+ * Document-surface callers (R83 error grammar) pass `{ errorSurface:
+ * 'inline' }` so the designer portal's global mutation toast stays quiet —
+ * see useSendInvoice for the precedent.
  */
-export function useUpdateDamageClaim() {
+export function useUpdateDamageClaim(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (input: UpdateDamageClaimInput): Promise<DamageClaim> => {
       const supabase = getSupabase() as any;
 
@@ -1856,10 +1871,15 @@ function poSendUrl(): string {
  * Invalidates: ['purchase-orders'], ['purchase-order', id],
  *              ['procurement-items'] (the By Status rows surface
  *              po_number / sent_at off the joined PO).
+ *
+ * Document-surface callers (R83 error grammar) pass `{ errorSurface:
+ * 'inline' }` so the designer portal's global mutation toast stays quiet —
+ * see useSendInvoice for the precedent.
  */
-export function useSendPurchaseOrder() {
+export function useSendPurchaseOrder(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (
       input: SendPurchaseOrderInput
     ): Promise<SendPurchaseOrderResult> => {

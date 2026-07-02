@@ -14,8 +14,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSendPurchaseOrder } from '@patina/supabase';
+import { useLogPOAcknowledgment, useSendPurchaseOrder } from '@patina/supabase';
 import { poSendErrorMessage } from '@/components/portal/procurement/po-send-actions';
+import { procurementEvents } from '@/lib/analytics/procurement-events';
+import { fmtDay } from '@/lib/document/format';
 
 export interface PoPreviewProps {
   open: boolean;
@@ -27,6 +29,139 @@ export interface PoPreviewProps {
   /** 'resend' renders the muted re-send wording for already-sent POs. */
   mode?: 'send' | 'resend';
   onSent?: (sentAtIso: string) => void;
+  /**
+   * PRC-07 (R84): ack context for the resend preview. When the PO has been
+   * sent but never acknowledged, the paper offers the log-acknowledgment act
+   * (phoned/emailed acks stamp acknowledged_at). All optional — the unfold's
+   * drafted-PO mount omits them and no ack affordance renders.
+   */
+  sentAt?: string | null;
+  acknowledgedAt?: string | null;
+  vendorPoNumber?: string | null;
+  confirmedEta?: string | null;
+}
+
+/**
+ * PRC-07 (R84) — the manual vendor-acknowledgment act, in Document grammar.
+ * Ports the LogAcknowledgmentPopover's logic (log_po_acknowledgment RPC,
+ * 00186/00190: ack date stamped server-side NOW() idempotently; PO # and ETA
+ * coalesce — blank keeps what's on file) with quiet inline confirm (R51) and
+ * the R83 inline error band. One form, two homes: the resend preview's paper
+ * and the Orders ledger's charcoal rows — `tone` picks the ink.
+ */
+export function LogAckInline({
+  purchaseOrderId,
+  vendorPoNumber,
+  confirmedEta,
+  sentAt,
+  tone = 'paper',
+  onLogged,
+}: {
+  purchaseOrderId: string;
+  vendorPoNumber?: string | null;
+  confirmedEta?: string | null;
+  /** ISO sent_at when known — keeps the days-to-ack metric honest. */
+  sentAt?: string | null;
+  tone?: 'paper' | 'book';
+  onLogged?: () => void;
+}) {
+  const qc = useQueryClient();
+  const logAck = useLogPOAcknowledgment({ errorSurface: 'inline' });
+  const [poNo, setPoNo] = useState(vendorPoNumber ?? '');
+  const [eta, setEta] = useState(confirmedEta ? confirmedEta.slice(0, 10) : '');
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const dark = tone === 'book';
+  const label = dark
+    ? 'font-mono text-[8px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)]'
+    : 'font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]';
+  const input = dark
+    ? 'rounded-[3px] border border-[rgba(250,247,242,0.2)] bg-transparent px-2 py-1 font-mono text-[10.5px] text-[var(--color-off-white)] outline-none [color-scheme:dark]'
+    : 'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1 font-mono text-[10.5px] text-[var(--color-charcoal)] outline-none';
+
+  const confirm = async () => {
+    if (logAck.isPending) return;
+    setError(null);
+    try {
+      await logAck.mutateAsync({
+        purchaseOrderId,
+        // undefined preserves the stored value (the RPC coalesces NULL inputs).
+        vendorPoNumber: poNo.trim() || undefined,
+        confirmedEta: eta || undefined,
+      });
+      procurementEvents.poAcknowledgmentLogged({
+        days_since_sent: sentAt
+          ? Math.max(0, Math.floor((Date.now() - new Date(sentAt).getTime()) / 86_400_000))
+          : null,
+      });
+      // One act, many surfaces (§5): unfold PO cell, ledger row, Desk need.
+      void qc.invalidateQueries({ queryKey: ['project-ffe-items'] });
+      void qc.invalidateQueries({ queryKey: ['document-state'] });
+      setDone(true);
+      onLogged?.();
+    } catch (e) {
+      setError((e as Error).message || 'The acknowledgment could not be logged.');
+    }
+  };
+
+  if (done) {
+    // R51: the quiet confirmation — a line of text at the act site.
+    return (
+      <p
+        className={`text-[10.5px] ${dark ? 'text-[rgba(250,247,242,0.7)]' : 'text-[var(--color-charcoal)]'}`}
+      >
+        Acknowledged — logged {fmtDay(new Date().toISOString())}.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <p className={`mb-1.5 text-[10px] ${dark ? 'text-[rgba(250,247,242,0.45)]' : 'text-[var(--text-muted)]'}`}>
+        Stamped as of today — PO # and ETA are optional, blank keeps what&rsquo;s on file.
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-col gap-0.5">
+          <span className={label}>Vendor PO #</span>
+          <input
+            type="text"
+            value={poNo}
+            onChange={(e) => setPoNo(e.target.value)}
+            placeholder="NA-2026-…"
+            className={`w-[130px] ${input}`}
+          />
+        </label>
+        <label className="flex flex-col gap-0.5">
+          <span className={label}>Confirmed ETA</span>
+          <input
+            type="date"
+            value={eta}
+            onChange={(e) => setEta(e.target.value)}
+            aria-label="Confirmed ETA"
+            className={input}
+          />
+        </label>
+        <button
+          type="button"
+          disabled={logAck.isPending}
+          onClick={() => void confirm()}
+          className="rounded-[4px] border border-[var(--color-clay)] px-2.5 py-1 text-[10.5px] font-medium text-[var(--color-clay)] hover:bg-[rgba(196,165,123,0.1)] disabled:opacity-50"
+        >
+          {logAck.isPending ? 'Logging…' : 'Log acknowledgment'}
+        </button>
+      </div>
+      {error && (
+        // R83: the failure renders as a quiet inline band at the act site.
+        <p role="alert" className="mt-1.5 text-[10.5px] text-[#C4836F]">
+          {error}{' '}
+          <button type="button" onClick={() => void confirm()} className="underline hover:opacity-80">
+            try again
+          </button>
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function PoPreview({
@@ -37,14 +172,21 @@ export function PoPreview({
   vendorEmailHint,
   mode = 'send',
   onSent,
+  sentAt,
+  acknowledgedAt,
+  vendorPoNumber,
+  confirmedEta,
 }: PoPreviewProps) {
   const qc = useQueryClient();
-  const sendPo = useSendPurchaseOrder();
+  // R83: failures render inline on this paper — no global toast (D2).
+  const sendPo = useSendPurchaseOrder({ errorSurface: 'inline' });
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [poNumber, setPoNumber] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  // PRC-27 (R84): the manual sent-stamp for phone / fax / trade-portal orders.
+  const [marking, setMarking] = useState(false);
   const previewedFor = useRef<string | null>(null);
 
   // Render + store the PDF the moment the paper lifts (mode 'preview'
@@ -73,15 +215,19 @@ export function PoPreview({
 
   if (!open) return null;
 
-  const send = async () => {
-    if (sending) return;
-    setSending(true);
+  // One runner, two stamps (PRC-27): 'send' emails the vendor; 'mark_sent'
+  // stamps sent_at without emailing — the phone / fax / trade-portal path
+  // ported from po-send-actions. Both clear the Desk's po_unsent nag through
+  // the same invalidations (the derivation reads document-state).
+  const stamp = async (sendMode: 'send' | 'mark_sent') => {
+    if (sending || marking) return;
+    (sendMode === 'send' ? setSending : setMarking)(true);
     setError(null);
     try {
       const r = await sendPo.mutateAsync({
         purchaseOrderId,
-        mode: 'send',
-        recipientEmail: vendorEmailHint ?? undefined,
+        mode: sendMode,
+        recipientEmail: sendMode === 'send' ? (vendorEmailHint ?? undefined) : undefined,
       });
       const stamped = new Date().toISOString();
       // One act, many surfaces (§5): PO cell, Orders row, Desk, margin.
@@ -95,9 +241,10 @@ export function PoPreview({
     } catch (e) {
       setError(poSendErrorMessage((e as Error).message));
     } finally {
-      setSending(false);
+      (sendMode === 'send' ? setSending : setMarking)(false);
     }
   };
+  const send = () => stamp('send');
 
   return (
     <div role="dialog" aria-label="Purchase order preview" className="fixed inset-0 z-[60]">
@@ -139,6 +286,23 @@ export function PoPreview({
           )}
         </div>
 
+        {/* PRC-07 (R84): a sent-but-unacknowledged PO offers the ack act on
+            the paper itself — the vendor phoned or emailed; log it here. */}
+        {mode === 'resend' && sentAt && !acknowledgedAt && (
+          <div className="border-t border-[var(--color-pearl)] px-5 py-2.5">
+            <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--color-clay)]">
+              Vendor confirmed by phone or email?
+            </p>
+            <LogAckInline
+              purchaseOrderId={purchaseOrderId}
+              vendorPoNumber={vendorPoNumber}
+              confirmedEta={confirmedEta}
+              sentAt={sentAt}
+              tone="paper"
+            />
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-2.5 border-t border-[var(--color-pearl)] px-5 py-3">
           {error && signedUrl && (
             <p className="text-[11px] text-[#C4836F]">{error}</p>
@@ -146,12 +310,26 @@ export function PoPreview({
           {warning && !error && (
             <p className="text-[11px] text-[var(--text-muted)]">{warning}</p>
           )}
+          {/* PRC-27: the manual path — always available on an unsent PO
+              (deliberately not gated on the PDF or a vendor email: an
+              out-of-sync PO's fix is exactly "mark it sent manually"). */}
+          {mode === 'send' && (
+            <button
+              type="button"
+              disabled={sending || marking}
+              onClick={() => void stamp('mark_sent')}
+              title="For orders placed through a vendor portal, phone, or showroom — stamps the sent date without emailing."
+              className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)] hover:text-[var(--color-clay)] disabled:opacity-50"
+            >
+              {marking ? 'Marking…' : 'ordered by phone / portal — mark as sent'}
+            </button>
+          )}
           <span className="ml-auto text-[11px] text-[var(--text-muted)]">
             {vendorEmailHint ? `to ${vendorEmailHint}` : 'no vendor email on file'}
           </span>
           <button
             type="button"
-            disabled={!signedUrl || !vendorEmailHint || sending}
+            disabled={!signedUrl || !vendorEmailHint || sending || marking}
             onClick={() => void send()}
             className="rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
