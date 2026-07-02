@@ -2710,3 +2710,31 @@ Full notification-settings depth (RMS-07), sessions & sign-out-others (RMS-09), 
 ---
 
 *Entries: D1–D14 · O1–O7 (resolved) · I1–I43 · R1–R70 (+R68.1) · R72–R91 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = R91*
+
+---
+
+## The Document — Track 8 · money completion — 2026-07-01
+
+### I44 · The Accounts book learns to write (R74–R77 built)
+
+Branch `the-document/track8-accounts-writes`, four slices, ZERO migrations (00177/00178/00187/00204 carried everything).
+
+**R74a — the Invoice folio.** A paper sheet above the charcoal ledgers (`PaperFolioSheet`: z-60, capture-phase Esc so the Accounts book beneath survives the keypress, body portal). One invoice: number + paper-ink stamp, client · project doorway, typed lines (milestone/time/ffe/adhoc), totals, payment history, and the acts row — Issue & send · Record payment · Resend · Void · Print — the old Billing detail's logic 1:1 over `useInvoice/useIssueInvoice/useSendInvoice/useRecordPayment/useVoidInvoice`, all `errorSurface:'inline'` (R83; the options param was added to the four hooks that lacked it). Print = the folio itself (`@media print` hides every body sibling of the portal). Opens from: Ledger rows + Receivables rows (folio-first, `document ↗` doorway kept), the Money margin's InvoiceBody, and `openInvoiceFolio()` for ⌘K.
+
+**R74b — the composer.** An anti-wizard sheet: Milestones (unbilled+unclaimed) · Unbilled time (00177 view, resolved rates) · FF&E (00187 partition — covered/unpriced fall out with a notice) · Ad-hoc, tax/terms/memo, running `computeInvoiceTotals`, one "Draft the invoice →" act → the folio opens (review-then-send). Time claim with compensating-delete on conflict. Prefill contract: `openInvoiceComposer({ projectId?, initialFfeItemIds?, initialTimeEntryIds? })`; context-free opens a document picker. Entry points: Ledger head, the Account band acts row. Pure line assembly in `lib/document/invoice-composer.ts` (11 contract tests).
+
+**R75.** "Export week → Accounts" is alive: the shown week's unbilled entries arrive ticked; one document → pre-scoped, several → the composer asks and ticks that document's share.
+
+**R76.** FF&E section head: "Bill N uninvoiced →" (bill-all-uninvoiced prefill — the composer IS the multi-select surface); per-line coverage notes invoiced·N°/paid/unpriced off the 00187 bridge. `line-unfold` untouched (Track 11-M).
+
+**R77.** Hours ledger: week paging, all-time unbilled balance + "bill it →", per-document lens via optional `initialContext` prop, delete-with-confirm on unbilled entries (billed immutable), rows carry resolved money (BIL-08), R83 inline notes.
+
+**Verified.** designer-portal tsc: zero non-`packages/email` errors; packages/supabase tsc clean; 306 document jest (incl. client-mirror + dissolve-grammar contracts) + 20 use-invoices vitest green; D4 shadow grep green.
+
+**Provisional / owed (post-merge wiring):**
+- ⌘K "draw an invoice" row → `openInvoiceComposer()` (command-bar not touched this wave).
+- Studio drawer: pass `initialContext={sheetContext}` to `<HoursLedger />` (one line) so the Account band's "Hours · this project ↗" lands pre-filtered; the link ships now and opens unfiltered until then.
+- The per-line Bill act in the line unfold (Track 11-M's surface).
+- The folio's own `document ↗` doorway navigates but cannot close an Accounts sheet open beneath (no close-ledger event exists); the rows' doorways still close properly. Minor; revisit if it reads poorly.
+- R74b's third entry point ("the per-project money margin") deferred — the margin composer lives in margin-rail (not this wave's ownership); the Account band + InvoiceBody cover in-document money authoring.
+- R77's route retirement (`/portal/time`, `/portal/projects/[id]/time`) rides the dissolve, not this track (D7 — old zones keep functioning).
