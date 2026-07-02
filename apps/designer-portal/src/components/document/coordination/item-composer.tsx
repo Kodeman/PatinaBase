@@ -44,6 +44,7 @@ import {
 } from '@patina/supabase';
 import type { SectionTask } from '@/hooks/use-section-work';
 import { deriveBlocksKind } from '@/lib/document/coordination-derivation';
+import { canDeleteDecision } from '@/lib/document/decision-edges';
 import {
   ITEM_TYPE_ORDER,
   itemTypeToken,
@@ -181,6 +182,11 @@ export function ItemComposer({
   const materializeDrafts = useMaterializeDraftOptions();
 
   const isEdit = Boolean(editItem);
+  // R87 — delete stays draft-only. A published item (pending/expired/responded)
+  // is never deleted; it's reopened or resolved so the R56 audit trail survives.
+  // The composer only ever re-opens on drafts today (both call sites filter to
+  // status='draft'); this guard makes that invariant local to the surface.
+  const canDelete = isEdit && canDeleteDecision(editItem?.status);
   // A two-tap inline confirm for the destructive delete (no modal — D1).
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -681,8 +687,8 @@ export function ItemComposer({
           Cancel
         </button>
 
-        {/* Delete (edit mode only) — a two-tap inline confirm, never a modal (D1). */}
-        {isEdit &&
+        {/* Delete (draft only, R87) — a two-tap inline confirm, never a modal (D1). */}
+        {canDelete &&
           (confirmingDelete ? (
             <span className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
               Delete draft?
