@@ -17,6 +17,7 @@ export function LibraryShelf({
   meta,
   actions,
   teachingIds,
+  validationIds,
   onDeep,
   onPromote,
   onNominate,
@@ -26,6 +27,8 @@ export function LibraryShelf({
   meta?: string;
   actions?: React.ReactNode;
   teachingIds: Set<string>;
+  /** Pieces in the validation queue (needs_validation) — get the validate lens. */
+  validationIds?: Set<string>;
   onDeep: (productId: string, name: string) => void;
   onPromote?: (productId: string) => void;
   onNominate?: (productId: string) => void;
@@ -92,6 +95,7 @@ export function LibraryShelf({
                 layer: it.layer,
               }}
               needsTeaching={teachingIds.has(it.id)}
+              needsValidation={validationIds?.has(it.id) ?? false}
               onDeep={onDeep}
               onPromote={onPromote}
               onNominate={onNominate}
