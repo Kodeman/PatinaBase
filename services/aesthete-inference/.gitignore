@@ -1,0 +1,9 @@
+# Model weights are baked into the Docker image (stage 1 of the Dockerfile) and
+# exported locally via `make export` — never committed.
+models/
+
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
