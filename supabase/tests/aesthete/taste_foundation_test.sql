@@ -41,6 +41,27 @@ BEGIN;
 
 -- ─── fixtures ──────────────────────────────────────────────────────────────
 
+-- (Wave 4C) Premise pin: this suite exercises first-judgment profile-shell
+-- creation and deterministic consensus/RLS math over the fixture designers.
+-- A live DB may already carry learned taste state for them (demo judgments,
+-- a nightly refit's profiles/snapshots/confidence rows). Clear the fixture
+-- designers' taste state INSIDE the transaction (rolled back) so the suite
+-- is exact on ANY baseline — bare reset, demo-seeded, or post-nightly.
+DELETE FROM taste_probe_queue
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM taste_judgments
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM taste_corrections
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM signature_biases
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM designer_style_confidence
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM designer_taste_snapshots
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+DELETE FROM designer_taste_profiles
+ WHERE designer_id IN ('a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004');
+
 -- Two catalog products for judgment rows.
 INSERT INTO products (id, name, source_url, captured_by, captured_at, layer, patina_managed)
 VALUES
@@ -116,6 +137,8 @@ DECLARE
   v_text text;
   v_id bigint;
   v_rule uuid;
+  v_house_rule uuid;
+  v_style uuid;
 BEGIN
   -- Case 0a: seeded dev accounts must exist (suite precondition).
   SELECT count(*) INTO v_count FROM auth.users
@@ -137,8 +160,10 @@ BEGIN
   SELECT count(*) INTO v_count FROM house_taste WHERE status = 'active';
   ASSERT v_count = 1,
     'FAIL 1a: exactly one active house_taste row expected, got ' || v_count;
+  -- (Wave 4C: was pinned to status=active — a later consensus activation
+  -- legitimately retires v1. The 00242 seed contract is the ROW, any status.)
   SELECT count(*) INTO v_count FROM house_taste
-   WHERE status = 'active' AND version = 1
+   WHERE version = 1
      AND computed_from->>'seed' = 'provisional'
      AND warmth = 0 AND complexity = 0 AND formality = 0
      AND timelessness = 0 AND boldness = 0 AND craftsmanship = 0
@@ -223,10 +248,15 @@ BEGIN
   END;
 
   -- Case 3h: confidence level enum + generated weight.
+  SELECT id INTO v_style FROM styles WHERE is_archetype
+   AND NOT EXISTS (SELECT 1 FROM designer_style_confidence c
+                    WHERE c.designer_id = u_designer AND c.style_id = styles.id)
+   ORDER BY name LIMIT 1;
+  ASSERT v_style IS NOT NULL, 'FAIL 3h0: no archetype free of confidence rows for the designer';
   INSERT INTO designer_style_confidence (designer_id, style_id, level)
-  SELECT u_designer, id, 'expert' FROM styles WHERE is_archetype LIMIT 1;
+  VALUES (u_designer, v_style, 'expert');
   SELECT count(*) INTO v_count FROM designer_style_confidence
-   WHERE designer_id = u_designer AND weight = 1.0;
+   WHERE designer_id = u_designer AND style_id = v_style AND weight = 1.0;
   ASSERT v_count = 1,
     'FAIL 3h1: level = expert should generate weight 1.0, got ' || v_count || ' matching rows';
   BEGIN
@@ -238,28 +268,42 @@ BEGIN
 
   -- Case 4a: the designer sees only their own profile/snapshots/judgments/biases.
   PERFORM pg_temp.assume_user(u_designer);
-  SELECT count(*) INTO v_count FROM designer_taste_profiles;
-  ASSERT v_count = 1,
-    'FAIL 4a1: designer should see exactly their own taste profile, got ' || v_count;
+  SELECT count(*) INTO v_count FROM designer_taste_profiles WHERE designer_id <> u_designer;
+  ASSERT v_count = 0,
+    'FAIL 4a1: designer must see NO foreign taste profiles, got ' || v_count;
   SELECT count(*) INTO v_count FROM designer_taste_profiles WHERE designer_id = u_designer;
   ASSERT v_count = 1,
     'FAIL 4a2: the visible profile should be the designer''s own, got ' || v_count;
-  SELECT count(*) INTO v_count FROM designer_taste_snapshots;
+  SELECT count(*) INTO v_count FROM designer_taste_snapshots WHERE designer_id <> u_designer;
+  ASSERT v_count = 0,
+    'FAIL 4a3a: designer must see NO foreign snapshots, got ' || v_count;
+  SELECT count(*) INTO v_count FROM designer_taste_snapshots WHERE designer_id = u_designer;
+  ASSERT v_count >= 1,
+    'FAIL 4a3b: designer should see their own snapshot, got ' || v_count;
+  SELECT count(*) INTO v_count FROM taste_judgments WHERE designer_id <> u_designer;
+  ASSERT v_count = 0,
+    'FAIL 4a4a: designer must see NO foreign judgments, got ' || v_count;
+  SELECT count(*) INTO v_count FROM taste_judgments
+   WHERE designer_id = u_designer AND product_a = p_a AND product_b = p_b;
   ASSERT v_count = 1,
-    'FAIL 4a3: designer should see exactly their own snapshot, got ' || v_count;
-  SELECT count(*) INTO v_count FROM taste_judgments;
+    'FAIL 4a4b: designer should see their own fixture judgment, got ' || v_count;
+  SELECT count(*) INTO v_count FROM signature_biases WHERE designer_id <> u_designer;
+  ASSERT v_count = 0,
+    'FAIL 4a5a: designer must see NO foreign biases, got ' || v_count;
+  SELECT count(*) INTO v_count FROM signature_biases
+   WHERE designer_id = u_designer AND name = 'Warm lean';
   ASSERT v_count = 1,
-    'FAIL 4a4: designer should see exactly their own judgment, got ' || v_count;
-  SELECT count(*) INTO v_count FROM signature_biases;
-  ASSERT v_count = 1,
-    'FAIL 4a5: designer should see exactly their own bias, got ' || v_count;
+    'FAIL 4a5b: designer should see their own fixture bias, got ' || v_count;
   PERFORM pg_temp.reset_role();
 
   -- Case 4b: the other designer sees only their own rows too.
   PERFORM pg_temp.assume_user(u_mgr);
-  SELECT count(*) INTO v_count FROM designer_taste_profiles;
+  SELECT count(*) INTO v_count FROM designer_taste_profiles WHERE designer_id <> u_mgr;
+  ASSERT v_count = 0,
+    'FAIL 4b1a: studio manager must see NO foreign taste profiles, got ' || v_count;
+  SELECT count(*) INTO v_count FROM designer_taste_profiles WHERE designer_id = u_mgr;
   ASSERT v_count = 1,
-    'FAIL 4b1: studio manager should see exactly their own taste profile, got ' || v_count;
+    'FAIL 4b1b: studio manager should see their own taste profile, got ' || v_count;
   SELECT count(*) INTO v_count FROM taste_judgments WHERE designer_id = u_designer;
   ASSERT v_count = 0,
     'FAIL 4b2: studio manager must NOT see the designer''s judgments, got ' || v_count;
@@ -278,12 +322,14 @@ BEGIN
   -- Case 4d: the lead (admin domain) sees all profiles + judgments and may
   -- read house_taste directly.
   PERFORM pg_temp.assume_user(u_lead);
-  SELECT count(*) INTO v_count FROM designer_taste_profiles;
+  SELECT count(*) INTO v_count FROM designer_taste_profiles
+   WHERE designer_id IN (u_designer, u_mgr);
   ASSERT v_count = 2,
-    'FAIL 4d1: lead should see both taste profiles, got ' || v_count;
-  SELECT count(*) INTO v_count FROM taste_judgments;
+    'FAIL 4d1: lead should see both fixture taste profiles, got ' || v_count;
+  SELECT count(*) INTO v_count FROM taste_judgments
+   WHERE product_a = p_a AND product_b = p_b;
   ASSERT v_count = 2,
-    'FAIL 4d2: lead (super_admin) should see both judgments, got ' || v_count;
+    'FAIL 4d2: lead (super_admin) should see both fixture judgments, got ' || v_count;
   SELECT count(*) INTO v_count FROM house_taste;
   ASSERT v_count >= 1,
     'FAIL 4d3: lead should read house_taste directly, got ' || v_count;
@@ -334,7 +380,9 @@ BEGIN
   -- Case 5a: judgments are append-only — the owner's UPDATE silently
   -- affects 0 rows (no UPDATE policy), the row is unchanged.
   SELECT id INTO v_id FROM taste_judgments
-   WHERE designer_id = u_designer ORDER BY id LIMIT 1;
+   WHERE designer_id = u_designer AND product_a = p_a AND product_b = p_b
+     AND choice = 'a'
+   ORDER BY id LIMIT 1;
   PERFORM pg_temp.assume_user(u_designer);
   UPDATE taste_judgments SET choice = 'both' WHERE id = v_id;
   PERFORM pg_temp.reset_role();
@@ -353,12 +401,13 @@ BEGIN
   -- Case 5c: corrections are append-only too.
   PERFORM pg_temp.assume_user(u_designer);
   INSERT INTO taste_corrections (designer_id, subject, direction)
-  VALUES (u_designer, 'match', '{"warmth": -0.3}');
+  VALUES (u_designer, 'match', '{"warmth": -0.3}')
+  RETURNING id INTO v_id;
   UPDATE taste_corrections SET subject = 'dna' WHERE designer_id = u_designer;
   DELETE FROM taste_corrections WHERE designer_id = u_designer;
   PERFORM pg_temp.reset_role();
   SELECT count(*) INTO v_count FROM taste_corrections
-   WHERE designer_id = u_designer AND subject = 'match';
+   WHERE id = v_id AND subject = 'match';
   ASSERT v_count = 1,
     'FAIL 5c: correction must survive owner UPDATE/DELETE unchanged, got ' || v_count;
 
@@ -411,11 +460,12 @@ BEGIN
   -- it, but not the designer's private rule.
   PERFORM pg_temp.assume_user(u_lead);
   INSERT INTO taste_rules (owner_scope, predicate, action)
-  VALUES ('house', '{"all":[{"attr":"patina_potential","gte":0.2}]}', 'boost');
+  VALUES ('house', '{"all":[{"attr":"patina_potential","gte":0.2}]}', 'boost')
+  RETURNING id INTO v_house_rule;
   PERFORM pg_temp.reset_role();
 
   PERFORM pg_temp.assume_user(u_client);
-  SELECT count(*) INTO v_count FROM taste_rules WHERE owner_scope = 'house';
+  SELECT count(*) INTO v_count FROM taste_rules WHERE id = v_house_rule;
   ASSERT v_count = 1,
     'FAIL 8b1: house rules should be visible to all authenticated, got ' || v_count;
   SELECT count(*) INTO v_count FROM taste_rules WHERE id = v_rule;

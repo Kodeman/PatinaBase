@@ -9,9 +9,12 @@
 //   1. In parallel:
 //        a. aesthete_search(ask) via the CALLER client — FTS candidates
 //           (00244 seam; SECURITY INVOKER ⇒ three-layer law transitively).
-//        b. embed the ask text through the inference worker (/embed/text,
+//        b. resolve the ask embedding: ask_embed_cache first (§12.3/00250 —
+//           sha1(model_version+ask) key, 7 d TTL, service-role table; cache
+//           errors are misses), else the inference worker (/embed/text,
 //           kind=query) under a HARD 1.5 s budget (ASK_EMBED_TIMEOUT_MS —
-//           the per-request timeout IS the circuit breaker, §12.1).
+//           the per-request timeout IS the circuit breaker, §12.1), storing
+//           the fresh vector back best-effort.
 //   2. Embed ok → aesthete_ask_knn(embedding) via the CALLER client (00247,
 //      SECURITY INVOKER twin of the seam) — vector candidates.
 //   3. Blend by Reciprocal Rank Fusion: score(p) = Σ_lists 1/(60 + pos).
@@ -41,6 +44,8 @@ import {
 
 /** Hard budget for embedding the ask text — past it, FTS-only (§12.1 rung 2). */
 export const ASK_EMBED_TIMEOUT_MS = 1500;
+/** Ask-embed cache TTL (§12.3: 7 d). Purge runs in aesthete_jobs_janitor (00250). */
+export const ASK_CACHE_TTL_DAYS = 7;
 /** Items returned to the surface by default (paper result-lines are few). */
 export const DEFAULT_ASK_LIMIT = 8;
 export const MAX_ASK_LIMIT = 24;
@@ -157,6 +162,8 @@ export interface AskEventInput {
   category: string | null;
   layer: string | null;
   limit: number;
+  /** True when the ask embed came from ask_embed_cache (§12.3/00250). */
+  cacheHit?: boolean;
 }
 
 /** One 00244 match_events row: source='engine_ask', latency + result count +
@@ -171,6 +178,7 @@ export function buildAskEvent(input: AskEventInput): Record<string, unknown> {
   };
   if (input.category) context.category = input.category;
   if (input.layer) context.layer = input.layer;
+  if (input.cacheHit) context.cache_hit = true;
 
   return {
     session_key: null, // no quiz session on the ask path
@@ -214,6 +222,112 @@ export interface AdminDb {
   };
 }
 
+// ─── Ask-embed cache (§12.3 via 00250's ask_embed_cache — NOT Redis) ─────────
+//
+// §12.3 wanted this cache in the shared Redis; 00250 documents the decision
+// to use an UNLOGGED postgres table instead (no Redis seam from the edge
+// runtime, cross-stack networking unproven, same semantics). Rows carry
+// sha1(model_version + ask) + the pgvector literal ONLY — the ask text is
+// never persisted (R31/R38 hold: a one-way hash is not the ask).
+//
+// Model-version bootstrapping: the key needs the worker's model_version,
+// which we only learn from a successful embed response. The factory tracks
+// the last seen version per warm isolate, and a COLD isolate bootstraps it
+// from the newest cache row (one tiny select, only when unknown — edge
+// isolates recycle aggressively, hot-reload dev mode spins one per request).
+// An empty table means no version is knowable → miss, exactly right. A
+// model-version bump changes every hash; stale-version rows age out on the
+// 7 d TTL. Bonus (documented, drilled): with a knowable version, repeated
+// asks stay on the vector rung even while the worker is down.
+
+/** Cache seam — injectable for tests. lookup returns the pgvector literal. */
+export interface AskEmbedCache {
+  lookup(ask: string): Promise<string | null>;
+  store(ask: string, vector: number[], modelVersion: string): Promise<void>;
+}
+
+/** Service-role slice for the cache table (supabase-js chain shapes: the
+ *  keyed read, the newest-row version bootstrap, and the upsert). */
+export interface CacheDb {
+  from(table: string): {
+    select(columns: string): {
+      eq(column: string, value: string): {
+        gt(column: string, value: string): {
+          maybeSingle(): PromiseLike<
+            { data: { embedding?: string } | null; error: { message: string } | null }
+          >;
+        };
+      };
+      order(column: string, opts: { ascending: boolean }): {
+        limit(n: number): {
+          maybeSingle(): PromiseLike<
+            { data: { model_version?: string } | null; error: { message: string } | null }
+          >;
+        };
+      };
+    };
+    upsert(row: Record<string, unknown>): PromiseLike<{ error: { message: string } | null }>;
+  };
+}
+
+/** SHA-1 hex digest (the §12.3 cache key hash). */
+export async function sha1Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(input));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Key = sha1(model_version + '\n' + ask) — §12.3, ask text never stored. */
+export function askCacheKey(modelVersion: string, ask: string): Promise<string> {
+  return sha1Hex(`${modelVersion}\n${ask}`);
+}
+
+export function createAskEmbedCache(
+  db: CacheDb,
+  opts: { ttlDays?: number; initialModelVersion?: string | null } = {},
+): AskEmbedCache {
+  const ttlDays = opts.ttlDays ?? ASK_CACHE_TTL_DAYS;
+  // Learned from the first successful embed of this warm isolate.
+  let knownModelVersion: string | null = opts.initialModelVersion ?? null;
+
+  return {
+    async lookup(ask: string): Promise<string | null> {
+      if (!knownModelVersion) {
+        // Cold isolate: bootstrap the version from the newest cache row.
+        const { data, error } = await db
+          .from('ask_embed_cache')
+          .select('model_version')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw new Error(`ask_embed_cache bootstrap failed: ${error.message}`);
+        knownModelVersion = data?.model_version ?? null;
+        if (!knownModelVersion) return null; // empty cache — nothing knowable yet
+      }
+      const key = await askCacheKey(knownModelVersion, ask);
+      const { data, error } = await db
+        .from('ask_embed_cache')
+        .select('embedding')
+        .eq('cache_key', key)
+        .gt('expires_at', new Date().toISOString())
+        .maybeSingle();
+      if (error) throw new Error(`ask_embed_cache lookup failed: ${error.message}`);
+      return data?.embedding ?? null;
+    },
+
+    async store(ask: string, vector: number[], modelVersion: string): Promise<void> {
+      knownModelVersion = modelVersion;
+      const key = await askCacheKey(modelVersion, ask);
+      const { error } = await db.from('ask_embed_cache').upsert({
+        cache_key: key,
+        embedding: toPgVector(vector),
+        model_version: modelVersion,
+        expires_at: new Date(Date.now() + ttlDays * 86_400_000).toISOString(),
+      });
+      if (error) throw new Error(`ask_embed_cache store failed: ${error.message}`);
+    },
+  };
+}
+
 /** Display fields — mirrors the portal's LayerProductRow subset. */
 export const ASK_PRODUCT_FIELDS =
   'id, name, brand, price_retail, price_trade, images, category, layer';
@@ -246,6 +360,8 @@ export interface AskDeps {
   admin: AdminDb;
   /** null = INFERENCE_URL/TOKEN unconfigured → straight to the FTS rung. */
   inference: InferenceClient | null;
+  /** §12.3 ask-embed cache (00250). Absent/null = uncached (pre-00250 behavior). */
+  cache?: AskEmbedCache | null;
   request: AskRequest;
   userId: string | null;
   log?: (event: string, fields?: Record<string, unknown>) => void;
@@ -256,10 +372,25 @@ export interface AskDeps {
 
 async function embedAsk(
   deps: AskDeps,
-): Promise<{ vector: number[] | null; degraded: boolean }> {
+): Promise<{ pgVector: string | null; degraded: boolean; cacheHit: boolean }> {
+  // 1. Cache first (§12.3/00250). Cache errors are misses, never failures.
+  if (deps.cache) {
+    try {
+      const hit = await deps.cache.lookup(deps.request.ask);
+      if (hit) {
+        deps.log?.('embed_cache_hit');
+        return { pgVector: hit, degraded: false, cacheHit: true };
+      }
+    } catch (err) {
+      deps.log?.('embed_cache_error', {
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   if (!deps.inference) {
     deps.log?.('embed_unconfigured');
-    return { vector: null, degraded: true };
+    return { pgVector: null, degraded: true, cacheHit: false };
   }
   const inputs: EmbedTextInput[] = [{ id: 'ask', text: deps.request.ask, kind: 'query' }];
   try {
@@ -269,15 +400,25 @@ async function embedAsk(
     const v = res.vectors.find((x) => x.id === 'ask')?.v ?? null;
     if (!v) {
       deps.log?.('embed_no_vector', { errors: res.errors.length });
-      return { vector: null, degraded: true };
+      return { pgVector: null, degraded: true, cacheHit: false };
     }
-    return { vector: v, degraded: false };
+    // Best-effort store — a cache-write failure never fails the ask.
+    if (deps.cache) {
+      try {
+        await deps.cache.store(deps.request.ask, v, res.model_version);
+      } catch (err) {
+        deps.log?.('embed_cache_error', {
+          reason: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return { pgVector: toPgVector(v), degraded: false, cacheHit: false };
   } catch (err) {
     // Timeout / 429 / worker down — all the same rung: FTS-only, quietly.
     deps.log?.('embed_degraded', {
       reason: err instanceof Error ? err.message : String(err),
     });
-    return { vector: null, degraded: true };
+    return { pgVector: null, degraded: true, cacheHit: false };
   }
 }
 
@@ -311,9 +452,9 @@ export async function runAsk(deps: AskDeps): Promise<AskResult> {
   const ftsHits = (ftsSettled.data ?? []) as SeamHit[];
 
   let vectorHits: SeamHit[] = [];
-  if (embed.vector) {
+  if (embed.pgVector) {
     const knn = await deps.caller.rpc('aesthete_ask_knn', {
-      p_embedding: toPgVector(embed.vector),
+      p_embedding: embed.pgVector,
       p_filters: filters,
     });
     if (knn.error) {
@@ -356,6 +497,7 @@ export async function runAsk(deps: AskDeps): Promise<AskResult> {
     category: req.category,
     layer: req.layer,
     limit: req.limit,
+    cacheHit: embed.cacheHit,
   });
   try {
     const { error } = await deps.admin.from('match_events').insert(event);

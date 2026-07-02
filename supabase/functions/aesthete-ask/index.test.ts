@@ -18,13 +18,18 @@ import {
   assertEquals,
   assertFalse,
 } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
-import { InferenceError, type InferenceClient } from '../_shared/aesthete.ts';
+import { InferenceError, type InferenceClient, toPgVector } from '../_shared/aesthete.ts';
 import {
+  ASK_CACHE_TTL_DAYS,
   ASK_EMBED_TIMEOUT_MS,
+  askCacheKey,
   type AskDeps,
+  type AskEmbedCache,
   type AskRequest,
   buildAskEvent,
+  type CacheDb,
   CANDIDATE_POOL,
+  createAskEmbedCache,
   DEFAULT_ASK_LIMIT,
   MAX_ASK_LIMIT,
   mergeCandidates,
@@ -311,8 +316,16 @@ Deno.test('runAsk NEVER writes the ask text anywhere the admin client touches', 
   const context = admin.inserts[0].row.context as Record<string, unknown>;
   for (const key of Object.keys(context)) {
     assert(
-      ['degraded', 'vector_candidates', 'fts_candidates', 'result_count', 'limit', 'category', 'layer']
-        .includes(key),
+      [
+        'degraded',
+        'vector_candidates',
+        'fts_candidates',
+        'result_count',
+        'limit',
+        'category',
+        'layer',
+        'cache_hit', // §12.3/00250 — structural flag only, never text
+      ].includes(key),
       `unexpected context key: ${key}`,
     );
   }
@@ -492,4 +505,282 @@ Deno.test('peekJwt reads sub + role; rejects malformed tokens', () => {
   const anonPayload = btoa(JSON.stringify({ role: 'anon' }))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   assertEquals(peekJwt(`Bearer x.${anonPayload}.y`).role, 'anon');
+});
+
+// ─── §12.3 ask-embed cache (00250 — Wave 4C) ─────────────────────────────────
+
+function fakeAskCache(cfg: { hit?: string | null; lookupError?: string; storeError?: string }) {
+  const lookups: string[] = [];
+  const stores: Array<{ ask: string; vector: number[]; modelVersion: string }> = [];
+  const cache: AskEmbedCache = {
+    lookup(ask: string) {
+      lookups.push(ask);
+      if (cfg.lookupError) return Promise.reject(new Error(cfg.lookupError));
+      return Promise.resolve(cfg.hit ?? null);
+    },
+    store(ask: string, vector: number[], modelVersion: string) {
+      stores.push({ ask, vector, modelVersion });
+      if (cfg.storeError) return Promise.reject(new Error(cfg.storeError));
+      return Promise.resolve();
+    },
+  };
+  return { cache, lookups, stores };
+}
+
+function fakeCacheDb() {
+  const rows = new Map<string, { embedding: string; model_version: string }>();
+  const upserts: Array<Record<string, unknown>> = [];
+  let selects = 0;
+  const db: CacheDb = {
+    from(_table: string) {
+      return {
+        select(_cols: string) {
+          selects++;
+          return {
+            eq(_col: string, key: string) {
+              return {
+                gt(_col2: string, _iso: string) {
+                  return {
+                    maybeSingle() {
+                      const row = rows.get(key);
+                      return Promise.resolve({
+                        data: row ? { embedding: row.embedding } : null,
+                        error: null,
+                      });
+                    },
+                  };
+                },
+              };
+            },
+            order(_col: string, _opts: { ascending: boolean }) {
+              return {
+                limit(_n: number) {
+                  return {
+                    maybeSingle() {
+                      // newest row = last inserted (created_at DESC stand-in)
+                      const newest = [...rows.values()].at(-1);
+                      return Promise.resolve({
+                        data: newest ? { model_version: newest.model_version } : null,
+                        error: null,
+                      });
+                    },
+                  };
+                },
+              };
+            },
+          };
+        },
+        upsert(row: Record<string, unknown>) {
+          upserts.push(row);
+          rows.set(row.cache_key as string, {
+            embedding: row.embedding as string,
+            model_version: row.model_version as string,
+          });
+          return Promise.resolve({ error: null });
+        },
+      };
+    },
+  };
+  return { db, upserts, rows, stats: { get selects() { return selects; } } };
+}
+
+Deno.test('askCacheKey: deterministic, version-scoped, ask-scoped', async () => {
+  const a = await askCacheKey('nomic-v1.5', SENTINEL_ASK);
+  const b = await askCacheKey('nomic-v1.5', SENTINEL_ASK);
+  const c = await askCacheKey('nomic-v2.0', SENTINEL_ASK);
+  const d = await askCacheKey('nomic-v1.5', 'a different ask');
+  assertEquals(a, b);
+  assert(a !== c, 'model version must scope the key');
+  assert(a !== d, 'ask text must scope the key');
+  assertEquals(a.length, 40); // sha1 hex
+});
+
+Deno.test('createAskEmbedCache: cold isolate on an EMPTY cache bootstraps, finds no version, misses', async () => {
+  const { db } = fakeCacheDb();
+  const cache = createAskEmbedCache(db);
+  assertEquals(await cache.lookup(SENTINEL_ASK), null);
+});
+
+Deno.test('createAskEmbedCache: a FRESH isolate hits rows stored by a previous one (version bootstrap)', async () => {
+  // Edge isolates recycle aggressively (dev serve: one per request) — the
+  // model version must be re-learnable from the table, not only from a warm
+  // module global. This is the exact live-walk regression of 2026-07-02.
+  const { db } = fakeCacheDb();
+  const first = createAskEmbedCache(db);
+  await first.store(SENTINEL_ASK, [0.1, 0.9], 'test-model');
+
+  const fresh = createAskEmbedCache(db); // cold: no in-memory version
+  assertEquals(await fresh.lookup(SENTINEL_ASK), toPgVector([0.1, 0.9]));
+});
+
+Deno.test('createAskEmbedCache: store persists hash+literal ONLY (no ask text), then lookup hits', async () => {
+  const { db, upserts } = fakeCacheDb();
+  const cache = createAskEmbedCache(db);
+  const vector = [0.25, -0.5, 0.75];
+
+  await cache.store(SENTINEL_ASK, vector, 'test-model');
+
+  assertEquals(upserts.length, 1);
+  const row = upserts[0];
+  assertEquals(
+    Object.keys(row).sort(),
+    ['cache_key', 'embedding', 'expires_at', 'model_version'].sort(),
+  );
+  assertEquals(row.cache_key, await askCacheKey('test-model', SENTINEL_ASK));
+  assertEquals(row.embedding, toPgVector(vector));
+  assertEquals(row.model_version, 'test-model');
+  // R31/R38: nothing in the persisted row contains the ask text.
+  const serialized = JSON.stringify(row);
+  assertFalse(serialized.includes(SENTINEL_ASK));
+  assertFalse(serialized.toLowerCase().includes('walrus'));
+  // TTL ≈ 7 days out (§12.3).
+  const ttlMs = Date.parse(row.expires_at as string) - Date.now();
+  assertAlmostEquals(ttlMs / 86_400_000, ASK_CACHE_TTL_DAYS, 0.01);
+
+  // The store taught the isolate the model version → same ask now hits.
+  assertEquals(await cache.lookup(SENTINEL_ASK), toPgVector(vector));
+  // A different ask under the same version misses.
+  assertEquals(await cache.lookup('some other ask'), null);
+});
+
+Deno.test('runAsk cache hit: inference NEVER called, kNN gets the cached literal, degraded=false', async () => {
+  const cachedLiteral = toPgVector([0.9, 0.1]);
+  const caller = fakeCaller({ fts: [hit('p2')], knn: [hit('p1')], products: [productRow('p1'), productRow('p2')] });
+  const admin = fakeAdmin();
+  const { cache, lookups, stores } = fakeAskCache({ hit: cachedLiteral });
+  let inferenceCalled = false;
+  const inference: InferenceClient = {
+    embedText() {
+      inferenceCalled = true;
+      return Promise.reject(new Error('must not be called on a cache hit'));
+    },
+    embedImage() {
+      return Promise.reject(new Error('not used'));
+    },
+    healthz() {
+      return Promise.resolve(null);
+    },
+  };
+
+  const result = await runAsk({
+    caller: caller.db,
+    admin: admin.db,
+    inference,
+    cache,
+    request: baseRequest(),
+    userId: 'designer-1',
+  });
+
+  assertFalse(inferenceCalled);
+  assertEquals(lookups, [SENTINEL_ASK]);
+  assertEquals(stores.length, 0);
+  assertEquals(result.degraded, false);
+  const knn = caller.calls.rpcs.find((r) => r.fn === 'aesthete_ask_knn');
+  assert(knn, 'kNN seam must run on a cache hit');
+  assertEquals(knn!.args.p_embedding, cachedLiteral);
+  // Observability: the event context flags the hit (structured, no text).
+  const context = admin.inserts[0].row.context as Record<string, unknown>;
+  assertEquals(context.cache_hit, true);
+  assertEquals(context.degraded, false);
+});
+
+Deno.test('runAsk cache miss: worker embeds, vector stored with its model_version', async () => {
+  const caller = fakeCaller({ fts: [], knn: [hit('p1')], products: [productRow('p1')] });
+  const admin = fakeAdmin();
+  const { cache, lookups, stores } = fakeAskCache({ hit: null });
+  const vector = [0.3, 0.4];
+
+  const result = await runAsk({
+    caller: caller.db,
+    admin: admin.db,
+    inference: fakeInference(vector),
+    cache,
+    request: baseRequest(),
+    userId: 'designer-1',
+  });
+
+  assertEquals(lookups, [SENTINEL_ASK]);
+  assertEquals(stores.length, 1);
+  assertEquals(stores[0].vector, vector);
+  assertEquals(stores[0].modelVersion, 'test-model'); // learned from the embed response
+  assertEquals(result.degraded, false);
+  const knn = caller.calls.rpcs.find((r) => r.fn === 'aesthete_ask_knn');
+  assertEquals(knn!.args.p_embedding, toPgVector(vector));
+  const context = admin.inserts[0].row.context as Record<string, unknown>;
+  assertFalse('cache_hit' in context); // miss → flag absent (nulls-dropped shape)
+});
+
+Deno.test('runAsk cache lookup error is a miss, never a failure', async () => {
+  const caller = fakeCaller({ fts: [hit('p1')], knn: [hit('p1')], products: [productRow('p1')] });
+  const admin = fakeAdmin();
+  const { cache } = fakeAskCache({ lookupError: 'cache table on fire' });
+
+  const result = await runAsk({
+    caller: caller.db,
+    admin: admin.db,
+    inference: fakeInference([1, 0]),
+    cache,
+    request: baseRequest(),
+    userId: 'designer-1',
+  });
+
+  assertEquals(result.degraded, false); // worker still answered
+  assertEquals(result.result_count, 1);
+});
+
+Deno.test('runAsk cache store error never fails the ask', async () => {
+  const caller = fakeCaller({ fts: [hit('p1')], knn: [hit('p1')], products: [productRow('p1')] });
+  const admin = fakeAdmin();
+  const { cache, stores } = fakeAskCache({ hit: null, storeError: 'disk full' });
+
+  const result = await runAsk({
+    caller: caller.db,
+    admin: admin.db,
+    inference: fakeInference([1, 0]),
+    cache,
+    request: baseRequest(),
+    userId: 'designer-1',
+  });
+
+  assertEquals(stores.length, 1); // attempted
+  assertEquals(result.degraded, false);
+  assertEquals(result.result_count, 1);
+});
+
+Deno.test('runAsk worker DOWN + warm cache hit stays on the vector rung (documented 00250 bonus)', async () => {
+  const cachedLiteral = toPgVector([0.5, 0.5]);
+  const caller = fakeCaller({ fts: [hit('p2')], knn: [hit('p1')], products: [productRow('p1'), productRow('p2')] });
+  const admin = fakeAdmin();
+  const { cache } = fakeAskCache({ hit: cachedLiteral });
+
+  const result = await runAsk({
+    caller: caller.db,
+    admin: admin.db,
+    inference: fakeInference('down'), // would 503 — but the hit short-circuits it
+    cache,
+    request: baseRequest(),
+    userId: 'designer-1',
+  });
+
+  assertEquals(result.degraded, false);
+  assert(caller.calls.rpcs.some((r) => r.fn === 'aesthete_ask_knn'));
+});
+
+Deno.test('runAsk without a cache (pre-00250 deploy state) behaves exactly as before', async () => {
+  const caller = fakeCaller({ fts: [hit('p1')], knn: [hit('p1')], products: [productRow('p1')] });
+  const admin = fakeAdmin();
+
+  const result = await runAsk({
+    caller: caller.db,
+    admin: admin.db,
+    inference: fakeInference([1, 0]),
+    cache: null,
+    request: baseRequest(),
+    userId: 'designer-1',
+  });
+
+  assertEquals(result.degraded, false);
+  assertEquals(result.result_count, 1);
+  const context = admin.inserts[0].row.context as Record<string, unknown>;
+  assertFalse('cache_hit' in context);
 });
