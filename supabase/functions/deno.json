@@ -1,0 +1,6 @@
+{
+  "lock": false,
+  "compilerOptions": {
+    "lib": ["deno.window", "deno.ns", "dom", "dom.iterable", "dom.asynciterable", "esnext"]
+  }
+}
