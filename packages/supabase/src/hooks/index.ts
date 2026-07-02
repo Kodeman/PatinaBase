@@ -350,6 +350,7 @@ export {
   useDuplicateProposal,
   // Signing
   useSignProposal,
+  useRecordOfflineSignature,
   useDeclineProposal,
   useRequestProposalChange,
 } from './use-proposals';

@@ -1218,6 +1218,62 @@ export function useSignProposal() {
 }
 
 /**
+ * Record that a client signed a proposal offline (DESIGNER action).
+ *
+ * Backed by the atomic `record_offline_signature` RPC (00254) — the designer-
+ * authorized sibling of `sign_proposal`. For when a client signs a physical
+ * contract: in one transaction the RPC settles the approval `client_decisions`
+ * row with `client_consent_method='paper'`, flips `proposals.status='accepted'`,
+ * logs a 'signed_offline' engagement event, and (with p_auto_activate=true, the
+ * default) activates the project — returning its id so we can walk straight in.
+ * Recording an already-'accepted' proposal is a no-op (idempotent).
+ *
+ * ⚠ AUTH: SECURITY DEFINER but only succeeds when the caller is the proposal's
+ * DESIGNER (auth.uid() = designer_id). This is the designer offline-sign path.
+ * `p_signedDate` seeds the activated project's start date (phase/milestone
+ * anchoring), defaulting server-side to today.
+ */
+export function useRecordOfflineSignature() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      proposalId,
+      signedByName,
+      signedDate,
+    }: {
+      proposalId: string;
+      signedByName: string;
+      signedDate?: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data, error } = await supabase.rpc('record_offline_signature', {
+        p_proposal_id: proposalId,
+        p_signed_name: signedByName,
+        ...(signedDate ? { p_start_date: signedDate } : {}),
+      });
+
+      if (error) throw error;
+      return data as string | null; // the activated project id
+    },
+    onSuccess: (_, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['proposal-stats'] });
+      // One act, many surfaces: an approval decision settles, the proposal flips
+      // to accepted, and the project activates — the desk/document read models
+      // and the project lists must all refetch.
+      queryClient.invalidateQueries({ queryKey: ['document-state'] });
+      queryClient.invalidateQueries({ queryKey: ['desk-engagements'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['proposal-project', proposalId] });
+    },
+  });
+}
+
+/**
  * Request changes to a proposal (CLIENT action).
  *
  * Backed by the `request_proposal_change` RPC (00211). The RPC records the

@@ -40,6 +40,7 @@ import { ProposalPreview } from './proposal-preview';
 import { ProposalPreviewRail } from './drafting/proposal-mirror';
 import { SendSheet } from './overlays/send-sheet';
 import { ReviseSheet } from './overlays/revise-sheet';
+import { MarkSignedSheet } from './overlays/mark-signed-sheet';
 
 const fmtDay = (iso: string) =>
   new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(iso));
@@ -104,12 +105,14 @@ export function ProposalWatch({
   clientName: string;
 }) {
   const router = useRouter();
+  const qc = useQueryClient();
   const { watch: w } = useProposalWatch(proposalId);
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [reviseOpen, setReviseOpen] = useState(false);
   const [resendOpen, setResendOpen] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
+  const [markSignedOpen, setMarkSignedOpen] = useState(false);
 
   const nudge = useNudgeProposal();
   const family = familyLabel(clientName);
@@ -269,6 +272,13 @@ export function ProposalWatch({
             )}
           </>
         )}
+        {/* Mark signed — the designer records a paper signature (R92). Only for a
+            proposal that's out and still signable (not revised/declined). */}
+        {(w.status === 'sent' || w.status === 'viewed' || w.status === 'expired') && (
+          <Instrument variant="primary" trailing="→" onClick={() => setMarkSignedOpen(true)}>
+            Mark signed
+          </Instrument>
+        )}
         <ProposalVersionHistory proposalId={proposalId} />
       </InstrumentRow>
 
@@ -298,6 +308,18 @@ export function ProposalWatch({
         onOpened={(newProposalId) => router.push(`/doc/${newProposalId}`)}
       />
       <SendSheet proposalId={proposalId} open={resendOpen} onClose={() => setResendOpen(false)} />
+      <MarkSignedSheet
+        proposalId={proposalId}
+        clientName={clientName}
+        open={markSignedOpen}
+        onClose={() => setMarkSignedOpen(false)}
+        onSigned={(projectId) => {
+          // One act, many surfaces: the signed proposal folder re-derives away
+          // (shape B → A) and we walk into the new document.
+          void qc.invalidateQueries({ queryKey: ['document-state'] });
+          router.push(`/doc/${projectId}`);
+        }}
+      />
       {previewOpen && (
         <ProposalPreview
           proposalId={proposalId}

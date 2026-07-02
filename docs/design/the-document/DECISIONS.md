@@ -2825,3 +2825,25 @@ Five parallel worktree builds over frozen seams (command-bar left frozen; ⌘K w
 *Entries: D1–D14 · O1–O7 (resolved) · I1–I48 · R1–R70 (+R68.1) · R72–R91 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = I48 (rulings end at R91)*
 
 *Entries add: I47 · migration 00252 · last id = I47*
+
+---
+
+## The Document — the offline signature (R92) — 2026-07-02
+
+### R92 · The designer can record a signature made on paper
+
+When a client signs a physical contract, the designer needs a way to move the proposal past the proposal phase. `sign_proposal` (00210, R44) can't do it — it is client-authorized (`client_id = auth.uid()`) and a designer session is rejected by design. Its designer-authorized sibling is **`record_offline_signature`** (migration **00254**): the same one-act/many-surfaces grammar — settle the `approval` `client_decisions` row, flip the proposal to `accepted`, log an engagement event, and (default) activate the project via `activate_proposal_as_project` — but the caller is the proposal's **designer** and consent is recorded as **`'paper'`** (new value on the `client_decisions.client_consent_method` CHECK) rather than `'electronic_signature'`.
+
+Because it delegates to the same activation, the whole proposal (rooms, FF&E, phases, milestones) carries into the new active project exactly as a digital sign would.
+
+**The rulings inside R92:**
+- **Issued proposals only.** Signability is `('sent','viewed','expired')`. A `draft` (never issued) is out — the designer Sends it first; the act does **not** appear in the Drafting Room. `declined` (explicit client rejection → must be re-issued) and `revised` (superseded) are excluded.
+- **A paper signature is not time-boxed** — there is no `valid_until` expiry guard, so a proposal that lapsed digitally (`expired`) can still be recorded.
+- **The engagement event is `'signed_offline'`**; the signer's printed name lands on `signed_by_name` / `client_signature`; `signed_ip` is null. The optional signing date the designer enters seeds the activated project's `start_date` (phase/milestone anchoring).
+- **No client confirmation email.** Unlike the client sign route (which fires `proposal-sign-confirmation`), an in-person paper signing doesn't send one.
+
+**The surface.** A **Mark signed →** act on the proposal watch view (`proposal-watch.tsx`), beside Request-a-change / Nudge, shown for `sent`/`viewed`/`expired`. It opens `MarkSignedSheet` (two fields — who signed, when — on the DocSheet frame, D4/D1/R83) → `useRecordOfflineSignature` → invalidate `document-state` → walk into `/doc/{projectId}`. Extends the I7 two-step activation net; sibling to R44's `sign_proposal`.
+
+**Verified.** db reset clean through **00254**; SQL smoke green — the CHECK admits `'paper'`; the designer path produces `accepted` + back-linked proposal, exactly one `paper` approval decision, an `active` project matching the returned id, and a `signed_offline` event; idempotent on re-call (same project, no duplicate approval/project); a **client** caller is rejected (`insufficient_privilege`) and `declined`/`draft` raise `check_violation`. `@patina/supabase` + designer-portal tsc: **zero errors**. Additive only (D7): `sign_proposal` and the legacy /portal sign route untouched. ⚠ Not on prod (rides the 00230–00254 catch-up); live Chrome walk owed. Spec v1.7 fold still owed (R61–R92).
+
+*Entries add: R92 · migration 00254 · last id = R92*

@@ -33,6 +33,7 @@ export {
   useDuplicateProposal,
   // Signing
   useSignProposal,
+  useRecordOfflineSignature,
   useDeclineProposal,
 } from '@patina/supabase';
 
