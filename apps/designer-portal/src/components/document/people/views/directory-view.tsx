@@ -52,10 +52,13 @@ export function DirectoryView({
   openPerson,
   role,
   onRoleChange,
+  notice,
 }: PeopleViewProps & {
   /** Controlled role filter (lifted to the Room so the ask bar can set it). */
   role: DirectoryRole;
   onRoleChange: (role: DirectoryRole) => void;
+  /** A quiet inline confirmation (R51 grammar) after an add — never a toast (R83). */
+  notice?: string | null;
 }) {
   const { data, isLoading } = usePeopleDirectory({ role });
   const now = useMemo(() => new Date(), []);
@@ -76,6 +79,16 @@ export function DirectoryView({
         title="Directory"
         sub="Everyone Patina works with — clients, makers, general contractors, and your studio — one roster."
       />
+
+      {/* The quiet confirmation band — R51's settled grammar, inline, no toast. */}
+      {notice && (
+        <p
+          role="status"
+          className="mb-4 border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] py-2 pl-3 pr-2 font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[#6f8268]"
+        >
+          {notice}
+        </p>
+      )}
 
       <div className="mb-5 flex flex-wrap gap-1.5">
         {ROLE_TABS.map(([key, label]) => {

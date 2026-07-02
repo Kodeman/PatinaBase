@@ -58,6 +58,9 @@ export function PeopleRoom() {
   // The Directory's role filter lives here (controlled) so the ask bar can set it.
   const [roleFilter, setRoleFilter] = useState<DirectoryRole>('all');
   const [addOpen, setAddOpen] = useState(false);
+  // R51/R83 — the quiet inline confirmation band the Directory shows after an
+  // add (never a toast). Cleared when the designer moves on (view/filter).
+  const [notice, setNotice] = useState<string | null>(null);
 
   const { data: all } = usePeopleDirectory({ role: 'all' });
   const now = useMemo(() => new Date(), []);
@@ -92,6 +95,7 @@ export function PeopleRoom() {
     goView: (v) => {
       setOpenPerson(null);
       setPendingThreadId(null);
+      setNotice(null);
       setView(v);
     },
     notify,
@@ -140,7 +144,15 @@ export function PeopleRoom() {
       {...nav}
     />
   ) : view === 'directory' ? (
-    <DirectoryView {...nav} role={roleFilter} onRoleChange={setRoleFilter} />
+    <DirectoryView
+      {...nav}
+      role={roleFilter}
+      onRoleChange={(r) => {
+        setNotice(null);
+        setRoleFilter(r);
+      }}
+      notice={notice}
+    />
   ) : view === 'threads' ? (
     <ThreadsView {...nav} pendingThreadId={pendingThreadId} />
   ) : view === 'nurture' ? (
@@ -235,10 +247,12 @@ export function PeopleRoom() {
       <AddPersonSheet
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onAdded={(message) => {
-          // Land them where they'll show: the Directory, filtered to clients.
-          filterDirectory('client');
-          notify(message);
+        onAdded={(message, kind) => {
+          // Land them where they'll show: the Directory, filtered to the kind
+          // just added — with the confirmation INLINE above the roster (R83:
+          // no toast; R51's quiet grammar).
+          filterDirectory(kind);
+          setNotice(message);
         }}
         onGoToLeads={() => router.push('/portal/pipeline')}
       />

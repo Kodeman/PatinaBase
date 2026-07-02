@@ -172,6 +172,8 @@ export {
   useTradeAccounts,
   useVendorReviews,
   useToggleVendorSave,
+  useSaveVendor,
+  useSavedVendorIds,
   useSubmitVendorReview,
   useVoteOnSpecialization,
   useFindOrCreateVendor,
