@@ -16,6 +16,8 @@ PATTERN="${1:-}"
 
 # JWT-protected functions (called from our portals / services with service key).
 JWT_PROTECTED=(
+  aesthete-embed-worker
+  aesthete-dna-draft
   notification-dispatch
   campaign-dispatch
   campaign-scheduler
