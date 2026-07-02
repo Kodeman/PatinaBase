@@ -1,13 +1,18 @@
 // Supabase Edge Function: aesthete-embed-worker
 //
-// Aesthete Engine Wave 2B (design §6.1 pipeline, §12.2 embed row, §4.3).
-// Drains the 00241 aesthete_jobs outbox for the two embed kinds:
+// Aesthete Engine Wave 2B (design §6.1 pipeline, §12.2 embed row, §4.3);
+// portfolio drain added in Wave 4B (00249).
+// Drains the 00241 aesthete_jobs outbox for the three embed kinds:
 //
-//   embed_text  → products.embedding        (name ‖ description ‖ materials,
+//   embed_text      → products.embedding    (name ‖ description ‖ materials,
 //                                            kind=document — 00008 RPCs live)
-//   embed_fused → products.aesthete_vector  (normalize(0.65·mean(≤3 images)
+//   embed_fused     → products.aesthete_vector (normalize(0.65·mean(≤3 images)
 //                                            + 0.35·style-caption embed);
 //                                            caption stored on style_caption)
+//   portfolio_embed → designer_portfolio_items.embedding + status='embedded'
+//                     (signed portfolio-items URL — or the storage_path
+//                     verbatim when already http(s) — then
+//                     recompute_portfolio_centroid per touched designer)
 //
 // Invoked by pg_cron every minute through invoke_edge_function (00241 cron
 // 'aesthete-embed'; body {} — optional {batch_size} clamps 1..16). Gateway
@@ -72,12 +77,19 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const admin = adminClient();
     const result = await runEmbedBatch({
       // Structural narrowing: supabase-js's builder generics blow TS2589 when
       // checked against the narrow DbLike seam; runtime shape is identical.
-      db: adminClient() as unknown as DbLike,
+      db: admin as unknown as DbLike,
       inference,
       batchSize,
+      // Signed URLs for the private portfolio-items bucket (00249). Service
+      // role bypasses the owner-pathed storage policies by design.
+      signUrl: async (bucket, path, expiresInSec) => {
+        const { data, error } = await admin.storage.from(bucket).createSignedUrl(path, expiresInSec);
+        return { url: data?.signedUrl ?? null, error: error?.message ?? null };
+      },
       log: (event, fields) => logLine(FN, event, fields),
     });
     // §12.4 server event — only for batches that actually worked jobs (the
@@ -90,6 +102,7 @@ Deno.serve(async (req: Request) => {
         ms: result.ms,
         embed_text_done: result.kinds.embed_text.done,
         embed_fused_done: result.kinds.embed_fused.done,
+        portfolio_embed_done: result.kinds.portfolio_embed.done,
       });
     }
     return json(result);

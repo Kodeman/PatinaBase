@@ -191,13 +191,13 @@ function run(fake: ReturnType<typeof makeFakeDb>, inf: ReturnType<typeof makeFak
 
 // ─── orchestration ───────────────────────────────────────────────────────────
 
-Deno.test('runEmbedBatch drains embed_text before embed_fused with the batch size', async () => {
+Deno.test('runEmbedBatch drains embed_text, then embed_fused, then portfolio_embed with the batch size', async () => {
   const fake = makeFakeDb({ jobs: {}, products: [] });
   const inf = makeFakeInference();
   const { result } = run(fake, inf, 7);
   const r = await result;
-  assertEquals(fake.events, ['claim:embed_text', 'claim:embed_fused']);
-  assertEquals(fake.claims.map((c) => c.batch), [7, 7]);
+  assertEquals(fake.events, ['claim:embed_text', 'claim:embed_fused', 'claim:portfolio_embed']);
+  assertEquals(fake.claims.map((c) => c.batch), [7, 7, 7]);
   assertEquals(r.claimed, 0);
   assertEquals(r.done, 0);
   assertEquals(r.failed, 0);

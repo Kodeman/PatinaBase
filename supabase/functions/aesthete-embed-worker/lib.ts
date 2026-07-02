@@ -21,10 +21,19 @@
 //      /embed/text, fuse 0.65/0.35 with L2 normalize IN THIS FN (plain array
 //      math) → UPDATE products.aesthete_vector + style_caption +
 //      aesthete_vector_at + aesthete_model_version.
-//   3. Per-item failures → complete_aesthete_job('failed', reason) — the
+//   3. Claim up to batch_size portfolio_embed jobs (Wave 4B, 00249). Per
+//      item: resolve the image URL — a storage_path that is already
+//      http(s):// is used verbatim (the dev/demo affordance documented in
+//      00249), otherwise a short-lived signed URL on the private
+//      `portfolio-items` bucket — → /embed/image → UPDATE
+//      designer_portfolio_items.embedding + status='embedded'. After the
+//      batch, recompute_portfolio_centroid runs once per touched designer
+//      (§4.3: v_D0 geometric median; the RPC owns the math).
+//   4. Per-item failures → complete_aesthete_job('failed', reason) — the
 //      00241 RPC owns backoff (1 m/5 m/25 m) and the terminal park at
-//      attempts ≥ 5. Batch sizing keeps one invocation well inside the 60 s
-//      pg_net window (16 fused jobs ≈ ≤ 48 image embeds ≈ 5–20 s).
+//      attempts ≥ 5 (portfolio items additionally flip status='failed' when
+//      their job parks). Batch sizing keeps one invocation well inside the
+//      60 s pg_net window (16 fused jobs ≈ ≤ 48 image embeds ≈ 5–20 s).
 
 import {
   type AestheteJob,
@@ -165,10 +174,43 @@ export interface DbLike extends RpcClient {
   };
 }
 
+export interface PortfolioItemRow {
+  id: string;
+  designer_id: string;
+  storage_path: string;
+  status: string;
+}
+
+/** Private bucket for portfolio imagery (00249, capture-media precedent). */
+export const PORTFOLIO_BUCKET = 'portfolio-items';
+/** Signed-URL lifetime — long enough for the inference worker to fetch. */
+export const PORTFOLIO_SIGNED_URL_TTL_SEC = 600;
+
+/**
+ * A storage_path that is already an absolute http(s) URL is embedded
+ * verbatim — the dev/demo affordance documented in 00249 (live proofs and
+ * seeds reference public imagery). Bucket paths return null and go through
+ * the signer.
+ */
+export function directPortfolioUrl(storagePath: string): string | null {
+  return /^https?:\/\//i.test(storagePath) ? storagePath : null;
+}
+
 export interface EmbedBatchDeps {
   db: DbLike;
   inference: InferenceClient;
   batchSize: number;
+  /**
+   * Signed-URL factory for the private portfolio-items bucket (wired from
+   * the admin client's storage API in index.ts; fakeable in tests). Absent →
+   * bucket-pathed portfolio jobs fail as a config error (http(s) paths still
+   * work).
+   */
+  signUrl?: (
+    bucket: string,
+    path: string,
+    expiresInSec: number,
+  ) => Promise<{ url: string | null; error: string | null }>;
   /** injected clock for deterministic tests */
   now?: () => Date;
   log?: (event: string, fields?: Record<string, unknown>) => void;
@@ -182,6 +224,7 @@ export interface EmbedBatchResult {
   kinds: {
     embed_text: { claimed: number; done: number; failed: number };
     embed_fused: { claimed: number; done: number; failed: number };
+    portfolio_embed: { claimed: number; done: number; failed: number };
   };
 }
 
@@ -489,24 +532,177 @@ async function drainEmbedFused(deps: EmbedBatchDeps, tally: KindTally): Promise<
   }
 }
 
+// ─── portfolio_embed drain (Wave 4B, 00249) ──────────────────────────────────
+
+interface PortfolioWork {
+  job: AestheteJob;
+  item: PortfolioItemRow;
+  url?: string;
+  failed?: string;
+}
+
+/** Terminal-park mirror: at attempts ≥ 5 complete_aesthete_job parks the job
+ * as 'failed'; the portfolio item row flips to 'failed' too so the owner's
+ * surface can say so honestly. */
+function willPark(job: AestheteJob): boolean {
+  return job.attempts >= 5;
+}
+
+async function drainPortfolioEmbed(deps: EmbedBatchDeps, tally: KindTally): Promise<void> {
+  const jobs = await claimJobs(deps.db, 'portfolio_embed', deps.batchSize);
+  tally.claimed = jobs.length;
+  if (jobs.length === 0) return;
+
+  const failItem = async (w: PortfolioWork, reason: string) => {
+    if (willPark(w.job)) {
+      const { error } = await deps.db
+        .from('designer_portfolio_items')
+        .update({ status: 'failed' })
+        .eq('id', w.item.id);
+      if (error) {
+        deps.log?.('portfolio_item_status_error', { item_id: w.item.id, error: error.message });
+      }
+    }
+    await finish(deps, tally, w.job, 'failed', reason);
+  };
+
+  // payload carries the item ref (job.product_id is NULL for this kind).
+  const itemIds = jobs
+    .map((j) => (j.payload?.portfolio_item_id as string | undefined) ?? null)
+    .filter((id): id is string => !!id);
+
+  let items: Map<string, PortfolioItemRow>;
+  try {
+    const { data, error } = await deps.db
+      .from('designer_portfolio_items')
+      .select('id, designer_id, storage_path, status')
+      .in('id', itemIds);
+    if (error) throw new Error(`portfolio items lookup failed: ${error.message}`);
+    items = new Map(((data ?? []) as PortfolioItemRow[]).map((i) => [i.id, i]));
+  } catch (err) {
+    for (const job of jobs) await finish(deps, tally, job, 'failed', errMessage(err));
+    return;
+  }
+
+  const work: PortfolioWork[] = [];
+  for (const job of jobs) {
+    const itemId = (job.payload?.portfolio_item_id as string | undefined) ?? null;
+    const item = itemId ? items.get(itemId) : undefined;
+    if (!item) {
+      // Row deleted since enqueue (owner delete) — terminal via the ladder.
+      await finish(deps, tally, job, 'failed', 'portfolio item not found');
+      continue;
+    }
+    work.push({ job, item });
+  }
+  if (work.length === 0) return;
+
+  // ── resolve URLs: verbatim http(s), else signed bucket URL ────────────────
+  for (const w of work) {
+    const direct = directPortfolioUrl(w.item.storage_path);
+    if (direct) {
+      w.url = direct;
+      continue;
+    }
+    if (!deps.signUrl) {
+      w.failed = 'no signed-url factory configured for bucket path';
+      continue;
+    }
+    try {
+      const { url, error } = await deps.signUrl(
+        PORTFOLIO_BUCKET,
+        w.item.storage_path,
+        PORTFOLIO_SIGNED_URL_TTL_SEC,
+      );
+      if (!url) w.failed = `signed URL failed: ${error ?? 'no url returned'}`;
+      else w.url = url;
+    } catch (err) {
+      w.failed = `signed URL failed: ${errMessage(err)}`;
+    }
+  }
+
+  // ── embed (≤ 16 per request — one image per item) ─────────────────────────
+  const pending = work.filter((w) => !w.failed);
+  const vectorsByItem = new Map<string, number[]>();
+  const errorsByItem = new Map<string, string>();
+  for (const batch of chunk(pending, INFERENCE_MAX_BATCH)) {
+    const inputs: EmbedImageInput[] = batch.map((w) => ({ id: w.item.id, url: w.url! }));
+    try {
+      const res = await deps.inference.embedImage(inputs);
+      for (const v of res.vectors) vectorsByItem.set(v.id, v.v);
+      for (const e of res.errors) errorsByItem.set(e.id, e.reason);
+    } catch (err) {
+      const reason = errMessage(err);
+      for (const w of batch) if (!w.failed) w.failed = `image embed request failed: ${reason}`;
+    }
+  }
+
+  // ── persist + tally ───────────────────────────────────────────────────────
+  const touchedDesigners = new Set<string>();
+  for (const w of work) {
+    if (w.failed) {
+      await failItem(w, w.failed);
+      continue;
+    }
+    const vec = vectorsByItem.get(w.item.id);
+    if (!vec) {
+      await failItem(w, errorsByItem.get(w.item.id) ?? 'no vector returned');
+      continue;
+    }
+    const { error } = await deps.db
+      .from('designer_portfolio_items')
+      .update({ embedding: toPgVector(vec), status: 'embedded' })
+      .eq('id', w.item.id);
+    if (error) {
+      await failItem(w, `embedding update failed: ${error.message}`);
+      continue;
+    }
+    touchedDesigners.add(w.item.designer_id);
+    await finish(deps, tally, w.job, 'done');
+  }
+
+  // ── centroid recompute per touched designer (§4.3; RPC owns the math) ────
+  for (const designerId of touchedDesigners) {
+    try {
+      const { data, error } = await deps.db.rpc('recompute_portfolio_centroid', {
+        p_designer_id: designerId,
+      });
+      if (error) throw new Error(error.message);
+      deps.log?.('portfolio_centroid_recomputed', {
+        designer_id: designerId,
+        result: data as Record<string, unknown>,
+      });
+    } catch (err) {
+      // Never fatal: the 00249 nightly sweep recomputes stale designers.
+      deps.log?.('portfolio_centroid_error', {
+        designer_id: designerId,
+        error: errMessage(err),
+      });
+    }
+  }
+}
+
 // ─── entry ───────────────────────────────────────────────────────────────────
 
 export async function runEmbedBatch(deps: EmbedBatchDeps): Promise<EmbedBatchResult> {
   const t0 = Date.now();
   const text: KindTally = { claimed: 0, done: 0, failed: 0 };
   const fused: KindTally = { claimed: 0, done: 0, failed: 0 };
+  const portfolio: KindTally = { claimed: 0, done: 0, failed: 0 };
 
   // embed_text first (§12.2 embed row: fused needs captions but NOT
-  // text-embed results — order is priority, not dependency).
+  // text-embed results — order is priority, not dependency). Portfolio last:
+  // product vectors serve live matching; portfolio images only seed v_D0.
   await drainEmbedText(deps, text);
   await drainEmbedFused(deps, fused);
+  await drainPortfolioEmbed(deps, portfolio);
 
   const result: EmbedBatchResult = {
-    claimed: text.claimed + fused.claimed,
-    done: text.done + fused.done,
-    failed: text.failed + fused.failed,
+    claimed: text.claimed + fused.claimed + portfolio.claimed,
+    done: text.done + fused.done + portfolio.done,
+    failed: text.failed + fused.failed + portfolio.failed,
     ms: Date.now() - t0,
-    kinds: { embed_text: text, embed_fused: fused },
+    kinds: { embed_text: text, embed_fused: fused, portfolio_embed: portfolio },
   };
   deps.log?.('batch_done', { ...result });
   return result;
