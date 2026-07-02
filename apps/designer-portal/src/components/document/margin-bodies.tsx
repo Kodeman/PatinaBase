@@ -23,6 +23,7 @@ import {
   useSendMessage,
   useThreadMessages,
   useUpdateDecision,
+  useUpdateDecisionStatus,
   type ConsentMethod,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
@@ -30,6 +31,7 @@ import { invalidateMarginSurfaces, useSendWeeklyPulse } from '@/hooks/use-margin
 import { useEscalateNoteToDecision } from '@/hooks/use-margin-notes';
 import { AmendmentSheet } from '@/components/document/overlays/amendment-sheet';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
+import { extendRevivesDecision } from '@/lib/document/decision-edges';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
 import { openInvoiceFolio } from './accounts/invoice-overlays';
@@ -125,13 +127,19 @@ export function DecisionBody({
   // evidence / timestamp) — previously a date-only "Resolved · date" line.
   const { data: overrides } = useDecisionOverrides(row.item_id) as { data: AnyRecord[] | undefined };
   const reminder = useSendDecisionReminder();
-  const update = useUpdateDecision();
+  // R83: the margin's quiet grammar — failures render inline at the act, never
+  // as the global toast (errorSurface:'inline').
+  const update = useUpdateDecision({ errorSurface: 'inline' });
+  const updateStatus = useUpdateDecisionStatus({ errorSurface: 'inline' });
   const override = useApplyDecisionOverride();
 
   // R11: the override action is personal — "Record Sarah's pick".
   const clientFirstName = (clientName ?? '').trim().split(/\s+/)[0];
 
   const [extendTo, setExtendTo] = useState(todayYmd());
+  // R51/R83 quiet confirmation for the Extend act — sage when it landed,
+  // terracotta when it didn't. Null until the designer acts.
+  const [extendNote, setExtendNote] = useState<string | null>(null);
   const [pickId, setPickId] = useState('');
   const [consent, setConsent] = useState<ConsentMethod>('verbal');
   const [evidence, setEvidence] = useState('');
@@ -158,6 +166,39 @@ export function DecisionBody({
   ].filter(Boolean);
 
   const selectedOption = options.find((o) => o.selected) ?? null;
+
+  // R87 — Extend on a STORED-expired decision revives it: bump the due_date first
+  // (useUpdateDecision), then run the 00171 expired→pending recovery so the client
+  // can respond again (the natural meaning of extending the date). On a still-live
+  // (pending/overdue) decision, Extend just moves the deadline — no status move.
+  // Mirrors the /portal detail page's handleExtendAndReopen. Quiet inline
+  // confirmation, inline error on failure (R51/R83 — no toast).
+  const isExpired = extendRevivesDecision(decision.status);
+  const extendBusy = update.isPending || updateStatus.isPending;
+  const handleExtend = async () => {
+    if (!extendTo || extendBusy) return;
+    setExtendNote(null);
+    try {
+      await update.mutateAsync({
+        decisionId: row.item_id,
+        designerClientId: decision.designer_client_id,
+        dueDate: extendTo,
+      });
+      if (isExpired) {
+        await updateStatus.mutateAsync({
+          decisionId: row.item_id,
+          status: 'pending',
+          currentStatus: decision.status,
+        });
+      }
+      invalidateMarginSurfaces(qc, projectId);
+      setExtendNote(isExpired ? 'Reopened — the client can respond again' : 'Deadline moved');
+    } catch (e) {
+      setExtendNote(
+        `Couldn't extend — ${e instanceof Error ? e.message : 'try again'}`,
+      );
+    }
+  };
 
   return (
     <div className="border-t border-[var(--color-pearl)] pt-2.5">
@@ -266,21 +307,28 @@ export function DecisionBody({
             <button
               type="button"
               className={BTN}
-              disabled={!extendTo || update.isPending}
-              onClick={() =>
-                update.mutate(
-                  {
-                    decisionId: row.item_id,
-                    designerClientId: decision.designer_client_id,
-                    dueDate: extendTo,
-                  },
-                  { onSuccess: () => invalidateMarginSurfaces(qc, projectId) },
-                )
-              }
+              disabled={!extendTo || extendBusy}
+              onClick={handleExtend}
             >
-              Extend
+              {/* R87: on an expired decision the act revives it, so it reads as
+                  a reopen; on a live one it just moves the date. */}
+              {isExpired ? 'Extend & reopen' : 'Extend'}
             </button>
           </div>
+
+          {/* R51/R83 quiet confirmation / inline failure — at the act, no toast. */}
+          {extendNote && (
+            <p
+              className={
+                extendNote.startsWith("Couldn't")
+                  ? 'rounded-[3px] border border-[rgba(196,131,111,0.4)] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.05em]'
+                  : 'font-mono text-[9px] uppercase tracking-[0.05em]'
+              }
+              style={{ color: extendNote.startsWith("Couldn't") ? '#C4836F' : '#85947C' }}
+            >
+              {extendNote}
+            </p>
+          )}
 
           <div className="flex flex-wrap items-center gap-1.5 border-t border-dashed border-[var(--color-pearl)] pt-2">
             <select

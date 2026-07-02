@@ -509,10 +509,13 @@ export function useCreateDecision() {
 /**
  * Update a decision's status (e.g., reopen a responded decision back to pending)
  */
-export function useUpdateDecisionStatus() {
+export function useUpdateDecisionStatus(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // Document callers (the margin's quiet grammar) pass { errorSurface: 'inline' }
+    // to keep the global error toast quiet — the act renders failures inline (R83).
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({
       decisionId,
       status,
@@ -563,10 +566,13 @@ export function useUpdateDecisionStatus() {
  * (delete-then-insert). Status is intentionally NOT editable here — use
  * useUpdateDecisionStatus / usePublishDraftDecision for status moves.
  */
-export function useUpdateDecision() {
+export function useUpdateDecision(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // Document callers (the margin's quiet grammar) pass { errorSurface: 'inline' }
+    // to keep the global error toast quiet — the act renders failures inline (R83).
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (input: UpdateDecisionInput) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
