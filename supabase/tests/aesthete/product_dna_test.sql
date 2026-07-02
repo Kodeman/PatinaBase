@@ -125,11 +125,17 @@ BEGIN
   EXCEPTION WHEN check_violation THEN NULL;
   END;
 
-  -- Case 2a: anon sees the catalog DNA row only.
+  -- Case 2a: anon sees catalog-visible DNA only. (Wave 2A: was an absolute
+  -- count of 1, which broke once 00244's demo seed gave the dev catalog DNA
+  -- rows — now asserts the actual transitive-visibility property: every DNA
+  -- row anon can read belongs to a product anon can see, i.e. catalog.)
   PERFORM pg_temp.assume_anon();
-  SELECT count(*) INTO v_count FROM product_dna;
-  ASSERT v_count = 1,
-    'FAIL 2a: anon should see exactly the 1 catalog DNA row, got ' || v_count;
+  SELECT count(*) INTO v_count
+    FROM product_dna d
+   WHERE NOT EXISTS (SELECT 1 FROM products p
+                      WHERE p.id = d.product_id AND p.layer = 'catalog');
+  ASSERT v_count = 0,
+    'FAIL 2a: anon must only see catalog-layer DNA rows; ' || v_count || ' leaked';
   SELECT count(*) INTO v_count FROM product_dna WHERE product_id = p_catalog;
   ASSERT v_count = 1,
     'FAIL 2b: anon should see the catalog product''s DNA, got ' || v_count;
