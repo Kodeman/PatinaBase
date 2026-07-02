@@ -51,7 +51,8 @@ export async function POST(
       .eq('user_id', user.id),
     admin
       .from('profiles')
-      .select('id, location_city, location_state, location_zip')
+      // profiles stores plain city/state/zip; leads uses the location_* names.
+      .select('id, city, state, zip')
       .eq('id', user.id)
       .maybeSingle(),
   ]);
@@ -70,15 +71,15 @@ export async function POST(
       `${savedItems.length} saved items, approx $${Math.round(totalCents / 100)} total.`;
 
   // 4. Upsert the lead — one draft per (homeowner, room_scan) at a time.
-  const leadRow: Record<string, unknown> = {
+  const leadRow = {
     homeowner_id: user.id,
     project_type: body.project_type ?? room.type ?? 'other',
     project_description: description,
     budget_range: body.budget_range ?? null,
     timeline: body.timeline ?? null,
-    location_city: profileRes.data?.location_city ?? null,
-    location_state: profileRes.data?.location_state ?? null,
-    location_zip: profileRes.data?.location_zip ?? null,
+    location_city: profileRes.data?.city ?? null,
+    location_state: profileRes.data?.state ?? null,
+    location_zip: profileRes.data?.zip ?? null,
     room_scan_id: scanRes.data?.id ?? null,
     status: 'pending',
     match_reasons: {

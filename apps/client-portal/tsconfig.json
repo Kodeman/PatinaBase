@@ -47,9 +47,12 @@
     "**/*.test.tsx",
     "**/*.spec.ts",
     "**/*.spec.tsx",
+    "src/test-utils/**",
     "../../packages/patina-design-system/src/**/*.test.ts",
     "../../packages/patina-design-system/src/**/*.test.tsx",
+    "../../packages/patina-design-system/src/**/*.stories.tsx",
     "../../packages/help-system/src/**/*.test.ts",
-    "../../packages/help-system/src/**/*.test.tsx"
+    "../../packages/help-system/src/**/*.test.tsx",
+    "../../packages/help-system/src/**/*.stories.tsx"
   ]
 }

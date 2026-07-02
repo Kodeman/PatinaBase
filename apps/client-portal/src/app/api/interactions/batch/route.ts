@@ -13,12 +13,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@patina/supabase/server';
 import { createAdminClient } from '@patina/supabase/client';
+import type { Database, Json } from '@patina/supabase';
 
 type IncomingEvent = {
   event_type: string;
   product_id?: string | null;
   room_id?: string | null;
-  metadata?: Record<string, unknown>;
+  metadata?: Json;
   timestamp?: string;
 };
 
@@ -76,7 +77,14 @@ export async function POST(request: NextRequest) {
     created_at: e.timestamp ?? new Date().toISOString(),
   }));
 
-  const { error: insertError } = await admin.from('interactions').insert(rows);
+  // `interactions.product_id` is NOT NULL (migration 00067), but room-level
+  // events (feed_loaded, room_channel_viewed, ...) carry no product_id — those
+  // rows are rejected by the DB constraint at runtime today. Relaxing the
+  // column is a schema change owed separately; keep the wire shape as-is and
+  // bridge the type here.
+  const { error: insertError } = await admin
+    .from('interactions')
+    .insert(rows as unknown as Database['public']['Tables']['interactions']['Insert'][]);
   if (insertError) {
     console.error('[interactions/batch] insert failed', insertError);
     return NextResponse.json({ error: 'insert_failed' }, { status: 500 });
