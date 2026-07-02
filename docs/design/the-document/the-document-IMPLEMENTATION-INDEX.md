@@ -1,11 +1,13 @@
 # THE DOCUMENT — Implementation Index
 
-**Drive Claude Code from this one page.** Updated 2026-07-01.
+**Drive Claude Code from this one page.** Updated 2026-07-02.
 Authority order: **codebase → spec → prototypes → `DECISIONS.md`.**
 
 ## Snapshot
-- `DECISIONS.md` through **R72** (R71 = proposal-watch, logged in the project log) · spec **v1.6** (a **v1.7 fold is owed** for R61–R72) · flipped to default (flag `the-document-pilot`).
-- Migrations: Document stack **00191–00231** (+00232–00235 field-capture, separate workstream). **Prod is at 00229** — owes 00230–00231 + the `proposal-nudge` edge fn (blocked on LAN access to the prod box as of 2026-07-01).
+- `DECISIONS.md` through **R91 · I48** (R71 = proposal-watch, logged in the project log) · spec **v1.6** (a **v1.7 fold is owed** — now spans **R61–R90** + the parity re-audit I43) · flipped to default (flag `the-document-pilot`).
+- **The parity re-audit + gap-closure program is complete on `main`** (2026-07-02, head `53e69069`): re-swept v2 gap ledger (I43), funnel repair (I45), **Wave 1** (Tracks 7/8/9/11-M — I46, all P0s closed), the R73–R91 ruling round, and **Wave 2** (the Post R82 · proposal depth + tier mirror R85/R86 · decision edges R87 · Library import/validate/search R88 · help affordance R89 · scan sheet R90 — I47/I48). Only the **R21 dissolve** remains (old-URL redirects → Document surfaces, zone removal, `next.config.js` redirect table, DocumentGate retirement).
+- Migrations: Document stack **00191–00253** (00239–00251 = a separate aesthete workstream; the Document's own new numbers are 00252 proposal-folio anchor + 00253 apply_scope_change guard). **Prod is at 00229** — owes **00230–00253** + the `proposal-nudge` edge fn (blocked on LAN access to the prod box).
+- **Spec v1.7 fold owed** = consolidate R61–R90 + I43 into `the-document-spec-v1.7.md`; until then `DECISIONS.md` (through I48) is the authoritative record and the gap ledger is `portal-vs-desk-feature-gap-matrix-v2.md`.
 
 ## Built & live — verified in the running app
 Slices 0–6 · **THE FLIP** · Track 1 (in-document parity) · Track 2 (the Orders book) · Track 3 (Library Room · Engine · Accounts book · Composing Page) · Track 4 (Proposal Authoring) · Track 5 (Project Coordination / the ball-in-court) · the Decision Composer (R55–R56) · the People Room (R57–R60) · **Track 6 (R61–R66 + R65 refinements — merged `54885b1a`)** · the Account sheet & nameplate (R67) · the household (R68 + `set_document_client` 00225) · the Direction work band (R68.1) · the quiet timer (R69) · **the Piece** `/library/[id]` (R70) · **proposal watch + nudge** (R71, migrations 00230–00231) · **the light Desk** (R72).
