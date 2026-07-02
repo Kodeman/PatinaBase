@@ -17,11 +17,18 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
+  useProcurementItems,
   useSendMessage,
   useStartVendorBrief,
   useThreadMessages,
   useUser,
 } from '@patina/supabase';
+import {
+  OrderAssistant,
+  type OrderAssistantFFEItem,
+  type OrderAssistantProject,
+  type OrderAssistantVendor,
+} from '@/components/portal/procurement/order-assistant';
 import { Stamp } from './stamp';
 import { MItem } from './m-item';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
@@ -51,6 +58,123 @@ const PO_STAMP: Record<string, { color: string; ink?: string }> = {
 
 const termsLabel = (vendor: AnyRecord): string =>
   vendor.default_payment_terms ? vendor.default_payment_terms.replace(/_/g, ' ') : 'terms n/a';
+
+// ─── PRC-24 (R84): "Order all —" — the multi-line Order Assistant ──────────
+
+/**
+ * An item is orderable when approved and not yet on a PO; decision-blocked
+ * items are excluded up front so the assistant never opens on a batch it
+ * would refuse. Ported from the by-vendor page's W3-T3a gate
+ * (app/(portal)/portal/procurement/by-vendor/page.tsx — isOrderable).
+ */
+const isOrderable = (it: AnyRecord): boolean => {
+  if (it.status !== 'approved' || it.purchase_order_id) return false;
+  if (it.blocked && it.blocked_by_decision_id) return false;
+  return !!it.vendor_id;
+};
+
+/** One assistant session — one (vendor, project) pair → one PO (W3-T3a). */
+interface PendingOrder {
+  vendor: OrderAssistantVendor;
+  project: OrderAssistantProject;
+  ffeItems: OrderAssistantFFEItem[];
+}
+
+/**
+ * The vendor page's whole-queue ordering act: every approved-unordered FF&E
+ * line the studio holds with this vendor, fed to the existing OrderAssistant
+ * (all steps, same atomic create-PO RPC + sidemark + coverage vote). One PO
+ * covers one project, so a multi-project vendor enqueues one session per
+ * (vendor, project) and the assistant walks the queue — the by-vendor page's
+ * exact mechanism, in the book's DM-mono grammar. PRC-09's order-all rides
+ * this same act.
+ */
+function VendorOrderAll({ vendor }: { vendor: AnyRecord }) {
+  const { data: items } = useProcurementItems({ vendorId: vendor.id }) as {
+    data: AnyRecord[] | undefined;
+  };
+  const orderable = useMemo(() => (items ?? []).filter(isOrderable), [items]);
+  const [queue, setQueue] = useState<PendingOrder[]>([]);
+  const active = queue[0] ?? null;
+
+  // Catalog vendors keep their Patina-handled path (W1.5.5) — no manual POs.
+  if (vendor.is_patina_catalog || orderable.length === 0) return null;
+
+  const orderAll = () => {
+    const assistantVendor: OrderAssistantVendor = {
+      id: vendor.id,
+      name: vendor.name,
+      default_payment_terms: vendor.default_payment_terms ?? null,
+      trade_portal_url: vendor.trade_portal_url ?? undefined,
+      trade_account_email: vendor.trade_account_email ?? undefined,
+      is_patina_catalog: vendor.is_patina_catalog ?? false,
+      orders_email: vendor.orders_email ?? null,
+      contact_info: vendor.contact_info ?? null,
+    };
+    const byProject = new Map<string, AnyRecord[]>();
+    for (const it of orderable) {
+      const list = byProject.get(it.project_id) ?? [];
+      list.push(it);
+      byProject.set(it.project_id, list);
+    }
+    setQueue(
+      Array.from(byProject.entries()).map(([pid, list]) => ({
+        vendor: assistantVendor,
+        project: { id: pid, name: list[0].project?.name ?? 'Project' },
+        ffeItems: list.map((it) => ({
+          id: it.id,
+          name: it.name,
+          room: it.room?.name,
+          line_total_cents: it.line_total_cents ?? 0,
+          // Dual pricing (00185/00186): the assistant totals
+          // COALESCE(trade, unit) × qty, matching the RPC's server total.
+          quantity: it.quantity ?? 1,
+          unit_price_cents: it.unit_price_cents ?? null,
+          trade_price_cents: it.trade_price_cents ?? null,
+          blocked: it.blocked,
+          blocked_by_decision_id: it.blocked_by_decision_id ?? null,
+          blocked_reason: it.blocked_reason,
+        })),
+      })),
+    );
+  };
+
+  return (
+    <>
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <button
+          type="button"
+          onClick={orderAll}
+          className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+        >
+          Order all — {orderable.length} item{orderable.length === 1 ? '' : 's'} →
+        </button>
+        <span className={MONO_LABEL}>approved · unordered</span>
+      </div>
+      {/* D4 inside the book: the shared assistant carries shadow-xl in the
+          old zones — strip it here without touching it (the R3/line-unfold
+          precedent). */}
+      {active && (
+        <div className="contents [&_.shadow-xl]:shadow-none">
+          <OrderAssistant
+            open
+            onOpenChange={(open: boolean) => {
+              if (!open) setQueue((q) => q.slice(1));
+            }}
+            vendor={active.vendor}
+            project={active.project}
+            ffeItems={active.ffeItems}
+            scopeDisclaimer={
+              queue.length > 1
+                ? `${queue.length} project orders queued for ${active.vendor.name} — you'll confirm each in turn.`
+                : undefined
+            }
+          />
+        </div>
+      )}
+    </>
+  );
+}
 
 /** The vendor's brief threads, newest first (RLS scopes to the caller). */
 function useVendorThreads(contactProfileId: string | null) {
@@ -376,6 +500,9 @@ export function VendorsBookPage({
 
       {/* ── Orders page: open POs, PO-anchored, deep-link into documents ── */}
       {page === 'orders' && (
+        <>
+        {/* PRC-24: the whole approved-unordered queue, one act. */}
+        <VendorOrderAll vendor={vendor} />
         <ul>
           {openPos.map((po) => {
             const stamp = PO_STAMP[po.status] ?? PO_STAMP.draft;
@@ -414,6 +541,7 @@ export function VendorsBookPage({
             </li>
           )}
         </ul>
+        </>
       )}
 
       {/* ── Thread page: the vendor comms (.mitem grammar) ── */}
