@@ -286,6 +286,8 @@ function createNoOpSpan(): Span {
     setAttribute: () => ({} as Span),
     setAttributes: () => ({} as Span),
     addEvent: () => ({} as Span),
+    addLink: () => ({} as Span),
+    addLinks: () => ({} as Span),
     setStatus: () => ({} as Span),
     updateName: () => ({} as Span),
     end: () => {},

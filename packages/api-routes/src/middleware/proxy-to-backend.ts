@@ -441,7 +441,7 @@ export async function proxyToBackend(
 export function createProxyHandler(
   serviceName: string,
   baseUrl: string,
-  options: Partial<Omit<ProxyConfig, 'service'>> = {},
+  options: Partial<Omit<ProxyConfig, 'service'>> & { service?: Partial<ServiceConfig> } = {},
 ) {
   return async (request: Request, context: RouteContext): Promise<Response> => {
     return proxyToBackend(request, context, {

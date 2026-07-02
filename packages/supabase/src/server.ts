@@ -3,7 +3,7 @@
  * Provides authenticated server client creation via cookies.
  */
 import { createServerClient as createSSRServerClient } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { cookies, headers } from 'next/headers';
 import type { Database } from './database.types';
 import { getCookieDomain } from './lib/cookie-domain';
@@ -69,10 +69,14 @@ export function createServiceClient() {
  * Create a Supabase server client for use in Server Components and Route Handlers.
  * Reads auth session from cookies automatically.
  */
-export async function createServerClient() {
+export async function createServerClient(): Promise<SupabaseClient<Database>> {
   const cookieStore = await cookies();
   const cookieOptions = await resolveServerCookieOptions();
 
+  // @supabase/ssr@0.5.x still instantiates the pre-2.49 SupabaseClient generics,
+  // which degrade every table type to `never` under @supabase/supabase-js@2.98.
+  // The runtime object is a plain SupabaseClient, so re-anchor the type on the
+  // supabase-js generics until @supabase/ssr is bumped to a matching release.
   return createSSRServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookieOptions,
     cookies: {
@@ -92,7 +96,7 @@ export async function createServerClient() {
         }
       },
     },
-  });
+  }) as unknown as SupabaseClient<Database>;
 }
 
 /**

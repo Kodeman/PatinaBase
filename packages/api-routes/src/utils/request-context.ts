@@ -36,6 +36,9 @@ export interface RouteContext {
 
   /** Additional custom context data */
   custom?: Record<string, unknown>;
+
+  /** Auth token for backend proxying, stored under a private symbol (see setAuthToken/getAuthToken) */
+  [AUTH_TOKEN_KEY]?: string;
 }
 
 /**
