@@ -12,13 +12,16 @@
  */
 
 import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useDamageClaims,
   usePurchaseOrders,
   useReceivingInspections,
+  useUpdateDamageClaim,
 } from '@patina/supabase';
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
 import { LedgerFrontMatter } from './ledger-front-matter';
+import { Stamp } from './stamp';
 import { receivingFrontMatter } from '@/lib/document/ledger-summary';
 import { fmtDay } from '@/lib/document/format';
 
@@ -27,6 +30,162 @@ type AnyRecord = any;
 
 const isoOffsetDays = (days: number) =>
   new Date(Date.now() + days * 86_400_000).toISOString();
+
+/**
+ * PRC-11 (R84): one open damage claim — DamageClaimDrawer's lifecycle ported
+ * into the book's row grammar. Review/edit the auto-drafted description and
+ * notify the vendor (drafted → vendor_notified), or close it with an
+ * optional resolution note (vendor_notified → resolved). Forward-only, the
+ * same useUpdateDamageClaim validation. Quiet confirms (R51), inline
+ * failures (R83). Photos stay iOS-only, as in the drawer.
+ */
+function OpenClaimRow({
+  claim,
+  onOpenDocument,
+}: {
+  claim: AnyRecord;
+  onOpenDocument: (projectId: string | null) => void;
+}) {
+  const qc = useQueryClient();
+  const updateClaim = useUpdateDamageClaim({ errorSurface: 'inline' });
+  const [act, setAct] = useState<'notify' | 'resolve' | null>(null);
+  const [description, setDescription] = useState<string>(claim.description ?? '');
+  const [note, setNote] = useState('');
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const po = claim.inspection?.purchase_order;
+  const vendorName = po?.vendor?.name ?? 'Vendor';
+  const projectName = po?.project?.name ?? 'Project';
+  const drafted = claim.state === 'drafted';
+
+  const run = async (state: 'vendor_notified' | 'resolved') => {
+    if (updateClaim.isPending) return;
+    setError(null);
+    try {
+      await updateClaim.mutateAsync({
+        id: claim.id,
+        state,
+        // Notify carries the reviewed description with it (the drawer's
+        // review-then-notify); resolve carries the optional note.
+        ...(state === 'vendor_notified' ? { description } : {}),
+        ...(state === 'resolved' && note.trim() ? { resolution_notes: note.trim() } : {}),
+      });
+      // One act, many surfaces (§5): line stamps, unfold, Desk claim need.
+      void qc.invalidateQueries({ queryKey: ['project-ffe-items'] });
+      void qc.invalidateQueries({ queryKey: ['document-state'] });
+      setDone(
+        state === 'vendor_notified'
+          ? `Vendor notified — ${vendorName} has the claim.`
+          : 'Resolved — folded into the record.',
+      );
+      setAct(null);
+    } catch (e) {
+      setError((e as Error).message || 'The claim could not be updated.');
+    }
+  };
+
+  return (
+    <li className="border-b border-[rgba(250,247,242,0.08)] px-1 py-2.5">
+      <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3">
+        <div>
+          <p className="text-[12.5px] font-medium text-[var(--color-off-white)]">
+            {vendorName} · {projectName}
+          </p>
+          <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+            {[
+              `drafted ${fmtDay(claim.created_at)}`,
+              claim.vendor_notified_at ? `vendor notified ${fmtDay(claim.vendor_notified_at)}` : null,
+              claim.inspection?.outcome ?? null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        </div>
+        <Stamp
+          label={drafted ? 'claim drafted' : 'vendor notified'}
+          color={drafted ? 'var(--color-terracotta)' : 'var(--color-golden-hour)'}
+          ink={drafted ? undefined : '#D8BE56'}
+        />
+        <button
+          type="button"
+          onClick={() => setAct((cur) => (cur ? null : drafted ? 'notify' : 'resolve'))}
+          aria-expanded={act != null}
+          className="whitespace-nowrap rounded-[3px] border border-[var(--color-clay)] px-2.5 py-1 text-[10.5px] text-[var(--color-clay)] hover:bg-[rgba(196,165,123,0.1)]"
+        >
+          {drafted ? 'Notify vendor' : 'Mark resolved'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenDocument(po?.project?.id ?? null)}
+          className="whitespace-nowrap text-[10.5px] text-[var(--color-clay)] hover:underline"
+        >
+          open document →
+        </button>
+      </div>
+
+      {act === 'notify' && (
+        <div className="mt-2 flex items-end gap-2 pl-1">
+          <textarea
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe the damage or shortage before notifying the vendor."
+            aria-label="Claim description"
+            className="flex-1 resize-none rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-off-white)] outline-none placeholder:text-[rgba(250,247,242,0.3)]"
+          />
+          <button
+            type="button"
+            disabled={updateClaim.isPending}
+            onClick={() => void run('vendor_notified')}
+            className="whitespace-nowrap rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {updateClaim.isPending ? 'Notifying…' : 'Notify vendor'}
+          </button>
+        </div>
+      )}
+
+      {act === 'resolve' && (
+        <div className="mt-2 flex items-end gap-2 pl-1">
+          <textarea
+            rows={2}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="How was it resolved? (replacement shipped, credit issued…)"
+            aria-label="Resolution notes"
+            className="flex-1 resize-none rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-off-white)] outline-none placeholder:text-[rgba(250,247,242,0.3)]"
+          />
+          <button
+            type="button"
+            disabled={updateClaim.isPending}
+            onClick={() => void run('resolved')}
+            className="whitespace-nowrap rounded-[4px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-2.5 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {updateClaim.isPending ? 'Resolving…' : 'Mark resolved'}
+          </button>
+        </div>
+      )}
+
+      {done && !error && (
+        // R51: the quiet confirmation (the row leaves the open set on refetch).
+        <p className="mt-1.5 text-[10.5px] text-[rgba(250,247,242,0.7)]">{done}</p>
+      )}
+      {error && (
+        // R83: inline at the act — the reason and a retry.
+        <p role="alert" className="mt-1.5 text-[10.5px] text-[var(--color-terracotta)]">
+          {error}{' '}
+          <button
+            type="button"
+            onClick={() => void run(drafted ? 'vendor_notified' : 'resolved')}
+            className="underline hover:opacity-80"
+          >
+            try again
+          </button>
+        </p>
+      )}
+    </li>
+  );
+}
 
 export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (projectId: string | null) => void }) {
   const since30 = useMemo(() => isoOffsetDays(-30), []);
@@ -48,6 +207,13 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
   const [showCleared, setShowCleared] = useState(false);
 
   const openClaimCount = (draftedClaims?.length ?? 0) + (notifiedClaims?.length ?? 0);
+
+  // PRC-11: the open-claims group — drafted first (they need the notify act),
+  // then vendor-notified, newest first within each (the hooks' order).
+  const openClaims = useMemo(
+    () => [...(draftedClaims ?? []), ...(notifiedClaims ?? [])],
+    [draftedClaims, notifiedClaims],
+  );
 
   // Warehouse-day queue: delivered POs with no inspection logged, oldest ETA
   // first (the day's work, in arrival order).
@@ -139,6 +305,21 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
               </li>
             )}
           </ul>
+
+          {/* PRC-11: open claims — the lifecycle acts live where the book
+              already counts them. */}
+          {openClaims.length > 0 && (
+            <>
+              <p className="mb-1 font-mono text-[8.5px] font-semibold uppercase tracking-[0.08em] text-[rgba(250,247,242,0.4)]">
+                Open claims · {openClaims.length}
+              </p>
+              <ul className="mb-5">
+                {openClaims.map((c) => (
+                  <OpenClaimRow key={c.id} claim={c} onOpenDocument={onOpenDocument} />
+                ))}
+              </ul>
+            </>
+          )}
 
           {/* The Settled fold — cleared inspections, collapsed (R12 pattern). */}
           {cleared.length > 0 && (

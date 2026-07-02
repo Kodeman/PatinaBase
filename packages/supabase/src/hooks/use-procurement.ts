@@ -1508,10 +1508,15 @@ export function useCreateReceivingInspection() {
  *
  * Invalidates: ['damage-claims'], ['receiving-inspections'],
  *              ['today-procurement-counts']
+ *
+ * Document-surface callers (R83 error grammar) pass `{ errorSurface:
+ * 'inline' }` so the designer portal's global mutation toast stays quiet —
+ * see useSendInvoice for the precedent.
  */
-export function useUpdateDamageClaim() {
+export function useUpdateDamageClaim(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (input: UpdateDamageClaimInput): Promise<DamageClaim> => {
       const supabase = getSupabase() as any;
 
