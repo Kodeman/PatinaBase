@@ -11,14 +11,30 @@ internal Docker network only.
 ## API
 
 ```
-POST /embed/text   {"inputs": [{"id": "…", "text": "…", "kind": "document" | "query"}]}
-POST /embed/image  {"inputs": [{"id": "…", "url": "https://…"}]}
+POST /embed/text          {"inputs": [{"id": "…", "text": "…", "kind": "document" | "query"}]}
+POST /embed/image         {"inputs": [{"id": "…", "url": "https://…"}]}
+POST /fit/taste           BT MAP taste refit (design §8.2 — Wave 4A)
+POST /fit/taste/backtest  chronological split eval (design §8.3/§14.4)
 GET  /healthz  →   {"status", "model_version", "text_dim": 768, "image_dim": 768, "warmed": true}
 ```
 
-- **Auth:** `/embed/*` requires `Authorization: Bearer $INFERENCE_TOKEN`;
+- **Auth:** `/embed/*` and `/fit/*` require `Authorization: Bearer $INFERENCE_TOKEN`;
   `/healthz` is open. The worker **refuses to start** if `INFERENCE_TOKEN` is
   unset.
+- **`/fit/taste` (stateless, model-free):** request carries
+  `{designer: {theta_prior: [94 floats]|null}, judgments: [{phi_a, phi_b,
+  choice: a|b|neither|both, weight, age_days}], hyper: {tau_days: 180,
+  lambda0: 0.5, lambda_n0: 30}}` → `{theta, converged, n_effective,
+  train_accuracy, n_used, n_skipped, n_iter, lambda_used, dim}`. φ features
+  are computed DB-side by 00244's `_aesthete_phi` (the 94-d ordering contract
+  lives in SQL); a `null` prior means the zero vector. `neither`/`both` rows
+  carry no pairwise preference and are skipped (counted in `n_skipped`).
+  Solved by damped Newton on the convex §8.2 objective — pure numpy, no new
+  dependencies. `/fit/taste/backtest` adds `test_fraction` (default 0.3),
+  splits chronologically by `age_days`, and returns
+  `{pairwise_accuracy, auc, prior_accuracy, prior_auc, n_train, n_test}` —
+  `prior_accuracy` is θ_H scored on the same held-out block, so the §14.4
+  dial-unlock comparison (θ_D ≥ θ_H + 5 pts) is one call.
 - **Batch:** ≤ 16 inputs per request; more (or zero) is a `400`.
 - **Response (both embed routes):**
   `{"model_version": "…", "vectors": [{"id", "dim": 768, "v": [768 floats]}], "errors": [{"id", "reason"}]}`

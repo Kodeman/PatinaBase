@@ -2,12 +2,14 @@
 
 FastAPI app exposing:
 
-    POST /embed/text   {inputs: [{id, text, kind: 'document'|'query'}]}
-    POST /embed/image  {inputs: [{id, url}]}          # batch ≤ 16
-    GET  /healthz      → {status, model_version, text_dim, image_dim, warmed}
+    POST /embed/text          {inputs: [{id, text, kind: 'document'|'query'}]}
+    POST /embed/image         {inputs: [{id, url}]}          # batch ≤ 16
+    POST /fit/taste           BT MAP taste refit (design §8.2 — Wave 4A)
+    POST /fit/taste/backtest  chronological split eval (§8.3/§14.4)
+    GET  /healthz             → {status, model_version, text_dim, image_dim, warmed}
 
-Stateless, no DB access, internal Docker network only. /embed/* requires
-`Authorization: Bearer $INFERENCE_TOKEN`; /healthz is open.
+Stateless, no DB access, internal Docker network only. /embed/* and /fit/*
+require `Authorization: Bearer $INFERENCE_TOKEN`; /healthz is open.
 
 Task prefixes are applied HERE, worker-side, from `kind` — callers never send
 prefixes (mixed prefixes silently degrade similarity; §4.2).
@@ -29,12 +31,17 @@ from starlette.concurrency import run_in_threadpool
 
 from .config import Settings, settings_from_env
 from .embedder import EmbedderLike
+from .fit import FitInputError, backtest, fit_bt_map
 from .images import ImageFetchError, fetch_image
 from .schemas import (
     EmbedResponse,
     Healthz,
     ImageEmbedRequest,
     ItemError,
+    TasteBacktestRequest,
+    TasteBacktestResponse,
+    TasteFitRequest,
+    TasteFitResponse,
     TextEmbedRequest,
     Vector,
 )
@@ -216,6 +223,84 @@ def create_app(
 
         return EmbedResponse(
             model_version=eng.model_version, vectors=vectors, errors=errors
+        )
+
+    # ── taste refit (design §8.2/§14.4 — Wave 4A) ────────────────────────────
+    # Pure numpy, no model files involved: the request carries φ features
+    # (computed DB-side by 00244's _aesthete_phi — the 94-d ordering contract
+    # lives in SQL), the prior θ_H, and hyperparameters. Judgment lists cap at
+    # FIT_MAX_JUDGMENTS (a full designer history, not an embed batch — the
+    # 16-item embed cap does not apply).
+
+    FIT_MAX_JUDGMENTS = 10_000
+
+    def check_fit_size(n: int) -> None:
+        if n > FIT_MAX_JUDGMENTS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"judgments must contain ≤ {FIT_MAX_JUDGMENTS} items (got {n})",
+            )
+
+    @app.post(
+        "/fit/taste", response_model=TasteFitResponse, dependencies=[Depends(require_token)]
+    )
+    async def fit_taste(req: TasteFitRequest) -> TasteFitResponse:
+        check_fit_size(len(req.judgments))
+        enter_gate()
+        try:
+            result = await run_in_threadpool(
+                fit_bt_map,
+                [j.model_dump() for j in req.judgments],
+                req.designer.theta_prior,
+                req.hyper.tau_days,
+                req.hyper.lambda0,
+                req.hyper.lambda_n0,
+            )
+        except FitInputError as err:
+            raise HTTPException(status_code=400, detail=str(err))
+        finally:
+            gate.leave()
+        return TasteFitResponse(
+            theta=result.theta.tolist(),
+            converged=result.converged,
+            n_effective=result.n_effective,
+            train_accuracy=result.train_accuracy,
+            n_used=result.n_used,
+            n_skipped=result.n_skipped,
+            n_iter=result.n_iter,
+            lambda_used=result.lambda_used,
+            dim=result.dim,
+        )
+
+    @app.post(
+        "/fit/taste/backtest",
+        response_model=TasteBacktestResponse,
+        dependencies=[Depends(require_token)],
+    )
+    async def fit_taste_backtest(req: TasteBacktestRequest) -> TasteBacktestResponse:
+        check_fit_size(len(req.judgments))
+        enter_gate()
+        try:
+            result = await run_in_threadpool(
+                backtest,
+                [j.model_dump() for j in req.judgments],
+                req.designer.theta_prior,
+                req.hyper.tau_days,
+                req.hyper.lambda0,
+                req.hyper.lambda_n0,
+                req.test_fraction,
+            )
+        except FitInputError as err:
+            raise HTTPException(status_code=400, detail=str(err))
+        finally:
+            gate.leave()
+        return TasteBacktestResponse(
+            pairwise_accuracy=result.pairwise_accuracy,
+            auc=result.auc,
+            prior_accuracy=result.prior_accuracy,
+            prior_auc=result.prior_auc,
+            n_train=result.n_train,
+            n_test=result.n_test,
         )
 
     return app
