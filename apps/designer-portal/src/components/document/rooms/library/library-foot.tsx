@@ -11,7 +11,11 @@
  * from designer_teaching_stats (they are running scores, not daily counts).
  */
 
-import { useDesignerTeachingStats, useDesignerTaughtToday } from '@patina/supabase';
+import {
+  useDesignerTeachingStats,
+  useDesignerTaughtToday,
+  useMyJudgmentCount,
+} from '@patina/supabase';
 
 interface TeachingStats {
   products_taught: number;
@@ -22,6 +26,9 @@ interface TeachingStats {
 export function LibraryFoot() {
   const { data, isLoading } = useDesignerTeachingStats();
   const { data: taughtTodayCount, isLoading: loadingToday } = useDesignerTaughtToday();
+  // Wave 3B: lifetime side-by-side judgments — shown only once any exist, so
+  // the line never grows a fourth "—" for designers who haven't sat yet.
+  const { data: judgmentCount } = useMyJudgmentCount();
   const stats = (data ?? null) as TeachingStats | null;
 
   // Real-or-nothing (R32/R37): show "—" while a read is in flight rather than
@@ -40,6 +47,9 @@ export function LibraryFoot() {
       <FootStat value={taughtToday == null ? '—' : String(taughtToday)} label="Taught today" />
       <FootStat value={acc == null ? '—' : `${acc}%`} label="Your accuracy" />
       <FootStat value={impact == null ? '—' : String(impact)} label="Matches sharpened" />
+      {(judgmentCount ?? 0) > 0 && (
+        <FootStat value={String(judgmentCount)} label="Pairs weighed" />
+      )}
       <p className="ml-auto max-w-[32ch] text-right text-[0.66rem] italic text-[var(--color-aged-oak)]">
         The shelves are your eye, made legible to the Engine.
       </p>

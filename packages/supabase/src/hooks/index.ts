@@ -1128,3 +1128,46 @@ export type {
   FfeItemCoverage,
   FfeInvoiceCoverageMap,
 } from './use-invoices';
+// Aesthete Engine — Wave 3B hooks batch (design §5.2 prefill, §8 taste, §8.5 Your Eye)
+export {
+  useProductDnaDraft,
+  resolveSpectrumPrefill,
+  summarizeDraftFacts,
+} from './use-product-dna';
+export type {
+  ProductDnaDraft,
+  DnaDraftBody,
+  DnaDraftStyle,
+  DnaDraftMaterial,
+  DnaDraftPatina,
+  SpectrumPrefill,
+  SpectrumPrefillSource,
+} from './use-product-dna';
+export {
+  useDueTasteProbes,
+  useJudgmentPool,
+  useMyJudgmentCount,
+  useSubmitTasteJudgment,
+  useSubmitTasteCorrection,
+  useMyTasteProfile,
+  useMySignatureBiases,
+  useUpdateMyBiases,
+  useMyStyleConfidence,
+  buildJudgmentDeck,
+  nudgeBiasStrength,
+} from './use-aesthete-taste';
+export type {
+  JudgmentChoice,
+  JudgmentContext,
+  JudgmentProduct,
+  JudgmentPair,
+  TasteProbeRow,
+  SubmitJudgmentInput,
+  SubmitJudgmentResult,
+  SubmitCorrectionInput,
+  TasteProfileRow,
+  BiasStatus,
+  SignatureBiasRow,
+  BiasOverride,
+  StyleConfidenceRow,
+} from './use-aesthete-taste';

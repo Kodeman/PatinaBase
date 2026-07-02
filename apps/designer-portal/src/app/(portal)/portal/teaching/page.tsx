@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useDesignerTeachingStats, useTeachingQueue } from '@patina/supabase';
 import {
@@ -9,7 +10,6 @@ import {
   LoadingStrata,
   ProductListItem,
 } from '@/components/portal';
-import { ProgressBar } from '@/components/portal/progress-bar';
 import { useHydrated } from '@/hooks/use-hydrated';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,8 +34,6 @@ export default function TeachingPage() {
   const accuracy = accuracyScore != null ? Math.round(accuracyScore * 100) : null;
   // Real cumulative count of future matches this designer's teaching improved.
   const matchImpact = stats?.match_impact_count ?? 0;
-  const dailyGoal = 20;
-  const todayProgress = stats?.today_count ?? Math.min(totalTaught, dailyGoal);
 
   return (
     <div className="pt-8">
@@ -47,18 +45,15 @@ export default function TeachingPage() {
         <span className="type-label-secondary">{queue.length} products need your expertise</span>
       </div>
 
-      {/* Daily Stats */}
+      {/* Stats — quiet counts, no goals or progress meters (de-gamified, R32/R37). */}
       <div className="mb-6 flex gap-0 border-b border-[var(--border-subtle)] pb-6">
         <div className="pr-8">
-          <span className="type-meta-small mb-1 block">Today&apos;s Progress</span>
+          <span className="type-meta-small mb-1 block">Taught</span>
           <span className="type-data-large" style={{ fontSize: '1.8rem' }}>
-            {todayProgress}
-            <span className="ml-1 font-body text-[0.8rem] font-normal text-[var(--text-muted)]">
-              of {dailyGoal} goal
-            </span>
+            {totalTaught.toLocaleString()}
           </span>
-          <div className="mt-2 w-[120px]">
-            <ProgressBar progress={(todayProgress / dailyGoal) * 100} />
+          <div className="mt-1 font-body text-[0.72rem] text-[var(--text-muted)]">
+            pieces, all time
           </div>
         </div>
         <div className="border-l border-[var(--border-subtle)] px-8">
@@ -75,6 +70,14 @@ export default function TeachingPage() {
           <div className="mt-1 font-body text-[0.72rem] text-[var(--text-muted)]">
             future matches improved
           </div>
+        </div>
+        <div className="ml-auto self-center">
+          <Link
+            href="/portal/teaching/your-eye"
+            className="font-body text-[0.8rem] italic text-[var(--text-muted)] underline decoration-[var(--color-pearl)] underline-offset-2 hover:text-[var(--text-primary)]"
+          >
+            See your eye →
+          </Link>
         </div>
       </div>
 
@@ -101,6 +104,13 @@ export default function TeachingPage() {
         >
           <div className="type-label mb-0.5">Deep Analysis</div>
           <div className="type-label-secondary">~15 min per product · Full intelligence mapping</div>
+        </div>
+        <div
+          className="flex-1 cursor-pointer rounded-md border-2 border-[var(--color-pearl)] p-4 hover:border-[var(--accent-primary)]"
+          onClick={() => router.push('/portal/teaching/judgments')}
+        >
+          <div className="type-label mb-0.5">Side by Side</div>
+          <div className="type-label-secondary">Seconds per pair · Which is more you?</div>
         </div>
       </div>
 

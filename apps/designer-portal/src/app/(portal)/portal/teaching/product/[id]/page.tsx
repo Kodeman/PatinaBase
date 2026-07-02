@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   useProduct,
@@ -10,7 +10,12 @@ import {
   useDesignerTeachingStats,
   useAllStyles,
   useSubmitTeaching,
+  useProductDnaDraft,
+  resolveSpectrumPrefill,
+  summarizeDraftFacts,
 } from '@patina/supabase';
+import { EngineFirstReadNote } from '../../_components/engine-first-read';
+import { CorrectionPicker } from '../../_components/correction-picker';
 import {
   DetailRow,
   StyleTag,
@@ -106,19 +111,30 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
     if (secondaryNames.length) setSecondaryStyles(secondaryNames);
   }, [rawStyles]);
 
+  // §5.2 canonical-else-draft: an untaught product prefills its sliders from
+  // the Engine's newest draft; a designer save writes the canonical row and
+  // the prefill source flips to canonical on the next read.
+  const { data: dnaDraft } = useProductDnaDraft(id);
+  const spectrumTouchedRef = useRef(false);
+  const prefill = resolveSpectrumPrefill(spectrum ?? null, dnaDraft?.draft ?? null);
+
   useEffect(() => {
-    if (!spectrum) return;
+    // Never fight the designer: once a slider moves, data arrivals stop
+    // reseeding the form.
+    if (spectrumTouchedRef.current) return;
+    if (prefill.source === 'none') return;
     const toSlider = (v: number | null | undefined) =>
       v == null ? 50 : Math.round((v + 1) * 50);
     setSpectrumValues({
-      warmth: toSlider(spectrum.warmth),
-      ornate: toSlider(spectrum.complexity),
-      formality: toSlider(spectrum.formality),
-      timeless: toSlider(spectrum.timelessness),
-      statement: toSlider(spectrum.boldness),
-      artisan: toSlider(spectrum.craftsmanship),
+      warmth: toSlider(prefill.values.warmth),
+      ornate: toSlider(prefill.values.complexity),
+      formality: toSlider(prefill.values.formality),
+      timeless: toSlider(prefill.values.timelessness),
+      statement: toSlider(prefill.values.boldness),
+      artisan: toSlider(prefill.values.craftsmanship),
     });
-  }, [spectrum]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spectrum, dnaDraft]);
 
   // Skeleton until hydrated so SSR (empty cache) and first client paint (warm
   // singleton cache) render the same tree — prevents hydration mismatch.
@@ -154,6 +170,7 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
   };
 
   const updateSpectrum = (key: string) => (value: number) => {
+    spectrumTouchedRef.current = true;
     setSpectrumValues((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -279,12 +296,18 @@ export default function TeachProductPage({ params }: { params: Promise<{ id: str
             </div>
 
             <label className={labelClass}>Style Spectrum</label>
+            {prefill.source === 'draft' && (
+              <EngineFirstReadNote facts={summarizeDraftFacts(dnaDraft?.draft)} />
+            )}
             <SpectrumSlider leftLabel="Cold" rightLabel="Warm" value={spectrumValues.warmth} onChange={updateSpectrum('warmth')} />
             <SpectrumSlider leftLabel="Minimal" rightLabel="Ornate" value={spectrumValues.ornate} onChange={updateSpectrum('ornate')} />
             <SpectrumSlider leftLabel="Casual" rightLabel="Formal" value={spectrumValues.formality} onChange={updateSpectrum('formality')} />
             <SpectrumSlider leftLabel="Trendy" rightLabel="Timeless" value={spectrumValues.timeless} onChange={updateSpectrum('timeless')} />
             <SpectrumSlider leftLabel="Subtle" rightLabel="Statement" value={spectrumValues.statement} onChange={updateSpectrum('statement')} />
             <SpectrumSlider leftLabel="Mass" rightLabel="Artisan" value={spectrumValues.artisan} onChange={updateSpectrum('artisan')} />
+            {/* §8.2: quiet structured correction — feeds the taste refit, never
+                rewrites the piece's canonical row from here. */}
+            <CorrectionPicker productId={id} />
           </TeachPanel>
 
           {/* Client Matching */}

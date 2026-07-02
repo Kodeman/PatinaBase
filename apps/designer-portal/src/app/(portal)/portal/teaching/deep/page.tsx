@@ -1,12 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useClaimNextProduct, useProductSpectrum, useSaveSpectrum } from '@patina/supabase';
+import {
+  useClaimNextProduct,
+  useProductSpectrum,
+  useSaveSpectrum,
+  useProductDnaDraft,
+  resolveSpectrumPrefill,
+  summarizeDraftFacts,
+} from '@patina/supabase';
 import { Button } from '@/components/ui/controls';
 import { LoadingStrata } from '@/components/portal/loading-strata';
 import { SpectrumSlider } from '@/components/portal/spectrum-slider';
 import { useToast } from '@/components/portal/toast-provider';
+import { EngineFirstReadNote } from '../_components/engine-first-read';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -25,11 +33,14 @@ export default function DeepAnalysisPage() {
   const isLoading = claim.isPending;
   const productId = product?.product_id || product?.id;
   const { data: spectrum } = useProductSpectrum(productId) as { data: Any };
+  // §5.2 canonical-else-draft: when no designer-confirmed spectrum row exists,
+  // prefill the sliders from the Engine's newest draft — quietly marked below.
+  const { data: dnaDraft } = useProductDnaDraft(productId);
   const saveSpectrum = useSaveSpectrum();
   const { toast } = useToast();
 
   // Sliders are 0..100; the DB stores -1..1. Seed initial slider values from
-  // any existing spectrum (db -1..1 → slider 0..100).
+  // the canonical spectrum when it exists, else the draft (-1..1 → 0..100).
   const [spectrumValues, setSpectrumValues] = useState({
     warmth: 50,
     ornate: 50,
@@ -38,22 +49,30 @@ export default function DeepAnalysisPage() {
     statement: 50,
     artisan: 50,
   });
+  const touchedRef = useRef(false);
+
+  const prefill = resolveSpectrumPrefill(spectrum ?? null, dnaDraft?.draft ?? null);
 
   useEffect(() => {
-    if (!spectrum) return;
+    // Never fight the designer: once they move a slider, data arrivals stop
+    // reseeding the form.
+    if (touchedRef.current) return;
+    if (prefill.source === 'none') return;
     const toSlider = (v: number | null | undefined) =>
       v == null ? 50 : Math.round((v + 1) * 50);
     setSpectrumValues({
-      warmth: toSlider(spectrum.warmth),
-      ornate: toSlider(spectrum.complexity),
-      formality: toSlider(spectrum.formality),
-      timeless: toSlider(spectrum.timelessness),
-      statement: toSlider(spectrum.boldness),
-      artisan: toSlider(spectrum.craftsmanship),
+      warmth: toSlider(prefill.values.warmth),
+      ornate: toSlider(prefill.values.complexity),
+      formality: toSlider(prefill.values.formality),
+      timeless: toSlider(prefill.values.timelessness),
+      statement: toSlider(prefill.values.boldness),
+      artisan: toSlider(prefill.values.craftsmanship),
     });
-  }, [spectrum]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spectrum, dnaDraft]);
 
   const updateSpectrum = (key: string) => (value: number) => {
+    touchedRef.current = true;
     setSpectrumValues((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -100,6 +119,9 @@ export default function DeepAnalysisPage() {
           )}
 
           <div className="mt-4 max-w-[480px]">
+            {prefill.source === 'draft' && (
+              <EngineFirstReadNote facts={summarizeDraftFacts(dnaDraft?.draft)} />
+            )}
             <SpectrumSlider leftLabel="Cold" rightLabel="Warm" value={spectrumValues.warmth} onChange={updateSpectrum('warmth')} />
             <SpectrumSlider leftLabel="Minimal" rightLabel="Ornate" value={spectrumValues.ornate} onChange={updateSpectrum('ornate')} />
             <SpectrumSlider leftLabel="Casual" rightLabel="Formal" value={spectrumValues.formality} onChange={updateSpectrum('formality')} />
