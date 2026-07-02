@@ -48,6 +48,32 @@ interface POForThroughput {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
 
+/** PRC-06: one lens option — quiet DM-mono text, clay when worn (R28). */
+function LensLink({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`font-mono text-[8.5px] uppercase tracking-[0.06em] transition-colors ${
+        active
+          ? 'text-[var(--color-clay)]'
+          : 'text-[rgba(250,247,242,0.45)] hover:text-[rgba(250,247,242,0.8)]'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 const PO_STAMP: Record<string, { color: string; ink?: string }> = {
   draft: { color: 'var(--color-pearl)', ink: 'rgba(250,247,242,0.6)' },
   confirmed: { color: 'var(--color-dusty-blue)' },
@@ -91,6 +117,10 @@ export function OrdersLedger({
   const [batchBusy, setBatchBusy] = useState(false);
   // PRC-07 (R84): the row whose log-acknowledgment band is unfolded.
   const [ackPoId, setAckPoId] = useState<string | null>(null);
+  // PRC-06 (R84): the quiet lenses — project + payment state, DM-mono text
+  // (the portal's FacetedFilterPopover facets, without the pills).
+  const [projectLens, setProjectLens] = useState<string | null>(null);
+  const [paymentLens, setPaymentLens] = useState<'due' | 'pending' | 'paid' | null>(null);
 
   const vendorById = useMemo(() => {
     const map = new Map<string, AnyRecord>();
@@ -98,10 +128,34 @@ export function OrdersLedger({
     return map;
   }, [vendors]);
 
-  const groups = useMemo(() => {
-    const live = (orders ?? []).filter((o) => o.status !== 'cancelled');
-    const byVendor = new Map<string, AnyRecord[]>();
+  const live = useMemo(
+    () => (orders ?? []).filter((o) => o.status !== 'cancelled'),
+    [orders],
+  );
+
+  // Lens options derive from the unlensed book — the lens narrows the page,
+  // never the vocabulary.
+  const projectOptions = useMemo(() => {
+    const map = new Map<string, string>();
     for (const o of live) {
+      const id = o.project_id ?? o.project?.id;
+      if (id) map.set(id, o.project?.name ?? 'Project');
+    }
+    return [...map.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [live]);
+
+  const groups = useMemo(() => {
+    const lensed = live
+      .filter((o) => !projectLens || (o.project_id ?? o.project?.id) === projectLens)
+      .filter(
+        (o) =>
+          !paymentLens ||
+          (o.payments ?? []).some((p: AnyRecord) => p.state === paymentLens),
+      );
+    const byVendor = new Map<string, AnyRecord[]>();
+    for (const o of lensed) {
       const list = byVendor.get(o.vendor_id) ?? [];
       list.push(o);
       byVendor.set(o.vendor_id, list);
@@ -113,7 +167,7 @@ export function OrdersLedger({
         pos,
       }))
       .sort((a, b) => a.vendorName.localeCompare(b.vendorName));
-  }, [orders, vendorById]);
+  }, [live, projectLens, paymentLens, vendorById]);
 
   const selectedVendor = useMemo(() => {
     const pos = (orders ?? []).filter((o) => selected.includes(o.id));
@@ -207,6 +261,53 @@ export function OrdersLedger({
           {isLoading && (
             <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">
               Opening the book…
+            </p>
+          )}
+          {/* PRC-06 (R84): the ledger's quiet lenses — project + payment
+              facets as DM-mono text, never FilterPills. The front matter
+              stays the whole book's opening; the lens narrows the rows. */}
+          {!isLoading && live.length > 0 && (
+            <div className="mb-4 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+              {projectOptions.length > 1 && (
+                <>
+                  <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.35)]">
+                    project ·
+                  </span>
+                  <LensLink active={!projectLens} onClick={() => setProjectLens(null)}>
+                    all
+                  </LensLink>
+                  {projectOptions.map((p) => (
+                    <LensLink
+                      key={p.id}
+                      active={projectLens === p.id}
+                      onClick={() => setProjectLens((cur) => (cur === p.id ? null : p.id))}
+                    >
+                      {p.name}
+                    </LensLink>
+                  ))}
+                  <span className="mx-1.5" aria-hidden />
+                </>
+              )}
+              <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.35)]">
+                payment ·
+              </span>
+              <LensLink active={!paymentLens} onClick={() => setPaymentLens(null)}>
+                all
+              </LensLink>
+              {(['due', 'pending', 'paid'] as const).map((s) => (
+                <LensLink
+                  key={s}
+                  active={paymentLens === s}
+                  onClick={() => setPaymentLens((cur) => (cur === s ? null : s))}
+                >
+                  {s}
+                </LensLink>
+              ))}
+            </div>
+          )}
+          {!isLoading && groups.length === 0 && (projectLens || paymentLens) && (
+            <p className="py-2 text-[11px] italic text-[rgba(250,247,242,0.4)]">
+              Nothing under this lens.
             </p>
           )}
           {groups.map((g) => (
