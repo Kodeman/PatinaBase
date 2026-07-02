@@ -12,12 +12,12 @@
  * to the filtered roster. Tracks B–D fill their view slots (see ./views, ./types).
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeopleDirectory, type PartyRole } from '@patina/supabase';
 import { deriveNurtureQueue, humanizeSince } from '@/lib/document/people-derivation';
 import { RoomShell } from '../rooms/room-shell';
-import { DirectoryView, type DirectoryRole } from './views/directory-view';
+import { DirectoryView, type DirectoryRole, type MakerLens } from './views/directory-view';
 import { PersonProfile } from './views/person-profile';
 import { ThreadsView } from './views/threads-view';
 import { NurtureView } from './views/nurture-view';
@@ -58,9 +58,30 @@ export function PeopleRoom() {
   // The Directory's role filter lives here (controlled) so the ask bar can set it.
   const [roleFilter, setRoleFilter] = useState<DirectoryRole>('all');
   const [addOpen, setAddOpen] = useState(false);
+  // R51/R83 — the quiet inline confirmation band the Directory shows after an
+  // add (never a toast). Cleared when the designer moves on (view/filter).
+  const [notice, setNotice] = useState<string | null>(null);
+  // R78 — the Makers filter's lens (roster | marketplace), lifted so walking
+  // into a profile and back doesn't drop the designer out of the marketplace.
+  const [makerLens, setMakerLens] = useState<MakerLens>('roster');
 
   const { data: all } = usePeopleDirectory({ role: 'all' });
   const now = useMemo(() => new Date(), []);
+
+  // Deep-link entry (R78/R60): /people?person=<id>&role=<role> opens straight
+  // onto a profile — the Orders book's "relationship & profile →" cross-link
+  // lands here. Read once on mount from the location itself (the Room is
+  // client-only; no Suspense-bound useSearchParams needed).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const person = params.get('person');
+    const role = params.get('role');
+    const roles: PartyRole[] = ['client', 'lead', 'maker', 'gc', 'team'];
+    if (person && role && (roles as string[]).includes(role)) {
+      setOpenPerson({ id: person, role: role as PartyRole });
+      if (role === 'maker') setRoleFilter('maker');
+    }
+  }, []);
 
   // The live Engine nudge: the strongest dormant tie from the nurture queue.
   const nudge = useMemo(() => {
@@ -92,6 +113,7 @@ export function PeopleRoom() {
     goView: (v) => {
       setOpenPerson(null);
       setPendingThreadId(null);
+      setNotice(null);
       setView(v);
     },
     notify,
@@ -140,7 +162,17 @@ export function PeopleRoom() {
       {...nav}
     />
   ) : view === 'directory' ? (
-    <DirectoryView {...nav} role={roleFilter} onRoleChange={setRoleFilter} />
+    <DirectoryView
+      {...nav}
+      role={roleFilter}
+      onRoleChange={(r) => {
+        setNotice(null);
+        setRoleFilter(r);
+      }}
+      notice={notice}
+      makerLens={makerLens}
+      onMakerLens={setMakerLens}
+    />
   ) : view === 'threads' ? (
     <ThreadsView {...nav} pendingThreadId={pendingThreadId} />
   ) : view === 'nurture' ? (
@@ -235,10 +267,12 @@ export function PeopleRoom() {
       <AddPersonSheet
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onAdded={(message) => {
-          // Land them where they'll show: the Directory, filtered to clients.
-          filterDirectory('client');
-          notify(message);
+        onAdded={(message, kind) => {
+          // Land them where they'll show: the Directory, filtered to the kind
+          // just added — with the confirmation INLINE above the roster (R83:
+          // no toast; R51's quiet grammar).
+          filterDirectory(kind);
+          setNotice(message);
         }}
         onGoToLeads={() => router.push('/portal/pipeline')}
       />

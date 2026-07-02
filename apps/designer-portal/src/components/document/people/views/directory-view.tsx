@@ -15,9 +15,14 @@ import { useMemo } from 'react';
 import { usePeopleDirectory, type PartyRole } from '@patina/supabase';
 import { ViewHeader } from '../view-shell';
 import { PersonRow } from '../directory/person-row';
+import { MakersMarketplace } from '../directory/makers-marketplace';
 import type { PeopleViewProps } from '../types';
 
 export type DirectoryRole = PartyRole | 'all';
+
+/** The Makers filter reads two ways (R78): the admitted roster, or the whole
+ *  marketplace (discovery + save-as-admission). A lens, never a route. */
+export type MakerLens = 'roster' | 'marketplace';
 
 const ROLE_TABS: Array<[DirectoryRole, string]> = [
   ['all', 'All'],
@@ -52,13 +57,22 @@ export function DirectoryView({
   openPerson,
   role,
   onRoleChange,
+  notice,
+  makerLens,
+  onMakerLens,
 }: PeopleViewProps & {
   /** Controlled role filter (lifted to the Room so the ask bar can set it). */
   role: DirectoryRole;
   onRoleChange: (role: DirectoryRole) => void;
+  /** A quiet inline confirmation (R51 grammar) after an add — never a toast (R83). */
+  notice?: string | null;
+  /** Controlled Makers lens (lifted so it survives a profile walk-in/back). */
+  makerLens: MakerLens;
+  onMakerLens: (lens: MakerLens) => void;
 }) {
   const { data, isLoading } = usePeopleDirectory({ role });
   const now = useMemo(() => new Date(), []);
+  const marketplace = role === 'maker' && makerLens === 'marketplace';
 
   const rows = useMemo(() => {
     const list = [...(data ?? [])];
@@ -76,6 +90,16 @@ export function DirectoryView({
         title="Directory"
         sub="Everyone Patina works with — clients, makers, general contractors, and your studio — one roster."
       />
+
+      {/* The quiet confirmation band — R51's settled grammar, inline, no toast. */}
+      {notice && (
+        <p
+          role="status"
+          className="mb-4 border-l-2 border-[var(--color-sage)] bg-[rgba(133,148,124,0.07)] py-2 pl-3 pr-2 font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[#6f8268]"
+        >
+          {notice}
+        </p>
+      )}
 
       <div className="mb-5 flex flex-wrap gap-1.5">
         {ROLE_TABS.map(([key, label]) => {
@@ -98,7 +122,38 @@ export function DirectoryView({
         })}
       </div>
 
-      {isLoading ? (
+      {/* The Makers lens line (R78) — roster vs the marketplace, DM-mono words. */}
+      {role === 'maker' && (
+        <p className="mb-4 flex items-baseline gap-x-3 border-b border-[var(--color-pearl)]/70 pb-2">
+          {(
+            [
+              ['roster', 'your roster'],
+              ['marketplace', 'the marketplace'],
+            ] as Array<[MakerLens, string]>
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onMakerLens(key)}
+              aria-current={makerLens === key ? 'true' : undefined}
+              className={`font-mono text-[9.5px] uppercase tracking-[0.1em] transition-colors ${
+                makerLens === key
+                  ? 'text-[var(--color-clay)]'
+                  : 'text-[var(--color-aged-oak)] hover:text-[var(--color-mocha)]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="ml-auto font-mono text-[0.46rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+            {makerLens === 'marketplace' ? 'save = joins your roster' : `${rows.length} admitted`}
+          </span>
+        </p>
+      )}
+
+      {marketplace ? (
+        <MakersMarketplace onOpenMaker={(id) => openPerson(id, 'maker')} />
+      ) : isLoading ? (
         <p className="px-1 py-6 text-[0.76rem] text-[var(--color-aged-oak)]">
           Reading the roster…
         </p>
@@ -106,6 +161,19 @@ export function DirectoryView({
         <div className="rounded-[10px] border border-dashed border-[var(--doc-ink-border)] bg-white/40 px-5 py-8 text-center">
           <p className="text-[0.76rem] leading-relaxed text-[var(--color-aged-oak)]">
             {EMPTY_COPY[role]}
+            {role === 'maker' && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={() => onMakerLens('marketplace')}
+                  className="font-medium text-[var(--color-clay)] underline-offset-2 hover:underline"
+                >
+                  Browse the marketplace
+                </button>
+                .
+              </>
+            )}
           </p>
         </div>
       ) : (

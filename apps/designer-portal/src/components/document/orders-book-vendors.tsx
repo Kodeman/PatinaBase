@@ -371,6 +371,8 @@ export function VendorsBookPage({
               trade portal →
             </a>
           )}
+          {/* R78/R60 cross-link contract: trade lives here; the RELATIONSHIP lives in People. */}
+          <a href={`/people?person=${vendor.id}&role=maker`} className="mt-1 block text-[10.5px] text-[var(--color-clay)] hover:underline">their profile · in People →</a>
         </div>
       )}
 

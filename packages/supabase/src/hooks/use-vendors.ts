@@ -345,12 +345,21 @@ export function useVendorReviews(vendorId: string, pagination?: Pagination) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Toggle save/unsave a vendor
+ * Toggle save/unsave a vendor.
+ *
+ * Saving is ADMISSION to the designer's roster: `public.people_directory`
+ * (00221) lists a maker when the designer has saved them (saved_vendors) or
+ * engaged them on a project (project_parties) — so this mutation also
+ * refreshes the people directory read model.
+ *
+ * For inline error rendering at the act site (R83's quiet-band grammar) pass
+ * `{ errorSurface: 'inline' }` so the global mutation toast stays silent.
  */
-export function useToggleVendorSave() {
+export function useToggleVendorSave(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({ vendorId, notes }: { vendorId: string; notes?: string }) => {
       const supabase = getSupabase() as any;
 
@@ -394,6 +403,77 @@ export function useToggleVendorSave() {
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
       queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] });
       queryClient.invalidateQueries({ queryKey: ['saved-vendors'] });
+      // Saved = admission to the roster (people_directory unions saved makers).
+      queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+    },
+  });
+}
+
+/**
+ * Ensure a vendor is SAVED for this designer (idempotent — never unsaves).
+ *
+ * The deterministic sibling of useToggleVendorSave: vendor creation and other
+ * "admit to my roster" acts must not risk flipping an already-saved vendor
+ * off the roster. Upserts on (designer_id, vendor_id) — the same shape the
+ * /api/vendors/[id]/save route writes (saved_vendors, migration 00009).
+ */
+export function useSaveVendor(options?: { errorSurface?: 'inline' }) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async ({ vendorId, notes }: { vendorId: string; notes?: string }) => {
+      const supabase = getSupabase() as any;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase.from('saved_vendors').upsert(
+        {
+          vendor_id: vendorId,
+          designer_id: user.id,
+          notes: notes ?? null,
+          saved_at: new Date().toISOString(),
+        },
+        { onConflict: 'designer_id,vendor_id' }
+      );
+
+      if (error) throw error;
+      return { saved: true as const };
+    },
+    onSuccess: (_, { vendorId }) => {
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] });
+      queryClient.invalidateQueries({ queryKey: ['saved-vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['people-directory'] });
+    },
+  });
+}
+
+/**
+ * The designer's saved vendor ids — the roster-admission set. Cached under
+ * ['saved-vendors'] so save/unsave mutations refresh it automatically.
+ */
+export function useSavedVendorIds() {
+  return useQuery({
+    queryKey: ['saved-vendors'],
+    queryFn: async (): Promise<string[]> => {
+      const supabase = getSupabase() as any;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('saved_vendors')
+        .select('vendor_id')
+        .eq('designer_id', user.id);
+
+      if (error) throw error;
+      return (data ?? []).map((r: { vendor_id: string }) => r.vendor_id);
     },
   });
 }
@@ -521,6 +601,9 @@ export interface FindOrCreateVendorInput {
   logoUrl?: string;
   primaryCategory?: string;
   marketPosition?: 'entry' | 'mid' | 'premium' | 'luxury' | 'ultra-luxury';
+  /** Where POs route (vendors.orders_email, 00188). Only written on CREATE —
+   *  an existing matched vendor's routing inbox is never overwritten here. */
+  ordersEmail?: string;
 }
 
 export interface FindOrCreateVendorResult {
@@ -536,12 +619,17 @@ export interface FindOrCreateVendorResult {
 
 /**
  * Find an existing vendor by name/website or create a new one
- * Used by the Chrome extension to link extracted manufacturers to vendor entities
+ * Used by the Chrome extension to link extracted manufacturers to vendor
+ * entities, and by the People Room's maker path (R78 / PRC-03).
+ *
+ * Pass `{ errorSurface: 'inline' }` when the caller renders failures inline
+ * (R83) so the global mutation toast stays silent.
  */
-export function useFindOrCreateVendor() {
+export function useFindOrCreateVendor(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (input: FindOrCreateVendorInput): Promise<FindOrCreateVendorResult> => {
       const supabase = getSupabase() as any;
 
@@ -615,6 +703,7 @@ export function useFindOrCreateVendor() {
           logo_url: input.logoUrl || null,
           primary_category: input.primaryCategory || null,
           market_position: input.marketPosition || null,
+          orders_email: input.ordersEmail || null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
