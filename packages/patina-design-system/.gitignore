@@ -1,0 +1,9 @@
+# Build outputs — tsup/tsc emit these; the design system's sources are all
+# .tsx/.ts. Compiled JS + declaration/source maps must never be committed into
+# src/ (they flaked whole-repo type-check — Wave 5A cleanup, delivery-log G4).
+dist/
+src/**/*.jsx
+src/**/*.js
+src/**/*.jsx.map
+src/**/*.js.map
+src/**/*.d.ts.map
