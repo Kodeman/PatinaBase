@@ -126,7 +126,7 @@ gate_edge() {
       continue
     fi
     ran=$((ran + 1))
-    if ! run deno test --allow-all "$d"; then
+    if ! run deno test --allow-all --config "$ROOT/supabase/functions/deno.json" "$d"; then
       failed=$((failed + 1))
     fi
   done
