@@ -20,6 +20,7 @@ JWT_PROTECTED=(
   aesthete-dna-draft
   aesthete-ask
   aesthete-nightly
+  aesthete-drift-audit
   notification-dispatch
   campaign-dispatch
   campaign-scheduler
