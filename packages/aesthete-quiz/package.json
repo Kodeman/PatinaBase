@@ -1,0 +1,50 @@
+{
+  "name": "@patina/aesthete-quiz",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Aesthete Engine style quiz — question definitions, zero-dependency PostgREST wire client, and headless React hooks. Consumed by the client portal and the external marketing site (see WIRE-CONTRACT.md).",
+  "main": "./dist/core/index.js",
+  "types": "./dist/core/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js",
+      "require": "./dist/core/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js",
+      "require": "./dist/react/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "WIRE-CONTRACT.md",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist tsconfig.build.tsbuildinfo",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "node scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@patina/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.8",
+    "react": "^19.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

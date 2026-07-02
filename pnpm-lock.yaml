@@ -887,6 +887,25 @@ importers:
         specifier: ^5.4.0
         version: 5.9.3
 
+  packages/aesthete-quiz:
+    dependencies:
+      '@patina/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.8
+        version: 19.2.14
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.37)(@vitest/ui@1.6.1)(jsdom@24.1.3)(less@4.5.1)(lightningcss@1.31.1)(sass@1.97.3)(terser@5.46.0)
+
   packages/api-client:
     dependencies:
       '@patina/types':
