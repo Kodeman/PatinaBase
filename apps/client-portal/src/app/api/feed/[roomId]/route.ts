@@ -2,14 +2,15 @@
  * GET /api/feed/:roomId?limit=20&offset=0
  *
  * Returns the ranked product feed for a (user, room) pair. Reads from
- * `feed_cache_meta` (populated nightly by the aesthete-engine pipeline),
- * joins the product rows, and enriches each product with its
- * `spatial_context` entries so the iOS client can render "why it fits"
- * copy directly.
+ * `feed_cache_meta` — historically populated by the legacy aesthete-engine
+ * NestJS service, which was DELETED in AE Wave 0C (salvage notes:
+ * docs/prds/AE/aesthete-engine-salvage.md). Nothing writes the cache today,
+ * so this normally returns the empty shape below. Live matching now lives in
+ * the `get_aesthete_matches` SQL RPC (migration 00244); re-pointing this
+ * feed at it is future work, deliberately not wired here.
  *
  * If the cache is missing or expired, returns an empty `products` array
- * and `cache_generated_at: null` — a follow-up iteration will add a live
- * pgvector fallback.
+ * and `cache_generated_at: null`.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@patina/supabase/server';

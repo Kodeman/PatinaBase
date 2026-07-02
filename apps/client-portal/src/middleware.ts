@@ -53,7 +53,12 @@ export async function middleware(req: NextRequest) {
   // The invite landing page is auth-adjacent but valid for both signed-in and
   // signed-out users — RLS-protected token lookup happens server-side.
   const isInviteLanding = req.nextUrl.pathname.startsWith('/auth/invite/');
-  const isPublicPage = req.nextUrl.pathname === '/' || req.nextUrl.pathname.startsWith('/demo') || isInviteLanding;
+  // /quiz + /quiz/results are pre-auth by design (Aesthete Engine §7.1):
+  // anonymous visitors take the style quiz; the localStorage session key is
+  // the capability, claimed on signup via claim_quiz_session.
+  const isQuizPage = req.nextUrl.pathname === '/quiz' || req.nextUrl.pathname.startsWith('/quiz/');
+  const isPublicPage =
+    req.nextUrl.pathname === '/' || req.nextUrl.pathname.startsWith('/demo') || isInviteLanding || isQuizPage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!user;
