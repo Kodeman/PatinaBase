@@ -14,7 +14,11 @@ import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { firstNameOf } from '@/lib/document/account-identity';
-import { openCommandBar, captureLeadPending } from '@/components/document/command-bar';
+import {
+  openCommandBar,
+  captureLeadPending,
+  openProjectPending,
+} from '@/components/document/command-bar';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { FolderCard } from '@/components/document/folder-card';
 import { InMotionChip } from '@/components/document/in-motion-chip';
@@ -64,6 +68,20 @@ export default function DeskPage() {
     };
     window.addEventListener('document:open-capture-lead', onOpen);
     return () => window.removeEventListener('document:open-capture-lead', onOpen);
+  }, []);
+
+  // R79 — same contract for ⌘K's "Open a project".
+  useEffect(() => {
+    if (openProjectPending.value) {
+      openProjectPending.value = false;
+      setOpenProjectOpen(true);
+    }
+    const onOpen = () => {
+      openProjectPending.value = false;
+      setOpenProjectOpen(true);
+    };
+    window.addEventListener('document:open-open-project', onOpen);
+    return () => window.removeEventListener('document:open-open-project', onOpen);
   }, []);
 
   // Time-derived greeting + date are client-only — server vs client timezone

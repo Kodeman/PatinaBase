@@ -223,7 +223,7 @@ export function StudioDrawer() {
         {open?.key === 'accounts' && (
           <AccountsBook onClose={() => setOpenLedger(null)} initialContext={sheetContext} />
         )}
-        {open?.key === 'hours' && <HoursLedger />}
+        {open?.key === 'hours' && <HoursLedger initialContext={sheetContext} />}
         {/* All sheet-weight ledgers (orders/accounts/hours) are bound; People is
             a Room (R50), so no generic placeholder branch remains. */}
       </DocSheet>

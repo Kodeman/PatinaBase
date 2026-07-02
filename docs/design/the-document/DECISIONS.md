@@ -2709,7 +2709,18 @@ Full notification-settings depth (RMS-07), sessions & sign-out-others (RMS-09), 
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I43 · R1–R70 (+R68.1) · R72–R91 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = R91*
+## The Document — funnel repair + Wave 1 landed — 2026-07-01
+
+### I45 · Funnel repair — the lead→proposal→project chain is unbroken
+
+Commit `a256ef3c`. All ten walk findings fixed and re-walked green the same day: F2 (Discovery persists lead prefills incl. project_type; UI ready-gate strictly tighter than the 00224 RPC; serialized saves with blur/unmount flush — F3/F4's true root cause was racing upserts from an unstable mutation object in effect deps), F5 (content-bearing rows only + new-row autofocus), F6 (doorway prefetch + "Opening…" acknowledgment), F1 (accepted-lead /doc/{leadId} resolves onward, mirroring R6), F8 (00236 — relationship docs title from designer_clients.client_name), F10 (SignedSeal reads project existence; the act calls activate_proposal_as_project — the R44/I7 safety net, one act re-derives the Desk), R73 (ClientPicker invite-and-link: service-role invite creates the auth user + profile and links the SAME designer_clients row — walked fully live: capture → discovery → direction → drafting → invite & link → SENT), R83 (mutation meta errorSurface='inline' opts Document mutations out of the global toast; inline terracotta bands; zero toasts through the whole re-walk). Re-walk table in `the-document-reaudit-walk-2026-07.md`.
+
+### I46 · Wave 1 — Tracks 7 · 8 · 9 · 11-M on main
+
+Four parallel worktree builds over frozen seams, merged same-day (T9 `6bb6c19f` → T11-M `60eaef9e` → T7 `f22c8776` → T8 + integration): **R79/R80/R81** (OpenProjectSheet + `open_project_direct` 00237 · self-save vitals/phases + Care "Close the book" + `close_project` 00238 · the Amendment sheet), **R74–R77** (Invoice folio + anti-wizard composer, zero migrations — 00177/00178/00187/00204 carried it · Export week → composer · FF&E Bill acts + coverage stamps · full Hours ledger), **R78** (maker path on '+ Add' · Makers marketplace lens, save-as-admission · maker profile depth + Orders cross-links), **R84** (ack logging · mark-sent · inline ETA · damage-claim lifecycle · multi-line Order Assistant/order-all · ledger lenses · receiving KPI strip). Orchestrator integration pass: ⌘K "Open a project" + "Draw an invoice" (capture-lead pending-flag pattern), Hours ledger drawer pre-addressing, line-unfold "Bill →", account-band "Amendment →". **All six P0 rows closed** (BIL-02/03/04/05/09, PRC-03). Verified: tsc 0 new · 325 doc jest · next build green · db reset clean through 00238 · live Chrome walk (open-a-project → project doc with vitals/Sharing/Close-the-book · Amendment sheet · folio-first Accounts ledger + folio acts · composer entries). ⚠ Owed: margin MONEY fold for open amendments (helpers ready in amendment-derivation.ts) · ⌘K "add a maker" + FF&E add-a-vendor doorway · AccountBand passes clientName='' to the Amendment sheet (familyLabel falls back to "the client") · `apply_scope_change` (00084) lacks an internal ownership guard (pre-existing; follow-up migration candidate) · phase-estimates placed in the letterhead "Phases" fold not the Work block (design flag) · screenshots in-conversation only.
+
+---
+
 
 ---
 
@@ -2740,3 +2751,7 @@ Branch `the-document/track8-accounts-writes`, four slices, ZERO migrations (0017
 - R77's route retirement (`/portal/time`, `/portal/projects/[id]/time`) rides the dissolve, not this track (D7 — old zones keep functioning).
 
 **Live walk (same day, worktree dev server :3010 against the shared local stack).** Desk → Accounts book: "Draw an invoice →" head act + folio-first rows render; INV-2026-W02 folio opened ABOVE the ledger sheet (paper over charcoal, D14 held); **Record payment $800 landed end-to-end** — stamp SENT→PART PAID, payments row appended, quiet sage confirmation, Void act correctly withdrew (paid > 0), and the ledger BENEATH updated in the same act (revenue $0→$800 · A/R $6,200→$5,400 · row stamp/owed). Esc closed only the folio; the Accounts book stayed mounted with focus restored. The composer sheet opened with its document picker. ⚠ Walk cut short mid-composer: a concurrent session ran `supabase db reset` on the shared stack (picker emptied + session invalidated — DB truth, not a Track 8 bug); the composer's ticked sections were exercised by the 11 contract tests + tsc instead.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I46 · R1–R70 (+R68.1) · R72–R91 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = I46 (rulings end at R91)*

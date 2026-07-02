@@ -24,6 +24,7 @@ import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { openLedger } from './command-bar';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
+import { AmendmentSheet } from './overlays/amendment-sheet';
 
 const SAGE_INK = '#85947C';
 const TERRACOTTA_INK = '#C4836F';
@@ -131,6 +132,7 @@ export function AccountBand({ projectId }: { projectId: string }) {
   const { data } = useAccountPage(projectId);
   const [open, setOpen] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
+  const [amendmentOpen, setAmendmentOpen] = useState(false);
 
   if (!data) return null;
 
@@ -278,12 +280,27 @@ export function AccountBand({ projectId }: { projectId: string }) {
             >
               Export · QBO
             </button>
+            {/* R81 — the Amendment: scope changes composed from the money
+                band (the margin escalation is the other doorway). */}
+            <button
+              type="button"
+              onClick={() => setAmendmentOpen(true)}
+              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+            >
+              Amendment →
+            </button>
             {exportNote && (
               <span className="font-mono text-[8.5px] text-[var(--text-muted)]">{exportNote}</span>
             )}
           </div>
         </div>
       )}
+      <AmendmentSheet
+        projectId={projectId}
+        clientName=""
+        open={amendmentOpen}
+        onClose={() => setAmendmentOpen(false)}
+      />
     </div>
   );
 }

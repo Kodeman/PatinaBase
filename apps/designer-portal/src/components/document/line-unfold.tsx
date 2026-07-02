@@ -14,6 +14,7 @@ import { OrderAssistant } from '@/components/portal/procurement/order-assistant'
 import { LogInspectionDrawer } from '@/components/portal/procurement/log-inspection-drawer';
 import { clientVendorEmailHint } from '@/components/portal/procurement/po-send-actions';
 import { PoPreview } from './po-preview';
+import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { FolioStrip } from './folio-strip';
 import { useAssignLineRoom, useDocumentRooms } from '@/hooks/use-document-rooms';
 import { deriveLineStamp } from '@/lib/document/stamp-derivation';
@@ -361,6 +362,16 @@ export function LineUnfold({
             Log inspection
           </button>
         )}
+        {/* R76 — bill this line: the composer opens FF&E-prefilled and
+            intersects against what's still billable (covered lines fall out
+            with a quiet notice), so the act needs no coverage gate here. */}
+        <button
+          type="button"
+          className={ACTION_BTN}
+          onClick={() => openInvoiceComposer({ projectId, initialFfeItemIds: [item.id] })}
+        >
+          Bill →
+        </button>
         <button type="button" className={ACTION_BTN} onClick={() => onAddNote(item.id)}>
           + Note
         </button>

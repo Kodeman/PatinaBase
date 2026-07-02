@@ -21,6 +21,7 @@ import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { usePeopleDirectory } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { openAccount } from './account/account-sheet';
+import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { fillStateForDesk } from '@/lib/document/fill-state';
 import { folderTab } from '@/lib/document/desk-derivation';
 import { StrataMark } from './strata-mark';
@@ -50,6 +51,16 @@ export const captureLeadPending = { value: false };
 export function openCaptureLead() {
   captureLeadPending.value = true;
   window.dispatchEvent(new CustomEvent('document:open-capture-lead'));
+}
+
+/** R79 — same pattern as {@link openCaptureLead}: the OpenProjectSheet is
+ *  mounted on the Desk; the pending flag carries the intent across a
+ *  navigation from any other surface. */
+export const openProjectPending = { value: false };
+
+export function openOpenProject() {
+  openProjectPending.value = true;
+  window.dispatchEvent(new CustomEvent('document:open-open-project'));
 }
 
 /** R28/R29/R36 pre-addressing: optional context rides the open-ledger event —
@@ -167,6 +178,25 @@ export function CommandBar() {
           if (pathname !== '/desk') router.push('/desk');
           openCaptureLead();
         },
+      },
+      {
+        // R79 — open a project that didn't come through a proposal.
+        kind: 'action' as const,
+        label: 'Open a project',
+        sub: 'no proposal needed',
+        keywords: 'new project open project manual project start project create project',
+        run: () => {
+          if (pathname !== '/desk') router.push('/desk');
+          openOpenProject();
+        },
+      },
+      {
+        // R74b — the anti-wizard composer; context-free it asks which project.
+        kind: 'action' as const,
+        label: 'Draw an invoice',
+        sub: 'milestones · time · FF&E · ad-hoc',
+        keywords: 'invoice bill new invoice draw invoice billing money',
+        run: () => openInvoiceComposer(),
       },
       { kind: 'action' as const, label: 'The Desk', sub: 'go home', run: () => router.push('/desk') },
       {
