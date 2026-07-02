@@ -27,10 +27,8 @@ import {
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { invalidateMarginSurfaces, useSendWeeklyPulse } from '@/hooks/use-margin-items';
-import {
-  useEscalateNoteToDecision,
-  useEscalateNoteToScopeChange,
-} from '@/hooks/use-margin-notes';
+import { useEscalateNoteToDecision } from '@/hooks/use-margin-notes';
+import { AmendmentSheet } from '@/components/document/overlays/amendment-sheet';
 import type { MarginItemRow } from '@/lib/document/margin-derivation';
 import { composePulseDraft } from '@/lib/document/compose-pulse-draft';
 import { fmtDay, fmtUsd, todayYmd } from '@/lib/document/format';
@@ -627,13 +625,24 @@ export function PulseBody({
 
 // ── note (R14 — the margin's private layer) ─────────────────────────────────
 
-export function NoteBody({ row, projectId }: { row: MarginItemRow; projectId: string | null }) {
+export function NoteBody({
+  row,
+  projectId,
+  clientName,
+}: {
+  row: MarginItemRow;
+  projectId: string | null;
+  clientName?: string;
+}) {
   const toDecision = useEscalateNoteToDecision();
-  const toScopeChange = useEscalateNoteToScopeChange();
-  const busy = toDecision.isPending || toScopeChange.isPending;
+  // R81: the scope-change escalation now opens the Amendment sheet seeded with
+  // the note's words — the compose act itself records what the note became
+  // (margin_notes.escalated_to_scope_change_id, via useComposeAmendment).
+  const [amending, setAmending] = useState(false);
+  const busy = toDecision.isPending;
 
   if (row.state === 'escalated') {
-    const became = row.payload.escalated_to_decision_id ? 'a client decision' : 'a scope change request';
+    const became = row.payload.escalated_to_decision_id ? 'a client decision' : 'an amendment';
     return <Quiet>Escalated — now {became}. The note rests here.</Quiet>;
   }
 
@@ -654,20 +663,26 @@ export function NoteBody({ row, projectId }: { row: MarginItemRow; projectId: st
           >
             → Client decision
           </button>
-          <button
-            type="button"
-            className={BTN}
-            disabled={busy}
-            onClick={() =>
-              toScopeChange.mutate({ noteId: row.item_id, projectId, body: row.title })
-            }
-          >
-            → Scope change
+          <button type="button" className={BTN} disabled={busy} onClick={() => setAmending(true)}>
+            → Amendment
           </button>
         </div>
       )}
-      {(toDecision.isError || toScopeChange.isError) && (
+      {toDecision.isError && (
         <p className="mt-1 text-[10px] text-[#C77B6E]">Escalation failed — try again.</p>
+      )}
+      {projectId && (
+        <AmendmentSheet
+          projectId={projectId}
+          clientName={clientName ?? ''}
+          open={amending}
+          onClose={() => setAmending(false)}
+          seed={{
+            title: row.title.length > 70 ? `${row.title.slice(0, 67)}…` : row.title,
+            description: row.title,
+            noteId: row.item_id,
+          }}
+        />
       )}
     </div>
   );
@@ -707,7 +722,7 @@ export function MarginItemBody({
     case 'time':
       return null;
     case 'note':
-      return <NoteBody row={row} projectId={projectId} />;
+      return <NoteBody row={row} projectId={projectId} clientName={clientName} />;
     default:
       return null;
   }
