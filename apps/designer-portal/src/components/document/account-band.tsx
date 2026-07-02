@@ -23,6 +23,7 @@ import {
 import type { SectionKey } from '@/lib/document/desk-derivation';
 import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { openLedger } from './command-bar';
+import { openInvoiceComposer } from './accounts/invoice-overlays';
 
 const SAGE_INK = '#85947C';
 const TERRACOTTA_INK = '#C4836F';
@@ -246,7 +247,25 @@ export function AccountBand({ projectId }: { projectId: string }) {
             </div>
           )}
 
-          <div className="mt-2.5 flex items-baseline gap-4">
+          <div className="mt-2.5 flex flex-wrap items-baseline gap-4">
+            {/* R74b — draw an invoice for THIS engagement: the anti-wizard
+                composer, milestones/time/FF&E pulled through pre-scoped. */}
+            <button
+              type="button"
+              onClick={() => openInvoiceComposer({ projectId })}
+              className="rounded-[3px] border border-[rgba(196,165,123,0.5)] px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.05em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white"
+            >
+              Draw an invoice →
+            </button>
+            {/* R77 — the per-document Hours lens (the drawer pre-addresses
+                the ledger with this project once wired through). */}
+            <button
+              type="button"
+              onClick={() => openLedger('hours', { projectId })}
+              className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+            >
+              Hours · this project ↗
+            </button>
             <button
               type="button"
               onClick={() => {

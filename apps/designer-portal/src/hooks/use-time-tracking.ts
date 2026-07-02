@@ -254,10 +254,12 @@ export interface CreateTimeEntryInput {
   source?: 'timer_auto' | 'timer_manual' | 'manual_entry';
 }
 
-export function useCreateTimeEntry() {
+export function useCreateTimeEntry(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // R83 — document surfaces render failures inline; no global toast.
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async (input: CreateTimeEntryInput) => {
       const supabase = getSupabase();
       const { data: userData } = await supabase.auth.getUser();
@@ -305,10 +307,12 @@ export interface UpdateTimeEntryInput {
   }>;
 }
 
-export function useUpdateTimeEntry() {
+export function useUpdateTimeEntry(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // R83 — see useCreateTimeEntry.
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({ id, updates }: UpdateTimeEntryInput) => {
       const supabase = getSupabase();
       const { data, error } = await supabase
@@ -324,10 +328,13 @@ export function useUpdateTimeEntry() {
   });
 }
 
-export function useDeleteTimeEntry() {
+export function useDeleteTimeEntry(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // R83 — see useCreateTimeEntry. (R77: the Hours ledger deletes unbilled
+    // entries with an inline confirm; billed entries stay immutable.)
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({ id }: { id: string; projectId: string }) => {
       const supabase = getSupabase();
       const { error } = await supabase.from('project_time_entries').delete().eq('id', id);
@@ -566,10 +573,12 @@ export interface ClaimTimeEntriesInput {
  * loaded, the partial claim is rolled back and the mutation throws so the
  * caller can compensate (delete the draft) and refresh.
  */
-export function useClaimTimeEntries() {
+export function useClaimTimeEntries(options?: { errorSurface?: 'inline' }) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // R83 — the invoice composer renders claim conflicts inline.
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
     mutationFn: async ({ invoiceId, entryIds }: ClaimTimeEntriesInput) => {
       const supabase = getSupabase();
       const { data, error } = await supabase

@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PaperFolioSheet } from '../overlays/paper-folio-sheet';
 import { InvoiceFolio } from './invoice-folio';
+import { InvoiceComposer } from './invoice-composer';
 
 // ── One-act openers ─────────────────────────────────────────────────────────
 
@@ -90,6 +91,22 @@ export function InvoiceOverlays() {
               close();
               router.push(`/doc/${projectId}`);
             }}
+          />
+        )}
+      </PaperFolioSheet>
+
+      <PaperFolioSheet
+        open={overlay?.kind === 'composer'}
+        onClose={close}
+        title="Draw an invoice"
+        wide
+      >
+        {overlay?.kind === 'composer' && (
+          <InvoiceComposer
+            context={overlay.context}
+            // The handoff: the fresh draft opens as the folio — issue & send
+            // live there (review-then-send, R74).
+            onDrafted={(invoiceId) => setOverlay({ kind: 'folio', invoiceId })}
           />
         )}
       </PaperFolioSheet>
