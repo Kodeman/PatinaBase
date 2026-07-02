@@ -2754,8 +2754,6 @@ Branch `the-document/track8-accounts-writes`, four slices, ZERO migrations (0017
 
 ---
 
-*Entries: D1–D14 · O1–O7 (resolved) · I1–I46 · R1–R70 (+R68.1) · R72–R91 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = I46 (rulings end at R91)*
-
 ---
 
 ## The Document — Wave 2 · Proposal depth + the tier mirror (R85 · R86) — 2026-07-02
@@ -2793,5 +2791,37 @@ Worktree branch, four slices, **one additive migration (00252)**.
 - The client's proposal copy does not yet RENDER the flagged proposal-folio files — 00252 opens the client read leg (the data path is ready); a small flagged-file list on `apps/client-portal proposals/[id]` is the remaining leg of "space plans reach the client copy."
 - `proposalTierVisibility`'s `paymentSchedule`-at-curated call awaits a design ruling (see the ⚠ above).
 - `@patina/utils` + `@patina/design-system` dist were rebuilt so client-portal (dist-resolved) type-checks; a clean CI runs `pnpm build` first anyway.
+
+---
+
+## The Document — Wave 2 · the Post + the long tail + integration — 2026-07-02
+
+### I48 · Wave 2 tracks + integration on main (R82 · R87 · R88 · R89 · R90)
+
+Five parallel worktree builds over frozen seams (command-bar left frozen; ⌘K wired in the integration pass — the Wave-1 pattern), merged in order: Decisions `611cc651` → the Post `a39c378b` → Library `7ad5a902` → Help+Scan `6b610b02` → Proposal `fb20e6e5` (one additive import conflict in `drafting-room.tsx`, resolved keeping both) → integration.
+
+**R82 — the Post.** The Studio Drawer bell no longer exits to `/portal/inbox`; it dispatches `document:open-post` and a charcoal Drawer-weight `PostSheet` (bubble-phase Esc, a drawer peer of the ledgers) mounts beside them with two R28 pages: **Letters** (`useInboxMessages`) and **the Record** (`useInboxNotifications`), read-on-open via the mark-read route, D8 dot unchanged. `post-derivation.ts` classifies each notice: a type that already derives a Desk need renders as a quiet **"on your Desk ↗" cross-reference** (never a duplicate act), unmapped notices are plain records. Letters open a **shared** People thread via a new `/people?thread=` reader (mirrors the person-param block). A mobile bell was added (there was none). ⚠ two design flags for Leah (non-blocking): the bell lands on the Record while Letters is the leftmost link; the dot reflects Record unread only (`useUnreadInboxCount` unchanged).
+
+**R87 — decision edges.** In the margin `DecisionBody`, **Extend on a stored-expired decision now revives it** (bump due_date via `useUpdateDecision`, then `useUpdateDecisionStatus` expired→pending — the 00171 transition already existed; button "Extend & reopen") so the client can respond again; on a still-live decision Extend keeps due-date-only. **Delete stays draft-only** (guard in `item-composer`; the shared `decision-edges.ts` predicates `extendRevivesDecision`/`canDeleteDecision` are the one law both surfaces read). No migration.
+
+**R88 — the Library's working acts.** A shelf-header **Import…** on My Library (reuses `catalog/import`'s CSV/lazy-SheetJS parse → `/api/catalog/import`; rows land as `status:'draft'` raw captures that fire the teaching-queue trigger → "Needs teaching"); a **validate** teach-fold lens per card (Agree/Disagree over `useValidationQueue`/`useSubmitValidation` — the distinct `needs_validation` queue) rendered where Quick Tags would otherwise be (a piece is in one queue or the other); **field-grain search** beside the librarian bar extending `useCrossLayerSearch` from name+brand to name/SKU/maker/category. Collections/categories stay deferred (R88). No migration. Note: the 4-field default widens the Engine's keyword fallback + legacy `/portal/library/search` too (strictly more inclusive).
+
+**R89 — the help affordance.** The Document shell wraps in `SurfaceKeyProvider` and mounts `ContextualHelpPanel` (layout siblings; the shell has no utility bar). Each surface declares its key via `useDocumentSurface`; `openHelp()` (window event) opens the panel scoped to the current surface. The browsable Help Center is re-homed to a paper `/help/**` route group (old `/portal/help` stays until the dissolve, D7). The shared panel is reused minus its design-system shadow (the sanctioned `shadow-none`); a full paper repaint of the Layer-2 slide-out would touch `packages/help-system` (deferred).
+
+**R90 — the scan opens as a sheet.** A new `scan-viewer-sheet.tsx` (a `doc-file-viewer` sibling, z-[60] paper, capture-phase Esc) fetches the `RoomScan` by id (`useRoomScan`) and renders the reused-as-is `RoomScanViewer`. The letterhead "The scan" instrument now opens the interactive sheet instead of the static image; it also opens from the Folio and Discovery. `/portal/rooms/[id]` is superseded (deletion rides the dissolve, D7). ⚠ the Folio scan door is dormant until a producer writes a `room_scan` folio chip (flagged, commented). No migration.
+
+**Integration pass (`main` after the five merges).** ⌘K registry rows added: **the Post** (`openPost`), **Draft a proposal** (R85 — `openDraftProposalPicker` + a layout-mounted `DraftProposalOverlay` hosting the R73 ClientPicker cold start), **Help…** (`openHelp`), and the Wave-1 owed **Add a maker** (R78 — `/people?add=maker` cold-starts the add sheet in maker mode via a new `initialKind` prop). `AccountBand` now forwards the household name to the Amendment sheet (was `''` → "the client"). **Migration 00253** closes an IDOR: `apply_scope_change` (00084, SECURITY DEFINER) now requires the caller to own the project before it mutates budget/fee/timeline + inserts rooms/FF&E.
+
+**Verified (integration on main):** tsc 0 new errors, 399 designer document+help jest green, `next build` exit 0, db reset clean through **00253**, `project_documents.proposal_id` column + the `apply_scope_change` guard SQL-confirmed.
+
+**Deferred / owed:**
+- **Margin MONEY fold for open amendments** — needs a new margin kind + read-model change (not cheap); the Amendment sheet's own on-project strip already surfaces open amendments. Helpers ready in `lib/document/amendment-derivation.ts`.
+- **FF&E line-unfold "add a vendor" doorway** — the ⌘K "Add a maker" now covers vendor creation globally; the per-line doorway is a further convenience, deferred.
+- **Client proposal-folio render** (R85b's client leg is data-ready; the client-portal file list is owed), the **R86 `paymentSchedule`-at-curated** ruling, the **R82 bell-landing/dot** flags, and the **spec v1.7 fold** (R61–R90).
+- Prod catch-up (00230–00253 + `proposal-nudge` fn) still blocked on LAN access to the prod box.
+
+---
+
+*Entries: D1–D14 · O1–O7 (resolved) · I1–I48 · R1–R70 (+R68.1) · R72–R91 (R71 = proposal-watch, logged in the project) · L1–L4 · THE GO · FLIP CONFIRMED · last id = I48 (rulings end at R91)*
 
 *Entries add: I47 · migration 00252 · last id = I47*
