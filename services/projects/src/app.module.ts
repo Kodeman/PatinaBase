@@ -29,7 +29,7 @@ import { TimelineModule } from './timeline/timeline.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
-import { WebSocketModule } from './websocket/websocket.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 
 @Module({
@@ -90,7 +90,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
     NotificationsModule,
     ApprovalsModule,
     AnalyticsModule,
-    WebSocketModule,
+    RealtimeModule,
   ],
   providers: [
     // Global Authentication Guard — Supabase JWT validation
