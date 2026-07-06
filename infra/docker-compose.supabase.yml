@@ -247,11 +247,18 @@ services:
       PGRST_JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-postgres}
       FILE_SIZE_LIMIT: 52428800
-      STORAGE_BACKEND: file
+      # Object storage backend: Cloudflare R2 (S3-compatible). Previously STORAGE_BACKEND=file (local /var/lib/storage volume).
+      STORAGE_BACKEND: s3
+      GLOBAL_S3_BUCKET: ${SUPABASE_STORAGE_R2_BUCKET:-patina-storage}
+      GLOBAL_S3_ENDPOINT: https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com
+      GLOBAL_S3_FORCE_PATH_STYLE: "true"
+      REGION: auto
+      # storage-api v1.0.6 s3 backend resolves creds via the AWS SDK default chain (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY)
+      AWS_ACCESS_KEY_ID: ${SUPABASE_STORAGE_R2_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${SUPABASE_STORAGE_R2_SECRET_ACCESS_KEY}
+      # Legacy file path retained; storage_data volume kept mounted as a cold backup during cutover.
       FILE_STORAGE_BACKEND_PATH: /var/lib/storage
       TENANT_ID: stub
-      REGION: stub
-      GLOBAL_S3_BUCKET: stub
       ENABLE_IMAGE_TRANSFORMATION: "true"
       IMGPROXY_URL: http://imgproxy:5001
     volumes:
