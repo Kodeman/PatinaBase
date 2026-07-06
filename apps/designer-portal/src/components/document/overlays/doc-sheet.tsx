@@ -34,11 +34,22 @@ export function DocSheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
 
+  // Focus in on open, restore on close. Depends ONLY on `open` — not onClose —
+  // so a caller's unstable onClose identity (recreated each render) can't re-run
+  // this and steal focus from a field mid-typing (one keystroke re-renders the
+  // caller → new onClose → panel.focus() would yank focus out of the input).
   useEffect(() => {
     if (!open) return;
     restoreRef.current = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
+    return () => {
+      restoreRef.current?.focus?.();
+    };
+  }, [open]);
 
+  // Esc closes. Re-subscribes if onClose changes (harmless — no focus effect).
+  useEffect(() => {
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -46,10 +57,7 @@ export function DocSheet({
       }
     };
     document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      restoreRef.current?.focus?.();
-    };
+    return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
   if (!open) return null;
