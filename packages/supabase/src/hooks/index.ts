@@ -1185,3 +1185,26 @@ export type {
   EngineAskResult,
   UseEngineAskOptions,
 } from './use-engine-ask';
+// Feedback layer (docs/ledger/patina-feedback-layer-prd.md) — capture, ledger,
+// triage, close-the-loop.
+export {
+  useFeedback,
+  useFeedbackNote,
+  useUnseenShipped,
+  useSignedScreenshotUrl,
+  useCreateFeedback,
+  useSetFeedbackStatus,
+  useReactToFeedback,
+  useReplyToFeedback,
+  useMarkFeedbackSeen,
+} from './use-feedback';
+export type {
+  Feedback,
+  FeedbackBucket,
+  FeedbackWeight,
+  FeedbackStatus,
+  FeedbackEvent,
+  FeedbackEventKind,
+  FeedbackFilters,
+  CreateFeedbackInput,
+} from './use-feedback';
