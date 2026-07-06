@@ -38,13 +38,6 @@ database_id = "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 preview_database_id = "xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 migrations_dir = "migrations"
 
-# Bind an R2 Bucket. Use R2 to store arbitrarily large blobs of data, such as files.
-# Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#r2-buckets
-[[r2_buckets]]
-binding = "PRIMARY_R2"
-bucket_name = "Patina-bucket"
-preview_bucket_name = "teeny-sample-primary-bucket"
-
 # Automatically place your workloads in an optimal location to minimize latency.
 # If you are running back-end logic in a Worker, running it closer to your back-end infrastructure
 # rather than the end user may result in better performance.
