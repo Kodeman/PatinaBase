@@ -147,8 +147,8 @@ export function FeedbackSheet() {
   const activeBucket = bucket ? bucketMeta(bucket) : null;
 
   return (
-    <DocSheet open={open} onClose={requestClose} title="Leave a note">
-      <div className="mx-auto max-w-xl">
+    <DocSheet open={open} onClose={requestClose} title="Leave a note" variant="center">
+      <div className="mx-auto max-w-2xl">
         <div className="mb-3 flex items-baseline justify-between gap-3">
           <h2 className="font-heading text-xl text-[var(--color-pearl)]">Leave a note</h2>
           <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.5)]">

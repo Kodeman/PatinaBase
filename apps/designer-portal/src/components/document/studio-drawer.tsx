@@ -219,6 +219,7 @@ export function StudioDrawer() {
         open={open !== null && open.weight === 'sheet'}
         onClose={() => setOpenLedger(null)}
         title={open?.name ?? ''}
+        variant={open?.key === 'feedback' ? 'center' : 'sheet'}
       >
         {open?.key === 'orders' && (
           <OrdersLedger onClose={() => setOpenLedger(null)} initialContext={sheetContext} />
