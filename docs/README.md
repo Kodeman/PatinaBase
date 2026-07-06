@@ -1,94 +1,38 @@
-# Strata Documentation Index
+# Patina Documentation Index
 
-Reference documentation for specs, PRDs, and architecture. Claude reads this index to find relevant docs on-demand.
+## Start here → [Consolidated As-Built PRDs](prds/consolidated/README.md)
 
----
+The canonical reference for **what Patina is, as built** is the 12 Detailed PRDs in [`prds/consolidated/`](prds/consolidated/), each reconciled against the actual codebase (routes, migrations `00001–00254`, edge functions, services). Read those first for any area — they supersede the scattered specs, delivery logs, and gap matrices that used to live here.
 
-## Implementation Status
+| Area | PRD |
+|------|-----|
+| Designer Portal (core) | [01-designer-portal](prds/consolidated/01-designer-portal.md) |
+| The Document (desk) | [02-the-document](prds/consolidated/02-the-document.md) |
+| Decision System | [03-decision-system](prds/consolidated/03-decision-system.md) |
+| Procurement, Orders & Billing | [04-procurement-orders](prds/consolidated/04-procurement-orders.md) |
+| Aesthete Engine (taste/AI) | [05-aesthete-engine](prds/consolidated/05-aesthete-engine.md) |
+| Library, Catalog & Capture | [06-library-catalog-capture](prds/consolidated/06-library-catalog-capture.md) |
+| Vendors & Pipeline | [07-vendors-pipeline](prds/consolidated/07-vendors-pipeline.md) |
+| Client Portal | [08-client-portal](prds/consolidated/08-client-portal.md) |
+| Help & Guidance | [09-help-guidance](prds/consolidated/09-help-guidance.md) |
+| Comms, Email & Notifications | [10-comms-email-notifications](prds/consolidated/10-comms-email-notifications.md) |
+| Native — iOS & Extension | [11-native-ios-extension](prds/consolidated/11-native-ios-extension.md) |
+| Platform & Infrastructure | [12-platform-infra](prds/consolidated/12-platform-infra.md) |
 
-### Currently Implementing
-| Spec | Started | Progress | Last Update |
-|------|---------|----------|-------------|
-| [product-capture](_active/product-capture.md) | 2026-01 | In Progress | 2026-01-24 |
-| [vendor-management](_active/vendor-management.md) | 2026-01 | In Progress | 2026-01-24 |
-| [mobile-companion](_active/mobile-companion.md) | 2026-01 | In Progress | 2026-01-24 |
-| [mobile-first-launch](_active/mobile-first-launch.md) | 2026-01 | In Progress | 2026-01-24 |
+## Still-current operational docs (not superseded by PRDs)
 
-### Recently Completed
-| Spec | Completed | Duration |
-|------|-----------|----------|
-| *None yet* | — | — |
+These stay authoritative — the PRDs point to them rather than replace them:
 
----
+- **Runbooks** — `operations/email-system-runbook.md`, `operations/e2e-local-test.md`, `infra/runbooks/**` (auth, email, domains, local-dev), `prds/AE/aesthete-engine-runbook.md`, `prds/AE/aesthete-engine-prod-readiness.md`.
+- **Maintenance** — `maintenance/stale-files-audit.md` (dead-code/removable-file audit; separate from this doc consolidation).
+- **Deploy** — `infra/DEPLOYMENT_GUIDE.md`, `infra/QUICKSTART.md`, `infra/PORT_REFERENCE.md`, `architecture/cloudflare-migration.html`, `architecture/supabase-cloud-migration.html`.
+- **Analytics** — `specs/Data Tracking/`, `handoffs/sprint-2-posthog-dashboards/`.
+- **Design references** — the-document prototypes + `CODEBASE-MAP.md` / `DECISIONS.md` under `design/the-document/`, `product/portal-vs-desk-feature-gap-matrix-v2.md`.
 
-## Specs (Feature Requirements)
+## Archive
 
-### Active (In Development)
-| File | Description |
-|------|-------------|
-| `specs/_active/product-capture.md` | Chrome extension product + vendor capture flow |
-| `specs/_active/vendor-management.md` | Vendor CRUD, reviews, trade accounts - portal module |
-| `specs/_active/mobile-companion.md` | iOS companion system - navigation, states, gestures |
-| `specs/_active/mobile-first-launch.md` | First launch user story - threshold to walk flow |
-
-### Pending
-*No pending specs — create new specs in `specs/` folder*
-
-## PRDs (Product Requirements)
-
-| File | Description |
-|------|-------------|
-| `prds/monorepo-bootstrap.md` | Initial Strata monorepo setup and architecture |
-
-## Architecture
-
-| File | Description |
-|------|-------------|
-| `architecture/ios-development-plan.md` | iOS app architecture, SwiftUI patterns, phase plan |
-
-## Wireframes (Interactive HTML)
-
-| File | Description |
-|------|-------------|
-| `wireframes/web-companion.html` | Portal AI companion embedded interface |
-| `wireframes/mobile-companion-flow.html` | iOS companion navigation flows |
-| `wireframes/mobile-immersive-experience.html` | iOS immersive furniture discovery |
-
----
-
-## Pending Specs (To Be Created)
-
-These specs are referenced in CLAUDE.md files but don't exist yet:
-
-| File | Needed For | Description |
-|------|------------|-------------|
-| `specs/portal-companion.md` | Portal | AI shopping companion feature for web |
-| `specs/room-scanning.md` | Mobile | iOS room capture and sync with Supabase |
-| `architecture/data-flow.md` | All | How data moves between apps |
-| `architecture/auth-flow.md` | Portal | Supabase SSR auth patterns |
-| `architecture/embedding-pipeline.md` | All | pgvector embedding system |
-
----
+Docs that a consolidated PRD fully replaces were moved to [`_archive/`](_archive/) (path-preserving, history intact via `git mv`). See the archive rationale in the [consolidated README](prds/consolidated/README.md#what-happened-to-the-old-docs).
 
 ## Templates
 
-Use these templates when creating new documentation:
-
-| Template | Purpose |
-|----------|---------|
-| `specs/_template.md` | Feature specifications with implementation checklists |
-| `prds/_template.md` | Product requirement documents |
-| `architecture/_template.md` | Architecture Decision Records (ADRs) |
-
----
-
-## Workflow
-
-1. **Create spec** - Copy `specs/_template.md` to `specs/[feature].md`
-2. **Implement** - Run `/implement docs/specs/[feature].md`
-3. **Track** - Spec moves to `_active/`, progress logged in `implementation/`
-4. **Complete** - Spec moves to `_completed/`, status updated here
-
----
-
-*Add new docs here as they're created. Keep descriptions to one line.*
+`prds/_template.md` · `specs/_template.md` · `architecture/_template.md`
