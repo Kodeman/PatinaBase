@@ -1,0 +1,297 @@
+'use client';
+
+/**
+ * ShareSheet (Schedule & Boards Wave 2 · C2) — the designer's tokenized
+ * share-link instrument. A charcoal DocSheet (D8) that slides up over the open
+ * proposal (never a route, never an unmount — D1). Same grammar as SendSheet:
+ * charcoal, hairlines, clay accents, zero shadows (D4), inline errors at the act
+ * (R83 — no toasts).
+ *
+ * A share link opens a VIEW-ONLY copy of the proposal for anyone holding it (no
+ * account needed). The visibility matrix is seeded from the proposal's
+ * client-visibility tier, then edited per-field. The raw token is returned by
+ * create EXACTLY once and never persisted (only sha256(token) is stored), so:
+ *   · a just-created link shows its URL once, with a Copy button;
+ *   · existing links can only be reviewed (views, last-viewed) and revoked —
+ *     there is no copy for them (the URL is unrecoverable by design);
+ *   · "regenerate" = revoke + create anew.
+ */
+
+import { useEffect, useState } from 'react';
+import {
+  useProposalShares,
+  useCreateShare,
+  useRevokeShare,
+  type DocumentShare,
+} from '@patina/supabase';
+import {
+  SHARE_VISIBILITY_FIELDS,
+  shareVisibilityForTier,
+  shareLinkUrl,
+  type ShareVisibility,
+  type ClientVisibilityTier,
+} from '@patina/utils';
+import { DocSheet } from './doc-sheet';
+
+const labelCls =
+  'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[rgba(250,247,242,0.5)]';
+
+const fieldCls =
+  'w-full rounded-[4px] border border-[rgba(250,247,242,0.18)] bg-[rgba(250,247,242,0.04)] px-3 py-2 text-[13px] text-[var(--color-off-white)] outline-none transition-colors placeholder:italic placeholder:text-[rgba(250,247,242,0.35)] focus:border-[var(--color-clay)]';
+
+// Guests are always view-only, so the feedback toggle is meaningless on a share
+// link (it is forced off for tokenized guests). Omit it from the matrix.
+const MATRIX_FIELDS = SHARE_VISIBILITY_FIELDS.filter((f) => f.key !== 'feedbackEnabled');
+
+const fmtDate = (iso: string) =>
+  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(iso));
+
+export function ShareSheet({
+  proposalId,
+  tier,
+  open,
+  onClose,
+}: {
+  proposalId: string;
+  tier?: ClientVisibilityTier | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { data: shares = [] } = useProposalShares(proposalId);
+  const createShare = useCreateShare();
+  const revokeShare = useRevokeShare();
+
+  const [visibility, setVisibility] = useState<ShareVisibility>(() => shareVisibilityForTier(tier));
+  const [label, setLabel] = useState('');
+  const [created, setCreated] = useState<{ url: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Re-seed the matrix and clear transient state each time the sheet opens (or
+  // when the tier resolves while open) — a fresh link starts from the tier's
+  // defaults, not a previous session's edits.
+  useEffect(() => {
+    if (open) {
+      setVisibility(shareVisibilityForTier(tier));
+      setCreated(null);
+      setCopied(false);
+      setError(null);
+    }
+  }, [open, tier]);
+
+  const activeShares = shares.filter((s) => s.status === 'active');
+
+  const handleCreate = async () => {
+    setError(null);
+    setCopied(false);
+    try {
+      const res = await createShare.mutateAsync({
+        proposalId,
+        label: label.trim() || null,
+        visibility,
+      });
+      // Local-dev origin heuristic: the designer runs on :3000, the client
+      // portal on :3002. In production the two are distinct hosts and the
+      // replace is a no-op — the token still resolves once the origin is right.
+      const origin =
+        typeof window !== 'undefined'
+          ? window.location.origin.replace(':3000', ':3002')
+          : '';
+      setCreated({ url: shareLinkUrl(origin, res.token) });
+      setLabel('');
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not create the share link. Please try again.',
+      );
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!created) return;
+    try {
+      await navigator.clipboard.writeText(created.url);
+      setCopied(true);
+    } catch {
+      setError('Could not copy automatically — select the link above and copy it manually.');
+    }
+  };
+
+  const handleRevoke = async (share: DocumentShare) => {
+    setError(null);
+    try {
+      await revokeShare.mutateAsync({ shareId: share.id, proposalId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not revoke the link. Please try again.');
+    }
+  };
+
+  return (
+    <DocSheet open={open} onClose={onClose} title="Share links">
+      <div className="mx-auto max-w-xl">
+        <p className={labelCls}>Share links</p>
+        <h2 className="mt-1 font-heading text-xl text-[var(--color-pearl)]">Share this proposal</h2>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-[rgba(250,247,242,0.6)]">
+          A share link opens a <b>view-only</b> copy of this proposal for anyone who has it — no
+          account needed. Choose what the link reveals; feedback stays off on shared links.
+        </p>
+
+        {/* ── The just-created link — shown ONCE ── */}
+        {created && (
+          <div className="mt-5 rounded-[4px] border border-[rgba(168,181,160,0.4)] bg-[rgba(168,181,160,0.08)] p-3.5">
+            <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-sage)]">
+              Link created
+            </p>
+            <p className="mb-2 text-[12px] leading-relaxed text-[rgba(250,247,242,0.7)]">
+              Copy this link now — it is shown only once and can&rsquo;t be retrieved later.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={created.url}
+                onFocus={(e) => e.currentTarget.select()}
+                aria-label="Share link"
+                className={`${fieldCls} font-mono !text-[11px]`}
+              />
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="shrink-0 rounded-[4px] bg-[var(--color-clay)] px-3 py-2 text-[11px] font-medium text-[var(--color-charcoal)] transition-opacity hover:opacity-90"
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Existing links ── */}
+        <div className="mt-6">
+          <p className={labelCls}>Existing links</p>
+          {shares.length === 0 ? (
+            <p className="mt-2 text-[12px] italic text-[rgba(250,247,242,0.4)]">
+              No share links yet.
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {shares.map((s) => {
+                const revoked = s.status === 'revoked';
+                return (
+                  <li
+                    key={s.id}
+                    className="flex items-start justify-between gap-3 rounded-[4px] border border-[rgba(250,247,242,0.12)] bg-[rgba(250,247,242,0.03)] px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-[12.5px] text-[var(--color-off-white)]">
+                        {s.label || 'Untitled link'}
+                        {revoked && (
+                          <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.4)]">
+                            revoked
+                          </span>
+                        )}
+                      </p>
+                      <p className="mt-0.5 font-mono text-[9.5px] uppercase tracking-[0.04em] text-[rgba(250,247,242,0.45)]">
+                        {fmtDate(s.created_at)} · {s.view_count} view{s.view_count === 1 ? '' : 's'}
+                        {s.last_viewed_at ? ` · last ${fmtDate(s.last_viewed_at)}` : ''}
+                      </p>
+                    </div>
+                    {!revoked && (
+                      <button
+                        type="button"
+                        onClick={() => handleRevoke(s)}
+                        disabled={revokeShare.isPending}
+                        className="shrink-0 self-center font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.5)] transition-colors hover:text-[var(--color-terracotta)] disabled:opacity-40"
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {activeShares.length > 0 && (
+            <p className="mt-2 text-[11px] leading-relaxed text-[rgba(250,247,242,0.4)]">
+              An existing link&rsquo;s URL can&rsquo;t be shown again (only its hash is stored). To
+              regenerate one, revoke it and create a new link — the old URL stops working at once.
+            </p>
+          )}
+        </div>
+
+        {/* ── Create a new link ── */}
+        <div className="mt-6 border-t border-[rgba(250,247,242,0.1)] pt-5">
+          <p className={labelCls}>New link · what it reveals</p>
+          <div className="mt-2 space-y-1.5">
+            {MATRIX_FIELDS.map((f) => {
+              const on = visibility[f.key];
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setVisibility((v) => ({ ...v, [f.key]: !v[f.key] }))}
+                  className="flex w-full items-start justify-between gap-3 rounded-[4px] border border-[rgba(250,247,242,0.14)] px-3 py-2 text-left transition-colors hover:border-[var(--color-clay)]"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-[12.5px] text-[var(--color-off-white)]">
+                      {f.label}
+                    </span>
+                    <span className="block text-[11px] leading-snug text-[rgba(250,247,242,0.45)]">
+                      {f.description}
+                    </span>
+                  </span>
+                  <span
+                    className={`shrink-0 self-center font-mono text-[9px] uppercase tracking-[0.08em] ${
+                      on ? 'text-[var(--color-clay)]' : 'text-[rgba(250,247,242,0.35)]'
+                    }`}
+                  >
+                    {on ? 'Shown' : 'Hidden'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex flex-col gap-1.5">
+            <label className={labelCls} htmlFor="share-sheet-label">
+              Label (optional)
+            </label>
+            <input
+              id="share-sheet-label"
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="e.g. For the Hendersons"
+              className={fieldCls}
+            />
+          </div>
+
+          {error && (
+            <div
+              role="alert"
+              className="mt-4 rounded-[4px] border border-[rgba(196,124,92,0.4)] bg-[rgba(196,124,92,0.08)] p-3 text-[12.5px] text-[var(--color-clay)]"
+            >
+              {error}
+            </div>
+          )}
+
+          <div className="mt-4 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={createShare.isPending}
+              className="rounded-[4px] bg-[var(--color-clay)] px-4 py-2 text-[12px] font-medium text-[var(--color-charcoal)] transition-opacity disabled:opacity-40"
+            >
+              {createShare.isPending ? 'Creating…' : 'Create link →'}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.5)] hover:text-[var(--color-off-white)]"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </DocSheet>
+  );
+}

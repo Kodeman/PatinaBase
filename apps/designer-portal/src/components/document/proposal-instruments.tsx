@@ -29,6 +29,7 @@ import { Instrument, InstrumentRow } from './instrument';
 import { StrataMark } from './strata-mark';
 import { SendSheet } from './overlays/send-sheet';
 import { ProposalVersionHistory } from './proposal-version-history';
+import { ProposalShareInstrument } from './proposal-share-instrument';
 import { ProposalWatch } from './proposal-watch';
 
 export function ProposalInstruments({
@@ -150,6 +151,7 @@ export function ProposalInstruments({
               Send the proposal
             </Instrument>
           )}
+          <ProposalShareInstrument proposalId={proposalId} tier={proposal?.client_visibility_tier} />
           <ProposalVersionHistory proposalId={proposalId} />
         </InstrumentRow>
       </div>
