@@ -336,15 +336,20 @@ async function loadPoPaymentPayable(
     // fresh session is created below.
     onStaleSession: async () => {},
     async hasInFlightPayment(_sessionId: string) {
-      // Completed session + a stamped PaymentIntent + not-yet-paid state = an
-      // ACH debit in flight. Don't open a second payment path for the same row.
+      // A completed Checkout session still pointed-to by a not-yet-paid row = a
+      // payment in flight (card just cleared and the webhook hasn't landed, or an
+      // ACH debit settling). Do NOT require a stamped PaymentIntent: the PI is
+      // only stamped once the webhook processes, so between the user finishing
+      // Checkout and the webhook landing a second session would double-charge.
+      // A failed ACH already clears this pointer, so a still-present pointer on a
+      // completed session is authoritative.
       const { data: fresh } = await admin
         .from('po_payments')
-        .select('state, stripe_payment_intent_id')
+        .select('state')
         .eq('id', payment.id)
         .maybeSingle();
-      const row = fresh as { state: string; stripe_payment_intent_id: string | null } | null;
-      return !!row && row.state !== 'paid' && !!row.stripe_payment_intent_id;
+      const row = fresh as { state: string } | null;
+      return !!row && row.state !== 'paid';
     },
     async onSessionCreated(sessionId: string) {
       const { error: stampErr } = await admin

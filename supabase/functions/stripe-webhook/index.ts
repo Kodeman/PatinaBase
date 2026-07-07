@@ -672,7 +672,11 @@ async function markPoPaid(
     state: 'paid',
     paid_date: new Date().toISOString().slice(0, 10),
   };
-  if (paymentIntentId && !row.stripe_payment_intent_id) {
+  // Overwrite (not only-if-null): the settling event's PaymentIntent is the one
+  // that actually succeeded. A prior attempt (e.g. a failed-then-retried ACH)
+  // may have left a stale PI stamped; the recorded PI must reference the
+  // successful attempt.
+  if (paymentIntentId) {
     patch.stripe_payment_intent_id = paymentIntentId;
   }
   const { data, error } = await admin
@@ -774,12 +778,20 @@ async function handlePoAsyncPaymentFailed(
     return;
   }
 
-  // Clear the session pointer so Pay-now opens a fresh session. Leave state at
-  // its prior value (there is no 'failed' po_payment state). Guard on the
-  // session id so a newer session's pointer is never clobbered.
+  // Already settled: a late/duplicate async_payment_failed for a superseded
+  // attempt on a row that was paid by a later attempt. Do not clear the pointer
+  // (would strip a live session) and do not send a spurious failure notice.
+  if (row.state === 'paid') {
+    return;
+  }
+
+  // Clear the session pointer AND the stale PaymentIntent so Pay-now opens a
+  // fresh session and the row carries no reference to the failed attempt. Leave
+  // state at its prior value (there is no 'failed' po_payment state). Guard on
+  // the session id so a newer session's pointer is never clobbered.
   const { data: cleared, error } = await admin
     .from('po_payments')
-    .update({ stripe_checkout_session_id: null })
+    .update({ stripe_checkout_session_id: null, stripe_payment_intent_id: null })
     .eq('id', row.id)
     .eq('stripe_checkout_session_id', sessionId)
     .select('id');

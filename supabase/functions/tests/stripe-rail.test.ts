@@ -101,6 +101,7 @@ const ids = {
 const EVT = {
   inv: `evt_inv_${RUN}`,
   poPaid: `evt_po_paid_${RUN}`,
+  poPaidPi: `evt_po_paid_pi_${RUN}`, // DISTINCT event, same PI as poPaid — exercises the settle guard
   poFail: `evt_po_fail_${RUN}`,
 };
 const SESS = {
@@ -200,7 +201,7 @@ async function cleanup() {
   if (poIds.length) await admin.from('purchase_orders').delete().in('id', poIds);
   if (ids.project) await admin.from('projects').delete().eq('id', ids.project);
   if (ids.vendor) await admin.from('vendors').delete().eq('id', ids.vendor);
-  await admin.from('stripe_webhook_events').delete().in('id', [EVT.inv, EVT.poPaid, EVT.poFail]);
+  await admin.from('stripe_webhook_events').delete().in('id', [EVT.inv, EVT.poPaid, EVT.poPaidPi, EVT.poFail]);
   if (ids.designerA) await admin.auth.admin.deleteUser(ids.designerA).catch(() => {});
   if (ids.userB) await admin.auth.admin.deleteUser(ids.userB).catch(() => {});
 }
@@ -283,6 +284,28 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       const row = await poPayment(ids.payPaid);
       assertEquals(row.state, 'paid');
       assertEquals(await notifCount(ids.payPaid, 'payment_received'), 1); // still 1
+    });
+
+    // (d2) DISTINCT event (payment_intent.succeeded) for the SAME PaymentIntent
+    // after the settle. Event-id dedup can't help here (new event id), so this
+    // proves the settle guard itself: resolvePoPayment finds the row by PI id,
+    // markPoPaid's .neq('state','paid') no-ops, and no second notification fires.
+    await t.step('po_payment payment_intent.succeeded after settle is a no-op (settle guard)', async () => {
+      const before = await poPayment(ids.payPaid);
+      assertEquals(before.state, 'paid');
+      const res = await postSigned(
+        WEBHOOK_URL,
+        stripeEvent(EVT.poPaidPi, 'payment_intent.succeeded', {
+          id: `pi_po_${RUN}`, object: 'payment_intent',
+          metadata: { payable_type: 'po_payment', po_payment_id: ids.payPaid, purchase_order_id: ids.poA },
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      const row = await poPayment(ids.payPaid);
+      assertEquals(row.state, 'paid');
+      assertEquals(row.paid_date, before.paid_date); // paid_date unchanged
+      assertEquals(await notifCount(ids.payPaid, 'payment_received'), 1); // still exactly 1
     });
 
     // (c) PO_PAYMENT async_payment_failed clears the session pointer.
