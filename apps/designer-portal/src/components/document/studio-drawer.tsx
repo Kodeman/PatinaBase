@@ -21,7 +21,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { BookOpen, Package, Receipt, Users, Clock, Bell } from 'lucide-react';
-import { useUnreadInboxCount } from '@patina/supabase';
+import { useUnreadInboxCount, useProcurementUnreadCount } from '@patina/supabase';
 import { DocSheet } from './overlays/doc-sheet';
 import { PostSheet, openPost } from './overlays/post-sheet';
 import { OrdersLedger } from './orders-ledger';
@@ -64,7 +64,11 @@ export function StudioDrawer() {
   const [sheetContext, setSheetContext] = useState<OpenLedgerContext | null>(null);
   const open = LEDGERS.find((l) => l.key === openLedger) ?? null;
   const { inHandToday } = useDocumentTime();
-  const { data: unread = 0 } = useUnreadInboxCount();
+  // The Post's Record merges the inbox + procurement feeds, so the bell's
+  // awareness dot must read both unreads or it would lie about the sheet.
+  const { data: unreadInbox = 0 } = useUnreadInboxCount();
+  const { data: unreadProcurement = 0 } = useProcurementUnreadCount();
+  const unread = unreadInbox + unreadProcurement;
   const breadcrumb = breadcrumbFor(pathname);
   const holding = (pathname ?? '').startsWith('/doc/');
 

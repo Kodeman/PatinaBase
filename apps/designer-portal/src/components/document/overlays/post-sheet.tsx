@@ -11,14 +11,19 @@
  *   · Letters   — cross-document messages (`useInboxMessages`); a row opens the
  *                 ONE shared conversation in the People Room (`/people?thread=`),
  *                 never a copy.
- *   · the Record — a dated quiet ledger over `useInboxNotifications`. A notice
- *                 whose subject the Desk already surfaces renders as a quiet
- *                 CROSS-REFERENCE ("on your Desk"), never its own act (R82).
+ *   · the Record — a dated quiet ledger over TWO feeds merged as one list:
+ *                 `useInboxNotifications` (notification_log) and
+ *                 `useProcurementNotifications` (procurement_notifications,
+ *                 00151 — deposits/balances due, deliveries, damage claims).
+ *                 A notice whose subject the Desk already surfaces renders as
+ *                 a quiet CROSS-REFERENCE ("on your Desk"), never its own act
+ *                 (R82).
  *
- * Read-on-open (the mark-read route) on row click + a quiet "mark all read" act.
- * The clay dot stays awareness-not-count (D8): unread is a dot per row, never a
- * number, and the bell's own dot reads the same `useUnreadInboxCount`. Errors
- * render as a quiet inline terracotta band at the act site (R83), never a toast.
+ * Read-on-open (each feed's own mark-read path) on row click + a quiet "mark
+ * all read" act spanning both. The clay dot stays awareness-not-count (D8):
+ * unread is a dot per row, never a number, and the bell's own dot reads the
+ * same two unread counts. Errors render as a quiet inline terracotta band at
+ * the act site (R83), never a toast.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -28,16 +33,16 @@ import {
   useInboxNotifications,
   useInboxMessages,
   useInboxNotificationsRealtime,
-  type InboxNotification,
+  useProcurementNotifications,
+  useMarkProcurementNotificationRead,
   type InboxMessage,
 } from '@patina/supabase';
 import { DocSheet } from './doc-sheet';
 import {
-  deriveRecordRow,
-  notificationTitle,
-  notificationBody,
-  formatType,
-  isNotificationRead,
+  inboxRecordItem,
+  procurementRecordItem,
+  mergeRecordItems,
+  type RecordItem,
   letterHref,
   letterTitle,
   relTime,
@@ -66,10 +71,15 @@ export function PostSheet() {
   const [markReadError, setMarkReadError] = useState<string | null>(null);
 
   useInboxNotificationsRealtime();
-  const { data: notifications = [], isLoading: loadingRecord } = useInboxNotifications({
+  const { data: notifications = [], isLoading: loadingInbox } = useInboxNotifications({
     limit: 50,
   });
+  // No realtime leg for procurement (00151 hook is poll-only, staleTime 60 s).
+  const { data: procurement = [], isLoading: loadingProcurement } =
+    useProcurementNotifications({ limit: 50 });
+  const markProcurementRead = useMarkProcurementNotificationRead();
   const { data: messages = [], isLoading: loadingLetters } = useInboxMessages(50);
+  const loadingRecord = loadingInbox || loadingProcurement;
 
   useEffect(() => {
     const onOpen = () => {
@@ -81,9 +91,26 @@ export function PostSheet() {
     return () => window.removeEventListener('document:open-post', onOpen);
   }, []);
 
-  const unreadIds = useMemo(
-    () => notifications.filter((n) => !isNotificationRead(n)).map((n) => n.id),
-    [notifications],
+  // The one dated ledger: both feeds merged, newest first.
+  const record = useMemo(
+    () =>
+      mergeRecordItems(
+        notifications.map(inboxRecordItem),
+        procurement.map(procurementRecordItem),
+      ),
+    [notifications, procurement],
+  );
+
+  const unreadProcurementIds = useMemo(
+    () =>
+      record
+        .filter((i) => i.source === 'procurement' && !i.read)
+        .map((i) => i.id),
+    [record],
+  );
+  const unreadCount = useMemo(
+    () => record.reduce((sum, i) => (i.read ? sum : sum + 1), 0),
+    [record],
   );
 
   // One row per thread — the latest message, newest thread first (the inbox
@@ -121,6 +148,29 @@ export function PostSheet() {
     }
   }
 
+  // The procurement feed's own mark-read path (read_at on the 00151 row; the
+  // hook invalidates ['procurement-notifications'] + ['procurement-unread-count']).
+  async function markProcurementReadIds(ids: string[]) {
+    if (ids.length === 0) return;
+    setMarkReadError(null);
+    try {
+      await Promise.all(
+        ids.map((notificationId) =>
+          markProcurementRead.mutateAsync({ notificationId }),
+        ),
+      );
+    } catch (err) {
+      setMarkReadError(
+        err instanceof Error ? err.message : 'Could not mark as read. Try again.',
+      );
+    }
+  }
+
+  function markAllRead() {
+    void markRead('all');
+    void markProcurementReadIds(unreadProcurementIds);
+  }
+
   const navigate = (href: string) => {
     setOpen(false);
     if (href.startsWith('http')) {
@@ -130,10 +180,12 @@ export function PostSheet() {
     }
   };
 
-  function openRecordRow(n: InboxNotification) {
-    if (!isNotificationRead(n)) void markRead([n.id]);
-    const { href } = deriveRecordRow(n);
-    if (href) navigate(href);
+  function openRecordRow(item: RecordItem) {
+    if (!item.read) {
+      if (item.source === 'inbox') void markRead([item.id]);
+      else void markProcurementReadIds([item.id]);
+    }
+    if (item.row.href) navigate(item.row.href);
   }
 
   function openLetter(m: InboxMessage) {
@@ -148,10 +200,10 @@ export function PostSheet() {
         {/* Front matter — the literal name of the thing. */}
         <div className="flex items-baseline justify-between gap-4">
           <h2 className="font-heading text-xl text-[var(--color-pearl)]">The Post</h2>
-          {page === 'record' && unreadIds.length > 0 && (
+          {page === 'record' && unreadCount > 0 && (
             <button
               type="button"
-              onClick={() => markRead('all')}
+              onClick={markAllRead}
               className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.5)] transition-colors hover:text-[var(--color-clay)]"
             >
               Mark all read
@@ -192,11 +244,7 @@ export function PostSheet() {
         )}
 
         {page === 'record' ? (
-          <RecordList
-            notifications={notifications}
-            loading={loadingRecord}
-            onOpen={openRecordRow}
-          />
+          <RecordList items={record} loading={loadingRecord} onOpen={openRecordRow} />
         ) : (
           <LetterList letters={letters} loading={loadingLetters} onOpen={openLetter} />
         )}
@@ -208,16 +256,16 @@ export function PostSheet() {
 // ─── The Record ────────────────────────────────────────────────────────────
 
 function RecordList({
-  notifications,
+  items,
   loading,
   onOpen,
 }: {
-  notifications: InboxNotification[];
+  items: RecordItem[];
   loading: boolean;
-  onOpen: (n: InboxNotification) => void;
+  onOpen: (item: RecordItem) => void;
 }) {
   if (loading) return <QuietLine text="Gathering the record…" />;
-  if (notifications.length === 0) {
+  if (items.length === 0) {
     return (
       <QuietLine
         text="The record is clear."
@@ -227,25 +275,16 @@ function RecordList({
   }
   return (
     <ul className="divide-y divide-[rgba(250,247,242,0.08)]">
-      {notifications.map((n) => (
-        <RecordRow key={n.id} notification={n} onOpen={() => onOpen(n)} />
+      {items.map((item) => (
+        <RecordRow key={item.key} item={item} onOpen={() => onOpen(item)} />
       ))}
     </ul>
   );
 }
 
-function RecordRow({
-  notification,
-  onOpen,
-}: {
-  notification: InboxNotification;
-  onOpen: () => void;
-}) {
-  const read = isNotificationRead(notification);
-  const derived = deriveRecordRow(notification);
-  const title = notificationTitle(notification);
-  const body = notificationBody(notification);
-  const isCrossRef = derived.kind === 'cross_reference';
+function RecordRow({ item, onOpen }: { item: RecordItem; onOpen: () => void }) {
+  const { read, title, body } = item;
+  const isCrossRef = item.row.kind === 'cross_reference';
 
   return (
     <li>
@@ -276,7 +315,7 @@ function RecordRow({
                 {title}
               </span>
               <span className="flex-shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.4)]">
-                {relTime(notification.created_at)}
+                {relTime(item.createdAt)}
               </span>
             </div>
             {body ? (
@@ -285,7 +324,7 @@ function RecordRow({
               </p>
             ) : null}
             <div className="mt-1 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.35)]">
-              <span>{formatType(notification.type)}</span>
+              <span>{item.typeLabel}</span>
               {isCrossRef && (
                 <>
                   <span aria-hidden>·</span>
