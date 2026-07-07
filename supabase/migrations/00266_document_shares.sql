@@ -234,7 +234,7 @@ GRANT EXECUTE ON FUNCTION public.revoke_document_share(UUID)   TO authenticated;
 -- anon deliberately if an anon-client caller ever ships.
 -- Functions get EXECUTE via PUBLIC by default — revoke PUBLIC on all three
 -- (the 00260 clone_proposal pattern), then grant exactly the intended callers.
-REVOKE ALL ON FUNCTION public.create_document_share(UUID, TEXT, JSONB, TIMESTAMPTZ) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.revoke_document_share(UUID)   FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.resolve_document_share(TEXT)  FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.create_document_share(UUID, TEXT, JSONB, TIMESTAMPTZ) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.revoke_document_share(UUID)   FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.resolve_document_share(TEXT)  FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.resolve_document_share(TEXT)  TO authenticated;

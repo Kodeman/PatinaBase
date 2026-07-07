@@ -431,12 +431,12 @@ GRANT EXECUTE ON FUNCTION public.reopen_item_feedback(UUID)         TO authentic
 
 -- ── Least privilege (Wave-2 gate): functions get EXECUTE via PUBLIC by
 -- default — revoke PUBLIC; the in-function auth guards remain the second wall.
-REVOKE ALL ON FUNCTION public.item_feedback_after_insert() FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.item_feedback_gate(p_proposal_item_id uuid, p_ffe_item_id uuid, p_board_item_id uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.notify_item_feedback(p_feedback_id uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.reopen_item_feedback(p_feedback_id uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.reply_to_item_feedback(p_feedback_id uuid, p_body text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.resolve_item_feedback(p_feedback_id uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.item_feedback_after_insert() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.item_feedback_gate(p_proposal_item_id uuid, p_ffe_item_id uuid, p_board_item_id uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.notify_item_feedback(p_feedback_id uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.reopen_item_feedback(p_feedback_id uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.reply_to_item_feedback(p_feedback_id uuid, p_body text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.resolve_item_feedback(p_feedback_id uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.item_feedback_gate(uuid, uuid, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.reply_to_item_feedback(uuid, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.resolve_item_feedback(uuid) TO authenticated;
