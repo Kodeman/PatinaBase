@@ -1067,6 +1067,7 @@ export type {
 export {
   useBoards,
   useBoard,
+  useBoardsWithItems,
   useUpsertBoard,
   useDeleteBoard,
   useAddBoardItem,
