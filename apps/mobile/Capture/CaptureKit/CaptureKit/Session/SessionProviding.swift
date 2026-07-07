@@ -1,9 +1,9 @@
 //  SessionProviding.swift
 //  CaptureKit
 //
-//  Auth/session seam. The app provides AuthSessionAdapter wrapping the
-//  copy-adapted AuthService, so feature teams import CaptureKit only and never
-//  touch supabase-swift directly.
+//  Auth/session seam. The app provides SupabaseSessionService (a single
+//  app-owned supabase-swift client), so feature teams import CaptureKit only and
+//  never touch supabase-swift directly.
 
 import Foundation
 

@@ -78,6 +78,13 @@ struct RootView: View {
                 step: $onboardingFlowStep,
                 authorizer: container.authorizer,
                 onSelectWorkspace: { container.session.selectWorkspace(id: $0) },
+                // Real mode starts O2 empty — the real orgs arrive from
+                // authorize(); demo seeding is mock-only (harness/previews).
+                seedWorkspaces: AppConfiguration.runsRealServices ? [] : OnboardingWorkspace.demo,
+                onSignOut: {
+                    Task { await container.session.signOut() }
+                    onboardingFlowStep = 0   // back to O1; fresh O2 on return
+                },
                 onComplete: { coordinator.phase = .ready }
             )
         case .ready:

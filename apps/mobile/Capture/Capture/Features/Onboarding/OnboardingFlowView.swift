@@ -23,16 +23,26 @@ struct OnboardingFlowView: View {
     /// Persist the workspace the designer picks in O2 (real mode). No-op for the
     /// stub host / previews.
     let onSelectWorkspace: (String) -> Void
+    /// Workspaces the O2 screen starts with. Real mode passes `[]` (the user's
+    /// real orgs arrive from `authorize()`); the stub host / previews keep the
+    /// demo list so the harness renders unchanged.
+    let seedWorkspaces: [OnboardingWorkspace]
+    /// Sign out from the O2 "no workspace" dead end and restart onboarding.
+    let onSignOut: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(step: Binding<Int>,
          authorizer: WorkspaceAuthorizing,
          onSelectWorkspace: @escaping (String) -> Void = { _ in },
+         seedWorkspaces: [OnboardingWorkspace] = OnboardingWorkspace.demo,
+         onSignOut: @escaping () -> Void = {},
          onComplete: @escaping () -> Void) {
         self._step = step
         self.authorizer = authorizer
         self.onSelectWorkspace = onSelectWorkspace
+        self.seedWorkspaces = seedWorkspaces
+        self.onSignOut = onSignOut
         self.onComplete = onComplete
     }
 
@@ -74,10 +84,12 @@ struct OnboardingFlowView: View {
         case 1:
             ConnectWorkspaceScreen(
                 authorizer: authorizer,
+                workspaces: seedWorkspaces,
                 onConnected: { workspace, _ in
                     onSelectWorkspace(workspace.id)
                     advance(to: 2)
-                }
+                },
+                onSignOut: onSignOut
             )
         case 2:
             CameraPrimingScreen(onContinue: { advance(to: 3) })

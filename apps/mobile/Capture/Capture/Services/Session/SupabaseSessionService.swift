@@ -151,15 +151,33 @@ final class SupabaseSessionService: SessionProviding {
     // MARK: Hydration
 
     private func hydrate(user: User) async {
+        // Share one in-flight fetch across concurrent callers (an auth-stream
+        // event and an explicit sign-in can land together) so they never race.
         if let task = hydrationTask {
             await task.value
             return
         }
+        // Event-driven retry: skip re-fetching only when the last pass actually
+        // landed a profile + workspaces. A failed or empty pass — offline cold
+        // launch, or the SDK's auth context lagging the event by a tick — must
+        // re-hydrate on the *next* auth event (.tokenRefreshed/.signedIn/…).
+        // There is no polling loop; the retry is bounded by the event stream.
+        if isHydrated { return }
         let task = Task { @MainActor in
             await self.performHydration(userID: user.id.uuidString)
         }
         hydrationTask = task
         await task.value
+        // Clear the latch so a later event can retry when this pass came back
+        // empty; a successful pass is instead gated out above by `isHydrated`.
+        hydrationTask = nil
+    }
+
+    /// A hydration pass is "good" once it has both a profile and at least one
+    /// workspace. Mirrors the reference app re-gating on emptiness so failed
+    /// fetches retry instead of latching an empty session for the whole run.
+    private var isHydrated: Bool {
+        profileDisplayName != nil && !workspaces.isEmpty
     }
 
     private func performHydration(userID: String) async {
