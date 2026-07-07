@@ -11,7 +11,7 @@
  */
 
 import { createServiceClient } from '@patina/supabase/server';
-import { summarizeBoard, type ProposalBoardSummary } from '@patina/supabase';
+import { type ProposalBoardSummary } from '@patina/supabase';
 import { normalizeShareVisibility, guestShareVisibility, isLikelyShareToken } from '@patina/utils';
 import { ProposalDocument } from '@/components/proposal-document';
 
@@ -65,12 +65,13 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
     { data: phases },
     { data: exclusions },
     { data: scopeRooms },
-    { data: boardRows },
   ] = await Promise.all([
     admin
       .from('proposals')
       .select(
-        '*, client:profiles!client_id(id,email,full_name), items:proposal_items(*, product:products(id,name,images,brand))',
+        // Guest payload carries the client's NAME (letterhead) but never their
+        // email — this HTML reaches anyone holding the link.
+        '*, client:profiles!client_id(id,full_name), items:proposal_items(*, product:products(id,name,images,brand))',
       )
       .eq('id', proposalId)
       .single(),
@@ -79,20 +80,15 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
     admin.from('proposal_phases').select('*').eq('proposal_id', proposalId).order('sort_order', { ascending: true }),
     admin.from('proposal_exclusions').select('*').eq('proposal_id', proposalId).order('sort_order', { ascending: true }),
     admin.from('proposal_scope_rooms').select('*').eq('proposal_id', proposalId).order('sort_order', { ascending: true }),
-    admin
-      .from('proposal_boards')
-      .select('*, proposal_board_items(type,image_url,z_index)')
-      .eq('proposal_id', proposalId)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: true }),
   ]);
 
   if (!proposal) return <DeadLink />;
 
-  const boards: ProposalBoardSummary[] = (boardRows ?? []).map(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (b: any) => summarizeBoard(b, b.proposal_board_items ?? []),
-  );
+  // Boards deliberately absent on guest shares until they ride document_shares
+  // in Wave 3 (B3) — the client-side board wrapper re-fetches under RLS and a
+  // guest gets zero rows anyway, so shipping summaries here would only leak
+  // board names/covers into an anonymous payload.
+  const boards: ProposalBoardSummary[] = [];
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">

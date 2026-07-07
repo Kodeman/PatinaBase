@@ -228,6 +228,9 @@ COMMENT ON FUNCTION public.resolve_document_share(TEXT) IS
 
 GRANT EXECUTE ON FUNCTION public.create_document_share(UUID, TEXT, JSONB, TIMESTAMPTZ) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.revoke_document_share(UUID)   TO authenticated;
--- resolve is reachable by a guest (the server route calls it via the service
--- client; anon grant is defense-in-depth for a future anon-client call).
-GRANT EXECUTE ON FUNCTION public.resolve_document_share(TEXT)  TO anon, authenticated;
+-- resolve is called ONLY by the guest route's service client. No anon grant —
+-- least privilege: nothing anonymous calls PostgREST directly today, and the
+-- grant would open a direct token-probe endpoint for no caller. Re-grant to
+-- anon deliberately if an anon-client caller ever ships.
+REVOKE EXECUTE ON FUNCTION public.resolve_document_share(TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.resolve_document_share(TEXT)  TO authenticated;
