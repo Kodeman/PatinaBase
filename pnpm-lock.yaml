@@ -1563,6 +1563,9 @@ importers:
       '@patina/types':
         specifier: workspace:*
         version: link:../types
+      '@patina/utils':
+        specifier: workspace:*
+        version: link:../utils
       '@supabase/ssr':
         specifier: ^0.5.2
         version: 0.5.2(@supabase/supabase-js@2.98.0)
