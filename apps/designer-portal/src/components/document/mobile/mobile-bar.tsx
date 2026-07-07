@@ -10,7 +10,7 @@
 
 import { usePathname } from 'next/navigation';
 import { Bell } from 'lucide-react';
-import { useUnreadInboxCount } from '@patina/supabase';
+import { useUnreadInboxCount, useProcurementUnreadCount } from '@patina/supabase';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
 import { openPost } from '../overlays/post-sheet';
@@ -26,7 +26,7 @@ const STRATA = (
 
 /** The Post bell (R82) — the mobile twin of the Studio Drawer bell. Dispatches
  *  the same `document:open-post` event; the clay dot is awareness, not a count
- *  (D8), reading the same `useUnreadInboxCount` as the desktop bell. */
+ *  (D8), reading the same inbox + procurement unreads as the desktop bell. */
 function MobileBell({ unread }: { unread: number }) {
   return (
     <button
@@ -50,7 +50,10 @@ export function MobileBar() {
   const pathname = usePathname();
   const { activeDoc, openSpine, openTimer, openDrawer } = useMobileShell();
   const { inHandToday, running, paused, elapsedSeconds } = useDocumentTime();
-  const { data: unread = 0 } = useUnreadInboxCount();
+  // Both Record feeds — the dot must match what the Post shows unread.
+  const { data: unreadInbox = 0 } = useUnreadInboxCount();
+  const { data: unreadProcurement = 0 } = useProcurementUnreadCount();
+  const unread = unreadInbox + unreadProcurement;
 
   const inDocument = pathname?.startsWith('/doc/') && activeDoc !== null;
   const activeSection = activeDoc?.sections.find((s) => s.state === 'active');
