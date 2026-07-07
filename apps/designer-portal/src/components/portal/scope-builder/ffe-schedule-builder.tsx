@@ -21,6 +21,12 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Button, IconButton, Input, Select, Textarea } from '@/components/ui/controls';
 import { BulkActionBar, BulkActionButton } from '@/components/portal/bulk-action-bar';
+import { SearchInput } from '@/components/portal/search-input';
+import {
+  FacetedFilterPopover,
+  type Facet,
+  type FacetSelections,
+} from '@/components/portal/faceted-filter-popover';
 import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalScopeRooms,
@@ -764,6 +770,9 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
   const removeItem = useRemoveProposalItem();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkError, setBulkError] = useState<string | null>(null);
+  // ── S4 — schedule search + facet filters (client-side; items are loaded) ──
+  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<FacetSelections>({});
   // A drag starts only after 6px of travel, so plain clicks on the handle's
   // neighbors (checkbox, edit, remove, unfold) stay clicks.
   const sensors = useSensors(
@@ -826,24 +835,87 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
     [items]
   );
 
+  // ── S4 — apply search + facets over the loaded lines ──────────────────────
+  const facets = useMemo<Facet[]>(
+    () => [
+      {
+        key: 'room',
+        label: 'Room',
+        options: [
+          { value: '__unassigned', label: 'Unassigned' },
+          ...typedRooms.map((r) => ({ value: r.id, label: r.name })),
+        ],
+      },
+      {
+        key: 'type',
+        label: 'Item type',
+        options: [
+          { value: 'fixed', label: 'Fixed' },
+          { value: 'allowance', label: 'Allowance' },
+          { value: 'tbd', label: 'TBD' },
+        ],
+      },
+      {
+        key: 'category',
+        label: 'Category',
+        options: categoryOptions.map((c) => ({ value: c.slug, label: c.label })),
+      },
+    ],
+    [typedRooms, categoryOptions]
+  );
+
+  const hasActiveFilters =
+    search.trim().length > 0 || Object.values(filters).some((v) => v.length > 0);
+
+  const filteredItems = useMemo(() => {
+    const typedItems = items as FFEItem[];
+    const q = search.trim().toLowerCase();
+    const roomSel = filters.room ?? [];
+    const typeSel = filters.type ?? [];
+    const catSel = filters.category ?? [];
+
+    return typedItems.filter((i) => {
+      if (roomSel.length > 0 && !roomSel.includes(i.scope_room_id ?? '__unassigned')) return false;
+      if (typeSel.length > 0 && !typeSel.includes(i.item_type ?? 'fixed')) return false;
+      if (catSel.length > 0 && !(i.ffe_category && catSel.includes(i.ffe_category))) return false;
+      if (q) {
+        const hay = [
+          i.name,
+          i.vendor_name,
+          i.doc_code,
+          i.notes,
+          i.ffe_category ? categoryLookup.get(i.ffe_category) : null,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [items, search, filters, categoryLookup]);
+
+  // Reordering rewrites the WHOLE document's positions from the visible
+  // groups, so it only arms when every line is visible.
+  const canReorder = !hasActiveFilters;
+
   // Group items by room.
   const grouped = useMemo(() => {
-    const typedItems = items as FFEItem[];
     const groups: Record<string, { roomName: string; items: FFEItem[] }> = {};
 
-    const unassigned = typedItems.filter((i) => !i.scope_room_id);
+    const unassigned = filteredItems.filter((i) => !i.scope_room_id);
     if (unassigned.length > 0) {
       groups['__unassigned'] = { roomName: 'Unassigned', items: unassigned };
     }
 
     for (const room of typedRooms) {
-      const roomItems = typedItems.filter((i) => i.scope_room_id === room.id);
+      const roomItems = filteredItems.filter((i) => i.scope_room_id === room.id);
       if (roomItems.length > 0) {
         groups[room.id] = { roomName: room.name, items: roomItems };
       }
     }
     return groups;
-  }, [items, typedRooms]);
+  }, [filteredItems, typedRooms]);
 
   const totalEstimate = useMemo(() => {
     return (items as FFEItem[]).reduce((sum, i) => {
@@ -943,6 +1015,9 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
     const activeItem =
       typeof active.id === 'string' ? typedItems.find((i) => i.id === active.id) : undefined;
     if (activeItem) {
+      // Belt: handles are hidden while filtering, but never rebuild a global
+      // order from a partial view.
+      if (!canReorder) return;
       const overItem =
         typeof over.id === 'string' ? typedItems.find((i) => i.id === over.id) : undefined;
       // Same-room sorts only — cross-room moves go through the edit form /
@@ -1014,16 +1089,30 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
       {/* The "Preliminary FF&E Schedule" heading + description are rendered by
           ScopeBuilderShell. We only render the live item-count / estimated-total
           summary here to avoid a duplicate heading. */}
-      <div
-        style={{
-          fontFamily: 'var(--font-body)',
-          fontSize: '0.82rem',
-          color: 'var(--text-muted)',
-          marginBottom: '0.75rem',
-        }}
-      >
-        {(items as FFEItem[]).length} items
-        {totalEstimate > 0 ? ` · Est. total: ${formatDollars(totalEstimate)}` : ''}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: '0.82rem',
+            color: 'var(--text-muted)',
+          }}
+        >
+          {hasActiveFilters
+            ? `${filteredItems.length} of ${(items as FFEItem[]).length} items`
+            : `${(items as FFEItem[]).length} items`}
+          {totalEstimate > 0 ? ` · Est. total: ${formatDollars(totalEstimate)}` : ''}
+        </div>
+        {/* S4 — search + facet filters over the schedule (both hosts). */}
+        {(items as FFEItem[]).length > 0 && (
+          <div className="flex items-center gap-2">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search items, vendors, codes"
+            />
+            <FacetedFilterPopover facets={facets} value={filters} onChange={setFilters} />
+          </div>
+        )}
       </div>
 
       {/* R83 — bulk-action failures land inline at the schedule, never a toast. */}
@@ -1098,7 +1187,7 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
                       <SortableScheduleItem
                         key={item.id}
                         id={item.id}
-                        disabled={editing}
+                        disabled={editing || !canReorder}
                         spanFull={editing}
                       >
                         {(dragHandle) => (
@@ -1126,10 +1215,24 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         );
       })}
 
+      {/* S4 — the filter matched nothing (items exist, none visible). */}
+      {!isLoading && (items as FFEItem[]).length > 0 && filteredItems.length === 0 && (
+        <div
+          className="py-8 text-center"
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: '0.82rem',
+            color: 'var(--text-muted)',
+          }}
+        >
+          Nothing matches. Clear the search or filters to see the whole schedule.
+        </div>
+      )}
+
       {/* Empty room droppables — surface a drop target for any scope_rooms
           that don't yet have any items so the designer can drag captures
-          straight into them. */}
-      {typedRooms
+          straight into them. Hidden while filtering (they'd all read empty). */}
+      {!hasActiveFilters && typedRooms
         .filter((room) => !grouped[room.id])
         .map((room) => (
           <RoomDropZone key={`empty-${room.id}`} droppableId={roomDroppableId(room.id)}>
