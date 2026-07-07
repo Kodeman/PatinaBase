@@ -724,6 +724,7 @@ export {
   useProjectFFEItems,
   useUpdateFFEItemStatus,
   useUpdateFFEItemPricing,
+  useBulkReassignFfeVendor,
   useProjectPhases,
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
@@ -737,6 +738,8 @@ export type {
   ProjectPalette,
   ProjectPaletteSwatch,
   UpdateFFEItemPricingInput,
+  BulkReassignFfeVendorInput,
+  BulkReassignFfeVendorResult,
 } from './use-project-v2';
 export {
   // Proposal Activation
@@ -1067,6 +1070,7 @@ export type {
 export {
   useBoards,
   useBoard,
+  useBoardsWithItems,
   useUpsertBoard,
   useDeleteBoard,
   useAddBoardItem,

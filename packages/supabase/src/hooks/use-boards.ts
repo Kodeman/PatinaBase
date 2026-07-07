@@ -219,6 +219,43 @@ export function useBoard(boardId: string | null | undefined) {
 }
 
 /**
+ * Every board on a proposal WITH its items inlined, in one round trip — boards
+ * ordered by (sort_order, created_at), items by z_index (bottom → top). Powers
+ * the read-only document surfaces (client proposal, designer preview, drafting
+ * mirror) that render the whole board section at once via the shared
+ * BoardsBlock, rather than the editor's per-board `useBoard`. RLS scopes rows to
+ * the proposal designer (or, for non-draft proposals, the linked client).
+ */
+export function useBoardsWithItems(proposalId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['boards-with-items', proposalId ?? null],
+    enabled: !!proposalId,
+    queryFn: async (): Promise<BoardWithItems[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('proposal_boards')
+        .select('*, proposal_board_items(*)')
+        .eq('proposal_id', proposalId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+        .order('z_index', { ascending: true, referencedTable: 'proposal_board_items' });
+
+      if (error) throw error;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((data ?? []) as any[]).map((row) => {
+        const { proposal_board_items: items, ...board } = row;
+        return {
+          ...(board as ProposalBoard),
+          items: (items ?? []) as ProposalBoardItem[],
+        };
+      });
+    },
+  });
+}
+
+/**
  * Create or update a board. If `boardId` is provided, the row is updated;
  * otherwise a new row is inserted (a `name` is then required).
  */

@@ -247,6 +247,70 @@ export function useUpdateFFEItemStatus() {
   });
 }
 
+export interface BulkReassignFfeVendorInput {
+  projectId: string;
+  /** Selected FF&E item ids — the caller pre-filters PO-linked lines out. */
+  itemIds: string[];
+  vendorId: string;
+  /** Denormalized display name, kept in lockstep with vendor_id (00148). */
+  vendorName: string;
+}
+
+export interface BulkReassignFfeVendorResult {
+  /** Ids the UPDATE actually reached (RLS + PO guard applied server-side). */
+  updatedIds: string[];
+  /** Requested ids the write did NOT reach — PO-linked or not visible. */
+  skippedIds: string[];
+}
+
+/**
+ * Bulk vendor reassignment for the FF&E board (Schedule & Boards Wave 0B —
+ * replaces the "Reassign Vendor" Coming-soon stub, B-07).
+ *
+ * One UPDATE over the selected ids, guarded by `.is('purchase_order_id',
+ * null)`: a line already linked to a PO is ordered — reassigning it is a
+ * procurement act (cancel/re-issue the PO), never a bulk edit. The confirm
+ * dialog pre-filters those out; the server-side guard re-enforces it against
+ * a stale client. `.eq('project_id', …)` is defense-in-depth on top of RLS
+ * (the useAssignProductToFfeSlot ownership-scoping pattern).
+ *
+ * Invalidates the FF&E trio (invalidateFfeCaches: ['project-ffe-items', id],
+ * ['projects', id], ['procurement-items']) — the By Vendor groupings on both
+ * the project board and the cross-project views re-derive from vendor_id.
+ */
+export function useBulkReassignFfeVendor() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      projectId,
+      itemIds,
+      vendorId,
+      vendorName,
+    }: BulkReassignFfeVendorInput): Promise<BulkReassignFfeVendorResult> => {
+      if (itemIds.length === 0) throw new Error('no items selected');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('project_ffe_items')
+        .update({ vendor_id: vendorId, vendor_name: vendorName })
+        .in('id', itemIds)
+        .eq('project_id', projectId)
+        .is('purchase_order_id', null)
+        .select('id');
+      if (error) throw error;
+      const updatedIds = ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
+      const reached = new Set(updatedIds);
+      return {
+        updatedIds,
+        skippedIds: itemIds.filter((id) => !reached.has(id)),
+      };
+    },
+    onSuccess: (_, { projectId }) => {
+      invalidateFfeCaches(queryClient, projectId);
+    },
+  });
+}
+
 export interface UpdateFFEItemPricingInput {
   itemId: string;
   projectId: string;

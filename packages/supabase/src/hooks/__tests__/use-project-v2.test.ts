@@ -24,6 +24,10 @@ interface MockBuilder {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   eq: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  in: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  is: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   order: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   limit: any;
@@ -53,6 +57,8 @@ function makeBuilder(initial: BuilderResult = { data: null, error: null }): Mock
   builder.update = record('update');
   builder.delete = record('delete');
   builder.eq = record('eq');
+  builder.in = record('in');
+  builder.is = record('is');
   builder.order = record('order');
   builder.limit = record('limit');
 
@@ -107,8 +113,17 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 // Import AFTER mocks.
-import { useUpdateFFEItemPricing, useProjectFinancials, useUpdateFFEItemStatus } from '../use-project-v2';
-import type { UpdateFFEItemPricingInput } from '../use-project-v2';
+import {
+  useUpdateFFEItemPricing,
+  useProjectFinancials,
+  useUpdateFFEItemStatus,
+  useBulkReassignFfeVendor,
+} from '../use-project-v2';
+import type {
+  UpdateFFEItemPricingInput,
+  BulkReassignFfeVendorInput,
+  BulkReassignFfeVendorResult,
+} from '../use-project-v2';
 
 beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
@@ -541,5 +556,108 @@ describe('useUpdateFFEItemStatus', () => {
     expect(invalidatedKeys).toContainEqual(['projects', 'proj-5']);
     expect(invalidatedKeys).toContainEqual(['procurement-items']);
     expect(invalidatedKeys).toContainEqual(['project-financials', 'proj-5']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useBulkReassignFfeVendor  (Schedule & Boards Wave 0B — B-07)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type ReassignMutationConfig = {
+  mutationFn: (input: BulkReassignFfeVendorInput) => Promise<BulkReassignFfeVendorResult>;
+  onSuccess: (result: unknown, variables: BulkReassignFfeVendorInput) => void;
+};
+
+describe('useBulkReassignFfeVendor', () => {
+  it('updates vendor_id + vendor_name over the ids, scoped to the project, guarded to unordered lines', async () => {
+    queueTableResults('project_ffe_items', {
+      data: [{ id: 'ffe-1' }, { id: 'ffe-2' }],
+      error: null,
+    });
+
+    const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
+    const result = await config.mutationFn({
+      projectId: 'proj-1',
+      itemIds: ['ffe-1', 'ffe-2'],
+      vendorId: 'v-9',
+      vendorName: 'Hewn Woodworks',
+    });
+
+    const builder = builders.project_ffe_items;
+    const update = builder.__chain.find((c) => c.method === 'update');
+    expect(update?.args[0]).toEqual({ vendor_id: 'v-9', vendor_name: 'Hewn Woodworks' });
+
+    // One write, addressed to exactly the selected ids…
+    const inCall = builder.__chain.find((c) => c.method === 'in');
+    expect(inCall?.args).toEqual(['id', ['ffe-1', 'ffe-2']]);
+    // …defense-in-depth scoped to the project (useAssignProductToFfeSlot pattern)…
+    const eqCall = builder.__chain.find((c) => c.method === 'eq');
+    expect(eqCall?.args).toEqual(['project_id', 'proj-1']);
+    // …and the PO guard: an ordered line is never bulk-reassigned.
+    const isCall = builder.__chain.find((c) => c.method === 'is');
+    expect(isCall?.args).toEqual(['purchase_order_id', null]);
+
+    expect(result).toEqual({ updatedIds: ['ffe-1', 'ffe-2'], skippedIds: [] });
+  });
+
+  it('reports ids the guarded UPDATE did not reach as skipped (stale client raced an order)', async () => {
+    // ffe-2 got PO-linked since the board loaded — the .is() guard drops it.
+    queueTableResults('project_ffe_items', { data: [{ id: 'ffe-1' }], error: null });
+
+    const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
+    const result = await config.mutationFn({
+      projectId: 'proj-1',
+      itemIds: ['ffe-1', 'ffe-2'],
+      vendorId: 'v-9',
+      vendorName: 'Hewn Woodworks',
+    });
+
+    expect(result).toEqual({ updatedIds: ['ffe-1'], skippedIds: ['ffe-2'] });
+  });
+
+  it('throws (and never writes) on an empty selection', async () => {
+    const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
+    await expect(
+      config.mutationFn({
+        projectId: 'proj-1',
+        itemIds: [],
+        vendorId: 'v-9',
+        vendorName: 'Hewn Woodworks',
+      }),
+    ).rejects.toThrow(/no items selected/);
+    expect(builders.project_ffe_items).toBeUndefined();
+  });
+
+  it('throws when the UPDATE fails', async () => {
+    queueTableResults('project_ffe_items', {
+      data: null,
+      error: new Error('rls denied'),
+    });
+
+    const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
+    await expect(
+      config.mutationFn({
+        projectId: 'proj-1',
+        itemIds: ['ffe-1'],
+        vendorId: 'v-9',
+        vendorName: 'Hewn Woodworks',
+      }),
+    ).rejects.toThrow('rls denied');
+  });
+
+  it('onSuccess invalidates the FF&E trio (invalidateFfeCaches)', () => {
+    const config = useBulkReassignFfeVendor() as unknown as ReassignMutationConfig;
+
+    config.onSuccess({}, {
+      projectId: 'proj-7',
+      itemIds: ['ffe-1'],
+      vendorId: 'v-9',
+      vendorName: 'Hewn Woodworks',
+    });
+
+    const invalidatedKeys = invalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toContainEqual(['project-ffe-items', 'proj-7']);
+    expect(invalidatedKeys).toContainEqual(['projects', 'proj-7']);
+    expect(invalidatedKeys).toContainEqual(['procurement-items']);
   });
 });
