@@ -228,6 +228,83 @@ describe('NotificationBell', () => {
       expect.objectContaining({ body: JSON.stringify({ ids: ['log-1'] }) }),
     );
   });
+
+  // ── Read-state reconciliation across the dedupe boundary ────────────────────
+  // A client who already dismissed a derived item (localStorage) must not see
+  // it resurface unread just because a matching inbox row lands later — e.g.
+  // proposal-send inserting a notification_log row whose metadata.deep_link
+  // matches an already-read "awaiting proposal" derived item.
+
+  it('renders a collision as read when the derived side is read, even if the inbox row is unread', () => {
+    mockUseClientNotifications.mockReturnValue({
+      data: [
+        {
+          id: 'proposal-2',
+          kind: 'proposal' as const,
+          title: 'Proposal awaiting review',
+          message: 'Living room',
+          url: '/proposals/2',
+          created_at: '2024-02-13T15:00:00Z',
+          read_at: '2024-02-13T16:00:00Z', // already dismissed client-side
+        },
+      ],
+      isLoading: false,
+    });
+    mockUseInboxNotifications.mockReturnValue({
+      data: [
+        makeInbox({
+          id: 'log-proposal',
+          metadata: { subject: 'Proposal sent', deep_link: '/proposals/2' }, // no read_at
+        }),
+      ],
+      isLoading: false,
+    });
+    render(<NotificationBell />);
+
+    // The one merged item is read on either side, so no unread badge at all.
+    expect(screen.queryByTestId('notification-bell-count')).not.toBeInTheDocument();
+  });
+
+  it('clicking an unread merged item marks BOTH mechanisms (inbox API + derived localStorage)', () => {
+    mockUseClientNotifications.mockReturnValue({
+      data: [
+        {
+          id: 'proposal-2',
+          kind: 'proposal' as const,
+          title: 'Proposal awaiting review',
+          message: 'Living room',
+          url: '/proposals/2',
+          created_at: '2024-02-13T15:00:00Z',
+          read_at: null,
+        },
+      ],
+      isLoading: false,
+    });
+    mockUseInboxNotifications.mockReturnValue({
+      data: [
+        makeInbox({
+          id: 'log-proposal',
+          metadata: { subject: 'Proposal sent', deep_link: '/proposals/2' },
+        }),
+      ],
+      isLoading: false,
+    });
+    render(<NotificationBell />);
+    fireEvent.click(screen.getByTestId('notification-bell'));
+    fireEvent.click(screen.getByTestId('notification-item'));
+
+    // Inbox (API) mechanism — the winning identity's id.
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/inbox/mark-read',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ ids: ['log-proposal'] }),
+      }),
+    );
+    // Derived (localStorage) mechanism — the colliding derived id, so the
+    // dismissal sticks even if this inbox row is later filtered out of a merge.
+    expect(mockMarkRead).toHaveBeenCalledWith('proposal-2');
+  });
 });
 
 describe('mergeNotifications', () => {
@@ -258,5 +335,21 @@ describe('mergeNotifications', () => {
     const derivedItem = merged.find((m) => m.source === 'derived')!;
     expect(inboxItem.read).toBe(true);
     expect(derivedItem.read).toBe(false);
+  });
+
+  it('on collision, reconciles read as true if EITHER side is read and carries both ids', () => {
+    // Derived side already read; inbox row (the winning identity) is not.
+    const readDerived = [
+      { ...derived[0], read_at: '2024-02-14T11:00:00Z' },
+    ];
+    const unreadInbox = [
+      makeInbox({ id: 'log-1', metadata: { subject: 'Server decision', deep_link: '/decisions/1' } }),
+    ];
+    const merged = mergeNotifications(readDerived as any, unreadInbox as any);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].source).toBe('inbox'); // inbox row still wins the identity
+    expect(merged[0].read).toBe(true); // but read reconciles from the derived side
+    expect(merged[0].inboxId).toBe('log-1');
+    expect(merged[0].derivedId).toBe('decision-1'); // carried through for mark-read
   });
 });

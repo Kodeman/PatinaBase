@@ -11,9 +11,17 @@
  *       state lives server-side in metadata.read_at, toggled via /api/inbox/mark-read.
  *
  * Dedupe: when an inbox row targets the same deep link as a derived item they are
- * the same underlying event, so the server-backed inbox row wins and the derived
- * duplicate is dropped. This replaces the previous two-bell layout (a separate
- * InboxBell + this bell) that showed users two inconsistent unread counts.
+ * the same underlying event, so the server-backed inbox row wins the identity
+ * (title/message/id) and the derived duplicate is dropped. The merged item's
+ * read flag reconciles BOTH sides — read if either the inbox row's
+ * metadata.read_at or the derived item's localStorage read-state says so —
+ * and marking it read writes to both mechanisms. Otherwise a client who
+ * already dismissed the derived item would see it resurface unread the
+ * moment a matching inbox row lands (e.g. proposal-send inserting a
+ * notification_log row whose metadata.deep_link matches an already-read
+ * "awaiting proposal" derived item). This replaces the previous two-bell
+ * layout (a separate InboxBell + this bell) that showed users two
+ * inconsistent unread counts.
  */
 
 import { useState, useRef, useEffect, useMemo } from 'react';
@@ -58,7 +66,13 @@ export interface UnifiedNotification {
   url: string | null;
   created_at: string;
   read: boolean;
-  /** Present when source === 'derived' — the localStorage read-state id. */
+  /**
+   * The localStorage read-state id (see `useMarkClientNotificationRead`).
+   * Present when source === 'derived', and ALSO carried onto a merged
+   * source === 'inbox' item when a derived item collided with it on
+   * deep_link — so mark-read can clear the derived side of a deduped item
+   * too, not just the inbox row that won the identity.
+   */
   derivedId?: string;
   /** Present when source === 'inbox' — the notification_log row id. */
   inboxId?: string;
@@ -97,18 +111,30 @@ export function mergeNotifications(
   derived: ClientNotification[],
   inbox: InboxNotification[],
 ): UnifiedNotification[] {
+  // Index derived items by deep link so a colliding inbox row can inherit the
+  // derived item's read state (and its localStorage id) instead of discarding it.
+  const derivedByUrl = new Map<string, ClientNotification>();
+  for (const d of derived) {
+    if (d.url) derivedByUrl.set(d.url, d);
+  }
+
   const inboxItems: UnifiedNotification[] = inbox.map((n) => {
     const { title, message } = inboxPreview(n);
+    const url = inboxDeepLink(n);
+    const collidingDerived = url ? derivedByUrl.get(url) : undefined;
     return {
       key: `inbox-${n.id}`,
       source: 'inbox',
       kind: 'inbox',
       title,
       message,
-      url: inboxDeepLink(n),
+      url,
       created_at: n.created_at,
-      read: !!n.metadata?.read_at,
+      // Read if EITHER side says so — the inbox row's read_at or the
+      // colliding derived item's localStorage read-state.
+      read: !!n.metadata?.read_at || !!collidingDerived?.read_at,
       inboxId: n.id,
+      derivedId: collidingDerived?.id,
     };
   });
 
@@ -200,9 +226,13 @@ export function NotificationBell({ className = '' }: NotificationBellProps) {
 
   function handleNotificationClick(notification: UnifiedNotification) {
     if (!notification.read) {
-      if (notification.source === 'derived' && notification.derivedId) {
+      // A deduped item can carry both ids (the winning inbox row plus a
+      // colliding derived item) — mark every mechanism backing it so the
+      // read state sticks regardless of which source survives a future merge.
+      if (notification.derivedId) {
         markRead.mutate(notification.derivedId);
-      } else if (notification.source === 'inbox' && notification.inboxId) {
+      }
+      if (notification.inboxId) {
         void markInboxRead([notification.inboxId]);
       }
     }
@@ -214,7 +244,7 @@ export function NotificationBell({ className = '' }: NotificationBellProps) {
 
   function handleMarkAllRead() {
     const derivedUnread = notifications
-      .filter((n) => !n.read && n.source === 'derived' && n.derivedId)
+      .filter((n) => !n.read && n.derivedId)
       .map((n) => n.derivedId as string);
     const inboxUnread = notifications
       .filter((n) => !n.read && n.source === 'inbox' && n.inboxId)
