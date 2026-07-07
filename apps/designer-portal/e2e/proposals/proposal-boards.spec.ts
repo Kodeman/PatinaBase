@@ -403,4 +403,48 @@ test.describe.serial('proposal boards: create → add items → persist', () => 
       }
     }
   });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Step 8: Archive filter (00264) — archive hides the board from the Active
+  // view + flips status; the Archived tab still shows it; unarchive restores.
+  //
+  // Runs last and restores the board to active, so it can't disturb the
+  // shared assertions above. The shared-render exclusion (useBoardsWithItems
+  // status='active') is unit-tested in use-boards.test.ts; this covers the
+  // designer-side builder UI + the DB status flip.
+  // ────────────────────────────────────────────────────────────────────────
+  test('archive hides a board from the active view; unarchive restores it', async ({
+    authenticatedPage: page,
+  }) => {
+    await page.goto(`/portal/proposals/${proposalId}/scope?tab=boards`, {
+      waitUntil: 'networkidle',
+    });
+
+    const statusOf = async () => {
+      const { data, error } = await adminDb
+        .from('proposal_boards')
+        .select('status')
+        .eq('id', boardId)
+        .single();
+      if (error) throw error;
+      return (data as { status: string }).status;
+    };
+
+    // Board 1 is the active board; archive it via the board-level action.
+    await page.getByRole('button', { name: /^archive$/i }).click();
+    await expect
+      .poll(statusOf, { message: 'archive should flip status', timeout: 15_000 })
+      .toBe('archived');
+
+    // The Archived tab appears; switch to it and the board is still there.
+    await page.getByRole('button', { name: /archived ·/i }).click();
+    await expect(page.getByText('Board 1').first()).toBeVisible({ timeout: 15_000 });
+
+    // Unarchive restores it to active (the board is the selected one in the
+    // Archived view, so the board-level Unarchive action is present).
+    await page.getByRole('button', { name: /^unarchive$/i }).click();
+    await expect
+      .poll(statusOf, { message: 'unarchive should restore active', timeout: 15_000 })
+      .toBe('active');
+  });
 });
