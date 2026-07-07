@@ -31,6 +31,9 @@ import {
   CaptureInbox,
   parseCaptureDraggableId,
 } from '@/components/portal/proposals/capture-inbox';
+import { LeadTimeSelect } from '@/components/portal/ffe/lead-time-select';
+import { leadTimeLabel } from '@/lib/scope/lead-time';
+import { resolveDocCode } from '@/lib/scope/doc-code';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,17 +42,25 @@ interface FFEItem {
   name: string;
   description: string | null;
   quantity: number;
-  unit_price: number; // cents
+  unit_price: number; // cents (trade)
+  unit_sell_price: number; // cents (client)
+  markup_percent: number | null;
+  line_total_cents: number;
   notes: string | null;
+  internal_notes: string | null;
   category: string | null;
   vendor_name: string | null;
   position: number;
   scope_room_id: string | null;
   product_id: string | null;
+  image_url: string | null;
   item_type: ProposalItemType;
   budget_min_cents: number | null;
   budget_max_cents: number | null;
   ffe_category: string | null;
+  // Schedule & Boards Wave 1 — spec instrument
+  doc_code: string | null;
+  lead_time_weeks: number | null;
 }
 
 interface ScopeRoom {
@@ -112,6 +123,11 @@ function ItemEditForm({
     typeof item.budget_max_cents === 'number' ? String(item.budget_max_cents / 100) : ''
   );
   const [notes, setNotes] = useState(item.notes ?? '');
+  // S1/S2 — spec doc code (free text, mono) + lead-time bucket.
+  const [docCode, setDocCode] = useState(item.doc_code ?? '');
+  const [leadTimeWeeks, setLeadTimeWeeks] = useState<number | null>(
+    typeof item.lead_time_weeks === 'number' ? item.lead_time_weeks : null
+  );
 
   const minN = parseFloat(minDollars);
   const maxN = parseFloat(maxDollars);
@@ -154,6 +170,11 @@ function ItemEditForm({
         notes: notes || null,
       };
     }
+
+    // Spec fields apply to every item type. doc_code is free text (the
+    // designer's own code wins); lead_time_weeks stores the bucket bound.
+    updates.doc_code = docCode.trim() || null;
+    updates.lead_time_weeks = leadTimeWeeks;
 
     updateItem.mutate(
       { itemId: item.id, proposalId, updates },
@@ -243,6 +264,24 @@ function ItemEditForm({
               </option>
             ))}
           </Select>
+        </label>
+      </div>
+
+      {/* Spec instrument (S1/S2): doc code (mono, free text) + lead-time bucket */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <label className="block">
+          <span className="type-meta mb-1 block">Doc code</span>
+          <Input
+            type="text"
+            value={docCode}
+            onChange={(e) => setDocCode(e.target.value)}
+            placeholder="CH-01"
+            className="font-mono uppercase"
+          />
+        </label>
+        <label className="block">
+          <span className="type-meta mb-1 block">Lead time</span>
+          <LeadTimeSelect value={leadTimeWeeks} onChange={setLeadTimeWeeks} />
         </label>
       </div>
 
@@ -381,6 +420,8 @@ function ItemRow({
     <FFEItemCard
       name={displayName}
       vendorName={subtitle}
+      docCode={item.doc_code}
+      leadTimeLabel={leadTimeLabel(item.lead_time_weeks)}
       quantity={item.item_type === 'tbd' ? null : item.quantity}
       unitTotalLabel={unitTotalLabel}
       itemType={item.item_type}
@@ -633,6 +674,12 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
     [categories]
   );
 
+  // S1 — every doc code already in this document, for auto-suggest sequencing.
+  const existingDocCodes = useMemo(
+    () => (items as FFEItem[]).map((i) => i.doc_code),
+    [items]
+  );
+
   // Group items by room.
   const grouped = useMemo(() => {
     const typedItems = items as FFEItem[];
@@ -670,7 +717,7 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
   // Picked from the catalog → add a fixed proposal_item directly from the
   // denormalized pick result (the result already carries name/price/vendor, so
   // no follow-up product fetch is needed). priceCents is already cents.
-  const handleAddProduct = (r: ProductPickResult) =>
+  const handleAddProduct = (r: ProductPickResult, ffeCategorySlug: string | null) =>
     addItem
       .mutateAsync({
         proposalId,
@@ -681,6 +728,9 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         vendorName: r.vendorName ?? undefined,
         itemType: 'fixed',
         scopeRoomId: r.scopeRoomId,
+        ffeCategory: ffeCategorySlug ?? undefined,
+        // S1 — auto-suggest a spec code on add (prefix from category, else name).
+        docCode: resolveDocCode(null, ffeCategorySlug, existingDocCodes, r.name),
       })
       .then(() => {
         proposalEvents.itemAdded({
@@ -706,6 +756,7 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         ffeCategory: form.ffeCategory,
         budgetMinCents: budgetMin,
         budgetMaxCents: budgetMax,
+        docCode: resolveDocCode(null, form.ffeCategory, existingDocCodes, form.ffeCategory),
       })
       .then(() => {
         proposalEvents.itemAdded({
@@ -728,6 +779,7 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         itemType: 'tbd',
         scopeRoomId: form.scopeRoomId || null,
         ffeCategory: form.ffeCategory,
+        docCode: resolveDocCode(null, form.ffeCategory, existingDocCodes, form.ffeCategory),
       })
       .then(() => {
         proposalEvents.itemAdded({ proposalId, itemType: 'tbd', hasProduct: false, lineTotal: 0 });

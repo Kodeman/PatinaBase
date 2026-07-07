@@ -34,6 +34,12 @@ export interface ProposalItem {
   budget_min_cents?: number | null;
   budget_max_cents?: number | null;
   ffe_category?: string | null;
+  // Dual pricing (00185) + scheduling detail (Schedule & Boards Wave 1)
+  markup_percent?: number | null;
+  lead_time_weeks?: number | null;
+  internal_notes?: string | null;
+  /** Short spec/catalog reference, e.g. CH-01 (00262). */
+  doc_code?: string | null;
   // Joined data
   product?: {
     id: string;
@@ -354,6 +360,9 @@ export function useAddProposalItem() {
       budgetMinCents,
       budgetMaxCents,
       ffeCategory,
+      // Schedule & Boards Wave 1 — spec instrument
+      docCode,
+      leadTimeWeeks,
     }: {
       proposalId: string;
       productId?: string;
@@ -369,6 +378,8 @@ export function useAddProposalItem() {
       budgetMinCents?: number | null;
       budgetMaxCents?: number | null;
       ffeCategory?: string | null;
+      docCode?: string | null;
+      leadTimeWeeks?: number | null;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -416,6 +427,9 @@ export function useAddProposalItem() {
           budget_min_cents: budgetMinCents ?? null,
           budget_max_cents: budgetMaxCents ?? null,
           ffe_category: ffeCategory ?? null,
+          // Schedule & Boards Wave 1 (00262 doc_code + existing lead_time_weeks).
+          doc_code: docCode ?? null,
+          lead_time_weeks: leadTimeWeeks ?? null,
         })
         .select()
         .single();
@@ -470,6 +484,9 @@ export function useUpdateProposalItem() {
           | 'product_id'
           | 'vendor_name'
           | 'category'
+          | 'doc_code'
+          | 'lead_time_weeks'
+          | 'internal_notes'
         >
       >;
     }) => {
