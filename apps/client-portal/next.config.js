@@ -1,28 +1,40 @@
-const withPWA = require('next-pwa')({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development',
-  publicExcludes: ['!icons/**/*'],
-  buildExcludes: [/middleware-manifest\.json$/],
-  runtimeCaching: [
-    {
-      urlPattern: /^https?.*/,
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'https-calls',
-        networkTimeoutSeconds: 15,
-        expiration: {
-          maxEntries: 150,
-          maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
-        },
-        cacheableResponse: {
-          statuses: [0, 200],
-        },
-      },
-    },
-  ],
-});
+// next-pwa wraps the Next config with a webpack plugin (InjectManifest/
+// GenerateSW) that writes a service worker into `public/` during the build.
+// The @opennextjs/cloudflare adapter runs its own `next build` and then
+// repackages the output for Workers; next-pwa's build-time fs writes and
+// webpack-plugin assumptions aren't part of that adapter's tested surface,
+// and losing the service worker is an acceptable regression, but a broken
+// Workers build is not. Skip the wrap entirely for Cloudflare builds
+// (`OPEN_NEXT=true`, set by the deploy invocation — see wrangler.jsonc /
+// deploy notes) and fall back to an identity function.
+const withPWA =
+  process.env.OPEN_NEXT === 'true'
+    ? (config) => config
+    : require('next-pwa')({
+        dest: 'public',
+        register: true,
+        skipWaiting: true,
+        disable: process.env.NODE_ENV === 'development',
+        publicExcludes: ['!icons/**/*'],
+        buildExcludes: [/middleware-manifest\.json$/],
+        runtimeCaching: [
+          {
+            urlPattern: /^https?.*/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'https-calls',
+              networkTimeoutSeconds: 15,
+              expiration: {
+                maxEntries: 150,
+                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
+      });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

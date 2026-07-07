@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "patina-designer-portal",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "minify": true,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "NEXT_PUBLIC_SUPABASE_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJrdmNpeGRtdXllamZ6Y2lqcGRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNjg0MzIsImV4cCI6MjA4Mzg0NDQzMn0.SPl6jHaeTp9McfF-AmXJUDKTwRaXD7Qf0hlve72rVg0",
+    "SUPABASE_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
+    "NEXT_PUBLIC_APP_URL": "https://app.patina.cloud",
+    "NEXT_PUBLIC_ENV": "production",
+    "NEXT_PUBLIC_POSTHOG_KEY": "phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG",
+    "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com",
+    "ORDERS_SERVICE_URL": "https://patina-orders-worker.kody-be3.workers.dev",
+    "MEDIA_SERVICE_URL": "https://patina-media-svc-worker.kody-be3.workers.dev",
+    "PROJECTS_SERVICE_URL": "https://patina-projects-worker.kody-be3.workers.dev"
+  },
+  "services": [
+    { "binding": "SVC_PROJECTS", "service": "patina-projects-worker" },
+    { "binding": "SVC_ORDERS", "service": "patina-orders-worker" },
+    { "binding": "SVC_MEDIA", "service": "patina-media-svc-worker" }
+  ]
+}
