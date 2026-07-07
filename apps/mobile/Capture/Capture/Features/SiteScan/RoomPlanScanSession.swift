@@ -258,6 +258,13 @@ enum SiteScanError: LocalizedError {
     case notAuthenticated
     case processingFailed(String)
     case exportFailed(String)
+    /// Residual case for `SupabaseSiteScanService.upload()`: 00258's
+    /// `room_scans_guard_routing` rejected the project linkage (`user_id` isn't
+    /// the project's `designer_id`/`created_by`). F1 now pre-filters its picker
+    /// to guard-ownable projects, so this should only fire if ownership changed
+    /// after F1 loaded, or a deep link routed straight into `.siteScan` — surface
+    /// the real cause instead of the raw trigger message.
+    case foreignProjectOwner
 
     var errorDescription: String? {
         switch self {
@@ -266,6 +273,7 @@ enum SiteScanError: LocalizedError {
         case .notAuthenticated: return "You're signed out — sign in to upload this scan."
         case .processingFailed(let m): return m
         case .exportFailed(let m):     return m
+        case .foreignProjectOwner: return "This project belongs to another designer."
         }
     }
 }

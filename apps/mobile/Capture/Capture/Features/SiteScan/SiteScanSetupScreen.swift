@@ -2,14 +2,22 @@
 //  Capture · Wave F (Pro site-scan)
 //
 //  F1 · Site-scan setup (`.siteScanSetup`, id `f1ScanSetup`). The designer picks a
-//  project (from the frozen ProjectsService), optionally an existing room in it,
-//  names the scan, then starts. On Start the choices flow forward: the picked
-//  project + room ride the frozen `.siteScan(projectID:projectRoomID:)` route (the
-//  room pick is a `public.rooms` id → the scan's `room_id`); the name rides the
-//  in-flow `SiteScanHandoff` (the route can't carry it). When no room is picked the
-//  uploader creates a designer-owned room from the name field.
+//  project, optionally an existing room in it, names the scan, then starts. On
+//  Start the choices flow forward: the picked project + room ride the frozen
+//  `.siteScan(projectID:projectRoomID:)` route (the room pick is a `public.rooms`
+//  id → the scan's `room_id`); the name rides the in-flow `SiteScanHandoff` (the
+//  route can't carry it). When no room is picked the uploader creates a
+//  designer-owned room from the name field.
 //
-//  Renders on mocks: MockProjectsService fills the pickers, MockSiteScanService
+//  Project picker source (real mode): `SupabaseSiteScanService.ownableProjects()`,
+//  NOT the frozen `ProjectsService.listProjects()` — that's RLS-scoped to
+//  designer_id OR client_id OR team-member (00168), wider than what migration
+//  00258's upload-time guard actually allows (designer_id/created_by only). Listing
+//  the wider set here would let a team-member designer pick a project that then
+//  fails at F4. See `SiteScanSetupModel.load()`.
+//
+//  Renders on mocks: MockProjectsService fills the pickers (SiteScanSetupModel
+//  falls back to it when `siteScan` isn't the real service), MockSiteScanService
 //  reports supported, so the harness shows a populated setup form.
 
 import Foundation
@@ -20,6 +28,7 @@ import CaptureKit
 @Observable
 final class SiteScanSetupModel {
     private let projects: any ProjectsService
+    private let siteScan: any SiteScanService
 
     var allProjects: [FieldProject] = []
     var selectedProjectID: String?
@@ -28,8 +37,9 @@ final class SiteScanSetupModel {
     var name: String
     var loadError: String?
 
-    init(projects: any ProjectsService) {
+    init(projects: any ProjectsService, siteScan: any SiteScanService) {
         self.projects = projects
+        self.siteScan = siteScan
         self.name = Self.defaultName()
     }
 
@@ -40,7 +50,16 @@ final class SiteScanSetupModel {
     func load() async {
         loadError = nil
         do {
-            allProjects = try await projects.listProjects()
+            // Real mode: scope the picker to what 00258's guard will actually
+            // accept (see this file's header + `ownableProjects()`'s doc).
+            // Mock mode (MockSiteScanService, no guard to mirror): fall back to
+            // the frozen mock ProjectsService list exactly as before, so the
+            // harness screenshot doesn't regress.
+            if let supabaseSiteScan = siteScan as? SupabaseSiteScanService {
+                allProjects = try await supabaseSiteScan.ownableProjects()
+            } else {
+                allProjects = try await projects.listProjects()
+            }
         } catch {
             loadError = "Couldn't load your projects. Pull to retry."
         }
@@ -75,7 +94,8 @@ struct SiteScanSetupScreen: View {
         self.container = container
         self.coordinator = coordinator
         self.handoff = handoff
-        _model = State(wrappedValue: SiteScanSetupModel(projects: container.projects))
+        _model = State(wrappedValue: SiteScanSetupModel(projects: container.projects,
+                                                        siteScan: container.siteScan))
     }
 
     var body: some View {

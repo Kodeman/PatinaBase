@@ -17,6 +17,11 @@
 //      project the designer owns + is visible to them; fires only when linkage
 //      is set — our designer-owned project passes.
 //
+//  `ownableProjects()` below pre-filters F1's project picker to exactly what that
+//  guard allows (narrower than the frozen `ProjectsService.listProjects()`, which
+//  is RLS-scoped to designer_id OR client_id OR team-member — 00168) — so F1 can't
+//  offer a project that only fails later, at this file's `upload()`.
+//
 //  supabase-swift lives ONLY app-side; the concrete uses the shared authenticated
 //  client from `WorkServiceDependencies`.
 
@@ -66,20 +71,49 @@ final class SupabaseSiteScanService: SiteScanService {
         #endif
     }
 
+    // MARK: - F1 picker
+
+    /// Projects F1 may actually attach a scan to. Scoped server-side to mirror
+    /// 00258's `room_scans_guard_routing` BEFORE INSERT guard exactly:
+    /// `v_proj_designer IS DISTINCT FROM NEW.user_id AND v_proj_created IS
+    /// DISTINCT FROM NEW.user_id` raises "cannot attach a scan to a project owned
+    /// by a different designer" — i.e. the guard only ever allows `designer_id =
+    /// auth.uid() OR created_by = auth.uid()`. That's narrower than the frozen
+    /// `ProjectsService.listProjects()` (00168 RLS: designer_id OR client_id OR
+    /// team-member), which would let a team-member designer pick a project here
+    /// that then fails at upload. Not called in mock mode — `SiteScanSetupModel`
+    /// falls back to the frozen `MockProjectsService` list there.
+    func ownableProjects() async throws -> [FieldProject] {
+        let userID = try await currentUserID().uuidString
+        let rows: [OwnableProjectRow] = try await client
+            .from("projects")
+            .select("id, name")
+            .or("designer_id.eq.\(userID),created_by.eq.\(userID)")
+            .order("updated_at", ascending: false)
+            .execute()
+            .value
+        return rows.map { FieldProject(id: $0.id, name: $0.name, status: "") }
+    }
+
     // MARK: - Upload
 
     func upload(result: FieldScanResult, projectID: String?, projectRoomID: String?,
                 name: String) async throws -> FieldScanUploadReceipt {
         let userID = try await currentUserID()
-        let scanID = UUID()
 
-        // 1. Parent room: reuse the picked room (F1 room pick == a public.rooms id),
-        //    otherwise create a designer-owned rooms row from the name field.
-        let roomID = try await resolveRoomID(picked: projectRoomID, name: name, userID: userID)
+        // 1. Reserve this attempt's scan/room ids — or resume a prior attempt's,
+        //    if this is a retry (see `reservation(for:...)` doc below).
+        let reserved = try await reservation(for: result.localBundleURL,
+                                             picked: projectRoomID, name: name, userID: userID)
+        let scanID = reserved.scanID
+        let roomID = reserved.roomID
 
-        // 2. Insert the scan row (status=processing) with the project linkage +
-        //    best-effort metrics. project_room_id stays nil in v1 — F1 picks a
-        //    public.rooms id (→ room_id), not a project_rooms scope room.
+        // 2. Upsert (not insert) the scan row (status=processing) with the project
+        //    linkage + best-effort metrics, keyed on the reserved id. Upsert (vs.
+        //    a plain insert) tolerates a retry that resumes after a prior attempt
+        //    already wrote this row — see `reservation(for:...)`. project_room_id
+        //    stays nil in v1 — F1 picks a public.rooms id (→ room_id), not a
+        //    project_rooms scope room.
         let iso = ISO8601DateFormatter()
         let now = iso.string(from: Date())
         let metrics = scanMetrics()
@@ -94,7 +128,15 @@ final class SupabaseSiteScanService: SiteScanService {
             floor_area: metrics.area,
             coverage_percentage: metrics.coverage,
             scanned_at: now, created_at: now)
-        try await client.from("room_scans").insert(insert).execute()
+        do {
+            try await client.from("room_scans").upsert(insert, onConflict: "id").execute()
+        } catch let error as PostgrestError
+                    where error.message.contains("owned by a different designer") {
+            // Residual case (see SiteScanError.foreignProjectOwner): 00258's
+            // guard still runs on every upsert attempt, insert-path or not, so it
+            // catches this even on a retry of an already-reserved id.
+            throw SiteScanError.foreignProjectOwner
+        }
 
         // 3. Upload the two artifacts, then patch their URL columns.
         let modelURL = try await uploadArtifact(.usdz, bundle: result.localBundleURL,
@@ -111,10 +153,39 @@ final class SupabaseSiteScanService: SiteScanService {
         try await client.rpc("mark_scan_upload_complete",
                              params: ScanIDParam(p_scan_id: scanID.uuidString)).execute()
 
+        // Full success — this bundle's reservation is spent; a later, unrelated
+        // upload() call using the same URL (shouldn't happen, but be safe) gets a
+        // fresh reservation rather than silently reusing a completed scan's ids.
+        reservations[result.localBundleURL] = nil
         return FieldScanUploadReceipt(remoteScanID: scanID.uuidString)
     }
 
     // MARK: - Helpers
+
+    /// This attempt's reserved (scanID, roomID) pair, keyed by the finished
+    /// bundle's on-disk URL. `RoomPlanScanSession.finish()` mints a fresh temp
+    /// directory per scan, so the key can't collide across unrelated scans, but
+    /// stays STABLE across F4 retries of the same scan (`SiteScanUploadModel`
+    /// re-invokes `upload()` on this same service instance without changing
+    /// `result`). Without this, every retry minted a fresh scanID — and, when no
+    /// room was picked, a fresh designer-owned `rooms` row via `resolveRoomID`
+    /// too — orphaning a status='processing' room_scans row (and a spare rooms
+    /// row) per retry. Cleared on full success above; a failed attempt's
+    /// reservation is deliberately left cached so the next retry resumes it.
+    private struct ScanReservation {
+        let scanID: UUID
+        let roomID: UUID
+    }
+    private var reservations: [URL: ScanReservation] = [:]
+
+    private func reservation(for bundleURL: URL, picked: String?, name: String,
+                             userID: UUID) async throws -> ScanReservation {
+        if let cached = reservations[bundleURL] { return cached }
+        let roomID = try await resolveRoomID(picked: picked, name: name, userID: userID)
+        let fresh = ScanReservation(scanID: UUID(), roomID: roomID)
+        reservations[bundleURL] = fresh
+        return fresh
+    }
 
     private func currentUserID() async throws -> UUID {
         // The authenticated client is the source of truth for a canonical UUID
@@ -187,6 +258,13 @@ private struct ScanMetrics {
 }
 
 // MARK: - Wire DTOs (keys = PostgREST columns / RPC args, snake_case verbatim)
+
+/// `ownableProjects()`'s minimal read row — id + name, all the F1 picker needs
+/// (see `FieldProject.status` default `""` at the call site).
+private struct OwnableProjectRow: Decodable {
+    let id: String
+    let name: String
+}
 
 private struct RoomInsert: Encodable {
     let id: UUID
