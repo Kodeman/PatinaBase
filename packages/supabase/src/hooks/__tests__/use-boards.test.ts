@@ -96,7 +96,14 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 // Import AFTER the mocks are wired up.
-import { useSaveBoardLayout, useBoardsWithItems, type BoardLayoutPosition } from '../use-boards';
+import {
+  useSaveBoardLayout,
+  useBoardsWithItems,
+  buildDuplicateBoardItemRows,
+  summarizeBoard,
+  type BoardLayoutPosition,
+  type ProposalBoardItem,
+} from '../use-boards';
 
 beforeEach(() => {
   Object.keys(builderQueues).forEach((k) => delete builderQueues[k]);
@@ -215,5 +222,133 @@ describe('useBoardsWithItems', () => {
     pushTableResult('proposal_boards', { data: null, error: new Error('boom') });
     const config = useBoardsWithItems('prop-1') as unknown as { queryFn: () => Promise<unknown[]> };
     await expect(config.queryFn()).rejects.toThrow('boom');
+  });
+
+  // 00264: archived boards must never reach the shared render surfaces. The
+  // single choke point is this hook's status='active' filter.
+  it('filters to active boards so archived ones never reach the client copy', async () => {
+    const builder = pushTableResult('proposal_boards', { data: [], error: null });
+    const config = useBoardsWithItems('prop-1') as unknown as {
+      queryFn: () => Promise<unknown[]>;
+    };
+    await config.queryFn();
+
+    const eqCalls = builder.__chain.filter((c) => c.method === 'eq').map((c) => c.args);
+    expect(eqCalls).toContainEqual(['proposal_id', 'prop-1']);
+    expect(eqCalls).toContainEqual(['status', 'active']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// buildDuplicateBoardItemRows — the duplicate-board payload shape.
+//
+// Same WITH-CHECK trap as the layout upsert: a batch INSERT whose RLS check
+// joins board_id → the designer's proposal rejects the WHOLE statement if any
+// row omits board_id, so every duplicated item row MUST carry board_id + type.
+// Fresh rows omit `id` (gen_random_uuid()) and preserve the data snapshot
+// (incl. section_id).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('buildDuplicateBoardItemRows', () => {
+  const source: ProposalBoardItem[] = [
+    {
+      id: 'src-1',
+      board_id: 'old-board',
+      type: 'product',
+      x: 10,
+      y: 20,
+      width: 220,
+      height: null,
+      z_index: 0,
+      rotation: 0,
+      locked: false,
+      product_id: 'prod-1',
+      capture_id: null,
+      palette_id: null,
+      image_url: 'https://cdn/x.jpg',
+      content: null,
+      data: { name: 'Chair', section_id: 'sec-a' },
+      created_at: '',
+      updated_at: '',
+    },
+    {
+      id: 'src-2',
+      board_id: 'old-board',
+      type: 'note',
+      x: 40,
+      y: 60,
+      width: 200,
+      height: 150,
+      z_index: 1,
+      rotation: 12,
+      locked: true,
+      product_id: null,
+      capture_id: null,
+      palette_id: null,
+      image_url: null,
+      content: 'hello',
+      data: {},
+      created_at: '',
+      updated_at: '',
+    },
+  ];
+
+  it('carries board_id + type on every row, drops ids, preserves data', () => {
+    const rows = buildDuplicateBoardItemRows('new-board', source);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.board_id, 'every row must carry the NEW board_id').toBe('new-board');
+      expect(typeof row.type, 'every row must carry type').toBe('string');
+      expect(row, 'a fresh row must not carry the source id').not.toHaveProperty('id');
+    }
+    // Geometry + snapshot copied verbatim; section_id inside data survives.
+    expect(rows[0]).toEqual(
+      expect.objectContaining({
+        type: 'product',
+        x: 10,
+        y: 20,
+        width: 220,
+        height: null,
+        z_index: 0,
+        locked: false,
+        product_id: 'prod-1',
+        image_url: 'https://cdn/x.jpg',
+        data: { name: 'Chair', section_id: 'sec-a' },
+      }),
+    );
+    expect(rows[1].data).toEqual({});
+  });
+
+  it('returns an empty array for a board with no items', () => {
+    expect(buildDuplicateBoardItemRows('new-board', [])).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// summarizeBoard — count + fallback cover derivation, defensive defaults.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('summarizeBoard', () => {
+  it('counts items and picks the lowest-z image as the fallback cover', () => {
+    const summary = summarizeBoard(
+      { id: 'b1', name: 'Whole Home', proposal_id: 'p1', cover_image_url: null },
+      [
+        { type: 'product', image_url: 'p.jpg', z_index: 0 },
+        { type: 'image', image_url: 'top.jpg', z_index: 5 },
+        { type: 'image', image_url: 'bottom.jpg', z_index: 1 },
+      ],
+    );
+    expect(summary.item_count).toBe(3);
+    // Lowest-z image wins (bottom→top render order).
+    expect(summary.cover_fallback_url).toBe('bottom.jpg');
+  });
+
+  it('defaults sections/status for pre-00264 rows and null cover with no images', () => {
+    const summary = summarizeBoard({ id: 'b1', name: 'B', proposal_id: 'p1' }, [
+      { type: 'note', image_url: null, z_index: 0 },
+    ]);
+    expect(summary.sections).toEqual([]);
+    expect(summary.status).toBe('active');
+    expect(summary.cover_fallback_url).toBeNull();
   });
 });

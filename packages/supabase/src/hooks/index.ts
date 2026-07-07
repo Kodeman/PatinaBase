@@ -1074,15 +1074,21 @@ export {
   useBoard,
   useBoardsWithItems,
   useUpsertBoard,
+  useDuplicateBoard,
   useDeleteBoard,
   useAddBoardItem,
   useUpdateBoardItem,
   useDeleteBoardItem,
   useSaveBoardLayout,
   useProjectBoards,
+  // Pure helpers (00264 — exported for unit tests + reuse)
+  summarizeBoard,
+  buildDuplicateBoardItemRows,
 } from './use-boards';
 export type {
   BoardItemType,
+  BoardStatus,
+  BoardSection,
   ProposalBoard,
   ProposalBoardSummary,
   ProposalBoardItem,

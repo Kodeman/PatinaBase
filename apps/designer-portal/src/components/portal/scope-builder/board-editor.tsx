@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BoardCanvas,
+  BoardComposition,
   ImagePaletteExtractor,
   type BoardItem,
+  type BoardSection as CanvasBoardSection,
   type ExtractedSwatch,
 } from '@patina/design-system';
-import { Button, IconButton, Input, Textarea } from '@/components/ui/controls';
+import { Button, IconButton, Input, Select, Textarea } from '@/components/ui/controls';
 import {
   createBrowserClient,
   useBoard,
@@ -23,6 +25,7 @@ import {
   useRoomScans,
   type ProposalBoardItem,
   type AddBoardItemInput,
+  type BoardSection,
   type ProposalPalette,
   type RoomScan,
 } from '@patina/supabase';
@@ -32,6 +35,20 @@ import {
 } from '../proposals/product-picker-modal';
 import { renderBoardItem } from './board-item-renderer';
 import { BoardSuggestionsRail } from './board-suggestions-rail';
+import {
+  addSection,
+  arrangeBoardItems,
+  deleteSection,
+  moveSection,
+  renameSection,
+  sectionBounds,
+  type ArrangeItem,
+} from './board-arrange';
+
+type ViewMode = 'edit' | 'presentation' | 'detail';
+
+// Snap grid spacing (px) — matches BoardCanvas's default gridSize.
+const SNAP_GRID = 20;
 
 // Debounced layout autosave interval — mirrors the blur/600ms idiom used by
 // the palette swatch editor.
@@ -85,6 +102,11 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
   const [items, setItems] = useState<ProposalBoardItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('edit');
+  const [snap, setSnap] = useState(false);
+  // Local mirror of board.sections so section edits feel instant; write-through
+  // to the board row happens in persistSections.
+  const [sections, setSections] = useState<BoardSection[]>([]);
 
   const itemsRef = useRef<ProposalBoardItem[]>(items);
   itemsRef.current = items;
@@ -138,6 +160,13 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
     if (dirtyRef.current.size > 0) return;
     setItems(board.items);
   }, [board]);
+
+  // Mirror the board's persisted sections. Sections change through
+  // persistSections (which sets local state first), so re-syncing from a
+  // refetch just confirms the same value.
+  useEffect(() => {
+    setSections(board?.sections ?? []);
+  }, [board?.sections]);
 
   // ── Local mutation helpers ──────────────────────────────────────────────────
 
@@ -223,6 +252,62 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
     [boardId, deleteItem],
   );
 
+  // ── Sections ──────────────────────────────────────────────────────────────
+
+  const { mutate: upsertBoardMutate } = upsertBoard;
+
+  /** Optimistic local set + write-through to proposal_boards.sections. */
+  const persistSections = useCallback(
+    (next: BoardSection[]) => {
+      setSections(next);
+      upsertBoardMutate({ proposalId, boardId, sections: next });
+    },
+    [proposalId, boardId, upsertBoardMutate],
+  );
+
+  /** Assign (or clear, sectionId=null) the selected item's section membership. */
+  const assignSection = useCallback(
+    (itemId: string, sectionId: string | null) => {
+      flushLayoutRef.current();
+      const item = itemsRef.current.find((i) => i.id === itemId);
+      if (!item) return;
+      const nextData = { ...(item.data ?? {}), section_id: sectionId };
+      mergeLocal(itemId, { data: nextData });
+      updateItem.mutate({ itemId, boardId, data: nextData });
+    },
+    [boardId, mergeLocal, updateItem],
+  );
+
+  /**
+   * Auto-lay-out every item into a tidy grid (grouped by section when sections
+   * exist). Writes ONLY x/y through the same dirty→debounced-flush path a drag
+   * uses, so freeform editing keeps working afterward.
+   */
+  const handleArrange = useCallback(() => {
+    if (!board) return;
+    const arrangeItems: ArrangeItem[] = itemsRef.current.map((it) => ({
+      id: it.id,
+      type: it.type,
+      width: Number(it.width),
+      height: it.height === null ? null : Number(it.height),
+      data: it.data as { section_id?: string | null } | null,
+    }));
+    const positions = arrangeBoardItems(arrangeItems, sections, {
+      canvasWidth: board.canvas_width,
+    });
+    if (positions.length === 0) return;
+    const byId = new Map(positions.map((p) => [p.id, p]));
+    setItems((prev) =>
+      prev.map((it) => {
+        const pos = byId.get(it.id);
+        if (!pos || (Number(it.x) === pos.x && Number(it.y) === pos.y)) return it;
+        dirtyRef.current.add(it.id);
+        return { ...it, x: pos.x, y: pos.y };
+      }),
+    );
+    scheduleFlush();
+  }, [board, sections, scheduleFlush]);
+
   // ── Canvas callbacks ────────────────────────────────────────────────────────
 
   const handleItemsChange = useCallback(
@@ -299,89 +384,161 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
     data: it,
   }));
 
+  // Live section bands (edit mode only) — each wraps its assigned items, so it
+  // tracks them in freeform, not just after Arrange. Sections with no items are
+  // skipped (sectionBounds → null).
+  const canvasSections: CanvasBoardSection[] = sections
+    .map((s): CanvasBoardSection | null => {
+      const bounds = sectionBounds(
+        items.map((it) => ({
+          id: it.id,
+          type: it.type,
+          width: Number(it.width),
+          height: it.height === null ? null : Number(it.height),
+          data: it.data as { section_id?: string | null } | null,
+          x: Number(it.x),
+          y: Number(it.y),
+        })),
+        s.id,
+      );
+      return bounds ? { id: s.id, name: s.name, color: s.color, bounds } : null;
+    })
+    .filter((s): s is CanvasBoardSection => s !== null);
+
+  // Read-only composition for the Presentation/Detail preview toggle — the SAME
+  // shared block the client copy renders.
+  const compositionBoard = {
+    id: board.id,
+    name: board.name,
+    canvas_width: board.canvas_width,
+    canvas_height: board.canvas_height,
+    background_color: board.background_color,
+    items,
+  };
+
   const selected = selectedId ? (items.find((i) => i.id === selectedId) ?? null) : null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-      {/* Canvas */}
-      <div className="max-h-[70vh] overflow-auto rounded-md border border-[var(--border-default)]">
-        <BoardCanvas
-          items={canvasItems}
-          layout="freeform"
-          showGrid={false}
-          width={board.canvas_width}
-          height={board.canvas_height}
-          backgroundColor={board.background_color}
-          onItemsChange={handleItemsChange}
-          onItemClick={(item) => setSelectedId(String(item.id))}
-          onItemDelete={(itemId) => handleDeleteItem(String(itemId))}
-          renderItem={(item) => (
-            <div
-              className={
-                selectedId === String(item.id)
-                  ? 'h-full w-full rounded-sm ring-2 ring-[var(--accent-primary)] ring-offset-1'
-                  : 'h-full w-full'
-              }
-            >
-              {renderBoardItem(item)}
-            </div>
-          )}
-          className="border-0"
+      {/* Canvas column */}
+      <div className="space-y-2">
+        <BoardViewToolbar
+          viewMode={viewMode}
+          onViewMode={setViewMode}
+          snap={snap}
+          onToggleSnap={() => setSnap((s) => !s)}
+          onArrange={handleArrange}
+          itemCount={items.length}
         />
+
+        {viewMode === 'edit' ? (
+          <div className="max-h-[70vh] overflow-auto rounded-md border border-[var(--border-default)]">
+            <BoardCanvas
+              items={canvasItems}
+              sections={canvasSections}
+              layout={snap ? 'grid' : 'freeform'}
+              gridSize={SNAP_GRID}
+              showGrid={snap}
+              width={board.canvas_width}
+              height={board.canvas_height}
+              backgroundColor={board.background_color}
+              onItemsChange={handleItemsChange}
+              onItemClick={(item) => setSelectedId(String(item.id))}
+              onItemDelete={(itemId) => handleDeleteItem(String(itemId))}
+              renderItem={(item) => (
+                <div
+                  className={
+                    selectedId === String(item.id)
+                      ? 'h-full w-full rounded-sm ring-2 ring-[var(--accent-primary)] ring-offset-1'
+                      : 'h-full w-full'
+                  }
+                >
+                  {renderBoardItem(item)}
+                </div>
+              )}
+              className="border-0"
+            />
+          </div>
+        ) : (
+          <div className="max-h-[70vh] overflow-auto rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
+            {items.length === 0 ? (
+              <p className="py-8 text-center text-sm text-[var(--text-muted)]">
+                Nothing on this board yet — switch to Edit and add something.
+              </p>
+            ) : (
+              <BoardComposition board={compositionBoard} mode={viewMode === 'detail' ? 'detail' : 'presentation'} />
+            )}
+          </div>
+        )}
       </div>
 
       {/* Sidebar */}
       <div className="space-y-4">
-        {selected ? (
-          <ItemInspector
-            proposalId={proposalId}
-            boardName={board.name}
-            item={selected}
-            items={items}
-            onClose={() => setSelectedId(null)}
-            onCommitField={commitField}
-            onMergeLocal={(itemId, patch) => {
-              // Rotation drags follow the debounced layout path.
-              mergeLocal(itemId, patch);
-              if (patch.rotation !== undefined || patch.z_index !== undefined) {
-                dirtyRef.current.add(itemId);
-                scheduleFlush();
-              }
-            }}
-            onDelete={handleDeleteItem}
-            onSetCover={(imageUrl) =>
-              upsertBoard.mutate({ proposalId, boardId, coverImageUrl: imageUrl })
-            }
-          />
-        ) : (
+        {viewMode !== 'edit' ? (
           <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-xs text-[var(--text-muted)]">
-            Select an item on the canvas to edit it, or add something below.
+            Previewing the client&rsquo;s view
+            {viewMode === 'detail' ? ' with sourcing detail' : ''}. Switch to Edit to make changes.
           </div>
+        ) : (
+          <>
+            {selected ? (
+              <ItemInspector
+                proposalId={proposalId}
+                boardName={board.name}
+                item={selected}
+                items={items}
+                sections={sections}
+                onClose={() => setSelectedId(null)}
+                onCommitField={commitField}
+                onMergeLocal={(itemId, patch) => {
+                  // Rotation drags follow the debounced layout path.
+                  mergeLocal(itemId, patch);
+                  if (patch.rotation !== undefined || patch.z_index !== undefined) {
+                    dirtyRef.current.add(itemId);
+                    scheduleFlush();
+                  }
+                }}
+                onAssignSection={assignSection}
+                onDelete={handleDeleteItem}
+                onSetCover={(imageUrl) =>
+                  upsertBoard.mutate({ proposalId, boardId, coverImageUrl: imageUrl })
+                }
+              />
+            ) : (
+              <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-xs text-[var(--text-muted)]">
+                Select an item on the canvas to edit it, or add something below.
+              </div>
+            )}
+
+            {/* Sections — create / rename / delete / reorder. Arrange lives on
+                the toolbar. */}
+            <BoardSectionsPanel sections={sections} onChange={persistSections} />
+
+            {/* Add product / capture */}
+            <SidebarSection title="Products & captures">
+              <Button variant="secondary" size="sm" onClick={() => setPickerOpen(true)}>
+                + Add product or capture
+              </Button>
+            </SidebarSection>
+
+            {/* Similar-product suggestions (hidden until a product item exists and
+                the similarity RPC returns matches — degrades silently without
+                embeddings). Collapsible so it doesn't crowd the inspector. */}
+            <BoardSuggestionsRail items={items} onAdd={addItemToBoard} />
+
+            {/* Add palette */}
+            <AddPaletteSection proposalId={proposalId} onAdd={addItemToBoard} />
+
+            {/* Add room scan */}
+            <RoomScansGate proposalId={proposalId} onAdd={addItemToBoard} />
+
+            {/* Upload image */}
+            <UploadImageSection proposalId={proposalId} boardId={boardId} onAdd={addItemToBoard} />
+
+            {/* Add note */}
+            <AddNoteSection onAdd={addItemToBoard} />
+          </>
         )}
-
-        {/* Add product / capture */}
-        <SidebarSection title="Products & captures">
-          <Button variant="secondary" size="sm" onClick={() => setPickerOpen(true)}>
-            + Add product or capture
-          </Button>
-        </SidebarSection>
-
-        {/* Similar-product suggestions (hidden until a product item exists and
-            the similarity RPC returns matches — degrades silently without
-            embeddings). Collapsible so it doesn't crowd the inspector. */}
-        <BoardSuggestionsRail items={items} onAdd={addItemToBoard} />
-
-        {/* Add palette */}
-        <AddPaletteSection proposalId={proposalId} onAdd={addItemToBoard} />
-
-        {/* Add room scan */}
-        <RoomScansGate proposalId={proposalId} onAdd={addItemToBoard} />
-
-        {/* Upload image */}
-        <UploadImageSection proposalId={proposalId} boardId={boardId} onAdd={addItemToBoard} />
-
-        {/* Add note */}
-        <AddNoteSection onAdd={addItemToBoard} />
       </div>
 
       <ProductPickerModal
@@ -405,6 +562,160 @@ function SidebarSection({ title, children }: { title: string; children: React.Re
     <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
       <span className="type-meta mb-3 block text-[var(--accent-primary)]">{title}</span>
       {children}
+    </div>
+  );
+}
+
+// ─── View toolbar (Edit / Presentation / Detail + snap + arrange) ────────────
+
+const VIEW_LABELS: Record<ViewMode, string> = {
+  edit: 'Edit',
+  presentation: 'Presentation',
+  detail: 'Detail',
+};
+
+function BoardViewToolbar({
+  viewMode,
+  onViewMode,
+  snap,
+  onToggleSnap,
+  onArrange,
+  itemCount,
+}: {
+  viewMode: ViewMode;
+  onViewMode: (mode: ViewMode) => void;
+  snap: boolean;
+  onToggleSnap: () => void;
+  onArrange: () => void;
+  itemCount: number;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="inline-flex overflow-hidden rounded-md border border-[var(--border-default)]">
+        {(['edit', 'presentation', 'detail'] as ViewMode[]).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            aria-pressed={viewMode === mode}
+            onClick={() => onViewMode(mode)}
+            className={`px-3 py-1.5 text-xs transition-colors ${
+              viewMode === mode
+                ? 'bg-[var(--accent-primary)] text-white'
+                : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            {VIEW_LABELS[mode]}
+          </button>
+        ))}
+      </div>
+
+      {viewMode === 'edit' && (
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant={snap ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={onToggleSnap}
+            aria-pressed={snap}
+          >
+            {snap ? 'Snap: on' : 'Snap: off'}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={onArrange} disabled={itemCount === 0}>
+            Arrange
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Sections panel (create / rename / delete / reorder) ─────────────────────
+
+function BoardSectionsPanel({
+  sections,
+  onChange,
+}: {
+  sections: BoardSection[];
+  onChange: (next: BoardSection[]) => void;
+}) {
+  return (
+    <SidebarSection title="Sections">
+      {sections.length === 0 ? (
+        <p className="mb-2 text-xs text-[var(--text-muted)]">
+          Group items into named sections, then use Arrange to lay them out by section.
+        </p>
+      ) : (
+        <div className="mb-2 space-y-1.5">
+          {sections.map((section, index) => (
+            <SectionRow
+              key={section.id}
+              section={section}
+              isFirst={index === 0}
+              isLast={index === sections.length - 1}
+              onRename={(name) => onChange(renameSection(sections, section.id, name))}
+              onMove={(dir) => onChange(moveSection(sections, section.id, dir))}
+              onDelete={() => onChange(deleteSection(sections, section.id))}
+            />
+          ))}
+        </div>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onChange(addSection(sections, ''))}
+      >
+        + Add section
+      </Button>
+    </SidebarSection>
+  );
+}
+
+function SectionRow({
+  section,
+  isFirst,
+  isLast,
+  onRename,
+  onMove,
+  onDelete,
+}: {
+  section: BoardSection;
+  isFirst: boolean;
+  isLast: boolean;
+  onRename: (name: string) => void;
+  onMove: (dir: -1 | 1) => void;
+  onDelete: () => void;
+}) {
+  const [draft, setDraft] = useState(section.name);
+  // Keep the draft in step if the persisted name changes underneath (e.g. after
+  // a reorder re-key would remount, but a rename refetch would not).
+  useEffect(() => setDraft(section.name), [section.name]);
+
+  const commit = () => {
+    if (draft.trim() && draft !== section.name) onRename(draft);
+    else setDraft(section.name);
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') setDraft(section.name);
+        }}
+        className="h-7 flex-1"
+        aria-label={`Section name: ${section.name}`}
+      />
+      <IconButton label="Move section up" variant="ghost" size="sm" disabled={isFirst} onClick={() => onMove(-1)}>
+        ↑
+      </IconButton>
+      <IconButton label="Move section down" variant="ghost" size="sm" disabled={isLast} onClick={() => onMove(1)}>
+        ↓
+      </IconButton>
+      <IconButton label="Delete section" variant="ghost" size="sm" onClick={onDelete}>
+        ×
+      </IconButton>
     </div>
   );
 }
@@ -661,9 +972,11 @@ interface ItemInspectorProps {
   boardName: string;
   item: ProposalBoardItem;
   items: ProposalBoardItem[];
+  sections: BoardSection[];
   onClose: () => void;
   onCommitField: (itemId: string, patch: Partial<ProposalBoardItem>) => void;
   onMergeLocal: (itemId: string, patch: Partial<ProposalBoardItem>) => void;
+  onAssignSection: (itemId: string, sectionId: string | null) => void;
   onDelete: (itemId: string) => void;
   onSetCover: (imageUrl: string) => void;
 }
@@ -679,13 +992,17 @@ function ItemInspector({
   boardName,
   item,
   items,
+  sections,
   onClose,
   onCommitField,
   onMergeLocal,
+  onAssignSection,
   onDelete,
   onSetCover,
 }: ItemInspectorProps) {
   const imageUrl = itemImageUrl(item);
+  const currentSectionId =
+    (item.data as { section_id?: string | null } | null)?.section_id ?? '';
 
   const bringForward = () => {
     const maxZ = items.reduce((m, i) => Math.max(m, i.z_index), 0);
@@ -760,6 +1077,26 @@ function ItemInspector({
             </Button>
           </div>
         </div>
+
+        {/* Section membership (only when the board has sections) */}
+        {sections.length > 0 && (
+          <div>
+            <span className="mb-1 block text-xs text-[var(--text-muted)]">Section</span>
+            <Select
+              value={currentSectionId}
+              onChange={(e) => onAssignSection(item.id, e.target.value || null)}
+              wrapperClassName="w-full"
+              aria-label="Assign to section"
+            >
+              <option value="">Unsorted</option>
+              {sections.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
 
         {/* Rotation */}
         <div>

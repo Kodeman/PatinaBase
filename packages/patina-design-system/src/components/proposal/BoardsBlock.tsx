@@ -39,6 +39,12 @@ export interface BoardsBlockBoard {
   items: BoardsBlockItem[]
 }
 
+// Presentation = exactly today's client-facing render (the default everywhere).
+// Detail = presentation PLUS quiet product context on product/capture pins
+// (lead time + provenance), for the designer's editor preview toggle. It never
+// changes presentation output, so the client copy stays byte-stable.
+export type BoardMode = 'presentation' | 'detail'
+
 // ─── Snapshot shapes (written by the designer board editor into `data`) ──────
 
 interface ProductSnapshot {
@@ -46,6 +52,10 @@ interface ProductSnapshot {
   price_cents?: number | null
   vendor_name?: string | null
   image_url?: string | null
+  // Read only in detail mode, rendered when present (the editor may not have
+  // captured them — dormant until it does).
+  lead_time_weeks?: number | null
+  source_url?: string | null
 }
 
 interface PaletteSwatchSnapshot {
@@ -69,6 +79,17 @@ function formatDollars(cents: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   })}`
+}
+
+// Bare host for the provenance line ("west-elm.com"), stripped of a leading
+// www. Returns null for anything that isn't a parseable absolute URL.
+function sourceHost(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    return new URL(url).host.replace(/^www\./, '') || null
+  } catch {
+    return null
+  }
 }
 
 // ─── Scaled canvas (dependency-free scale-to-fit) ────────────────────────────
@@ -154,11 +175,11 @@ function ScaledBoardCanvas({
 
 // ─── Item renderers (read-only, client-facing tone) ──────────────────────────
 
-function renderBoardItem(item: BoardsBlockItem): React.ReactNode {
+function renderBoardItem(item: BoardsBlockItem, mode: BoardMode = 'presentation'): React.ReactNode {
   switch (item.type) {
     case 'product':
     case 'capture':
-      return <ProductTile item={item} />
+      return <ProductTile item={item} mode={mode} />
     case 'image':
       return <ImageTile item={item} />
     case 'room_scan':
@@ -172,9 +193,13 @@ function renderBoardItem(item: BoardsBlockItem): React.ReactNode {
   }
 }
 
-function ProductTile({ item }: { item: BoardsBlockItem }) {
+function ProductTile({ item, mode = 'presentation' }: { item: BoardsBlockItem; mode?: BoardMode }) {
   const snap = (item.data ?? {}) as ProductSnapshot
   const imageUrl = item.image_url ?? snap.image_url ?? null
+  // Detail-only context, computed once; renders nothing when absent.
+  const host = mode === 'detail' ? sourceHost(snap.source_url) : null
+  const leadWeeks =
+    mode === 'detail' && typeof snap.lead_time_weeks === 'number' ? snap.lead_time_weeks : null
 
   return (
     <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white shadow-sm">
@@ -226,6 +251,32 @@ function ProductTile({ item }: { item: BoardsBlockItem }) {
             }}
           >
             {formatDollars(snap.price_cents)}
+          </div>
+        )}
+        {/* Detail mode: quiet lead-time + provenance context. Guarded so
+            presentation output is byte-identical. */}
+        {leadWeeks !== null && (
+          <div
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: '0.62rem',
+              color: 'var(--text-muted)',
+            }}
+          >
+            {leadWeeks} wk lead time
+          </div>
+        )}
+        {host && (
+          <div
+            className="truncate"
+            style={{
+              fontFamily: 'var(--font-mono, monospace)',
+              fontSize: '0.58rem',
+              letterSpacing: '0.02em',
+              color: 'var(--text-muted)',
+            }}
+          >
+            {host}
           </div>
         )}
       </div>
@@ -459,6 +510,12 @@ function FeaturedPieces({ items }: { items: BoardsBlockItem[] }) {
 export interface BoardCompositionProps {
   board: BoardsBlockBoard
   className?: string
+  /**
+   * 'presentation' (default) is exactly the client-facing render.
+   * 'detail' additionally overlays lead-time + provenance on product/capture
+   * pins — used by the designer editor's preview toggle. See BoardMode.
+   */
+  mode?: BoardMode
 }
 
 /**
@@ -467,7 +524,7 @@ export interface BoardCompositionProps {
  * board has no items. Used directly by compact surfaces (the drafting mirror);
  * BoardsBlock maps it across a proposal's boards for the full document surfaces.
  */
-export function BoardComposition({ board, className }: BoardCompositionProps) {
+export function BoardComposition({ board, className, mode = 'presentation' }: BoardCompositionProps) {
   const items = board.items ?? []
   if (items.length === 0) return null
 
@@ -492,7 +549,7 @@ export function BoardComposition({ board, className }: BoardCompositionProps) {
           canvasWidth={board.canvas_width}
           canvasHeight={board.canvas_height}
           backgroundColor={board.background_color}
-          renderItem={renderBoardItem}
+          renderItem={(item) => renderBoardItem(item, mode)}
         />
       </div>
 
@@ -517,6 +574,12 @@ export interface BoardsBlockProps {
   mark?: React.ReactNode
   /** Section heading. Defaults to "Mood Boards". */
   heading?: string
+  /**
+   * 'presentation' (default) is the client-facing render; 'detail' overlays
+   * product context (editor preview only). Client + preview + drafting-mirror
+   * callers omit it, so their render is unchanged.
+   */
+  mode?: BoardMode
 }
 
 /**
@@ -524,7 +587,7 @@ export interface BoardsBlockProps {
  * renders nothing when there is nothing to show. Callers own the engagement
  * wrapper (`data-section-type="boards"`) since it is client-portal-specific.
  */
-export function BoardsBlock({ boards, mark, heading = 'Mood Boards' }: BoardsBlockProps) {
+export function BoardsBlock({ boards, mark, heading = 'Mood Boards', mode = 'presentation' }: BoardsBlockProps) {
   const visible = (boards ?? []).filter((b) => (b.items?.length ?? 0) > 0)
   if (visible.length === 0) return null
 
@@ -544,7 +607,7 @@ export function BoardsBlock({ boards, mark, heading = 'Mood Boards' }: BoardsBlo
           {heading}
         </h2>
         {visible.map((board) => (
-          <BoardComposition key={board.id} board={board} className="mt-6 first:mt-0" />
+          <BoardComposition key={board.id} board={board} className="mt-6 first:mt-0" mode={mode} />
         ))}
       </section>
     </>

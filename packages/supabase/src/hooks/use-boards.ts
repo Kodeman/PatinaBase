@@ -15,6 +15,21 @@ export type BoardItemType =
   | 'note'
   | 'room_scan';
 
+export type BoardStatus = 'active' | 'archived';
+
+/**
+ * A named section on a board (00264). Persisted as an ordered array in
+ * proposal_boards.sections — the same {id, name, color?} shape BoardCanvas's
+ * `sections` prop accepts. Items belong to a section via a `section_id` key
+ * inside each item's `data` JSONB (there is NO section_id column on
+ * proposal_board_items). `color` is optional and may be omitted.
+ */
+export interface BoardSection {
+  id: string;
+  name: string;
+  color?: string;
+}
+
 export interface ProposalBoard {
   id: string;
   proposal_id: string;
@@ -25,12 +40,24 @@ export interface ProposalBoard {
   canvas_height: number;
   background_color: string;
   sort_order: number;
+  // 00264. Older rows (pre-migration reads via `as any`) may lack these; the
+  // hooks below coerce to safe defaults ([] / 'active') so consumers never
+  // branch on undefined.
+  sections: BoardSection[];
+  status: BoardStatus;
   created_at: string;
   updated_at: string;
 }
 
 export interface ProposalBoardSummary extends ProposalBoard {
   item_count: number;
+  /**
+   * Effective thumbnail source when `cover_image_url` is unset: the image_url
+   * of the lowest-z image item on the board, else null. Derived in useBoards
+   * (the board list) so the chip can show cover → first-image → monogram
+   * without a second fetch.
+   */
+  cover_fallback_url: string | null;
 }
 
 export interface ProposalBoardItem {
@@ -104,6 +131,8 @@ export interface UpsertBoardInput {
   canvasHeight?: number;
   backgroundColor?: string;
   sortOrder?: number;
+  sections?: BoardSection[];
+  status?: BoardStatus;
 }
 
 export interface AddBoardItemInput {
@@ -157,9 +186,11 @@ export interface BoardLayoutPosition {
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 /**
- * All boards on a proposal (with item counts), ordered by sort_order then
- * created_at. RLS scopes rows to the proposal designer (or, for non-draft
- * proposals, the linked client).
+ * All boards on a proposal (BOTH active and archived — the builder filters by
+ * status client-side), ordered by sort_order then created_at. A compact item
+ * projection (type/image_url/z_index only — no `data` JSONB) rides along to
+ * derive item_count and the fallback cover in one round trip. RLS scopes rows
+ * to the proposal designer (or, for non-draft proposals, the linked client).
  */
 export function useBoards(proposalId: string | null | undefined) {
   return useQuery({
@@ -170,7 +201,7 @@ export function useBoards(proposalId: string | null | undefined) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('proposal_boards')
-        .select('*, proposal_board_items(count)')
+        .select('*, proposal_board_items(type, image_url, z_index)')
         .eq('proposal_id', proposalId)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });
@@ -179,14 +210,41 @@ export function useBoards(proposalId: string | null | undefined) {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return ((data ?? []) as any[]).map((row) => {
-        const { proposal_board_items: counts, ...board } = row;
-        return {
-          ...board,
-          item_count: counts?.[0]?.count ?? 0,
-        } as ProposalBoardSummary;
+        const { proposal_board_items: items, ...board } = row;
+        return summarizeBoard(board, (items ?? []) as BoardCoverItem[]);
       });
     },
   });
+}
+
+/** Minimal item projection useBoards pulls for count + cover derivation. */
+interface BoardCoverItem {
+  type: BoardItemType;
+  image_url: string | null;
+  z_index: number;
+}
+
+/**
+ * Fold a board row + its compact items into a ProposalBoardSummary. The
+ * fallback cover is the lowest-z image item's url (matching the bottom→top
+ * render order); sections/status default defensively for pre-00264 rows. Pure
+ * — exported for the unit test.
+ */
+export function summarizeBoard(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  board: any,
+  items: BoardCoverItem[],
+): ProposalBoardSummary {
+  const firstImage = items
+    .filter((i) => i.type === 'image' && !!i.image_url)
+    .sort((a, b) => (a.z_index ?? 0) - (b.z_index ?? 0))[0];
+  return {
+    ...(board as ProposalBoard),
+    sections: (board?.sections ?? []) as BoardSection[],
+    status: (board?.status ?? 'active') as BoardStatus,
+    item_count: items.length,
+    cover_fallback_url: firstImage?.image_url ?? null,
+  };
 }
 
 /**
@@ -219,12 +277,14 @@ export function useBoard(boardId: string | null | undefined) {
 }
 
 /**
- * Every board on a proposal WITH its items inlined, in one round trip — boards
- * ordered by (sort_order, created_at), items by z_index (bottom → top). Powers
- * the read-only document surfaces (client proposal, designer preview, drafting
- * mirror) that render the whole board section at once via the shared
- * BoardsBlock, rather than the editor's per-board `useBoard`. RLS scopes rows to
- * the proposal designer (or, for non-draft proposals, the linked client).
+ * Every ACTIVE board on a proposal WITH its items inlined, in one round trip —
+ * boards ordered by (sort_order, created_at), items by z_index (bottom → top).
+ * Powers the read-only document surfaces (client proposal, designer preview,
+ * drafting mirror) that render the whole board section at once via the shared
+ * BoardsBlock, rather than the editor's per-board `useBoard`. Archived boards
+ * (00264) are excluded HERE so the client copy never shows one — this is the
+ * single choke point every shared-render caller flows through. RLS scopes rows
+ * to the proposal designer (or, for non-draft proposals, the linked client).
  */
 export function useBoardsWithItems(proposalId: string | null | undefined) {
   return useQuery({
@@ -237,6 +297,7 @@ export function useBoardsWithItems(proposalId: string | null | undefined) {
         .from('proposal_boards')
         .select('*, proposal_board_items(*)')
         .eq('proposal_id', proposalId)
+        .eq('status', 'active')
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true })
         .order('z_index', { ascending: true, referencedTable: 'proposal_board_items' });
@@ -277,6 +338,8 @@ export function useUpsertBoard() {
         if (input.canvasHeight !== undefined) updates.canvas_height = input.canvasHeight;
         if (input.backgroundColor !== undefined) updates.background_color = input.backgroundColor;
         if (input.sortOrder !== undefined) updates.sort_order = input.sortOrder;
+        if (input.sections !== undefined) updates.sections = input.sections;
+        if (input.status !== undefined) updates.status = input.status;
 
         const { data, error } = await supabase
           .from('proposal_boards')
@@ -303,6 +366,8 @@ export function useUpsertBoard() {
           ? { background_color: input.backgroundColor }
           : {}),
         sort_order: input.sortOrder ?? 0,
+        ...(input.sections !== undefined ? { sections: input.sections } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
       };
 
       const { data, error } = await supabase
@@ -317,6 +382,111 @@ export function useUpsertBoard() {
     onSuccess: (board) => {
       queryClient.invalidateQueries({ queryKey: ['boards', board.proposal_id] });
       queryClient.invalidateQueries({ queryKey: ['board', board.id] });
+    },
+  });
+}
+
+/**
+ * Build the insert rows for a duplicated board's items. Each row carries a
+ * FRESH id (omitted → gen_random_uuid()), the NEW board_id, and `type` — the
+ * WITH-CHECK trap: a batch insert whose RLS check joins board_id → the
+ * designer's proposal rejects the WHOLE statement if any row omits board_id, so
+ * every row must carry it (and type, the other NOT NULL/CHECK column).
+ * Geometry + all snapshot fields (incl. `data`, which preserves each item's
+ * section_id) are copied verbatim. Pure — exported for the unit test.
+ */
+export function buildDuplicateBoardItemRows(
+  newBoardId: string,
+  sourceItems: ProposalBoardItem[],
+): Array<Record<string, unknown>> {
+  return sourceItems.map((it) => ({
+    board_id: newBoardId,
+    type: it.type,
+    x: it.x,
+    y: it.y,
+    width: it.width,
+    height: it.height,
+    z_index: it.z_index,
+    rotation: it.rotation,
+    locked: it.locked,
+    product_id: it.product_id,
+    capture_id: it.capture_id,
+    palette_id: it.palette_id,
+    image_url: it.image_url,
+    content: it.content,
+    data: it.data ?? {},
+  }));
+}
+
+/**
+ * Duplicate a board: copies the row (name + " (Copy)", same scope_room,
+ * sections, dims, background, cover) and every item (fresh ids). Runs
+ * client-side under the designer's RLS. Lands at the end of the board order.
+ */
+export function useDuplicateBoard() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      proposalId,
+      boardId,
+    }: {
+      proposalId: string;
+      boardId: string;
+    }): Promise<ProposalBoard> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      // Source board + its items in one read.
+      const { data: src, error: readErr } = await supabase
+        .from('proposal_boards')
+        .select('*, proposal_board_items(*)')
+        .eq('id', boardId)
+        .single();
+      if (readErr) throw readErr;
+      const { proposal_board_items: srcItems, ...board } = src;
+
+      // New board sorts after every existing one.
+      const { data: siblings } = await supabase
+        .from('proposal_boards')
+        .select('sort_order')
+        .eq('proposal_id', proposalId);
+      const maxSort = ((siblings ?? []) as Array<{ sort_order: number }>).reduce(
+        (m, r) => Math.max(m, r.sort_order ?? 0),
+        -1,
+      );
+
+      const { data: newBoard, error: boardErr } = await supabase
+        .from('proposal_boards')
+        .insert({
+          proposal_id: proposalId,
+          name: `${board.name} (Copy)`,
+          scope_room_id: board.scope_room_id ?? null,
+          cover_image_url: board.cover_image_url ?? null,
+          canvas_width: board.canvas_width,
+          canvas_height: board.canvas_height,
+          background_color: board.background_color,
+          sections: board.sections ?? [],
+          status: 'active',
+          sort_order: maxSort + 1,
+        })
+        .select()
+        .single();
+      if (boardErr) throw boardErr;
+
+      const rows = buildDuplicateBoardItemRows(
+        newBoard.id as string,
+        (srcItems ?? []) as ProposalBoardItem[],
+      );
+      if (rows.length > 0) {
+        const { error: itemsErr } = await supabase.from('proposal_board_items').insert(rows);
+        if (itemsErr) throw itemsErr;
+      }
+
+      return newBoard as ProposalBoard;
+    },
+    onSuccess: (board) => {
+      queryClient.invalidateQueries({ queryKey: ['boards', board.proposal_id] });
     },
   });
 }

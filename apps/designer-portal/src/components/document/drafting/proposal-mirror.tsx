@@ -117,12 +117,15 @@ export function useProposalMirrorData(proposalId: string) {
           .order('sort_order', { ascending: true }),
         // Mood boards — the SAME render the client copy carries (no tier gate;
         // boards aren't tier-gated). Items inlined + z-ordered for BoardComposition.
+        // status='active' mirrors useBoardsWithItems so this preview never shows
+        // an archived board the client's copy would hide (00264 — preview is truth).
         supabase
           .from('proposal_boards')
           .select(
             'id, name, canvas_width, canvas_height, background_color, sort_order, proposal_board_items(*)',
           )
           .eq('proposal_id', proposalId)
+          .eq('status', 'active')
           .order('sort_order', { ascending: true })
           .order('created_at', { ascending: true })
           .order('z_index', { ascending: true, referencedTable: 'proposal_board_items' }),
