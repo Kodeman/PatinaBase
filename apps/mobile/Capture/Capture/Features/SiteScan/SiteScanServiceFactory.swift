@@ -3,17 +3,14 @@
 //
 //  Real-mode factory for the site-scan seam. `@MainActor` because the service (and
 //  its live session) own an AR/RoomPlan session, like CameraService. AppContainer
-//  calls this in real mode; the freeze returns the mock. Wave F replaces ONLY the
-//  body below (the real RoomPlan/ARKit pipeline) and adds its real files in this
-//  directory.
+//  calls this ONLY in real mode; mock mode wires `MockSiteScanService` directly, so
+//  the simulator / previews / `-CaptureScreen` harness never reach this path.
 
 import CaptureKit
-import CaptureKitMocks
 
 enum SiteScanServiceFactory {
     @MainActor
     static func make(deps: WorkServiceDependencies) -> any SiteScanService {
-        // TODO(wave-F): replace with the real RoomPlan-backed SiteScanService.
-        MockSiteScanService()
+        SupabaseSiteScanService(deps: deps)
     }
 }
