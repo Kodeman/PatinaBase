@@ -59,6 +59,7 @@ import {
 import { LeadTimeSelect } from '@/components/portal/ffe/lead-time-select';
 import { LEAD_TIME_BUCKETS, leadTimeLabel } from '@/lib/scope/lead-time';
 import { resolveDocCode } from '@/lib/scope/doc-code';
+import { findScheduleTwins, type TwinRef } from '@/lib/scope/duplicates';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -603,6 +604,38 @@ function SortableScheduleItem({
   );
 }
 
+// ─── Twin chip (S7) ──────────────────────────────────────────────────────────
+//
+// Quiet inline warning under a line that shares a product or doc code with
+// another line in the SAME document. Never blocks (imports must never break);
+// the act is jump-to-twin. Mono, terracotta, shadow-free — Document-safe.
+
+function TwinChip({ twins, onJump }: { twins: TwinRef[]; onJump: (id: string) => void }) {
+  const first = twins[0];
+  const label = first.docCode ?? first.name ?? 'another line';
+  return (
+    <button
+      type="button"
+      onClick={() => onJump(first.id)}
+      title={
+        first.reason === 'doc_code'
+          ? 'Another line carries this doc code — jump to it'
+          : 'Another line specifies this same product — jump to it'
+      }
+      className="self-start font-mono hover:underline"
+      style={{
+        fontSize: '0.58rem',
+        letterSpacing: '0.04em',
+        color: '#C4836F',
+      }}
+    >
+      ⚠ twin: {label}
+      {first.roomName ? ` in ${first.roomName}` : ''}
+      {twins.length > 1 ? ` +${twins.length - 1} more` : ''} →
+    </button>
+  );
+}
+
 // ─── Category prompt modal ───────────────────────────────────────────────────
 //
 // Shown after a capture is dropped on a room: forces the designer to pick
@@ -834,6 +867,22 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
     () => (items as FFEItem[]).map((i) => i.doc_code),
     [items]
   );
+
+  // ── S7 — twins: shared product_id OR non-empty doc_code within the document.
+  // Derived over ALL loaded lines (a document-level property, independent of
+  // the current filter view).
+  const twins = useMemo(() => {
+    const roomNameById = new Map(typedRooms.map((r) => [r.id, r.name] as const));
+    return findScheduleTwins(items as FFEItem[], (roomId) =>
+      roomId ? roomNameById.get(roomId) ?? null : null
+    );
+  }, [items, typedRooms]);
+
+  const jumpToLine = (id: string) => {
+    document
+      .getElementById(`sched-line-${id}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
 
   // ── S4 — apply search + facets over the loaded lines ──────────────────────
   const facets = useMemo<Facet[]>(
@@ -1183,6 +1232,7 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
                 >
                   {group.items.map((item) => {
                     const editing = editingItemId === item.id;
+                    const itemTwins = twins.get(item.id);
                     return (
                       <SortableScheduleItem
                         key={item.id}
@@ -1191,19 +1241,26 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
                         spanFull={editing}
                       >
                         {(dragHandle) => (
-                          <ItemRow
-                            item={item}
-                            proposalId={proposalId}
-                            rooms={typedRooms}
-                            categories={categoryOptions}
-                            categoryLookup={categoryLookup}
-                            isEditing={editing}
-                            onStartEdit={() => setEditingItemId(item.id)}
-                            onStopEdit={() => setEditingItemId(null)}
-                            dragHandle={dragHandle}
-                            selected={selected.has(item.id)}
-                            onToggleSelect={() => toggleSelect(item.id)}
-                          />
+                          <div id={`sched-line-${item.id}`}>
+                            <ItemRow
+                              item={item}
+                              proposalId={proposalId}
+                              rooms={typedRooms}
+                              categories={categoryOptions}
+                              categoryLookup={categoryLookup}
+                              isEditing={editing}
+                              onStartEdit={() => setEditingItemId(item.id)}
+                              onStopEdit={() => setEditingItemId(null)}
+                              dragHandle={dragHandle}
+                              selected={selected.has(item.id)}
+                              onToggleSelect={() => toggleSelect(item.id)}
+                              twinChip={
+                                itemTwins ? (
+                                  <TwinChip twins={itemTwins} onJump={jumpToLine} />
+                                ) : undefined
+                              }
+                            />
+                          </div>
                         )}
                       </SortableScheduleItem>
                     );
