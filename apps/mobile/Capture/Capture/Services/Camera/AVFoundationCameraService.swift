@@ -39,6 +39,12 @@ public final class AVFoundationCameraService: NSObject, CameraService {
     /// switch between the live preview, the gradient, and the "off" notice.
     private(set) var authorization: CameraAuthorization = .notDetermined
 
+    /// Bumped by every `stop()`. `start()` snapshots it before awaiting the
+    /// permission dialog and bails if it changed — otherwise a stop() landing
+    /// mid-await (C1 covered while the prompt is up) would be followed by the
+    /// resumed start() relighting the session with no screen to show it.
+    private var startEpoch = 0
+
     /// The live session, for `CameraPreviewView`'s preview layer. Safe to read
     /// on the main actor — a session may be bound to a preview layer off-queue.
     var previewSession: AVCaptureSession { engine.previewSession }
@@ -72,8 +78,9 @@ public final class AVFoundationCameraService: NSObject, CameraService {
     }
 
     public func start() async {
+        let epoch = startEpoch
         await ensureAuthorized()
-        guard authorization == .authorized else { return }
+        guard authorization == .authorized, epoch == startEpoch else { return }
         // Attach the input now that we hold permission, then run. Both hop
         // through the engine's serial queue, so the input is in place before the
         // session starts.
@@ -81,7 +88,10 @@ public final class AVFoundationCameraService: NSObject, CameraService {
         engine.start()
     }
 
-    public func stop() { engine.stop() }
+    public func stop() {
+        startEpoch += 1
+        engine.stop()
+    }
     public func setTorch(_ mode: TorchMode) { engine.setTorch(mode) }
 
     /// Resolve camera permission, presenting the system prompt on first run.
