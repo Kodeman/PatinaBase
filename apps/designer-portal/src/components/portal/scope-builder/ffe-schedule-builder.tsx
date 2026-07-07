@@ -95,6 +95,11 @@ interface ScopeRoom {
   ffe_categories: string[] | null;
 }
 
+// S5 — the Drafting Room's line unfold consumes the same row shape and mounts
+// the same edit form; exported under schedule-scoped names.
+export type ScheduleLineItem = FFEItem;
+export type ScheduleScopeRoom = ScopeRoom;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatDollars(cents: number): string {
@@ -120,7 +125,7 @@ function categoryLabel(slug: string | null, lookup: Map<string, string>): string
 // we never compute it here.
 // ═══════════════════════════════════════════════════════════════════════════
 
-function ItemEditForm({
+export function ItemEditForm({
   item,
   proposalId,
   rooms,
@@ -771,6 +776,13 @@ function CategoryPromptModal({
 
 interface FFEScheduleBuilderProps {
   proposalId: string;
+  /**
+   * S5 — host-supplied expand-in-place panel. When provided, clicking a card
+   * unfolds the panel beneath it spanning the full grid row (Document grammar
+   * in the Drafting Room). The legacy /portal host omits it and keeps its
+   * pencil-edit-only behavior untouched.
+   */
+  renderUnfold?: (item: FFEItem, fold: () => void) => ReactNode;
 }
 
 interface CaptureDropContext {
@@ -779,7 +791,7 @@ interface CaptureDropContext {
   roomName: string;
 }
 
-export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
+export function FFEScheduleBuilder({ proposalId, renderUnfold }: FFEScheduleBuilderProps) {
   const { data: rooms = [] } = useProposalScopeRooms(proposalId);
   const { data: categories = [] } = useFFECategories({ proposalId });
 
@@ -789,6 +801,8 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
   const [captureDropError, setCaptureDropError] = useState<string | null>(null);
   // Only one row may be in inline-edit mode at a time.
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  // S5 — one line unfolded at a time (Drafting Room host only).
+  const [unfoldedItemId, setUnfoldedItemId] = useState<string | null>(null);
   // The shared Add controls own the picker + allowance/TBD forms; per-room
   // "+ Add Item" links open its picker pre-targeted via the imperative handle.
   const addControlsRef = useRef<AddFFEItemControlsHandle>(null);
@@ -1232,13 +1246,14 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
                 >
                   {group.items.map((item) => {
                     const editing = editingItemId === item.id;
+                    const unfolded = !!renderUnfold && !editing && unfoldedItemId === item.id;
                     const itemTwins = twins.get(item.id);
                     return (
                       <SortableScheduleItem
                         key={item.id}
                         id={item.id}
-                        disabled={editing || !canReorder}
-                        spanFull={editing}
+                        disabled={editing || unfolded || !canReorder}
+                        spanFull={editing || unfolded}
                       >
                         {(dragHandle) => (
                           <div id={`sched-line-${item.id}`}>
@@ -1249,17 +1264,29 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
                               categories={categoryOptions}
                               categoryLookup={categoryLookup}
                               isEditing={editing}
-                              onStartEdit={() => setEditingItemId(item.id)}
+                              onStartEdit={() => {
+                                setUnfoldedItemId(null);
+                                setEditingItemId(item.id);
+                              }}
                               onStopEdit={() => setEditingItemId(null)}
                               dragHandle={dragHandle}
                               selected={selected.has(item.id)}
                               onToggleSelect={() => toggleSelect(item.id)}
+                              onOpenDetail={
+                                renderUnfold
+                                  ? () =>
+                                      setUnfoldedItemId((cur) =>
+                                        cur === item.id ? null : item.id
+                                      )
+                                  : undefined
+                              }
                               twinChip={
                                 itemTwins ? (
                                   <TwinChip twins={itemTwins} onJump={jumpToLine} />
                                 ) : undefined
                               }
                             />
+                            {unfolded && renderUnfold(item, () => setUnfoldedItemId(null))}
                           </div>
                         )}
                       </SortableScheduleItem>

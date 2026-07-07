@@ -53,6 +53,7 @@ import { ChangeOrderTermsEditor } from '@/components/portal/scope-builder/change
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { TermsAgreementBody } from './terms-agreement-body';
+import { ScheduleLineUnfold } from './schedule-line-unfold';
 
 const STATE_TONE: Record<string, { color: string; bg: string }> = {
   Outline: { color: 'var(--color-aged-oak)', bg: 'transparent' },
@@ -262,7 +263,19 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
                   </div>
                 </div>
               )}
-              <FFEScheduleBuilder proposalId={proposalId} />
+              {/* S5 — a row unfolds in place (Document grammar; the legacy
+                  /portal host keeps pencil-edit only). D4 inside the paper: the
+                  shared builder's bulk bar + filter popover carry shadow-lg in
+                  the old zones — strip them here without touching them (R3),
+                  the same move LineUnfold makes for the procurement panels. */}
+              <div className="contents [&_.shadow-lg]:shadow-none [&_.shadow-xl]:shadow-none">
+                <FFEScheduleBuilder
+                  proposalId={proposalId}
+                  renderUnfold={(item, fold) => (
+                    <ScheduleLineUnfold item={item} proposalId={proposalId} onFold={fold} />
+                  )}
+                />
+              </div>
             </FacetSection>
 
             {/* Movement 3 · The Vision (palette + boards) — placed before the
