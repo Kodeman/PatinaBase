@@ -1,9 +1,20 @@
 // Supabase Edge Function: proposal-send
 //
-// Invoked by useSendProposal after the proposal row flips to status='sent'.
+// Invoked by useSendProposal after the proposal row flips to status='sent'
+// (the send_proposal RPC already committed that transition — this function's
+// email dispatch is best-effort and does NOT roll back the send on failure).
 // Loads the proposal, designer, and client, then emails the client a link
 // to client.patina.cloud/proposals/{id} via Resend. CC the designer's
 // optional cc_email if set.
+//
+// Also writes an in-app notification_log row (channel: in_app) for the
+// client so the client portal inbox/bell surfaces the waiting proposal —
+// metadata.deep_link (`/proposals/{id}`) is what the bell's dedupe logic
+// (apps/client-portal .../notification-bell.tsx) matches against the derived
+// "awaiting proposal" item. Written regardless of the email outcome (it
+// reflects the SEND, which already happened, not the email) and guarded by
+// an unread-duplicate check so a retried/duplicate invocation doesn't stack
+// duplicate bell entries.
 
 // deno-lint-ignore-file no-explicit-any
 
@@ -22,6 +33,7 @@ interface ProposalRow {
   cc_email: string | null;
   valid_until: string | null;
   total_amount: number | null;
+  client_id: string | null;
   designer: { full_name: string | null; email: string | null } | null;
   client: { full_name: string | null; email: string | null } | null;
 }
@@ -73,7 +85,7 @@ Deno.serve(async (req: Request) => {
     .from('proposals')
     .select(
       `
-      id, title, personal_message, cc_email, valid_until, total_amount,
+      id, title, personal_message, cc_email, valid_until, total_amount, client_id,
       designer:profiles!designer_id(full_name, email),
       client:profiles!client_id(full_name, email)
     `
@@ -145,10 +157,77 @@ Deno.serve(async (req: Request) => {
     body: JSON.stringify(payload),
   });
 
+  let emailOk = true;
+  let emailErrorDetail: string | undefined;
   if (!res.ok) {
-    const text = await res.text();
-    console.error('proposal-send: Resend failed', res.status, text);
-    return new Response(JSON.stringify({ error: 'send_failed', detail: text }), { status: 502 });
+    emailErrorDetail = await res.text();
+    console.error('proposal-send: Resend failed', res.status, emailErrorDetail);
+    emailOk = false;
+  }
+
+  // In-app notification: reflects the SEND (already committed by send_proposal
+  // before this function runs), not the email outcome — so this must run on
+  // both the success and failure paths above. Never fails the request; a
+  // notification hiccup must not surface as a send failure to the designer.
+  if (proposal.client_id) {
+    try {
+      const deepLink = `/proposals/${proposal.id}`;
+      const { data: existing, error: existingErr } = await supabase
+        .from('notification_log')
+        .select('id, metadata')
+        .eq('user_id', proposal.client_id)
+        .eq('type', 'proposal_sent')
+        .eq('channel', 'in_app')
+        .contains('metadata', { deep_link: deepLink })
+        .limit(5);
+
+      if (existingErr) {
+        // Best-effort dedupe check — if it fails, fall through to insert
+        // rather than silently dropping the notification.
+        console.error('proposal-send: notification dedupe check failed', existingErr);
+      }
+
+      // Idempotency: skip if an unread row for this exact proposal already
+      // exists, so a retried/duplicate invocation doesn't stack duplicate
+      // unread bell entries. An already-read row means the client already saw
+      // it, so a fresh send (e.g. after a revision) is still allowed through.
+      const hasUnreadDuplicate = ((existing ?? []) as Array<{ metadata: any }>).some(
+        (row) => !row.metadata?.read_at
+      );
+
+      if (!hasUnreadDuplicate) {
+        const { error: notifyErr } = await supabase.from('notification_log').insert({
+          user_id: proposal.client_id,
+          type: 'proposal_sent',
+          channel: 'in_app',
+          status: 'delivered',
+          template_id: 'proposal-sent',
+          metadata: {
+            proposal_id: proposal.id,
+            subject: 'Proposal ready for your review',
+            message: proposal.title,
+            deep_link: deepLink,
+          },
+        });
+        if (notifyErr) {
+          console.error('proposal-send: notification insert failed', notifyErr);
+        }
+      }
+    } catch (notifyErr) {
+      console.error('proposal-send: notification insert threw', notifyErr);
+    }
+  } else {
+    console.warn(
+      'proposal-send: proposal has no client_id, skipping in-app notification',
+      proposalId
+    );
+  }
+
+  if (!emailOk) {
+    return new Response(
+      JSON.stringify({ error: 'send_failed', detail: emailErrorDetail }),
+      { status: 502 }
+    );
   }
 
   return new Response(JSON.stringify({ ok: true }), {
