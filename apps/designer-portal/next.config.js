@@ -17,7 +17,13 @@ const nextConfig = {
         ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
         : "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https: blob:",
+      // Images: prod screenshots/assets come from https://api.patina.cloud
+      // (covered by https:). In dev, private-bucket signed URLs are served over
+      // http from local Supabase storage — allow those local origins so inline
+      // <img> previews (e.g. feedback screenshots) aren't CSP-blocked.
+      isDevelopment
+        ? "img-src 'self' data: https: blob: http://localhost:* http://127.0.0.1:*"
+        : "img-src 'self' data: https: blob:",
       "font-src 'self' data:",
       // Allow connections based on environment
       // Development: localhost, local network IPs, AND patina.cloud domains (for Cloudflare tunnel access)
