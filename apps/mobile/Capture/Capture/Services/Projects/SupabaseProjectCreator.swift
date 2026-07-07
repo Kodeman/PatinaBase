@@ -38,10 +38,14 @@ struct SupabaseProjectCreator: CaptureProjectCreating {
     func createProject(name: String) async throws -> String {
         guard let uid = session.userID else { throw ProjectCreateError.notAuthenticated }
 
-        // Minimal columns: `name` (NOT NULL) + `designer_id` (the RLS check). No
-        // other column on public.projects is NOT-NULL-without-default, and the
-        // table has no organization_id, so nothing else is required.
-        let row = NewProjectRow(name: name, designerID: uid)
+        // Minimal columns: `name` (NOT NULL), `designer_id` (the RLS check), and
+        // `created_by` — also NOT NULL (00004_catalog_enhancements.sql), added
+        // with a default that was immediately dropped, and filled by no trigger.
+        // Every real INSERT must supply it explicitly or Postgres raises 23502.
+        // The INSERT policy (00168) only checks designer_id = auth.uid(), so
+        // setting created_by to the same id is permitted. (Mirrors how the
+        // SECURITY DEFINER RPCs set it, e.g. open_project_direct, 00237.)
+        let row = NewProjectRow(name: name, designerID: uid, createdBy: uid)
         let created: CreatedProjectRow = try await client
             .from("projects")
             .insert(row)
@@ -59,9 +63,11 @@ struct SupabaseProjectCreator: CaptureProjectCreating {
 private struct NewProjectRow: Encodable {
     let name: String
     let designerID: String
+    let createdBy: String
     enum CodingKeys: String, CodingKey {
         case name
         case designerID = "designer_id"
+        case createdBy = "created_by"
     }
 }
 

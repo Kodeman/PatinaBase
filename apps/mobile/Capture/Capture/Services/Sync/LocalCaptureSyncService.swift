@@ -172,7 +172,11 @@ final class LocalCaptureSyncService: CaptureSyncService {
         }
 
         // (a) Upload each artifact to <uid>/<clientToken>/<file> in capture-media.
-        let folder = "\(uid.uuidString)/\(s.clientToken.uuidString)"
+        // CaptureMediaPath lowercases both segments — storage RLS (00234) compares
+        // against Postgres's lowercase auth.uid()::text, while Foundation's
+        // uuidString is uppercase; building this inline previously threw an RLS
+        // violation on every real upload.
+        let folder = CaptureMediaPath.folder(userID: uid, clientToken: s.clientToken)
         let orderedPhotos = s.photos.sorted { $0.order < $1.order }
         let hasVoice = !(s.voiceAudioFilename ?? "").isEmpty
         let total = orderedPhotos.count + (hasVoice ? 1 : 0)
@@ -251,7 +255,16 @@ final class LocalCaptureSyncService: CaptureSyncService {
                     shelf: s.venue?.shelf)
                 let result = try await remote.route(captureID: captureUUID, routing: routing)
                 if let productID = result.productID { s.committedProductId = productID.uuidString }
-                if result.status == "inbox" { s.destination = .inbox } // safe-harbored
+                if result.status == "inbox" {
+                    // Safe-harbored (00235): the library mint failed server-side and
+                    // the capture landed back in the inbox. Correct BOTH the
+                    // destination and the lifecycle the optimistic update above set
+                    // to `.saved` — leaving lifecycle at `.saved` while destination
+                    // reads `.inbox` is the exact inconsistency this branch exists
+                    // to prevent.
+                    s.destination = .inbox
+                    s.lifecycleRaw = CaptureLifecycle.State.inbox.rawValue
+                }
                 s.lastSyncError = nil
                 try? store.save()
             } catch {
@@ -273,18 +286,25 @@ final class LocalCaptureSyncService: CaptureSyncService {
         if let captureID = result.captureID { s.remoteId = captureID.uuidString }
         if let productID = result.productID { s.committedProductId = productID.uuidString }
 
-        // Server truth: a library commit that hit the safe-harbor comes back
-        // status=inbox. Reflect that locally so the UI stays honest.
-        let landedInbox = (result.status == "inbox")
-        if landedInbox { s.destination = .inbox }
-        s.lifecycleRaw = (landedInbox ? CaptureLifecycle.State.inbox
-                                      : CaptureLifecycle.State.saved).rawValue
+        // Server truth: only status=="saved" (00235) is a real library landing.
+        // Everything else — the plain "inbox" destination, a library commit that
+        // hit the safe-harbor, AND any other terminal status an idempotent
+        // replay can surface (e.g. "dismissed", from dismiss_field_capture) —
+        // must NOT present as saved/committed-with-product locally. CaptureKit's
+        // lifecycle enum is frozen (Domain/CaptureEnums.swift), so a first-class
+        // local `.dismissed` state is deferred; fold every non-"saved" status
+        // into `.inbox` for now so a server-dismissed capture never shows up
+        // locally as saved.
+        let landedSaved = (result.status == "saved")
+        s.destination = landedSaved ? .library : .inbox
+        s.lifecycleRaw = (landedSaved ? CaptureLifecycle.State.saved
+                                      : CaptureLifecycle.State.inbox).rawValue
         try? store.save()
 
         return CommitReceipt(
             remoteId: s.remoteId ?? s.clientToken.uuidString,
             productId: s.committedProductId,
-            destination: landedInbox ? .inbox : .library,
+            destination: landedSaved ? .library : .inbox,
             created: result.created ?? true
         )
     }
