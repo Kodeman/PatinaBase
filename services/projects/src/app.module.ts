@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
-import { BullModule } from '@nestjs/bull';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { APP_GUARD } from '@nestjs/core';
@@ -29,7 +28,7 @@ import { TimelineModule } from './timeline/timeline.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { AnalyticsModule } from './analytics/analytics.module';
-import { WebSocketModule } from './websocket/websocket.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 
 @Module({
@@ -52,15 +51,6 @@ import { IntegrationsModule } from './integrations/integrations.module';
       },
     ]),
     ScheduleModule.forRoot(),
-    BullModule.forRootAsync({
-      useFactory: () => ({
-        redis: {
-          host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT || '6379'),
-          password: process.env.REDIS_PASSWORD,
-        },
-      }),
-    }),
     EventEmitterModule.forRoot({
       wildcard: false,
       delimiter: '.',
@@ -90,7 +80,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
     NotificationsModule,
     ApprovalsModule,
     AnalyticsModule,
-    WebSocketModule,
+    RealtimeModule,
   ],
   providers: [
     // Global Authentication Guard — Supabase JWT validation

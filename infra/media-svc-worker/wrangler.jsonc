@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "patina-media-svc-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+
+  // Media NestJS service (upload intents, asset ledger, jobs API) — cloud
+  // migration phase 3b, against Supabase Cloud (svc_media schema via the
+  // pooler). This is the HTTP/API side only: actual image processing runs in
+  // the sibling patina-media-worker (Cloudflare Queues consumer + Sharp
+  // container, see infra/media-worker/) — this container's job-queue service
+  // just enqueues to it and receives its completion callback. Built from the
+  // monorepo root (image_build_context) because services/media/Dockerfile.cf's
+  // COPY paths are root-relative — same Dockerfile the Coolify deploy used,
+  // just built by wrangler instead. instance_type standard-1 (heavier than
+  // orders' basic — sharp/@gltf-transform/three are still in the dependency
+  // tree even though the actual transform work now happens in
+  // patina-media-worker's own container).
+  "containers": [
+    {
+      "class_name": "MediaService",
+      "image": "../../services/media/Dockerfile.cf",
+      "image_build_context": "../../",
+      "instance_type": "standard-1",
+      "max_instances": 2
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "MEDIA_SVC", "class_name": "MediaService" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MediaService"] }],
+
+  "observability": { "enabled": true }
+}

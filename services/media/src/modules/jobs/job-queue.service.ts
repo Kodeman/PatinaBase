@@ -1,8 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Queue, Worker, Job } from 'bullmq';
+import { Injectable, Logger, NotImplementedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient, JobType, JobState } from '../../generated/prisma-client';
-import IORedis from 'ioredis';
 
 export interface JobPayload {
   assetId: string;
@@ -17,82 +15,61 @@ export interface JobResult {
   error?: string;
 }
 
+/**
+ * Job types the Cloudflare pipeline (infra/media-worker, a Queues consumer +
+ * Sharp container) actually executes today. Mirrors CONTAINER_JOB_TYPES in
+ * infra/media-worker/src/index.ts — keep in sync.
+ */
+const WORKER_SUPPORTED_TYPES = new Set<JobType>([
+  'IMAGE_PROCESS',
+  'IMAGE_TRANSFORM',
+  'METADATA_EXTRACT',
+]);
+
+/**
+ * Job Queue Service (cloud migration phase 3b)
+ * =============================================
+ * Producer-only shim over the Cloudflare Queues pipeline. This used to own
+ * BullMQ Queue/Worker pairs backed by Redis; execution now happens entirely
+ * out of process in `infra/media-worker` (a Cloudflare Worker consuming the
+ * `media-jobs` queue, running Sharp in a Container, and POSTing completion
+ * back to `POST /v1/media/jobs/complete` — see jobs.controller.ts).
+ *
+ * This service still owns the `ProcessJob` ledger (create/read/update), but
+ * no longer runs any in-process execution:
+ *  - addJob() creates the ledger row, then POSTs the job to the worker's
+ *    `/enqueue` route (shared-secret guarded). Non-2xx responses (or an
+ *    unreachable worker) mark the row FAILED and re-throw.
+ *  - getJobStatus / cancelJob / retryJob operate on the DB ledger only.
+ *    cancelJob cannot recall a message already handed to Cloudflare Queues —
+ *    it only marks the ledger CANCELED so callers/UI stop waiting on it.
+ *  - getQueueStats derives counts from ProcessJob rows (there is no BullMQ
+ *    queue to introspect any more).
+ *  - registerWorker() is now a deprecated no-op (logs and returns) — kept so
+ *    existing callers (bulk-operations.processor.ts) don't need restructuring
+ *    beyond removing their registration calls.
+ *
+ * Job types outside WORKER_SUPPORTED_TYPES (the ASSET_DELETE / BULK_DELETE /
+ * BULK_COPY / CLEANUP_ORPHANED / MODEL3D_* / SNAPSHOT_GENERATE / VIRUS_SCAN
+ * families) have no executor on the Cloudflare pipeline yet — addJob() fails
+ * them fast with a clear NotImplementedException rather than leaving a
+ * ProcessJob row QUEUED forever with nothing to pick it up.
+ */
 @Injectable()
-export class JobQueueService implements OnModuleInit {
+export class JobQueueService {
   private readonly logger = new Logger(JobQueueService.name);
-  private connection: IORedis;
-  private queues: Map<JobType, Queue> = new Map();
-  private workers: Map<JobType, Worker> = new Map();
 
   constructor(
     private config: ConfigService,
     private prisma: PrismaClient,
-  ) {
-    this.connection = new IORedis({
-      host: this.config.get('REDIS_HOST', 'localhost'),
-      port: this.config.get('REDIS_PORT', 6379),
-      password: this.config.get('REDIS_PASSWORD'),
-      maxRetriesPerRequest: null,
-    });
-  }
-
-  async onModuleInit() {
-    // Initialize queues for different job types
-    const jobTypes: JobType[] = [
-      'IMAGE_PROCESS',
-      'IMAGE_TRANSFORM',
-      'MODEL3D_CONVERT',
-      'MODEL3D_OPTIMIZE',
-      'SNAPSHOT_GENERATE',
-      'VIRUS_SCAN',
-      'METADATA_EXTRACT',
-    ];
-
-    for (const type of jobTypes) {
-      this.initQueue(type);
-    }
-
-    this.logger.log('Job queue service initialized');
-  }
+  ) {}
 
   /**
-   * Initialize queue for a job type
-   */
-  private initQueue(type: JobType) {
-    const queueName = `media-${type.toLowerCase()}`;
-
-    const queue = new Queue(queueName, {
-      connection: this.connection as any,
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 5000,
-        },
-        removeOnComplete: {
-          age: 3600, // Keep completed jobs for 1 hour
-          count: 1000,
-        },
-        removeOnFail: {
-          age: 86400, // Keep failed jobs for 24 hours
-        },
-      },
-    });
-
-    this.queues.set(type, queue);
-    this.logger.log(`Initialized queue: ${queueName}`);
-  }
-
-  /**
-   * Add job to queue
+   * Add job to the ledger + hand it to the media-worker's Cloudflare Queues
+   * producer. Returns the ProcessJob id (also used as the worker's `jobId`,
+   * so the completion callback can address the same row).
    */
   async addJob(payload: JobPayload): Promise<string> {
-    const queue = this.queues.get(payload.type);
-    if (!queue) {
-      throw new Error(`Queue not found for job type: ${payload.type}`);
-    }
-
-    // Create job record in database
     const jobRecord = await this.prisma.processJob.create({
       data: {
         assetId: payload.assetId,
@@ -103,146 +80,118 @@ export class JobQueueService implements OnModuleInit {
       },
     });
 
-    // Add to BullMQ queue
-    const job = await queue.add(
+    if (!WORKER_SUPPORTED_TYPES.has(payload.type)) {
+      const error = `Job type ${payload.type} has no executor on the Cloudflare Queues pipeline yet (bulk/3D/scan ops are pending a later migration wave)`;
+      await this.markFailed(jobRecord.id, error);
+      throw new NotImplementedException(error);
+    }
+
+    await this.enqueueToWorker(
+      jobRecord.id,
+      payload.assetId,
       payload.type,
-      {
-        jobId: jobRecord.id,
-        assetId: payload.assetId,
-        ...payload.meta,
-      },
-      {
-        jobId: jobRecord.id,
-        priority: payload.priority,
-      },
+      payload.priority,
+      payload.meta,
     );
 
     this.logger.log(
-      `Added job ${jobRecord.id} to queue ${payload.type} for asset ${payload.assetId}`,
+      `Added job ${jobRecord.id} (${payload.type}) for asset ${payload.assetId}`,
     );
 
     return jobRecord.id;
   }
 
   /**
-   * Register worker for job type
+   * POST a job to the media-worker's `/enqueue` route. Ensures `meta.rawKey`
+   * is present (the consumer's MediaJob shape requires it) — looks it up from
+   * the asset if the caller didn't already supply it.
    */
-  registerWorker(
+  private async enqueueToWorker(
+    jobId: string,
+    assetId: string,
     type: JobType,
-    processor: (job: Job) => Promise<JobResult>,
-    concurrency = 5,
-  ) {
-    const queueName = `media-${type.toLowerCase()}`;
-    const workerId = `worker-${type}-${Date.now()}`;
+    priority: number | undefined,
+    meta: Record<string, any> | undefined,
+  ): Promise<void> {
+    const workerUrl = this.config.get<string>('MEDIA_WORKER_URL');
+    const enqueueSecret = this.config.get<string>('MEDIA_WORKER_ENQUEUE_SECRET');
 
-    const worker = new Worker(
-      queueName,
-      async (job: Job) => {
-        const jobId = job.data.jobId;
+    if (!workerUrl || !enqueueSecret) {
+      const error =
+        'MEDIA_WORKER_URL / MEDIA_WORKER_ENQUEUE_SECRET are not configured — cannot enqueue processing jobs';
+      await this.markFailed(jobId, error);
+      throw new Error(error);
+    }
 
-        try {
-          // Update job state to RUNNING
-          await this.prisma.processJob.update({
-            where: { id: jobId },
-            data: {
-              state: 'RUNNING',
-              startedAt: new Date(),
-              workerId,
-            },
-          });
+    let rawKey: string | undefined = meta?.rawKey;
+    if (!rawKey) {
+      const asset = await this.prisma.mediaAsset.findUnique({
+        where: { id: assetId },
+        select: { rawKey: true },
+      });
+      rawKey = asset?.rawKey;
+    }
 
-          // Process the job
-          const result = await processor(job);
+    const body = {
+      jobId,
+      assetId,
+      type,
+      priority,
+      meta: { ...meta, rawKey },
+    };
 
-          // Update job state based on result
-          if (result.success) {
-            await this.prisma.processJob.update({
-              where: { id: jobId },
-              data: {
-                state: 'SUCCEEDED',
-                finishedAt: new Date(),
-                result: result.data,
-              },
-            });
-          } else {
-            await this.handleJobFailure(jobId, result.error || 'Unknown error');
-          }
+    let response: Response;
+    try {
+      response = await fetch(`${workerUrl}/enqueue`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-enqueue-secret': enqueueSecret,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (err: any) {
+      const error = `Failed to reach media-worker /enqueue: ${err.message}`;
+      await this.markFailed(jobId, error);
+      throw new Error(error);
+    }
 
-          return result;
-        } catch (error) {
-          await this.handleJobFailure(jobId, error.message);
-          throw error;
-        }
-      },
-      {
-        connection: this.connection as any,
-        concurrency,
-        autorun: true,
-      },
-    );
-
-    // Worker event handlers
-    worker.on('completed', (job) => {
-      this.logger.log(`Job ${job.id} completed successfully`);
-    });
-
-    worker.on('failed', (job, err) => {
-      this.logger.error(`Job ${job?.id} failed: ${err.message}`, err.stack);
-    });
-
-    worker.on('error', (err) => {
-      this.logger.error(`Worker error: ${err.message}`, err.stack);
-    });
-
-    this.workers.set(type, worker);
-    this.logger.log(`Registered worker for ${type} with concurrency ${concurrency}`);
-  }
-
-  /**
-   * Handle job failure with retry logic
-   */
-  private async handleJobFailure(jobId: string, error: string) {
-    const job = await this.prisma.processJob.findUnique({
-      where: { id: jobId },
-    });
-
-    if (!job) return;
-
-    const attempts = job.attempts + 1;
-    const shouldRetry = attempts < job.maxRetries;
-
-    await this.prisma.processJob.update({
-      where: { id: jobId },
-      data: {
-        state: shouldRetry ? 'RETRY' : 'FAILED',
-        attempts,
-        error,
-        errorCode: this.extractErrorCode(error),
-        finishedAt: shouldRetry ? undefined : new Date(),
-      },
-    });
-
-    if (shouldRetry) {
-      this.logger.log(`Job ${jobId} will retry (attempt ${attempts}/${job.maxRetries})`);
-    } else {
-      this.logger.error(`Job ${jobId} failed after ${attempts} attempts`);
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      const error = `media-worker /enqueue returned ${response.status}: ${text.slice(0, 500)}`;
+      await this.markFailed(jobId, error);
+      throw new Error(error);
     }
   }
 
-  /**
-   * Extract error code from error message
-   */
-  private extractErrorCode(error: string): string {
-    // Simple error code extraction
-    if (error.includes('validation')) return 'VALIDATION_ERROR';
-    if (error.includes('storage')) return 'STORAGE_ERROR';
-    if (error.includes('timeout')) return 'TIMEOUT_ERROR';
-    if (error.includes('memory')) return 'MEMORY_ERROR';
-    return 'UNKNOWN_ERROR';
+  private async markFailed(jobId: string, error: string): Promise<void> {
+    await this.prisma.processJob
+      .update({
+        where: { id: jobId },
+        data: { state: 'FAILED', error, finishedAt: new Date() },
+      })
+      .catch((err) => {
+        this.logger.error(`Failed to mark job ${jobId} FAILED: ${err.message}`);
+      });
   }
 
   /**
-   * Get job status
+   * Deprecated — job execution now runs entirely in infra/media-worker's
+   * Cloudflare Queues consumer + container. This is a no-op kept so existing
+   * callers (e.g. bulk-operations.processor.ts) compile unchanged.
+   */
+  registerWorker(
+    type: JobType,
+    _processor: (job: any) => Promise<JobResult>,
+    _concurrency = 5,
+  ): void {
+    this.logger.warn(
+      `registerWorker(${type}) is deprecated and is now a no-op — job execution moved to the Cloudflare Queues media-worker pipeline (infra/media-worker).`,
+    );
+  }
+
+  /**
+   * Get job status (ledger read).
    */
   async getJobStatus(jobId: string) {
     const job = await this.prisma.processJob.findUnique({
@@ -262,7 +211,9 @@ export class JobQueueService implements OnModuleInit {
   }
 
   /**
-   * Cancel job
+   * Cancel job. Ledger-only: a message already handed to Cloudflare Queues
+   * cannot be recalled, so this just stops the ledger (and any UI polling
+   * it) from treating the job as pending.
    */
   async cancelJob(jobId: string) {
     const job = await this.prisma.processJob.findUnique({
@@ -273,14 +224,6 @@ export class JobQueueService implements OnModuleInit {
       throw new Error('Job not found');
     }
 
-    const queue = this.queues.get(job.type);
-    if (queue) {
-      const bullJob = await queue.getJob(jobId);
-      if (bullJob && (await bullJob.isWaiting())) {
-        await bullJob.remove();
-      }
-    }
-
     await this.prisma.processJob.update({
       where: { id: jobId },
       data: {
@@ -289,11 +232,13 @@ export class JobQueueService implements OnModuleInit {
       },
     });
 
-    this.logger.log(`Canceled job ${jobId}`);
+    this.logger.log(
+      `Canceled job ${jobId} (ledger only — an in-flight Cloudflare Queue message, if any, cannot be recalled)`,
+    );
   }
 
   /**
-   * Retry failed job
+   * Retry failed job — resets the ledger row and re-POSTs to the worker.
    */
   async retryJob(jobId: string) {
     const job = await this.prisma.processJob.findUnique({
@@ -308,7 +253,11 @@ export class JobQueueService implements OnModuleInit {
       throw new Error('Only failed jobs can be retried');
     }
 
-    // Reset job state and re-queue
+    if (!WORKER_SUPPORTED_TYPES.has(job.type)) {
+      const error = `Job type ${job.type} has no executor on the Cloudflare Queues pipeline yet`;
+      throw new NotImplementedException(error);
+    }
+
     await this.prisma.processJob.update({
       where: { id: jobId },
       data: {
@@ -321,41 +270,27 @@ export class JobQueueService implements OnModuleInit {
       },
     });
 
-    const queue = this.queues.get(job.type);
-    if (queue) {
-      const jobData: any = {
-        jobId: job.id,
-        assetId: job.assetId,
-      };
-      if (job.meta) {
-        Object.assign(jobData, job.meta);
-      }
-      await queue.add(
-        job.type,
-        jobData,
-        {
-          jobId: job.id,
-        },
-      );
-    }
+    await this.enqueueToWorker(
+      job.id,
+      job.assetId,
+      job.type,
+      job.priority,
+      (job.meta as Record<string, any> | null) ?? undefined,
+    );
 
     this.logger.log(`Retrying job ${jobId}`);
   }
 
   /**
-   * Get queue stats
+   * Get queue stats — derived from ProcessJob counts by state (there is no
+   * BullMQ queue to introspect any more).
    */
   async getQueueStats(type: JobType) {
-    const queue = this.queues.get(type);
-    if (!queue) {
-      throw new Error(`Queue not found for type: ${type}`);
-    }
-
     const [waiting, active, completed, failed] = await Promise.all([
-      queue.getWaitingCount(),
-      queue.getActiveCount(),
-      queue.getCompletedCount(),
-      queue.getFailedCount(),
+      this.prisma.processJob.count({ where: { type, state: 'QUEUED' as JobState } }),
+      this.prisma.processJob.count({ where: { type, state: 'RUNNING' as JobState } }),
+      this.prisma.processJob.count({ where: { type, state: 'SUCCEEDED' as JobState } }),
+      this.prisma.processJob.count({ where: { type, state: 'FAILED' as JobState } }),
     ]);
 
     return {
@@ -369,7 +304,7 @@ export class JobQueueService implements OnModuleInit {
   }
 
   /**
-   * Clean up completed/failed jobs
+   * Clean up completed/failed jobs.
    */
   async cleanupJobs(olderThanHours = 24) {
     const cutoffDate = new Date(Date.now() - olderThanHours * 60 * 60 * 1000);
@@ -386,25 +321,82 @@ export class JobQueueService implements OnModuleInit {
   }
 
   /**
-   * Shutdown gracefully
+   * Shutdown — no BullMQ/Redis connections to close any more.
    */
   async shutdown() {
-    this.logger.log('Shutting down job queue service...');
+    this.logger.log('Shutdown: nothing to close (Cloudflare Queues pipeline is stateless here)');
+  }
 
-    // Close all workers
-    for (const [type, worker] of this.workers.entries()) {
-      await worker.close();
-      this.logger.log(`Closed worker for ${type}`);
+  /**
+   * Handle the media-worker's completion callback
+   * (`POST /v1/media/jobs/complete`, see jobs.controller.ts). Updates the
+   * ProcessJob ledger and, on success with metadata extraction results,
+   * writes the resulting fields back onto MediaAsset.
+   */
+  async completeJob(payload: {
+    jobId: string;
+    assetId: string;
+    state: 'SUCCEEDED' | 'FAILED';
+    result?: unknown;
+  }): Promise<{ ok: boolean; reason?: string }> {
+    const { jobId, assetId, state, result } = payload;
+
+    const job = await this.prisma.processJob.findUnique({ where: { id: jobId } });
+    if (!job) {
+      this.logger.warn(`completeJob: unknown jobId ${jobId} (asset ${assetId})`);
+      return { ok: false, reason: 'job not found' };
     }
 
-    // Close all queues
-    for (const [type, queue] of this.queues.entries()) {
-      await queue.close();
-      this.logger.log(`Closed queue for ${type}`);
+    if (state === 'SUCCEEDED') {
+      await this.prisma.processJob.update({
+        where: { id: jobId },
+        data: {
+          state: 'SUCCEEDED',
+          finishedAt: new Date(),
+          result: (result as any) ?? undefined,
+        },
+      });
+
+      const metadata = (result as any)?.results?.extract_metadata;
+      if (metadata && typeof metadata === 'object') {
+        const data: Record<string, any> = { processed: true, status: 'READY' };
+        if (typeof metadata.width === 'number') data.width = metadata.width;
+        if (typeof metadata.height === 'number') data.height = metadata.height;
+        if (typeof metadata.format === 'string') data.format = metadata.format;
+        if (typeof metadata.blurhash === 'string') data.blurhash = metadata.blurhash;
+        if (metadata.dominantColor || metadata.space || metadata.hasAlpha !== undefined) {
+          data.palette = {
+            dominantColor: metadata.dominantColor,
+            colorSpace: metadata.space,
+            hasAlpha: metadata.hasAlpha,
+          };
+        }
+
+        await this.prisma.mediaAsset
+          .update({ where: { id: assetId }, data })
+          .catch((err) => {
+            this.logger.error(
+              `completeJob: failed to update MediaAsset ${assetId}: ${err.message}`,
+            );
+          });
+      }
+    } else {
+      const resultAny = result as any;
+      const errorMessage =
+        typeof resultAny?.error === 'string'
+          ? resultAny.error
+          : JSON.stringify(resultAny ?? {}).slice(0, 1000);
+
+      await this.prisma.processJob.update({
+        where: { id: jobId },
+        data: {
+          state: 'FAILED',
+          finishedAt: new Date(),
+          error: errorMessage,
+        },
+      });
     }
 
-    // Disconnect Redis
-    await this.connection.quit();
-    this.logger.log('Job queue service shutdown complete');
+    return { ok: true };
   }
 }

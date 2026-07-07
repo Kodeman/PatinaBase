@@ -20,13 +20,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { BookOpen, Package, Receipt, Users, Clock, Bell } from 'lucide-react';
+import { BookOpen, Package, Receipt, Users, Clock, Bell, MessageSquarePlus } from 'lucide-react';
 import { useUnreadInboxCount, useProcurementUnreadCount } from '@patina/supabase';
 import { DocSheet } from './overlays/doc-sheet';
 import { PostSheet, openPost } from './overlays/post-sheet';
 import { OrdersLedger } from './orders-ledger';
 import { AccountsBook } from './accounts/accounts-book';
 import { HoursLedger } from './hours-ledger';
+import { FeedbackLedger } from './feedback/feedback-ledger';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { fmtMinutes } from '@/lib/document/time-derivation';
 import { rememberRoomOrigin } from '@/lib/document/room-origin';
@@ -39,6 +40,7 @@ const LEDGERS = [
   { key: 'accounts', name: 'Accounts', icon: Receipt, weight: 'sheet' },
   { key: 'people', name: 'People', icon: Users, weight: 'room', href: '/people' },
   { key: 'hours', name: 'Hours', icon: Clock, weight: 'sheet' },
+  { key: 'feedback', name: 'Feedback', icon: MessageSquarePlus, weight: 'sheet' },
 ] as const;
 
 type Ledger = (typeof LEDGERS)[number];
@@ -221,6 +223,7 @@ export function StudioDrawer() {
         open={open !== null && open.weight === 'sheet'}
         onClose={() => setOpenLedger(null)}
         title={open?.name ?? ''}
+        variant={open?.key === 'feedback' ? 'center' : 'sheet'}
       >
         {open?.key === 'orders' && (
           <OrdersLedger onClose={() => setOpenLedger(null)} initialContext={sheetContext} />
@@ -229,6 +232,7 @@ export function StudioDrawer() {
           <AccountsBook onClose={() => setOpenLedger(null)} initialContext={sheetContext} />
         )}
         {open?.key === 'hours' && <HoursLedger initialContext={sheetContext} />}
+        {open?.key === 'feedback' && <FeedbackLedger />}
         {/* All sheet-weight ledgers (orders/accounts/hours) are bound; People is
             a Room (R50), so no generic placeholder branch remains. */}
       </DocSheet>

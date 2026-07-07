@@ -1,20 +1,39 @@
 import {
+  Body,
   Controller,
   Get,
+  Headers,
   Post,
   Param,
   Query,
   UseGuards,
+  UnauthorizedException,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { timingSafeEqual } from 'crypto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard, Public, RequirePermissions } from '@patina/auth';
 import { JobQueueService } from './job-queue.service';
 import { PrismaClient, JobState } from '../../generated/prisma-client';
 
-// Mock auth guard - replace with actual implementation
-class JwtAuthGuard {}
-class AdminGuard {}
+/**
+ * Constant-time string compare (Node's `timingSafeEqual` throws on mismatched
+ * lengths, so pad first — the padded prefix comparison result is discarded
+ * whenever the real lengths differ).
+ */
+function secureCompare(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) {
+    // Still run a same-length comparison so the response time doesn't leak
+    // the length mismatch any more than necessary.
+    timingSafeEqual(aBuf, aBuf);
+    return false;
+  }
+  return timingSafeEqual(aBuf, bBuf);
+}
 
 @ApiTags('Jobs & Processing')
 @Controller('v1/media')
@@ -24,10 +43,11 @@ export class JobsController {
   constructor(
     private jobQueue: JobQueueService,
     private prisma: PrismaClient,
+    private config: ConfigService,
   ) {}
 
   @Get('jobs')
-  @UseGuards(AdminGuard)
+  @RequirePermissions('media.jobs.admin')
   @ApiOperation({
     summary: 'List processing jobs',
     description: 'Get list of processing jobs with optional filtering by state',
@@ -70,7 +90,7 @@ export class JobsController {
 
   @Post('jobs/:id/retry')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(AdminGuard)
+  @RequirePermissions('media.jobs.admin')
   @ApiOperation({
     summary: 'Retry failed job',
     description: 'Retry a failed processing job',
@@ -82,7 +102,7 @@ export class JobsController {
 
   @Post('jobs/:id/cancel')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(AdminGuard)
+  @RequirePermissions('media.jobs.admin')
   @ApiOperation({
     summary: 'Cancel job',
     description: 'Cancel a queued or running job',
@@ -92,8 +112,46 @@ export class JobsController {
     return { message: 'Job canceled', jobId: id };
   }
 
+  /**
+   * Job-completion callback for the Cloudflare media-worker (a Worker, not a
+   * user) — see infra/media-worker/src/index.ts `reportCompletion()`. Marked
+   * `@Public()` to skip the global Supabase JWT guard entirely; auth here is
+   * a shared secret in `x-worker-secret`, compared in constant time against
+   * `COMPLETE_CALLBACK_SECRET`.
+   *
+   * Route intentionally has no `:id` — the worker's callback body already
+   * carries a flat `{jobId, assetId, state, result}` (matching its own
+   * `reportCompletion` payload exactly), so there's nothing a path param
+   * would add.
+   */
+  @Post('jobs/complete')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Media-worker job-completion callback',
+    description:
+      'Called by the Cloudflare Queues media-worker when a job finishes. Guarded by a shared secret header (x-worker-secret), not user auth.',
+  })
+  async completeJob(
+    @Headers('x-worker-secret') providedSecret: string | undefined,
+    @Body()
+    body: {
+      jobId: string;
+      assetId: string;
+      state: 'SUCCEEDED' | 'FAILED';
+      result?: unknown;
+    },
+  ) {
+    const expectedSecret = this.config.get<string>('COMPLETE_CALLBACK_SECRET');
+    if (!expectedSecret || !secureCompare(providedSecret ?? '', expectedSecret)) {
+      throw new UnauthorizedException('invalid worker secret');
+    }
+
+    return this.jobQueue.completeJob(body);
+  }
+
   @Get('qc/issues')
-  @UseGuards(AdminGuard)
+  @RequirePermissions('media.jobs.admin')
   @ApiOperation({
     summary: 'List QC issues',
     description: 'Get assets with quality control issues',
@@ -114,7 +172,7 @@ export class JobsController {
   }
 
   @Get('queue/stats')
-  @UseGuards(AdminGuard)
+  @RequirePermissions('media.jobs.admin')
   @ApiOperation({
     summary: 'Get queue statistics',
     description: 'Retrieve statistics for all job queues',

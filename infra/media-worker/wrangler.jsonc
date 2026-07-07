@@ -1,0 +1,44 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "patina-media-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+
+  // Cloudflare Container running the Sharp/R2 image processor (container/).
+  "containers": [
+    {
+      "class_name": "MediaProcessor",
+      "image": "./container/Dockerfile",
+      "instance_type": "standard-2",
+      "max_instances": 5
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "MEDIA_PROCESSOR", "class_name": "MediaProcessor" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MediaProcessor"] }],
+
+  // Queues: producer (for the /enqueue test route) + the media-jobs consumer.
+  // media-bulk (delete/copy) is DB-heavy and stays in NestJS for now.
+  "queues": {
+    "producers": [{ "binding": "MEDIA_JOBS", "queue": "media-jobs" }],
+    "consumers": [
+      {
+        "queue": "media-jobs",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "media-jobs-dlq"
+      }
+    ]
+  },
+
+  // R2 bindings — the Worker owns all object I/O (account-native view). The
+  // container is pure compute and needs no credentials.
+  "r2_buckets": [
+    { "binding": "RAW", "bucket_name": "patina-raw" },
+    { "binding": "PROCESSED", "bucket_name": "patina-processed" }
+  ],
+
+  "observability": { "enabled": true }
+}

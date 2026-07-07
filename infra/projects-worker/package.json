@@ -1,0 +1,20 @@
+{
+  "name": "patina-projects-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker fronting the projects NestJS container (migration phase 3d), against Supabase Cloud",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "types": "wrangler types",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "^0.3.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260701.0",
+    "typescript": "^5.6.0",
+    "wrangler": "^4.107.0"
+  }
+}

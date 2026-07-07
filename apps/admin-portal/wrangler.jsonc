@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "patina-admin-portal",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "NEXT_PUBLIC_SUPABASE_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJrdmNpeGRtdXllamZ6Y2lqcGRnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNjg0MzIsImV4cCI6MjA4Mzg0NDQzMn0.SPl6jHaeTp9McfF-AmXJUDKTwRaXD7Qf0hlve72rVg0",
+    "SUPABASE_URL": "https://bkvcixdmuyejfzcijpdg.supabase.co",
+    "NEXT_PUBLIC_APP_URL": "https://admin.patina.cloud",
+    "NEXT_PUBLIC_QR_AUTH_URL": "https://app.patina.cloud",
+    "NEXT_PUBLIC_ENV": "production",
+    "NEXT_PUBLIC_ENABLE_MFA": "true",
+    "NEXT_PUBLIC_ENABLE_DUAL_CONTROL": "true",
+    "NEXT_PUBLIC_ENABLE_IMPERSONATION": "false",
+    "NEXT_PUBLIC_ENABLE_ANALYTICS": "true",
+    "NEXT_PUBLIC_ENABLE_DEBUG": "false",
+    "NEXT_PUBLIC_ENABLED_OAUTH_PROVIDERS": "apple",
+    "ORDERS_SERVICE_URL": "https://patina-orders-worker.kody-be3.workers.dev",
+    "MEDIA_SERVICE_URL": "https://patina-media-svc-worker.kody-be3.workers.dev",
+    "PROJECTS_SERVICE_URL": "https://patina-projects-worker.kody-be3.workers.dev",
+    "DESIGNER_PORTAL_URL": "https://app.patina.cloud",
+    "CLIENT_PORTAL_URL": "https://client.patina.cloud",
+    "APP_NAME": "admin-portal"
+  },
+  "services": [
+    { "binding": "SVC_PROJECTS", "service": "patina-projects-worker" },
+    { "binding": "SVC_ORDERS", "service": "patina-orders-worker" },
+    { "binding": "SVC_MEDIA", "service": "patina-media-svc-worker" }
+  ]
+}

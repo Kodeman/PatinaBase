@@ -198,6 +198,16 @@ pnpm storybook      # Component development
 pnpm test           # Run tests
 ```
 
+### Deploying a portal to Cloudflare Workers
+
+Portals (client/designer/admin/manufacturer) run on Cloudflare Workers via OpenNext and are deployed from a wrangler-authed machine. **Always deploy through `infra/deploy-portal.sh`** — never run `opennextjs-cloudflare build` directly.
+
+```bash
+./infra/deploy-portal.sh <client|designer|admin|manufacturer>
+```
+
+The script first runs `turbo build --filter=<pkg>^...` to rebuild the portal's **workspace package dists** (`@patina/utils`, `@patina/design-system`, ...) before the OpenNext bundle. This is mandatory: `@patina/utils` resolves to its compiled `dist/` (its `package.json` `main` points there even though it's in `transpilePackages`), so a raw `opennextjs-cloudflare build` from the app dir bypasses Turborepo's `^build` graph and can bundle a **stale dist**. That is exactly how a missing export shipped to prod as `TypeError: proposalTierVisibility is not a function` — the dist predated a new source module. The script closes that gap.
+
 ## Important Conventions
 
 - **Using Fable**: When model is set to fable use fable to plan and orchestrate, do not use fable to execute.  Execution should be done with Sonnet and Opus Subagents, upon completion Fable should do an adversary review and tehn either reurn to user or instruct subagents further. 

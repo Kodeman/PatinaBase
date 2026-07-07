@@ -3,7 +3,6 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { BullModule } from '@nestjs/bull';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { CacheModule } from '@patina/cache';
 import { APP_GUARD } from '@nestjs/core';
@@ -55,18 +54,6 @@ import { EventsModule } from './config/events.module';
 
     // Events
     EventEmitterModule.forRoot(),
-
-    // Bull Queue
-    BullModule.forRootAsync({
-      useFactory: () => ({
-        redis: {
-          host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT || '6379'),
-          password: process.env.REDIS_PASSWORD,
-          db: parseInt(process.env.REDIS_DB || '2'),
-        },
-      }),
-    }),
 
     // Infrastructure
     PrismaModule,

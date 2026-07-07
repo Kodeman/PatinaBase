@@ -1,0 +1,27 @@
+# Cloudflare Containers build (linux/amd64).
+#
+# Unlike ./Dockerfile (which downloads + int8-quantizes the nomic ONNX pair in
+# a build stage), this copies models that were exported NATIVELY on the host
+# (`make export` / scripts/export_models.py → ./models) — ONNX is
+# platform-independent, so this avoids running the quantization under amd64
+# emulation. Build context is services/aesthete-inference/ (app/, requirements,
+# and the gitignored ./models).
+#
+# Runtime env (required): INFERENCE_TOKEN (set as a Worker secret, forwarded by
+# the InferenceEngine container class).
+FROM python:3.12-slim
+
+WORKDIR /srv
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app/ app/
+COPY models/ /models
+
+ENV MODELS_DIR=/models \
+    ORT_INTRA_OP_THREADS=2 \
+    PYTHONUNBUFFERED=1
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

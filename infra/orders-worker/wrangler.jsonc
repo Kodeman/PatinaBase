@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "patina-orders-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+
+  // Orders NestJS service (Stripe payments, EasyPost shipping) — cloud
+  // migration phase 3c, against Supabase Cloud (svc_orders schema via the
+  // pooler). Built from the monorepo root (image_build_context) because
+  // services/orders/Dockerfile.cf's COPY paths (pnpm-workspace.yaml,
+  // packages/{types,utils,cache,auth}, services/orders/) are root-relative —
+  // same Dockerfile the Coolify deploy used, just built by wrangler instead.
+  "containers": [
+    {
+      "class_name": "OrdersService",
+      "image": "../../services/orders/Dockerfile.cf",
+      "image_build_context": "../../",
+      "instance_type": "basic",
+      "max_instances": 2
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "ORDERS_SVC", "class_name": "OrdersService" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["OrdersService"] }],
+
+  "observability": { "enabled": true }
+}

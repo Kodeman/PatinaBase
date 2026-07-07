@@ -5,11 +5,9 @@ import {
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { PrismaClient } from '../../generated/prisma-client';
+import { PrismaClient, JobType } from '../../generated/prisma-client';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { createHash } from 'crypto';
 import * as crypto from 'crypto';
 
@@ -20,6 +18,7 @@ import { MetadataExtractionService } from '../assets/metadata-extraction.service
 import { ImageTransformService } from '../transform/image-transform.service';
 import { ThreeDProcessingService } from '../3d/3d-processing.service';
 import { VirusScannerService } from '../security/virus-scanner.service';
+import { JobQueueService } from '../jobs/job-queue.service';
 
 // DTOs
 import {
@@ -80,7 +79,7 @@ export class MediaService {
     private readonly imageTransform: ImageTransformService,
     private readonly threeDProcessing: ThreeDProcessingService,
     private readonly virusScanner: VirusScannerService,
-    @InjectQueue('media-processing') private readonly processingQueue: Queue,
+    private readonly jobQueue: JobQueueService,
   ) {}
 
   /**
@@ -197,33 +196,53 @@ export class MediaService {
       },
     });
 
-    // Queue processing job
-    const job = await this.processingQueue.add(
-      'process-asset',
-      {
-        assetId: dto.assetId,
-        options: dto.options || {},
+    // Queue processing job — routes through JobQueueService.addJob(), which
+    // POSTs to the Cloudflare Queues pipeline (infra/media-worker) instead of
+    // the old in-process BullMQ 'media-processing' queue.
+    const jobId = await this.jobQueue.addJob({
+      assetId: dto.assetId,
+      type: 'IMAGE_PROCESS' as JobType,
+      priority: this.getPriority(dto.priority),
+      meta: {
+        rawKey: asset.rawKey,
+        operations: this.buildOperationsFromOptions(dto.options),
       },
-      {
-        priority: this.getPriority(dto.priority),
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 5000,
-        },
-      },
-    );
+    });
 
-    // Note: processingJobId is not in schema - tracking handled by ProcessJob table
-    this.logger.log(`Created ProcessJob with jobId: ${job.id}`);
-
-    this.logger.log(`Queued processing job ${job.id} for asset ${dto.assetId}`);
+    this.logger.log(`Queued processing job ${jobId} for asset ${dto.assetId}`);
 
     return {
       assetId: dto.assetId,
-      jobId: job.id,
+      jobId,
       status: 'processing',
     };
+  }
+
+  /**
+   * Translate the free-form ProcessMediaDto.options flags into the
+   * operation list the media-worker container understands
+   * (generate_renditions / extract_metadata / optimize — see
+   * infra/media-worker/container/server.mjs). Options with no cloud-pipeline
+   * equivalent yet (generate3DPreview, extractColorPalette,
+   * generatePerceptualHash, runVirusScan) are silently dropped — those
+   * operations aren't ported to the container yet (see infra/media-worker/README.md).
+   */
+  private buildOperationsFromOptions(
+    options?: ProcessMediaDto['options'],
+  ): Array<{ type: string; params?: Record<string, any> }> {
+    const operations: Array<{ type: string; params?: Record<string, any> }> = [];
+
+    if (!options || options.generateThumbnails !== false) {
+      operations.push({ type: 'generate_renditions' });
+    }
+    if (!options || options.extractMetadata !== false) {
+      operations.push({ type: 'extract_metadata' });
+    }
+    if (options?.optimizeQuality !== undefined) {
+      operations.push({ type: 'optimize', params: { quality: options.optimizeQuality } });
+    }
+
+    return operations;
   }
 
   /**

@@ -58,6 +58,12 @@ export interface ServiceConfig {
   baseUrl: string;
   /** Optional path override (default: use request URL path) */
   path?: string;
+  /**
+   * Optional fetch implementation. On Cloudflare Workers, pass the service
+   * binding's fetch (e.g. `(i, init) => env.SVC_PROJECTS.fetch(i, init)`) so
+   * the proxy rides Worker→Worker bindings; defaults to global fetch.
+   */
+  fetcher?: typeof fetch;
 }
 
 export interface ErrorMapping {
@@ -364,6 +370,7 @@ export async function proxyToBackend(
           backendUrl,
           { method, headers, body: body as BodyInit | undefined },
           timeout,
+          config.service.fetcher,
         );
         return processBackendResponse(response, config);
       },
