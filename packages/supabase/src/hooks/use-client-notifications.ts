@@ -55,10 +55,18 @@ export function useClientNotifications() {
       if (!user) return [];
 
       const [decisionsRes, proposalsRes, scopeRes] = await Promise.all([
+        // SECURITY: scope pending decisions to the signed-in client. A decision
+        // belongs to a client via designer_clients.client_id (there is no
+        // client_id column on client_decisions itself). The `!inner` embed makes
+        // the client_id predicate a real join constraint. Without this filter a
+        // designer signed into the client portal — who can SELECT their own
+        // clients' decisions under RLS — sees "Decision needed" for decisions
+        // that are not theirs to make. RLS alone is NOT sufficient here.
         supabase
           .from('client_decisions')
-          .select('id, title, due_date, status, created_at, project_id')
+          .select('id, title, due_date, status, created_at, project_id, designer_clients!inner(client_id)')
           .eq('status', 'pending')
+          .eq('designer_clients.client_id', user.id)
           .order('created_at', { ascending: false })
           .limit(20),
         supabase

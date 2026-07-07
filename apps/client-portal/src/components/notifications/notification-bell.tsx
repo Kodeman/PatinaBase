@@ -1,10 +1,19 @@
 'use client';
 
 /**
- * NotificationBell — derived "needs attention" feed.
- * Aggregates pending decisions, awaiting proposals, and pending scope changes
- * from existing tables. Read state lives in localStorage (no notifications
- * pipeline in production yet).
+ * NotificationBell — the single client-portal notification surface.
+ *
+ * Merges two sources into one deduped, read-aware feed:
+ *   (a) DERIVED "needs attention" items — pending decisions, awaiting proposals,
+ *       pending scope changes (useClientNotifications). Read state is persisted
+ *       client-side in localStorage (no per-row read column on those tables).
+ *   (b) INBOX rows — durable notification_log rows (useInboxNotifications). Read
+ *       state lives server-side in metadata.read_at, toggled via /api/inbox/mark-read.
+ *
+ * Dedupe: when an inbox row targets the same deep link as a derived item they are
+ * the same underlying event, so the server-backed inbox row wins and the derived
+ * duplicate is dropped. This replaces the previous two-bell layout (a separate
+ * InboxBell + this bell) that showed users two inconsistent unread counts.
  */
 
 import { useState, useRef, useEffect, useMemo } from 'react';
@@ -17,41 +26,153 @@ import {
   FileText,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 
 import {
   useClientNotifications,
+  useInboxNotifications,
+  useInboxNotificationsRealtime,
   useMarkClientNotificationRead,
   useMarkAllClientNotificationsRead,
   type ClientNotification,
+  type ClientNotificationKind,
+  type InboxNotification,
 } from '@patina/supabase';
 
 interface NotificationBellProps {
   className?: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Merge model
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface UnifiedNotification {
+  /** Stable React key. */
+  key: string;
+  source: 'derived' | 'inbox';
+  kind: ClientNotificationKind | 'inbox';
+  title: string;
+  message: string;
+  url: string | null;
+  created_at: string;
+  read: boolean;
+  /** Present when source === 'derived' — the localStorage read-state id. */
+  derivedId?: string;
+  /** Present when source === 'inbox' — the notification_log row id. */
+  inboxId?: string;
+}
+
+function formatType(type: string): string {
+  return type.replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function inboxPreview(n: InboxNotification): { title: string; message: string } {
+  const md = n.metadata ?? {};
+  const title =
+    (md.subject as string | undefined) ||
+    (md.headline as string | undefined) ||
+    (md.title as string | undefined) ||
+    formatType(n.type);
+  const message =
+    (md.preview as string | undefined) ||
+    (md.message as string | undefined) ||
+    (md.body as string | undefined) ||
+    '';
+  return { title, message };
+}
+
+function inboxDeepLink(n: InboxNotification): string | null {
+  const md = n.metadata ?? {};
+  return (md.deep_link as string | undefined) ?? (md.url as string | undefined) ?? null;
+}
+
+/**
+ * Merge derived items and inbox rows into one feed, newest first. An inbox row
+ * that shares a deep link with a derived item wins (the derived duplicate is
+ * dropped) so the same event never appears twice.
+ */
+export function mergeNotifications(
+  derived: ClientNotification[],
+  inbox: InboxNotification[],
+): UnifiedNotification[] {
+  const inboxItems: UnifiedNotification[] = inbox.map((n) => {
+    const { title, message } = inboxPreview(n);
+    return {
+      key: `inbox-${n.id}`,
+      source: 'inbox',
+      kind: 'inbox',
+      title,
+      message,
+      url: inboxDeepLink(n),
+      created_at: n.created_at,
+      read: !!n.metadata?.read_at,
+      inboxId: n.id,
+    };
+  });
+
+  const inboxLinks = new Set(
+    inboxItems.map((i) => i.url).filter((u): u is string => !!u),
+  );
+
+  const derivedItems: UnifiedNotification[] = derived
+    .filter((d) => !(d.url && inboxLinks.has(d.url)))
+    .map((d) => ({
+      key: d.id,
+      source: 'derived',
+      kind: d.kind,
+      title: d.title,
+      message: d.message,
+      url: d.url ?? null,
+      created_at: d.created_at,
+      read: !!d.read_at,
+      derivedId: d.id,
+    }));
+
+  return [...inboxItems, ...derivedItems].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Presentation
+// ─────────────────────────────────────────────────────────────────────────────
+
 const ICON_BY_KIND = {
   decision: AlertCircle,
   proposal: FileText,
   scope_change: ClipboardList,
+  inbox: Bell,
 } as const;
 
 const COLOR_BY_KIND = {
   decision: 'text-amber-600 bg-amber-50',
   proposal: 'text-blue-600 bg-blue-50',
   scope_change: 'text-purple-600 bg-purple-50',
+  inbox: 'text-gray-600 bg-gray-100',
 } as const;
 
 export function NotificationBell({ className = '' }: NotificationBellProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
 
-  const { data: notifications = [], isLoading } = useClientNotifications();
+  useInboxNotificationsRealtime();
+  const { data: derived = [], isLoading: loadingDerived } = useClientNotifications();
+  const { data: inbox = [], isLoading: loadingInbox } = useInboxNotifications();
   const markRead = useMarkClientNotificationRead();
   const markAllRead = useMarkAllClientNotificationsRead();
 
+  const notifications = useMemo(
+    () => mergeNotifications(derived, inbox),
+    [derived, inbox],
+  );
+  const isLoading = loadingDerived || loadingInbox;
+
   const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read_at).length,
-    [notifications]
+    () => notifications.filter((n) => !n.read).length,
+    [notifications],
   );
 
   useEffect(() => {
@@ -64,8 +185,27 @@ export function NotificationBell({ className = '' }: NotificationBellProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  function handleNotificationClick(notification: ClientNotification) {
-    markRead.mutate(notification.id);
+  async function markInboxRead(ids: string[]) {
+    if (ids.length === 0) return;
+    try {
+      await fetch('/api/inbox/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ['inbox'] });
+    }
+  }
+
+  function handleNotificationClick(notification: UnifiedNotification) {
+    if (!notification.read) {
+      if (notification.source === 'derived' && notification.derivedId) {
+        markRead.mutate(notification.derivedId);
+      } else if (notification.source === 'inbox' && notification.inboxId) {
+        void markInboxRead([notification.inboxId]);
+      }
+    }
     setIsOpen(false);
     if (notification.url) {
       window.location.href = notification.url;
@@ -73,10 +213,15 @@ export function NotificationBell({ className = '' }: NotificationBellProps) {
   }
 
   function handleMarkAllRead() {
-    const unreadIds = notifications.filter((n) => !n.read_at).map((n) => n.id);
-    if (unreadIds.length > 0) {
-      markAllRead.mutate(unreadIds);
-    }
+    const derivedUnread = notifications
+      .filter((n) => !n.read && n.source === 'derived' && n.derivedId)
+      .map((n) => n.derivedId as string);
+    const inboxUnread = notifications
+      .filter((n) => !n.read && n.source === 'inbox' && n.inboxId)
+      .map((n) => n.inboxId as string);
+
+    if (derivedUnread.length > 0) markAllRead.mutate(derivedUnread);
+    if (inboxUnread.length > 0) void markInboxRead(inboxUnread);
   }
 
   return (
@@ -134,13 +279,24 @@ export function NotificationBell({ className = '' }: NotificationBellProps) {
               <ul className="divide-y divide-gray-100">
                 {notifications.map((notification) => (
                   <NotificationItem
-                    key={notification.id}
+                    key={notification.key}
                     notification={notification}
                     onClick={() => handleNotificationClick(notification)}
                   />
                 ))}
               </ul>
             )}
+          </div>
+
+          <div className="border-t border-gray-100 bg-gray-50 px-4 py-2 text-center">
+            <Link
+              href="/inbox"
+              onClick={() => setIsOpen(false)}
+              className="text-xs font-medium text-[var(--accent-primary)] hover:opacity-80"
+              data-testid="notification-view-all"
+            >
+              View all in inbox
+            </Link>
           </div>
         </div>
       )}
@@ -152,12 +308,12 @@ function NotificationItem({
   notification,
   onClick,
 }: {
-  notification: ClientNotification;
+  notification: UnifiedNotification;
   onClick: () => void;
 }) {
   const Icon = ICON_BY_KIND[notification.kind];
   const colorClass = COLOR_BY_KIND[notification.kind];
-  const isRead = !!notification.read_at;
+  const isRead = notification.read;
 
   return (
     <li className={isRead ? 'bg-white' : 'bg-blue-50/30'}>
@@ -184,7 +340,9 @@ function NotificationItem({
                 <span className="flex-shrink-0 w-2 h-2 rounded-full bg-[var(--accent-primary)] mt-1.5" />
               )}
             </div>
-            <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">{notification.message}</p>
+            {notification.message ? (
+              <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">{notification.message}</p>
+            ) : null}
             <p className="text-xs text-gray-400 mt-1">
               {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
             </p>

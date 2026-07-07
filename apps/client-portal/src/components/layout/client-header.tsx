@@ -13,7 +13,6 @@ import {
 } from '@patina/supabase';
 import { ContextualHelpPanel } from '@patina/help-system';
 import { NotificationBell } from '../notifications/notification-bell';
-import { InboxBell } from '../notifications/inbox-bell';
 import {
   Avatar,
   DropdownMenu,
@@ -63,6 +62,27 @@ export function ClientHeader({
           >
             Today
           </Link>
+          <Link
+            href="/decisions"
+            className="hidden min-h-[44px] items-center type-meta transition-opacity hover:opacity-70 sm:inline-flex"
+            data-testid="header-decisions-link"
+          >
+            Decisions
+          </Link>
+          <Link
+            href="/proposals"
+            className="hidden min-h-[44px] items-center type-meta transition-opacity hover:opacity-70 sm:inline-flex"
+            data-testid="header-proposals-link"
+          >
+            Proposals
+          </Link>
+          <Link
+            href="/invoices"
+            className="hidden min-h-[44px] items-center type-meta transition-opacity hover:opacity-70 sm:inline-flex"
+            data-testid="header-invoices-link"
+          >
+            Invoices
+          </Link>
         </div>
         <div className="flex flex-shrink-0 items-center gap-3 sm:gap-5">
           <div className="flex min-h-[44px] items-center gap-2">
@@ -84,7 +104,6 @@ export function ClientHeader({
           </Link>
           <RoomsLink />
           <ReviewsLink />
-          <InboxBell />
           <NotificationBell />
           <HelpButton />
           {lastUpdated ? (
