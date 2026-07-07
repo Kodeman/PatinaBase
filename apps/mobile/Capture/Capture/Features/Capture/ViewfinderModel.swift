@@ -14,7 +14,7 @@ import CaptureKit
 final class ViewfinderModel {
     // ── Seams ──
     private let store: CaptureStore
-    private let camera: any CameraService
+    let camera: any CameraService
     private let location: any LocationService
     private let analytics: any CaptureAnalytics
     private let coordinator: CaptureCoordinator
@@ -30,6 +30,9 @@ final class ViewfinderModel {
     // ── Light (R1) ──
     var isLowLight: Bool = false
     var torchOn: Bool = false
+
+    // ── Camera permission (device only; mirrored from AVFoundationCameraService) ──
+    private(set) var cameraAuthorization: CameraAuthorization = .notDetermined
 
     // ── Venue (S1 stamp, auto) ──
     var venueLabel: String?
@@ -68,6 +71,9 @@ final class ViewfinderModel {
         mode = camera.currentMode
         isLowLight = camera.isLowLight
         await camera.start()
+        if let av = camera as? AVFoundationCameraService {
+            cameraAuthorization = av.authorization
+        }
         frameTask?.cancel()
         frameTask = Task { [weak self] in await self?.observeFrames() }
         await stampVenue()
