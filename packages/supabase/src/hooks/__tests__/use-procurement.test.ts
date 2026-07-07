@@ -112,6 +112,8 @@ const supabaseClient = {
   from: vi.fn((table: string) => getBuilder(table)),
   // RPC mock — W3-T1 (00186): create_purchase_order / log_po_acknowledgment.
   rpc: vi.fn(),
+  // Phase 4 — Stripe Checkout dispatch (useStartPoCheckout).
+  functions: { invoke: vi.fn() },
 };
 
 vi.mock('@supabase/ssr', () => ({
@@ -131,7 +133,10 @@ import {
   // W1-T5 — cross-project FF&E items (rows-per-item By Status view)
   useProcurementItems,
   usePOPayments,
+  fetchPOPayments,
   useCreatePurchaseOrder,
+  // Phase 4 — Stripe Checkout, designer pays at order time (Order via Patina)
+  useStartPoCheckout,
   // W3-T1 — atomic create RPC + vendor acknowledgment (migration 00186)
   useLogPOAcknowledgment,
   useLogPaymentPaid,
@@ -165,6 +170,7 @@ beforeEach(() => {
   supabaseClient.auth.getUser.mockReset();
   supabaseClient.auth.getSession.mockReset();
   supabaseClient.rpc.mockReset();
+  supabaseClient.functions.invoke.mockReset();
   // Clear the table-call log so cross-table ordering assertions (which use
   // indexOf over from.mock.calls) never see calls from earlier tests.
   supabaseClient.from.mockClear();
@@ -371,6 +377,159 @@ describe('usePOPayments', () => {
   it('does not run the query when purchaseOrderId is empty', () => {
     const config = usePOPayments('') as unknown as { enabled: boolean };
     expect(config.enabled).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// fetchPOPayments  (Phase 4 — one-shot resolver behind OrderViaPatina's
+// checkout handoff; extracted so usePOPayments and the imperative caller
+// share one query.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('fetchPOPayments', () => {
+  it('selects po_payments by purchase_order_id ordered by sort_order ascending', async () => {
+    const builder = setTableDefault('po_payments', {
+      data: [{ id: 'p1', purchase_order_id: 'po1', kind: 'deposit', state: 'pending', sort_order: 0 }],
+      error: null,
+    });
+
+    const rows = await fetchPOPayments('po1');
+
+    expect(rows).toEqual([
+      { id: 'p1', purchase_order_id: 'po1', kind: 'deposit', state: 'pending', sort_order: 0 },
+    ]);
+    expect(supabaseClient.from).toHaveBeenCalledWith('po_payments');
+    expect(builder.__chain.find((c) => c.method === 'eq')?.args).toEqual([
+      'purchase_order_id',
+      'po1',
+    ]);
+  });
+
+  it('returns [] when data is null and throws on a query error', async () => {
+    setTableDefault('po_payments', { data: null, error: null });
+    await expect(fetchPOPayments('po1')).resolves.toEqual([]);
+
+    setTableDefault('po_payments', { data: null, error: new Error('rls denied') });
+    await expect(fetchPOPayments('po1')).rejects.toThrow('rls denied');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useStartPoCheckout  (Phase 4 — Stripe Checkout, designer pays at order
+// time. Dispatches { po_payment_id } on the shared create-checkout-session
+// edge function; mirrors useStartCheckout's error-surfacing exactly.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useStartPoCheckout', () => {
+  it('invokes create-checkout-session with { po_payment_id } and resolves { url }', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: { url: 'https://checkout.stripe.com/session-abc' },
+      error: null,
+    });
+
+    const config = useStartPoCheckout() as unknown as {
+      mutationFn: (input: { poPaymentId: string }) => Promise<{ url: string }>;
+    };
+
+    const result = await config.mutationFn({ poPaymentId: 'pp-1' });
+
+    expect(supabaseClient.functions.invoke).toHaveBeenCalledWith('create-checkout-session', {
+      body: { po_payment_id: 'pp-1' },
+    });
+    expect(result).toEqual({ url: 'https://checkout.stripe.com/session-abc' });
+  });
+
+  it('omits meta when no errorSurface option is given (default global toast)', () => {
+    const config = useStartPoCheckout() as unknown as { meta: unknown };
+    expect(config.meta).toBeUndefined();
+  });
+
+  it('sets meta.errorSurface = "inline" when requested (R83 — caller renders its own failure state)', () => {
+    const config = useStartPoCheckout({ errorSurface: 'inline' }) as unknown as {
+      meta: { errorSurface?: string };
+    };
+    expect(config.meta).toEqual({ errorSurface: 'inline' });
+  });
+
+  it('surfaces the edge function JSON detail over the generic error message (e.g. 409 already paid)', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'Edge Function returned a non-2xx status code',
+        context: {
+          json: async () => ({
+            error: 'po_payment_already_paid',
+            detail: 'This purchase-order payment has already been paid.',
+          }),
+        },
+      },
+    });
+
+    const config = useStartPoCheckout() as unknown as {
+      mutationFn: (input: { poPaymentId: string }) => Promise<unknown>;
+    };
+
+    await expect(config.mutationFn({ poPaymentId: 'pp-paid' })).rejects.toThrow(
+      'This purchase-order payment has already been paid.',
+    );
+  });
+
+  it('falls back to the error code when the JSON body has no detail (e.g. 404 not found)', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'Edge Function returned a non-2xx status code',
+        context: { json: async () => ({ error: 'po_payment_not_found' }) },
+      },
+    });
+
+    const config = useStartPoCheckout() as unknown as {
+      mutationFn: (input: { poPaymentId: string }) => Promise<unknown>;
+    };
+
+    await expect(config.mutationFn({ poPaymentId: 'pp-missing' })).rejects.toThrow(
+      'po_payment_not_found',
+    );
+  });
+
+  it('falls back to the generic FunctionsHttpError message when the body cannot be parsed', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: null,
+      error: { message: 'Failed to fetch', context: undefined },
+    });
+
+    const config = useStartPoCheckout() as unknown as {
+      mutationFn: (input: { poPaymentId: string }) => Promise<unknown>;
+    };
+
+    await expect(config.mutationFn({ poPaymentId: 'pp-x' })).rejects.toThrow('Failed to fetch');
+  });
+
+  it('throws data.detail ?? data.error when the function returns 200 with a soft error body', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({
+      data: { error: 'po_not_patina_catalog', detail: 'This purchase order is paid directly with the vendor, not through Patina.' },
+      error: null,
+    });
+
+    const config = useStartPoCheckout() as unknown as {
+      mutationFn: (input: { poPaymentId: string }) => Promise<unknown>;
+    };
+
+    await expect(config.mutationFn({ poPaymentId: 'pp-noncatalog' })).rejects.toThrow(
+      'This purchase order is paid directly with the vendor, not through Patina.',
+    );
+  });
+
+  it('throws "No checkout URL returned" when the function resolves without a url', async () => {
+    supabaseClient.functions.invoke.mockResolvedValue({ data: {}, error: null });
+
+    const config = useStartPoCheckout() as unknown as {
+      mutationFn: (input: { poPaymentId: string }) => Promise<unknown>;
+    };
+
+    await expect(config.mutationFn({ poPaymentId: 'pp-y' })).rejects.toThrow(
+      'No checkout URL returned',
+    );
   });
 });
 

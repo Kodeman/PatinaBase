@@ -1,11 +1,13 @@
 'use client';
 
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowUpDown, X } from 'lucide-react';
+import { ArrowUpDown, CheckCircle2, Loader2, X } from 'lucide-react';
 import {
   usePurchaseOrders,
+  usePOPayments,
   useProcurementItems,
   useVendors,
   useIsStudioOwner,
@@ -146,6 +148,13 @@ function SortRow({
   );
 }
 
+// ─── Checkout-return polling (Phase 4) ────────────────────────────────────
+// Mirrors apps/client-portal/src/app/invoices/[invoiceId]/page.tsx: poll for
+// ~30s at 3s intervals, then assume a bank transfer is in flight (ACH can
+// take days to settle).
+const CONFIRM_POLL_INTERVAL_MS = 3_000;
+const CONFIRM_POLL_TIMEOUT_MS = 30_000;
+
 // ─── Page content ────────────────────────────────────────────────────────────
 
 function ByVendorContent() {
@@ -156,6 +165,76 @@ function ByVendorContent() {
   // tile). Passed server-side into usePurchaseOrders; the query key embeds the
   // filters object so the filtered view is its own cache entry.
   const projectId = searchParams.get('projectId');
+  const queryClient = useQueryClient();
+
+  // ── Stripe Checkout return (Phase 4 — ?po=<id>&checkout=success|cancelled)
+  // The create-checkout-session edge function's po_payment success/cancel
+  // URLs both land here. Read once from the URL and strip the params so a
+  // refresh doesn't replay the confirmation banner — same idiom as the
+  // client-portal invoice page's ?checkout= handling.
+  const [checkoutReturn, setCheckoutReturn] = useState<{
+    poId: string;
+    status: 'success' | 'cancelled';
+  } | null>(null);
+  const [showCheckoutCancelled, setShowCheckoutCancelled] = useState(false);
+  const [confirmState, setConfirmState] = useState<
+    'confirming' | 'confirmed' | 'ach_pending' | null
+  >(null);
+
+  useEffect(() => {
+    const po = searchParams.get('po');
+    const checkout = searchParams.get('checkout');
+    if (!po || !checkout) return;
+    if (checkout === 'success') {
+      setCheckoutReturn({ poId: po, status: 'success' });
+      setConfirmState('confirming');
+    } else if (checkout === 'cancelled') {
+      setCheckoutReturn({ poId: po, status: 'cancelled' });
+      setShowCheckoutCancelled(true);
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('po');
+    params.delete('checkout');
+    params.delete('session_id');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    // Runs once on mount only — searchParams/router/pathname are read from
+    // the URL Stripe redirected back to, not reactive inputs to re-derive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Poll the just-returned-to PO's payments every ~3s for ~30s (ACH can take
+  // days to settle, so we don't wait forever — after the timeout we assume
+  // a bank-transfer is in flight rather than keep spinning).
+  const { data: highlightPayments, refetch: refetchHighlightPayments } = usePOPayments(
+    checkoutReturn?.status === 'success' ? checkoutReturn.poId : '',
+  );
+  const highlightPaid = (highlightPayments ?? []).some((p) => p.state === 'paid');
+
+  useEffect(() => {
+    if (confirmState === 'confirming' && highlightPaid) {
+      setConfirmState('confirmed');
+      // The PO row reads its payment state off the ['purchase-orders'] list
+      // cache (the join usePurchaseOrders embeds), which this poll never
+      // touches — refresh it so the row's Pay-now button/pill catches up
+      // with the just-observed 'paid' state.
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+    }
+  }, [confirmState, highlightPaid, queryClient]);
+
+  useEffect(() => {
+    if (confirmState !== 'confirming') return;
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      if (Date.now() - startedAt >= CONFIRM_POLL_TIMEOUT_MS) {
+        setConfirmState((s) => (s === 'confirming' ? 'ach_pending' : s));
+        clearInterval(timer);
+        return;
+      }
+      void refetchHighlightPayments();
+    }, CONFIRM_POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [confirmState, refetchHighlightPayments]);
 
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<VendorSortKey>('due');
@@ -319,6 +398,41 @@ function ByVendorContent() {
 
   return (
     <div className="pt-8">
+      {/* Stripe Checkout return (Phase 4) — mirrors the client-portal invoice
+          page's ?checkout= banner. The targeted PO row itself scrolls into
+          view and highlights (VendorSectionCard/PoRow, via highlightPoId). */}
+      {confirmState === 'confirming' && (
+        <div className="type-body-small mb-6 flex items-center gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[var(--text-muted)]" aria-hidden />
+          <span>Confirming payment&hellip; this usually takes a few seconds.</span>
+        </div>
+      )}
+      {confirmState === 'confirmed' && (
+        <div className="type-body-small mb-6 flex items-center gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--accent-primary)]" aria-hidden />
+          <span>Payment received.</span>
+        </div>
+      )}
+      {confirmState === 'ach_pending' && (
+        <div className="type-body-small mb-6 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
+          Payment processing &mdash; bank transfers can take 3&ndash;5 business days to clear.
+          We&rsquo;ll update this purchase order as soon as it settles.
+        </div>
+      )}
+      {showCheckoutCancelled && (
+        <div className="type-body-small mb-6 flex items-start justify-between gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
+          <span>Payment not completed &mdash; you can pay any time from this purchase order.</span>
+          <button
+            type="button"
+            onClick={() => setShowCheckoutCancelled(false)}
+            aria-label="Dismiss"
+            className="shrink-0 rounded p-0.5 text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+      )}
+
       {/* Header band */}
       <div className="mb-6 flex flex-wrap items-baseline justify-between gap-4">
         <div>
@@ -484,6 +598,7 @@ function ByVendorContent() {
               <VendorSectionCard
                 key={group.vendorId}
                 group={group}
+                highlightPoId={checkoutReturn?.poId ?? null}
                 onOrderAllClick={
                   showOrderAll && orderable.length > 0 ? handleOrderAll : undefined
                 }
