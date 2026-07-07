@@ -4,6 +4,7 @@ import { createServerClient } from '@patina/supabase/server';
 
 import { fetchClientOrders } from '@/lib/data/orders';
 import { OrderRow } from '@/components/orders/OrderRow';
+import { OrdersErrorState } from '@/components/orders/OrdersErrorState';
 
 export const metadata = {
   title: 'Orders · Patina',
@@ -21,7 +22,8 @@ export default async function ClientOrdersPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/auth/signin?callbackUrl=/orders');
 
-  const orders = await fetchClientOrders();
+  const result = await fetchClientOrders();
+  const orders = result.orders ?? [];
 
   const active = orders.filter((o) => ACTIVE_STATUSES.has(o.status));
   const completed = orders.filter((o) => COMPLETED_STATUSES.has(o.status));
@@ -35,7 +37,9 @@ export default async function ClientOrdersPage() {
         deliveries here.
       </p>
 
-      {orders.length === 0 && (
+      {result.error && <OrdersErrorState error={result.error} returnTo="/orders" />}
+
+      {!result.error && orders.length === 0 && (
         <div className="py-16 text-center">
           <p className="type-body-small">
             Your orders will appear here once your designer adds items to your project.
