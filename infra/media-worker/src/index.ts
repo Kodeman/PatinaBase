@@ -23,6 +23,10 @@ interface Env {
   MEDIA_JOBS: Queue<MediaJob>;
   RAW: R2Bucket; // patina-raw
   PROCESSED: R2Bucket; // patina-processed
+  // Shared secret required on POST /enqueue (x-enqueue-secret header). The
+  // NestJS producer sends it; without it the public route is an open job
+  // injector against the prod buckets.
+  ENQUEUE_SECRET: string;
   // Optional: NestJS ledger callback (POST {jobId,state,result}). Skipped if unset.
   COMPLETE_CALLBACK_URL?: string;
   COMPLETE_CALLBACK_SECRET?: string;
@@ -40,6 +44,16 @@ const CONTAINER_JOB_TYPES = new Set(['IMAGE_PROCESS', 'IMAGE_TRANSFORM', 'METADA
 export class MediaProcessor extends Container<Env> {
   defaultPort = 8080;
   sleepAfter = '15m';
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const ab = enc.encode(a);
+  const bb = enc.encode(b);
+  if (ab.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i];
+  return diff === 0;
 }
 
 function b64ToBytes(b64: string): Uint8Array {
@@ -115,6 +129,10 @@ export default {
       return new Response('ok');
     }
     if (request.method === 'POST' && url.pathname === '/enqueue') {
+      const provided = request.headers.get('x-enqueue-secret') ?? '';
+      if (!env.ENQUEUE_SECRET || !timingSafeEqual(provided, env.ENQUEUE_SECRET)) {
+        return new Response('unauthorized', { status: 401 });
+      }
       const job = (await request.json()) as MediaJob;
       await env.MEDIA_JOBS.send(job);
       return Response.json({ queued: true, jobId: job.jobId }, { status: 202 });
