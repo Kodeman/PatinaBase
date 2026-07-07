@@ -176,9 +176,15 @@ test.describe.serial('proposal boards: create → add items → persist', () => 
     await searchInput.waitFor({ state: 'visible', timeout: 10_000 });
     await searchInput.fill('chair');
 
-    const firstResult = pickerModal.getByTestId('product-picker-result').first();
-    await firstResult.waitFor({ state: 'visible', timeout: 15_000 });
-    await firstResult.click();
+    // Target the seed product BY NAME — under scope="library" the cross-layer
+    // search surfaces every layer's matches (seed data has two catalog chairs,
+    // and "Oak Reading Chair" sorts first), so .first() is scope-sensitive.
+    const seedResult = pickerModal
+      .getByTestId('product-picker-result')
+      .filter({ hasText: SEED_PRODUCT_NAME })
+      .first();
+    await seedResult.waitFor({ state: 'visible', timeout: 15_000 });
+    await seedResult.click();
 
     // Picker closes itself on pick; the product card then renders on the
     // canvas with the snapshot name.
