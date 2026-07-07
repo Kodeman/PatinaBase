@@ -37,7 +37,7 @@ final class QRApproveModel {
     var phase: Phase = .ready
     private(set) var secondsRemaining: Int = 0
 
-    private var countdownTask: Task<Void, Never>?
+    @ObservationIgnored private var countdownTask: Task<Void, Never>?
 
     init(payload: String,
          portalAuth: any PortalAuthApprovalService,

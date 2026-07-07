@@ -198,7 +198,7 @@ struct WorkDashboardScreen: View {
     }
 
     private func rowList<Item: Identifiable, RowContent: View>(
-        _ items: [Item], @ViewBuilder row: (Item) -> RowContent
+        _ items: [Item], @ViewBuilder row: @escaping (Item) -> RowContent
     ) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in

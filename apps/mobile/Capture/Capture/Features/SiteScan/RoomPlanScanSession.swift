@@ -61,6 +61,12 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
         roomCaptureView.delegate = self
     }
 
+    // `RoomCaptureViewDelegate` vestigially refines `NSCoding`; this driver is
+    // never archived, so satisfy it with no-op stubs (nonisolated to match the
+    // delegate callbacks below and the protocol's nonisolated requirements).
+    nonisolated required init?(coder: NSCoder) { nil }
+    nonisolated func encode(with coder: NSCoder) {}
+
     /// Begin the live scan. Idempotent — the F2 view host calls this when the
     /// RoomCaptureView appears (RoomPlan wants `run` tied to view appearance).
     func start() {
@@ -165,14 +171,15 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
 
 // MARK: - RoomPlan delegate
 //
-// One conformance to RoomCaptureViewDelegate — which REFINES
-// RoomCaptureSessionDelegate — so all four callbacks (live coverage/coaching +
-// the RoomBuilder post-process) live under a single conformance. Session-delegate
-// methods not implemented here use RoomPlan's default (empty) implementations.
+// Conformance to BOTH RoomCaptureViewDelegate (the RoomBuilder post-process
+// callbacks) and RoomCaptureSessionDelegate (live coverage/coaching) — the view
+// delegate does not refine the session delegate, so both are declared here so all
+// four callbacks live under a single extension. Session-delegate methods not
+// implemented here use RoomPlan's default (empty) implementations.
 // `nonisolated` + a MainActor hop mirrors the reference RoomCaptureService (the
 // RoomPlan delegates are not MainActor-isolated).
 
-extension RoomPlanScanSession: RoomCaptureViewDelegate {
+extension RoomPlanScanSession: RoomCaptureViewDelegate, RoomCaptureSessionDelegate {
 
     // ── Live scan telemetry (RoomCaptureSessionDelegate, inherited) ──
     nonisolated func captureSession(_ session: RoomCaptureSession, didUpdate room: CapturedRoom) {
