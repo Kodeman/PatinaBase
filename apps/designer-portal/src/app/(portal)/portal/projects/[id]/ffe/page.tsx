@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   useProject,
@@ -11,6 +11,7 @@ import {
 } from '@/hooks/use-projects';
 import {
   useUpdateFFEItemStatus,
+  useBulkReassignFfeVendor,
   useIsStudioOwner,
   useVendors,
   useFFECategories,
@@ -54,6 +55,10 @@ import {
   getBlockedItems,
 } from '@/components/portal/procurement/blocked-by-decision-notice';
 import { BulkActionBar, BulkActionButton } from '@/components/portal/bulk-action-bar';
+import {
+  ReassignVendorDialog,
+  type ReassignVendorOption,
+} from '@/components/portal/ffe/reassign-vendor-dialog';
 // F1.7 — FF&E migrated to ambient + reactive help-system layers per spec §12.4.
 // FF&E itself is Patina vocabulary (Furniture, Fixtures & Equipment), and each
 // procurement stage is a Patina-defined step. The page-level intro frames the
@@ -628,6 +633,53 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
     );
   };
 
+  // ── Reassign Vendor (Wave 0B — replaces the B-07 Coming-soon stub) ──────
+  // The dialog splits the selection itself: PO-linked lines are listed as
+  // skipped (an ordered line's vendor changes through its PO, not a bulk
+  // edit) and the mutation re-enforces that guard server-side.
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const reassignVendor = useBulkReassignFfeVendor();
+  const vendorOptions = useMemo<ReassignVendorOption[]>(
+    () =>
+      Array.from(vendorById.values())
+        .filter((v) => v?.id && v?.name)
+        .map((v) => ({ id: v.id as string, name: v.name as string })),
+    [vendorById],
+  );
+
+  const handleReassignVendor = async (
+    vendor: ReassignVendorOption,
+    reassignableIds: string[],
+  ) => {
+    try {
+      const result = await reassignVendor.mutateAsync({
+        projectId,
+        itemIds: reassignableIds,
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+      });
+      toast(
+        `${result.updatedIds.length} item${result.updatedIds.length === 1 ? '' : 's'} reassigned to ${vendor.name}.`,
+        'success',
+      );
+      if (result.skippedIds.length > 0) {
+        // The dialog already excluded PO-linked lines — reaching here means
+        // the board was stale (an item got ordered since load).
+        toast(
+          `${result.skippedIds.length} item${result.skippedIds.length === 1 ? '' : 's'} skipped — already on a purchase order.`,
+          'warning',
+        );
+      }
+      setReassignOpen(false);
+      setSelected(new Set());
+    } catch (err) {
+      toast(
+        `Could not reassign vendor — ${err instanceof Error ? err.message : 'unknown error'}`,
+        'error',
+      );
+    }
+  };
+
   // No post-creation work needed here (W1-T7): the 00184 DB triggers advance
   // linked items to 'ordered' server-side, and useCreatePurchaseOrder's
   // onSuccess invalidates both FF&E cache namespaces (invalidateFfeCaches →
@@ -878,8 +930,7 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
         />
       )}
 
-      {/* Bulk action bar. Create PO launches the Order Assistant (P1.1).
-          Reassign Vendor is not built yet — disabled with a tooltip (B-07). */}
+      {/* Bulk action bar. Create PO launches the Order Assistant (P1.1). */}
       <BulkActionBar count={selected.size} onClear={() => setSelected(new Set())}>
         <BulkActionButton onClick={() => bulkAdvance('approved')}>Mark Approved</BulkActionButton>
         <BulkActionButton onClick={() => bulkAdvance('ordered')}>Mark Ordered</BulkActionButton>
@@ -891,8 +942,22 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
         {/* W3-T4 — route selected items to the invoice composer's
             ?ffeItemIds= prefill (covered/unpriced items skipped with toasts). */}
         <BulkActionButton onClick={handleInvoiceItems}>Invoice Items</BulkActionButton>
-        <ComingSoonButton>Reassign Vendor</ComingSoonButton>
+        {/* Wave 0B — bulk vendor reassignment (was the B-07 Coming-soon stub). */}
+        <BulkActionButton onClick={() => setReassignOpen(true)}>
+          Reassign Vendor
+        </BulkActionButton>
       </BulkActionBar>
+
+      <ReassignVendorDialog
+        open={reassignOpen}
+        onClose={() => setReassignOpen(false)}
+        items={items.filter((it) => selected.has(it.id))}
+        vendors={vendorOptions}
+        pending={reassignVendor.isPending}
+        onConfirm={(vendor, reassignableIds) =>
+          void handleReassignVendor(vendor, reassignableIds)
+        }
+      />
 
       {/* Order Assistant — one vendor at a time; closing advances the queue. */}
       {activeOrder && (
@@ -915,13 +980,3 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
   );
 }
 
-// Matches BulkActionButton styling but disabled with a tooltip — used for
-// procurement actions that aren't built yet (B-07). Kept local so the shared
-// BulkActionButton component stays untouched.
-function ComingSoonButton({ children }: { children: ReactNode }) {
-  return (
-    <Button variant="secondary" size="sm" disabled title="Coming soon">
-      {children}
-    </Button>
-  );
-}
