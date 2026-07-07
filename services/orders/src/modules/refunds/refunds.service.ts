@@ -3,6 +3,7 @@ import { PrismaClient } from '../../generated/prisma-client';
 import Stripe from 'stripe';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
 import { v4 as uuidv4 } from 'uuid';
+import { assertStripeConfigured } from '../../config/stripe.module';
 
 @Injectable()
 export class RefundsService {
@@ -16,6 +17,8 @@ export class RefundsService {
    * Create a full or partial refund
    */
   async createRefund(orderId: string, amount?: number, reason?: string, actor?: string) {
+    assertStripeConfigured(this.stripe);
+
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {

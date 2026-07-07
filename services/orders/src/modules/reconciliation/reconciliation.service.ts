@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { v4 as uuidv4 } from 'uuid';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
+import { assertStripeConfigured } from '../../config/stripe.module';
 
 @Injectable()
 export class ReconciliationService {
@@ -18,10 +19,31 @@ export class ReconciliationService {
   ) {}
 
   /**
-   * Run reconciliation job (scheduled every 6 hours)
+   * Scheduled entry point (every 6 hours). A cron must not crash-loop, so
+   * when Stripe is unconfigured (parked payment rail) this skips silently
+   * with a log line instead of throwing — unlike the manually-triggered
+   * `runReconciliation()` below, which fails fast with a 503 for the
+   * `POST /reconciliation/run` request path.
    */
   @Cron(CronExpression.EVERY_6_HOURS)
+  async scheduledReconciliation(): Promise<void> {
+    if (!this.stripe) {
+      this.logger.warn(
+        'Skipping scheduled reconciliation: Stripe is not configured (payments rail parked)',
+      );
+      return;
+    }
+
+    await this.runReconciliation();
+  }
+
+  /**
+   * Run reconciliation job. Used by the scheduled cron above and by the
+   * manual `POST /reconciliation/run` endpoint.
+   */
   async runReconciliation() {
+    assertStripeConfigured(this.stripe);
+
     const windowHours = this.configService.get<number>('RECONCILIATION_WINDOW_HOURS', 24);
     const startTime = new Date();
     startTime.setHours(startTime.getHours() - windowHours);

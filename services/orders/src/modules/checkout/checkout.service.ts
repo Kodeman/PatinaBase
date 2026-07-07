@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { generateIdentifierSuffix } from '@patina/utils';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
+import { assertStripeConfigured } from '../../config/stripe.module';
 
 @Injectable()
 export class CheckoutService {
@@ -20,6 +21,8 @@ export class CheckoutService {
    * Create a Stripe Checkout Session
    */
   async createCheckoutSession(dto: CreateCheckoutDto) {
+    assertStripeConfigured(this.stripe);
+
     // Get cart
     const cart = await this.prisma.cart.findUnique({
       where: { id: dto.cartId },
@@ -159,6 +162,8 @@ export class CheckoutService {
    * Create Payment Intent (for direct card processing)
    */
   async createPaymentIntent(dto: CreateCheckoutDto) {
+    assertStripeConfigured(this.stripe);
+
     const cart = await this.prisma.cart.findUnique({
       where: { id: dto.cartId },
       include: { items: true },

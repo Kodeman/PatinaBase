@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { v4 as uuidv4 } from 'uuid';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
 import { NotificationDispatchClient } from '../../infrastructure/notification-dispatch.client';
+import { assertStripeConfigured } from '../../config/stripe.module';
 
 @Injectable()
 export class WebhooksService {
@@ -22,6 +23,8 @@ export class WebhooksService {
    * Handle Stripe webhook event
    */
   async handleStripeWebhook(signature: string, rawBody: Buffer) {
+    assertStripeConfigured(this.stripe);
+
     const webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET')!;
 
     let event: Stripe.Event;
