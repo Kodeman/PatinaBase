@@ -153,82 +153,15 @@ export class EventsService {
     }
   }
 
-  /**
-   * Process outbox events - runs every 10 seconds
-   */
-  @Cron(CronExpression.EVERY_10_SECONDS)
-  async processOutboxEvents() {
-    const events = await this.prisma.outboxEvent.findMany({
-      where: {
-        published: false,
-        retryCount: { lt: 5 }, // Max 5 retries
-      },
-      take: 100,
-      orderBy: { createdAt: 'asc' },
-    });
-
-    if (events.length === 0) {
-      return;
-    }
-
-    this.logger.log(`Processing ${events.length} outbox events`);
-
-    for (const event of events) {
-      try {
-        // In production, publish to OCI Streaming
-        await this.publishToStream(event);
-
-        // Mark as published
-        await this.prisma.outboxEvent.update({
-          where: { id: event.id },
-          data: {
-            published: true,
-            publishedAt: new Date(),
-          },
-        });
-
-        this.logger.debug(`Event published: ${event.type} (${event.id})`);
-      } catch (error) {
-        this.logger.error(`Failed to publish event ${event.id}:`, error);
-
-        // Increment retry count
-        await this.prisma.outboxEvent.update({
-          where: { id: event.id },
-          data: {
-            retryCount: event.retryCount + 1,
-            lastError: error instanceof Error ? error.message : 'Unknown error',
-          },
-        });
-      }
-    }
-  }
-
-  /**
-   * Publish event to OCI Streaming
-   */
-  private async publishToStream(event: any) {
-    // In production, use OCI SDK to publish to streaming
-    // For MVP, we'll just log
-    this.logger.debug(`Publishing to stream: ${event.type}`, {
-      eventId: event.id,
-      payload: event.payload,
-    });
-
-    // Simulate async operation
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    // Example OCI Streaming publish:
-    // const client = new StreamClient({ authProvider });
-    // await client.putMessages({
-    //   streamId: process.env.OCI_STREAM_OCID,
-    //   putMessagesDetails: {
-    //     messages: [{
-    //       key: event.id,
-    //       value: Buffer.from(JSON.stringify(event.payload)).toString('base64'),
-    //     }],
-    //   },
-    // });
-  }
+  // NOTE: this class used to run a @Cron(EVERY_10_SECONDS) `processOutboxEvents`
+  // pump that called a `publishToStream` method — that method was a logging
+  // stub only ("In production, publish to OCI Streaming" — never implemented),
+  // so the pump never did anything beyond flipping `published`/`retryCount` on
+  // `outboxEvent` rows. Removed during the Cloudflare Container migration.
+  // `createOutboxEvent()` above still records the row for audit/history; since
+  // nothing sets `published: true` anymore, `cleanupPublishedEvents()` below
+  // (which only deletes published rows) will find nothing to delete until a
+  // real publisher is wired up.
 
   /**
    * Clean up old published events - runs daily

@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "patina-projects-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+
+  // Projects NestJS service (tasks, RFIs, change orders, issues, daily logs,
+  // documents, milestones, timeline, approvals, analytics) — cloud migration
+  // phase 3d, against Supabase Cloud (svc_projects schema via the pooler).
+  // Bull/Redis were removed at the app-module level (no @Processor was ever
+  // wired up — see services/projects/src/app.module.ts); the shared
+  // @patina/cache module runs with REDIS_DISABLED=true (in-process store).
+  // Built from the monorepo root (image_build_context) because
+  // services/projects/Dockerfile.cf's COPY paths (pnpm-workspace.yaml,
+  // packages/{types,utils,cache,auth}, services/projects/) are root-relative.
+  "containers": [
+    {
+      "class_name": "ProjectsService",
+      "image": "../../services/projects/Dockerfile.cf",
+      "image_build_context": "../../",
+      "instance_type": "basic",
+      "max_instances": 2
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "PROJECTS_SVC", "class_name": "ProjectsService" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProjectsService"] }],
+
+  "observability": { "enabled": true }
+}
