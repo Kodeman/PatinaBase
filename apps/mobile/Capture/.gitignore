@@ -8,3 +8,7 @@ xcuserdata/
 DerivedData/
 *.xcscmblueprint
 *.xccheckout
+
+# Generated project is rebuilt by scripts/generate_project.rb; the implicit
+# workspace + SPM resolution (Package.resolved) are build artifacts, not source.
+Capture.xcodeproj/project.xcworkspace/

@@ -10,6 +10,7 @@
 //  specimen and opens the C5 sheet on release.
 
 import SwiftUI
+import UIKit
 import CaptureKit
 import CaptureKitMocks   // #Preview only — MockCameraService for the low-light state
 
@@ -23,8 +24,8 @@ struct ViewfinderScreen: View {
 
     var body: some View {
         ZStack {
-            // Live feed (gradient fallback) + framing chrome
-            ViewfinderSceneBackdrop(luma: model.luma)
+            // Live feed (real camera on device; gradient fallback otherwise) + framing chrome
+            liveFeed
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .gesture(navigationGesture)
@@ -70,11 +71,38 @@ struct ViewfinderScreen: View {
 
     private var cardAnimation: Animation? { reduceMotion ? nil : .snappy }
 
+    // MARK: Live feed
+
+    /// The real device camera downcasts to `AVFoundationCameraService` (the lawful
+    /// in-repo pattern, cf. `session as? RoomPlanScanSession`): show its preview
+    /// when authorized, a Settings prompt when denied. Mock/sim keeps the exact
+    /// gradient it always drew.
+    @ViewBuilder private var liveFeed: some View {
+        if let camera = model.camera as? AVFoundationCameraService {
+            switch model.cameraAuthorization {
+            case .authorized:
+                CameraPreviewView(session: camera.previewSession)
+            case .denied:
+                ZStack {
+                    ViewfinderSceneBackdrop(luma: model.luma)
+                    CameraAccessDeniedNotice()
+                }
+            case .notDetermined:
+                ViewfinderSceneBackdrop(luma: model.luma)
+            }
+        } else {
+            ViewfinderSceneBackdrop(luma: model.luma)
+        }
+    }
+
     // MARK: Top bar — venue (left) + night/torch status (right)
 
     private var topBar: some View {
         HStack(alignment: .top) {
-            ViewfinderVenueChip(label: model.venueLabel)
+            VStack(alignment: .leading, spacing: 8) {
+                ViewfinderWorkButton(action: model.openWork)
+                ViewfinderVenueChip(label: model.venueLabel)
+            }
             Spacer()
             VStack(alignment: .trailing, spacing: 8) {
                 if model.isLowLight { ViewfinderNightChip() }
@@ -136,6 +164,39 @@ struct ViewfinderScreen: View {
                     Task { await model.cycleMode(-1) }
                 }
             }
+    }
+}
+
+// MARK: - Denied state (R3 tone)
+
+/// Shown over the gradient when camera access is off. Tone matches R3's decline
+/// copy: rust glyph, a one-line reason, and a route to Settings.
+private struct CameraAccessDeniedNotice: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "camera.slash")
+                .font(CaptureType.title)
+                .foregroundStyle(CaptureColor.rust2)
+
+            Text("Camera access is off for Patina Field")
+                .font(CaptureType.callout)
+                .foregroundStyle(CaptureColor.paper)
+                .multilineTextAlignment(.center)
+
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+            .font(CaptureType.bodyEmph)
+            .foregroundStyle(CaptureColor.ink)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(CaptureColor.paper, in: Capsule())
+        }
+        .padding(24)
+        .frame(maxWidth: 300)
+        .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 

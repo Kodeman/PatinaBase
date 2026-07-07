@@ -4,6 +4,10 @@ Native Swift/SwiftUI app for room capture, companion experience, and
 furniture discovery. Part of the Patina monorepo — see root `CLAUDE.md`
 for the overall Supabase-first architecture.
 
+This is the **client-only** app: designer and trades functionality lives in
+the sibling app, `apps/mobile/Capture` ("Patina Field") — see
+`apps/mobile/CLAUDE.md` for how the split works.
+
 ## Data & auth
 
 - **Auth**: Supabase Auth (GoTrue). Access via `SupabaseClientManager.shared`.
@@ -27,7 +31,7 @@ for the overall Supabase-first architecture.
   - `Design/` — `Tokens`, `Components`, `Animations`, `Gestures`
   - `Features/` — feature-per-folder (Walk, RoomScan, Home, Companion,
     ARPlacement, StyleQuiz/Conversation/Reveal, Collections, ProductDetail,
-    Profile, Recommendations, Rooms, Notifications, Designer, Shared,
+    Profile, Recommendations, Rooms, Notifications, DesignServices, Shared,
     Authentication, FirstLaunch)
   - `Services/` — `Auth`, `Sync` (Supabase), `Analytics`, `Companion`, `API`
 

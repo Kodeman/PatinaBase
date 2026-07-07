@@ -62,18 +62,6 @@ public struct RemoteFFEItem: Codable, Sendable, Identifiable {
     public let qty: Int?
 }
 
-public struct RemoteLead: Codable, Sendable, Identifiable {
-    public let id: String
-    public let homeowner_id: String?
-    public let designer_id: String?
-    public let project_type: String?
-    public let budget_range: String?
-    public let timeline: String?
-    public let project_description: String?
-    public let status: String?
-    public let created_at: String
-}
-
 // MARK: - Client
 
 public actor ProjectsAPIClient {
@@ -151,17 +139,6 @@ public actor ProjectsAPIClient {
             URLQueryItem(name: "select", value: "*"),
             URLQueryItem(name: "project_id", value: "eq.\(projectId)"),
             URLQueryItem(name: "order", value: "category.asc"),
-        ])
-    }
-
-    // MARK: - Leads (designer-side)
-
-    /// Open leads visible to the current designer.
-    public func listOpenLeads() async throws -> [RemoteLead] {
-        try await get(path: "leads", queryItems: [
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "status", value: "in.(new,reviewing,contacted)"),
-            URLQueryItem(name: "order", value: "created_at.desc"),
         ])
     }
 }

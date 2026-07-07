@@ -24,12 +24,30 @@ enum AVFoundationCameraError: Error, Sendable {
     case encodingFailed     // photo produced no file data
 }
 
+/// Camera permission as the viewfinder branches on it. `.restricted` (parental
+/// controls / MDM) folds into `.denied` — both mean "no live feed, offer Settings."
+enum CameraAuthorization: Sendable { case notDetermined, authorized, denied }
+
 /// Real camera. `@MainActor` to satisfy the `CameraService` seam; all hardware
 /// work is delegated to `CaptureCameraEngine` on its own serial queue.
 @MainActor
 public final class AVFoundationCameraService: NSObject, CameraService {
     public private(set) var currentMode: CameraMode = .photo
     public private(set) var isLowLight: Bool = false
+
+    /// Camera permission, resolved in `start()`. The viewfinder mirrors this to
+    /// switch between the live preview, the gradient, and the "off" notice.
+    private(set) var authorization: CameraAuthorization = .notDetermined
+
+    /// Bumped by every `stop()`. `start()` snapshots it before awaiting the
+    /// permission dialog and bails if it changed — otherwise a stop() landing
+    /// mid-await (C1 covered while the prompt is up) would be followed by the
+    /// resumed start() relighting the session with no screen to show it.
+    private var startEpoch = 0
+
+    /// The live session, for `CameraPreviewView`'s preview layer. Safe to read
+    /// on the main actor — a session may be bound to a preview layer off-queue.
+    var previewSession: AVCaptureSession { engine.previewSession }
 
     public let frameState: AsyncStream<CameraFrameState>
     private let frameContinuation: AsyncStream<CameraFrameState>.Continuation
@@ -59,9 +77,37 @@ public final class AVFoundationCameraService: NSObject, CameraService {
         currentMode = mode
     }
 
-    public func start() async { engine.start() }
-    public func stop() { engine.stop() }
+    public func start() async {
+        let epoch = startEpoch
+        await ensureAuthorized()
+        guard authorization == .authorized, epoch == startEpoch else { return }
+        // Attach the input now that we hold permission, then run. Both hop
+        // through the engine's serial queue, so the input is in place before the
+        // session starts.
+        engine.attachCameraInputIfNeeded()
+        engine.start()
+    }
+
+    public func stop() {
+        startEpoch += 1
+        engine.stop()
+    }
     public func setTorch(_ mode: TorchMode) { engine.setTorch(mode) }
+
+    /// Resolve camera permission, presenting the system prompt on first run.
+    /// This is the only place the request is made; O3's primer defers to it.
+    private func ensureAuthorized() async {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            authorization = .authorized
+        case .notDetermined:
+            authorization = await AVCaptureDevice.requestAccess(for: .video) ? .authorized : .denied
+        case .denied, .restricted:
+            authorization = .denied
+        @unknown default:
+            authorization = .denied
+        }
+    }
 
     public func capture() async throws -> CapturedFrame {
         let mode = currentMode
@@ -82,8 +128,8 @@ private final class CaptureCameraEngine: NSObject, AVCaptureVideoDataOutputSampl
     private let session = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
     private let videoOutput = AVCaptureVideoDataOutput()
-    private let sessionQueue = DispatchQueue(label: "cloud.patina.capture.camera.session")
-    private let videoQueue = DispatchQueue(label: "cloud.patina.capture.camera.video")
+    private let sessionQueue = DispatchQueue(label: "cloud.patina.field.camera.session")
+    private let videoQueue = DispatchQueue(label: "cloud.patina.field.camera.video")
     private let motion = CMMotionManager()
     private let motionQueue = OperationQueue()
 
@@ -97,17 +143,17 @@ private final class CaptureCameraEngine: NSObject, AVCaptureVideoDataOutputSampl
     var onFrameState: ((CameraFrameState) -> Void)?
     var onLowLightChange: ((Bool) -> Void)?
 
+    /// Handed to `AVCaptureVideoPreviewLayer`; AVFoundation permits binding a
+    /// session to a preview layer from any thread.
+    var previewSession: AVCaptureSession { session }
+
+    /// Outputs only — they need no camera permission. The camera *input* is
+    /// attached later (`attachCameraInputIfNeeded`), once access is granted;
+    /// touching the capture device before then is what left the feed black.
     func configureSession() {
         sessionQueue.async { [self] in
             session.beginConfiguration()
             session.sessionPreset = .photo
-
-            if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-               let input = try? AVCaptureDeviceInput(device: device),
-               session.canAddInput(input) {
-                session.addInput(input)
-                deviceInput = input
-            }
 
             if session.canAddOutput(photoOutput) {
                 session.addOutput(photoOutput)
@@ -122,6 +168,23 @@ private final class CaptureCameraEngine: NSObject, AVCaptureVideoDataOutputSampl
                 session.addOutput(videoOutput)
             }
 
+            session.commitConfiguration()
+        }
+    }
+
+    /// Attach the wide-angle back-camera input if absent. Idempotent: a no-op
+    /// once attached or when no device exists (simulator). Called post-auth so
+    /// the session gains a live input the moment permission lands.
+    func attachCameraInputIfNeeded() {
+        sessionQueue.async { [self] in
+            guard deviceInput == nil,
+                  let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+                  let input = try? AVCaptureDeviceInput(device: device) else { return }
+            session.beginConfiguration()
+            if session.canAddInput(input) {
+                session.addInput(input)
+                deviceInput = input
+            }
             session.commitConfiguration()
         }
     }

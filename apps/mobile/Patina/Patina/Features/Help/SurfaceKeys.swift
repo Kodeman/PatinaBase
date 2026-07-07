@@ -154,27 +154,6 @@ public enum SurfaceKeys {
             public static let step3Profile: SurfaceKey = "ios-app/first-launch-tour/step-3-profile"
         }
 
-        // MARK: - Designer (G10)
-        //
-        // The iOS Designer-mode home surfaces a designer's studio today —
-        // active projects, leads, pending decisions, and unread conversations.
-        // Help affordances cover the dashboard concept, the studio quick-action
-        // cards, and the leads / decisions / consultation flows.
-
-        public enum Designer {
-            /// Root surface — used by the `?` toolbar button to populate
-            /// the contextual help panel.
-            public static let root: SurfaceKey = "ios-app/designer"
-            /// "Your studio today" dashboard header + stat counters.
-            public static let studioToday: SurfaceKey = "ios-app/designer/studio-today"
-            /// "Awaiting decision" — Patina concept (client-gated decision).
-            public static let pendingDecision: SurfaceKey = "ios-app/designer/pending-decision"
-            /// Open leads — the lead-funnel entry into a consultation.
-            public static let openLead: SurfaceKey = "ios-app/designer/open-lead"
-            /// Designer consultation booking surface.
-            public static let consultation: SurfaceKey = "ios-app/designer/consultation"
-        }
-
         // MARK: - QRAuth (G10)
         //
         // The iOS QR sign-in flow — scan the QR code shown on a web browser,
@@ -302,12 +281,6 @@ public enum SurfaceKeys {
         IOSApp.FirstLaunchTour.step1Home,
         IOSApp.FirstLaunchTour.step2Saved,
         IOSApp.FirstLaunchTour.step3Profile,
-        // IOSApp/Designer (G10)
-        IOSApp.Designer.root,
-        IOSApp.Designer.studioToday,
-        IOSApp.Designer.pendingDecision,
-        IOSApp.Designer.openLead,
-        IOSApp.Designer.consultation,
         // IOSApp/QRAuth (G10)
         IOSApp.QRAuth.root,
         IOSApp.QRAuth.scanIntro,

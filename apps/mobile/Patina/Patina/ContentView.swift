@@ -153,29 +153,11 @@ struct ContentView: View {
 
     // MARK: - Home View
 
-    /// Home view chosen by the signed-in user's role and saved home
-    /// preference. Designers (and dual-role users in auto mode) land on
-    /// the designer dashboard; consumers (and dual-role users who opted
-    /// into consumer mode) land on the DailyRoom. Roles come from
-    /// `ProfileService.shared`; the dual-role preference comes from
-    /// `SettingsService.shared.preferredHomeMode`.
+    /// The client home surface. Patina is a client-only app, so every
+    /// signed-in user lands on the DailyRoom.
     @ViewBuilder
     private var mainHomeView: some View {
-        let roles = ProfileService.shared.roles
-        let hasDesigner = roles.contains("designer")
-        let hasConsumer = roles.contains("consumer") || roles.isEmpty
-        let preferred = SettingsService.shared.preferredHomeMode
-
-        switch (hasDesigner, hasConsumer, preferred) {
-        case (true, _, .designer):
-            DesignerHomeView()
-        case (true, false, _):
-            DesignerHomeView()
-        case (true, true, .auto):
-            DesignerHomeView()
-        default:
-            DailyRoomView()
-        }
+        DailyRoomView()
     }
 
     // MARK: - Navigation Destinations
@@ -272,10 +254,6 @@ struct ContentView: View {
             DesignerConsultationView()
                 .toolbar(.hidden, for: .navigationBar)
 
-        case .designerHome:
-            DesignerHomeView()
-                .toolbar(.hidden, for: .navigationBar)
-
         case .projectList:
             ProjectListView()
                 .toolbar(.hidden, for: .navigationBar)
@@ -299,10 +277,6 @@ struct ContentView: View {
         case .threadDetail(let threadId):
             ThreadDetailView(threadId: threadId)
                 .toolbarTitleDisplayMode(.inline)
-
-        case .receiveDelivery:
-            ReceiveDeliveryView()
-                .toolbar(.hidden, for: .navigationBar)
         }
     }
 }

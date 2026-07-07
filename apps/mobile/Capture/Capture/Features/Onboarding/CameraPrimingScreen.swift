@@ -98,7 +98,7 @@ struct CameraPrimingScreen: View {
             OnboardingGlyph(symbol: "camera.fill")
 
             VStack(spacing: 8) {
-                Text("Capture needs the camera")
+                Text("Patina Field needs the camera")
                     .font(CaptureType.title2)
                     .foregroundStyle(CaptureColor.ink)
                     .multilineTextAlignment(.center)

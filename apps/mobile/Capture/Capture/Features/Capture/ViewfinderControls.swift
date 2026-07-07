@@ -56,6 +56,31 @@ struct ViewfinderVenueChip: View {
     }
 }
 
+// MARK: - Work affordance (W1 entry, top-leading)
+
+/// Small briefcase pill that opens the designer/pro Work dashboard. Sits above the
+/// venue chip so it never crowds the shutter or mode selector.
+struct ViewfinderWorkButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "briefcase.fill")
+                    .font(CaptureType.footnote)
+                Text("Work")
+                    .font(CaptureType.eyebrow)
+                    .textCase(.uppercase)
+            }
+            .foregroundStyle(CaptureColor.paper)
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(.black.opacity(0.42), in: Capsule())
+        }
+        .accessibilityLabel("Work")
+        .accessibilityHint("Opens projects, leads, decisions, and messages")
+    }
+}
+
 // MARK: - Night / torch status pills (top-right)
 
 struct ViewfinderNightChip: View {
