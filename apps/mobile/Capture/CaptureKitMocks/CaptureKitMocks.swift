@@ -1,7 +1,7 @@
 //  CaptureKitMocks.swift
 //  CaptureKitMocks
 //
-//  In-memory / mock conformer for every CaptureKit seam, so all 33 screens
+//  In-memory / mock conformer for every CaptureKit seam, so all 51 screens
 //  render in the simulator without camera/LiDAR/Speech/network. Wired by
 //  AppContainer when -CaptureUseMocks is set; also used by previews + tests.
 

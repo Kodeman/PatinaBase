@@ -1,7 +1,7 @@
 //  CaptureScreenID.swift
 //  CaptureKit
 //
-//  Frozen per-screen accessibility identifiers (33 entries) — the deterministic
+//  Frozen per-screen accessibility identifiers (51 entries) — the deterministic
 //  handles XCUITest and MobAI use to drive and assert every screen.
 
 import Foundation
@@ -48,4 +48,30 @@ public enum CaptureScreenID: String, CaseIterable, Sendable {
     case u2LibrarySearch      = "screen.U2.library-search"
     case t1Settings           = "screen.T1.settings"
     case t2Account            = "screen.T2.account"
+    // Flow 8 — Work dashboard (Phase 2 designer/pro flows)
+    case w1Work               = "screen.W1.work"
+    // Flow 9 — Projects
+    case p1ProjectList        = "screen.P1.project-list"
+    case p2ProjectDetail      = "screen.P2.project-detail"
+    // Flow 10 — Leads
+    case l1LeadList           = "screen.L1.lead-list"
+    case l2LeadDetail         = "screen.L2.lead-detail"
+    // Flow 11 — Decisions (read-only)
+    case d1DecisionList       = "screen.D1.decision-list"
+    case d2DecisionDetail     = "screen.D2.decision-detail"
+    // Flow 12 — Messages
+    case m1Inbox              = "screen.M1.inbox"
+    case m2Thread             = "screen.M2.thread"
+    // Flow 13 — Receiving / goods-in
+    case g1Arriving           = "screen.G1.arriving"
+    case g2Inspection         = "screen.G2.inspection"
+    case g3Outcome            = "screen.G3.outcome"
+    // Flow 14 — QR portal-login approval
+    case q1QRScan             = "screen.Q1.qr-scan"
+    case q2QRApprove          = "screen.Q2.qr-approve"
+    // Flow 15 — Pro site-scan
+    case f1ScanSetup          = "screen.F1.scan-setup"
+    case f2SiteScan           = "screen.F2.site-scan"
+    case f3ScanReview         = "screen.F3.scan-review"
+    case f4ScanUpload         = "screen.F4.scan-upload"
 }

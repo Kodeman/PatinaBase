@@ -12,7 +12,7 @@ object in a showroom into a structured, located, synced **specimen**. Spec:
   Activity attributes). Built by the foundation owner; teams code against it.
 - **`CaptureKitMocks/`** — mock conformer for every seam, so all screens render
   in the Simulator without camera/LiDAR/Speech/network.
-- **`Capture/`** — the app target (all 33 screens, Features/ per flow).
+- **`Capture/`** — the app target (all 51 screens, Features/ per flow).
 - `CaptureShareExtension/`, `CaptureWidgets/` — Team F (Phase 1).
 
 ## Build
@@ -49,11 +49,11 @@ scripts/capture-gate.sh            # or: build | test | lint
 
 # RUN — generate → build → boot sim → install → launch
 scripts/capture-run.sh                    # real entry (viewfinder / onboarding)
-scripts/capture-run.sh C5.specimen-sheet  # jump straight to any of the 33 screens
+scripts/capture-run.sh C5.specimen-sheet  # jump straight to any of the 51 screens
 CAPTURE_SIM="iPhone 17 Pro" scripts/capture-run.sh N3.measure
 
 # SWEEP — screenshot every screen (pure simctl, no MCP) → .build/shots/
-scripts/capture-shots.sh                  # all 33
+scripts/capture-shots.sh                  # all 51
 scripts/capture-shots.sh C5 N1 S3         # subset (prefix match)
 ```
 

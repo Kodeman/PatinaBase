@@ -135,6 +135,13 @@ final class ViewfinderModel {
         coordinator.navigate(to: .session)
     }
 
+    // MARK: Work (W1 — designer/pro dashboard)
+
+    func openWork() {
+        analytics.event("work.open", ["from": "viewfinder"])
+        coordinator.navigate(to: .work)
+    }
+
     // MARK: Shutter press → single tap vs. multi-shot hold
 
     func pressChanged() {

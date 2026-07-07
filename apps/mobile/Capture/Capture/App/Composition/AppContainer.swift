@@ -3,8 +3,14 @@
 //
 //  Composition root. Branches on `AppConfiguration.runsRealServices`:
 //   • All-mock mode (default sim, -CaptureUseMocks, UITest): mocks + in-memory
-//     store + InMemoryCaptureSyncService + no-op analytics — keeps the 33-screen
+//     store + InMemoryCaptureSyncService + no-op analytics — keeps the 51-screen
 //     harness, run/shots scripts, and previews working unchanged.
+//
+//  Phase 2 designer/pro seams (projects/leads/decisions/messaging/receiving/
+//  portalAuth/siteScan): mock mode wires the CaptureKitMocks conformers; real
+//  mode calls each flow's own `<Flow>ServiceFactory.make(deps:)` — which the
+//  freeze leaves returning the mock until that wave's agent replaces it. This
+//  file is FROZEN for the waves.
 //   • Real mode (physical device, or sim with -CaptureForceReal): Supabase
 //     session, persistent store (with graceful fallback), the local sync outbox
 //     wired to real capture-media upload + the commit RPC, the offline-sync Live
@@ -26,6 +32,16 @@ public final class AppContainer {
     public let session: any SessionProviding
     public let location: any LocationService
     public let analytics: any CaptureAnalytics
+
+    // ── Phase 2 designer/pro seams (frozen; wave agents build the screens) ──
+    public let projects: any ProjectsService
+    public let leads: any LeadsService
+    public let decisions: any DecisionsReadService
+    public let messaging: any MessagingService
+    public let receiving: any ReceivingService
+    public let portalAuth: any PortalAuthApprovalService
+    public let siteScan: any SiteScanService
+
     /// S2 inline project creation (real PostgREST insert vs. local-only). App
     /// -internal; nil in mock mode.
     let projectCreator: (any CaptureProjectCreating)?
@@ -57,6 +73,18 @@ public final class AppContainer {
                                                 session: session, remote: gateway)
             self.projectCreator = SupabaseProjectCreator(client: client, session: session)
 
+            // Phase 2 seams — each flow's own factory. The freeze leaves these
+            // returning the mock conformer; a wave agent swaps in the real
+            // service by editing ONLY its `<Flow>ServiceFactory` + its own files.
+            let workDeps = WorkServiceDependencies(client: client, session: session)
+            self.projects = ProjectsServiceFactory.make(deps: workDeps)
+            self.leads = LeadsServiceFactory.make(deps: workDeps)
+            self.decisions = DecisionsServiceFactory.make(deps: workDeps)
+            self.messaging = MessagesServiceFactory.make(deps: workDeps)
+            self.receiving = ReceivingServiceFactory.make(deps: workDeps)
+            self.portalAuth = QRApproveServiceFactory.make(deps: workDeps)
+            self.siteScan = SiteScanServiceFactory.make(deps: workDeps)
+
             #if targetEnvironment(simulator)
             self.camera = MockCameraService()
             self.location = MockLocationService()
@@ -80,6 +108,15 @@ public final class AppContainer {
             self.projectCreator = nil
             self.camera = MockCameraService()
             self.location = MockLocationService()
+
+            // Phase 2 seams — mock conformers (also the harness/preview default).
+            self.projects = MockProjectsService()
+            self.leads = MockLeadsService()
+            self.decisions = MockDecisionsReadService()
+            self.messaging = MockMessagingService()
+            self.receiving = MockReceivingService()
+            self.portalAuth = MockPortalAuthApprovalService()
+            self.siteScan = MockSiteScanService()
         }
     }
 }

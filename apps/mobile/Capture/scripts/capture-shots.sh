@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# capture-shots.sh — sweep every screen in the 33-screen matrix and save a PNG
+# capture-shots.sh — sweep every screen in the 51-screen matrix and save a PNG
 # of each, using only the simulator + simctl (no MCP needed). The CLI "visual
 # regression" counterpart to driving the app interactively via blitz-iphone.
 #
@@ -8,7 +8,7 @@
 # (gitignored); override with CAPTURE_SHOTS_DIR.
 #
 # Usage:
-#   scripts/capture-shots.sh                      # all 33 screens
+#   scripts/capture-shots.sh                      # all 51 screens
 #   scripts/capture-shots.sh C5 N1 S3             # only the given screens (prefix match)
 #   CAPTURE_SIM="iPhone 17 Pro" scripts/capture-shots.sh
 set -euo pipefail
@@ -30,6 +30,14 @@ ALL_SCREENS=(
   S1.assign S2.create-project S3.destination S4.saved S5.inbox
   V1.session-tray V2.cull V3.detail
   U1.sync U2.library-search T1.settings T2.account
+  W1.work
+  P1.project-list P2.project-detail
+  L1.lead-list L2.lead-detail
+  D1.decision-list D2.decision-detail
+  M1.inbox M2.thread
+  G1.arriving G2.inspection G3.outcome
+  Q1.qr-scan Q2.qr-approve
+  F1.scan-setup F2.site-scan F3.scan-review F4.scan-upload
 )
 
 # Optional filter: keep screens whose suffix starts with any given prefix (e.g. "C5", "N").

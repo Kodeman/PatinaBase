@@ -74,7 +74,10 @@ struct ViewfinderScreen: View {
 
     private var topBar: some View {
         HStack(alignment: .top) {
-            ViewfinderVenueChip(label: model.venueLabel)
+            VStack(alignment: .leading, spacing: 8) {
+                ViewfinderWorkButton(action: model.openWork)
+                ViewfinderVenueChip(label: model.venueLabel)
+            }
             Spacer()
             VStack(alignment: .trailing, spacing: 8) {
                 if model.isLowLight { ViewfinderNightChip() }

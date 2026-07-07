@@ -46,7 +46,19 @@ public extension CaptureRoute {
         case .syncStatus: return "syncStatus"
         case .settings: return "settings"
         case .account: return "account"
-        case .project: return "project"
+        case .project: return "project"          // P2 — reused for project detail
+        case .work: return "work"
+        case .projectList: return "projectList"
+        case .leadList: return "leadList"
+        case .leadDetail: return "leadDetail"
+        case .decisionList: return "decisionList"
+        case .decisionDetail: return "decisionDetail"
+        case .inbox: return "inbox"
+        case .thread: return "thread"
+        case .receiving: return "receiving"
+        case .qrScan: return "qrScan"
+        case .siteScanSetup: return "siteScanSetup"
+        case .siteScan: return "siteScan"
         }
     }
 }
@@ -67,6 +79,8 @@ public extension CaptureSheet {
         case .inboxTerminal: return "inboxTerminal"
         case .photoImport: return "photoImport"
         case .cullDeck: return "cullDeck"
+        case .receivingInspection: return "receivingInspection"
+        case .qrApprove: return "qrApprove"
         }
     }
 }
