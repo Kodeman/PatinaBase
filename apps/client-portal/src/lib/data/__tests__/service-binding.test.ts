@@ -14,7 +14,15 @@
  * exercising the real import — this is the standard way to unit-test a
  * thin wrapper around a library that can't run in this environment anyway
  * (the real success path only ever executes inside an actual Cloudflare
- * Worker or `wrangler dev`).
+ * Worker).
+ *
+ * The mocks use SYNC semantics (mockReturnValue / synchronous throw), not
+ * mockResolvedValue/mockRejectedValue: the wrapper must call the sync
+ * accessor. Avoiding the async accessor is load-bearing — on Node-runtime
+ * routes outside a Worker it doesn't throw, it falls through to wrangler's
+ * getPlatformProxy(), boots Miniflare, and hands back a stub binding whose
+ * fetch 503s, which broke local dev (see the doc comment in
+ * service-binding.ts).
  */
 
 import { getServiceBindingFetcher } from '../service-binding';
@@ -30,20 +38,34 @@ describe('getServiceBindingFetcher', () => {
     jest.resetAllMocks();
   });
 
-  it('returns undefined outside the Cloudflare Workers runtime (getCloudflareContext throws)', async () => {
-    mockGetCloudflareContext.mockRejectedValue(
-      new Error('getCloudflareContext called without initOpenNextCloudflareForDev'),
-    );
+  it('returns undefined when the sync accessor throws (local dev / Jest — the non-Worker path)', async () => {
+    mockGetCloudflareContext.mockImplementation(() => {
+      throw new Error(
+        'getCloudflareContext has been called without having called initOpenNextCloudflareForDev',
+      );
+    });
 
     const fetcher = await getServiceBindingFetcher('SVC_ORDERS');
 
     expect(fetcher).toBeUndefined();
   });
 
-  it('returns the binding fetch, bound to the binding, when the Cloudflare context is present', async () => {
+  it('calls the accessor in SYNC mode (no { async: true }) — async mode boots Miniflare outside Workers', async () => {
+    mockGetCloudflareContext.mockReturnValue({ env: {}, cf: undefined, ctx: {} });
+
+    await getServiceBindingFetcher('SVC_ORDERS');
+
+    expect(mockGetCloudflareContext).toHaveBeenCalledTimes(1);
+    // Exactly zero arguments: passing { async: true } would flip the
+    // accessor into the getPlatformProxy()/Miniflare fall-through on
+    // Node-runtime routes, resurrecting the local-dev 503-stub bug.
+    expect(mockGetCloudflareContext).toHaveBeenCalledWith();
+  });
+
+  it('returns the binding fetch, bound to the binding, when the Worker context is present', async () => {
     const boundFetch = jest.fn().mockResolvedValue('ok');
     const binding = { fetch: boundFetch };
-    mockGetCloudflareContext.mockResolvedValue({ env: { SVC_ORDERS: binding }, cf: undefined, ctx: {} });
+    mockGetCloudflareContext.mockReturnValue({ env: { SVC_ORDERS: binding }, cf: undefined, ctx: {} });
 
     const fetcher = await getServiceBindingFetcher('SVC_ORDERS');
 
@@ -56,7 +78,7 @@ describe('getServiceBindingFetcher', () => {
   });
 
   it('returns undefined when the named binding is missing from env', async () => {
-    mockGetCloudflareContext.mockResolvedValue({ env: {}, cf: undefined, ctx: {} });
+    mockGetCloudflareContext.mockReturnValue({ env: {}, cf: undefined, ctx: {} });
 
     const fetcher = await getServiceBindingFetcher('SVC_ORDERS');
 
@@ -64,7 +86,7 @@ describe('getServiceBindingFetcher', () => {
   });
 
   it('returns undefined when the named binding has no fetch method', async () => {
-    mockGetCloudflareContext.mockResolvedValue({ env: { SVC_ORDERS: {} }, cf: undefined, ctx: {} });
+    mockGetCloudflareContext.mockReturnValue({ env: { SVC_ORDERS: {} }, cf: undefined, ctx: {} });
 
     const fetcher = await getServiceBindingFetcher('SVC_ORDERS');
 

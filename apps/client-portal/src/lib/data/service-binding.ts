@@ -14,10 +14,25 @@ import 'server-only';
  * global `fetch` for exactly this reason; nothing in the monorepo has wired
  * a binding into that seam yet, so this is the first caller.
  *
- * Returns `undefined` whenever a binding isn't available: local `next dev`
- * (unless `initOpenNextCloudflareForDev` is configured), Jest/unit tests, or
- * any other non-Workers runtime. Callers must fall back to plain `fetch`
- * against the service's public URL in that case.
+ * Runtime discrimination is deliberately the SYNCHRONOUS
+ * `getCloudflareContext()` — NOT `{ async: true }`:
+ *
+ *  - In a deployed OpenNext Worker, the worker entrypoint stamps the
+ *    Cloudflare context onto `globalThis` (Symbol.for('__cloudflare-context__'))
+ *    before any app code runs, so the sync accessor succeeds and we return
+ *    the binding's bound `.fetch`.
+ *  - Everywhere else (local `next dev`, `next build`, Jest) the sync
+ *    accessor throws immediately, and we return `undefined` so callers fall
+ *    back to plain `fetch` against the service's public/env URL.
+ *
+ * The async accessor must not be used here: on Node.js-runtime routes it
+ * doesn't throw outside Workers — it falls through to wrangler's
+ * `getPlatformProxy()`, which boots a Miniflare instance (~hundreds of ms,
+ * plus `.wrangler/state` writes) and resolves the binding to a local STUB
+ * whose `.fetch()` answers 503 whenever the target worker isn't also
+ * running locally. Because the stub is truthy, `fetcher ?? fetch` would
+ * pick it over global fetch, making a healthy local orders service on
+ * :3015 render as "unreachable" under `pnpm dev:client`.
  */
 export async function getServiceBindingFetcher(
   bindingName: string,
@@ -28,7 +43,8 @@ export async function getServiceBindingFetcher(
     // which has no business loading at request time. `cloudflare-context.js`
     // itself has no top-level imports of its own.
     const { getCloudflareContext } = await import('@opennextjs/cloudflare/cloudflare-context');
-    const { env } = await getCloudflareContext({ async: true });
+    // Sync mode — the real-Worker discriminator (see doc comment above).
+    const { env } = getCloudflareContext();
     const binding = (env as Record<string, unknown>)[bindingName] as
       | { fetch?: typeof fetch }
       | undefined;
@@ -36,8 +52,8 @@ export async function getServiceBindingFetcher(
       return binding.fetch.bind(binding);
     }
   } catch {
-    // Not running on Cloudflare Workers, or the binding isn't configured —
-    // caller falls back to a plain fetch against the service's public URL.
+    // Not inside a deployed Worker (sync accessor threw) — caller falls
+    // back to a plain fetch against the service's public URL.
   }
   return undefined;
 }

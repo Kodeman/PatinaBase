@@ -227,4 +227,64 @@ describe('fetchClientOrders', () => {
     expect(global.fetch).not.toHaveBeenCalled();
     expect(mockGetServiceBindingFetcher).toHaveBeenCalledWith('SVC_ORDERS');
   });
+
+  it('surfaces unreachable when the binding fetch rejects — no silent second try via global fetch', async () => {
+    // Production semantics: if the Worker handed us a binding, its failure
+    // IS the orders service being unreachable. Falling back to a public
+    // fetch from inside the Worker would mask a real outage.
+    const bindingFetch = jest.fn().mockRejectedValue(new Error('binding: connection refused'));
+    mockGetServiceBindingFetcher.mockResolvedValue(bindingFetch);
+
+    const result = await fetchClientOrders();
+
+    expect(result).toEqual({ error: 'unreachable' });
+    expect(bindingFetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('surfaces unreachable when the binding fetch answers 503 (binding resolves, service down)', async () => {
+    const bindingFetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      json: async () => ({ message: 'no healthy upstream' }),
+    });
+    mockGetServiceBindingFetcher.mockResolvedValue(bindingFetch);
+
+    const result = await fetchClientOrders();
+
+    expect(result).toEqual({ error: 'unreachable' });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('falls back to global fetch against ORDERS_SERVICE_URL when no binding resolves (local dev)', async () => {
+    // The local-dev contract behind the sync-discriminator fix: the context
+    // accessor throws outside a Worker → getServiceBindingFetcher returns
+    // undefined → the request must go through global fetch to the env URL,
+    // NOT through any Miniflare stub.
+    mockGetServiceBindingFetcher.mockResolvedValue(undefined);
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [] }),
+    });
+
+    const result = await fetchClientOrders();
+
+    expect(result).toEqual({ orders: [] });
+    // next/jest loads .env.local, which sets ORDERS_SERVICE_URL — mirror the
+    // module's own resolution (env var, localhost fallback, trailing-slash
+    // strip) so this asserts the URL actually used, not a hardcoded guess.
+    const expectedBase = (process.env.ORDERS_SERVICE_URL || 'http://localhost:3015').replace(
+      /\/$/,
+      '',
+    );
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${expectedBase}/api/v1/orders`,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+      }),
+    );
+  });
 });
