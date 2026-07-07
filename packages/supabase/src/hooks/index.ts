@@ -694,6 +694,8 @@ export {
   useAddScopeRoom,
   useUpdateScopeRoom,
   useRemoveScopeRoom,
+  useReorderProposalItems,
+  useReorderProposalScopeRooms,
   useProposalPhases,
   useAddProposalPhase,
   useUpdateProposalPhase,

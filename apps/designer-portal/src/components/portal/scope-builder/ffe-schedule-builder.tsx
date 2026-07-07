@@ -1,14 +1,33 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core';
+import {
+  DndContext,
+  useDroppable,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Button, IconButton, Input, Select, Textarea } from '@/components/ui/controls';
+import { BulkActionBar, BulkActionButton } from '@/components/portal/bulk-action-bar';
 import { proposalEvents } from '@/lib/analytics';
 import {
   useProposalScopeRooms,
   useFFECategories,
   useConsumeCapture,
+  useReorderProposalItems,
+  useReorderProposalScopeRooms,
   createBrowserClient,
   type ProposalItemType,
 } from '@patina/supabase';
@@ -32,7 +51,7 @@ import {
   parseCaptureDraggableId,
 } from '@/components/portal/proposals/capture-inbox';
 import { LeadTimeSelect } from '@/components/portal/ffe/lead-time-select';
-import { leadTimeLabel } from '@/lib/scope/lead-time';
+import { LEAD_TIME_BUCKETS, leadTimeLabel } from '@/lib/scope/lead-time';
 import { resolveDocCode } from '@/lib/scope/doc-code';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -366,6 +385,11 @@ function ItemRow({
   isEditing,
   onStartEdit,
   onStopEdit,
+  dragHandle,
+  selected,
+  onToggleSelect,
+  onOpenDetail,
+  twinChip,
 }: {
   item: FFEItem;
   proposalId: string;
@@ -375,6 +399,11 @@ function ItemRow({
   isEditing: boolean;
   onStartEdit: () => void;
   onStopEdit: () => void;
+  dragHandle?: ReactNode;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+  onOpenDetail?: () => void;
+  twinChip?: ReactNode;
 }) {
   const removeItem = useRemoveProposalItem();
   const lineCost = item.unit_price * item.quantity;
@@ -417,41 +446,48 @@ function ItemRow({
         : '—';
 
   return (
-    <FFEItemCard
-      name={displayName}
-      vendorName={subtitle}
-      docCode={item.doc_code}
-      leadTimeLabel={leadTimeLabel(item.lead_time_weeks)}
-      quantity={item.item_type === 'tbd' ? null : item.quantity}
-      unitTotalLabel={unitTotalLabel}
-      itemType={item.item_type}
-      actions={
-        <>
-          <IconButton
-            label="Edit item"
-            variant="ghost"
-            size="sm"
-            onClick={onStartEdit}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-            </svg>
-          </IconButton>
-          <IconButton
-            label="Remove item"
-            variant="ghost"
-            size="sm"
-            onClick={handleRemove}
-            disabled={removeItem.isPending}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </IconButton>
-        </>
-      }
-    />
+    <div className="flex flex-col gap-1">
+      <FFEItemCard
+        name={displayName}
+        vendorName={subtitle}
+        docCode={item.doc_code}
+        leadTimeLabel={leadTimeLabel(item.lead_time_weeks)}
+        quantity={item.item_type === 'tbd' ? null : item.quantity}
+        unitTotalLabel={unitTotalLabel}
+        itemType={item.item_type}
+        selected={selected}
+        onToggleSelect={onToggleSelect}
+        onOpenDetail={onOpenDetail}
+        actions={
+          <>
+            {dragHandle}
+            <IconButton
+              label="Edit item"
+              variant="ghost"
+              size="sm"
+              onClick={onStartEdit}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+              </svg>
+            </IconButton>
+            <IconButton
+              label="Remove item"
+              variant="ghost"
+              size="sm"
+              onClick={handleRemove}
+              disabled={removeItem.isPending}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </IconButton>
+          </>
+        }
+      />
+      {twinChip}
+    </div>
   );
 }
 
@@ -498,6 +534,65 @@ function RoomDropZone({
       }}
     >
       {children}
+    </div>
+  );
+}
+
+// ─── Sortable item wrapper (S3) ──────────────────────────────────────────────
+//
+// Grid cell + useSortable. The drag affordance is a dedicated handle (grip)
+// rendered into the card's hover action cluster via a render-prop, so clicks
+// on the checkbox / edit / remove / unfold never start a drag.
+
+function SortableScheduleItem({
+  id,
+  disabled,
+  spanFull,
+  children,
+}: {
+  id: string;
+  disabled?: boolean;
+  /** Editing / unfolded rows span the whole grid row. */
+  spanFull?: boolean;
+  children: (dragHandle: ReactNode) => ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+
+  const handle = disabled ? null : (
+    <button
+      type="button"
+      aria-label="Reorder item"
+      className="cursor-grab rounded-sm p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] active:cursor-grabbing"
+      {...attributes}
+      {...listeners}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <circle cx="9" cy="5" r="1.6" />
+        <circle cx="15" cy="5" r="1.6" />
+        <circle cx="9" cy="12" r="1.6" />
+        <circle cx="15" cy="12" r="1.6" />
+        <circle cx="9" cy="19" r="1.6" />
+        <circle cx="15" cy="19" r="1.6" />
+      </svg>
+    </button>
+  );
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        gridColumn: spanFull ? '1 / -1' : undefined,
+        opacity: isDragging ? 0.4 : undefined,
+        zIndex: isDragging ? 10 : undefined,
+        position: 'relative',
+      }}
+    >
+      {children(handle)}
     </div>
   );
 }
@@ -663,6 +758,57 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
 
   const typedRooms = rooms as ScopeRoom[];
 
+  // ── S3 — drag reorder + selection / bulk bar ──────────────────────────────
+  const reorderItems = useReorderProposalItems();
+  const updateItem = useUpdateProposalItem();
+  const removeItem = useRemoveProposalItem();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  // A drag starts only after 6px of travel, so plain clicks on the handle's
+  // neighbors (checkbox, edit, remove, unfold) stay clicks.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  // Apply one field-update to every selected line. Errors surface inline
+  // (R83) — never a toast — and the selection survives a failure so the
+  // designer can retry.
+  const bulkUpdate = async (updates: Record<string, unknown>) => {
+    setBulkError(null);
+    try {
+      await Promise.all(
+        [...selected].map((itemId) => updateItem.mutateAsync({ itemId, proposalId, updates }))
+      );
+      setSelected(new Set());
+    } catch (err) {
+      setBulkError(
+        err instanceof Error ? err.message : 'Some lines could not be updated — try again.'
+      );
+    }
+  };
+
+  const bulkDelete = async () => {
+    setBulkError(null);
+    try {
+      await Promise.all(
+        [...selected].map((itemId) => removeItem.mutateAsync({ itemId, proposalId }))
+      );
+      setSelected(new Set());
+    } catch (err) {
+      setBulkError(
+        err instanceof Error ? err.message : 'Some lines could not be removed — try again.'
+      );
+    }
+  };
+
   const categoryLookup = useMemo(() => {
     const map = new Map<string, string>();
     for (const c of categories) map.set(c.slug, c.label);
@@ -785,11 +931,44 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         proposalEvents.itemAdded({ proposalId, itemType: 'tbd', hasProduct: false, lineTotal: 0 });
       });
 
-  // Map a drag-end (capture dragged from inbox onto a room droppable) into a
-  // capture-drop context. The category is collected via CategoryPromptModal.
+  // One DndContext serves two drag species: capture cards dropped onto room
+  // zones (existing) and schedule lines sorted within a room (S3). Lines are
+  // told apart by their raw uuid ids living in the loaded item set.
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over) return;
+
+    // ── S3: sort a line within its room ──
+    const typedItems = items as FFEItem[];
+    const activeItem =
+      typeof active.id === 'string' ? typedItems.find((i) => i.id === active.id) : undefined;
+    if (activeItem) {
+      const overItem =
+        typeof over.id === 'string' ? typedItems.find((i) => i.id === over.id) : undefined;
+      // Same-room sorts only — cross-room moves go through the edit form /
+      // bulk bar, keeping the drop-zone semantics reserved for captures.
+      if (!overItem || overItem.id === activeItem.id) return;
+      if ((overItem.scope_room_id ?? null) !== (activeItem.scope_room_id ?? null)) return;
+
+      // Rebuild the GLOBAL order from the display groups, with the active
+      // line moved to the over line's slot inside its room. The RPC rewrites
+      // position = array index for every id, normalizing 0..n-1.
+      const orderedIds: string[] = [];
+      for (const group of Object.values(grouped)) {
+        const ids = group.items.map((i) => i.id);
+        const from = ids.indexOf(activeItem.id);
+        const to = ids.indexOf(overItem.id);
+        if (from !== -1 && to !== -1) {
+          ids.splice(from, 1);
+          ids.splice(to, 0, activeItem.id);
+        }
+        orderedIds.push(...ids);
+      }
+      reorderItems.mutate({ proposalId, orderedIds });
+      return;
+    }
+
+    // ── Existing: capture dropped onto a room zone ──
     if (!isFFEScheduleDroppable(over.id)) return;
     const captureId = parseCaptureDraggableId(active.id);
     if (!captureId) return;
@@ -830,7 +1009,7 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
   };
 
   return (
-    <DndContext onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
     <div>
       {/* The "Preliminary FF&E Schedule" heading + description are rendered by
           ScopeBuilderShell. We only render the live item-count / estimated-total
@@ -846,6 +1025,22 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
         {(items as FFEItem[]).length} items
         {totalEstimate > 0 ? ` · Est. total: ${formatDollars(totalEstimate)}` : ''}
       </div>
+
+      {/* R83 — bulk-action failures land inline at the schedule, never a toast. */}
+      {bulkError && (
+        <p
+          role="alert"
+          className="mb-3 rounded-sm border px-3 py-2"
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: '0.78rem',
+            color: '#C4836F',
+            borderColor: 'rgba(196,131,111,0.4)',
+          }}
+        >
+          {bulkError}
+        </p>
+      )}
 
       {isLoading && (
         <div
@@ -889,28 +1084,43 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
                 </Button>
               </div>
 
-              <div
-                className="grid gap-3"
-                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}
+              <SortableContext
+                items={group.items.map((i) => i.id)}
+                strategy={rectSortingStrategy}
               >
-                {group.items.map((item) => {
-                  const editing = editingItemId === item.id;
-                  return (
-                    <div key={item.id} style={{ gridColumn: editing ? '1 / -1' : undefined }}>
-                      <ItemRow
-                        item={item}
-                        proposalId={proposalId}
-                        rooms={typedRooms}
-                        categories={categoryOptions}
-                        categoryLookup={categoryLookup}
-                        isEditing={editing}
-                        onStartEdit={() => setEditingItemId(item.id)}
-                        onStopEdit={() => setEditingItemId(null)}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+                <div
+                  className="grid gap-3"
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}
+                >
+                  {group.items.map((item) => {
+                    const editing = editingItemId === item.id;
+                    return (
+                      <SortableScheduleItem
+                        key={item.id}
+                        id={item.id}
+                        disabled={editing}
+                        spanFull={editing}
+                      >
+                        {(dragHandle) => (
+                          <ItemRow
+                            item={item}
+                            proposalId={proposalId}
+                            rooms={typedRooms}
+                            categories={categoryOptions}
+                            categoryLookup={categoryLookup}
+                            isEditing={editing}
+                            onStartEdit={() => setEditingItemId(item.id)}
+                            onStopEdit={() => setEditingItemId(null)}
+                            dragHandle={dragHandle}
+                            selected={selected.has(item.id)}
+                            onToggleSelect={() => toggleSelect(item.id)}
+                          />
+                        )}
+                      </SortableScheduleItem>
+                    );
+                  })}
+                </div>
+              </SortableContext>
             </div>
           </RoomDropZone>
         );
@@ -1030,6 +1240,65 @@ export function FFEScheduleBuilder({ proposalId }: FFEScheduleBuilderProps) {
           setCaptureDropError(null);
         }}
       />
+
+      {/* S3 — pre-sale bulk bar (mirrors the post-sale BulkActionBar pattern):
+          move to room · set item type · set lead-time bucket · delete. The
+          Selects act immediately on change and reset to their placeholder. */}
+      <BulkActionBar count={selected.size} onClear={() => setSelected(new Set())}>
+        <Select
+          aria-label="Move selected to room"
+          value=""
+          className="!w-auto"
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === '') return;
+            void bulkUpdate({ scope_room_id: v === '__unassigned' ? null : v });
+          }}
+        >
+          <option value="">Move to room…</option>
+          <option value="__unassigned">Unassigned</option>
+          {typedRooms.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </Select>
+        <Select
+          aria-label="Set item type"
+          value=""
+          className="!w-auto"
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === '') return;
+            void bulkUpdate({ item_type: v });
+          }}
+        >
+          <option value="">Set type…</option>
+          <option value="fixed">Fixed</option>
+          <option value="allowance">Allowance</option>
+          <option value="tbd">TBD</option>
+        </Select>
+        <Select
+          aria-label="Set lead time"
+          value=""
+          className="!w-auto"
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === '') return;
+            void bulkUpdate({ lead_time_weeks: Number(v) });
+          }}
+        >
+          <option value="">Set lead time…</option>
+          {LEAD_TIME_BUCKETS.map((b) => (
+            <option key={b.value} value={b.value}>
+              {b.label}
+            </option>
+          ))}
+        </Select>
+        <BulkActionButton variant="danger" onClick={() => void bulkDelete()}>
+          Delete
+        </BulkActionButton>
+      </BulkActionBar>
     </div>
     </DndContext>
   );

@@ -184,6 +184,106 @@ export function useRemoveScopeRoom() {
   });
 }
 
+/**
+ * Reorder a proposal's FF&E schedule lines (Schedule & Boards Wave 1 · S3).
+ *
+ * `orderedIds` is the new GLOBAL order of every line in the proposal (position
+ * is a global sort key; the room grouping in the UI is a view over it). Persists
+ * the whole ordering in one statement via the reorder_proposal_items RPC (00263,
+ * SECURITY INVOKER — RLS authorizes) and optimistically reorders the
+ * ['proposal-items-schedule', proposalId] cache so the drag lands instantly,
+ * rolling back on error.
+ */
+export function useReorderProposalItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ proposalId, orderedIds }: { proposalId: string; orderedIds: string[] }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { error } = await supabase.rpc('reorder_proposal_items', {
+        p_proposal_id: proposalId,
+        p_ordered_ids: orderedIds,
+      });
+      if (error) throw error;
+    },
+    onMutate: async ({ proposalId, orderedIds }) => {
+      const key = ['proposal-items-schedule', proposalId];
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData(key);
+      const rank = new Map(orderedIds.map((id, i) => [id, i] as const));
+      queryClient.setQueryData(key, (old: unknown) => {
+        if (!Array.isArray(old)) return old;
+        return [...old]
+          .map((it: { id: string; position?: number }) =>
+            rank.has(it.id) ? { ...it, position: rank.get(it.id)! } : it
+          )
+          .sort(
+            (a: { position?: number }, b: { position?: number }) =>
+              (a.position ?? 0) - (b.position ?? 0)
+          );
+      });
+      return { previous, key };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(context.key, context.previous);
+      }
+    },
+    onSettled: (_d, _e, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: ['proposal-items-schedule', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+    },
+  });
+}
+
+/**
+ * Reorder a proposal's scope rooms (Schedule & Boards Wave 1 · S3). Persists the
+ * whole ordering via the reorder_proposal_scope_rooms RPC (00263, SECURITY
+ * INVOKER) and optimistically reorders the ['proposal-scope-rooms', proposalId]
+ * cache, rolling back on error.
+ */
+export function useReorderProposalScopeRooms() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ proposalId, orderedIds }: { proposalId: string; orderedIds: string[] }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { error } = await supabase.rpc('reorder_proposal_scope_rooms', {
+        p_proposal_id: proposalId,
+        p_ordered_ids: orderedIds,
+      });
+      if (error) throw error;
+    },
+    onMutate: async ({ proposalId, orderedIds }) => {
+      const key = ['proposal-scope-rooms', proposalId];
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData(key);
+      const rank = new Map(orderedIds.map((id, i) => [id, i] as const));
+      queryClient.setQueryData(key, (old: unknown) => {
+        if (!Array.isArray(old)) return old;
+        return [...old]
+          .map((r: { id: string; sort_order?: number }) =>
+            rank.has(r.id) ? { ...r, sort_order: rank.get(r.id)! } : r
+          )
+          .sort(
+            (a: { sort_order?: number }, b: { sort_order?: number }) =>
+              (a.sort_order ?? 0) - (b.sort_order ?? 0)
+          );
+      });
+      return { previous, key };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(context.key, context.previous);
+      }
+    },
+    onSettled: (_d, _e, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: ['proposal-scope-rooms', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+    },
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PROPOSAL PHASES
 // ═══════════════════════════════════════════════════════════════════════════
