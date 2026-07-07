@@ -16,12 +16,15 @@ import { EmptyState, useHelpContent } from '@patina/help-system';
 import {
   useBoards,
   useUpsertBoard,
+  useDuplicateBoard,
   useDeleteBoard,
   useProposalScopeRooms,
   type ProposalBoardSummary,
   type ProposalScopeRoom,
 } from '@patina/supabase';
 import { BoardEditor } from './board-editor';
+
+type StatusFilter = 'active' | 'archived';
 
 // CMS surface key for the zero-boards state (probe-then-fallback, mirroring
 // the FF&E board empty-state pattern).
@@ -37,20 +40,64 @@ export function BoardsBuilder({ proposalId }: BoardsBuilderProps) {
   const { data: roomsData = [] } = useProposalScopeRooms(proposalId);
   const rooms = roomsData as ProposalScopeRoom[];
   const upsertBoard = useUpsertBoard();
+  const duplicateBoard = useDuplicateBoard();
   const deleteBoard = useDeleteBoard();
 
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
-  const active =
-    boards.find((b) => b.id === activeBoardId) ?? boards[0] ?? null;
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
+
+  const activeCount = boards.filter((b) => b.status !== 'archived').length;
+  const archivedCount = boards.length - activeCount;
+
+  // Fall back to Active whenever nothing is archived, so unarchiving the last
+  // board can't strand the view on an empty Archived tab.
+  const effectiveFilter: StatusFilter = archivedCount === 0 ? 'active' : statusFilter;
+
+  // Boards matching the current filter (archived boards stay editable, behind
+  // the Archived tab). The active board is chosen from the shown set so an
+  // archive/unarchive that moves a board out of view falls back cleanly.
+  const shown = boards.filter((b) =>
+    effectiveFilter === 'archived' ? b.status === 'archived' : b.status !== 'archived',
+  );
+  const active = shown.find((b) => b.id === activeBoardId) ?? shown[0] ?? null;
 
   const handleNewBoard = useCallback(async () => {
     const result = await upsertBoard.mutateAsync({
       proposalId,
-      name: `Board ${boards.length + 1}`,
+      name: `Board ${activeCount + 1}`,
       sortOrder: boards.length,
     });
-    if (result?.id) setActiveBoardId(result.id);
-  }, [upsertBoard, proposalId, boards.length]);
+    if (result?.id) {
+      setStatusFilter('active');
+      setActiveBoardId(result.id);
+    }
+  }, [upsertBoard, proposalId, activeCount, boards.length]);
+
+  const handleDuplicate = useCallback(
+    (boardId: string) => {
+      duplicateBoard.mutate(
+        { proposalId, boardId },
+        {
+          onSuccess: (b) => {
+            setStatusFilter('active');
+            setActiveBoardId(b.id);
+          },
+        },
+      );
+    },
+    [duplicateBoard, proposalId],
+  );
+
+  const handleArchiveToggle = useCallback(
+    (board: ProposalBoardSummary) => {
+      const next = board.status === 'archived' ? 'active' : 'archived';
+      upsertBoard.mutate({ proposalId, boardId: board.id, status: next });
+      // Leaving the current filter's view — drop the selection so `active`
+      // falls back to the first still-shown board.
+      if (activeBoardId === board.id) setActiveBoardId(null);
+    },
+    [upsertBoard, proposalId, activeBoardId],
+  );
 
   const handleRename = useCallback(
     (boardId: string, name: string) => {
@@ -89,14 +136,49 @@ export function BoardsBuilder({ proposalId }: BoardsBuilderProps) {
 
   return (
     <div className="space-y-4">
+      {archivedCount > 0 && (
+        <div className="inline-flex overflow-hidden rounded-md border border-[var(--border-default)] text-xs">
+          {(
+            [
+              ['active', `Active · ${activeCount}`],
+              ['archived', `Archived · ${archivedCount}`],
+            ] as Array<[StatusFilter, string]>
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={effectiveFilter === value}
+              onClick={() => {
+                setStatusFilter(value);
+                setActiveBoardId(null);
+              }}
+              className={`px-3 py-1.5 transition-colors ${
+                effectiveFilter === value
+                  ? 'bg-[var(--accent-primary)] text-white'
+                  : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <BoardList
-        boards={boards}
+        boards={shown}
         activeId={active?.id ?? null}
+        showNew={effectiveFilter === 'active'}
         onSelect={setActiveBoardId}
         onNew={() => void handleNewBoard()}
         onRename={handleRename}
         onDelete={setDeleteTarget}
       />
+
+      {shown.length === 0 && (
+        <p className="text-sm text-[var(--text-muted)]">
+          No {effectiveFilter} boards.
+        </p>
+      )}
 
       <AlertDialog
         open={deleteTarget !== null}
@@ -133,7 +215,7 @@ export function BoardsBuilder({ proposalId }: BoardsBuilderProps) {
 
       {active && (
         <>
-          {/* Room link */}
+          {/* Board-level acts: room link · duplicate · archive */}
           <div className="flex flex-wrap items-center gap-3">
             <label
               htmlFor="board-room-link"
@@ -154,6 +236,20 @@ export function BoardsBuilder({ proposalId }: BoardsBuilderProps) {
                 </option>
               ))}
             </Select>
+
+            <div className="ml-auto flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={duplicateBoard.isPending}
+                onClick={() => handleDuplicate(active.id)}
+              >
+                {duplicateBoard.isPending ? 'Duplicating…' : 'Duplicate'}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => handleArchiveToggle(active)}>
+                {active.status === 'archived' ? 'Unarchive' : 'Archive'}
+              </Button>
+            </div>
           </div>
 
           {/* key={id} so switching boards remounts the editor (flushes the
@@ -170,13 +266,14 @@ export function BoardsBuilder({ proposalId }: BoardsBuilderProps) {
 interface BoardListProps {
   boards: ProposalBoardSummary[];
   activeId: string | null;
+  showNew: boolean;
   onSelect: (id: string) => void;
   onNew: () => void;
   onRename: (boardId: string, name: string) => void;
   onDelete: (board: ProposalBoardSummary) => void;
 }
 
-function BoardList({ boards, activeId, onSelect, onNew, onRename, onDelete }: BoardListProps) {
+function BoardList({ boards, activeId, showNew, onSelect, onNew, onRename, onDelete }: BoardListProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState('');
 
@@ -196,6 +293,7 @@ function BoardList({ boards, activeId, onSelect, onNew, onRename, onDelete }: Bo
               : 'border-[var(--border-default)] bg-[var(--bg-muted)]'
           }`}
         >
+          <BoardCoverThumb board={b} />
           {renamingId === b.id ? (
             <Input
               autoFocus
@@ -239,13 +337,39 @@ function BoardList({ boards, activeId, onSelect, onNew, onRename, onDelete }: Bo
           </IconButton>
         </div>
       ))}
-      <button
-        onClick={onNew}
-        className="rounded-md border border-dashed border-[var(--border-default)] px-3 py-2 text-sm hover:border-[var(--accent-primary)]"
-      >
-        + New Board
-      </button>
+      {showNew && (
+        <button
+          onClick={onNew}
+          className="rounded-md border border-dashed border-[var(--border-default)] px-3 py-2 text-sm hover:border-[var(--accent-primary)]"
+        >
+          + New Board
+        </button>
+      )}
     </div>
+  );
+}
+
+/**
+ * Board-list thumbnail: the set cover, else the first image item on the board,
+ * else a monogram of the board name's first letter.
+ */
+function BoardCoverThumb({ board }: { board: ProposalBoardSummary }) {
+  const src = board.cover_image_url ?? board.cover_fallback_url ?? null;
+  if (src) {
+    return (
+      <span className="h-7 w-7 flex-shrink-0 overflow-hidden rounded-sm bg-[var(--bg-muted)]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm bg-[var(--bg-muted)] font-display text-xs text-[var(--text-muted)]"
+    >
+      {board.name.trim().charAt(0).toUpperCase() || 'B'}
+    </span>
   );
 }
 
