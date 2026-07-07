@@ -20,14 +20,19 @@ struct OnboardingFlowView: View {
     @Binding var step: Int
     let onComplete: () -> Void
     let authorizer: WorkspaceAuthorizing
+    /// Persist the workspace the designer picks in O2 (real mode). No-op for the
+    /// stub host / previews.
+    let onSelectWorkspace: (String) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(step: Binding<Int>,
          authorizer: WorkspaceAuthorizing,
+         onSelectWorkspace: @escaping (String) -> Void = { _ in },
          onComplete: @escaping () -> Void) {
         self._step = step
         self.authorizer = authorizer
+        self.onSelectWorkspace = onSelectWorkspace
         self.onComplete = onComplete
     }
 
@@ -69,7 +74,10 @@ struct OnboardingFlowView: View {
         case 1:
             ConnectWorkspaceScreen(
                 authorizer: authorizer,
-                onConnected: { _, _ in advance(to: 2) }
+                onConnected: { workspace, _ in
+                    onSelectWorkspace(workspace.id)
+                    advance(to: 2)
+                }
             )
         case 2:
             CameraPrimingScreen(onContinue: { advance(to: 3) })

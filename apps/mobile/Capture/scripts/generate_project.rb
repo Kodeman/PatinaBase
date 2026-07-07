@@ -157,6 +157,35 @@ embed.symbol_dst_subfolder_spec = :frameworks
   bf.settings = { 'ATTRIBUTES' => %w[CodeSignOnCopy RemoveHeadersOnCopy] }
 end
 
+# ── Remote SPM packages (APP TARGET ONLY) ───────────────────────────────────
+# Architecture rule: feature teams import CaptureKit only; SDK use is app-side.
+# CaptureKit / CaptureKitMocks / CaptureTests must NOT link these. supabase-swift
+# powers real auth/session/persistence (Phase 1a); posthog-ios is linked now and
+# consumed in Phase 1b (analytics).
+def link_remote_package(project, target, url:, minimum_version:, product:)
+  ref = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
+  ref.repositoryURL = url
+  ref.requirement = { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => minimum_version }
+  project.root_object.package_references << ref
+
+  dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+  dep.package = ref
+  dep.product_name = product
+  target.package_product_dependencies << dep
+
+  build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+  build_file.product_ref = dep
+  target.frameworks_build_phase.files << build_file
+  ref
+end
+
+link_remote_package(project, app,
+                    url: 'https://github.com/supabase/supabase-swift',
+                    minimum_version: '2.40.0', product: 'Supabase')
+link_remote_package(project, app,
+                    url: 'https://github.com/PostHog/posthog-ios.git',
+                    minimum_version: '3.48.0', product: 'PostHog')
+
 # Deterministic UUIDs so re-running this script on an unchanged source tree
 # leaves `git status` clean instead of rewriting every object identifier.
 # Called twice: pass 1 assigns content-derived UUIDs, but PBXContainerItemProxy

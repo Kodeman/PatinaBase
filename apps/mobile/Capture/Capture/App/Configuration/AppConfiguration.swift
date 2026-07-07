@@ -7,8 +7,18 @@
 import Foundation
 
 public enum AppConfiguration {
-    public static let supabaseURL = URL(string: "https://api.patina.cloud")!
-    public static var supabaseAnonKey: String { Secrets.supabaseAnonKey }
+    /// Shared backend. Defaults to production; overridable for local-stack
+    /// testing via `-CaptureSupabaseURL <url>`.
+    public static var supabaseURL: URL {
+        if let raw = launchArgValue("-CaptureSupabaseURL"), let url = URL(string: raw) { return url }
+        return URL(string: "https://api.patina.cloud")!
+    }
+
+    /// Anon (publishable) key. From `Secrets.swift` (gitignored) by default;
+    /// overridable via `-CaptureSupabaseAnonKey <key>` for local-stack testing.
+    public static var supabaseAnonKey: String {
+        launchArgValue("-CaptureSupabaseAnonKey") ?? Secrets.supabaseAnonKey
+    }
 
     public static let appGroupID = "group.cloud.patina.field"
     public static let urlScheme = "field"
@@ -23,6 +33,32 @@ public enum AppConfiguration {
     }
     public static var isUITest: Bool {
         ProcessInfo.processInfo.arguments.contains("-CaptureUITest")
+    }
+
+    /// Composition policy: whether the app wires REAL services (Supabase session,
+    /// persistent store, local sync outbox) instead of mocks.
+    ///
+    /// All-mock (returns `false`): `-CaptureUseMocks` / `--uitesting`,
+    /// `-CaptureUITest`, **or** running on the simulator without
+    /// `-CaptureForceReal`. This keeps the 33-screen `-CaptureScreen` harness,
+    /// capture-run.sh, capture-shots.sh, and previews working by default.
+    ///
+    /// Real (returns `true`): a physical device by default, or the simulator
+    /// with `-CaptureForceReal`.
+    public static var runsRealServices: Bool {
+        if useMocks || isUITest { return false }
+        #if targetEnvironment(simulator)
+        return ProcessInfo.processInfo.arguments.contains("-CaptureForceReal")
+        #else
+        return true
+        #endif
+    }
+
+    /// Value that follows a `-Flag value` launch argument, if present.
+    private static func launchArgValue(_ flag: String) -> String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: flag), i + 1 < args.count else { return nil }
+        return args[i + 1]
     }
 
     /// `-CaptureScreen <suffix>` drives a screen on launch (deterministic sim/UITest
