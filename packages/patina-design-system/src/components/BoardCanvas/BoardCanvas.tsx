@@ -44,6 +44,14 @@ export interface BoardSection {
   id: string
   name: string
   color?: string
+  /**
+   * Logical-coordinate band this section occupies on the canvas. When present,
+   * the canvas draws a labeled dashed region behind the items; when absent the
+   * section is not drawn (it is a data-only grouping the caller lays out via an
+   * Arrange pass). The board editor computes bounds live from the positions of
+   * the items assigned to the section, so bands track their items in freeform.
+   */
+  bounds?: { x: number; y: number; width: number; height: number }
 }
 
 export interface BoardCanvasProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -321,26 +329,33 @@ export const BoardCanvas = React.forwardRef<HTMLDivElement, BoardCanvasProps>(
                 ...gridBackground,
               }}
             >
-              {/* Sections */}
-              {sections.map((section) => (
-                <div
-                  key={section.id}
-                  className="absolute border-2 border-dashed rounded-lg p-4"
-                  style={{
-                    borderColor: section.color || '#94a3b8',
-                  }}
-                >
+              {/* Sections — drawn only when the caller supplies bounds; the
+                  band sits behind the items (rendered first, no positive z). */}
+              {sections.map((section) =>
+                section.bounds ? (
                   <div
-                    className="text-sm font-medium px-2 py-1 rounded"
+                    key={section.id}
+                    className="absolute rounded-lg border-2 border-dashed"
                     style={{
-                      backgroundColor: section.color || '#94a3b8',
-                      color: 'white',
+                      left: section.bounds.x,
+                      top: section.bounds.y,
+                      width: section.bounds.width,
+                      height: section.bounds.height,
+                      borderColor: section.color || '#94a3b8',
                     }}
                   >
-                    {section.name}
+                    <div
+                      className="absolute -top-3 left-2 rounded px-2 py-0.5 text-xs font-medium"
+                      style={{
+                        backgroundColor: section.color || '#94a3b8',
+                        color: 'white',
+                      }}
+                    >
+                      {section.name}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ) : null,
+              )}
 
               {/* Items */}
               {items.map((item) => (
