@@ -202,7 +202,7 @@ function ProductTile({ item, mode = 'presentation' }: { item: BoardsBlockItem; m
     mode === 'detail' && typeof snap.lead_time_weeks === 'number' ? snap.lead_time_weeks : null
 
   return (
-    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white shadow-sm">
+    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white">
       <div
         className="relative w-full overflow-hidden"
         style={{ aspectRatio: '1 / 1', background: 'var(--color-pearl, #f5f3ee)' }}
@@ -299,7 +299,7 @@ function ImageTile({ item }: { item: BoardsBlockItem }) {
       src={item.image_url}
       alt=""
       draggable={false}
-      className="pointer-events-none h-full w-full select-none rounded-sm object-cover shadow-sm"
+      className="pointer-events-none h-full w-full select-none rounded-sm object-cover"
     />
   )
 }
@@ -307,7 +307,7 @@ function ImageTile({ item }: { item: BoardsBlockItem }) {
 function RoomScanTile({ item }: { item: BoardsBlockItem }) {
   const snap = (item.data ?? {}) as RoomScanSnapshot
   return (
-    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white shadow-sm">
+    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white">
       <div
         className="relative min-h-0 flex-1"
         style={{ background: 'var(--color-pearl, #f5f3ee)' }}
@@ -343,7 +343,7 @@ function PaletteStrip({ item }: { item: BoardsBlockItem }) {
   const swatches = snap.swatches ?? []
 
   return (
-    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white shadow-sm">
+    <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-sm border border-[var(--border-subtle)] bg-white">
       <div className="flex min-h-0 flex-1">
         {swatches.length > 0 ? (
           swatches.map((s, i) => (
@@ -378,7 +378,7 @@ function NoteCard({ item }: { item: BoardsBlockItem }) {
   if (!item.content?.trim()) return null
   return (
     <div
-      className="h-full w-full select-none overflow-hidden rounded-sm p-3 shadow-sm"
+      className="h-full w-full select-none overflow-hidden rounded-sm p-3"
       style={{
         backgroundColor: '#F3E9D5',
         border: '1px solid #E0D2B8',

@@ -31,7 +31,7 @@ Pre-00139 rows have `total_amount_cents` backfilled from `budget_cents` and may 
 
 ## Proposal → project activation
 
-`activate_proposal_as_project(p_proposal_id, p_start_date)` (latest body in `00180_activation_carry_boards.sql`; prior revisions: 00140 richer carry → 00167 created_by fix) is the bridge. Preconditions: `proposals.status = 'accepted'` and `proposals.project_id IS NULL`.
+`activate_proposal_as_project(p_proposal_id, p_start_date)` (latest body in `00262_spec_doc_codes.sql`; lineage: 00140 richer carry → 00167 created_by fix → 00180 boards carry → 00185 dual pricing → 00199 vendor_id carry → 00262 doc_code carry) is the bridge. Preconditions: `proposals.status = 'accepted'` and `proposals.project_id IS NULL`.
 
 Status transitions and side effects:
 
