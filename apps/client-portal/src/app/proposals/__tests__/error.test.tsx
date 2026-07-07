@@ -49,4 +49,15 @@ describe('ProposalsError', () => {
     expect(consoleSpy).toHaveBeenCalledWith(expect.any(String), error);
     consoleSpy.mockRestore();
   });
+
+  it('renders error digest when provided', () => {
+    render(<ProposalsError error={makeError('abc123digest')} reset={reset} />);
+    expect(screen.getByText('Error Reference')).toBeInTheDocument();
+    expect(screen.getByText('abc123digest')).toBeInTheDocument();
+  });
+
+  it('hides error digest when not provided', () => {
+    render(<ProposalsError error={makeError()} reset={reset} />);
+    expect(screen.queryByText('Error Reference')).not.toBeInTheDocument();
+  });
 });
