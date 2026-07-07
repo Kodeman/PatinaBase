@@ -24,7 +24,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SIM="${CAPTURE_SIM:-iPhone 17}"
-BUNDLE_ID="cloud.patina.capture"
+BUNDLE_ID="cloud.patina.field"
 DERIVED=".build/derived"          # under the gitignored .build/
 SCREEN="${1:-}"
 

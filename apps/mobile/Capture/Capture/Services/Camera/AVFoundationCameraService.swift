@@ -82,8 +82,8 @@ private final class CaptureCameraEngine: NSObject, AVCaptureVideoDataOutputSampl
     private let session = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
     private let videoOutput = AVCaptureVideoDataOutput()
-    private let sessionQueue = DispatchQueue(label: "cloud.patina.capture.camera.session")
-    private let videoQueue = DispatchQueue(label: "cloud.patina.capture.camera.video")
+    private let sessionQueue = DispatchQueue(label: "cloud.patina.field.camera.session")
+    private let videoQueue = DispatchQueue(label: "cloud.patina.field.camera.video")
     private let motion = CMMotionManager()
     private let motionQueue = OperationQueue()
 

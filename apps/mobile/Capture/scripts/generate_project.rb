@@ -49,7 +49,7 @@ def framework!(target, project, name)
     s = c.build_settings
     s['DEFINES_MODULE'] = 'YES'
     s['PRODUCT_NAME'] = name
-    s['PRODUCT_BUNDLE_IDENTIFIER'] = "cloud.patina.capture.#{name.downcase}"
+    s['PRODUCT_BUNDLE_IDENTIFIER'] = "cloud.patina.field.#{name.downcase}"
     s['GENERATE_INFOPLIST_FILE'] = 'YES'
     s['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'NO'
     s['SKIP_INSTALL'] = 'YES'
@@ -65,16 +65,22 @@ app.build_configurations.each do |c|
   common!(c)
   s = c.build_settings
   s['PRODUCT_NAME'] = 'Capture'
-  s['PRODUCT_BUNDLE_IDENTIFIER'] = 'cloud.patina.capture'
+  s['PRODUCT_BUNDLE_IDENTIFIER'] = 'cloud.patina.field'
   s['GENERATE_INFOPLIST_FILE'] = 'YES'
+  # Partial plist merged into the generated one — currently just the URL scheme
+  # (Xcode merges GENERATE_INFOPLIST_FILE keys into this physical file's keys).
+  s['INFOPLIST_FILE'] = 'Capture/Info.plist'
+  s['CODE_SIGN_ENTITLEMENTS'] = 'Capture/Capture.entitlements'
+  s['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
   s['CURRENT_PROJECT_VERSION'] = '1'
   s['MARKETING_VERSION'] = '0.1'
+  s['INFOPLIST_KEY_CFBundleDisplayName'] = 'Patina Field'
   s['INFOPLIST_KEY_UILaunchScreen_Generation'] = 'YES'
   s['INFOPLIST_KEY_UIApplicationSceneManifest_Generation'] = 'YES'
   s['INFOPLIST_KEY_UISupportedInterfaceOrientations'] = 'UIInterfaceOrientationPortrait'
   # Just-in-time permission usage strings (Phase 0 sets all).
   s['INFOPLIST_KEY_NSCameraUsageDescription'] =
-    'Field Capture uses the camera to photograph products and read their labels, barcodes, and dimensions.'
+    'Patina Field uses the camera to photograph products and read their labels, barcodes, and dimensions.'
   s['INFOPLIST_KEY_NSMicrophoneUsageDescription'] =
     'Used to record a quick voice note about a piece.'
   s['INFOPLIST_KEY_NSSpeechRecognitionUsageDescription'] =
@@ -88,7 +94,7 @@ app.build_configurations.each do |c|
   s['INFOPLIST_KEY_NSMotionUsageDescription'] =
     'Shows a level guide for square, steady captures.'
   s['INFOPLIST_KEY_NSFaceIDUsageDescription'] =
-    'Unlock Field Capture with Face ID.'
+    'Unlock Patina Field with Face ID.'
 end
 
 # ── Source groups (one synced-style group per target source root) ───────────
@@ -105,14 +111,23 @@ end
 
 add_sources(project, kit,   'CaptureKit',      File.join(ROOT, 'CaptureKit', 'CaptureKit'))
 add_sources(project, mocks, 'CaptureKitMocks', File.join(ROOT, 'CaptureKitMocks'))
-add_sources(project, app,   'Capture',         File.join(ROOT, 'Capture'),
-            exclude: ['Secrets.example.swift'])
+app_group = add_sources(project, app, 'Capture', File.join(ROOT, 'Capture'),
+                         exclude: ['Secrets.example.swift'])
+
+# Non-Swift app files the glob above doesn't see: the URL-scheme partial
+# Info.plist and entitlements (referenced only via build settings, no build
+# phase needed) and the app-icon asset catalog (needs the Resources phase so
+# actool compiles it).
+app_group.new_file(File.join(ROOT, 'Capture', 'Info.plist'))
+app_group.new_file(File.join(ROOT, 'Capture', 'Capture.entitlements'))
+assets_ref = app_group.new_file(File.join(ROOT, 'Capture', 'Assets.xcassets'))
+app.add_resources([assets_ref])
 
 # Unit tests (logic tests linking CaptureKit; no app host).
 tests = project.new_target(:unit_test_bundle, 'CaptureTests', :ios, DEPLOYMENT)
 tests.build_configurations.each do |c|
   common!(c)
-  c.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'cloud.patina.capture.tests'
+  c.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'cloud.patina.field.tests'
   c.build_settings['GENERATE_INFOPLIST_FILE'] = 'YES'
 end
 add_sources(project, tests, 'CaptureTests', File.join(ROOT, 'CaptureTests'))
@@ -141,6 +156,17 @@ embed.symbol_dst_subfolder_spec = :frameworks
   bf = embed.add_file_reference(fw.product_reference)
   bf.settings = { 'ATTRIBUTES' => %w[CodeSignOnCopy RemoveHeadersOnCopy] }
 end
+
+# Deterministic UUIDs so re-running this script on an unchanged source tree
+# leaves `git status` clean instead of rewriting every object identifier.
+# Called twice: pass 1 assigns content-derived UUIDs, but PBXContainerItemProxy
+# hashes partly off the *pre-fixup* remoteGlobalIDString it's still holding, so
+# its own new UUID isn't yet reproducible; pass 1 also rewrites that string to
+# the now-stable target UUID via fixup_uuid_references. Pass 2 re-hashes with
+# that already-stable value in place, so the proxy/dependency objects settle
+# too. (Everything else is idempotent across the extra call.)
+project.predictabilize_uuids
+project.predictabilize_uuids
 
 # Shared schemes so `xcodebuild -scheme …` works deterministically.
 project.save

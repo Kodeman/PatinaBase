@@ -1,7 +1,7 @@
 //  CaptureDeepLink.swift
 //  Capture
 //
-//  Entry-point + verification deep links. `capture://screen/<CaptureScreenID>`
+//  Entry-point + verification deep links. `field://screen/<CaptureScreenID>`
 //  drives any screen directly for MobAI / XCUITest per-screen validation (the
 //  32-row acceptance matrix). Production entries (E1/E2) also land here.
 
@@ -9,19 +9,19 @@ import Foundation
 import CaptureKit
 
 enum CaptureDeepLink {
-    /// Resolve a `capture://…` URL into a navigation intent.
+    /// Resolve a `field://…` URL into a navigation intent.
     @MainActor
     static func handle(_ url: URL, coordinator: CaptureCoordinator, store: CaptureStore) {
         guard url.scheme == AppConfiguration.urlScheme else { return }
 
-        // capture://screen/<id>  — drive a specific screen (debug/verification).
+        // field://screen/<id>  — drive a specific screen (debug/verification).
         if url.host == "screen", let raw = url.pathComponents.dropFirst().first,
            let id = CaptureScreenID(rawValue: "screen.\(raw)") ?? CaptureScreenID.allCases.first(where: { $0.rawValue.hasSuffix(raw) }) {
             route(for: id, coordinator: coordinator, store: store)
             return
         }
 
-        // capture://capture — instant viewfinder (E1/E2).
+        // field://capture — instant viewfinder (E1/E2).
         if url.host == "capture" || url.host == nil {
             coordinator.popToRoot()
         }

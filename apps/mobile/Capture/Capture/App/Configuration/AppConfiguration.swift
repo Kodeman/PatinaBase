@@ -10,9 +10,9 @@ public enum AppConfiguration {
     public static let supabaseURL = URL(string: "https://api.patina.cloud")!
     public static var supabaseAnonKey: String { Secrets.supabaseAnonKey }
 
-    public static let appGroupID = "group.cloud.patina.capture"
-    public static let urlScheme = "capture"
-    public static let authCallback = "capture://auth/callback"
+    public static let appGroupID = "group.cloud.patina.field"
+    public static let urlScheme = "field"
+    public static let authCallback = "field://auth/callback"
     public static let captureMediaBucket = "capture-media"
     public static let productImagesBucket = "product-images"
 

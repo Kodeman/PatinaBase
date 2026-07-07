@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# capture-shots.sh — sweep every screen in the 32-screen matrix and save a PNG
+# capture-shots.sh — sweep every screen in the 33-screen matrix and save a PNG
 # of each, using only the simulator + simctl (no MCP needed). The CLI "visual
 # regression" counterpart to driving the app interactively via blitz-iphone.
 #
@@ -8,14 +8,14 @@
 # (gitignored); override with CAPTURE_SHOTS_DIR.
 #
 # Usage:
-#   scripts/capture-shots.sh                      # all 32 screens
+#   scripts/capture-shots.sh                      # all 33 screens
 #   scripts/capture-shots.sh C5 N1 S3             # only the given screens (prefix match)
 #   CAPTURE_SIM="iPhone 17 Pro" scripts/capture-shots.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SIM="${CAPTURE_SIM:-iPhone 17}"
-BUNDLE_ID="cloud.patina.capture"
+BUNDLE_ID="cloud.patina.field"
 DERIVED=".build/derived"
 OUT="${CAPTURE_SHOTS_DIR:-.build/shots}"
 SETTLE="${CAPTURE_SHOT_SETTLE:-1.4}"   # seconds to let a screen render before the shot

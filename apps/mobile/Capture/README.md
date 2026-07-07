@@ -1,7 +1,7 @@
-# Patina Field Capture (T-03)
+# Patina Field (T-03)
 
-Standalone camera-first iOS app — turns a physical object in a showroom into a
-structured, located, synced **specimen**. Spec:
+**Patina Field** is a standalone camera-first iOS app — it turns a physical
+object in a showroom into a structured, located, synced **specimen**. Spec:
 `docs/design/ios-Capture/patina-mobile-ux-flow.html`. Plan:
 `~/.claude/plans/review-the-design-document-greedy-engelbart.md`.
 
@@ -12,7 +12,7 @@ structured, located, synced **specimen**. Spec:
   Activity attributes). Built by the foundation owner; teams code against it.
 - **`CaptureKitMocks/`** — mock conformer for every seam, so all screens render
   in the Simulator without camera/LiDAR/Speech/network.
-- **`Capture/`** — the app target (all 32 screens, Features/ per flow).
+- **`Capture/`** — the app target (all 33 screens, Features/ per flow).
 - `CaptureShareExtension/`, `CaptureWidgets/` — Team F (Phase 1).
 
 ## Build
@@ -49,11 +49,11 @@ scripts/capture-gate.sh            # or: build | test | lint
 
 # RUN — generate → build → boot sim → install → launch
 scripts/capture-run.sh                    # real entry (viewfinder / onboarding)
-scripts/capture-run.sh C5.specimen-sheet  # jump straight to any of the 32 screens
+scripts/capture-run.sh C5.specimen-sheet  # jump straight to any of the 33 screens
 CAPTURE_SIM="iPhone 17 Pro" scripts/capture-run.sh N3.measure
 
 # SWEEP — screenshot every screen (pure simctl, no MCP) → .build/shots/
-scripts/capture-shots.sh                  # all 32
+scripts/capture-shots.sh                  # all 33
 scripts/capture-shots.sh C5 N1 S3         # subset (prefix match)
 ```
 

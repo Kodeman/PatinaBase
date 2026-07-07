@@ -1,7 +1,7 @@
 //  CaptureScreenID.swift
 //  CaptureKit
 //
-//  Frozen per-screen accessibility identifiers (32 entries) — the deterministic
+//  Frozen per-screen accessibility identifiers (33 entries) — the deterministic
 //  handles XCUITest and MobAI use to drive and assert every screen.
 
 import Foundation

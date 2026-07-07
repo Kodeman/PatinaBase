@@ -1,7 +1,7 @@
 //  CaptureEnums.swift
 //  CaptureKit
 //
-//  Frozen domain vocabulary for Patina Field Capture (T-03).
+//  Frozen domain vocabulary for Patina Field (T-03).
 //  These enums are part of the SwiftData schema surface — adding cases is safe,
 //  renaming/removing is a foundation-owner-only, migration-bearing change.
 
