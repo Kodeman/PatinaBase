@@ -257,6 +257,7 @@ struct SyncStatusScreen: View {
 import CaptureKitMocks
 
 #Preview {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     @MainActor func make(_ title: String, status: CaptureStatus, photos: Int = 1, configure: (Specimen) -> Void = { _ in }) {
         let s = store.newDraft()

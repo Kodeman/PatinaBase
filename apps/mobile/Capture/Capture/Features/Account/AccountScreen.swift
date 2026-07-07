@@ -244,6 +244,7 @@ struct AccountScreen: View {
 import CaptureKitMocks
 
 #Preview {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     let s = store.newDraft()
     s.title = "Oak console"

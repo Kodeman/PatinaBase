@@ -302,6 +302,7 @@ enum RoutePreviewData {
     /// A seeded in-memory store + a flagship specimen plus a couple of siblings so
     /// the session tray / cull deck render with real content in previews.
     static func make() -> Demo {
+        // swiftlint:disable:next force_try
         let store = try! CaptureStore.inMemory()
         let venue = VenueStamp(
             projectName: "Walbridge Res.",

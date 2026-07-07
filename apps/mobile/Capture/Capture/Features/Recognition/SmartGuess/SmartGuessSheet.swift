@@ -220,6 +220,7 @@ struct SmartGuessSheet: View {
 import CaptureKitMocks
 
 #Preview("N5 · Smart guess") {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     let specimen = store.newDraft()
     return SmartGuessSheet(

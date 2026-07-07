@@ -112,6 +112,7 @@ struct S2CreateProjectScreen: View {
 }
 
 #Preview {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     return S2CreateProjectScreen(store: store, coordinator: CaptureCoordinator())
         .modelContainer(store.container)

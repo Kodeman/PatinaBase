@@ -3,7 +3,7 @@
 //
 //  Entry-point + verification deep links. `field://screen/<CaptureScreenID>`
 //  drives any screen directly for MobAI / XCUITest per-screen validation (the
-//  32-row acceptance matrix). Production entries (E1/E2) also land here.
+//  33-row acceptance matrix). Production entries (E1/E2) also land here.
 
 import Foundation
 import CaptureKit

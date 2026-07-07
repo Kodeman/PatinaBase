@@ -24,6 +24,8 @@ public final class AppContainer {
         // CP0: in-memory store + mocks. As concretes land, switch on
         // AppConfiguration.useMocks and inject SupabaseCaptureSyncService, etc.
         let store = (try? CaptureStore.inMemory())
+            // TODO(phase-1a): replaced by persistent-container init
+            // swiftlint:disable:next force_try
             ?? CaptureStore(container: try! CaptureStore.makeContainer(inMemory: true))
         self.store = store
         self.camera = MockCameraService()

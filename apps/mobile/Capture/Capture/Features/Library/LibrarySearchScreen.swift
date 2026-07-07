@@ -279,6 +279,7 @@ struct LibrarySearchScreen: View {
 import CaptureKitMocks
 
 #Preview {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     @MainActor func make(_ title: String, maker: String?, dest: CaptureDestination, status: CaptureStatus, venue: VenueStamp?) {
         let s = store.newDraft()

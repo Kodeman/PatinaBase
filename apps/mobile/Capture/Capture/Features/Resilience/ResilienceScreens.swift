@@ -20,7 +20,7 @@ import CaptureKit
 /// accessibility id so XCUITest/MobAI can tell the two entries apart.
 enum PhotoImportContext {
     case denied        // R3 — camera off for Patina Field
-    case shareImport   // E3 — "Save to Patina" share extension hand-off
+    case shareImport   // E3 — "Save to Patina Field" share extension hand-off
 
     var screenID: CaptureScreenID { self == .shareImport ? .e3ShareSheet : .r3Denied }
     var title: String { self == .shareImport ? "Saved to Patina Field" : "Camera is off for Patina Field" }
@@ -236,6 +236,7 @@ enum ResilienceScreens {
 
 @MainActor
 private func photoImportPreview(_ context: PhotoImportContext) -> some View {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     return PhotoImportSheet(store: store,
                             coordinator: CaptureCoordinator(),

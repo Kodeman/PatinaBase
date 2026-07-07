@@ -166,6 +166,7 @@ struct CodeScanSheet: View {
 import CaptureKitMocks
 
 #Preview("N2 · Scan") {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     let specimen = store.newDraft()
     return CodeScanSheet(
