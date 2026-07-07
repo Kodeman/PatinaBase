@@ -17,6 +17,11 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_ADDRESS = Deno.env.get('RESEND_FROM') ?? 'hello@patina.cloud';
 const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 interface ProposalRow {
   id: string;
   title: string;
@@ -44,9 +49,19 @@ function formatDate(iso: string): string {
   });
 }
 
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return json({ error: 'method_not_allowed' }, 405);
   }
 
   let proposalId: string | undefined;
@@ -54,10 +69,10 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     proposalId = body?.proposalId;
   } catch {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 });
+    return json({ error: 'invalid_body' }, 400);
   }
   if (!proposalId) {
-    return new Response(JSON.stringify({ error: 'proposalId_required' }), { status: 400 });
+    return json({ error: 'proposalId_required' }, 400);
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -76,7 +91,7 @@ Deno.serve(async (req: Request) => {
 
   if (error || !data) {
     console.error('proposal-nudge: lookup failed', error);
-    return new Response(JSON.stringify({ error: 'proposal_not_found' }), { status: 404 });
+    return json({ error: 'proposal_not_found' }, 404);
   }
 
   const proposal = data as unknown as ProposalRow;
@@ -84,15 +99,13 @@ Deno.serve(async (req: Request) => {
   // A nudge only makes sense while the proposal is in the client's hands.
   if (proposal.status !== 'sent' && proposal.status !== 'viewed') {
     console.warn('proposal-nudge: not nudgeable', proposalId, proposal.status);
-    return new Response(JSON.stringify({ error: 'not_nudgeable', status: proposal.status }), {
-      status: 422,
-    });
+    return json({ error: 'not_nudgeable', status: proposal.status }, 422);
   }
 
   const recipient = proposal.client?.email;
   if (!recipient) {
     console.warn('proposal-nudge: no client email for proposal', proposalId);
-    return new Response(JSON.stringify({ error: 'no_recipient' }), { status: 422 });
+    return json({ error: 'no_recipient' }, 422);
   }
 
   const designerName = proposal.designer?.full_name ?? 'Your designer';
@@ -142,10 +155,8 @@ Deno.serve(async (req: Request) => {
   if (!res.ok) {
     const text = await res.text();
     console.error('proposal-nudge: Resend failed', res.status, text);
-    return new Response(JSON.stringify({ error: 'send_failed', detail: text }), { status: 502 });
+    return json({ error: 'send_failed', detail: text }, 502);
   }
 
-  return new Response(JSON.stringify({ ok: true }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return json({ ok: true });
 });
