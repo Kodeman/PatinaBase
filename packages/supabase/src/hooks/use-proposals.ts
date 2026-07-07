@@ -40,6 +40,8 @@ export interface ProposalItem {
   internal_notes?: string | null;
   /** Short spec/catalog reference, e.g. CH-01 (00262). */
   doc_code?: string | null;
+  /** Designer-defined field values, keyed by spec_field_defs.field_key (S6, 00268). */
+  custom_fields?: Record<string, unknown> | null;
   // Joined data
   product?: {
     id: string;
@@ -487,6 +489,13 @@ export function useUpdateProposalItem() {
           | 'doc_code'
           | 'lead_time_weeks'
           | 'internal_notes'
+          // S² Wave 2: financial lens (bulk markup writes client price + markup)
+          // and S6 custom field values. line_total_cents is still recomputed
+          // below from the merged unit_sell_price, so passing unit_sell_price
+          // (with no unit_price) folds through correctly.
+          | 'unit_sell_price'
+          | 'markup_percent'
+          | 'custom_fields'
         >
       >;
     }) => {

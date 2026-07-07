@@ -34,6 +34,7 @@ import {
   useConsumeCapture,
   useReorderProposalItems,
   useReorderProposalScopeRooms,
+  useIsStudioOwner,
   createBrowserClient,
   type ProposalItemType,
 } from '@patina/supabase';
@@ -60,6 +61,13 @@ import { LeadTimeSelect } from '@/components/portal/ffe/lead-time-select';
 import { LEAD_TIME_BUCKETS, leadTimeLabel } from '@/lib/scope/lead-time';
 import { resolveDocCode } from '@/lib/scope/doc-code';
 import { findScheduleTwins, type TwinRef } from '@/lib/scope/duplicates';
+// S² Wave 2 — custom fields (S6), spec PDFs (S8), financial lens (S9)
+import { SpecFieldsManager } from '@/components/portal/scope-builder/spec-fields-manager';
+import { FinancialLensPanel, type LensRow } from '@/components/portal/scope-builder/financial-lens';
+import { useSpecFieldDefs } from '@/hooks/use-spec-fields';
+import { withFieldValue, formatFieldValue } from '@/lib/scope/spec-fields';
+import { computeMarkupUpdate } from '@/lib/scope/markup';
+import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -87,6 +95,8 @@ interface FFEItem {
   // Schedule & Boards Wave 1 — spec instrument
   doc_code: string | null;
   lead_time_weeks: number | null;
+  // Schedule & Boards Wave 2 — S6 custom field values (keyed by field_key)
+  custom_fields: Record<string, unknown> | null;
 }
 
 interface ScopeRoom {
@@ -139,6 +149,11 @@ export function ItemEditForm({
   onDone: () => void;
 }) {
   const updateItem = useUpdateProposalItem();
+  // S6 — the schedule's designer-defined columns + this line's values.
+  const { data: fieldDefs = [] } = useSpecFieldDefs({ proposalId });
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>(
+    (item.custom_fields as Record<string, unknown> | null) ?? {}
+  );
 
   const [name, setName] = useState(item.name ?? '');
   const [qty, setQty] = useState(String(item.quantity ?? 1));
@@ -206,6 +221,9 @@ export function ItemEditForm({
     // designer's own code wins); lead_time_weeks stores the bucket bound.
     updates.doc_code = docCode.trim() || null;
     updates.lead_time_weeks = leadTimeWeeks;
+    // S6 — custom field values (keyed by field_key). Only persisted when the
+    // document has defs, so lines without custom fields never write a payload.
+    if (fieldDefs.length > 0) updates.custom_fields = customFields;
 
     updateItem.mutate(
       { itemId: item.id, proposalId, updates },
@@ -357,6 +375,25 @@ export function ItemEditForm({
               />
             </div>
           </label>
+        </div>
+      )}
+
+      {/* S6 — designer-defined custom fields (typed per kind). */}
+      {fieldDefs.length > 0 && (
+        <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          {fieldDefs.map((def) => (
+            <label key={def.id} className="block">
+              <span className="type-meta mb-1 block">{def.name}</span>
+              <Input
+                type={def.kind === 'number' ? 'number' : def.kind === 'url' ? 'url' : 'text'}
+                value={formatFieldValue(customFields[def.field_key])}
+                onChange={(e) =>
+                  setCustomFields((cur) => withFieldValue(cur, def.field_key, def.kind, e.target.value))
+                }
+                placeholder={def.kind === 'url' ? 'https://…' : ''}
+              />
+            </label>
+          ))}
         </div>
       )}
 
@@ -839,6 +876,13 @@ export function FFEScheduleBuilder({
   // ── S4 — schedule search + facet filters (client-side; items are loaded) ──
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<FacetSelections>({});
+  // ── S9 — financial lens (studio-owner money view) + bulk markup ──
+  const { isStudioOwner } = useIsStudioOwner();
+  const [moneyView, setMoneyView] = useState(false);
+  const [bulkMarkup, setBulkMarkup] = useState('');
+  // ── S8 — spec PDF export (client-side fetch → blob) ──
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   // A drag starts only after 6px of travel, so plain clicks on the handle's
   // neighbors (checkbox, edit, remove, unfold) stay clicks.
   const sensors = useSensors(
@@ -881,6 +925,67 @@ export function FFEScheduleBuilder({
       setBulkError(
         err instanceof Error ? err.message : 'Some lines could not be removed — try again.'
       );
+    }
+  };
+
+  // S9 — set markup% on the selected lines: recompute client price + line total
+  // per item (trade × (1 + markup) = client). Allowance/TBD carry no unit trade
+  // price, so they're skipped with a per-item count. The canonical
+  // useUpdateProposalItem write refolds proposals.total_amount.
+  const applyBulkMarkup = async () => {
+    const pct = parseFloat(bulkMarkup);
+    if (!Number.isFinite(pct)) return;
+    setBulkError(null);
+    const selectedItems = (items as FFEItem[]).filter((i) => selected.has(i.id));
+    let applied = 0;
+    let skipped = 0;
+    try {
+      await Promise.all(
+        selectedItems.map((it) => {
+          const res = computeMarkupUpdate(
+            { item_type: it.item_type, unit_price: it.unit_price, quantity: it.quantity },
+            pct
+          );
+          if (!res) {
+            skipped += 1;
+            return Promise.resolve();
+          }
+          applied += 1;
+          return updateItem.mutateAsync({
+            itemId: it.id,
+            proposalId,
+            updates: {
+              markup_percent: res.markup_percent,
+              unit_sell_price: res.unit_sell_price,
+            },
+          });
+        })
+      );
+      setSelected(new Set());
+      setBulkMarkup('');
+      if (skipped > 0) {
+        setBulkError(
+          `Markup applied to ${applied} line${applied === 1 ? '' : 's'} · skipped ${skipped} allowance/TBD line${skipped === 1 ? '' : 's'} (no unit price).`
+        );
+      }
+    } catch (err) {
+      setBulkError(
+        err instanceof Error ? err.message : 'Some lines could not be updated — try again.'
+      );
+    }
+  };
+
+  // S8 — export the whole schedule as a spec PDF (client price only; no money
+  // beyond client price ever reaches the file). Inline error at the act (R83).
+  const exportSchedulePdf = async () => {
+    setPdfBusy(true);
+    setPdfError(null);
+    try {
+      await downloadSpecPdf({ kind: 'document', proposalId }, 'schedule.pdf');
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : 'Could not export the schedule.');
+    } finally {
+      setPdfBusy(false);
     }
   };
 
@@ -1013,6 +1118,24 @@ export function FFEScheduleBuilder({
       return sum;
     }, 0);
   }, [items]);
+
+  // S9 — financial-lens rows over the WHOLE document (not the filtered view),
+  // room-resolved. Rendered only for studio owners when the money view is on.
+  const lensRows = useMemo<LensRow[]>(() => {
+    const roomNameById = new Map(typedRooms.map((r) => [r.id, r.name] as const));
+    return (items as FFEItem[]).map((i) => ({
+      id: i.id,
+      code: i.doc_code,
+      name: i.name || categoryLabel(i.ffe_category, categoryLookup) || 'Untitled',
+      quantity: i.quantity,
+      itemType: i.item_type,
+      tradeCents: i.unit_price ?? null,
+      markupPercent: i.markup_percent ?? null,
+      clientUnitCents: i.unit_sell_price ?? null,
+      lineTotalCents: i.line_total_cents ?? null,
+      roomName: i.scope_room_id ? roomNameById.get(i.scope_room_id) ?? 'Unassigned' : 'Unassigned',
+    }));
+  }, [items, typedRooms, categoryLookup]);
 
   // Picked from the catalog → add a fixed proposal_item directly from the
   // denormalized pick result (the result already carries name/price/vendor, so
@@ -1184,18 +1307,56 @@ export function FFEScheduleBuilder({
             : `${(items as FFEItem[]).length} items`}
           {totalEstimate > 0 ? ` · Est. total: ${formatDollars(totalEstimate)}` : ''}
         </div>
-        {/* S4 — search + facet filters over the schedule (both hosts). */}
-        {(items as FFEItem[]).length > 0 && (
-          <div className="flex items-center gap-2">
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Search items, vendors, codes"
-            />
-            <FacetedFilterPopover facets={facets} value={filters} onChange={setFilters} />
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* S6 — the schedule's custom-field columns (both hosts). */}
+          <SpecFieldsManager owner={{ proposalId }} />
+          {/* S9 — studio-owner money view toggle. */}
+          {isStudioOwner && (
+            <Button
+              variant={moneyView ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setMoneyView((v) => !v)}
+              aria-pressed={moneyView}
+            >
+              {moneyView ? 'Money ✓' : 'Money'}
+            </Button>
+          )}
+          {(items as FFEItem[]).length > 0 && (
+            <>
+              {/* S8 — export the whole schedule as a client-safe spec PDF. */}
+              <Button variant="ghost" size="sm" onClick={exportSchedulePdf} disabled={pdfBusy}>
+                {pdfBusy ? 'Exporting…' : 'Export schedule (PDF)'}
+              </Button>
+              {/* S4 — search + facet filters over the schedule (both hosts). */}
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Search items, vendors, codes"
+              />
+              <FacetedFilterPopover facets={facets} value={filters} onChange={setFilters} />
+            </>
+          )}
+        </div>
       </div>
+
+      {/* S8 — spec-PDF export failures land inline (R83), never a toast. */}
+      {pdfError && (
+        <p
+          role="alert"
+          className="mb-3 rounded-sm border px-3 py-2"
+          style={{
+            fontFamily: 'var(--font-body)',
+            fontSize: '0.78rem',
+            color: '#C4836F',
+            borderColor: 'rgba(196,131,111,0.4)',
+          }}
+        >
+          {pdfError}
+        </p>
+      )}
+
+      {/* S9 — the financial lens (studio owners only; designer-eyes analysis). */}
+      {moneyView && isStudioOwner && <FinancialLensPanel rows={lensRows} />}
 
       {/* R83 — bulk-action failures land inline at the schedule, never a toast. */}
       {bulkError && (
@@ -1502,6 +1663,30 @@ export function FFEScheduleBuilder({
             </option>
           ))}
         </Select>
+        {/* S9 — bulk markup (pre-sale): set markup% on the selected fixed lines;
+            allowance/TBD lines are skipped with a count in the inline notice. */}
+        <div className="flex items-center gap-1">
+          <div className="relative">
+            <Input
+              type="number"
+              aria-label="Markup percent"
+              value={bulkMarkup}
+              onChange={(e) => setBulkMarkup(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void applyBulkMarkup();
+              }}
+              placeholder="Markup"
+              className="!w-20 pr-5"
+            />
+            <span
+              className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 font-body text-[0.82rem]"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              %
+            </span>
+          </div>
+          <BulkActionButton onClick={() => void applyBulkMarkup()}>Apply markup</BulkActionButton>
+        </div>
         <BulkActionButton variant="danger" onClick={() => void bulkDelete()}>
           Delete
         </BulkActionButton>
