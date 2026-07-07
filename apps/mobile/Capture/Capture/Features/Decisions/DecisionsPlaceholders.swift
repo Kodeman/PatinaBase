@@ -1,23 +1,8 @@
 //  DecisionsPlaceholders.swift
 //  Capture · Wave D (Decisions, read-only)
 //
-//  D1/D2 freeze placeholders. Wave D replaces these with the real pending list +
-//  read-only decision detail, reading from `container.decisions`.
-
-import SwiftUI
-import CaptureKit
-
-struct DecisionListPlaceholder: View {
-    var body: some View {
-        FieldPlaceholderScreen(screenID: .d1DecisionList, title: "Decisions", wave: "D",
-                               symbol: "checkmark.seal")
-    }
-}
-
-struct DecisionDetailPlaceholder: View {
-    let decisionID: String
-    var body: some View {
-        FieldPlaceholderScreen(screenID: .d2DecisionDetail, title: "Decision", wave: "D",
-                               symbol: "checkmark.seal", note: "Decision \(decisionID)")
-    }
-}
+//  D1/D2 freeze placeholders — superseded. The real screens now live in
+//  DecisionListScreen.swift and DecisionDetailScreen.swift (registered by
+//  DecisionsScreens.swift); this file is kept (rather than removed) so the wave's
+//  file footprint stays visible in one place, per the "files only inside your
+//  flow directory" rule — there is nothing left for it to define.

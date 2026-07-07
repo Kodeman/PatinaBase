@@ -1,16 +1,14 @@
 //  DecisionsServiceFactory.swift
 //  Capture · Wave D (Decisions, read-only)
 //
-//  Real-mode factory for the Decisions read seam. AppContainer calls this in real
-//  mode; the freeze returns the mock. Wave D replaces ONLY the body below and adds
-//  its real service file(s) in this directory.
+//  Real-mode factory for the Decisions read seam. AppContainer calls this only in
+//  real mode (mock mode wires MockDecisionsReadService directly and never reaches
+//  here), so no mock fallback branch is needed — `deps` is always usable.
 
 import CaptureKit
-import CaptureKitMocks
 
 enum DecisionsServiceFactory {
     static func make(deps: WorkServiceDependencies) -> any DecisionsReadService {
-        // TODO(wave-D): replace with the real Supabase-backed DecisionsReadService.
-        MockDecisionsReadService()
+        SupabaseDecisionsReadService(deps: deps)
     }
 }
