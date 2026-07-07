@@ -705,3 +705,125 @@ describe('folderTab (R16)', () => {
     expect(tab('   ', 'Harbor House')).toBe('Harbor');
   });
 });
+
+describe('deriveNeed — lines_flagged (C4)', () => {
+  const proposalRow = (partial: Partial<DocumentStateRow> = {}) =>
+    mkRow({
+      engagement_kind: 'proposal',
+      active_section: 'proposal',
+      project_id: null,
+      proposal_id: 'pr1',
+      proposal_status: 'sent',
+      proposal_sent_at: daysAgo(1),
+      ...partial,
+    });
+
+  it('a flagged proposal → FLAGGED need naming the doc, not urgent', () => {
+    const need = deriveNeed(proposalRow(), NOW, null, null, {
+      count: 2,
+      docTitle: 'Whitfield Residence',
+      proposalId: 'pr1',
+    });
+    expect(need!.kind).toBe('lines_flagged');
+    expect(need!.text).toBe('2 lines flagged on Whitfield Residence');
+    expect(need!.stamp.label).toBe('FLAGGED');
+    expect(need!.stamp.color).toBe('var(--color-clay)');
+    expect(need!.urgent).toBe(false);
+  });
+
+  it('singularizes a single flagged line', () => {
+    const need = deriveNeed(proposalRow(), NOW, null, null, {
+      count: 1,
+      docTitle: 'Olsen Penthouse',
+      proposalId: 'pr1',
+    });
+    expect(need!.text).toBe('1 line flagged on Olsen Penthouse');
+  });
+
+  it('a flag outranks a silent hesitation on the same sent proposal', () => {
+    // Sent 2d ago, unopened → hesitating on its own; a flag rises above it.
+    const row = proposalRow({ proposal_sent_at: daysAgo(2) });
+    expect(deriveNeed(row, NOW)!.kind).toBe('hesitating_proposal');
+    expect(
+      deriveNeed(row, NOW, null, null, { count: 1, docTitle: 'X', proposalId: 'pr1' })!.kind,
+    ).toBe('lines_flagged');
+  });
+
+  it('does not fire without a flagged entry (null or count 0)', () => {
+    const row = proposalRow({ proposal_sent_at: daysAgo(0.5) });
+    expect(deriveNeed(row, NOW, null, null, null)).toBeNull();
+    expect(
+      deriveNeed(row, NOW, null, null, { count: 0, docTitle: 'X', proposalId: 'pr1' }),
+    ).toBeNull();
+  });
+
+  it('a terminal proposal state still wins over a flag (accepted → SIGNED)', () => {
+    const need = deriveNeed(
+      proposalRow({ proposal_status: 'accepted' }),
+      NOW,
+      null,
+      null,
+      { count: 3, docTitle: 'X', proposalId: 'pr1' },
+    );
+    expect(need!.kind).toBe('proposal_signed');
+  });
+});
+
+describe('partitionDesk — flagged lines (C4)', () => {
+  it('threads flaggedLines by proposal_id into a lines_flagged folder', () => {
+    const row = mkRow({
+      engagement_id: 'e-flag',
+      engagement_kind: 'proposal',
+      project_id: null,
+      proposal_id: 'pr1',
+      proposal_status: 'viewed',
+      proposal_sent_at: daysAgo(4),
+      proposal_viewed_at: daysAgo(3),
+    });
+    const flagged = new Map([
+      ['pr1', { count: 2, docTitle: 'Whitfield Residence', proposalId: 'pr1' }],
+    ]);
+    const { folders } = partitionDesk([row], NOW, undefined, undefined, flagged);
+    expect(folders).toHaveLength(1);
+    expect(folders[0].need.kind).toBe('lines_flagged');
+  });
+
+  it('ranks a flag under a terminal decline but above a fresh lead (NEED_RANK)', () => {
+    const flaggedProp = mkRow({
+      engagement_id: 'e-flag',
+      engagement_kind: 'proposal',
+      project_id: null,
+      proposal_id: 'pr-flag',
+      proposal_status: 'viewed',
+      proposal_sent_at: daysAgo(5),
+      proposal_viewed_at: daysAgo(3),
+    });
+    const declined = mkRow({
+      engagement_id: 'e-declined',
+      engagement_kind: 'proposal',
+      project_id: null,
+      proposal_id: 'pr-dec',
+      proposal_status: 'declined',
+    });
+    const lead = mkRow({
+      engagement_id: 'e-lead',
+      engagement_kind: 'lead',
+      project_id: null,
+      lead_status: 'new',
+      lead_response_deadline: daysAhead(5),
+    });
+    const flagged = new Map([['pr-flag', { count: 1, docTitle: 'X', proposalId: 'pr-flag' }]]);
+    const { folders } = partitionDesk(
+      [lead, flaggedProp, declined],
+      NOW,
+      undefined,
+      undefined,
+      flagged,
+    );
+    expect(folders.map((f) => f.need.kind)).toEqual([
+      'proposal_declined',
+      'lines_flagged',
+      'new_lead',
+    ]);
+  });
+});

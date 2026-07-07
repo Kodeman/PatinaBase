@@ -1220,3 +1220,19 @@ export type {
   FeedbackFilters,
   CreateFeedbackInput,
 } from './use-feedback';
+
+// Schedule & Boards Wave 2 · Track C — document shares (C2) + per-line verdicts (C3)
+export {
+  useProposalShares,
+  useCreateShare,
+  useRevokeShare,
+} from './use-document-shares';
+export type { DocumentShare, CreatedShare } from './use-document-shares';
+export {
+  useProposalFeedback,
+  useItemFeedbackThread,
+  useSubmitVerdict,
+  useReplyToItemFeedback,
+  useResolveFeedback,
+} from './use-item-feedback';
+export type { ItemFeedback, ItemFeedbackEvent, Verdict } from './use-item-feedback';

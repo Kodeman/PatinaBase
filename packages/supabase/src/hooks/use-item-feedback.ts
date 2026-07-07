@@ -1,0 +1,146 @@
+'use client';
+
+// Per-line client verdicts (Schedule & Boards Wave 2 · C3). Approve / flag / note
+// on a single proposal line, plus a short thread. A verdict NEVER mutates the
+// line — it is commentary with a state chip. RLS (00267): the client writes/reads
+// her own; the designer reads every verdict on their document; resolve/reopen are
+// designer-only RPCs; replies are open to either party.
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { createBrowserClient } from '../client';
+import type { Verdict } from '@patina/utils';
+
+const getSupabase = () => createBrowserClient();
+
+export type { Verdict };
+
+export interface ItemFeedback {
+  id: string;
+  proposal_item_id: string | null;
+  ffe_item_id: string | null;
+  board_item_id: string | null;
+  client_id: string;
+  verdict: Verdict;
+  body: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ItemFeedbackEvent {
+  id: string;
+  feedback_id: string;
+  actor: string;
+  kind: 'created' | 'replied' | 'resolved' | 'reopened';
+  body: string | null;
+  created_at: string;
+}
+
+/**
+ * Every proposal-line verdict on a proposal (via the proposal_items FK). RLS
+ * scopes rows: the designer sees all on their doc, the client sees her own.
+ * Board-anchored verdicts are excluded here (this is the proposal-line feed).
+ */
+export function useProposalFeedback(proposalId: string | undefined) {
+  return useQuery({
+    queryKey: ['proposal-feedback', proposalId],
+    enabled: !!proposalId,
+    queryFn: async (): Promise<ItemFeedback[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('item_feedback')
+        .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, verdict, body, resolved_at, resolved_by, created_at, updated_at, proposal_items!inner(proposal_id)')
+        .eq('proposal_items.proposal_id', proposalId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ItemFeedback[];
+    },
+  });
+}
+
+/** The thread (created / replied / resolved / reopened) on one verdict. */
+export function useItemFeedbackThread(feedbackId: string | undefined) {
+  return useQuery({
+    queryKey: ['item-feedback-thread', feedbackId],
+    enabled: !!feedbackId,
+    queryFn: async (): Promise<ItemFeedbackEvent[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('item_feedback_events')
+        .select('*')
+        .eq('feedback_id', feedbackId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ItemFeedbackEvent[];
+    },
+  });
+}
+
+/** Client leaves a verdict on a line (INSERT; trigger writes the thread + notify). */
+export function useSubmitVerdict() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      proposalId: string;
+      proposalItemId: string;
+      verdict: Verdict;
+      body?: string | null;
+    }): Promise<ItemFeedback> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('item_feedback')
+        .insert({ proposal_item_id: input.proposalItemId, verdict: input.verdict, body: input.body ?? null })
+        .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, verdict, body, resolved_at, resolved_by, created_at, updated_at')
+        .single();
+      if (error) throw error;
+      return data as ItemFeedback;
+    },
+    onSuccess: (_r, input) => {
+      qc.invalidateQueries({ queryKey: ['proposal-feedback', input.proposalId] });
+    },
+  });
+}
+
+/** Either party adds a reply to a verdict's thread. */
+export function useReplyToItemFeedback() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { feedbackId: string; body: string; proposalId?: string }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('reply_to_item_feedback', {
+        p_feedback_id: input.feedbackId,
+        p_body: input.body,
+      });
+      if (error) throw error;
+      return data as ItemFeedbackEvent;
+    },
+    onSuccess: (_r, input) => {
+      qc.invalidateQueries({ queryKey: ['item-feedback-thread', input.feedbackId] });
+      if (input.proposalId) qc.invalidateQueries({ queryKey: ['proposal-feedback', input.proposalId] });
+    },
+  });
+}
+
+/** Designer marks a flag handled (or reopens it). Never touches the line. */
+export function useResolveFeedback() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { feedbackId: string; proposalId: string; reopen?: boolean }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const fn = input.reopen ? 'reopen_item_feedback' : 'resolve_item_feedback';
+      const { data, error } = await supabase.rpc(fn, { p_feedback_id: input.feedbackId });
+      if (error) throw error;
+      return data as ItemFeedback;
+    },
+    onSuccess: (_r, input) => {
+      qc.invalidateQueries({ queryKey: ['proposal-feedback', input.proposalId] });
+      qc.invalidateQueries({ queryKey: ['item-feedback-thread', input.feedbackId] });
+    },
+  });
+}

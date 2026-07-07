@@ -120,7 +120,19 @@ export function deepLinkFor(n: InboxNotification): string | null {
  */
 export function deriveRecordRow(n: InboxNotification): RecordRow {
   const type = (n.type ?? '').toLowerCase();
-  const needKind = NOTIFICATION_NEED_KIND[type] ?? null;
+  // C4 (Schedule & Boards Wave 2): a per-line client verdict lands as ONE
+  // notification type ('client_feedback') for approve / flag / note. Only a FLAG
+  // is Desk-backed — the 'lines_flagged' need carries the act (resolve / revise)
+  // — so only a rejected verdict becomes a quiet cross-reference (R82). An
+  // approval or a note has no Desk act and reads as a plain notice. Handled here
+  // (not in NOTIFICATION_NEED_KIND) because that map keys on type alone and one
+  // type covers all three verdicts.
+  const needKind: NeedKind | null =
+    type === 'client_feedback'
+      ? metaString(n.metadata, 'verdict') === 'rejected'
+        ? 'lines_flagged'
+        : null
+      : (NOTIFICATION_NEED_KIND[type] ?? null);
   const docHref = documentHrefFor(n);
 
   if (needKind) {

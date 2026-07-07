@@ -12,7 +12,8 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useProjectV2, useProjectPhases } from '@patina/supabase';
+import { useProjectV2, useProjectPhases, useProposalFeedback } from '@patina/supabase';
+import { rollupVerdicts, formatVerdictRollup } from '@patina/utils';
 import { useDocumentEngagement } from '@/hooks/use-document-state';
 import { useHoldDocument } from '@/hooks/document-time-provider';
 import { useMobileActiveDoc } from '@/components/document/mobile/mobile-shell';
@@ -98,6 +99,26 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   const { data: phases } = useProjectPhases(projectId) as { data: AnyRecord[] | undefined };
   const { data: liveProposal } = useProposal(proposalId) as { data: any };
   const others = useDocumentPresence(row?.engagement_id ?? null);
+
+  // C3 — the proposal's per-line client verdicts, rolled up for a quiet
+  // letterhead summary on the open proposal ("4 of 12 approved · 1 flagged").
+  // The denominator is the client-visible line count; empty when nothing has
+  // happened yet → no line renders.
+  const { data: proposalFeedback = [] } = useProposalFeedback(proposalId);
+  const verdictSummary = useMemo(() => {
+    const totalLines = liveProposal?.items?.length ?? 0;
+    return formatVerdictRollup(
+      rollupVerdicts(
+        totalLines,
+        proposalFeedback.map((f) => ({
+          lineId: f.proposal_item_id ?? '',
+          verdict: f.verdict,
+          createdAt: f.created_at,
+          resolvedAt: f.resolved_at,
+        })),
+      ),
+    );
+  }, [proposalFeedback, liveProposal?.items?.length]);
 
   // D11 (ratified R19): picking up the document starts the timer (chaining out any running
   // one); putting down releases it through the log strip. Projects only —
@@ -454,6 +475,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                     {sections.find((s) => s.key === row.active_section)?.sub}
                   </span>
                 </div>
+                {/* C3 — a quiet letterhead read of where the client's verdicts
+                    stand ("4 of 12 approved · 1 flagged"). Nothing when the
+                    client hasn't weighed in yet. */}
+                {row.engagement_kind === 'proposal' && verdictSummary && (
+                  <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                    {verdictSummary}
+                  </p>
+                )}
                 {/* The proposal instruments (gated to engagement_kind
                     ==='proposal'): the Drafting Room doorway for a draft, the
                     Send/Preview/Revise overlay row once it's in the client's
