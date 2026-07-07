@@ -388,7 +388,11 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onPick={handlePick}
-        scope="catalog"
+        // Full 3-layer library (personal/studio/catalog) + cross-layer search,
+        // matching the FF&E add (ffe/page.tsx pickerScope="library"). The
+        // Captures and Quick-create-draft tabs are scope-independent (the modal
+        // shell renders them for both scopes), so both still work here.
+        scope="library"
       />
     </div>
   );

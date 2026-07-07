@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useRef, useCallback, useState } from 'react';
+import { Fragment, use, useEffect, useRef, useCallback, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useProposal, useProposalSections } from '@/hooks/use-proposals';
 import { useEnterRevision } from '@patina/supabase';
@@ -18,6 +18,7 @@ import {
   useProposalPhases,
   useProposalExclusions,
   useProposalScopeRooms,
+  useBoardsWithItems,
 } from '@patina/supabase';
 import type {
   ProposalPaymentMilestone,
@@ -31,6 +32,7 @@ import {
   TimelinePhasesBlock,
   ExclusionsBlock,
   ScopeRoomsBlock,
+  BoardsBlock,
 } from '@patina/design-system';
 
 /**
@@ -58,6 +60,7 @@ export default function ProposalPreviewPage({
   const { data: phases } = useProposalPhases(id) as { data: ProposalPhase[] | undefined };
   const { data: exclusions } = useProposalExclusions(id) as { data: ProposalExclusion[] | undefined };
   const { data: scopeRooms } = useProposalScopeRooms(id) as { data: ProposalScopeRoom[] | undefined };
+  const { data: boardsData } = useBoardsWithItems(id);
 
   useEffect(() => {
     if (!shouldAutoPrint) return;
@@ -185,6 +188,24 @@ export default function ProposalPreviewPage({
   const canRevise =
     proposal.status === 'declined' || proposal.status === 'expired';
 
+  // Real mood boards (00179) render via the shared BoardsBlock — the SAME block
+  // the client proposal + drafting mirror use. Placement mirrors the client
+  // copy: after the `concept` section when one exists, else just before
+  // `selections`, else after the last section. The legacy
+  // `metadata.mood_board_urls` image strip inside `concept` stays ONLY as a
+  // fallback when the proposal has zero real boards.
+  const realBoards = boardsData ?? [];
+  const hasRealBoards = realBoards.some((b) => b.items.length > 0);
+  const sectionList = sections ?? [];
+  const conceptIndex = sectionList.findIndex((s) => s.type === 'concept');
+  const selectionsIndex = sectionList.findIndex((s) => s.type === 'selections');
+  const boardsAfterIndex =
+    conceptIndex >= 0
+      ? conceptIndex
+      : selectionsIndex >= 0
+        ? selectionsIndex - 1
+        : sectionList.length - 1;
+
   return (
     <div className="pt-8">
       {/* Designer revise bar — declined/expired proposals can be revised */}
@@ -235,8 +256,13 @@ export default function ProposalPreviewPage({
           date={proposal.created_at}
         />
 
+        {boardsAfterIndex < 0 && hasRealBoards && (
+          <BoardsBlock boards={realBoards} mark={<StrataMark variant="micro" />} />
+        )}
+
         {sections?.map((section, index) => (
-          <div key={section.id} data-section-type={section.type}>
+          <Fragment key={section.id}>
+          <div data-section-type={section.type}>
             {index > 0 && <StrataMark variant="micro" />}
 
             <section className="py-8">
@@ -276,7 +302,7 @@ export default function ProposalPreviewPage({
                     const palette = (section.metadata?.color_palette as Array<{ hex: string }>) || [];
                     return (
                       <>
-                        {moodUrls.length > 0 && (
+                        {moodUrls.length > 0 && !hasRealBoards && (
                           <div className="mb-6 flex flex-wrap gap-2.5">
                             {moodUrls.map((url, i) => (
                               <div key={i} className="h-[75px] w-[100px] overflow-hidden rounded bg-[var(--color-pearl)]">
@@ -463,6 +489,10 @@ export default function ProposalPreviewPage({
               )}
             </section>
           </div>
+          {index === boardsAfterIndex && hasRealBoards && (
+            <BoardsBlock boards={realBoards} mark={<StrataMark variant="micro" />} />
+          )}
+          </Fragment>
         ))}
 
         {/* Footer */}
