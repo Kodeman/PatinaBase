@@ -435,6 +435,9 @@ async function handleSessionCompleted(
   event: Stripe.Event
 ): Promise<void> {
   const session = event.data.object as Stripe.Checkout.Session;
+  if (payableTypeOf(session) === 'po_payment') {
+    return handlePoSessionCompleted(admin, event, session);
+  }
   const { sessionId, paymentIntentId, invoiceId } = sessionIds(session);
 
   let row = await resolvePaymentRow(admin, sessionId, paymentIntentId, invoiceId);
@@ -486,6 +489,9 @@ async function handleAsyncPaymentSucceeded(
   event: Stripe.Event
 ): Promise<void> {
   const session = event.data.object as Stripe.Checkout.Session;
+  if (payableTypeOf(session) === 'po_payment') {
+    return handlePoAsyncPaymentSucceeded(admin, event, session);
+  }
   const { sessionId, paymentIntentId, invoiceId } = sessionIds(session);
   const row = await resolvePaymentRow(admin, sessionId, paymentIntentId, invoiceId);
   if (!row) {
@@ -501,6 +507,9 @@ async function handleAsyncPaymentFailed(
   event: Stripe.Event
 ): Promise<void> {
   const session = event.data.object as Stripe.Checkout.Session;
+  if (payableTypeOf(session) === 'po_payment') {
+    return handlePoAsyncPaymentFailed(admin, event, session);
+  }
   const { sessionId, paymentIntentId, invoiceId } = sessionIds(session);
   const row = await resolvePaymentRow(admin, sessionId, paymentIntentId, invoiceId);
   if (!row) {
@@ -547,6 +556,9 @@ async function handlePaymentIntentSettled(
   outcome: 'succeeded' | 'failed'
 ): Promise<void> {
   const pi = event.data.object as Stripe.PaymentIntent;
+  if (payableTypeOf(pi) === 'po_payment') {
+    return handlePoPaymentIntentSettled(admin, event, pi, outcome);
+  }
   const row = await resolvePaymentRow(admin, null, pi.id, null);
   if (!row || row.status !== 'pending') return;
 
@@ -563,6 +575,242 @@ async function handlePaymentIntentSettled(
       throw new Error(`failed to mark payment ${row.id} failed (PI): ${error.message}`);
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// po_payment settle branch — "Order via Patina" catalog PO payments.
+//
+// The payable unit is a po_payments row (00148). state is pending|due|paid;
+// there is NO 'failed' state — a failed ACH clears the session pointer and
+// leaves state untouched. Flipping a deposit to 'paid' fires 00184 Trigger D
+// (deposit_paid_flips_balance) automatically; the webhook never touches
+// purchase_orders.status (no 'paid' member; the payment rail invents no
+// transition). Settle/failure notify the designer via procurement_notifications
+// (kinds added in 00266). All writes are service-role; the same guard-then-flip
+// contract as the invoice handlers keeps Stripe retries safe.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Which payable a session / payment intent belongs to. Absent = invoice (back-compat). */
+function payableTypeOf(obj: { metadata?: Stripe.Metadata | null }): 'invoice' | 'po_payment' {
+  return obj.metadata?.payable_type === 'po_payment' ? 'po_payment' : 'invoice';
+}
+
+interface PoPaymentRow {
+  id: string;
+  purchase_order_id: string;
+  kind: string;
+  amount_cents: number;
+  state: string;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+}
+
+const PO_PAYMENT_COLS =
+  'id, purchase_order_id, kind, amount_cents, state, stripe_checkout_session_id, stripe_payment_intent_id';
+
+function poSessionIds(session: Stripe.Checkout.Session): {
+  sessionId: string;
+  paymentIntentId: string | null;
+  poPaymentId: string | null;
+} {
+  return {
+    sessionId: session.id,
+    paymentIntentId:
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id ?? null,
+    poPaymentId: session.metadata?.po_payment_id ?? null,
+  };
+}
+
+/** Resolve the po_payments row: session id → PI id → metadata po_payment_id. */
+async function resolvePoPayment(
+  admin: SupabaseClient,
+  sessionId: string | null,
+  paymentIntentId: string | null,
+  poPaymentId: string | null
+): Promise<PoPaymentRow | null> {
+  if (sessionId) {
+    const { data } = await admin
+      .from('po_payments')
+      .select(PO_PAYMENT_COLS)
+      .eq('stripe_checkout_session_id', sessionId)
+      .maybeSingle();
+    if (data) return data as PoPaymentRow;
+  }
+  if (paymentIntentId) {
+    const { data } = await admin
+      .from('po_payments')
+      .select(PO_PAYMENT_COLS)
+      .eq('stripe_payment_intent_id', paymentIntentId)
+      .maybeSingle();
+    if (data) return data as PoPaymentRow;
+  }
+  if (poPaymentId) {
+    const { data } = await admin
+      .from('po_payments')
+      .select(PO_PAYMENT_COLS)
+      .eq('id', poPaymentId)
+      .maybeSingle();
+    if (data) return data as PoPaymentRow;
+  }
+  return null;
+}
+
+/**
+ * Flip a not-yet-paid row to paid (concurrency-safe via the state guard).
+ * Returns true only when THIS call performed the flip — the designer
+ * notification keys off that so it fires exactly once. CHECK
+ * chk_paid_date_required_when_paid demands paid_date alongside state.
+ */
+async function markPoPaid(
+  admin: SupabaseClient,
+  row: PoPaymentRow,
+  paymentIntentId: string | null
+): Promise<boolean> {
+  const patch: Record<string, unknown> = {
+    state: 'paid',
+    paid_date: new Date().toISOString().slice(0, 10),
+  };
+  if (paymentIntentId && !row.stripe_payment_intent_id) {
+    patch.stripe_payment_intent_id = paymentIntentId;
+  }
+  const { data, error } = await admin
+    .from('po_payments')
+    .update(patch)
+    .eq('id', row.id)
+    .neq('state', 'paid')
+    .select('id');
+  if (error) {
+    throw new Error(`failed to mark po_payment ${row.id} paid: ${error.message}`);
+  }
+  return (data ?? []).length > 0;
+}
+
+/** Insert a procurement notification for the PO's owning designer. Never throws. */
+async function notifyPoPayment(
+  admin: SupabaseClient,
+  row: PoPaymentRow,
+  kind: 'payment_received' | 'payment_failed'
+): Promise<void> {
+  try {
+    const { data: po } = await admin
+      .from('purchase_orders')
+      .select('id, designer_id')
+      .eq('id', row.purchase_order_id)
+      .maybeSingle();
+    const designerId = (po as { designer_id: string } | null)?.designer_id ?? null;
+    if (!designerId) {
+      console.warn('stripe-webhook: no designer for po_payment notification', row.id);
+      return;
+    }
+    const { error } = await admin.from('procurement_notifications').insert({
+      user_id: designerId,
+      kind,
+      subject_purchase_order_id: row.purchase_order_id,
+      subject_payment_id: row.id,
+    });
+    if (error) {
+      console.error('stripe-webhook: po_payment notification insert failed', error);
+    }
+  } catch (err) {
+    console.error('stripe-webhook: po_payment notification side effect failed', err);
+  }
+}
+
+async function handlePoSessionCompleted(
+  admin: SupabaseClient,
+  event: Stripe.Event,
+  session: Stripe.Checkout.Session
+): Promise<void> {
+  const { sessionId, paymentIntentId, poPaymentId } = poSessionIds(session);
+  const row = await resolvePoPayment(admin, sessionId, paymentIntentId, poPaymentId);
+  if (!row) {
+    console.warn('stripe-webhook: no po_payment resolvable for session', sessionId);
+    return;
+  }
+
+  if (session.payment_status === 'paid') {
+    const flipped = await markPoPaid(admin, row, paymentIntentId);
+    if (flipped) await notifyPoPayment(admin, row, 'payment_received');
+  } else if (paymentIntentId && !row.stripe_payment_intent_id) {
+    // ACH initiated ('unpaid'): stamp the PI id, leave state. The
+    // async_payment_succeeded/failed event settles it in 3–5 business days.
+    const { error } = await admin
+      .from('po_payments')
+      .update({ stripe_payment_intent_id: paymentIntentId })
+      .eq('id', row.id)
+      .is('stripe_payment_intent_id', null);
+    if (error) {
+      throw new Error(`failed to stamp PI on po_payment ${row.id}: ${error.message}`);
+    }
+  }
+}
+
+async function handlePoAsyncPaymentSucceeded(
+  admin: SupabaseClient,
+  event: Stripe.Event,
+  session: Stripe.Checkout.Session
+): Promise<void> {
+  const { sessionId, paymentIntentId, poPaymentId } = poSessionIds(session);
+  const row = await resolvePoPayment(admin, sessionId, paymentIntentId, poPaymentId);
+  if (!row) {
+    console.warn('stripe-webhook: po async_payment_succeeded with no row', sessionId);
+    return;
+  }
+  const flipped = await markPoPaid(admin, row, paymentIntentId);
+  if (flipped) await notifyPoPayment(admin, row, 'payment_received');
+}
+
+async function handlePoAsyncPaymentFailed(
+  admin: SupabaseClient,
+  event: Stripe.Event,
+  session: Stripe.Checkout.Session
+): Promise<void> {
+  const { sessionId, paymentIntentId, poPaymentId } = poSessionIds(session);
+  const row = await resolvePoPayment(admin, sessionId, paymentIntentId, poPaymentId);
+  if (!row) {
+    console.warn('stripe-webhook: po async_payment_failed with no row', sessionId);
+    return;
+  }
+
+  // Clear the session pointer so Pay-now opens a fresh session. Leave state at
+  // its prior value (there is no 'failed' po_payment state). Guard on the
+  // session id so a newer session's pointer is never clobbered.
+  const { data: cleared, error } = await admin
+    .from('po_payments')
+    .update({ stripe_checkout_session_id: null })
+    .eq('id', row.id)
+    .eq('stripe_checkout_session_id', sessionId)
+    .select('id');
+  if (error) {
+    throw new Error(`failed to clear session pointer on po_payment ${row.id}: ${error.message}`);
+  }
+
+  if ((cleared ?? []).length > 0) {
+    await notifyPoPayment(admin, row, 'payment_failed');
+  }
+}
+
+/** Belt-and-suspenders PI handler: only settle-success touches not-yet-paid rows. */
+async function handlePoPaymentIntentSettled(
+  admin: SupabaseClient,
+  event: Stripe.Event,
+  pi: Stripe.PaymentIntent,
+  outcome: 'succeeded' | 'failed'
+): Promise<void> {
+  const poPaymentId = pi.metadata?.po_payment_id ?? null;
+  const row = await resolvePoPayment(admin, null, pi.id, poPaymentId);
+  if (!row || row.state === 'paid') return;
+
+  if (outcome === 'succeeded') {
+    const flipped = await markPoPaid(admin, row, pi.id);
+    if (flipped) await notifyPoPayment(admin, row, 'payment_received');
+  }
+  // outcome 'failed': po_payment has no 'failed' state. A Checkout card decline
+  // leaves the session open for retry; a failed ACH is handled authoritatively
+  // by checkout.session.async_payment_failed (clears pointer + notifies). Nothing
+  // to do here — leave state untouched.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
