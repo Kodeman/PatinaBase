@@ -57,8 +57,16 @@ export async function middleware(req: NextRequest) {
   // anonymous visitors take the style quiz; the localStorage session key is
   // the capability, claimed on signup via claim_quiz_session.
   const isQuizPage = req.nextUrl.pathname === '/quiz' || req.nextUrl.pathname.startsWith('/quiz/');
+  // /share/[token] is a public, VIEW-ONLY window onto a proposal (Wave 2 · C2):
+  // the token is resolved server-side via resolve_document_share() — no session,
+  // no RLS-authed data, no verdict/sign affordances.
+  const isSharePage = req.nextUrl.pathname.startsWith('/share/');
   const isPublicPage =
-    req.nextUrl.pathname === '/' || req.nextUrl.pathname.startsWith('/demo') || isInviteLanding || isQuizPage;
+    req.nextUrl.pathname === '/' ||
+    req.nextUrl.pathname.startsWith('/demo') ||
+    isInviteLanding ||
+    isQuizPage ||
+    isSharePage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!user;
