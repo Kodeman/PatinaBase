@@ -33,6 +33,10 @@ import { LeadTimeSelect } from '@/components/portal/ffe/lead-time-select';
 import { leadTimeLabel } from '@/lib/scope/lead-time';
 import { StrataMark } from '@/components/document/strata-mark';
 import { pieceSections, pieceFill, piecePct } from '@/lib/document/piece-progress';
+// S² Wave 2 — custom fields (S6) + spec sheet PDF (S8)
+import { useSpecFieldDefs } from '@/hooks/use-spec-fields';
+import { withFieldValue, formatFieldValue } from '@/lib/scope/spec-fields';
+import { downloadSpecPdf } from '@/lib/scope/spec-pdf-client';
 
 const ACTION_BTN =
   'rounded-[4px] border border-[var(--color-pearl)] px-2.5 py-1.5 text-[10.5px] font-medium text-[var(--color-charcoal)] hover:border-[var(--color-clay)] disabled:opacity-50';
@@ -85,13 +89,38 @@ export function ScheduleLineUnfold({
   const { data: product } = useProduct(item.product_id ?? '') as { data: any };
   const { data: capturedByName } = useProfileName(product?.captured_by);
 
+  const { data: fieldDefs = [] } = useSpecFieldDefs({ proposalId });
+
   const updateItem = useUpdateProposalItem();
   const [editing, setEditing] = useState(false);
   const [docCode, setDocCode] = useState(item.doc_code ?? '');
   const [clientNotes, setClientNotes] = useState(item.notes ?? '');
   const [internalNotes, setInternalNotes] = useState(item.internal_notes ?? '');
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>(
+    (item.custom_fields as Record<string, unknown> | null) ?? {}
+  );
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  // S8 — the item spec sheet (client price only; no trade/markup ever). Inline
+  // error at the act (R83), quiet confirmation (R51).
+  const handleSpecPdf = async () => {
+    setPdfBusy(true);
+    setError(null);
+    setSaved(null);
+    try {
+      await downloadSpecPdf(
+        { kind: 'item', proposalId, itemId: item.id },
+        `spec-${item.doc_code || item.id}.pdf`
+      );
+      setSaved('spec sheet downloaded');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'The spec sheet could not be generated.');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   const categoryLabelText = item.ffe_category
     ? (categories as Array<{ slug: string; label: string }>).find(
@@ -218,6 +247,35 @@ export function ScheduleLineUnfold({
         </div>
       </div>
 
+      {/* ── Custom fields (S6) — the schedule's designer-defined columns ── */}
+      {fieldDefs.length > 0 && (
+        <div className="mb-3 grid grid-cols-1 gap-3 border-t border-dashed border-[var(--color-pearl)] pt-2.5 sm:grid-cols-3">
+          {fieldDefs.map((def) => (
+            <div key={def.id}>
+              <CellLabel>{def.name}</CellLabel>
+              <input
+                type={def.kind === 'number' ? 'number' : def.kind === 'url' ? 'url' : 'text'}
+                value={formatFieldValue(customFields[def.field_key])}
+                disabled={updateItem.isPending}
+                onChange={(e) =>
+                  setCustomFields((cur) => withFieldValue(cur, def.field_key, def.kind, e.target.value))
+                }
+                onBlur={() => {
+                  const original = (item.custom_fields as Record<string, unknown> | null)?.[def.field_key] ?? null;
+                  const current = customFields[def.field_key] ?? null;
+                  if (JSON.stringify(current) !== JSON.stringify(original)) {
+                    save({ custom_fields: customFields }, `${def.name} saved`);
+                  }
+                }}
+                placeholder={def.kind === 'url' ? 'https://…' : '—'}
+                aria-label={def.name}
+                className="w-full bg-transparent text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)] disabled:opacity-50"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Provenance — only when the line points at a real piece ── */}
       {product && (
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-dashed border-[var(--color-pearl)] pt-2.5">
@@ -307,6 +365,9 @@ export function ScheduleLineUnfold({
           aria-expanded={editing}
         >
           {editing ? 'Close edit ↑' : 'Edit the line ✎'}
+        </button>
+        <button type="button" className={ACTION_BTN} onClick={handleSpecPdf} disabled={pdfBusy}>
+          {pdfBusy ? 'Preparing…' : 'Spec sheet (PDF) ↓'}
         </button>
         <button type="button" className={ACTION_BTN} onClick={onFold}>
           Fold ↑

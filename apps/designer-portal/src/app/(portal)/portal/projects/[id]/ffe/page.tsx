@@ -79,6 +79,8 @@ import {
   parseDollarsToCents,
   parsePercentInput,
 } from '@/lib/currency-ui';
+// S² Wave 2 · S9 — the studio-owner financial lens, shared with the pre-sale builder.
+import { FinancialLensPanel, type LensRow } from '@/components/portal/scope-builder/financial-lens';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyItem = any;
@@ -161,6 +163,25 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
 
   const items = useMemo(() => (Array.isArray(rawItems) ? rawItems : []) as AnyItem[], [rawItems]);
   const rooms = useMemo(() => (Array.isArray(rawRooms) ? rawRooms : []) as AnyItem[], [rawRooms]);
+
+  // S9 — studio-owner money view (post-sale: display-only in v1; bulk money edits
+  // on live procurement rows need a ruling). Reuses the shared FinancialLensPanel.
+  const [moneyView, setMoneyView] = useState(false);
+  const lensRows = useMemo<LensRow[]>(() => {
+    const roomNameById = new Map<string, string>(rooms.map((r) => [r.id, r.name]));
+    return items.map((it) => ({
+      id: it.id,
+      code: it.doc_code ?? null,
+      name: it.name || 'Untitled',
+      quantity: it.quantity ?? 1,
+      itemType: (it.item_type ?? 'fixed') as LensRow['itemType'],
+      tradeCents: it.trade_price_cents ?? null,
+      markupPercent: it.markup_percent ?? null,
+      clientUnitCents: it.unit_price_cents ?? null,
+      lineTotalCents: it.line_total_cents ?? null,
+      roomName: it.project_room_id ? roomNameById.get(it.project_room_id) ?? 'Unassigned' : 'Unassigned',
+    }));
+  }, [items, rooms]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vendorList = (Array.isArray(vendors) ? vendors : []) as any[];
 
@@ -758,8 +779,24 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Search items, vendors, PO numbers" />
-        <FacetedFilterPopover facets={facets} value={filters} onChange={setFilters} />
+        <div className="flex items-center gap-2">
+          {/* S9 — studio-owner money view toggle (post-sale, display-only). */}
+          {isStudioOwner && (
+            <Button
+              variant={moneyView ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setMoneyView((v) => !v)}
+              aria-pressed={moneyView}
+            >
+              {moneyView ? 'Money ✓' : 'Money'}
+            </Button>
+          )}
+          <FacetedFilterPopover facets={facets} value={filters} onChange={setFilters} />
+        </div>
       </div>
+
+      {/* S9 — the financial lens (studio owners only; designer-eyes analysis). */}
+      {moneyView && isStudioOwner && <FinancialLensPanel rows={lensRows} />}
 
       {/* Stage-count summary strip — pipeline-at-a-glance. Clicking a chip
           single-select-toggles the shared filters.stage (same state as the
