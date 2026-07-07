@@ -17,6 +17,7 @@ enum RouteSessionScreens {
         let store = container.store
         let sync = container.sync
         let location = container.location
+        let projectCreator = container.projectCreator
 
         // ── Flow 6 routes ──────────────────────────────────────────────
         r.registerRoute(CaptureRoute.session.registryKey) { _ in
@@ -36,7 +37,8 @@ enum RouteSessionScreens {
                 location: location, coordinator: coordinator))
         }
         r.registerSheet(CaptureSheet.createProject.registryKey) { _ in
-            AnyView(S2CreateProjectScreen(store: store, coordinator: coordinator))
+            AnyView(S2CreateProjectScreen(store: store, coordinator: coordinator,
+                                          projectCreator: projectCreator))
         }
         r.registerSheet(CaptureSheet.destination(UUID()).registryKey) { sheet in
             guard case let .destination(id) = sheet else { return AnyView(EmptyView()) }

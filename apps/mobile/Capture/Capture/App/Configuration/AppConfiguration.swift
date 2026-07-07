@@ -68,4 +68,18 @@ public enum AppConfiguration {
         guard let i = args.firstIndex(of: "-CaptureScreen"), i + 1 < args.count else { return nil }
         return args[i + 1]
     }
+
+    // MARK: - PostHog (Phase 1b analytics)
+
+    /// PostHog project key. From `Secrets.swift` (gitignored), else the
+    /// `POSTHOG_API_KEY` env var, else empty (analytics stays a no-op). Mirrors
+    /// the existing Patina app's resolution.
+    public static var postHogAPIKey: String {
+        Secrets.postHogAPIKey ?? ProcessInfo.processInfo.environment["POSTHOG_API_KEY"] ?? ""
+    }
+
+    /// PostHog host, overridable via `POSTHOG_HOST` (defaults to US cloud).
+    public static var postHogHost: String {
+        ProcessInfo.processInfo.environment["POSTHOG_HOST"] ?? "https://us.i.posthog.com"
+    }
 }

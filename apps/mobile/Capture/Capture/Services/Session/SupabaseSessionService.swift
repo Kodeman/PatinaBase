@@ -49,6 +49,10 @@ final class SupabaseSessionService: SessionProviding {
     /// Coalesces concurrent hydration (auth-stream event + explicit sign-in) so
     /// `signInWithGoogle()` and the listener share one fetch and never race.
     @ObservationIgnored private var hydrationTask: Task<Void, Never>?
+    /// Monotonic token identifying the current hydration pass. `Task` is a value
+    /// type (no `===` identity), so this stands in for it: a finishing pass only
+    /// clears the latch if it still owns this generation.
+    @ObservationIgnored private var hydrationGeneration = 0
 
     private enum Keys {
         static let activeWorkspaceID = "session.activeWorkspaceID"
@@ -163,6 +167,8 @@ final class SupabaseSessionService: SessionProviding {
         // re-hydrate on the *next* auth event (.tokenRefreshed/.signedIn/…).
         // There is no polling loop; the retry is bounded by the event stream.
         if isHydrated { return }
+        hydrationGeneration += 1
+        let generation = hydrationGeneration
         let task = Task { @MainActor in
             await self.performHydration(userID: user.id.uuidString)
         }
@@ -170,8 +176,15 @@ final class SupabaseSessionService: SessionProviding {
         await task.value
         // Clear the latch so a later event can retry when this pass came back
         // empty; a successful pass is instead gated out above by `isHydrated`.
-        hydrationTask = nil
+        // Only clear OUR slot: a signOut (which nils the latch) or a successor
+        // hydration pass that bumped the generation must not be clobbered by this
+        // task finishing late.
+        if hydrationGeneration == generation { hydrationTask = nil }
     }
+
+    /// The user id the current session is authenticated for, or nil once signed
+    /// out. Used to bail an in-flight hydration whose session changed mid-fetch.
+    private var currentSessionUserID: String? { session?.user.id.uuidString }
 
     /// A hydration pass is "good" once it has both a profile and at least one
     /// workspace. Mirrors the reference app re-gating on emptiness so failed
@@ -181,9 +194,24 @@ final class SupabaseSessionService: SessionProviding {
     }
 
     private func performHydration(userID: String) async {
-        profileDisplayName = await fetchDisplayName(userID: userID)
-        roles = await fetchRoles(userID: userID)
-        workspaces = await fetchWorkspaces(userID: userID)
+        // After EACH await, re-check that the session still belongs to the user
+        // this pass started for before writing any state. Otherwise a signOut (or
+        // a different account signing in) that lands while a fetch is in flight
+        // would let this task's post-await writes repopulate identity/workspace
+        // state for the wrong user — and, via the `isHydrated` gate, make the new
+        // account skip hydration and even re-persist the old org id. Bail silently.
+        let name = await fetchDisplayName(userID: userID)
+        guard currentSessionUserID == userID else { return }
+        profileDisplayName = name
+
+        let fetchedRoles = await fetchRoles(userID: userID)
+        guard currentSessionUserID == userID else { return }
+        roles = fetchedRoles
+
+        let fetchedWorkspaces = await fetchWorkspaces(userID: userID)
+        guard currentSessionUserID == userID else { return }
+        workspaces = fetchedWorkspaces
+
         resolveActiveWorkspace()
     }
 
