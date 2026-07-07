@@ -387,6 +387,33 @@ const PROJECT_DETAIL_SELECT =
   'start_date, kickoff_date, target_end_date, expected_completion_date, updated_at, ' +
   'project_phases(id, name, phase_key, status, sort_order, start_date, target_end_date, completed_at, progress)';
 
+// Real "approvals pending" per project = client_decisions still awaiting the
+// client's response (status 'pending'). RLS scopes client_decisions to the
+// client, so this counts only decisions addressed to them. Best-effort: a
+// failure here must never break the project read (falls back to 0).
+// (Proposal-line verdicts awaiting the client, C3, live on the proposal document
+// itself — its own rollup header — since an active project's proposal is signed.)
+const fetchPendingApprovalCounts = async (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  projectIds: string[],
+): Promise<Map<string, number>> => {
+  const counts = new Map<string, number>();
+  if (projectIds.length === 0) return counts;
+  const { data, error } = await supabase
+    .from('client_decisions')
+    .select('project_id')
+    .in('project_id', projectIds)
+    .eq('status', 'pending');
+  if (error) return counts;
+  for (const row of asArray<any>(data)) {
+    const pid = asString(row?.project_id);
+    if (!pid) continue;
+    counts.set(pid, (counts.get(pid) ?? 0) + 1);
+  }
+  return counts;
+};
+
 export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> => {
   try {
     const supabase = (await createServerClient()) as any;
@@ -402,10 +429,16 @@ export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> =>
       .order('updated_at', { ascending: false });
     if (error) throw error;
 
-    return asArray<any>(data).map((row) => {
+    const rows = asArray<any>(data);
+    const pending = await fetchPendingApprovalCounts(
+      supabase,
+      rows.map((r) => asString(r?.id)).filter(Boolean),
+    );
+
+    return rows.map((row) => {
       const { progressPercentage, currentPhaseLabel, nextPhase } = summarisePhases(row?.project_phases);
-      // approvalsPending / unreadMessages are computed counts — left at 0 for now
-      // (decisions + comms unread are a follow-up); the read path no longer 500s.
+      // unreadMessages remains a follow-up; approvalsPending is now real (pending
+      // client_decisions on the project).
       return mapProjectListItem({
         id: row?.id,
         name: row?.name,
@@ -415,6 +448,7 @@ export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> =>
         currentPhase: currentPhaseLabel || row?.current_phase,
         progressPercentage,
         nextMilestoneTitle: nextPhase?.name,
+        approvalsPending: pending.get(asString(row?.id)) ?? 0,
       });
     });
   } catch (error) {
@@ -447,6 +481,8 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
       row.project_phases,
     );
 
+    const pending = await fetchPendingApprovalCounts(supabase, [projectId]);
+
     const milestones: MilestoneDetail[] = phases
       .map((phase, index) =>
         mapMilestone(
@@ -478,7 +514,7 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
       progressPercentage,
       completedMilestones: completed,
       totalMilestones: phases.length,
-      approvalsPending: 0,
+      approvalsPending: pending.get(projectId) ?? 0,
       unreadMessages: 0,
       nextMilestone: nextPhase
         ? {
