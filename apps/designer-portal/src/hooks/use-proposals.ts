@@ -15,6 +15,7 @@ export {
   useAddProposalItem,
   useUpdateProposalItem,
   useRemoveProposalItem,
+  useReorderProposalItems,
   useSendProposal,
   useNudgeProposal,
   // Sections
