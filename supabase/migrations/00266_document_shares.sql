@@ -232,5 +232,9 @@ GRANT EXECUTE ON FUNCTION public.revoke_document_share(UUID)   TO authenticated;
 -- least privilege: nothing anonymous calls PostgREST directly today, and the
 -- grant would open a direct token-probe endpoint for no caller. Re-grant to
 -- anon deliberately if an anon-client caller ever ships.
-REVOKE EXECUTE ON FUNCTION public.resolve_document_share(TEXT) FROM anon;
+-- Functions get EXECUTE via PUBLIC by default — revoke PUBLIC on all three
+-- (the 00260 clone_proposal pattern), then grant exactly the intended callers.
+REVOKE ALL ON FUNCTION public.create_document_share(UUID, TEXT, JSONB, TIMESTAMPTZ) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.revoke_document_share(UUID)   FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.resolve_document_share(TEXT)  FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.resolve_document_share(TEXT)  TO authenticated;
