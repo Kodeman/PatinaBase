@@ -12,7 +12,7 @@ struct ViewfinderPlaceholder: View {
         ZStack {
             CaptureColor.ink.ignoresSafeArea()
             LinearGradient(
-                colors: [Color(hex: 0x4A5247), Color(hex: 0x1C1D17)],
+                colors: [CaptureColor.ink2, CaptureColor.ink],
                 startPoint: .top, endPoint: .bottom
             )
             .ignoresSafeArea()

@@ -69,7 +69,7 @@ struct ReadyScreen: View {
     private var subtitle: String {
         switch hardwareEntry {
         case .actionButton:
-            return "Map the Action Button to Patina, and capture without even unlocking to the app."
+            return "Map the Action Button to Patina Field, and capture without even unlocking to the app."
         case .controlCenter:
             return "Add the Capture control to Control Center and shoot in a single tap."
         }

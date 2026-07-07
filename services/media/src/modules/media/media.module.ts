@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { PrismaClient } from '../../generated/prisma-client';
 
 // Modules
@@ -11,7 +12,6 @@ import { UploadService } from '../upload/upload.service';
 import { MetadataExtractionService } from '../assets/metadata-extraction.service';
 import { ImageTransformService } from '../transform/image-transform.service';
 import { VirusScannerService } from '../security/virus-scanner.service';
-import { JobQueueService } from '../jobs/job-queue.service';
 
 // Controllers
 import { MediaController } from './media.controller';
@@ -22,6 +22,10 @@ import { MediaSecurityInterceptor } from './interceptors/security.interceptor';
 
 @Module({
   imports: [
+    // Register media processing queue
+    BullModule.registerQueue({
+      name: 'media-processing',
+    }),
     // Import 3D module for Model3DService and ThreeDProcessingService
     ThreeDModule,
   ],
@@ -45,11 +49,6 @@ import { MediaSecurityInterceptor } from './interceptors/security.interceptor';
     MetadataExtractionService,
     ImageTransformService,
     VirusScannerService,
-    // JobQueueService.addJob() is how processMedia() reaches the Cloudflare
-    // Queues pipeline (infra/media-worker) — see job-queue.service.ts. This
-    // module gets its own instance (mirrors the module's own PrismaClient
-    // factory above); it's a thin, stateless wrapper so that's harmless.
-    JobQueueService,
 
     // Guards & Interceptors
     MediaAccessGuard,

@@ -65,12 +65,15 @@ final class StubWorkspaceAuthorizer: WorkspaceAuthorizing {
 // MARK: - Screen
 
 struct ConnectWorkspaceScreen: View {
-    private enum Phase: Equatable { case idle, authorizing, failed }
+    private enum Phase: Equatable { case idle, authorizing, failed, empty, chooseWorkspace }
 
     let authorizer: WorkspaceAuthorizing
     /// Auth succeeded → continue to camera priming (O3) with the chosen
     /// workspace + whether the designer opted into Face ID.
     var onConnected: (_ workspace: OnboardingWorkspace, _ enableFaceID: Bool) -> Void
+    /// Escape hatch from the "no workspace" dead end: sign out and restart
+    /// onboarding so the designer can try another account. No-op for previews.
+    var onSignOut: () -> Void
 
     @State private var phase: Phase = .idle
     @State private var workspaces: [OnboardingWorkspace]
@@ -79,9 +82,11 @@ struct ConnectWorkspaceScreen: View {
 
     init(authorizer: WorkspaceAuthorizing,
          workspaces: [OnboardingWorkspace] = OnboardingWorkspace.demo,
-         onConnected: @escaping (_ workspace: OnboardingWorkspace, _ enableFaceID: Bool) -> Void = { _, _ in }) {
+         onConnected: @escaping (_ workspace: OnboardingWorkspace, _ enableFaceID: Bool) -> Void = { _, _ in },
+         onSignOut: @escaping () -> Void = {}) {
         self.authorizer = authorizer
         self.onConnected = onConnected
+        self.onSignOut = onSignOut
         _workspaces = State(initialValue: workspaces)
         _selected = State(initialValue: workspaces.first)
     }
@@ -126,18 +131,31 @@ struct ConnectWorkspaceScreen: View {
                         Label("Couldn’t connect. Tap to try again.", systemImage: "exclamationmark.triangle.fill")
                             .font(CaptureType.footnote)
                             .foregroundStyle(CaptureColor.rust)
+                            .multilineTextAlignment(.center)
+                    } else if phase == .empty {
+                        Label("No workspace found for your account — ask your studio admin.",
+                              systemImage: "person.crop.circle.badge.exclamationmark")
+                            .font(CaptureType.footnote)
+                            .foregroundStyle(CaptureColor.rust)
+                            .multilineTextAlignment(.center)
                     }
 
-                    Button(action: { Task { await connect() } }) {
+                    Button(action: { Task { await primaryAction() } }) {
                         HStack(spacing: 8) {
                             if phase == .authorizing {
                                 ProgressView().tint(CaptureColor.paper3)
                             }
-                            Text(phase == .authorizing ? "Connecting…" : "Continue with Patina")
+                            Text(primaryButtonTitle)
                         }
                     }
-                    .buttonStyle(OnboardingFilledButtonStyle(enabled: phase != .authorizing))
-                    .disabled(phase == .authorizing)
+                    .buttonStyle(OnboardingFilledButtonStyle(enabled: primaryButtonEnabled))
+                    .disabled(!primaryButtonEnabled)
+
+                    if phase == .empty {
+                        Button("Sign in with a different account", action: onSignOut)
+                            .font(CaptureType.footnote)
+                            .foregroundStyle(CaptureColor.inkSoft)
+                    }
                 }
             }
             .padding(.horizontal, 28)
@@ -218,21 +236,62 @@ struct ConnectWorkspaceScreen: View {
 
     // MARK: Auth
 
+    /// Button dispatch: in `.chooseWorkspace` the auth already happened and the
+    /// tap only commits the pick; otherwise it (re)starts authentication.
+    @MainActor
+    private func primaryAction() async {
+        if phase == .chooseWorkspace {
+            guard let chosen = selected else { return }
+            phase = .idle
+            onConnected(chosen, enableFaceID)
+        } else {
+            await connect()
+        }
+    }
+
+    /// Authenticate, then branch honestly on what the account actually has —
+    /// never persisting or proceeding on a workspace the user didn't choose.
     @MainActor
     private func connect() async {
         phase = .authorizing
         do {
             let result = try await authorizer.authorize()
-            if !result.isEmpty {
-                workspaces = result
-                let stillValid = selected.map { result.contains($0) } ?? false
-                if !stillValid { selected = result.first }
+            workspaces = result
+            switch result.count {
+            case 0:
+                // No org membership: a dead end. Never persist, never proceed.
+                selected = nil
+                phase = .empty
+            case 1:
+                // Exactly one workspace: auto-select and continue.
+                selected = result[0]
+                phase = .idle
+                onConnected(result[0], enableFaceID)
+            default:
+                // Multiple: force an explicit pick (the picker above) before we
+                // persist a default. `selected` stays nil so Continue is gated.
+                selected = nil
+                phase = .chooseWorkspace
             }
-            let chosen = selected ?? result.first ?? OnboardingWorkspace(id: "default", name: "Patina")
-            phase = .idle
-            onConnected(chosen, enableFaceID)
         } catch {
             phase = .failed
+        }
+    }
+
+    private var primaryButtonTitle: String {
+        switch phase {
+        case .authorizing:     return "Connecting…"
+        case .chooseWorkspace: return "Continue"
+        case .empty:           return "Try again"
+        default:               return "Continue with Patina"
+        }
+    }
+
+    private var primaryButtonEnabled: Bool {
+        switch phase {
+        case .authorizing:     return false
+        case .chooseWorkspace: return selected != nil
+        default:               return true
         }
     }
 }

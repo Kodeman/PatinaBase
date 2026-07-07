@@ -348,9 +348,6 @@ public struct CompanionOverlay: View {
                                         coordinator.presentAuthentication()
                                     case .openDesignServices(let roomId):
                                         coordinator.presentedSheet = .designServices(roomId: roomId)
-                                    case .switchToConsumerHome:
-                                        SettingsService.shared.setPreferredHomeMode(.consumer)
-                                        coordinator.navigate(to: .heroFrame)
                                     }
                                 }
                             }

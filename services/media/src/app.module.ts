@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { BullModule } from '@nestjs/bullmq';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { APP_GUARD } from '@nestjs/core';
 import { HybridAuthGuard, PermissionsGuard } from '@patina/auth';
@@ -51,6 +52,15 @@ import { CloudflareCDNProvider } from './modules/storage/cdn/cloudflare-cdn.prov
       wildcard: true,
       delimiter: '.',
       maxListeners: 10,
+    }),
+
+    // BullMQ for job queues
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        password: process.env.REDIS_PASSWORD,
+      },
     }),
 
     // Feature modules

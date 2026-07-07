@@ -7,7 +7,6 @@ import { AccountSheet } from '@/components/document/account/account-sheet';
 import { InvoiceOverlays } from '@/components/document/accounts/invoice-overlays';
 import { DraftProposalOverlay } from '@/components/document/rooms/drafting/draft-proposal-opener';
 import { DocumentHelpProvider } from '@/components/document/help/document-help';
-import { FeedbackLayer } from '@/components/document/feedback/feedback-layer';
 import { MobileShellProvider } from '@/components/document/mobile/mobile-shell';
 import { MobileBar } from '@/components/document/mobile/mobile-bar';
 import { MobileSheets } from '@/components/document/mobile/mobile-sheets';
@@ -57,11 +56,6 @@ export default function DocumentLayout({ children }: { children: React.ReactNode
               <DraftProposalOverlay />
               <MobileBar />
               <MobileSheets />
-              {/* The feedback layer (docs/ledger/patina-feedback-layer-prd.md):
-                  a persistent capture button + sheet on its own layer, on every
-                  Desk screen. Mounted last so it sits above the rest of the
-                  chrome. */}
-              <FeedbackLayer />
             </DocumentHelpProvider>
           </MobileShellProvider>
         </DocumentTimeProvider>

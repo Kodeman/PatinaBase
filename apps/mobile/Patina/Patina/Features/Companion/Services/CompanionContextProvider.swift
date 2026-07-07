@@ -26,11 +26,6 @@ struct CompanionActionItem: Identifiable {
         /// Present the "Request design help" sheet (PT-3-8: design services
         /// is a `PresentedSheet`, not a navigation route).
         case openDesignServices(roomId: UUID?)
-        /// Flip the dual-role home preference back to consumer before
-        /// resetting to the root. Plain `.heroFrame` can't do it — the root
-        /// home surface is picked by `SettingsService.preferredHomeMode`,
-        /// which `navigate(to: .designerHome)` sets to `.designer` (R09).
-        case switchToConsumerHome
     }
 
     init(icon: String, label: String, hint: String, isSuggested: Bool = false, route: AppRoute) {
@@ -99,44 +94,6 @@ enum CompanionActionProvider {
                     route: .notifications
                 ),
             ]
-            if ProfileService.shared.roles.contains("designer") {
-                items.append(CompanionActionItem(
-                    icon: "rectangle.grid.2x2", label: "Designer workspace",
-                    hint: "Projects · Decisions · Messages",
-                    route: .designerHome
-                ))
-            }
-
-        case .designerHome:
-            items = [
-                CompanionActionItem(
-                    icon: "folder", label: "Projects",
-                    hint: "Active engagements", isSuggested: true,
-                    route: .projectList
-                ),
-                CompanionActionItem(
-                    icon: "checkmark.seal", label: "Decisions",
-                    hint: "Awaiting client approval",
-                    route: .decisionList
-                ),
-                CompanionActionItem(
-                    icon: "bubble.left.and.bubble.right", label: "Messages",
-                    hint: "Client threads",
-                    route: .threadList
-                ),
-                CompanionActionItem(
-                    icon: "bell", label: "Notifications",
-                    hint: "Updates across your projects",
-                    route: .notifications
-                ),
-            ]
-            if ProfileService.shared.roles.contains("consumer") {
-                items.append(CompanionActionItem(
-                    icon: "house", label: "Consumer view",
-                    hint: "Switch to your daily room",
-                    specialAction: .switchToConsumerHome
-                ))
-            }
 
         case .emergence, .roomEmergence:
             items = [
@@ -275,7 +232,7 @@ enum CompanionActionProvider {
             return "What's next for this room?"
         case .styleResult:
             return "Where to from here?"
-        case .designerHome, .projectList, .decisionList:
+        case .projectList, .decisionList:
             return "What's on your plate?"
         case .threadList, .threadDetail:
             return "Anything else?"

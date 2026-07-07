@@ -1,7 +1,7 @@
 //  CaptureKitMocks.swift
 //  CaptureKitMocks
 //
-//  In-memory / mock conformer for every CaptureKit seam, so all 32 screens
+//  In-memory / mock conformer for every CaptureKit seam, so all 51 screens
 //  render in the simulator without camera/LiDAR/Speech/network. Wired by
 //  AppContainer when -CaptureUseMocks is set; also used by previews + tests.
 
@@ -114,9 +114,17 @@ public final class MockSessionProviding: SessionProviding {
     public var userID: String? = "00000000-0000-0000-0000-000000000001"
     public var workspaceID: String? = "00000000-0000-0000-0000-0000000000aa"
     public var workspaceName: String? = "Walbridge Studio"
+    public var userEmail: String? = "ava@walbridge.studio"
+    public var displayName: String? = "Ava Walbridge"
     public init() {}
     public func waitForReady() async {}
-    public func signOut() async { isAuthenticated = false }
+    public func selectWorkspace(id: String) { workspaceID = id }
+    public func signOut() async {
+        isAuthenticated = false
+        userID = nil
+        workspaceID = nil
+        workspaceName = nil
+    }
 }
 
 @MainActor

@@ -86,11 +86,9 @@ struct RouteAnalyticsParityTests {
             (.profile, "Profile"),
             (.notifications, "Notifications"),
             (.designerConsultation, "Designer"),
-            (.designerHome, "Designer Home"),
             (.projectList, "Projects"),
             (.decisionList, "Decisions"),
-            (.threadList, "Messages"),
-            (.receiveDelivery, "Receive Delivery")
+            (.threadList, "Messages")
         ]
         for (route, name) in expected {
             #expect(route.analyticsScreenName == name, "Screen name drift for \(route)")

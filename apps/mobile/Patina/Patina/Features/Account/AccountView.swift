@@ -14,7 +14,6 @@ import Auth
 struct AccountView: View {
     @Environment(\.appCoordinator) private var coordinator
     @State private var showingSignOutAlert = false
-    @State private var homeMode: SettingsService.HomeMode = SettingsService.shared.preferredHomeMode
 
     private var authService: AuthService { AuthService.shared }
     private var profileService: ProfileService { ProfileService.shared }
@@ -29,12 +28,10 @@ struct AccountView: View {
         return formatter
     }()
 
-    /// Show the Workspace section only when the signed-in user actually
-    /// has both designer and consumer roles. Solo-role users have a
-    /// deterministic home, so the toggle would be confusing.
-    private var showsWorkspaceToggle: Bool {
-        let roles = profileService.roles
-        return roles.contains("designer") && roles.contains("consumer")
+    /// Designers now work in the separate Patina Field app. Surface a quiet
+    /// pointer to it for anyone whose profile still carries the designer role.
+    private var isDesigner: Bool {
+        profileService.roles.contains("designer")
     }
 
     var body: some View {
@@ -46,8 +43,8 @@ struct AccountView: View {
                 // Account info
                 accountSection
 
-                if showsWorkspaceToggle {
-                    workspaceSection
+                if isDesigner {
+                    patinaFieldRow
                 }
 
                 // Actions
@@ -126,53 +123,23 @@ struct AccountView: View {
         }
     }
 
-    // MARK: - Workspace Section
+    // MARK: - Patina Field Row
 
-    private var workspaceSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("Workspace")
-
-            VStack(spacing: 0) {
-                HStack {
-                    Text("Mode")
-                        .font(PatinaTypography.body)
-                        .foregroundStyle(PatinaColors.Text.secondary)
-                    Spacer()
-                    Menu {
-                        Button("Auto") { applyHomeMode(.auto) }
-                        Button("Designer") { applyHomeMode(.designer) }
-                        Button("Consumer") { applyHomeMode(.consumer) }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(homeModeLabel(homeMode))
-                                .font(PatinaTypography.body)
-                                .foregroundStyle(PatinaColors.Text.primary)
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(PatinaColors.Text.muted)
-                        }
-                    }
-                }
-                .padding(PatinaSpacing.md)
-            }
-            .background(PaperBackground(cornerRadius: PatinaRadius.lg))
+    /// A single quiet pointer to the companion Patina Field app, shown only
+    /// to users who still carry the designer role. Non-navigating in v1 —
+    /// no App Store link yet.
+    private var patinaFieldRow: some View {
+        HStack(spacing: PatinaSpacing.md) {
+            Image(systemName: "briefcase")
+                .font(.system(size: 20))
+                .foregroundStyle(PatinaColors.Text.secondary)
+            Text("Working on Patina projects? Get Patina Field.")
+                .font(PatinaTypography.body)
+                .foregroundStyle(PatinaColors.Text.secondary)
+            Spacer(minLength: 0)
         }
-    }
-
-    private func homeModeLabel(_ mode: SettingsService.HomeMode) -> String {
-        switch mode {
-        case .auto: return "Auto"
-        case .designer: return "Designer"
-        case .consumer: return "Consumer"
-        }
-    }
-
-    private func applyHomeMode(_ mode: SettingsService.HomeMode) {
-        homeMode = mode
-        SettingsService.shared.setPreferredHomeMode(mode)
-        // Bounce back to the root so mainHomeView re-evaluates with the
-        // new preference. The sheet stays open per existing patterns.
-        coordinator.navigate(to: .heroFrame)
+        .padding(PatinaSpacing.md)
+        .background(PaperBackground(cornerRadius: PatinaRadius.lg))
     }
 
     // MARK: - Actions Section

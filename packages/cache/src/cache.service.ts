@@ -1,7 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
-import { MemoryRedis } from './memory-redis';
 
 /**
  * Redis-based caching service for NestJS services
@@ -19,22 +18,6 @@ export class CacheService implements OnModuleDestroy {
   private totalRequests = 0;
 
   constructor(private readonly configService: ConfigService) {
-    // Redis-free mode for hosts with no Redis (e.g. Cloudflare Containers):
-    // REDIS_DISABLED=true swaps the ioredis client for an in-process store
-    // with the same call surface. Explicit env only — the services' config
-    // blocks default redis.host to localhost, so absence can't be inferred.
-    if (
-      this.configService.get<string>('REDIS_DISABLED') === 'true' ||
-      process.env.REDIS_DISABLED === 'true'
-    ) {
-      this.redis = new MemoryRedis() as unknown as Redis;
-      this.defaultTtl =
-        this.configService.get<number>('REDIS_CACHE_TTL') ||
-        this.configService.get<number>('redis.cacheTtl', 3600);
-      this.logger.log('REDIS_DISABLED=true — using in-memory cache store');
-      return;
-    }
-
     const redisConfig = {
       host: this.configService.get<string>('REDIS_HOST') || this.configService.get<string>('redis.host', 'localhost'),
       port: this.configService.get<number>('REDIS_PORT') || this.configService.get<number>('redis.port', 6379),

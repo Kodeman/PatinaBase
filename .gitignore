@@ -99,7 +99,4 @@ packages/patina-design-system/.dssync-tailwind.css
 
 # Transient multi-agent run artifacts (parity re-sweeps etc.)
 .claude/runs/
-
-# OpenNext / wrangler build artifacts (portals on Cloudflare Workers)
-.open-next/
-.wrangler/
+.superpowers/

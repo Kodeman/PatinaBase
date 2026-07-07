@@ -237,6 +237,7 @@ struct TagOCRSheet: View {
 import CaptureKitMocks
 
 #Preview("N1 · Tag OCR") {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     let specimen = store.newDraft()
     return TagOCRSheet(

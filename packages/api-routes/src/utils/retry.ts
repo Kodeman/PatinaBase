@@ -279,17 +279,11 @@ function mergeAbortSignals(signals: AbortSignal[]): AbortSignal {
   return controller.signal;
 }
 
-/**
- * fetch() wrapper that throws TimeoutError if the request exceeds timeoutMs.
- * `fetchImpl` lets callers swap the transport — on Cloudflare Workers the
- * portals pass a service-binding fetcher (env.SVC_X.fetch) so proxied calls
- * ride Worker→Worker bindings instead of public egress.
- */
+/** fetch() wrapper that throws TimeoutError if the request exceeds timeoutMs. */
 export async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
   timeoutMs: number,
-  fetchImpl: typeof fetch = fetch,
 ): Promise<Response> {
   const timeoutSignal = createTimeoutSignal(timeoutMs);
   const signal = options.signal
@@ -297,7 +291,7 @@ export async function fetchWithTimeout(
     : timeoutSignal;
 
   try {
-    return await fetchImpl(url, { ...options, signal });
+    return await fetch(url, { ...options, signal });
   } catch (error) {
     if (timeoutSignal.aborted) {
       throw new TimeoutError(`Request timed out after ${timeoutMs}ms`, timeoutMs);

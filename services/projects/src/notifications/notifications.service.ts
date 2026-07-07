@@ -1,5 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { UpdatePreferenceDto } from './dto/update-preference.dto';
@@ -11,6 +13,7 @@ export class NotificationsService {
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
+    @InjectQueue('notifications') private notificationQueue: Queue,
   ) {}
 
   /**
@@ -249,23 +252,53 @@ export class NotificationsService {
   }
 
   /**
-   * Private: Resolve delivery channels for a notification.
-   *
-   * NOTE: this used to enqueue Bull jobs ('send-email' / 'send-sms' /
-   * 'send-push') for a worker to pick up, but no @Processor ever consumed
-   * that queue anywhere in the codebase — it was producer-only dead code
-   * (jobs sat unprocessed in Redis; the notification was already marked
-   * 'sent' regardless). Removed with the Bull/Redis dependency during the
-   * Cloudflare Container migration; behavior is unchanged for callers.
+   * Private: Queue notification for delivery
    */
   private async queueForDelivery(
     notification: any,
     channels: Record<string, boolean>,
     preferences: any,
   ) {
-    const resolvedChannels = (['email', 'sms', 'push'] as const).filter(
-      (channel) => channels[channel],
-    );
+    const jobs = [];
+
+    if (channels.email && preferences.emailAddress) {
+      jobs.push(
+        this.notificationQueue.add('send-email', {
+          notificationId: notification.id,
+          to: preferences.emailAddress,
+          subject: notification.title,
+          message: notification.message,
+          actionUrl: notification.actionUrl,
+        }),
+      );
+    }
+
+    if (channels.sms && preferences.phoneNumber) {
+      jobs.push(
+        this.notificationQueue.add('send-sms', {
+          notificationId: notification.id,
+          to: preferences.phoneNumber,
+          message: `${notification.title}: ${notification.message}`,
+        }),
+      );
+    }
+
+    if (channels.push && preferences.pushTokens && Array.isArray(preferences.pushTokens)) {
+      jobs.push(
+        this.notificationQueue.add('send-push', {
+          notificationId: notification.id,
+          tokens: preferences.pushTokens,
+          title: notification.title,
+          body: notification.message,
+          data: {
+            actionUrl: notification.actionUrl,
+            type: notification.type,
+          },
+        }),
+      );
+    }
+
+    await Promise.all(jobs);
 
     // Update notification status
     await this.prisma.notification.update({
@@ -273,9 +306,7 @@ export class NotificationsService {
       data: { status: 'sent', sentAt: new Date() },
     });
 
-    this.logger.log(
-      `Resolved ${resolvedChannels.length} delivery channel(s) [${resolvedChannels.join(', ')}] for notification ${notification.id} (no delivery backend configured)`,
-    );
+    this.logger.log(`Queued ${jobs.length} delivery jobs for notification ${notification.id}`);
   }
 
   /**
@@ -325,13 +356,15 @@ export class NotificationsService {
       return acc;
     }, {} as Record<string, any[]>);
 
-    // Send digest email — see queueForDelivery() note: no delivery backend
-    // is wired up (the Bull 'send-digest' job was producer-only dead code).
+    // Send digest email
     const preferences = await this.getOrCreatePreferences(userId);
     if (preferences.email && preferences.emailAddress) {
-      this.logger.log(
-        `Digest (${frequency}) resolved for ${preferences.emailAddress}: ${notifications.length} notification(s) across ${Object.keys(byProject).length} project(s) (no delivery backend configured)`,
-      );
+      await this.notificationQueue.add('send-digest', {
+        to: preferences.emailAddress,
+        frequency,
+        notifications: byProject,
+        totalCount: notifications.length,
+      });
     }
 
     // Mark as sent

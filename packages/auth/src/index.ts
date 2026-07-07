@@ -1,26 +1,13 @@
 /**
  * @patina/auth — Supabase JWT auth for NestJS services
  *
- * Verifies Supabase-issued JWTs using the `jose` library, supporting both
- * signing schemes Supabase can issue:
+ * Verifies Supabase-issued JWTs (HS256) using SUPABASE_JWT_SECRET via the
+ * `jose` library. Exports guards, decorators, and a standalone
+ * `verifyJwtToken` helper that `@patina/api-routes` reuses for defense-in-depth
+ * verification at the portal proxy layer.
  *
- *  - HS256 (shared secret) — self-hosted / local Supabase. Verified against
- *    SUPABASE_JWT_SECRET.
- *  - ES256 / RS256 (asymmetric) — Supabase Cloud projects using signing
- *    keys. Verified against a remote JWKS, resolved from SUPABASE_JWKS_URL
- *    if set, otherwise derived from SUPABASE_URL as
- *    `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`.
- *
- * The algorithm in the token's protected header decides which path runs, so
- * each deployment only needs to configure the env vars for the scheme its
- * Supabase project actually uses. Exports guards, decorators, and a
- * standalone `verifyJwtToken` helper that `@patina/api-routes` reuses for
- * defense-in-depth verification at the portal proxy layer.
- *
- * Hard requirement: SUPABASE_JWT_SECRET must be set to verify HS256 tokens,
- * and SUPABASE_URL (or SUPABASE_JWKS_URL) must be set to verify ES256/RS256
- * tokens. Each path fails closed if its own config is missing — there is no
- * dev fallback.
+ * Hard requirement: SUPABASE_JWT_SECRET must be set in the environment.
+ * The guard fails closed if the secret is missing — there is no dev fallback.
  */
 import {
   SetMetadata,
@@ -29,7 +16,7 @@ import {
   ExecutionContext,
   createParamDecorator,
 } from '@nestjs/common';
-import { jwtVerify, decodeProtectedHeader, createRemoteJWKSet, type JWTVerifyGetKey } from 'jose';
+import { jwtVerify } from 'jose';
 
 // Metadata key for public routes
 export const IS_PUBLIC_KEY = 'isPublic';
@@ -81,62 +68,14 @@ function getJwtSecret(): Uint8Array {
   return cachedSecret;
 }
 
-let cachedJwks: JWTVerifyGetKey | null = null;
-
-function getJwksUrl(): string {
-  const explicit = process.env.SUPABASE_JWKS_URL;
-  if (explicit) return explicit;
-
-  const supabaseUrl = process.env.SUPABASE_URL;
-  if (!supabaseUrl) {
-    throw new Error(
-      '[@patina/auth] Received an asymmetrically-signed (ES256/RS256) JWT but ' +
-        'neither SUPABASE_JWKS_URL nor SUPABASE_URL is set. ' +
-        'Supabase Cloud projects sign JWTs with an asymmetric key — configure ' +
-        'SUPABASE_URL (e.g. https://<project-ref>.supabase.co) so the JWKS can be ' +
-        'derived as `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`, or set ' +
-        'SUPABASE_JWKS_URL directly. Refusing to operate without it.',
-    );
-  }
-  return `${supabaseUrl.replace(/\/$/, '')}/auth/v1/.well-known/jwks.json`;
-}
-
-function getJwks(): JWTVerifyGetKey {
-  if (cachedJwks) return cachedJwks;
-  cachedJwks = createRemoteJWKSet(new URL(getJwksUrl()));
-  return cachedJwks;
-}
-
 /**
  * Verify a Supabase JWT and return its payload.
- *
- * Branches on the token's protected-header `alg`:
- *  - HS256 → shared-secret verification against SUPABASE_JWT_SECRET
- *    (self-hosted / local Supabase).
- *  - ES256 / RS256 → remote JWKS verification, resolved from
- *    SUPABASE_JWKS_URL or derived from SUPABASE_URL (Supabase Cloud).
- *
- * Throws on invalid signature, expired token, malformed token, unsupported
- * algorithm, or missing configuration for the branch the token requires.
+ * Throws on invalid signature, expired token, malformed token, or wrong algorithm.
  * Used by JwtAuthGuard below and by @patina/api-routes' proxy layer.
  */
 export async function verifyJwtToken(token: string): Promise<SupabaseJwtPayload> {
-  let alg: string | undefined;
-  try {
-    ({ alg } = decodeProtectedHeader(token));
-  } catch {
-    throw new Error('[@patina/auth] Malformed token: unable to decode JWT protected header.');
-  }
-
-  if (alg === 'HS256') {
-    const { payload } = await jwtVerify(token, getJwtSecret(), {
-      algorithms: ['HS256'],
-    });
-    return payload as SupabaseJwtPayload;
-  }
-
-  const { payload } = await jwtVerify(token, getJwks(), {
-    algorithms: ['ES256', 'RS256'],
+  const { payload } = await jwtVerify(token, getJwtSecret(), {
+    algorithms: ['HS256'],
   });
   return payload as SupabaseJwtPayload;
 }

@@ -23,7 +23,6 @@ import { useAuth } from '@/hooks/use-auth';
 import { openAccount } from './account/account-sheet';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
 import { openPost } from './overlays/post-sheet';
-import { openFeedbackSheet } from './feedback/feedback-sheet';
 import { openHelp } from '@/lib/help-system/open-help';
 import { openDraftProposalPicker } from './rooms/drafting/draft-proposal-opener';
 import { fillStateForDesk } from '@/lib/document/fill-state';
@@ -39,7 +38,7 @@ type Row =
   | { kind: 'person'; label: string; sub: string; run: () => void }
   | { kind: 'engine'; label: string; sub: string };
 
-const LEDGERS = ['Library', 'Orders', 'Accounts', 'People', 'Hours', 'Feedback'];
+const LEDGERS = ['Library', 'Orders', 'Accounts', 'People', 'Hours'];
 
 /** Set true by {@link openCaptureLead} when the front door is invoked from a
  *  non-Desk surface; the Desk reads + clears it on mount so the sheet opens
@@ -235,15 +234,6 @@ export function CommandBar() {
         sub: 'about this surface',
         keywords: 'help guide docs how to support question learn',
         run: () => openHelp(),
-      },
-      {
-        // The feedback layer (docs/ledger/patina-feedback-layer-prd.md): the ⌘K
-        // keyboard entry to the capture sheet (also ⌘⇧F, also the FAB).
-        kind: 'action' as const,
-        label: 'Leave a note',
-        sub: 'feedback on this screen',
-        keywords: 'feedback note comment bug idea working missing change suggestion',
-        run: () => openFeedbackSheet(),
       },
       { kind: 'action' as const, label: 'The Desk', sub: 'go home', run: () => router.push('/desk') },
       {

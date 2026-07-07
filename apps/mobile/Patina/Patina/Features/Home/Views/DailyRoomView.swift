@@ -27,12 +27,6 @@ struct DailyRoomView: View {
     /// the user dismisses the resume card or continues the scan.
     @State private var resumableScan: ScanRecoveryService.RecoveryCandidate?
     @Namespace private var cardNamespace
-    /// PT-4-10: dual-role gate for the header mode-switch chip. Designers who
-    /// also hold the consumer role can flip between the two home surfaces.
-    private var isDualRole: Bool {
-        let roles = ProfileService.shared.roles
-        return roles.contains("designer") && (roles.contains("consumer") || roles.isEmpty)
-    }
 
     var body: some View {
         // First-launch tour wraps the entire screen so the three coachmark
@@ -148,17 +142,6 @@ struct DailyRoomView: View {
             // Newest first; the service returns oldest-first.
             resumableScan = candidates.max(by: { $0.createdAt < $1.createdAt })
         }
-        .onAppear {
-            // mainHomeView can resolve to DailyRoomView implicitly (no
-            // navigate call), e.g. when a dual-role user flips Workspace
-            // back to Consumer. Without this, the Companion context can
-            // be stuck at .designerHome from a prior session and the
-            // sheet will show the designer action set on the consumer
-            // home. Mirror of the DesignerHomeView fix.
-            if coordinator.currentScreen != .heroFrame {
-                coordinator.navigate(to: .heroFrame)
-            }
-        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 viewModel.load()
@@ -197,13 +180,7 @@ struct DailyRoomView: View {
                     onMonogramTap: { coordinator.navigate(to: .profile) },
                     // PT-3-7: bell → notifications, badge from unread count.
                     onBellTap: { coordinator.navigate(to: .notifications) },
-                    unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count,
-                    // PT-4-10: dual-role users get a chip to switch to the
-                    // designer home. Tapping persists the preference (which
-                    // re-routes `mainHomeView`) and captures the switch.
-                    roleChip: isDualRole
-                        ? .init(label: "DESIGNER", onTap: { switchToDesignerHome() })
-                        : nil
+                    unreadCount: notificationsViewModel.notifications.filter { !$0.isRead }.count
                 )
 
                 // PT-4-9: resume card for a saved, in-progress scan.
@@ -302,20 +279,6 @@ struct DailyRoomView: View {
                 Spacer().frame(height: 120)
             }
         }
-    }
-
-    /// PT-4-10: flip the saved home preference to `.designer` and capture the
-    /// switch. Because `SettingsService` is `@Observable` and `mainHomeView`
-    /// reads `preferredHomeMode`, this re-routes the root home surface to
-    /// `DesignerHomeView` on the next render — no imperative navigation needed.
-    private func switchToDesignerHome() {
-        HapticManager.shared.impact(.light)
-        SettingsService.shared.setPreferredHomeMode(.designer)
-        PostHogService.shared.capture("home_mode_switched", properties: [
-            "source": "header",
-            "to": SettingsService.HomeMode.designer.rawValue,
-            "from": SettingsService.HomeMode.consumer.rawValue
-        ])
     }
 
     /// PT-4-9: resume the saved in-progress scan. Routes into the Quiet

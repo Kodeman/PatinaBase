@@ -1,13 +1,10 @@
-import { createBrowserClient } from '@patina/supabase';
+import { io, Socket } from 'socket.io-client';
 import type { ApprovalStatus } from '@patina/types';
 
-// Event types for type-safe realtime communication.
-// Server → client events match the projects service EventBridge broadcasts;
-// they arrive over a Supabase Realtime private channel (`project:<id>`) instead
-// of Socket.io, but the event names and payloads are unchanged.
+// Event types for type-safe WebSocket communication
+// These match the backend event-bridge.service.ts events
 export enum WebSocketEvent {
-  // Client -> Server events (retained for API compatibility; now no-ops —
-  // subscription is handled by the Supabase channel, not per-message emits)
+  // Client -> Server events (match backend gateway)
   SUBSCRIBE_PROJECT = 'subscribe:project',
   UNSUBSCRIBE_PROJECT = 'unsubscribe:project',
   PING = 'ping',
@@ -133,32 +130,13 @@ interface WebSocketConfig {
   debug?: boolean;
 }
 
-type SupabaseBrowserClient = ReturnType<typeof createBrowserClient>;
-type ProjectChannel = ReturnType<SupabaseBrowserClient['channel']>;
-
-interface PresenceMeta {
-  userId: string;
-  userName?: string;
-  projectId?: string;
-}
-
-/**
- * Realtime service for the client portal project view.
- *
- * Backed by Supabase Realtime broadcast channels (private `project:<id>`).
- * The public API — `connect`, `subscribeToProject`, `on`/`off`, presence, and
- * the milestone room helpers — is unchanged from the former Socket.io
- * implementation, so `websocket-context.tsx` and its consumers are untouched.
- * Server-originated events arrive as broadcasts; peer presence uses Supabase
- * Realtime Presence and is surfaced as synthetic `team:presence` events.
- */
 export class WebSocketService {
-  private supabase: SupabaseBrowserClient | null = null;
-  private channel: ProjectChannel | null = null;
+  private socket: Socket | null = null;
   private config: WebSocketConfig;
   private eventHandlers: Map<string, Set<Function>> = new Map();
   private isConnected: boolean = false;
-  private currentProjectId: string | null = null;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private reconnectAttempts: number = 0;
 
   constructor(config: WebSocketConfig) {
     this.config = {
@@ -169,188 +147,225 @@ export class WebSocketService {
     };
   }
 
-  // Initialize the realtime connection and subscribe to the configured project.
+  // Initialize WebSocket connection
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
+      if (this.socket?.connected) {
+        if (this.config.debug) console.log('[WebSocket] Already connected');
+        resolve();
+        return;
+      }
+
       try {
-        if (!this.supabase) {
-          this.supabase = createBrowserClient();
-        }
-        // Authorize the Realtime connection so private-channel RLS can run.
-        if (this.config.authToken) {
-          this.supabase.realtime.setAuth(this.config.authToken);
-        }
+        // The projects service gateway is at the `/projects` namespace.
+        // Append it once here so callers can supply the host-level WS URL.
+        const url = this.config.url.replace(/\/projects\/?$/, '');
+        const namespacedUrl = `${url}/projects`;
+        this.socket = io(namespacedUrl, {
+          auth: {
+            token: this.config.authToken,
+            userId: this.config.userId,
+          },
+          transports: ['websocket', 'polling'],
+          reconnection: true,
+          reconnectionAttempts: this.config.reconnectAttempts,
+          reconnectionDelay: this.config.reconnectDelay,
+        });
 
-        if (!this.config.projectId) {
-          // No project yet — connection is established lazily on subscribe.
+        // Set up core event handlers
+        this.setupCoreEventHandlers();
+
+        // Handle successful connection
+        this.socket.on(WebSocketEvent.CONNECT, () => {
+          this.isConnected = true;
+          this.reconnectAttempts = 0;
+
+          if (this.config.debug) {
+            console.log('[WebSocket] Connected successfully');
+          }
+
+          // Auto-subscribe to project if projectId is provided
+          if (this.config.projectId) {
+            this.subscribeToProject(this.config.projectId);
+          }
+
           resolve();
-          return;
-        }
+        });
 
-        this.subscribeToProject(this.config.projectId, resolve, reject);
+        // Handle connection errors
+        this.socket.on(WebSocketEvent.ERROR, (error) => {
+          if (this.config.debug) {
+            console.error('[WebSocket] Connection error:', error);
+          }
+          reject(error);
+        });
+
       } catch (error) {
         reject(error);
       }
     });
   }
 
-  // Subscribe to realtime updates for a project.
-  subscribeToProject(
-    projectId: string,
-    onSubscribed?: () => void,
-    onError?: (err: unknown) => void,
-  ): void {
-    if (!this.supabase) {
-      this.supabase = createBrowserClient();
-      if (this.config.authToken) {
-        this.supabase.realtime.setAuth(this.config.authToken);
+  // Set up core event handlers
+  private setupCoreEventHandlers(): void {
+    if (!this.socket) return;
+
+    // Handle disconnect
+    this.socket.on(WebSocketEvent.DISCONNECT, (reason) => {
+      this.isConnected = false;
+      if (this.config.debug) {
+        console.log('[WebSocket] Disconnected:', reason);
       }
+      this.handleReconnect();
+    });
+
+    // Handle reconnection
+    this.socket.on(WebSocketEvent.RECONNECT, (attemptNumber) => {
+      this.isConnected = true;
+      if (this.config.debug) {
+        console.log(`[WebSocket] Reconnected after ${attemptNumber} attempts`);
+      }
+
+      // Re-subscribe to project after reconnection
+      if (this.config.projectId) {
+        this.subscribeToProject(this.config.projectId);
+      }
+    });
+  }
+
+  // Handle reconnection logic
+  private handleReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
     }
 
-    // Swap channels if the project changed.
-    if (this.channel && this.currentProjectId !== projectId) {
-      this.supabase.removeChannel(this.channel);
-      this.channel = null;
-    }
-    if (this.channel) {
-      onSubscribed?.();
+    if (this.reconnectAttempts >= (this.config.reconnectAttempts || 10)) {
+      if (this.config.debug) {
+        console.error('[WebSocket] Max reconnection attempts reached');
+      }
       return;
     }
 
-    this.currentProjectId = projectId;
-    const channel = this.supabase.channel(`project:${projectId}`, {
-      config: {
-        private: true,
-        presence: { key: this.config.userId ?? 'anonymous' },
-        broadcast: { self: false },
-      },
-    });
+    const delay = Math.min(
+      (this.config.reconnectDelay || 1000) * Math.pow(2, this.reconnectAttempts),
+      30000
+    );
 
-    // Every server broadcast → dispatch to registered handlers by event name.
-    channel.on('broadcast', { event: '*' }, (message: any) => {
-      this.dispatch(message.event, message.payload);
-    });
-
-    // Peer presence → synthetic `team:presence` events (WebSocketPresenceUpdate).
-    channel.on('presence', { event: 'sync' }, () => {
-      const state = channel.presenceState() as Record<string, PresenceMeta[]>;
-      for (const metas of Object.values(state)) {
-        const meta = metas[0];
-        if (meta) this.emitPresence(meta, 'viewing');
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectAttempts++;
+      if (this.config.debug) {
+        console.log(`[WebSocket] Attempting reconnection ${this.reconnectAttempts}/${this.config.reconnectAttempts}`);
       }
-    });
-    channel.on('presence', { event: 'join' }, ({ newPresences }: any) => {
-      for (const meta of newPresences ?? []) this.emitPresence(meta, 'viewing');
-    });
-    channel.on('presence', { event: 'leave' }, ({ leftPresences }: any) => {
-      for (const meta of leftPresences ?? []) this.emitPresence(meta, 'offline');
-    });
-
-    channel.subscribe((status: string, err?: Error) => {
-      if (status === 'SUBSCRIBED') {
-        this.isConnected = true;
-        this.dispatch(WebSocketEvent.CONNECT, undefined);
-        if (this.config.userId) {
-          channel.track({
-            userId: this.config.userId,
-            projectId,
-          } satisfies PresenceMeta);
-        }
-        if (this.config.debug) console.log(`[Realtime] Subscribed to project:${projectId}`);
-        onSubscribed?.();
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        this.isConnected = false;
-        this.dispatch(WebSocketEvent.ERROR, err ?? new Error(status));
-        if (this.config.debug) console.error(`[Realtime] ${status}`, err);
-        onError?.(err ?? new Error(status));
-      } else if (status === 'CLOSED') {
-        this.isConnected = false;
-        this.dispatch(WebSocketEvent.DISCONNECT, status);
-      }
-    });
-
-    this.channel = channel;
+      this.connect();
+    }, delay);
   }
 
-  // Unsubscribe from a project's realtime updates.
-  unsubscribeFromProject(projectId: string): void {
-    if (this.channel && this.currentProjectId === projectId) {
-      this.supabase?.removeChannel(this.channel);
-      this.channel = null;
-      this.currentProjectId = null;
-      this.isConnected = false;
+  // Subscribe to project updates
+  subscribeToProject(projectId: string): void {
+    if (!this.socket?.connected) {
+      console.warn('[WebSocket] Cannot subscribe: not connected');
+      return;
+    }
+
+    this.socket.emit(WebSocketEvent.SUBSCRIBE_PROJECT, { projectId });
+
+    if (this.config.debug) {
+      console.log(`[WebSocket] Subscribed to project: ${projectId}`);
     }
   }
 
-  // Milestone rooms no longer exist server-side (milestone updates arrive on the
-  // project channel). Retained as no-ops for API compatibility.
-  joinMilestone(_milestoneId: string): void {}
-  leaveMilestone(_milestoneId: string): void {}
+  // Unsubscribe from project updates
+  unsubscribeFromProject(projectId: string): void {
+    if (!this.socket?.connected) return;
 
-  // Register an event handler.
+    this.socket.emit(WebSocketEvent.UNSUBSCRIBE_PROJECT, { projectId });
+
+    if (this.config.debug) {
+      console.log(`[WebSocket] Unsubscribed from project: ${projectId}`);
+    }
+  }
+
+  // Join milestone room for detailed updates
+  joinMilestone(milestoneId: string): void {
+    if (!this.socket?.connected) return;
+
+    this.socket.emit(WebSocketEvent.JOIN_MILESTONE, { milestoneId });
+
+    if (this.config.debug) {
+      console.log(`[WebSocket] Joined milestone: ${milestoneId}`);
+    }
+  }
+
+  // Leave milestone room
+  leaveMilestone(milestoneId: string): void {
+    if (!this.socket?.connected) return;
+
+    this.socket.emit(WebSocketEvent.LEAVE_MILESTONE, { milestoneId });
+
+    if (this.config.debug) {
+      console.log(`[WebSocket] Left milestone: ${milestoneId}`);
+    }
+  }
+
+  // Register event handler
   on(event: WebSocketEvent, handler: Function): void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set());
     }
+
     this.eventHandlers.get(event)?.add(handler);
-  }
 
-  // Remove an event handler.
-  off(event: WebSocketEvent, handler: Function): void {
-    this.eventHandlers.get(event)?.delete(handler);
-  }
-
-  // Emit a client-originated broadcast on the current channel (rarely used).
-  emit(event: string, data: any): void {
-    if (!this.channel) {
-      console.warn('[Realtime] Cannot emit: no active channel');
-      return;
+    // Register with socket if connected
+    if (this.socket) {
+      this.socket.on(event, handler as any);
     }
-    this.channel.send({ type: 'broadcast', event, payload: data });
   }
 
-  // Dispatch an event to all registered handlers.
-  private dispatch(event: string, payload: any): void {
+  // Remove event handler
+  off(event: WebSocketEvent, handler: Function): void {
     const handlers = this.eventHandlers.get(event);
-    if (!handlers) return;
-    for (const handler of handlers) {
-      try {
-        handler(payload);
-      } catch (error) {
-        console.error(`[Realtime] Handler for ${event} threw:`, error);
+    if (handlers) {
+      handlers.delete(handler);
+
+      // Remove from socket if connected
+      if (this.socket) {
+        this.socket.off(event, handler as any);
       }
     }
   }
 
-  private emitPresence(meta: PresenceMeta, status: 'viewing' | 'offline'): void {
-    if (!meta?.userId) return;
-    const update: WebSocketPresenceUpdate = {
-      projectId: meta.projectId ?? this.currentProjectId ?? '',
-      userId: meta.userId,
-      userName: meta.userName ?? meta.userId,
-      status,
-      lastSeen: new Date().toISOString(),
-    };
-    this.dispatch(WebSocketEvent.TEAM_MEMBER_PRESENCE, update);
-  }
-
-  // Get connection status.
-  isSocketConnected(): boolean {
-    return this.isConnected;
-  }
-
-  // Clean up and disconnect.
-  disconnect(): void {
-    if (this.channel && this.supabase) {
-      this.supabase.removeChannel(this.channel);
+  // Send custom event
+  emit(event: string, data: any): void {
+    if (!this.socket?.connected) {
+      console.warn('[WebSocket] Cannot emit: not connected');
+      return;
     }
-    this.channel = null;
-    this.currentProjectId = null;
+
+    this.socket.emit(event, data);
+  }
+
+  // Get connection status
+  isSocketConnected(): boolean {
+    return this.isConnected && this.socket?.connected === true;
+  }
+
+  // Clean up and disconnect
+  disconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+    }
+
     this.isConnected = false;
     this.eventHandlers.clear();
 
     if (this.config.debug) {
-      console.log('[Realtime] Disconnected and cleaned up');
+      console.log('[WebSocket] Disconnected and cleaned up');
     }
   }
 }

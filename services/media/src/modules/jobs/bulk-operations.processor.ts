@@ -1,25 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Job } from 'bullmq';
 import { PrismaClient } from '../../generated/prisma-client';
 import { OCIStorageService } from '../storage/oci-storage.service';
 import { CDNManagerService } from '../storage/cdn/cdn-manager.service';
-import { JobResult } from './job-queue.service';
+import { JobQueueService, JobResult } from './job-queue.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
-/**
- * DEAD CODE (cloud migration 3b): these handlers used to run as BullMQ
- * workers, registered via `JobQueueService.registerWorker()`. That method is
- * now a deprecated no-op — job execution moved entirely to
- * infra/media-worker's Cloudflare Queues consumer, which only handles
- * IMAGE_PROCESS / IMAGE_TRANSFORM / METADATA_EXTRACT. Bulk ops (ASSET_DELETE,
- * BULK_DELETE, BULK_COPY, CLEANUP_ORPHANED) have no executor on the cloud
- * pipeline yet, so their enqueue paths (AssetsService, via
- * `JobQueueService.addJob()`) now fail fast with a clear
- * NotImplementedException instead of leaving a ProcessJob row QUEUED with
- * nothing to pick it up. The method bodies below are kept, unreachable, as a
- * reference for whatever executes bulk ops next (a future Cloudflare
- * Worker/Queue, or a scheduled job inside this same container) — nothing
- * calls them today.
- */
 @Injectable()
 export class BulkOperationsProcessor implements OnModuleInit {
   private readonly logger = new Logger(BulkOperationsProcessor.name);
@@ -28,20 +14,24 @@ export class BulkOperationsProcessor implements OnModuleInit {
     private prisma: PrismaClient,
     private storage: OCIStorageService,
     private cdn: CDNManagerService,
+    private jobQueue: JobQueueService,
     private eventEmitter: EventEmitter2,
   ) {}
 
   async onModuleInit() {
-    this.logger.warn(
-      'BulkOperationsProcessor has no executor on the Cloudflare Queues pipeline — ' +
-        'ASSET_DELETE/BULK_DELETE/BULK_COPY/CLEANUP_ORPHANED enqueue paths fail fast via JobQueueService.addJob().',
-    );
+    // Register workers for bulk operations
+    this.jobQueue.registerWorker('ASSET_DELETE', this.processAssetDelete.bind(this), 3);
+    this.jobQueue.registerWorker('BULK_DELETE', this.processBulkDelete.bind(this), 2);
+    this.jobQueue.registerWorker('BULK_COPY', this.processBulkCopy.bind(this), 2);
+    this.jobQueue.registerWorker('CLEANUP_ORPHANED', this.processCleanupOrphaned.bind(this), 1);
+
+    this.logger.log('Bulk operations processor initialized');
   }
 
   /**
    * Process single asset deletion
    */
-  private async processAssetDelete(job: { data: any }): Promise<JobResult> {
+  private async processAssetDelete(job: Job): Promise<JobResult> {
     const { assetId, hardDelete = true, purgeCdn = true } = job.data;
 
     try {
@@ -125,7 +115,7 @@ export class BulkOperationsProcessor implements OnModuleInit {
   /**
    * Process bulk deletion
    */
-  private async processBulkDelete(job: { data: any; updateProgress: (n: number) => Promise<void> }): Promise<JobResult> {
+  private async processBulkDelete(job: Job): Promise<JobResult> {
     const { assetIds, hardDelete = true, purgeCdn = true } = job.data;
 
     const results = {
@@ -140,7 +130,7 @@ export class BulkOperationsProcessor implements OnModuleInit {
       try {
         const result = await this.processAssetDelete({
           data: { assetId, hardDelete, purgeCdn },
-        });
+        } as Job);
 
         if (result.success) {
           results.deleted++;
@@ -177,7 +167,7 @@ export class BulkOperationsProcessor implements OnModuleInit {
   /**
    * Process bulk copy
    */
-  private async processBulkCopy(job: { data: any; updateProgress: (n: number) => Promise<void> }): Promise<JobResult> {
+  private async processBulkCopy(job: Job): Promise<JobResult> {
     const {
       assetIds,
       toProductId,
@@ -353,7 +343,7 @@ export class BulkOperationsProcessor implements OnModuleInit {
   /**
    * Process cleanup of orphaned files
    */
-  private async processCleanupOrphaned(job: { data: any }): Promise<JobResult> {
+  private async processCleanupOrphaned(job: Job): Promise<JobResult> {
     this.logger.log('Starting orphaned files cleanup');
 
     const results = {

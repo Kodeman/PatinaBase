@@ -1,0 +1,1 @@
+{"version":3,"file":"websocket.module.js","sourceRoot":"","sources":["websocket.module.ts"],"names":[],"mappings":";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;AAAA,2CAAwC;AACxC,2DAA+D;AAC/D,2DAAuD;IAO1C,eAAe;4BAL3B,IAAA,eAAM,EAAC;YACN,OAAO,EAAE,CAAC,4BAAY,CAAC;YACvB,SAAS,EAAE,CAAC,4CAAwB,CAAC;YACrC,OAAO,EAAE,CAAC,4CAAwB,CAAC;SACpC,CAAC;;;;;;;;YACF,6KAA+B;;;YAAlB,uDAAe;;;;;AAAf,0CAAe"}

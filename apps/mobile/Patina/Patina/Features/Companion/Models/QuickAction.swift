@@ -131,12 +131,10 @@ public enum QuickActionFactory {
         case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
              .manualRoomEntry:
             return []
-        case .designerHome,
-             .projectList, .projectDetail,
+        case .projectList, .projectDetail,
              .decisionList, .decisionDetail,
-             .threadList, .threadDetail,
-             .receiveDelivery:
-            // B2B surfaces have their own navigation — keep the Companion quiet.
+             .threadList, .threadDetail:
+            // Client project surfaces have their own navigation — keep the Companion quiet.
             return []
         }
     }

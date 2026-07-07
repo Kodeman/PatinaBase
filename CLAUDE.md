@@ -12,7 +12,7 @@ Patina is a custom home furnishing platform connecting interior designers with m
 - **Database**: Single Supabase PostgreSQL (self-hosted at api.patina.cloud)
 - **Backend**: 3 NestJS services (orders, media, projects) using Prisma with schema isolation
 - **Infrastructure**: Coolify + Cloudflare Tunnel (production), Docker Compose + Supabase CLI (local)
-- **Native**: iOS app (Swift/SwiftUI), Chrome extension (Plasmo)
+- **Native**: 2 iOS apps (Swift/SwiftUI) — client (Patina) + designer/trades (Patina Field), Chrome extension (Plasmo)
 
 ## Essential Commands
 
@@ -66,7 +66,7 @@ patina/
 │   ├── admin-portal/          # Next.js 15 — admin dashboard (port 3001)
 │   ├── client-portal/         # Next.js 15 — client-facing PWA (port 3002)
 │   ├── extension/             # Plasmo Chrome extension (product capture)
-│   └── mobile/                # Swift/SwiftUI iOS app (room scans, QR auth)
+│   └── mobile/                # 2 Swift/SwiftUI iOS apps — client (Patina) + designer/trades (Patina Field)
 ├── services/
 │   ├── orders/                # NestJS — Stripe payments, EasyPost shipping (port 3015)
 │   ├── media/                 # NestJS — image processing, MinIO/S3 storage (port 3014)
@@ -197,16 +197,6 @@ cd packages/patina-design-system
 pnpm storybook      # Component development
 pnpm test           # Run tests
 ```
-
-### Deploying a portal to Cloudflare Workers
-
-Portals (client/designer/admin/manufacturer) run on Cloudflare Workers via OpenNext and are deployed from a wrangler-authed machine. **Always deploy through `infra/deploy-portal.sh`** — never run `opennextjs-cloudflare build` directly.
-
-```bash
-./infra/deploy-portal.sh <client|designer|admin|manufacturer>
-```
-
-The script first runs `turbo build --filter=<pkg>^...` to rebuild the portal's **workspace package dists** (`@patina/utils`, `@patina/design-system`, ...) before the OpenNext bundle. This is mandatory: `@patina/utils` resolves to its compiled `dist/` (its `package.json` `main` points there even though it's in `transpilePackages`), so a raw `opennextjs-cloudflare build` from the app dir bypasses Turborepo's `^build` graph and can bundle a **stale dist**. That is exactly how a missing export shipped to prod as `TypeError: proposalTierVisibility is not a function` — the dist predated a new source module. The script closes that gap.
 
 ## Important Conventions
 

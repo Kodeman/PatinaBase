@@ -227,6 +227,7 @@ struct VoiceNoteSheet: View {
 import CaptureKitMocks
 
 #Preview("N4 · Voice") {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     let specimen = store.newDraft()
     return VoiceNoteSheet(
