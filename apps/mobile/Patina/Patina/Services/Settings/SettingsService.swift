@@ -23,17 +23,6 @@ import Supabase
 public final class SettingsService {
     public static let shared = SettingsService()
 
-    // MARK: - Types
-
-    /// Preferred home surface for dual-role users.
-    /// `auto` defers to the iOS client (which prefers designer when a user
-    /// has both roles).
-    public enum HomeMode: String, Codable, CaseIterable, Sendable {
-        case consumer
-        case designer
-        case auto
-    }
-
     // MARK: - Public State
 
     /// Aggregate "do you want notifications at all?" — derived from push
@@ -41,8 +30,6 @@ public final class SettingsService {
     public var notificationsEnabled: Bool = true
     /// Haptic feedback for in-app interactions.
     public var hapticsEnabled: Bool = true
-    /// Preferred home for dual-role users; nil server value maps to `.auto`.
-    public var preferredHomeMode: HomeMode = .auto
 
     /// Whether the initial fetch has completed.
     public private(set) var isLoaded: Bool = false
@@ -55,7 +42,6 @@ public final class SettingsService {
         public var user_id: String
         public var push_notifications: Bool?
         public var email_notifications: Bool?
-        public var preferred_home_mode: String?
     }
 
     public struct NotificationPrefsRow: Codable, Sendable {
@@ -77,17 +63,12 @@ public final class SettingsService {
         do {
             let row: UserSettingsRow = try await supabase.database
                 .from("user_settings")
-                .select("user_id, push_notifications, email_notifications, preferred_home_mode")
+                .select("user_id, push_notifications, email_notifications")
                 .eq("user_id", value: userId)
                 .single()
                 .execute()
                 .value
             self.notificationsEnabled = row.push_notifications ?? true
-            if let raw = row.preferred_home_mode, let mode = HomeMode(rawValue: raw) {
-                self.preferredHomeMode = mode
-            } else {
-                self.preferredHomeMode = .auto
-            }
         } catch {
             // No row yet — defaults already applied.
             #if DEBUG
@@ -142,16 +123,6 @@ public final class SettingsService {
         UserDefaults.standard.set(enabled, forKey: "patina.hapticsEnabled")
     }
 
-    /// Persist the dual-role home preference. `.auto` writes NULL on the
-    /// server so the column can return to the client-side default later.
-    public func setPreferredHomeMode(_ mode: HomeMode) {
-        preferredHomeMode = mode
-        Task { [mode] in
-            guard let userId = await currentUserId() else { return }
-            await upsertPreferredHomeMode(userId: userId, mode: mode)
-        }
-    }
-
     // MARK: - Internals
 
     private func upsertUserSetting(userId: String, pushEnabled: Bool) async {
@@ -186,25 +157,6 @@ public final class SettingsService {
         } catch {
             #if DEBUG
             PatinaLog.ui.error("[SettingsService] notification_preferences upsert failed: \(error.localizedDescription)")
-            #endif
-        }
-    }
-
-    private func upsertPreferredHomeMode(userId: String, mode: HomeMode) async {
-        struct UpsertPayload: Encodable {
-            let user_id: String
-            let preferred_home_mode: String?
-        }
-        let value: String? = mode == .auto ? nil : mode.rawValue
-        do {
-            try await supabase.database
-                .from("user_settings")
-                .upsert(UpsertPayload(user_id: userId, preferred_home_mode: value),
-                        onConflict: "user_id")
-                .execute()
-        } catch {
-            #if DEBUG
-            PatinaLog.ui.error("[SettingsService] preferred_home_mode upsert failed: \(error.localizedDescription)")
             #endif
         }
     }

@@ -143,8 +143,6 @@ public struct CompanionContext: Equatable {
             return "All items across your home"
         case .manualRoomEntry:
             return "Entering room details"
-        case .designerHome:
-            return "Designer dashboard"
         case .projectList:
             return "Projects"
         case .projectDetail:
@@ -157,8 +155,6 @@ public struct CompanionContext: Equatable {
             return "Conversations"
         case .threadDetail:
             return "In conversation"
-        case .receiveDelivery:
-            return "Receiving a delivery"
         }
     }
 
@@ -198,16 +194,12 @@ public struct CompanionContext: Equatable {
         case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
              .manualRoomEntry:
             return "house"
-        case .designerHome:
-            return "rectangle.stack"
         case .projectList, .projectDetail:
             return "folder"
         case .decisionList, .decisionDetail:
             return "checkmark.seal"
         case .threadList, .threadDetail:
             return "bubble.left.and.bubble.right"
-        case .receiveDelivery:
-            return "shippingbox"
         }
     }
 }

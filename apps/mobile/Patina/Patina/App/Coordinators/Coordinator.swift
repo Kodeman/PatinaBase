@@ -81,17 +81,13 @@ public enum AppRoute: Hashable {
     case notifications
     case designerConsultation
 
-    // MVP v1 expanded — dual-mode + B2B surfaces
-    case designerHome                                 // designer dashboard
+    // MVP v1 expanded — client surfaces
     case projectList                                  // client: list of projects
     case projectDetail(projectId: String)             // client: project detail
     case decisionList                                 // client: pending decisions
     case decisionDetail(decisionId: String)           // client: review options
     case threadList                                   // messaging inbox
     case threadDetail(threadId: String)               // messaging conversation
-
-    // Procurement (Sprint 2 W2.4)
-    case receiveDelivery                              // designer-on-site receiving
 
     /// Display name for the route. Used for debugging / companion context.
     ///
@@ -122,8 +118,6 @@ public enum AppRoute: Hashable {
         case .profile: return "Profile"
         case .notifications: return "Notifications"
         case .designerConsultation: return "Designer"
-        case .designerHome: return "Designer Home"
-        case .receiveDelivery: return "Receive Delivery"
         case .projectList: return "Projects"
         case .projectDetail: return "Project"
         case .decisionList: return "Decisions"
