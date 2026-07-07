@@ -23,17 +23,22 @@
  * A Room — full-bleed paper, zero shadows (D4); reuses RoomShell's physics.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useProposal,
+  useProposalFeedback,
   useScopeBuilderSummary,
   useUpdateProposalItem,
   type ProposalItemType,
 } from '@patina/supabase';
+import { latestVerdictByLine } from '@patina/utils';
 import { RoomShell } from '../room-shell';
 import { StrataMark } from '../../strata-mark';
+import { StatusChip } from '../../status-chip';
+import { ProposalShareInstrument } from '../../proposal-share-instrument';
+import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { FacetSection } from './facet-section';
 import { ProposalPreviewRail } from '../../drafting/proposal-mirror';
 import { SendSheet } from '../../overlays/send-sheet';
@@ -88,6 +93,30 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   const { facets, summary: s, items, fill, pct, state, gaps } = useDraftingState(proposalId);
   const updateItem = useUpdateProposalItem();
   const queryClient = useQueryClient();
+
+  // C3 — the client's per-line verdicts, folded to the latest per line, so the
+  // schedule can wear an approve / flag / note chip beside each row (no chip
+  // when a line has no verdict). Shares the ['proposal-feedback', id] query with
+  // the line unfold — one fetch.
+  const { data: feedback = [] } = useProposalFeedback(proposalId);
+  const latestVerdict = useMemo(
+    () =>
+      latestVerdictByLine(
+        feedback.map((f) => ({
+          lineId: f.proposal_item_id ?? '',
+          verdict: f.verdict,
+          createdAt: f.created_at,
+          resolvedAt: f.resolved_at,
+        })),
+      ),
+    [feedback],
+  );
+  const renderVerdictChip = (item: { id: string }) => {
+    const v = latestVerdict.get(item.id);
+    if (!v) return null;
+    const spec = verdictChipSpec(v.verdict, v.resolvedAt);
+    return spec ? <StatusChip label={spec.label} color={spec.color} /> : null;
+  };
 
   // Payments needs the running total (Σ FF&E estimate + Σ design fees), like the
   // legacy shell computed for the milestone allocator.
@@ -167,7 +196,15 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
     <RoomShell
       title="The Drafting Room"
       count={pct > 0 ? `${pct}% drafted` : undefined}
-      action={sendAction}
+      // C2 — the share instrument rides beside the send act in the head: a quiet
+      // mono doorway into the tokenized share-link sheet (view-only client copy),
+      // seeded from the proposal's client-visibility tier.
+      action={
+        <div className="flex items-center gap-4">
+          <ProposalShareInstrument proposalId={proposalId} tier={proposal?.client_visibility_tier} />
+          {sendAction}
+        </div>
+      }
       // S10: no backTo — leaving returns to the stashed origin (the document the
       // designer walked in from, "← the document"), not the legacy proposals route.
     >
@@ -274,6 +311,7 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
                   renderUnfold={(item, fold) => (
                     <ScheduleLineUnfold item={item} proposalId={proposalId} onFold={fold} />
                   )}
+                  renderVerdictChip={renderVerdictChip}
                 />
               </div>
             </FacetSection>

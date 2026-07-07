@@ -15,15 +15,22 @@
  * uses — one write path, two grammars.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   useProduct,
   useProposalScopeRooms,
   useFFECategories,
+  useProposalFeedback,
+  useItemFeedbackThread,
+  useReplyToItemFeedback,
+  useResolveFeedback,
   createBrowserClient,
+  type ItemFeedback,
 } from '@patina/supabase';
 import { useUpdateProposalItem } from '@/hooks/use-proposals';
+import { StatusChip } from '@/components/document/status-chip';
+import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import {
   ItemEditForm,
   type ScheduleLineItem,
@@ -84,6 +91,16 @@ export function ScheduleLineUnfold({
   const { data: categories = [] } = useFFECategories({ proposalId });
   const { data: product } = useProduct(item.product_id ?? '') as { data: any };
   const { data: capturedByName } = useProfileName(product?.captured_by);
+
+  // C3 — this line's client verdict (the latest of any on this proposal_item),
+  // sharing the schedule's ['proposal-feedback', id] query. Null → the feedback
+  // block renders nothing (no empty block on a line the client hasn't touched).
+  const { data: allFeedback = [] } = useProposalFeedback(proposalId);
+  const lineFeedback = useMemo<ItemFeedback | null>(() => {
+    const mine = allFeedback.filter((f) => f.proposal_item_id === item.id);
+    if (mine.length === 0) return null;
+    return mine.reduce((latest, f) => (f.created_at > latest.created_at ? f : latest));
+  }, [allFeedback, item.id]);
 
   const updateItem = useUpdateProposalItem();
   const [editing, setEditing] = useState(false);
@@ -250,6 +267,10 @@ export function ScheduleLineUnfold({
         </div>
       )}
 
+      {/* ── Client feedback (C3) — the line's verdict + thread + designer reply /
+          resolve. Only when the client has actually left a verdict on this line. ── */}
+      {lineFeedback && <LineFeedbackBlock feedback={lineFeedback} proposalId={proposalId} />}
+
       {/* ── Notes — the client's line vs the studio's ── */}
       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
@@ -327,6 +348,131 @@ export function ScheduleLineUnfold({
             onDone={() => setEditing(false)}
           />
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The line's client-feedback block (C3): the verdict chip + the client's note,
+ * the thread (created / replied / resolved / reopened), a reply composer either
+ * party may use, and — for an unresolved flag — Mark resolved / Reopen
+ * (designer-only RPCs). Inline saved/error at the act (R83/R51); no toasts,
+ * no shadows (D4).
+ */
+function LineFeedbackBlock({
+  feedback,
+  proposalId,
+}: {
+  feedback: ItemFeedback;
+  proposalId: string;
+}) {
+  const { data: thread = [] } = useItemFeedbackThread(feedback.id);
+  const reply = useReplyToItemFeedback();
+  const resolve = useResolveFeedback();
+  const [replyText, setReplyText] = useState('');
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const spec = verdictChipSpec(feedback.verdict, feedback.resolved_at);
+  const isFlag = feedback.verdict === 'rejected';
+  const resolved = !!feedback.resolved_at;
+
+  const sendReply = () => {
+    const body = replyText.trim();
+    if (!body) return;
+    setError(null);
+    setSaved(null);
+    reply
+      .mutateAsync({ feedbackId: feedback.id, body, proposalId })
+      .then(() => {
+        setReplyText('');
+        setSaved('reply sent');
+      })
+      .catch((e: Error) => setError(e.message || 'The reply could not be sent.'));
+  };
+
+  const toggleResolved = (reopen: boolean) => {
+    setError(null);
+    setSaved(null);
+    resolve
+      .mutateAsync({ feedbackId: feedback.id, proposalId, reopen })
+      .then(() => setSaved(reopen ? 'flag reopened' : 'flag resolved'))
+      .catch((e: Error) => setError(e.message || 'That could not be saved.'));
+  };
+
+  return (
+    <div className="mb-3 rounded-[4px] border border-[var(--color-pearl)] bg-[rgba(196,165,123,0.04)] px-3 py-2.5">
+      <div className="mb-1.5 flex items-center gap-2">
+        <CellLabel>Client feedback</CellLabel>
+        {spec && <StatusChip label={spec.label} color={spec.color} />}
+      </div>
+
+      {feedback.body && (
+        <p className="text-[11.5px] leading-snug text-[var(--color-charcoal)]">{feedback.body}</p>
+      )}
+
+      {/* The thread — created / replied / resolved / reopened, oldest first. */}
+      {thread.length > 0 && (
+        <ol className="mt-2 space-y-1 border-l border-[var(--color-pearl)] pl-2.5">
+          {thread.map((ev) => (
+            <li key={ev.id} className="text-[10.5px] leading-snug text-[var(--text-muted)]">
+              <span className="font-mono text-[8px] uppercase tracking-[0.06em]">{ev.kind}</span>
+              {ev.body ? (
+                <span className="text-[var(--color-charcoal)]"> · {ev.body}</span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {/* Reply composer — either party may reply. */}
+      <textarea
+        rows={2}
+        value={replyText}
+        disabled={reply.isPending}
+        onChange={(e) => setReplyText(e.target.value)}
+        placeholder="Reply to the client…"
+        aria-label="Reply to client feedback"
+        className="mt-2 w-full resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-muted)] disabled:opacity-50"
+      />
+
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          className={ACTION_BTN}
+          disabled={reply.isPending || !replyText.trim()}
+          onClick={sendReply}
+        >
+          {reply.isPending ? 'Sending…' : 'Reply'}
+        </button>
+        {isFlag && !resolved && (
+          <button
+            type="button"
+            className={ACTION_BTN}
+            disabled={resolve.isPending}
+            onClick={() => toggleResolved(false)}
+          >
+            {resolve.isPending ? 'Saving…' : 'Mark resolved'}
+          </button>
+        )}
+        {isFlag && resolved && (
+          <button
+            type="button"
+            className={ACTION_BTN}
+            disabled={resolve.isPending}
+            onClick={() => toggleResolved(true)}
+          >
+            {resolve.isPending ? 'Saving…' : 'Reopen'}
+          </button>
+        )}
+      </div>
+
+      {saved && !error && <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">{saved}</p>}
+      {error && (
+        <p role="alert" className="mt-1.5 text-[10px] text-[#C4836F]">
+          {error}
+        </p>
       )}
     </div>
   );

@@ -402,6 +402,7 @@ function ItemRow({
   onToggleSelect,
   onOpenDetail,
   twinChip,
+  verdictChip,
 }: {
   item: FFEItem;
   proposalId: string;
@@ -416,6 +417,7 @@ function ItemRow({
   onToggleSelect?: () => void;
   onOpenDetail?: () => void;
   twinChip?: ReactNode;
+  verdictChip?: ReactNode;
 }) {
   const removeItem = useRemoveProposalItem();
   const lineCost = item.unit_price * item.quantity;
@@ -498,7 +500,12 @@ function ItemRow({
           </>
         }
       />
-      {twinChip}
+      {(verdictChip || twinChip) && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {verdictChip}
+          {twinChip}
+        </div>
+      )}
     </div>
   );
 }
@@ -783,6 +790,14 @@ interface FFEScheduleBuilderProps {
    * pencil-edit-only behavior untouched.
    */
   renderUnfold?: (item: FFEItem, fold: () => void) => ReactNode;
+  /**
+   * C3 (Schedule & Boards Wave 2) — host-supplied per-line verdict chip. When
+   * provided, its return renders beside the line's twin chip (the client's
+   * latest approve / flag / note). The legacy /portal host omits it. Mirrors
+   * renderUnfold: the schedule stays agnostic; the Drafting Room supplies the
+   * feedback read.
+   */
+  renderVerdictChip?: (item: FFEItem) => ReactNode;
 }
 
 interface CaptureDropContext {
@@ -791,7 +806,11 @@ interface CaptureDropContext {
   roomName: string;
 }
 
-export function FFEScheduleBuilder({ proposalId, renderUnfold }: FFEScheduleBuilderProps) {
+export function FFEScheduleBuilder({
+  proposalId,
+  renderUnfold,
+  renderVerdictChip,
+}: FFEScheduleBuilderProps) {
   const { data: rooms = [] } = useProposalScopeRooms(proposalId);
   const { data: categories = [] } = useFFECategories({ proposalId });
 
@@ -1285,6 +1304,7 @@ export function FFEScheduleBuilder({ proposalId, renderUnfold }: FFEScheduleBuil
                                   <TwinChip twins={itemTwins} onJump={jumpToLine} />
                                 ) : undefined
                               }
+                              verdictChip={renderVerdictChip?.(item)}
                             />
                             {unfolded && renderUnfold(item, () => setUnfoldedItemId(null))}
                           </div>

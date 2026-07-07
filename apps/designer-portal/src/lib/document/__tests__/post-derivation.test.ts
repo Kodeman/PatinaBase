@@ -349,3 +349,56 @@ describe('mergeRecordItems', () => {
     expect(new Set(merged.map((i) => i.key)).size).toBe(2);
   });
 });
+
+describe('client_feedback verdicts (C4)', () => {
+  it('a FLAG (rejected) becomes a Desk cross-reference to lines_flagged (R82)', () => {
+    const row = deriveRecordRow(
+      notif({ type: 'client_feedback', metadata: { verdict: 'rejected', deep_link: '/doc/pr1' } }),
+    );
+    expect(row.kind).toBe('cross_reference');
+    expect(row.onDesk).toBe(true);
+    expect(row.needKind).toBe('lines_flagged');
+    // No project_id on the notice → the cross-reference defers to the Desk.
+    expect(row.href).toBe('/desk');
+  });
+
+  it('an APPROVAL is a plain notice that follows its document deep link', () => {
+    const row = deriveRecordRow(
+      notif({ type: 'client_feedback', metadata: { verdict: 'approved', deep_link: '/doc/pr1' } }),
+    );
+    expect(row.kind).toBe('notice');
+    expect(row.onDesk).toBe(false);
+    expect(row.needKind).toBeNull();
+    expect(row.href).toBe('/doc/pr1');
+  });
+
+  it('a NOTE (comment) is a plain notice', () => {
+    const row = deriveRecordRow(
+      notif({ type: 'client_feedback', metadata: { verdict: 'comment' } }),
+    );
+    expect(row.kind).toBe('notice');
+    expect(row.needKind).toBeNull();
+  });
+
+  it('a verdict-less client_feedback is a plain notice', () => {
+    const row = deriveRecordRow(notif({ type: 'client_feedback', metadata: {} }));
+    expect(row.kind).toBe('notice');
+    expect(row.needKind).toBeNull();
+  });
+
+  it('renders title from the subject/headline and body from the preview', () => {
+    const item = inboxRecordItem(
+      notif({
+        type: 'client_feedback',
+        metadata: {
+          headline: 'Sarah flagged a line',
+          preview: 'Can we see other options?',
+          verdict: 'rejected',
+        },
+      }),
+    );
+    expect(item.title).toBe('Sarah flagged a line');
+    expect(item.body).toBe('Can we see other options?');
+    expect(item.row.needKind).toBe('lines_flagged');
+  });
+});
