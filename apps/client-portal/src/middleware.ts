@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createAdminClient, createMiddlewareClient } from '@patina/supabase/client';
 import { resolvePortalDecision, type RoleDomain, type RoleLookup } from '@/lib/portal-access';
+import { env } from '@/lib/env';
 
 // Look up the user's role domains. Returns a tri-state so the caller can
 // distinguish "no permitted role" (redirect) from "could not check" (skip).
@@ -119,6 +120,14 @@ export async function middleware(req: NextRequest) {
     });
     return redirect;
   };
+
+  // /demo/* is sample/showcase content, not something real traffic should
+  // reach in production. Gate it ahead of the public/auth classification
+  // below (which still treats /demo as public in dev) so this short-circuits
+  // cleanly instead of layering onto the role-aware checks further down.
+  if (env.isProduction && req.nextUrl.pathname.startsWith('/demo')) {
+    return redirectWithCookies(new URL('/', baseUrl));
+  }
 
   // Authenticated user on an auth page: send them home (or to callbackUrl),
   // but first verify they belong on this portal. Without this gate, a user
