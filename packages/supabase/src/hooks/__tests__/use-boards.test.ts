@@ -99,6 +99,8 @@ vi.mock('@tanstack/react-query', () => ({
 import {
   useSaveBoardLayout,
   useBoardsWithItems,
+  useUpsertBoard,
+  useProjectOwnedBoards,
   buildDuplicateBoardItemRows,
   summarizeBoard,
   type BoardLayoutPosition,
@@ -350,5 +352,89 @@ describe('summarizeBoard', () => {
     expect(summary.sections).toEqual([]);
     expect(summary.status).toBe('active');
     expect(summary.cover_fallback_url).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useUpsertBoard — the B8 owner switch (00272). EXACTLY ONE of proposal_id /
+// project_id is written on the INSERT path; the UPDATE path keys on boardId and
+// never touches the owner.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useUpsertBoard — owner switch (B8)', () => {
+  const mutationFnOf = () =>
+    (useUpsertBoard() as unknown as {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mutationFn: (input: any) => Promise<any>;
+    }).mutationFn;
+
+  it('inserts a PROJECT-owned board with project_id and NO proposal_id', async () => {
+    const builder = pushTableResult('proposal_boards', {
+      data: { id: 'b1', project_id: 'proj-1', proposal_id: null },
+      error: null,
+    });
+    await mutationFnOf()({ projectId: 'proj-1', name: 'Working board' });
+    const row = builder.__chain.find((c) => c.method === 'insert')?.args[0] as Record<string, unknown>;
+    expect(row.project_id).toBe('proj-1');
+    expect(row).not.toHaveProperty('proposal_id');
+  });
+
+  it('inserts a PROPOSAL-owned board with proposal_id and NO project_id', async () => {
+    const builder = pushTableResult('proposal_boards', {
+      data: { id: 'b1', proposal_id: 'prop-1' },
+      error: null,
+    });
+    await mutationFnOf()({ proposalId: 'prop-1', name: 'Concept' });
+    const row = builder.__chain.find((c) => c.method === 'insert')?.args[0] as Record<string, unknown>;
+    expect(row.proposal_id).toBe('prop-1');
+    expect(row).not.toHaveProperty('project_id');
+  });
+
+  it('throws on insert when neither owner is provided', async () => {
+    await expect(mutationFnOf()({ name: 'Orphan' })).rejects.toThrow(/owner/i);
+  });
+
+  it('the UPDATE path keys on boardId and never writes an owner column', async () => {
+    const builder = pushTableResult('proposal_boards', { data: { id: 'b1' }, error: null });
+    await mutationFnOf()({ boardId: 'b1', name: 'Renamed' });
+    const row = builder.__chain.find((c) => c.method === 'update')?.args[0] as Record<string, unknown>;
+    expect(row.name).toBe('Renamed');
+    expect(row).not.toHaveProperty('proposal_id');
+    expect(row).not.toHaveProperty('project_id');
+    expect(builder.__chain.find((c) => c.method === 'eq')?.args).toEqual(['id', 'b1']);
+  });
+});
+
+// useProjectOwnedBoards — the live project-owned list (00272), keyed on project_id.
+describe('useProjectOwnedBoards', () => {
+  it('is disabled without a project id', () => {
+    const config = useProjectOwnedBoards(null) as unknown as { enabled: boolean };
+    expect(config.enabled).toBe(false);
+  });
+
+  it('selects proposal_boards scoped to project_id with a compact item projection', async () => {
+    const builder = pushTableResult('proposal_boards', {
+      data: [
+        {
+          id: 'b1',
+          project_id: 'proj-1',
+          proposal_id: null,
+          name: 'Working board',
+          canvas_width: 1200,
+          canvas_height: 800,
+          background_color: '#FAF8F5',
+          sort_order: 0,
+          proposal_board_items: [{ type: 'image', image_url: 'x.jpg', z_index: 0 }],
+        },
+      ],
+      error: null,
+    });
+    const config = useProjectOwnedBoards('proj-1') as unknown as {
+      queryFn: () => Promise<Array<{ project_id: string | null; item_count: number }>>;
+    };
+    const result = await config.queryFn();
+    expect(builder.__chain.find((c) => c.method === 'eq')?.args).toEqual(['project_id', 'proj-1']);
+    expect(result[0].project_id).toBe('proj-1');
+    expect(result[0].item_count).toBe(1);
   });
 });

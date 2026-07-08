@@ -1,6 +1,7 @@
 export {
   useProducts,
   useProduct,
+  useProductPrices,
   useProductsWithVendorPricing,
   useProductWithVendorPricing,
   useCreateProduct,
@@ -65,6 +66,7 @@ export type {
   ProductSort,
   UseProductsOptions,
   CreateDraftProductInput,
+  ProductPrice,
 } from './use-products';
 export {
   useFFECategories,
@@ -329,6 +331,7 @@ export {
   useCreateProposal,
   useUpdateProposal,
   useAddProposalItem,
+  useProposalScheduleItems,
   useUpdateProposalItem,
   useRemoveProposalItem,
   useSendProposal,
@@ -1081,6 +1084,9 @@ export {
   useDeleteBoardItem,
   useSaveBoardLayout,
   useProjectBoards,
+  // B8 (00272/00273) — project-owned live boards
+  useProjectOwnedBoards,
+  useContinueBoardInProject,
   // Pure helpers (00264 — exported for unit tests + reuse)
   summarizeBoard,
   buildDuplicateBoardItemRows,
@@ -1230,6 +1236,7 @@ export {
 export type { DocumentShare, CreatedShare } from './use-document-shares';
 export {
   useProposalFeedback,
+  useBoardFeedback,
   useItemFeedbackThread,
   useSubmitVerdict,
   useReplyToItemFeedback,

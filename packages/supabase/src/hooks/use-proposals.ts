@@ -342,6 +342,36 @@ export function useUpdateProposal(options?: { errorSurface?: 'inline' }) {
 /**
  * Add an item to a proposal
  */
+/**
+ * A proposal's schedule lines, slim projection for twin detection + doc_code
+ * suggestion (B5 board→schedule). Keyed on the SAME query key the FF&E schedule
+ * uses, so useAddProposalItem's invalidation refreshes it after a line is added.
+ */
+export function useProposalScheduleItems(proposalId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['proposal-items-schedule', proposalId ?? null],
+    enabled: !!proposalId,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('proposal_items')
+        .select('id, product_id, doc_code, scope_room_id, name, ffe_category')
+        .eq('proposal_id', proposalId)
+        .order('position', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        product_id: string | null;
+        doc_code: string | null;
+        scope_room_id: string | null;
+        name: string | null;
+        ffe_category: string | null;
+      }>;
+    },
+  });
+}
+
 export function useAddProposalItem() {
   const queryClient = useQueryClient();
 
@@ -356,6 +386,7 @@ export function useAddProposalItem() {
       notes,
       category,
       vendorName,
+      imageUrl,
       // Wave 1 — structured FF&E
       itemType,
       scopeRoomId,
@@ -375,6 +406,8 @@ export function useAddProposalItem() {
       notes?: string;
       category?: string;
       vendorName?: string;
+      /** Snapshot image (e.g. a board pin's image) carried onto the line. */
+      imageUrl?: string | null;
       itemType?: ProposalItemType;
       scopeRoomId?: string | null;
       budgetMinCents?: number | null;
@@ -422,6 +455,7 @@ export function useAddProposalItem() {
           notes: notes || null,
           category: category || null,
           vendor_name: vendorName || null,
+          image_url: imageUrl || null,
           position: nextPosition,
           // Wave 1 columns. Defaults match the table defaults from 00066.
           item_type: itemType ?? 'fixed',

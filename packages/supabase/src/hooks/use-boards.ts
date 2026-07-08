@@ -32,7 +32,13 @@ export interface BoardSection {
 
 export interface ProposalBoard {
   id: string;
-  proposal_id: string;
+  /**
+   * Owner leg — EXACTLY ONE of proposal_id / project_id is set (00272
+   * chk_proposal_boards_owner). proposal_id for a proposal-stage board;
+   * project_id for a live board "continued in the project" past signing (B8).
+   */
+  proposal_id: string | null;
+  project_id: string | null;
   name: string;
   scope_room_id: string | null;
   cover_image_url: string | null;
@@ -122,7 +128,14 @@ export interface ProjectBoard {
 }
 
 export interface UpsertBoardInput {
-  proposalId: string;
+  /**
+   * Owner on the INSERT path — pass EXACTLY ONE of proposalId / projectId
+   * (00272). On the UPDATE path (boardId set) the owner is immutable and
+   * neither is needed. Kept optional so the project-owned surface (B8) can
+   * pass projectId without a dummy proposalId.
+   */
+  proposalId?: string;
+  projectId?: string;
   boardId?: string;
   name?: string;
   scopeRoomId?: string | null;
@@ -240,6 +253,9 @@ export function summarizeBoard(
     .sort((a, b) => (a.z_index ?? 0) - (b.z_index ?? 0))[0];
   return {
     ...(board as ProposalBoard),
+    // Owner legs default to null for pre-00272 reads via `as any`.
+    proposal_id: (board?.proposal_id ?? null) as string | null,
+    project_id: (board?.project_id ?? null) as string | null,
     sections: (board?.sections ?? []) as BoardSection[],
     status: (board?.status ?? 'active') as BoardStatus,
     item_count: items.length,
@@ -354,9 +370,15 @@ export function useUpsertBoard() {
 
       // Insert path.
       if (!input.name) throw new Error('Board name is required');
+      if (!input.proposalId && !input.projectId) {
+        throw new Error('A board needs an owner (proposalId or projectId)');
+      }
 
       const row = {
-        proposal_id: input.proposalId,
+        // Exactly-one-of owner (00272). project_id path is the B8 project board.
+        ...(input.projectId
+          ? { project_id: input.projectId }
+          : { proposal_id: input.proposalId }),
         name: input.name,
         scope_room_id: input.scopeRoomId ?? null,
         cover_image_url: input.coverImageUrl ?? null,
@@ -380,7 +402,12 @@ export function useUpsertBoard() {
       return data as ProposalBoard;
     },
     onSuccess: (board) => {
-      queryClient.invalidateQueries({ queryKey: ['boards', board.proposal_id] });
+      // Refresh whichever owner list the board belongs to (00272).
+      if (board.project_id) {
+        queryClient.invalidateQueries({ queryKey: ['project-owned-boards', board.project_id] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['boards', board.proposal_id] });
+      }
       queryClient.invalidateQueries({ queryKey: ['board', board.id] });
     },
   });
@@ -512,6 +539,7 @@ export function useDeleteBoard() {
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['boards', variables.proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
     },
   });
@@ -557,9 +585,10 @@ export function useAddBoardItem() {
     },
     onSuccess: (item) => {
       queryClient.invalidateQueries({ queryKey: ['board', item.board_id] });
-      // Item counts on the list view — we don't know the proposal id from
-      // the item row, so invalidate the broader prefix.
+      // Item counts on the list view — we don't know the owner from the item
+      // row, so invalidate both owner-list prefixes.
       queryClient.invalidateQueries({ queryKey: ['boards'] });
+      queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
     },
   });
 }
@@ -626,6 +655,7 @@ export function useDeleteBoardItem() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['board', variables.boardId] });
       queryClient.invalidateQueries({ queryKey: ['boards'] });
+      queryClient.invalidateQueries({ queryKey: ['project-owned-boards'] });
     },
   });
 }
@@ -696,6 +726,70 @@ export function useProjectBoards(projectId: string | null | undefined) {
 
       if (error) throw error;
       return (data ?? []) as ProjectBoard[];
+    },
+  });
+}
+
+/**
+ * LIVE, editable boards owned by an activated project (B8, 00272) — the boards
+ * a designer has "continued in the project", NOT the frozen project_boards
+ * snapshot. Same shape/derivation as useBoards, keyed on project_id. Powers the
+ * project-surface boards builder. RLS scopes rows to the project designer (or,
+ * read-only, the project client).
+ */
+export function useProjectOwnedBoards(projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['project-owned-boards', projectId ?? null],
+    enabled: !!projectId,
+    queryFn: async (): Promise<ProposalBoardSummary[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('proposal_boards')
+        .select('*, proposal_board_items(type, image_url, z_index)')
+        .eq('project_id', projectId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((data ?? []) as any[]).map((row) => {
+        const { proposal_board_items: items, ...board } = row;
+        return summarizeBoard(board, (items ?? []) as BoardCoverItem[]);
+      });
+    },
+  });
+}
+
+/**
+ * "Continue this board in the project" (B8, 00273): clone a FROZEN
+ * project_boards snapshot row into a LIVE, editable project-owned board (+
+ * items), preserving sections. Returns the new board's id. The signed snapshot
+ * stays untouched as the record.
+ */
+export function useContinueBoardInProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      projectBoardId,
+      projectId: _projectId,
+    }: {
+      projectBoardId: string;
+      /** Only used to scope invalidation. */
+      projectId: string;
+    }): Promise<string> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.rpc('continue_board_in_project', {
+        p_project_board_id: projectBoardId,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: (_newBoardId, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['project-owned-boards', variables.projectId] });
     },
   });
 }
