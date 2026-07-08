@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   createBrowserClient,
@@ -25,7 +26,9 @@ import {
   useUpdateDecision,
   useUpdateDecisionStatus,
   type ConsentMethod,
+  type FieldParsedIntent,
 } from '@patina/supabase';
+import { describeFieldEffect } from '@/lib/document/field-sms';
 import { useAuth } from '@/hooks/use-auth';
 import { invalidateMarginSurfaces, useSendWeeklyPulse } from '@/hooks/use-margin-items';
 import { useEscalateNoteToDecision } from '@/hooks/use-margin-notes';
@@ -748,6 +751,58 @@ export function NoteBody({
   );
 }
 
+// ── field_sms (Field Coordination — an inbound field text in the Post) ───────
+
+export function FieldSmsBody({ row }: { row: MarginItemRow }) {
+  const p = row.payload;
+  const needsReview = row.state === 'needs_review';
+  const partyId = p.party_id as string | undefined;
+  const partyKind = (p.party_kind as string | undefined) ?? 'sub';
+  const parsed = (p.parsed_intent ?? null) as FieldParsedIntent | null;
+  const applied = (p.applied_effect ?? null) as { summary_text?: string } | null;
+
+  // Needs-review shows the proposed effect (the act is on the Desk triage card);
+  // an applied text shows what it did.
+  const effectLine = needsReview
+    ? describeFieldEffect(parsed, null)
+    : (applied?.summary_text ?? null);
+  const threadHref = partyId ? `/people?person=${partyId}&role=${partyKind}` : null;
+
+  return (
+    <div className="border-t border-[var(--color-pearl)] pt-2.5">
+      {row.detail && (
+        <p className="mb-2 text-[11px] italic leading-relaxed text-[var(--text-body)]">
+          “{row.detail}”
+        </p>
+      )}
+      {effectLine && (
+        <p className="mb-2 font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
+          {needsReview ? 'Proposed' : 'Applied'} · {effectLine}
+        </p>
+      )}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        {/* The act lives on the Desk triage card (R82: one act, one place). */}
+        {needsReview && (
+          <Link
+            href="/desk"
+            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)] hover:opacity-80"
+          >
+            review on the desk →
+          </Link>
+        )}
+        {threadHref && (
+          <Link
+            href={threadHref}
+            className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
+          >
+            open the thread →
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── shared body switch ──────────────────────────────────────────────────────
 // One mapping from a margin row to its body, used by both the desktop rail
 // and the D13 mobile margin-item sheet so they never drift.
@@ -783,6 +838,8 @@ export function MarginItemBody({
       return null;
     case 'note':
       return <NoteBody row={row} projectId={projectId} clientName={clientName} />;
+    case 'field_sms':
+      return <FieldSmsBody row={row} />;
     default:
       return null;
   }

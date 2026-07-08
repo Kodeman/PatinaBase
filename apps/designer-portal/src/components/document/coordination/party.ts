@@ -63,6 +63,30 @@ export const COURT_TOKENS: Record<Court, CourtToken> = {
     dotColor: 'var(--color-aged-oak)',
     initials: 'VE',
   },
+  // Field kinds (00281) — the site trades gain their own court tokens so an item
+  // assigned to a sub/installer/receiver renders with a real label + color, not
+  // a fallback. Labels mirror @patina/types field-config PARTY_KIND_LABELS.
+  sub: {
+    label: 'Sub',
+    barLabel: 'waiting on the sub',
+    waitingOn: 'the sub',
+    dotColor: 'var(--color-mocha)',
+    initials: 'SU',
+  },
+  installer: {
+    label: 'Installer',
+    barLabel: 'waiting on the installer',
+    waitingOn: 'the installer',
+    dotColor: 'var(--color-golden-hour)',
+    initials: 'IN',
+  },
+  receiver: {
+    label: 'Receiver',
+    barLabel: 'waiting on the receiver',
+    waitingOn: 'the receiver',
+    dotColor: 'var(--color-terracotta)',
+    initials: 'RE',
+  },
 };
 
 /** The generic court token (no concrete party). */
@@ -77,7 +101,7 @@ export function courtToken(court: Court): CourtToken {
 export interface PartyLike {
   display_name: string | null;
   company_name: string | null;
-  party_kind?: 'gc' | 'vendor' | 'client_rep' | 'other' | null;
+  party_kind?: 'gc' | 'vendor' | 'client_rep' | 'other' | 'sub' | 'installer' | 'receiver' | null;
 }
 
 /**
