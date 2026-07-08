@@ -90,6 +90,13 @@ export function ClientHeader({
           >
             Budget
           </Link>
+          <Link
+            href="/documents"
+            className="hidden min-h-[44px] items-center type-meta transition-opacity hover:opacity-70 sm:inline-flex"
+            data-testid="header-documents-link"
+          >
+            Documents
+          </Link>
         </div>
         <div className="flex flex-shrink-0 items-center gap-3 sm:gap-5">
           <div className="flex min-h-[44px] items-center gap-2">
