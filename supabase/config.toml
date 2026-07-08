@@ -266,6 +266,12 @@ verify_jwt = false
 [functions.resend-webhook]
 verify_jwt = false
 
+# Twilio posts inbound SMS here directly and cannot carry a Supabase JWT.
+# Authenticity is enforced inside the function via the X-Twilio-Signature
+# (HMAC-SHA1 over SMS_INBOUND_PUBLIC_URL + params, keyed by TWILIO_AUTH_TOKEN).
+[functions.sms-inbound]
+verify_jwt = false
+
 # Unauthenticated email-link GET (?t=<signed token>); its own token is the auth.
 [functions.comms-mute]
 verify_jwt = false
