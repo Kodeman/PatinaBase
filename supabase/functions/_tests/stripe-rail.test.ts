@@ -5,13 +5,13 @@
 // are minted with the Stripe SDK's generateTestHeaderString + whsec_test123.
 //
 // Prereq (started by run.sh, or run manually):
-//   supabase functions serve --env-file supabase/functions/tests/test.env --no-verify-jwt
+//   supabase functions serve --env-file supabase/functions/_tests/test.env --no-verify-jwt
 //
 // Run:
-//   supabase/functions/tests/run.sh
+//   supabase/functions/_tests/run.sh
 // or directly (with SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY
 // / STRIPE_WEBHOOK_SECRET in the env):
-//   deno test -A supabase/functions/tests/stripe-rail.test.ts
+//   deno test -A supabase/functions/_tests/stripe-rail.test.ts
 //
 // Fixtures are marker-tagged and deleted in a finally block. The harness never
 // runs `supabase db reset` — the local stack is shared across sessions.
@@ -25,6 +25,7 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? 'whsec_test123';
 const WEBHOOK_URL = `${SB_URL}/functions/v1/stripe-webhook`;
 const CHECKOUT_URL = `${SB_URL}/functions/v1/create-checkout-session`;
+const EXPIRE_URL = `${SB_URL}/functions/v1/expire-po-session`;
 
 const RUN = crypto.randomUUID().slice(0, 8);
 const MARKER = `STRIPE_RAIL_TEST_${RUN}`;
@@ -92,11 +93,13 @@ const ids = {
   poC: '',
   poD: '',
   poE: '', // cancelled catalog PO → create-checkout 409 (test e4)
+  poF: '', // cancelled catalog PO with an OPEN session → expire-po-session clears it
   payPaid: '', // PO_A deposit → paid via checkout.session.completed (tests b, d, e1)
   payFail: '', // PO_B balance → async_payment_failed (test c)
   payNonCatalog: '', // PO_C deposit → create-checkout 422
   payAlreadyPaid: '', // PO_D deposit, state=paid → create-checkout 409
-  payCancelled: '', // PO_E deposit, PO cancelled → create-checkout 409, no session
+  payCancelled: '', // PO_E deposit, PO cancelled, NO pointer → expire-po-session {expired:0}
+  payExpire: '', // PO_F deposit, PO cancelled, WITH pointer+PI → expire-po-session {expired:1}
   invoice: '',
   invPay: '',
   // ── direct_order fixtures (00276) ──
@@ -105,6 +108,7 @@ const ids = {
   doFail: '', // pending_payment → async_payment_failed clears pointers (test h)
   doCanceled: '', // status=canceled → create-checkout 409
   doAlreadyPaid: '', // status=paid → create-checkout 409
+  doRefunded: '', // status=refunded (00277) → create-checkout 409, no session
 };
 const EVT = {
   inv: `evt_inv_${RUN}`,
@@ -126,6 +130,7 @@ const SESS = {
   inv: `cs_inv_${RUN}`,
   poPaid: `cs_po_paid_${RUN}`,
   poFail: `cs_po_fail_${RUN}`,
+  poExpire: `cs_po_expire_${RUN}`, // open session on a cancelled PO (expire-po-session)
   doPaid: `cs_do_paid_${RUN}`,
   doFail: `cs_do_fail_${RUN}`,
 };
@@ -176,6 +181,7 @@ async function seed() {
   ids.poC = await po('C', false);
   ids.poD = await po('D', true);
   ids.poE = await po('E', true, 'fifty_fifty', 'cancelled');
+  ids.poF = await po('F', true, 'fifty_fifty', 'cancelled');
 
   ids.payPaid = await insert('po_payments', {
     purchase_order_id: ids.poA, kind: 'deposit', amount_cents: 5000, state: 'pending',
@@ -195,6 +201,13 @@ async function seed() {
   // Stale 'pending' payment on a CANCELLED PO — must be refused by checkout.
   ids.payCancelled = await insert('po_payments', {
     purchase_order_id: ids.poE, kind: 'deposit', amount_cents: 5000, state: 'pending', notes: MARKER,
+  });
+  // Cancelled PO with an OPEN Checkout session + stale PI — expire-po-session
+  // expires the session (swallowing the fake-key failure) and clears BOTH pointers.
+  ids.payExpire = await insert('po_payments', {
+    purchase_order_id: ids.poF, kind: 'deposit', amount_cents: 5000, state: 'pending',
+    stripe_checkout_session_id: SESS.poExpire, stripe_payment_intent_id: `pi_po_expire_${RUN}`,
+    notes: MARKER,
   });
 
   ids.invoice = await insert('invoices', {
@@ -247,6 +260,7 @@ async function seed() {
   ids.doPaid = await directOrder(SESS.doPaid, 'pending_payment', 2);
   ids.doFail = await directOrder(SESS.doFail, 'pending_payment');
   ids.doCanceled = await directOrder(null, 'canceled');
+  ids.doRefunded = await directOrder(null, 'refunded');
   ids.doAlreadyPaid = await insert('direct_orders', {
     client_id: ids.designerA, product_id: ids.product, product_name: `${MARKER} Product`,
     quantity: 1, unit_price_cents: 5000, amount_cents: 5000, currency: 'usd',
@@ -255,9 +269,9 @@ async function seed() {
 }
 
 async function cleanup() {
-  const payIds = [ids.payPaid, ids.payFail, ids.payNonCatalog, ids.payAlreadyPaid, ids.payCancelled].filter(Boolean);
-  const poIds = [ids.poA, ids.poB, ids.poC, ids.poD, ids.poE].filter(Boolean);
-  const doIds = [ids.doPaid, ids.doFail, ids.doCanceled, ids.doAlreadyPaid].filter(Boolean);
+  const payIds = [ids.payPaid, ids.payFail, ids.payNonCatalog, ids.payAlreadyPaid, ids.payCancelled, ids.payExpire].filter(Boolean);
+  const poIds = [ids.poA, ids.poB, ids.poC, ids.poD, ids.poE, ids.poF].filter(Boolean);
+  const doIds = [ids.doPaid, ids.doFail, ids.doCanceled, ids.doAlreadyPaid, ids.doRefunded].filter(Boolean);
   if (payIds.length) await admin.from('procurement_notifications').delete().in('subject_payment_id', payIds);
   if (ids.invoice) {
     await admin.from('designer_earnings').delete().eq('invoice_id', ids.invoice);
@@ -272,10 +286,12 @@ async function cleanup() {
   if (ids.product) await admin.from('products').delete().eq('id', ids.product);
   if (ids.project) await admin.from('projects').delete().eq('id', ids.project);
   if (ids.vendor) await admin.from('vendors').delete().eq('id', ids.vendor);
-  // notification_log refund rows (user cascade also clears them, but be tidy).
+  // notification_log rows (user cascade also clears them, but be tidy):
+  // invoice refund notices + the direct-order ACH-failure client notice.
   if (ids.designerA) {
     await admin.from('notification_log').delete()
-      .eq('user_id', ids.designerA).eq('type', 'invoice_payment_refunded');
+      .eq('user_id', ids.designerA)
+      .in('type', ['invoice_payment_refunded', 'direct_order_payment_failed']);
   }
   await admin.from('stripe_webhook_events').delete().in('id', [
     EVT.inv, EVT.poPaid, EVT.poPaidPi, EVT.poFail,
@@ -311,6 +327,19 @@ async function directOrder(id: string) {
     stripe_checkout_session_id: string | null; stripe_payment_intent_id: string | null;
     shipping: Record<string, unknown> | null;
   };
+}
+
+/** in_app direct-order failure notifications for a given order (client inbox). */
+async function directOrderFailNotifCount(orderId: string): Promise<number> {
+  const { data, error } = await admin
+    .from('notification_log')
+    .select('metadata')
+    .eq('type', 'direct_order_payment_failed')
+    .eq('channel', 'in_app');
+  if (error) throw new Error(error.message);
+  return (data as { metadata: Record<string, unknown> }[]).filter(
+    (r) => r.metadata?.direct_order_id === orderId,
+  ).length;
 }
 
 async function notifCount(paymentId: string, kind: string): Promise<number> {
@@ -622,6 +651,10 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       assertEquals(row.stripe_checkout_session_id, null); // cleared
       assertEquals(row.stripe_payment_intent_id, null); // cleared
       assertEquals(row.status, 'pending_payment'); // untouched
+      // The client is notified their bank transfer failed (email is dry-run;
+      // the in_app notification_log row is the assertable effect). Fires exactly
+      // once, keyed to the attempt we cleared.
+      assertEquals(await directOrderFailNotifCount(ids.doFail), 1);
     });
 
     // (h2) async_payment_failed against the ALREADY-PAID order short-circuits:
@@ -643,6 +676,9 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       const row = await directOrder(ids.doPaid);
       assertEquals(row.status, 'paid'); // untouched
       assertEquals(row.stripe_checkout_session_id, SESS.doPaid); // pointer preserved
+      // Short-circuit fired before the pointer clear → no client failure notice
+      // for a paid order.
+      assertEquals(await directOrderFailNotifCount(ids.doPaid), 0);
     });
 
     // (i) create-checkout rejects a non-owner (404) — before any Stripe call.
@@ -681,6 +717,95 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       const body = await res.json();
       assertEquals(res.status, 409);
       assertEquals(body.error, 'direct_order_already_paid');
+    });
+
+    // (l) create-checkout rejects a refunded order (409, direct_order_refunded)
+    // — terminal-dead; minting a session would let the client pay again with no
+    // ledger flip. The load-guard returns before any Stripe call, so no session
+    // pointer is ever written.
+    await t.step('direct_order create-checkout rejects refunded order (409, no session)', async () => {
+      const tokenA = await signIn(`stripe-rail-a-${RUN}@example.test`);
+      const res = await fetch(CHECKOUT_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenA}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ direct_order_id: ids.doRefunded }),
+      });
+      const body = await res.json();
+      assertEquals(res.status, 409);
+      assertEquals(body.error, 'direct_order_refunded');
+      // No Stripe call happened → the order's session pointer stays null.
+      const row = await directOrder(ids.doRefunded);
+      assertEquals(row.stripe_checkout_session_id, null);
+    });
+
+    // ═══ expire-po-session (cancelled-PO orphaned Checkout teardown) ══════════
+
+    // (m) Non-owner → 404 not_found (no existence leak), before any effect.
+    await t.step('expire-po-session rejects non-owner (404)', async () => {
+      const tokenB = await signIn(`stripe-rail-b-${RUN}@example.test`);
+      const res = await fetch(EXPIRE_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenB}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ purchase_order_id: ids.poE }),
+      });
+      const body = await res.json();
+      assertEquals(res.status, 404);
+      assertEquals(body.error, 'not_found');
+    });
+
+    // (n) A live (non-cancelled) PO → 409 po_not_cancelled with its status. poA
+    // is 'confirmed'; the guard returns before touching any payment row.
+    await t.step('expire-po-session rejects non-cancelled PO (409)', async () => {
+      const tokenA = await signIn(`stripe-rail-a-${RUN}@example.test`);
+      const res = await fetch(EXPIRE_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenA}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ purchase_order_id: ids.poA }),
+      });
+      const body = await res.json();
+      assertEquals(res.status, 409);
+      assertEquals(body.error, 'po_not_cancelled');
+      assertEquals(body.status, 'confirmed');
+    });
+
+    // (o) Cancelled PO whose only payment has NO open session → nothing to do,
+    // {expired: 0}. (payCancelled on poE has a null session pointer.)
+    await t.step('expire-po-session on cancelled PO with no open sessions → {expired:0}', async () => {
+      const tokenA = await signIn(`stripe-rail-a-${RUN}@example.test`);
+      const res = await fetch(EXPIRE_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenA}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ purchase_order_id: ids.poE }),
+      });
+      const body = await res.json();
+      assertEquals(res.status, 200);
+      assertEquals(body.expired, 0);
+      // The stale pending row is untouched (still null pointer, never had one).
+      const row = await poPayment(ids.payCancelled);
+      assertEquals(row.stripe_checkout_session_id, null);
+    });
+
+    // (p) Cancelled PO with an OPEN session pointer + stale PI → {expired: 1},
+    // BOTH pointers cleared. The live sessions.expire call fails against the fake
+    // Stripe key and is swallowed (console.warn) — the pointer-clearing DB effect
+    // is what we assert. (See wave brief item 2: fails-and-is-swallowed fixture.)
+    await t.step('expire-po-session expires open session + clears pointers → {expired:1}', async () => {
+      const before = await poPayment(ids.payExpire);
+      assertEquals(before.stripe_checkout_session_id, SESS.poExpire);
+      assertEquals(before.stripe_payment_intent_id, `pi_po_expire_${RUN}`);
+      const tokenA = await signIn(`stripe-rail-a-${RUN}@example.test`);
+      const res = await fetch(EXPIRE_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenA}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ purchase_order_id: ids.poF }),
+      });
+      const body = await res.json();
+      assertEquals(res.status, 200);
+      assertEquals(body.expired, 1);
+      const row = await poPayment(ids.payExpire);
+      assertEquals(row.stripe_checkout_session_id, null); // cleared
+      assertEquals(row.stripe_payment_intent_id, null); // stale PI cleared too
+      assertEquals(row.state, 'pending'); // state untouched (no 'failed' state)
     });
 
     // ═══ refund reconciliation (00277) ═══════════════════════════════════════

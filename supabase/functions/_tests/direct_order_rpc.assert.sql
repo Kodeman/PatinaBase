@@ -9,7 +9,7 @@
 --
 -- Run:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
---     -f supabase/functions/tests/direct_order_rpc.assert.sql
+--     -f supabase/functions/_tests/direct_order_rpc.assert.sql
 --
 -- Every case prints "A# PASS" / "A# FAIL". A clean run is all PASS.
 

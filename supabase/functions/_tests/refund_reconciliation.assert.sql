@@ -5,10 +5,10 @@
 --
 -- Run (after applying 00277):
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
---     -f - < supabase/functions/tests/refund_reconciliation.assert.sql
+--     -f - < supabase/functions/_tests/refund_reconciliation.assert.sql
 -- or from a host with psql:
 --   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
---     -f supabase/functions/tests/refund_reconciliation.assert.sql
+--     -f supabase/functions/_tests/refund_reconciliation.assert.sql
 --
 -- Every case prints "R# PASS" / "R# FAIL". A clean run is all PASS. Run BEFORE
 -- 00277 to see it go red (the reverses_invoice_payment_id column is absent).
