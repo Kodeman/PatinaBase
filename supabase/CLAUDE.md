@@ -19,6 +19,7 @@ Sequential numbered files in `migrations/`. Never modify existing migrations - a
 - RLS enabled on all tables
 - pgvector for embeddings — 768-dim canonical aesthetic space (see `docs/prds/AE/aesthete-engine-system-design.md`); the Aesthete Engine delivery program is tracked in `docs/prds/AE/aesthete-engine-delivery-plan.md`
 - Use `created_at` and `updated_at` timestamps
+- ⚠ **Grants on fresh local stacks**: Supabase flipped platform defaults 2026-05-30 — new local stacks no longer auto-grant table/function privileges to anon/authenticated at creation, so a fresh `supabase start` breaks every pre-00285 object (42501). `seed/00-legacy-grants.sql` (first in `[db.seed] sql_paths`) restores the legacy posture for never-explicitly-managed objects on every local `db reset`; it never runs on prod. Migrations written after the flip must include explicit `GRANT`s for anything portals reach (00282/00283 style) — never rely on creation-time defaults.
 
 ## Project money columns (post-00139)
 
