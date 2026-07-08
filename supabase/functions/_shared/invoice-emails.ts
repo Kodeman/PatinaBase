@@ -399,6 +399,55 @@ export function buildDirectOrderReceiptEmail(
   return { subject, html };
 }
 
+export interface DirectOrderPaymentFailedEmailParams {
+  /** Snapshot product name (direct_orders.product_name). */
+  orderName: string;
+  quantity: number;
+  /** The order total whose bank transfer failed (direct_orders.amount_cents). */
+  amountCents: number;
+  clientName?: string | null;
+  /** Absolute client-portal link to the orders page. */
+  portalUrl: string;
+  currency?: string;
+}
+
+/**
+ * Sent to the client when a direct order's asynchronous payment (ACH bank debit
+ * started in Stripe Checkout) fails to clear — e.g. insufficient funds or a
+ * returned debit. No money was taken and the order is back to pending_payment;
+ * the client can retry from their orders page. Consumed by stripe-webhook on
+ * checkout.session.async_payment_failed for a direct_order. Mirrors
+ * buildPaymentFailedEmail's frame; the copy drops the invoice/designer context
+ * (a direct order has none) and points at the orders page.
+ */
+export function buildDirectOrderPaymentFailedEmail(
+  params: DirectOrderPaymentFailedEmailParams,
+): RenderedInvoiceEmail {
+  const clientName = params.clientName?.trim() || "there";
+  const qty = params.quantity > 0 ? params.quantity : 1;
+  const qtyPrefix = qty > 1 ? `${qty} × ` : "";
+
+  const subject = `Payment didn't go through — ${params.orderName}`;
+
+  const html = wrap(
+    `
+      <p>Hi ${escapeHtml(clientName)},</p>
+      <p>Unfortunately your bank transfer of <strong>${formatInvoiceCurrency(
+        params.amountCents,
+        params.currency,
+      )}</strong> for ${escapeHtml(`${qtyPrefix}${params.orderName}`)} didn&rsquo;t complete.</p>
+      <p style="margin:0 0 12px">No money was taken. You can retry the payment from your orders
+        page — you can use a card or try the bank transfer again.</p>
+      <p style="margin:0 0 12px;color:#766a5c"><em>If you believe this is an error, reply to
+        this email and we&rsquo;ll help sort it out.</em></p>
+    `,
+    params.portalUrl,
+    "Retry payment",
+  );
+
+  return { subject, html };
+}
+
 export interface PaymentRefundedEmailParams {
   invoiceNumber: string;
   projectName: string;

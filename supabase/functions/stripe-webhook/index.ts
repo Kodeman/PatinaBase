@@ -61,6 +61,7 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 import Stripe from 'npm:stripe@17';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
 import {
+  buildDirectOrderPaymentFailedEmail,
   buildDirectOrderReceiptEmail,
   buildPaymentFailedEmail,
   buildPaymentReceiptEmail,
@@ -1101,6 +1102,101 @@ async function sendDirectOrderPaidEmails(admin: SupabaseClient, orderId: string)
   }
 }
 
+/**
+ * Failure notice to the client + a client-facing in_app notification after a
+ * direct-order ACH bank debit fails. Never throws — a dead email/notification
+ * must not fail (and thus retry) the webhook. Mirrors sendFailureSideEffects
+ * (invoice) structurally, retargeted to the buyer since a direct order has no
+ * designer party. Reloads the order AFTER the pointer clear (status is still
+ * pending_payment truth). All interpolated email values are escaped.
+ */
+async function sendDirectOrderFailureSideEffects(
+  admin: SupabaseClient,
+  orderId: string
+): Promise<void> {
+  try {
+    const order = await resolveDirectOrder(admin, null, null, orderId);
+    if (!order) return;
+
+    const amountLabel = formatInvoiceCurrency(order.amount_cents, order.currency);
+    const portalUrl = `${CLIENT_PORTAL_URL}/orders`;
+    const deepLink = `/orders?order=${order.id}`;
+
+    // Ops heads-up: a client's bank transfer bounced and the order reopened.
+    console.warn(
+      `stripe-webhook: direct_order ACH payment failed — order ${order.id} (${order.product_name}, ${amountLabel}) returned to pending_payment; client notified.`
+    );
+
+    // Buyer profile → failure recipient. Fall back to the Checkout email captured
+    // on the (now-failed) attempt's shipping snapshot, mirroring the receipt path.
+    const { data: client } = await admin
+      .from('profiles')
+      .select('id, full_name, email')
+      .eq('id', order.client_id)
+      .maybeSingle();
+    const clientName = (client as { full_name?: string | null } | null)?.full_name ?? null;
+    const clientEmail =
+      (client as { email?: string | null } | null)?.email ??
+      (order.shipping?.email as string | undefined) ??
+      null;
+
+    if (clientEmail) {
+      const rendered = buildDirectOrderPaymentFailedEmail({
+        orderName: order.product_name,
+        quantity: order.quantity,
+        amountCents: order.amount_cents,
+        currency: order.currency,
+        clientName,
+        portalUrl,
+      });
+      const sendResult = await sendCompliantEmail(admin, {
+        to: clientEmail,
+        subject: rendered.subject,
+        html: rendered.html,
+        userId: order.client_id,
+        notificationType: 'direct_order_payment_failed',
+        category: 'operational',
+        templateId: 'direct-order-payment-failed',
+        metadata: {
+          direct_order_id: order.id,
+          amount_cents: order.amount_cents,
+          subject: rendered.subject,
+          message: `Your bank transfer of ${amountLabel} for ${order.product_name} didn't complete. No money was taken — you can retry from your orders page.`,
+          deep_link: deepLink,
+        },
+      });
+      if (!sendResult.success && !sendResult.suppressed) {
+        console.error('stripe-webhook: direct_order failure email failed', sendResult.error);
+      }
+    } else {
+      console.warn('stripe-webhook: no failure recipient for direct_order', order.id);
+    }
+
+    // Client-facing in_app notification (mirrors the invoice failure path's
+    // notification_log insert; retargeted to the buyer).
+    const subject = `Payment didn't go through — ${order.product_name}`;
+    const { error: notifyErr } = await admin.from('notification_log').insert({
+      user_id: order.client_id,
+      type: 'direct_order_payment_failed',
+      channel: 'in_app',
+      status: 'delivered',
+      template_id: 'direct-order-payment-failed',
+      metadata: {
+        direct_order_id: order.id,
+        amount_cents: order.amount_cents,
+        subject,
+        message: `Your bank transfer of ${amountLabel} for ${order.product_name} didn't complete. No money was taken — you can retry from your orders page.`,
+        deep_link: deepLink,
+      },
+    });
+    if (notifyErr) {
+      console.error('stripe-webhook: direct_order failure notification insert failed', notifyErr);
+    }
+  } catch (err) {
+    console.error('stripe-webhook: direct_order failure side effects failed', err);
+  }
+}
+
 async function handleDirectOrderSessionCompleted(
   admin: SupabaseClient,
   event: Stripe.Event,
@@ -1170,13 +1266,22 @@ async function handleDirectOrderAsyncPaymentFailed(
   // fresh session and the order carries no reference to the failed attempt.
   // Leave status at pending_payment (there is no 'failed' status). Guard on the
   // session id so a newer session's pointer is never clobbered.
-  const { error } = await admin
+  const { data: clearedRows, error } = await admin
     .from('direct_orders')
     .update({ stripe_checkout_session_id: null, stripe_payment_intent_id: null })
     .eq('id', row.id)
-    .eq('stripe_checkout_session_id', sessionId);
+    .eq('stripe_checkout_session_id', sessionId)
+    .select('id');
   if (error) {
     throw new Error(`failed to clear session pointer on direct_order ${row.id}: ${error.message}`);
+  }
+
+  // Notify the client their bank transfer failed — only on the attempt we
+  // actually cleared, so a late/duplicate failure (or one superseded by a newer
+  // session) doesn't re-notify. Side effects are wrapped to never throw, so a
+  // dead email/notification can never fail (and thus retry) the webhook.
+  if ((clearedRows ?? []).length > 0) {
+    await sendDirectOrderFailureSideEffects(admin, row.id);
   }
 }
 
