@@ -109,8 +109,8 @@ export interface OrderAssistantProps {
  *   created  — post-create confirmation ("Done" closes / advances the queue)
  *
  * Patina-Catalog routing skips `details` entirely — the one-click submit
- * fires from the coverage step and payment terms don't apply (Patina
- * invoices net_30 internally).
+ * fires from the coverage step and payment terms don't apply (the designer
+ * pays Patina at order time via Stripe hosted Checkout).
  */
 export type OrderAssistantStep = 'review' | 'coverage' | 'details' | 'created';
 

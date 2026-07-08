@@ -223,11 +223,12 @@ export function OrderViaPatina({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        // Block the close-on-outside-click / Escape paths while we're mid
-        // redirect — the PO is created and Checkout is about to open; losing
-        // the dialog here would just be a confusing flash before the
-        // navigation, not an actual cancel.
-        if (isRedirecting) return;
+        // Block the close-on-outside-click / Escape paths for the whole
+        // submitting window — while the create mutation is in flight AND while
+        // we're mid redirect (PO created, Checkout about to open). Dismissing
+        // here would either drop the dialog mid-request or flash it away right
+        // before the Stripe navigation, not perform an actual cancel.
+        if (isSubmitting) return;
         onOpenChange(next);
       }}
     >

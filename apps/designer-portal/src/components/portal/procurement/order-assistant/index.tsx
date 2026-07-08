@@ -12,8 +12,9 @@
  *   created  — post-create confirmation; "Done" closes / advances the queue
  *
  * Patina-Catalog routing keeps its one-click path: the catalog submit fires
- * from the last pre-create step (payment terms don't apply — Patina invoices
- * net_30 internally) and `details` is skipped.
+ * from the last pre-create step, creates the PO with `full_upfront`, then
+ * hands the designer to Stripe hosted Checkout to pay Patina at order time
+ * (Phase 4 — designer pays at order time); `details` is skipped.
  *
  * On submit, calls `useCreatePurchaseOrder` from `@patina/supabase`, which
  * inserts a `purchase_orders` row + the matching `po_payments` rows + links
@@ -35,6 +36,8 @@ import {
   useCreatePurchaseOrder,
   useFfeInvoiceCoverage,
   useOrganizations,
+  useStartPoCheckout,
+  fetchPOPayments,
   type CreatePurchaseOrderInput,
   type PaymentPattern,
   type PurchaseOrder,
@@ -244,13 +247,32 @@ export function OrderAssistant(props: OrderAssistantProps) {
 
   const createPO = useCreatePurchaseOrder();
   const { toast } = useToast();
+  // Checkout-start failures on the catalog path must NOT roll back the
+  // already-created PO and must NOT use the global mutation-error toast — they
+  // render inline on the created panel instead. See useStartPoCheckout's R83
+  // errorSurface doc.
+  const startCheckout = useStartPoCheckout({ errorSurface: 'inline' });
 
-  // ─── One-click Patina order (S3.10) ─────────────────────────────────────
-  // For catalog routing, skip the external-vendor details step and create the
-  // PO directly with isPatinaCatalog=true. Patina invoices on net_30 by
-  // default; deposit/balance milestone fields don't apply.
+  // Set once the catalog PO is created and we're resolving its po_payment id /
+  // starting Checkout. While true the panel keeps its submitting UI (even
+  // though the order already exists) and refuses to close.
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  // Set only if catalog checkout-start fails after the PO was created — the
+  // recoverable, inline message shown on the created panel.
+  const [catalogCheckoutError, setCatalogCheckoutError] = useState<string | null>(null);
+
+  // "Busy" = the create mutation is in flight OR we're mid Stripe redirect.
+  // Both must block close/back/skip and keep the primary control disabled.
+  const isBusy = createPO.isPending || isRedirecting;
+
+  // ─── One-click Patina order (S3.10 → Phase 4 pay-at-order) ──────────────
+  // For catalog routing, skip the external-vendor details step, create the PO
+  // with isPatinaCatalog=true + full_upfront, then take the designer to Stripe
+  // hosted Checkout to pay Patina now. The PO is NEVER rolled back if checkout
+  // fails — the "Pay now" affordance on By Vendor recovers it.
   const handleCatalogSubmit = async () => {
     setSubmitError(null);
+    setCatalogCheckoutError(null);
     if (hasBlockedItems) {
       procurementEvents.orderBlocked({
         blocked_item_count: blockedItems.length,
@@ -263,11 +285,17 @@ export function OrderAssistant(props: OrderAssistantProps) {
       );
       return;
     }
+
+    let po: PurchaseOrder;
     try {
-      const po = await createPO.mutateAsync({
+      po = await createPO.mutateAsync({
         projectId: project.id,
         vendorId: vendor.id,
-        paymentPattern: 'net_30',
+        // Designer pays Patina at order time (Phase 4). `full_upfront` is the
+        // pattern the create_purchase_order RPC (00186) maps to a single
+        // po_payments row for the full trade total — the one row Stripe
+        // Checkout collects below.
+        paymentPattern: 'full_upfront',
         isPatinaCatalog: true,
         ffeItemIds: submittableFfeItemIds,
         // Catalog routing skips the details step, so the designer never sees
@@ -275,25 +303,53 @@ export function OrderAssistant(props: OrderAssistantProps) {
         // value; sidemarkEdited stays false on this path).
         sidemark: sidemark.trim() || undefined,
       });
-      procurementEvents.poCreated({
-        payment_pattern: 'net_30',
-        // Server-computed TRADE total (00186) — authoritative.
-        total_cents: po.total_cents,
-        is_patina_catalog: true,
-        coverage_overridden: coverageOverridden,
-        sidemark_edited: sidemarkEdited,
-        vendor_id: vendor.id,
-        project_id: project.id,
-      });
-      toast(
-        `Patina order placed — ${ffeItems.length} item${ffeItems.length === 1 ? '' : 's'} routed through Patina.`,
-        'success',
+    } catch (err) {
+      // PO creation itself failed — nothing was created; surface inline and
+      // stay on the submit step so the designer can retry.
+      setSubmitError(err instanceof Error ? err.message : 'Failed to place order');
+      return;
+    }
+
+    procurementEvents.poCreated({
+      payment_pattern: 'full_upfront',
+      // Server-computed TRADE total (00186) — authoritative.
+      total_cents: po.total_cents,
+      is_patina_catalog: true,
+      coverage_overridden: coverageOverridden,
+      sidemark_edited: sidemarkEdited,
+      vendor_id: vendor.id,
+      project_id: project.id,
+    });
+    // The PO now exists — from here it is NEVER rolled back. Notify the caller
+    // (advances its queue / refreshes lists), then hand off to Stripe Checkout.
+    onCreated?.();
+    toast(
+      `Order placed via Patina — redirecting you to payment…`,
+      'success',
+    );
+
+    setIsRedirecting(true);
+    try {
+      // The RPC returns only the purchase_orders header (no nested payments) —
+      // resolve the single full_upfront po_payment row before starting checkout.
+      const payments = await fetchPOPayments(po.id);
+      const payment = payments[0];
+      if (!payment) {
+        throw new Error('No payment record was found for this order.');
+      }
+      const { url } = await startCheckout.mutateAsync({ poPaymentId: payment.id });
+      window.location.href = url;
+      // Navigating away to Stripe — no further state updates past this point.
+    } catch (err) {
+      // Checkout-start failed AFTER the PO was created. Keep the PO; land the
+      // designer on the created panel with an honest, recoverable message —
+      // payment can be finished from Procurement → By Vendor ("Pay now").
+      setIsRedirecting(false);
+      setCatalogCheckoutError(
+        err instanceof Error ? err.message : "Payment couldn't be started.",
       );
-      onCreated?.();
       setCreatedPo(po);
       goToStep('created');
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Failed to place order');
     }
   };
 
@@ -328,6 +384,8 @@ export function OrderAssistant(props: OrderAssistantProps) {
     setMilestones([freshMilestone(), freshMilestone()]);
     setSubmitError(null);
     setCopyState('idle');
+    setIsRedirecting(false);
+    setCatalogCheckoutError(null);
     // Soft-gate + sidemark session state (W3-T3b). The sidemark VALUE is not
     // cleared here — the prefill effect above owns it and re-generates as
     // soon as the edited flag drops (clearing it here would clobber the
@@ -471,7 +529,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
   };
 
   const handleSkip = () => {
-    if (createPO.isPending) return;
+    if (isBusy) return;
     onOpenChange(false);
   };
 
@@ -511,7 +569,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
   };
 
   const handleBack = () => {
-    if (createPO.isPending) return;
+    if (isBusy) return;
     const prev = prevStep(step, machineOpts);
     if (prev) goToStep(prev);
   };
@@ -521,20 +579,22 @@ export function OrderAssistant(props: OrderAssistantProps) {
   const stepIndex = sequence.indexOf(step);
 
   const primaryLabel =
-    isSubmitStep && hasBlockedItems
-      ? 'Blocked — decision pending'
-      : isSubmitStep && isCatalog
-        ? gateIsUncovered
-          ? 'Proceed anyway — order via Patina'
-          : `One-click order via Patina · ${formatDollars(totalCents)}`
-        : isSubmitStep
-          ? `Confirm ${ffeItems.length} ordered`
-          : gateIsUncovered
-            ? 'Proceed anyway'
-            : 'Continue';
+    isRedirecting
+      ? 'Redirecting to payment…'
+      : isSubmitStep && hasBlockedItems
+        ? 'Blocked — decision pending'
+        : isSubmitStep && isCatalog
+          ? gateIsUncovered
+            ? 'Proceed anyway — order via Patina'
+            : `One-click order via Patina · ${formatDollars(totalCents)}`
+          : isSubmitStep
+            ? `Confirm ${ffeItems.length} ordered`
+            : gateIsUncovered
+              ? 'Proceed anyway'
+              : 'Continue';
 
   const primaryDisabled =
-    createPO.isPending || (isSubmitStep && hasBlockedItems);
+    isBusy || (isSubmitStep && hasBlockedItems);
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -548,7 +608,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-40 bg-black/20"
-            onClick={() => !createPO.isPending && onOpenChange(false)}
+            onClick={() => !isBusy && onOpenChange(false)}
             aria-hidden="true"
           />
           <motion.div
@@ -589,7 +649,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
                 <IconButton
                   label="Close"
                   onClick={handleSkip}
-                  disabled={createPO.isPending}
+                  disabled={isBusy}
                   size="sm"
                   // autoFocus lands here so screen readers announce the dialog
                   // label immediately; restored to the trigger on close.
@@ -658,6 +718,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
                   vendor={vendor}
                   itemCount={ffeItems.length}
                   isCatalog={isCatalog}
+                  checkoutError={catalogCheckoutError}
                 />
               )}
 
@@ -704,7 +765,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
                       variant="ghost"
                       size="sm"
                       onClick={handleSkip}
-                      disabled={createPO.isPending}
+                      disabled={isBusy}
                     >
                       {isCatalog ? 'Cancel' : 'Skip — order externally'}
                     </Button>
@@ -713,7 +774,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
                       variant="ghost"
                       size="sm"
                       onClick={handleBack}
-                      disabled={createPO.isPending}
+                      disabled={isBusy}
                     >
                       Back
                     </Button>
@@ -723,7 +784,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
                     size="sm"
                     onClick={handleContinue}
                     disabled={primaryDisabled}
-                    loading={isSubmitStep && createPO.isPending}
+                    loading={isSubmitStep && isBusy}
                     title={
                       isSubmitStep && hasBlockedItems
                         ? 'Ordering is blocked pending a client decision'
@@ -757,11 +818,18 @@ function CreatedConfirmation({
   vendor,
   itemCount,
   isCatalog,
+  checkoutError,
 }: {
   po: PurchaseOrder;
   vendor: OrderAssistantVendor;
   itemCount: number;
   isCatalog: boolean;
+  /**
+   * Set only on the catalog path when Stripe checkout-start failed after the
+   * PO was created (Phase 4). The PO is real and unpaid; this drives the
+   * honest, recoverable message directing the designer to "Pay now".
+   */
+  checkoutError?: string | null;
 }) {
   return (
     <>
@@ -789,7 +857,9 @@ function CreatedConfirmation({
         )}
         <p className="mt-2 text-[0.7rem] leading-relaxed text-[var(--text-muted)]">
           {isCatalog
-            ? 'Patina handles the deposit and balance internally — track progress from Procurement → By Vendor.'
+            ? checkoutError
+              ? `Order placed, but payment wasn’t completed — ${checkoutError} You can pay Patina any time from Procurement → By Vendor using “Pay now” on this order.`
+              : 'Order placed — finish paying Patina from Procurement → By Vendor using “Pay now” on this order.'
             : 'Track payments and vendor acknowledgment from Procurement → By Vendor.'}
         </p>
       </section>
@@ -833,8 +903,8 @@ const ROUTING_COPY: Record<
     bg: 'rgba(168, 181, 160, 0.12)',
   },
   catalog: {
-    label: 'Patina-handled order',
-    hint: 'One-click ordering through Patina — payment terms are handled internally.',
+    label: 'Order via Patina',
+    hint: 'Order through Patina and pay now, via Stripe, to place the order.',
     color: 'var(--color-clay, #C4A57B)',
     bg: 'rgba(196, 165, 123, 0.15)',
   },
