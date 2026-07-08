@@ -18,7 +18,10 @@
 //     dateEnd:             "YYYY-MM-DD"  // inclusive — required
 //     includePaid:         boolean       // covers deposits + balances/milestones paid
 //     includeOutstanding:  boolean       // covers pending/due payments
-//     includePatinaCatalog: boolean
+//     includePatinaCatalog: boolean       // gates OUTSTANDING catalog-PO rows only —
+//                                          // PAID catalog-PO payments (real Stripe
+//                                          // spend) are always included, same as any
+//                                          // other paid bill (Item 10 / wave brief D)
 //     projectIds?:         string[]
 //     vendorIds?:          string[]
 //     preview?:            boolean       // if true, return JSON stats only (no CSV body)
@@ -408,7 +411,18 @@ async function fetchExportRows(
 
   const filtered = owned
     .filter((r) => {
-      if (!params.includePatinaCatalog && r.purchase_order.is_patina_catalog) {
+      // Patina Catalog POs are gated behind the opt-in flag for OUTSTANDING
+      // rows (Patina handles those payments internally, so there's nothing
+      // for the designer to track as a bill unless they ask for it). But a
+      // *paid* catalog-PO payment is real money the designer already sent to
+      // Patina via Stripe (po_payments.state='paid') — that's genuine spend
+      // that must appear in the export the same as any non-catalog paid
+      // bill, regardless of the toggle. Item 10 / wave brief D.
+      if (
+        !params.includePatinaCatalog &&
+        r.purchase_order.is_patina_catalog &&
+        r.state !== "paid"
+      ) {
         return false;
       }
       return matchesIncludeBucket(r);
