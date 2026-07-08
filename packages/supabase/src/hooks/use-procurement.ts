@@ -744,6 +744,13 @@ export interface UpdatePurchaseOrderStatusInput {
  *              ['delivery-calendar'], ['today-procurement-counts'],
  *              and — when projectId is provided — both FF&E namespaces via
  *              invalidateFfeCaches().
+ *
+ * Side effect (Item 2): cancelling a Patina-catalog PO (`status: 'cancelled'`
+ * on a row with `is_patina_catalog: true`) fires a fire-and-forget invoke of
+ * the `expire-po-session` edge function so any open Stripe Checkout session
+ * for the PO's po_payment can't still be completed after the order is dead.
+ * Never awaited by the caller, never blocks or fails the cancel — a failure
+ * only reaches `console.warn`.
  */
 export function useUpdatePurchaseOrderStatus() {
   const queryClient = useQueryClient();
@@ -770,7 +777,7 @@ export function useUpdatePurchaseOrderStatus() {
       }
       return data as PurchaseOrder;
     },
-    onSuccess: (_, { purchaseOrderId, projectId }) => {
+    onSuccess: (result, { purchaseOrderId, projectId, status }) => {
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-order', purchaseOrderId] });
       queryClient.invalidateQueries({ queryKey: ['po-payments', purchaseOrderId] });
@@ -778,6 +785,40 @@ export function useUpdatePurchaseOrderStatus() {
       queryClient.invalidateQueries({ queryKey: ['today-procurement-counts'] });
       if (projectId) {
         invalidateFfeCaches(queryClient, projectId);
+      }
+
+      // Item 2 (Phase 4 follow-through) — cancelling a Patina-catalog PO can
+      // leave an open Stripe Checkout session for its po_payment alive; the
+      // designer could still complete a payment for an order that no longer
+      // exists. Expire it server-side. Every cancel surface (present and
+      // future) routes through this one status mutation, so this onSuccess
+      // is the single place that needs the hook.
+      //
+      // Fire-and-forget by design: awaited so a failure can be logged, but
+      // NEVER surfaced to the caller and never allowed to fail or delay the
+      // cancel itself — the promise below is intentionally not returned
+      // from onSuccess (returning it would make react-query await it before
+      // resolving mutateAsync()).
+      if (status === 'cancelled' && (result as PurchaseOrder | undefined)?.is_patina_catalog) {
+        const supabase = getSupabase() as any;
+        void (async () => {
+          try {
+            const { error } = await supabase.functions.invoke('expire-po-session', {
+              body: { purchase_order_id: purchaseOrderId },
+            });
+            if (error) {
+              console.warn(
+                `expire-po-session failed for purchase order ${purchaseOrderId}:`,
+                error,
+              );
+            }
+          } catch (err) {
+            console.warn(
+              `expire-po-session invoke threw for purchase order ${purchaseOrderId}:`,
+              err,
+            );
+          }
+        })();
       }
     },
   });
