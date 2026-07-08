@@ -73,6 +73,13 @@ describe('payNowPayment', () => {
     expect(result).toBeNull();
   });
 
+  it('returns null for a refunded payment (Item 4 — never re-offer Pay now on a refund)', () => {
+    const result = payNowPayment(
+      po({ payments: [payment({ state: 'refunded', amount_cents: 50000 })] }),
+    );
+    expect(result).toBeNull();
+  });
+
   it('returns null when the unpaid row has a zero amount (nothing due)', () => {
     const result = payNowPayment(po({ payments: [payment({ state: 'pending', amount_cents: 0 })] }));
     expect(result).toBeNull();

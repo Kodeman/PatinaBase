@@ -1491,6 +1491,124 @@ describe('useUpdatePurchaseOrderStatus', () => {
       ),
     ).toEqual([]);
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Item 2 — expire open Checkout sessions when a Patina-catalog PO is
+  // cancelled. Fire-and-forget: onSuccess is synchronous, so the invoke
+  // runs as an un-awaited microtask — flush it with a real setTimeout(0)
+  // (vi.useFakeTimers isn't active in this file) before asserting.
+  // ───────────────────────────────────────────────────────────────────────
+
+  const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  describe('onSuccess — expire-po-session side effect', () => {
+    it('invokes expire-po-session with the purchase_order_id when a Patina-catalog PO is cancelled', async () => {
+      supabaseClient.functions.invoke.mockResolvedValue({ data: { expired: 1 }, error: null });
+
+      const config = useUpdatePurchaseOrderStatus() as unknown as {
+        onSuccess: (
+          result: unknown,
+          variables: { purchaseOrderId: string; status: string; projectId?: string },
+        ) => void;
+      };
+
+      config.onSuccess(
+        { id: 'po-1', is_patina_catalog: true },
+        { purchaseOrderId: 'po-1', status: 'cancelled' },
+      );
+
+      await flushMicrotasks();
+
+      expect(supabaseClient.functions.invoke).toHaveBeenCalledWith('expire-po-session', {
+        body: { purchase_order_id: 'po-1' },
+      });
+    });
+
+    it('does NOT invoke expire-po-session for a non-catalog PO cancel', async () => {
+      const config = useUpdatePurchaseOrderStatus() as unknown as {
+        onSuccess: (
+          result: unknown,
+          variables: { purchaseOrderId: string; status: string; projectId?: string },
+        ) => void;
+      };
+
+      config.onSuccess(
+        { id: 'po-2', is_patina_catalog: false },
+        { purchaseOrderId: 'po-2', status: 'cancelled' },
+      );
+
+      await flushMicrotasks();
+
+      expect(supabaseClient.functions.invoke).not.toHaveBeenCalled();
+    });
+
+    it('does NOT invoke expire-po-session for a Patina-catalog PO transitioning to a non-cancelled status', async () => {
+      const config = useUpdatePurchaseOrderStatus() as unknown as {
+        onSuccess: (
+          result: unknown,
+          variables: { purchaseOrderId: string; status: string; projectId?: string },
+        ) => void;
+      };
+
+      config.onSuccess(
+        { id: 'po-3', is_patina_catalog: true },
+        { purchaseOrderId: 'po-3', status: 'shipped' },
+      );
+
+      await flushMicrotasks();
+
+      expect(supabaseClient.functions.invoke).not.toHaveBeenCalled();
+    });
+
+    it('never throws and only logs when the invoke rejects — the cancel UX must never fail on this', async () => {
+      supabaseClient.functions.invoke.mockRejectedValue(new Error('network down'));
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      const config = useUpdatePurchaseOrderStatus() as unknown as {
+        onSuccess: (
+          result: unknown,
+          variables: { purchaseOrderId: string; status: string; projectId?: string },
+        ) => void;
+      };
+
+      expect(() =>
+        config.onSuccess(
+          { id: 'po-4', is_patina_catalog: true },
+          { purchaseOrderId: 'po-4', status: 'cancelled' },
+        ),
+      ).not.toThrow();
+
+      await flushMicrotasks();
+
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('logs (does not throw) when the edge function resolves with a 409 po_not_cancelled error body', async () => {
+      supabaseClient.functions.invoke.mockResolvedValue({
+        data: null,
+        error: { error: 'po_not_cancelled', status: 'shipped' },
+      });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      const config = useUpdatePurchaseOrderStatus() as unknown as {
+        onSuccess: (
+          result: unknown,
+          variables: { purchaseOrderId: string; status: string; projectId?: string },
+        ) => void;
+      };
+
+      config.onSuccess(
+        { id: 'po-5', is_patina_catalog: true },
+        { purchaseOrderId: 'po-5', status: 'cancelled' },
+      );
+
+      await flushMicrotasks();
+
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

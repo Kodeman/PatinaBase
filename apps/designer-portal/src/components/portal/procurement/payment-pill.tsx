@@ -12,6 +12,11 @@
  *   paid             → olive/sage tint (#A8B5A0 family)
  *   patina_handled   → clay tint (visually distinct champagne treatment
  *                       used when is_patina_catalog === true)
+ *   refunded         → dusty-blue tint (#8B9CAD family) — a full Stripe
+ *                       refund (charge.refunded webhook, migration 00277)
+ *                       flips the po_payment to this terminal state. Kept
+ *                       visually distinct from `paid` (sage/success) so a
+ *                       refunded payment never reads as money still held.
  *
  * Text content:
  *   - Short form (default): just the state label ("Pending", "Due", "Paid",
@@ -29,7 +34,7 @@ import type { CSSProperties } from 'react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type PaymentPillState = 'pending' | 'due' | 'paid' | 'patina_handled';
+export type PaymentPillState = 'pending' | 'due' | 'paid' | 'patina_handled' | 'refunded';
 
 export interface PaymentPillProps {
   /** Payment state — drives color and default label. */
@@ -89,6 +94,14 @@ const STATE_STYLES: Record<PaymentPillState, PillStyle> = {
     text: 'var(--color-clay)',
     stateLabel: 'Patina handled',
   },
+  refunded: {
+    // Not in the original PRD mock (refunds shipped later, migration 00277).
+    // Dusty-blue reads as neutral/reversed rather than success (paid/sage)
+    // or a still-outstanding balance (due/terracotta, pending/clay).
+    bg: 'rgba(139,156,173,0.18)',
+    text: 'var(--color-dusty-blue)',
+    stateLabel: 'Refunded',
+  },
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -115,7 +128,8 @@ function buildPillText(props: PaymentPillProps): string {
   if (!kind) return styles.stateLabel;
 
   // Long form: "{kind} {amount?} {state-verb} {date?}"
-  const verb = state === 'paid' ? 'paid' : state === 'due' ? 'due' : '';
+  const verb =
+    state === 'paid' ? 'paid' : state === 'due' ? 'due' : state === 'refunded' ? 'refunded' : '';
   const parts: string[] = [kind];
   if (typeof amount === 'number') parts.push(formatDollars(amount));
   if (verb) parts.push(verb);

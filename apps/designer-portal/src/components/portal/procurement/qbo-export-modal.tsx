@@ -10,7 +10,11 @@
  *   - Header:         "Export to QuickBooks" + "Build the reconciliation pack"
  *   - Date range:     two date inputs, default current calendar month
  *   - Includes:       4 checkboxes (deposits/balances/outstanding ON by default,
- *                     Patina Catalog OFF — Patina handles those internally)
+ *                     outstanding Patina Catalog balances OFF). Phase 4 —
+ *                     designers pay catalog POs at order time, so PAID
+ *                     catalog spend is real money and always exports; the
+ *                     Catalog checkbox only gates its not-yet-paid
+ *                     (outstanding) rows.
  *   - Filter row:     "All projects" / "All vendors" (single option in v1 —
  *                     multi-select is a v2 deferral per architect dossier §1)
  *   - Preview block:  champagne-tinted box with live counts from the
@@ -273,14 +277,18 @@ export function QboExportModal({ open, onOpenChange }: QboExportModalProps) {
     label,
     checked,
     onChange,
+    title,
   }: {
     id: string;
     label: string;
     checked: boolean;
     onChange: (v: boolean) => void;
+    /** Optional hover/assistive clarification for labels that need it. */
+    title?: string;
   }) => (
     <label
       htmlFor={id}
+      title={title}
       className="flex cursor-pointer items-center gap-2 text-[0.8rem] text-[var(--text-primary)]"
     >
       <input
@@ -396,9 +404,14 @@ export function QboExportModal({ open, onOpenChange }: QboExportModalProps) {
                 checked={includeOutstanding}
                 onChange={setIncludeOutstanding}
               />
+              {/* Phase 4 — this gates ONLY outstanding (unpaid) Catalog
+                  rows. Paid Catalog spend is real money the designer paid
+                  Patina at order time and always exports, regardless of
+                  this checkbox. */}
               <Checkbox
                 id="qbo-patina-catalog"
-                label="Patina Catalog transactions"
+                label="Include outstanding Patina Catalog balances"
+                title="Paid Patina Catalog transactions always export — this only adds not-yet-paid Catalog balances."
                 checked={includePatinaCatalog}
                 onChange={setIncludePatinaCatalog}
               />
