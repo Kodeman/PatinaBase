@@ -192,8 +192,11 @@ function pickHeadlinePayment(po: ItemPurchaseOrder): {
   return {
     state: target.state as PaymentPillState,
     amount: target.amount_cents,
+    // A refund keeps `paid_date` (migration 00277) rather than stamping a
+    // separate refunded_at — surface that date, not the (likely stale/null)
+    // due_date.
     dueDate:
-      target.state === 'paid'
+      target.state === 'paid' || target.state === 'refunded'
         ? target.paid_date
         : target.due_date,
     kind,

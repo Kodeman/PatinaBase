@@ -69,7 +69,13 @@ function poPaymentToPillProps(payment: POPayment) {
     state: payment.state,
     kind,
     amount: payment.amount_cents,
-    dueDate: payment.state === 'paid' ? payment.paid_date : payment.due_date,
+    // A refund keeps `paid_date` (migration 00277) rather than stamping a
+    // separate refunded_at — surface that date, not the (likely stale/null)
+    // due_date, so the pill's long form reads "Deposit $500 refunded Apr 8".
+    dueDate:
+      payment.state === 'paid' || payment.state === 'refunded'
+        ? payment.paid_date
+        : payment.due_date,
   };
 }
 

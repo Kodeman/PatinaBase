@@ -24,7 +24,17 @@ export type PaymentPattern =
   | 'custom_milestones';
 
 export type POPaymentKind = 'deposit' | 'balance' | 'milestone';
-export type POPaymentState = 'pending' | 'due' | 'paid';
+/**
+ * Narrow local widening (Item 4, 2026-07): the Postgres enum gained
+ * `'refunded'` in migration 00277 (charge.refunded webhook, full-refund
+ * path) but `database.types.ts` hasn't been regenerated to reflect it yet —
+ * that regen is owned by another workstream. Declaring the real value here
+ * (rather than leaving portal code to `as PaymentPillState`-cast an
+ * out-of-union string past the type checker) is what let the refunded-pill
+ * rendering bug exist undetected. Remove this comment once
+ * `database.types.ts` is regenerated and this type sources from there.
+ */
+export type POPaymentState = 'pending' | 'due' | 'paid' | 'refunded';
 
 export type POStatus =
   | 'draft'
