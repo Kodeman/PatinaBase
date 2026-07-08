@@ -91,12 +91,18 @@ export async function middleware(req: NextRequest) {
   // the token is resolved server-side via resolve_document_share() — no session,
   // no RLS-authed data, no verdict/sign affordances.
   const isSharePage = req.nextUrl.pathname.startsWith('/share/');
+  // /field/[token] is the same login-less pattern for a field party (Field
+  // Coordination Wave 4): the token is resolved server-side via
+  // resolve_field_link() — a contractor on a jobsite phone has no Patina
+  // account and never will (R46-style tracked, login-less courts).
+  const isFieldPage = req.nextUrl.pathname.startsWith('/field/');
   const isPublicPage =
     req.nextUrl.pathname === '/' ||
     req.nextUrl.pathname.startsWith('/demo') ||
     isInviteLanding ||
     isQuizPage ||
-    isSharePage;
+    isSharePage ||
+    isFieldPage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   // The wrong-portal interstitial is the redirect target for wrong-role users;
   // it must be exempt from the gate or a wrong-role user would loop. /unauthorized
