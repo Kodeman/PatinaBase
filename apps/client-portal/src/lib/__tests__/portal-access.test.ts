@@ -12,6 +12,7 @@ import {
   describeAccountKindFromDomain,
   resolveForeignPortalHome,
   describeAccountKind,
+  safeCallbackPath,
   type RoleLookup,
 } from '../portal-access';
 
@@ -166,6 +167,37 @@ describe('resolveForeignPortalHome', () => {
 
   it('returns null for an empty role list', () => {
     expect(resolveForeignPortalHome([])).toBeNull();
+  });
+});
+
+describe('safeCallbackPath', () => {
+  it('rejects an absolute URL (open redirect)', () => {
+    expect(safeCallbackPath('https://evil.com')).toBeNull();
+    expect(safeCallbackPath('http://evil.com/phish')).toBeNull();
+  });
+
+  it('rejects a protocol-relative URL', () => {
+    expect(safeCallbackPath('//evil.com')).toBeNull();
+  });
+
+  it('rejects a leading-backslash path (IE-style scheme-relative quirk)', () => {
+    expect(safeCallbackPath('/\\evil.com')).toBeNull();
+  });
+
+  it('accepts a plain relative path with a query string', () => {
+    expect(safeCallbackPath('/projects?x=1')).toBe('/projects?x=1');
+  });
+
+  it('returns null for null input', () => {
+    expect(safeCallbackPath(null)).toBeNull();
+  });
+
+  it('rejects an empty string', () => {
+    expect(safeCallbackPath('')).toBeNull();
+  });
+
+  it('rejects a scheme-relative path missing the leading slash', () => {
+    expect(safeCallbackPath('evil.com')).toBeNull();
   });
 });
 

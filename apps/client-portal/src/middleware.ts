@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createAdminClient, createMiddlewareClient } from '@patina/supabase/client';
-import { resolvePortalDecision, type RoleDomain, type RoleLookup } from '@/lib/portal-access';
+import {
+  resolvePortalDecision,
+  safeCallbackPath,
+  type RoleDomain,
+  type RoleLookup,
+} from '@/lib/portal-access';
 import { env } from '@/lib/env';
 
 // Look up the user's role domains. Returns a tri-state so the caller can
@@ -135,7 +140,11 @@ export async function middleware(req: NextRequest) {
   // to `/wrong-portal` from a deeper protected route — the round trip causes
   // the QR signin page to re-render mid-flight and looks like a reload loop.
   if (isAuthenticated && isAuthPage && !isInviteLanding) {
-    const callbackUrl = req.nextUrl.searchParams.get('callbackUrl');
+    // Sanitized: an absolute or protocol-relative callbackUrl would otherwise
+    // be an open redirect via `new URL(callbackUrl, baseUrl)` below, since
+    // new URL() ignores its base argument when the first argument already
+    // parses as an absolute URL. See safeCallbackPath in portal-access.ts.
+    const callbackUrl = safeCallbackPath(req.nextUrl.searchParams.get('callbackUrl'));
     const decision = resolvePortalDecision(
       await getClientPortalRoleLookup(user!.id),
       callbackUrl || '/',

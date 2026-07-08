@@ -47,6 +47,24 @@ export type PortalDecision =
   | { action: 'skip'; reason: 'missing-service-key' | 'lookup-error' }
   | { action: 'redirect'; to: string };
 
+/**
+ * Sanitizes an untrusted `callbackUrl` query param before it is used to build
+ * a post-auth redirect target (`new URL(callbackUrl, baseUrl)` in middleware.ts).
+ * `new URL()` ignores its base when the first argument is already absolute, so
+ * an unsanitized callbackUrl is an open redirect (`?callbackUrl=https://evil.com`
+ * sends a freshly-authenticated user off-site). Also rejects protocol-relative
+ * (`//evil.com`, which `new URL()` resolves against the current protocol to
+ * `https://evil.com`) and a leading backslash (`/\evil.com` — WHATWG URL
+ * parsing normalizes `\` to `/` for special schemes, so this resolves the same
+ * way as `//evil.com`). Only a plain single-leading-slash path is honored;
+ * anything else returns `null` so the caller falls back to its default
+ * post-auth destination.
+ */
+export function safeCallbackPath(raw: string | null): string | null {
+  if (!raw) return null;
+  return /^\/(?![\/\\])/.test(raw) ? raw : null;
+}
+
 /** True when any of the user's role domains permits the client portal. */
 export function hasClientPortalDomain(domains: RoleDomain[]): boolean {
   return domains.some((domain) => CLIENT_PORTAL_DOMAINS.includes(domain));
