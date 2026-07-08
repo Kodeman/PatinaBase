@@ -31,11 +31,11 @@
 //   payment_intent.succeeded / payment_intent.payment_failed
 //                                       belt-and-suspenders by PI id — only
 //                                       flips rows still pending.
-//   charge.refunded                     refund reconciliation v1 (00268).
+//   charge.refunded                     refund reconciliation v1 (00273).
 //                                       Resolve the payable by charge.payment_intent
 //                                       across invoice_payments → po_payments →
 //                                       direct_orders. FULL refund flips state
-//                                       (guarded) and the 00268 trigger reverses
+//                                       (guarded) and the 00273 trigger reverses
 //                                       invoice/earnings/milestone accounting;
 //                                       PARTIAL refund changes no row, only
 //                                       logs + notifies (partial accounting is
@@ -609,7 +609,7 @@ async function handlePaymentIntentSettled(
 // (deposit_paid_flips_balance) automatically; the webhook never touches
 // purchase_orders.status (no 'paid' member; the payment rail invents no
 // transition). Settle/failure notify the designer via procurement_notifications
-// (kinds added in 00266). All writes are service-role; the same guard-then-flip
+// (kinds added in 00271). All writes are service-role; the same guard-then-flip
 // contract as the invoice handlers keeps Stripe retries safe.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -854,7 +854,7 @@ async function handlePoPaymentIntentSettled(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// direct_order settle branch — client "buy now" orders (00267).
+// direct_order settle branch — client "buy now" orders (00272).
 //
 // The payable unit is a direct_orders row. status is pending_payment|paid|
 // canceled. Settle flips pending_payment → paid (guarded), stamps the
@@ -1203,12 +1203,12 @@ async function handleDirectOrderPaymentIntentSettled(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// charge.refunded — refund reconciliation v1 (00268).
+// charge.refunded — refund reconciliation v1 (00273).
 //
 // A dashboard-initiated refund arrives as charge.refunded on the Charge object.
 // We resolve the payable by charge.payment_intent across the three tables in
 // order (invoice_payments → po_payments → direct_orders). FULL refunds flip the
-// payable's state guarded on its settled value — the 00268 trigger owns invoice
+// payable's state guarded on its settled value — the 00273 trigger owns invoice
 // rollup/status/earnings-reversal/milestone-unpay for invoices; po/direct_order
 // carry their own state column. PARTIAL refunds flip NO row (partial accounting
 // is still v2) — they only log + notify. Unmatched PI → log + 200 (a refund for
@@ -1239,7 +1239,7 @@ async function sendInvoiceRefundSideEffects(
   opts: { partial: boolean; refundedAmount: number }
 ): Promise<void> {
   try {
-    // Reload AFTER any flip — the 00268 trigger has already reopened the
+    // Reload AFTER any flip — the 00273 trigger has already reopened the
     // invoice / cleared paid_at (full refund), so this reads post-refund truth.
     const invoice = await loadInvoiceJoined(admin, row.invoice_id);
     if (!invoice) return;
@@ -1342,7 +1342,7 @@ async function handleInvoiceRefund(
     return;
   }
   // FULL: flip succeeded → refunded (guard makes the distinct-event replay a
-  // no-op). The 00268 trigger reverses the accounting.
+  // no-op). The 00273 trigger reverses the accounting.
   const { data: flipped, error } = await admin
     .from('invoice_payments')
     .update({ status: 'refunded' })

@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00266 — po_payments Stripe columns (payable_type dispatch, po_payment rail)
+-- 00271 — po_payments Stripe columns (payable_type dispatch, po_payment rail)
 --
 -- Phase 3 of the payment-rail consolidation. The create-checkout-session and
 -- stripe-webhook edge functions are being generalized from invoice-only to a
@@ -77,5 +77,5 @@ COMMENT ON TYPE public.procurement_notification_kind IS
   '(00184 lifecycle triggers, manual flips, or the daily po-payments-due-daily pg_cron job from 00189). '
   'delivery_this_week: produced by the delivery-this-week-weekly pg_cron job (00189). '
   'damage_claim_drafted: fired on INSERT into damage_claims with state = ''drafted''. '
-  'payment_received / payment_failed: fired by the stripe-webhook po_payment branch (00266) when an '
+  'payment_received / payment_failed: fired by the stripe-webhook po_payment branch (00271) when an '
   '"Order via Patina" purchase-order payment settles or its ACH transfer fails.';

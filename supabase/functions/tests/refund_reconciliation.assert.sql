@@ -1,9 +1,9 @@
 -- apply_invoice_payment_effects refund reversal — BEGIN/ROLLBACK assertion
--- script (00268). Mirrors direct_order_rpc.assert.sql: exercises the trigger
+-- script (00273). Mirrors direct_order_rpc.assert.sql: exercises the trigger
 -- against the SHARED local DB inside a transaction that is ROLLED BACK, so
 -- nothing persists and no `db reset` is ever needed.
 --
--- Run (after applying 00268):
+-- Run (after applying 00273):
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
 --     -f - < supabase/functions/tests/refund_reconciliation.assert.sql
 -- or from a host with psql:
@@ -11,7 +11,7 @@
 --     -f supabase/functions/tests/refund_reconciliation.assert.sql
 --
 -- Every case prints "R# PASS" / "R# FAIL". A clean run is all PASS. Run BEFORE
--- 00268 to see it go red (the reverses_invoice_payment_id column is absent).
+-- 00273 to see it go red (the reverses_invoice_payment_id column is absent).
 
 BEGIN;
 

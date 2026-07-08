@@ -1,9 +1,9 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00267 — direct_orders (third payable type on the consolidated payment rail)
+-- 00272 — direct_orders (third payable type on the consolidated payment rail)
 --
 -- Phase 5 of the payment-rail consolidation. create-checkout-session and
 -- stripe-webhook already dispatch on payable_type for `invoice` (00178) and
--- `po_payment` (00266). This migration adds the data model for the third and
+-- `po_payment` (00271). This migration adds the data model for the third and
 -- final payable: a CLIENT buying a Patina-managed product directly ("buy now",
 -- no cart). Unlike invoice/po_payment — whose payable rows are created by the
 -- designer's own flows — a direct order is minted on demand by the client, so
@@ -14,7 +14,7 @@
 --      at create time (product_name / unit_price_cents / amount_cents), so a
 --      later product price/name edit never moves an existing order. Stripe
 --      pointers (session + PaymentIntent) live on the row exactly as they do on
---      invoice_payments (00178) and po_payments (00266), with the same partial-
+--      invoice_payments (00178) and po_payments (00271), with the same partial-
 --      unique-index style (uniq_direct_orders_stripe_*).
 --   2. RLS: clients SELECT their own rows only. NO INSERT/UPDATE/DELETE policy
 --      for authenticated — writes go through create_direct_order (create) and
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS public.direct_orders (
 
 COMMENT ON TABLE public.direct_orders IS
   'Client "buy now" orders for Patina-managed products — the third payable_type '
-  'on the consolidated Stripe rail (invoice 00178, po_payment 00266). Rows are '
+  'on the consolidated Stripe rail (invoice 00178, po_payment 00271). Rows are '
   'minted by create_direct_order (SECURITY DEFINER) and settled by the '
   'service-role stripe-webhook. Money columns are snapshots taken at create '
   'time; unit_price_cents comes straight from products.price_retail (integer '
@@ -87,7 +87,7 @@ COMMENT ON COLUMN public.direct_orders.shipping IS
   'tracking_number) plus customer_details.email, persisted on paid settle.';
 
 -- Stripe idempotency: one order per PaymentIntent / Checkout Session. Same
--- naming/style as uniq_po_payments_stripe_* (00266) and the invoice indexes.
+-- naming/style as uniq_po_payments_stripe_* (00271) and the invoice indexes.
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_direct_orders_stripe_pi
   ON public.direct_orders(stripe_payment_intent_id)
   WHERE stripe_payment_intent_id IS NOT NULL;
