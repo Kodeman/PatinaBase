@@ -457,6 +457,19 @@ async function loadDirectOrderPayable(
       409
     );
   }
+  // A refunded order (00277) is terminal-dead: minting a fresh session here would
+  // let the client be charged again, and the settle would then be refused (money
+  // taken, no ledger flip). Refuse before any Stripe call — no session pointer is
+  // ever written. Product answer: place a new order.
+  if (order.status === 'refunded') {
+    return json(
+      {
+        error: 'direct_order_refunded',
+        detail: 'This order was refunded and can no longer be paid. Please place a new order.',
+      },
+      409
+    );
+  }
   if (order.amount_cents <= 0) {
     return json({ error: 'nothing_due', detail: 'This order has no balance due.' }, 409);
   }
