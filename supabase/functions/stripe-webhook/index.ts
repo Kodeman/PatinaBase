@@ -58,6 +58,7 @@ import {
   buildPaymentReceiptEmail,
   formatInvoiceCurrency,
 } from '../_shared/invoice-emails.ts';
+import { decideSessionCompletedAction, sessionIds } from './lib.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -415,21 +416,6 @@ async function sendFailureSideEffects(
 // Event handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function sessionIds(session: Stripe.Checkout.Session): {
-  sessionId: string;
-  paymentIntentId: string | null;
-  invoiceId: string | null;
-} {
-  return {
-    sessionId: session.id,
-    paymentIntentId:
-      typeof session.payment_intent === 'string'
-        ? session.payment_intent
-        : session.payment_intent?.id ?? null,
-    invoiceId: session.metadata?.invoice_id ?? null,
-  };
-}
-
 async function handleSessionCompleted(
   admin: SupabaseClient,
   event: Stripe.Event
@@ -464,10 +450,15 @@ async function handleSessionCompleted(
     return;
   }
 
-  if (session.payment_status === 'paid') {
+  const action = decideSessionCompletedAction(
+    session.payment_status,
+    paymentIntentId,
+    !!row.stripe_payment_intent_id
+  );
+  if (action.kind === 'settle') {
     const flipped = await markSucceeded(admin, row, event.id, paymentIntentId);
     if (flipped) await sendSuccessSideEffects(admin, row);
-  } else if (paymentIntentId && !row.stripe_payment_intent_id) {
+  } else if (action.kind === 'stamp_payment_intent') {
     // ACH initiated ('unpaid'): stamp the PI id, leave the row pending. The
     // async_payment_succeeded/failed event settles it in 3–5 business days.
     const { error } = await admin

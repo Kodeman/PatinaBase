@@ -20,9 +20,11 @@
 //      retrieve it. Open + amount matches amount_due → return its url.
 //      Open + amount stale → expire it and fail its pending payment row.
 //      Complete with a still-pending payment row (ACH processing) → 409.
-//   6. Create the session: mode 'payment', card + us_bank_account, one line
-//      item "Invoice {number} — {project}" at amount_due, metadata.invoice_id
-//      on BOTH the session and the payment intent (webhook resolution).
+//   6. Create the session: mode 'payment', card + us_bank_account (ACH,
+//      verification_method 'automatic' for instant Financial Connections
+//      verification where available), one line item "Invoice {number} —
+//      {project}" at amount_due, metadata.invoice_id on BOTH the session and
+//      the payment intent (webhook resolution).
 //   7. Persist invoices.stripe_checkout_session_id + INSERT a pending
 //      invoice_payments row (method stripe, amount_cents = amount_due).
 //      The stripe-webhook function flips that row; the 00178 AFTER trigger
@@ -41,6 +43,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@17';
+import { buildCheckoutSessionParams } from './lib.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -250,28 +253,17 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Create the Checkout session ──────────────────────────────────────
-    const label = `Invoice ${invoice.invoice_number ?? invoice.id.slice(0, 8)} — ${
-      invoice.project?.name ?? 'Patina project'
-    }`;
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      customer: customerId,
-      payment_method_types: ['card', 'us_bank_account'],
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: (invoice.currency || 'USD').toLowerCase(),
-            unit_amount: amountDue,
-            product_data: { name: label },
-          },
-        },
-      ],
-      metadata: { invoice_id: invoice.id },
-      payment_intent_data: { metadata: { invoice_id: invoice.id } },
-      success_url: `${CLIENT_PORTAL_URL}/invoices/${invoice.id}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${CLIENT_PORTAL_URL}/invoices/${invoice.id}?checkout=cancelled`,
-    });
+    const session = await stripe.checkout.sessions.create(
+      buildCheckoutSessionParams({
+        customerId,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoice_number,
+        projectName: invoice.project?.name ?? null,
+        currency: invoice.currency,
+        amountDueCents: amountDue,
+        clientPortalUrl: CLIENT_PORTAL_URL,
+      })
+    );
 
     if (!session.url) {
       console.error('create-checkout-session: session created without url', session.id);
