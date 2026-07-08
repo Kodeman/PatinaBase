@@ -23,7 +23,7 @@
  * A Room — full-bleed paper, zero shadows (D4); reuses RoomShell's physics.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -59,6 +59,8 @@ import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { TermsAgreementBody } from './terms-agreement-body';
 import { ScheduleLineUnfold } from './schedule-line-unfold';
+import type { ComposeDecisionRequest } from '@/lib/document/compose-decision';
+import { ComposeDecisionSheet } from '@/components/document/coordination/compose-decision-sheet';
 
 const STATE_TONE: Record<string, { color: string; bg: string }> = {
   Outline: { color: 'var(--color-aged-oak)', bg: 'transparent' },
@@ -99,6 +101,28 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   // when a line has no verdict). Shares the ['proposal-feedback', id] query with
   // the line unfold — one fetch.
   const { data: feedback = [] } = useProposalFeedback(proposalId);
+
+  // C4 — escalate a flagged line to a client Decision. The Drafting Room is its
+  // own route (no margin rail), so it hosts the composer itself. Available only
+  // once the proposal has a project + client — the composer's existing contract.
+  const composeProjectId = (proposal?.project_id as string | null) ?? null;
+  const composeClientUserId = (proposal?.client_id as string | null) ?? null;
+  const canComposeDecision = Boolean(composeProjectId && composeClientUserId);
+  const [composeRequest, setComposeRequest] = useState<ComposeDecisionRequest | null>(null);
+
+  // A1 — the Desk "N lines flagged" walk-in arrives at /drafting/<id>?flagged=1.
+  // Read it client-side (no useSearchParams → no Suspense boundary needed) and
+  // auto-open the oldest unresolved flag's line, its Alternatives band showing.
+  const [arrivingFlagged, setArrivingFlagged] = useState(false);
+  useEffect(() => {
+    setArrivingFlagged(new URLSearchParams(window.location.search).get('flagged') === '1');
+  }, []);
+  const firstFlaggedItemId = useMemo(() => {
+    if (!arrivingFlagged) return undefined;
+    const open = feedback.filter((f) => f.verdict === 'rejected' && !f.resolved_at && f.proposal_item_id);
+    if (open.length === 0) return undefined;
+    return open.reduce((a, b) => (a.created_at <= b.created_at ? a : b)).proposal_item_id ?? undefined;
+  }, [arrivingFlagged, feedback]);
   const latestVerdict = useMemo(
     () =>
       latestVerdictByLine(
@@ -308,8 +332,15 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
               <div className="contents [&_.shadow-lg]:shadow-none [&_.shadow-xl]:shadow-none">
                 <FFEScheduleBuilder
                   proposalId={proposalId}
+                  initialUnfoldedId={firstFlaggedItemId}
                   renderUnfold={(item, fold) => (
-                    <ScheduleLineUnfold item={item} proposalId={proposalId} onFold={fold} />
+                    <ScheduleLineUnfold
+                      item={item}
+                      proposalId={proposalId}
+                      onFold={fold}
+                      canComposeDecision={canComposeDecision}
+                      onComposeDecision={setComposeRequest}
+                    />
                   )}
                   renderVerdictChip={renderVerdictChip}
                 />
@@ -428,6 +459,18 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
         onClose={() => setSendOpen(false)}
         onSent={returnToDocument}
       />
+
+      {/* C4 — the escalate-to-Decision composer, opened from a flagged line's
+          Alternatives band. Mounted only with a project + client in hand. */}
+      {composeRequest && composeProjectId && (
+        <ComposeDecisionSheet
+          proposalId={proposalId}
+          projectId={composeProjectId}
+          clientUserId={composeClientUserId}
+          request={composeRequest}
+          onClose={() => setComposeRequest(null)}
+        />
+      )}
     </RoomShell>
   );
 }

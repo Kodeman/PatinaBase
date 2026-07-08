@@ -64,7 +64,7 @@ export function FolderCard({ folder }: { folder: DeskFolder }) {
 
   return (
     <Link
-      href={`/doc/${row.engagement_id}`}
+      href={need.deepLink ?? `/doc/${row.engagement_id}`}
       className={cardClassName}
       aria-label={`${row.title} — ${need.text}`}
     >

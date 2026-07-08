@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, type ReactNode } from 'react';
+import { useState, useMemo, useRef, useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   DndContext,
@@ -835,6 +835,12 @@ interface FFEScheduleBuilderProps {
    * feedback read.
    */
   renderVerdictChip?: (item: FFEItem) => ReactNode;
+  /**
+   * A1 (Schedule & Boards Wave 3) — a line to auto-unfold once on mount. The
+   * Desk "N lines flagged" walk-in lands the designer on the first flagged
+   * line with its Alternatives band already open.
+   */
+  initialUnfoldedId?: string;
 }
 
 interface CaptureDropContext {
@@ -847,6 +853,7 @@ export function FFEScheduleBuilder({
   proposalId,
   renderUnfold,
   renderVerdictChip,
+  initialUnfoldedId,
 }: FFEScheduleBuilderProps) {
   const { data: rooms = [] } = useProposalScopeRooms(proposalId);
   const { data: categories = [] } = useFFECategories({ proposalId });
@@ -1021,6 +1028,20 @@ export function FFEScheduleBuilder({
       .getElementById(`sched-line-${id}`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
+
+  // A1 (Wave 3) — the Desk "N lines flagged" walk-in: open the first flagged
+  // line once (its Alternatives band shows itself on an unresolved rejection),
+  // then scroll to it. Guarded so it fires only when the row is actually loaded.
+  const didAutoOpenRef = useRef(false);
+  useEffect(() => {
+    if (didAutoOpenRef.current || !initialUnfoldedId || !renderUnfold) return;
+    if (!(items as FFEItem[]).some((it) => it.id === initialUnfoldedId)) return;
+    didAutoOpenRef.current = true;
+    setUnfoldedItemId(initialUnfoldedId);
+    requestAnimationFrame(() => jumpToLine(initialUnfoldedId));
+    // jumpToLine is stable enough; only the loaded set + target matter here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialUnfoldedId, items, renderUnfold]);
 
   // ── S4 — apply search + facets over the loaded lines ──────────────────────
   const facets = useMemo<Facet[]>(

@@ -15,7 +15,7 @@
  * uses — one write path, two grammars.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   useProduct,
@@ -25,9 +25,15 @@ import {
   useItemFeedbackThread,
   useReplyToItemFeedback,
   useResolveFeedback,
+  useTaughtAlternatives,
+  useSwapLineToProduct,
+  useLogSuggestionEvent,
   createBrowserClient,
   type ItemFeedback,
+  type TaughtAlternative,
 } from '@patina/supabase';
+import { extractAttributeKeywords, rankTaughtAlternatives } from '@patina/utils';
+import type { ComposeDecisionRequest } from '@/lib/document/compose-decision';
 import { useUpdateProposalItem } from '@/hooks/use-proposals';
 import { StatusChip } from '@/components/document/status-chip';
 import { verdictChipSpec } from '@/lib/document/verdict-chip';
@@ -85,10 +91,15 @@ export function ScheduleLineUnfold({
   item,
   proposalId,
   onFold,
+  canComposeDecision = false,
+  onComposeDecision,
 }: {
   item: ScheduleLineItem;
   proposalId: string;
   onFold: () => void;
+  /** C4 — whether "Put it to the client" can open the margin composer (needs a project). */
+  canComposeDecision?: boolean;
+  onComposeDecision?: (request: ComposeDecisionRequest) => void;
 }) {
   // Same cached queries the builder holds — no extra round trips.
   const { data: rooms = [] } = useProposalScopeRooms(proposalId);
@@ -330,6 +341,18 @@ export function ScheduleLineUnfold({
           resolve. Only when the client has actually left a verdict on this line. ── */}
       {lineFeedback && <LineFeedbackBlock feedback={lineFeedback} proposalId={proposalId} />}
 
+      {/* ── Taught alternatives (A1) — only on an UNRESOLVED rejection. A shortlist
+          from the designer's own corpus first, lightly filtered by the flag note. ── */}
+      {lineFeedback && lineFeedback.verdict === 'rejected' && !lineFeedback.resolved_at && (
+        <AlternativesBand
+          item={item}
+          feedback={lineFeedback}
+          proposalId={proposalId}
+          canComposeDecision={canComposeDecision}
+          onComposeDecision={onComposeDecision}
+        />
+      )}
+
       {/* ── Notes — the client's line vs the studio's ── */}
       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
@@ -412,6 +435,189 @@ export function ScheduleLineUnfold({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Taught alternatives (A1) — the shortlist shown on an unresolved rejection.
+ * Drawn from the designer's own corpus first (find_taught_alternatives boosts
+ * personal, then studio, ahead of the catalog) and lightly re-ranked by the
+ * attribute words parsed from the client's flag note. Two acts per pick — Swap
+ * the line to it (which resolves the flag) or Dismiss — plus a line-level "Put
+ * it to the client" that escalates to a Decision (C4). Every shown / swap /
+ * dismiss is a training signal. Silent-degrade: no product link, no embedding,
+ * or an RPC error → the band renders nothing. No shadows (D4), inline errors (R83).
+ */
+function AlternativesBand({
+  item,
+  feedback,
+  proposalId,
+  canComposeDecision,
+  onComposeDecision,
+}: {
+  item: ScheduleLineItem;
+  feedback: ItemFeedback;
+  proposalId: string;
+  canComposeDecision: boolean;
+  onComposeDecision?: (request: ComposeDecisionRequest) => void;
+}) {
+  const { data: raw = [], isError } = useTaughtAlternatives(item.product_id, 8);
+  const swap = useSwapLineToProduct();
+  const logEvent = useLogSuggestionEvent();
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const keywords = useMemo(() => extractAttributeKeywords(feedback.body), [feedback.body]);
+  const ranked = useMemo(() => rankTaughtAlternatives(raw, keywords), [raw, keywords]);
+  const shown = useMemo(() => ranked.filter((p) => !dismissed.has(p.id)), [ranked, dismissed]);
+
+  // Log the shown batch once per distinct product set — a training receipt.
+  const shownKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (shown.length === 0) return;
+    const key = shown.map((p) => p.id).join(',');
+    if (shownKeyRef.current === key) return;
+    shownKeyRef.current = key;
+    logEvent.mutate(
+      shown.map((p, i) => ({
+        context: 'line_alternatives' as const,
+        action: 'shown' as const,
+        productId: p.id,
+        feedbackId: feedback.id,
+        rank: i,
+      })),
+    );
+    // logEvent identity is stable; re-run only when the shown set changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, feedback.id]);
+
+  if (!item.product_id || isError || ranked.length === 0) return null;
+
+  const doSwap = (p: TaughtAlternative, rank: number) => {
+    setError(null);
+    setSaved(null);
+    swap
+      .mutateAsync({ proposalItemId: item.id, productId: p.id, feedbackId: feedback.id, proposalId, rank })
+      .then(() => setSaved(`Swapped to ${p.name}.`))
+      .catch((e: Error) => setError(e.message || 'The line could not be swapped.'));
+  };
+
+  const doDismiss = (p: TaughtAlternative, rank: number) => {
+    setDismissed((s) => new Set(s).add(p.id));
+    logEvent.mutate({
+      context: 'line_alternatives',
+      action: 'dismissed',
+      productId: p.id,
+      feedbackId: feedback.id,
+      rank,
+    });
+  };
+
+  const putToClient = () => {
+    const picks = shown.slice(0, 3);
+    onComposeDecision?.({
+      feedbackId: feedback.id,
+      title: `Re: ${item.name}`,
+      rejected: {
+        productId: item.product_id ?? null,
+        name: item.name,
+        imageUrl: item.image_url ?? null,
+        priceCents: item.unit_sell_price ?? null,
+      },
+      alternatives: picks.map((p) => ({
+        productId: p.id,
+        name: p.name,
+        imageUrl: p.images?.[0] ?? null,
+        priceCents: p.price_retail,
+        brand: p.brand,
+        layer: p.layer,
+      })),
+    });
+    // Escalating these to the client is an accept signal for each.
+    logEvent.mutate(
+      picks.map((p, i) => ({
+        context: 'line_alternatives' as const,
+        action: 'accepted' as const,
+        productId: p.id,
+        feedbackId: feedback.id,
+        rank: i,
+      })),
+    );
+  };
+
+  return (
+    <div className="mb-3 rounded-[4px] border border-dashed border-[var(--color-clay)] bg-[rgba(196,165,123,0.04)] px-3 py-2.5">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <CellLabel>Alternatives · taught from your library</CellLabel>
+        {keywords.length > 0 && (
+          <span className="font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+            matched · {keywords.join(' · ')}
+          </span>
+        )}
+      </div>
+
+      <ul className="space-y-1.5">
+        {shown.map((p, i) => (
+          <li key={p.id} className="flex items-center gap-2.5">
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-[3px] border border-[var(--color-pearl)] bg-[rgba(196,165,123,0.06)]">
+              {p.images?.[0] && (
+                <img src={p.images[0]} alt="" loading="lazy" className="h-full w-full object-cover" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[11.5px] text-[var(--color-charcoal)]">{p.name}</p>
+              <p className="flex items-center gap-2 text-[9px] text-[var(--text-muted)]">
+                <LayerBadge layer={p.layer} />
+                {p.price_retail != null && <span>${Math.round(p.price_retail / 100).toLocaleString()}</span>}
+                {p.brand && <span className="truncate">{p.brand}</span>}
+              </p>
+            </div>
+            <button type="button" className={ACTION_BTN} disabled={swap.isPending} onClick={() => doSwap(p, i)}>
+              {swap.isPending ? 'Swapping…' : 'Swap'}
+            </button>
+            <button
+              type="button"
+              aria-label={`Dismiss ${p.name}`}
+              className="rounded-[4px] border border-transparent px-1.5 py-1 text-[12px] leading-none text-[var(--text-muted)] hover:border-[var(--color-pearl)] hover:text-[var(--color-charcoal)]"
+              onClick={() => doDismiss(p, i)}
+            >
+              ×
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {canComposeDecision && onComposeDecision && (
+        <div className="mt-2 border-t border-dashed border-[var(--color-pearl)] pt-2">
+          <button type="button" className={ACTION_BTN} onClick={putToClient}>
+            Put it to the client →
+          </button>
+        </div>
+      )}
+
+      {saved && !error && <p className="mt-1.5 text-[10px] text-[var(--text-muted)]">{saved}</p>}
+      {error && (
+        <p role="alert" className="mt-1.5 text-[10px] text-[#C4836F]">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The taught-corpus provenance chip: your library / your studio / the catalog. */
+function LayerBadge({ layer }: { layer: string }) {
+  const label = layer === 'personal' ? 'Yours' : layer === 'studio' ? 'Studio' : 'Catalog';
+  const taught = layer === 'personal' || layer === 'studio';
+  return (
+    <span
+      className={`font-mono text-[7.5px] uppercase tracking-[0.08em] ${
+        taught ? 'text-[var(--color-clay)]' : 'text-[var(--text-muted)]'
+      }`}
+    >
+      {label}
+    </span>
   );
 }
 
