@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser, createServerClient } from '@patina/supabase/server';
+import { resolveClientIp } from '@/lib/utils/client-ip';
 
 export async function POST(
   request: NextRequest,
@@ -17,10 +18,7 @@ export async function POST(
     return NextResponse.json({ error: 'invalid_name' }, { status: 400 });
   }
 
-  const clientIp =
-    request.headers.get('x-client-ip') ??
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    null;
+  const clientIp = resolveClientIp(request.headers);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createServerClient()) as any;
