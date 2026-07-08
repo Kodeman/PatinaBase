@@ -17,7 +17,10 @@ import {
   useUserWithRoles,
   useOrganizations,
   useCaptureProduct,
+  useCaptureFromUrl,
 } from '@patina/supabase';
+import { buildRefreshDiff, type RefreshFieldChange } from '@patina/utils';
+import { usePieceField } from '@/hooks/use-piece-field';
 import { RoomShell } from '../room-shell';
 import { StrataMark } from '@/components/document/strata-mark';
 import { StrataSweep } from '@/components/ui/strata-sweep';
@@ -486,6 +489,7 @@ export function PieceRoom({ productId }: { productId: string }) {
               </div>
             </div>
             <FacetTextarea productId={p.id} column="usage_notes" serverValue={p.usage_notes} label="Usage notes" placeholder="how a designer should use this piece" rows={3} needed={studioNeeds} readOnly={readOnly} />
+            {canEdit && <RefreshFromSource product={p} onRefetch={() => void refetch()} />}
           </PieceFacet>
 
           {showSeo && (
@@ -637,6 +641,174 @@ function RailButton({
     >
       {children}
     </button>
+  );
+}
+
+/** Render a diff value for the per-field accept list (before → after). */
+function formatChangeValue(field: string, value: string | number | string[] | null): string {
+  if (value == null) return '—';
+  if (Array.isArray(value)) {
+    return value.length === 0 ? '—' : `${value.length} image${value.length > 1 ? 's' : ''}`;
+  }
+  if (field === 'price_retail' && typeof value === 'number') {
+    return (value / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  }
+  const s = String(value);
+  return s.length > 80 ? `${s.slice(0, 79)}…` : s;
+}
+
+/**
+ * Refresh-from-source (A3, refresh mode). Re-reads the piece's stored source
+ * URL through the SSRF-guarded `capture-from-url` edge function, diffs the
+ * result against what's on file (buildRefreshDiff — only fields the page
+ * carries AND that differ), and offers a per-field Accept. Never auto-applies;
+ * each accept commits through the same self-save the facets use (usePieceField),
+ * then refetches. Inline errors, no toast, no shadow (R83 / D4). Rendered only
+ * when the caller may edit — accepting is a write.
+ */
+function RefreshFromSource({
+  product,
+  onRefetch,
+}: {
+  product: PieceProduct;
+  onRefetch: () => void;
+}) {
+  const refresh = useCaptureFromUrl();
+  const field = usePieceField(product.id);
+  const [changes, setChanges] = useState<RefreshFieldChange[] | null>(null);
+  const [ranOnce, setRanOnce] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState<Set<string>>(new Set());
+  const [applyError, setApplyError] = useState<string | null>(null);
+
+  const source = product.source_url?.trim() || '';
+  const disabled = !source || refresh.isPending;
+
+  const run = async () => {
+    if (!source) return;
+    setError(null);
+    setApplyError(null);
+    setChanges(null);
+    setAccepted(new Set());
+    setRanOnce(false);
+    try {
+      const extracted = await refresh.mutateAsync({
+        url: source,
+        mode: 'refresh',
+        productId: product.id,
+      });
+      const diff = buildRefreshDiff(
+        {
+          name: product.name,
+          brand: product.brand,
+          description: product.description,
+          price_retail: product.price_retail,
+          images: product.images,
+        },
+        extracted,
+      );
+      setChanges(diff);
+      setRanOnce(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not read the source just now.');
+    }
+  };
+
+  const accept = async (change: RefreshFieldChange) => {
+    setApplyError(null);
+    try {
+      await field.mutateAsync({ [change.field]: change.after });
+      setAccepted((prev) => new Set(prev).add(change.field));
+      onRefetch();
+    } catch (e) {
+      setApplyError(e instanceof Error ? e.message : 'Could not apply that change.');
+    }
+  };
+
+  return (
+    <div className="mt-4 border-t border-[var(--doc-ink-border)] pt-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <span className="mb-1 block font-mono text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+            Refresh from source
+          </span>
+          <p className="text-[0.72rem] text-[var(--color-aged-oak)]">
+            {source
+              ? 'Re-read the source page and choose what to update.'
+              : 'Add a source URL to enable a refresh.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void run()}
+          disabled={disabled}
+          className="shrink-0 rounded-[5px] border border-[var(--doc-ink-border)] bg-white px-3 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-charcoal)] transition-colors hover:border-[var(--color-clay)] disabled:opacity-45"
+        >
+          {refresh.isPending ? 'Reading…' : 'Refresh from source'}
+        </button>
+      </div>
+
+      {error && (
+        <p role="alert" className="mt-2 text-[0.72rem] text-[var(--color-clay)]">
+          {error}
+        </p>
+      )}
+
+      {ranOnce && changes && changes.length === 0 && (
+        <p className="mt-3 text-[0.72rem] italic text-[var(--color-aged-oak)]">
+          Already up to date with the source.
+        </p>
+      )}
+
+      {changes && changes.length > 0 && (
+        <ul className="mt-3 flex flex-col gap-2">
+          {changes.map((c) => {
+            const isAccepted = accepted.has(c.field);
+            return (
+              <li
+                key={c.field}
+                className="flex items-start justify-between gap-3 rounded-[5px] border border-[var(--doc-ink-border)] p-2.5"
+              >
+                <div className="min-w-0">
+                  <span className="mb-1 block font-mono text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                    {c.label}
+                  </span>
+                  <div className="text-[0.76rem] leading-snug text-[var(--color-charcoal)]">
+                    <span className="text-[var(--color-aged-oak)] line-through">
+                      {formatChangeValue(c.field, c.before)}
+                    </span>
+                    <span aria-hidden className="px-1.5 text-[var(--color-aged-oak)]">
+                      →
+                    </span>
+                    <span>{formatChangeValue(c.field, c.after)}</span>
+                  </div>
+                </div>
+                {isAccepted ? (
+                  <span className="shrink-0 self-center font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-sage)]">
+                    Accepted
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void accept(c)}
+                    disabled={field.isPending}
+                    className="shrink-0 self-center rounded-[5px] border border-[var(--color-clay)] px-2.5 py-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:opacity-45"
+                  >
+                    Accept
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {applyError && (
+        <p role="alert" className="mt-2 text-[0.72rem] text-[var(--color-clay)]">
+          {applyError}
+        </p>
+      )}
+    </div>
   );
 }
 
