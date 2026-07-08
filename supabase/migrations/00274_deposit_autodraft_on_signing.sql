@@ -9,10 +9,19 @@
 -- (issue_invoice, 00178); nothing about the review-then-send state machine
 -- changes.
 --
--- CREATE OR REPLACE's the LATEST activate_proposal_as_project body
--- (00199_activation_carry_vendor_id — the vendor_id carry; later files
--- 00210/00237/00254 only CALL the function, they don't redefine it). Body is
--- 00199 verbatim except:
+-- REBASED 2026-07-07: this file originally CREATE-OR-REPLACE'd the 00199
+-- (vendor_id carry) body. Since then a Schedule & Boards program shipped two
+-- newer bodies that land BEFORE this migration — 00262 (doc_code carry) and
+-- 00269 (00262's body VERBATIM + custom_fields carry, the current latest).
+-- Because 00274 applies LAST, a 00199-based body would SILENTLY REVERT the
+-- doc_code and custom_fields carries (both project_ffe_items inserts + the
+-- spec_field_defs copy). The body below is therefore 00269's body VERBATIM
+-- with the 00274 delta re-applied on top — the doc_code / custom_fields carry
+-- is preserved and the deposit auto-draft rides along.
+--
+-- 00274 delta over the (now 00269) base body — semantics unchanged from the
+-- original 00199-based delta; the milestone INSERT was structurally identical
+-- across 00199 → 00262 → 00269, so the delta grafts on unchanged:
 --   1. The kickoff milestone INSERT (sort_order = 0, the row seeded
 --      'outstanding' at signing — 00204's language for the same row) now
 --      stamps trigger_kind = 'on_signing' and captures its id via RETURNING.
@@ -68,9 +77,9 @@ DECLARE
   v_phase RECORD;
   v_new_phase_id UUID;
   v_milestone RECORD;
-  v_new_milestone_id UUID;
-  v_kickoff_milestone_id UUID;
-  v_kickoff_amount_cents INTEGER;
+  v_new_milestone_id UUID;       -- 00274 delta
+  v_kickoff_milestone_id UUID;   -- 00274 delta
+  v_kickoff_amount_cents INTEGER; -- 00274 delta
   v_co_terms RECORD;
   v_team RECORD;
   v_section RECORD;
@@ -181,13 +190,13 @@ BEGIN
 
       INSERT INTO project_ffe_items (
         project_id, project_room_id, source_proposal_item_id,
-        product_id, name, ffe_category, item_type,
+        product_id, name, ffe_category, item_type, doc_code, custom_fields,
         status, quantity, unit_price_cents, line_total_cents,
         budget_min_cents, budget_max_cents,
         vendor_id, vendor_name, eta, notes, sort_order
       ) VALUES (
         v_project_id, v_new_room_id, v_item.id,
-        v_item.product_id, v_item.name, v_item.ffe_category, v_item.item_type,
+        v_item.product_id, v_item.name, v_item.ffe_category, v_item.item_type, v_item.doc_code, v_item.custom_fields,
         'specified',
         v_item.quantity,
         v_item.unit_price,
@@ -216,13 +225,13 @@ BEGIN
 
     INSERT INTO project_ffe_items (
       project_id, project_room_id, source_proposal_item_id,
-      product_id, name, ffe_category, item_type,
+      product_id, name, ffe_category, item_type, doc_code, custom_fields,
       status, quantity, unit_price_cents, line_total_cents,
       budget_min_cents, budget_max_cents,
       vendor_id, vendor_name, eta, notes, sort_order
     ) VALUES (
       v_project_id, NULL, v_item.id,
-      v_item.product_id, v_item.name, v_item.ffe_category, v_item.item_type,
+      v_item.product_id, v_item.name, v_item.ffe_category, v_item.item_type, v_item.doc_code, v_item.custom_fields,
       'specified',
       v_item.quantity,
       v_item.unit_price,
@@ -233,6 +242,15 @@ BEGIN
       v_item.position
     );
   END LOOP;
+
+  -- Custom field DEFS (S6, 00268): copy the proposal's schedule columns onto
+  -- project-owned rows (same field_key/name/kind/sort). The per-line VALUES ride
+  -- along in project_ffe_items.custom_fields above, keyed by field_key —
+  -- verbatim, no id remap.
+  INSERT INTO spec_field_defs (project_id, field_key, name, kind, sort_order)
+  SELECT v_project_id, field_key, name, kind, sort_order
+  FROM spec_field_defs
+  WHERE proposal_id = p_proposal_id;
 
   v_running_date := p_start_date;
   FOR v_phase IN
@@ -447,7 +465,8 @@ END;
 $function$;
 
 COMMENT ON FUNCTION public.activate_proposal_as_project(uuid, date) IS
-  'Bridges an accepted proposal into an active project (body lineage: 00140 → 00167 → 00180 → 00199 → 00274). '
-  '00274 delta: the kickoff (sort_order=0) payment milestone is stamped trigger_kind=''on_signing'' and, when its '
+  'Bridges an accepted proposal into an active project (body lineage: 00140 → 00167 → 00180 → 00199 → 00262 → 00269 → 00274). '
+  '00269 carries doc_code + custom_fields (+ spec_field_defs copy) into project_ffe_items; 00274 rebases onto that body and adds: '
+  'the kickoff (sort_order=0) payment milestone is stamped trigger_kind=''on_signing'' and, when its '
   'amount_cents > 0, immediately drafts its invoice via draft_invoice_from_milestone (00204) — draft only, guarded '
   'so drafting can never fail activation. Supersedes 00206''s "on_signing stays a designer act" note.';
