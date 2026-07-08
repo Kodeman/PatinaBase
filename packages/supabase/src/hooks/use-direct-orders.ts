@@ -1,9 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// Note: This file uses type assertions (as any) because the database types
-// haven't been regenerated yet to include the direct_orders table (added in
-// migration 00267). The hook-level interfaces below mirror the table shape
-// and are the canonical contract until `pnpm db:generate` is run. Follows
-// use-invoices.ts / use-procurement.ts house style.
+// direct_orders + create_direct_order (migration 00276) are now in the
+// generated database types (regenerated from the linked prod project), so this
+// hook uses the typed client directly — no `as any`. The hook-level interfaces
+// below still mirror the table shape as the public contract the portals import.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
@@ -65,7 +63,7 @@ export function useDirectOrders() {
   return useQuery({
     queryKey: ['direct-orders'],
     queryFn: async (): Promise<DirectOrder[]> => {
-      const supabase = getSupabase() as any;
+      const supabase = getSupabase();
       const { data, error } = await supabase
         .from('direct_orders')
         .select('*')
@@ -103,7 +101,7 @@ export function useCreateDirectOrder(options?: { errorSurface?: 'inline' }) {
       productId: string;
       quantity?: number;
     }): Promise<DirectOrder> => {
-      const supabase = getSupabase() as any;
+      const supabase = getSupabase();
       const { data, error } = await supabase.rpc('create_direct_order', {
         p_product_id: productId,
         p_quantity: quantity ?? 1,
@@ -143,7 +141,7 @@ export function useStartDirectOrderCheckout(options?: { errorSurface?: 'inline' 
     }: {
       directOrderId: string;
     }): Promise<{ url: string }> => {
-      const supabase = getSupabase() as any;
+      const supabase = getSupabase();
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: { direct_order_id: directOrderId },
       });
