@@ -16,7 +16,7 @@ export const POST = createRouteHandler(
         service: {
           name: 'orders',
           baseUrl: ORDERS_URL,
-          path: '/api/v1/cart/items',
+          path: '/v1/cart/items',
         },
         requireAuth: true,
         retry: { maxRetries: 2 },

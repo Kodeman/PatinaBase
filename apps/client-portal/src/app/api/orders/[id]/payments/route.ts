@@ -17,7 +17,7 @@ export const GET = createRouteHandler(
         service: {
           name: 'orders',
           baseUrl: ORDERS_URL,
-          path: `/api/v1/orders/${orderId}/payments`,
+          path: `/v1/orders/${orderId}/payments`,
         },
         requireAuth: true,
         retry: { maxRetries: 3 },
@@ -41,7 +41,7 @@ export const POST = createRouteHandler(
         service: {
           name: 'orders',
           baseUrl: ORDERS_URL,
-          path: `/api/v1/orders/${orderId}/payments`,
+          path: `/v1/orders/${orderId}/payments`,
         },
         requireAuth: true,
         retry: { maxRetries: 1 }, // NEVER retry payments (double-charge risk)

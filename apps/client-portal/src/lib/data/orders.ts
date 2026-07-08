@@ -49,7 +49,7 @@ export type ClientOrdersResult =
 // app/api/orders/route.ts). Kept in sync deliberately rather than shared via
 // import — that route also still needs its own copy for its own proxy call.
 const ORDERS_SERVICE_URL = process.env.ORDERS_SERVICE_URL || 'http://localhost:3015';
-const ORDERS_PATH = '/api/v1/orders';
+const ORDERS_PATH = '/v1/orders';
 const REQUEST_TIMEOUT_MS = 10_000;
 
 function normalizeStatus(input: unknown): OrderStatus {
@@ -101,7 +101,7 @@ function extractRows(payload: unknown): any[] {
  * Fetch the signed-in client's orders directly from the orders service —
  * server-side, no self-HTTP round trip through `/api/orders` and
  * `NEXT_PUBLIC_APP_URL`. Uses the same backend + path the `/api/orders`
- * route handler proxies to (`ORDERS_SERVICE_URL` + `/api/v1/orders`); on
+ * route handler proxies to (`ORDERS_SERVICE_URL` + `/v1/orders`); on
  * Cloudflare Workers this rides the `SVC_ORDERS` service binding (see
  * `service-binding.ts`), falling back to a plain fetch against the public
  * service URL everywhere else (local dev, tests).

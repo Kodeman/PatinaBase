@@ -18,7 +18,7 @@ export const GET = createRouteHandler(
         service: {
           name: 'orders',
           baseUrl: ORDERS_URL,
-          path: `/api/v1/orders/${orderId}/fulfillments/${fulfillmentId}`,
+          path: `/v1/orders/${orderId}/fulfillments/${fulfillmentId}`,
         },
         requireAuth: true,
         retry: { maxRetries: 3 },

@@ -12,7 +12,7 @@ export const GET = createRouteHandler(
         service: {
           name: 'projects',
           baseUrl: PROJECTS_URL,
-          path: `/api/v1/projects/${projectId}/timeline/celebrations/${milestoneId}`,
+          path: `/v1/projects/${projectId}/timeline/celebrations/${milestoneId}`,
         },
         requireAuth: true,
         retry: { maxRetries: 3 },
@@ -35,7 +35,7 @@ export const POST = createRouteHandler(
         service: {
           name: 'projects',
           baseUrl: PROJECTS_URL,
-          path: `/api/v1/projects/${projectId}/timeline/celebrations/${milestoneId}/viewed`,
+          path: `/v1/projects/${projectId}/timeline/celebrations/${milestoneId}/viewed`,
         },
         requireAuth: true,
         retry: { maxRetries: 2 },

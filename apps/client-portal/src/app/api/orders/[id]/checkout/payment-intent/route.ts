@@ -18,7 +18,7 @@ export const POST = createRouteHandler(
         service: {
           name: 'orders',
           baseUrl: ORDERS_URL,
-          path: `/api/v1/checkout/payment-intent`,
+          path: `/v1/checkout/payment-intent`,
         },
         requireAuth: true,
         retry: { maxRetries: 1 },

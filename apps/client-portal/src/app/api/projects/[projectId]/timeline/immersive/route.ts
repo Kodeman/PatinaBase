@@ -12,7 +12,7 @@ export const GET = createRouteHandler(
         service: {
           name: 'projects',
           baseUrl: PROJECTS_URL,
-          path: `/api/v1/projects/${projectId}/timeline/immersive`,
+          path: `/v1/projects/${projectId}/timeline/immersive`,
         },
         requireAuth: true,
         retry: { maxRetries: 3 },

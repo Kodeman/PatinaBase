@@ -203,8 +203,9 @@ describe('fetchClientOrders', () => {
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
-    expect(String(url)).toMatch(/\/api\/v1\/orders$/);
+    expect(String(url)).toMatch(/\/v1\/orders$/);
     expect(String(url)).not.toContain('/api/orders');
+    expect(String(url)).not.toContain('/api/v1');
     expect(init).toEqual(
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
@@ -281,7 +282,7 @@ describe('fetchClientOrders', () => {
     );
     expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(global.fetch).toHaveBeenCalledWith(
-      `${expectedBase}/api/v1/orders`,
+      `${expectedBase}/v1/orders`,
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
       }),

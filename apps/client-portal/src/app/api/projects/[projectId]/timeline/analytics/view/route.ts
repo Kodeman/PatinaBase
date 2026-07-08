@@ -12,7 +12,7 @@ export const POST = createRouteHandler(
         service: {
           name: 'projects',
           baseUrl: PROJECTS_URL,
-          path: `/api/v1/projects/${projectId}/timeline/analytics/view`,
+          path: `/v1/projects/${projectId}/timeline/analytics/view`,
         },
         requireAuth: true,
         retry: { maxRetries: 1 }, // Single attempt for analytics events

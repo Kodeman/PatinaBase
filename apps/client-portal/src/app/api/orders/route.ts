@@ -16,7 +16,7 @@ export const GET = createRouteHandler(
         service: {
           name: 'orders',
           baseUrl: ORDERS_URL,
-          path: '/api/v1/orders',
+          path: '/v1/orders',
         },
         requireAuth: true, // Always require auth for orders
         retry: { maxRetries: 3 },
@@ -38,7 +38,7 @@ export const POST = createRouteHandler(
         service: {
           name: 'orders',
           baseUrl: ORDERS_URL,
-          path: '/api/v1/orders',
+          path: '/v1/orders',
         },
         requireAuth: true,
         retry: { maxRetries: 1 }, // Don't retry order creation (idempotency issues)

@@ -17,7 +17,7 @@ export const GET = createRouteHandler(
         service: {
           name: 'orders',
           baseUrl: ORDERS_URL,
-          path: `/api/v1/orders/${orderId}`,
+          path: `/v1/orders/${orderId}`,
         },
         requireAuth: true,
         retry: { maxRetries: 3 },
@@ -40,7 +40,7 @@ export const PATCH = createRouteHandler(
         service: {
           name: 'orders',
           baseUrl: ORDERS_URL,
-          path: `/api/v1/orders/${orderId}`,
+          path: `/v1/orders/${orderId}`,
         },
         requireAuth: true,
         retry: { maxRetries: 2 },
@@ -62,7 +62,7 @@ export const DELETE = createRouteHandler(
         service: {
           name: 'orders',
           baseUrl: ORDERS_URL,
-          path: `/api/v1/orders/${orderId}`,
+          path: `/v1/orders/${orderId}`,
         },
         requireAuth: true,
         retry: { maxRetries: 1 }, // Don't retry cancellations

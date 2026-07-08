@@ -15,7 +15,7 @@ export const GET = createRouteHandler(
         service: {
           name: 'projects',
           baseUrl: PROJECTS_URL,
-          path: `/api/v1/projects/${projectId}/timeline/celebrations?limit=${limit}`,
+          path: `/v1/projects/${projectId}/timeline/celebrations?limit=${limit}`,
         },
         requireAuth: true,
         retry: { maxRetries: 3 },
