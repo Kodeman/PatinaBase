@@ -19,6 +19,13 @@ export interface DesignerEarning {
   invoice_id?: string | null;
   invoice_payment_id?: string | null;
   project_id?: string | null;
+  /**
+   * Refund contra row (00277): the invoice_payments.id whose earnings this
+   * negative row reverses. Set ONLY on reversal rows (NULL on forward credits).
+   * Money SUMs net correctly across contra + original; COUNTS must exclude
+   * these so a refund doesn't inflate the transaction count.
+   */
+  reverses_invoice_payment_id?: string | null;
   gross_amount: number;
   platform_fee: number;
   net_amount: number;
@@ -125,7 +132,7 @@ export function useEarningsStats() {
 
       const { data, error } = await supabase
         .from('designer_earnings')
-        .select('net_amount, status, source_type, created_at');
+        .select('net_amount, status, source_type, created_at, reverses_invoice_payment_id');
 
       if (error) throw error;
 
@@ -172,7 +179,13 @@ export function useEarningsStats() {
             .filter((e: DesignerEarning) => e.source_type === 'adjustment')
             .reduce((sum: number, e: DesignerEarning) => sum + e.net_amount, 0),
         },
-        transactionCount: earnings.length,
+        // Exclude 00277 refund contra rows: they carry reverses_invoice_payment_id
+        // and exist only to net out a refunded credit in the money SUMs above.
+        // Counting them would double-count a single refunded payment (original
+        // credit + its reversal) as two transactions.
+        transactionCount: earnings.filter(
+          (e: DesignerEarning) => !e.reverses_invoice_payment_id
+        ).length,
       };
 
       return stats;
