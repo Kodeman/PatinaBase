@@ -1,5 +1,5 @@
 export { notify } from './notify';
-export { getUserPreferences, isTypeEnabled, isChannelEnabled, isQuietHours, DEFAULT_PREFERENCES } from './preferences';
+export { getUserPreferences, isTypeEnabled, isChannelEnabled, isQuietHours, getReminderCadence, isReminderDigestUser, DEFAULT_PREFERENCES } from './preferences';
 export { createEdgeFunctionQueue } from './queue';
 export type { NotificationQueue } from './queue';
 export { generateUnsubscribeToken, verifyUnsubscribeToken, generateUnsubscribeUrl } from './tokens';

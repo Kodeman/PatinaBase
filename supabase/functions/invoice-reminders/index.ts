@@ -1,5 +1,19 @@
 // Supabase Edge Function: invoice-reminders
 //
+// DELIBERATELY EXEMPT FROM reminder_cadence. Unlike proposal-nudge and the
+// decision-reminders spine — both gated by decision-notify.ts's
+// CADENCE_ELIGIBLE_KINDS check against the client's reminder_cadence
+// preference, with deferred sends picked up by notification-digest/index.ts
+// — the A/R reminders sent below always go out immediately, on every run,
+// with no digest-deferral path at all.
+//
+// Ruling: payment prompts are financially consequential. Deferring an
+// overdue-invoice or final-notice email by up to a day to satisfy a client's
+// "daily summary" reminder_cadence preference would directly hurt
+// collections. This is a deliberate product decision, not a gap — do not
+// wire this function into reminder_cadence (or otherwise make A/R reminders
+// digest-eligible) without a new product ruling superseding this one.
+//
 // Runs daily (scheduled by pg_cron in migration 00181, 15:00 UTC). Direct
 // mirror of decision-reminders: service-role client, scan, send, stamp, JSON
 // summary.

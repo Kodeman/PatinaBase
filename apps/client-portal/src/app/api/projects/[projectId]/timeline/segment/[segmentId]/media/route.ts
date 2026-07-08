@@ -12,7 +12,7 @@ export const GET = createRouteHandler(
         service: {
           name: 'projects',
           baseUrl: PROJECTS_URL,
-          path: `/api/v1/projects/${projectId}/timeline/segment/${segmentId}/media`,
+          path: `/v1/projects/${projectId}/timeline/segment/${segmentId}/media`,
         },
         requireAuth: true,
         retry: { maxRetries: 3 },

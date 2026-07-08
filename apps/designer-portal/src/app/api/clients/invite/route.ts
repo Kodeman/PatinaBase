@@ -5,6 +5,15 @@ import {
   serverError,
 } from '@/lib/supabase-admin';
 
+// The client (homeowner) accepting this invite must land on the CLIENT
+// portal, not here. Without an explicit `redirectTo`, GoTrue falls back to
+// its site_url default (the designer portal's origin) — a homeowner who
+// clicks the email link would land in the designer's workspace instead of
+// their own. Same env var + fallback the Weekly Pulse email leg already uses
+// (see app/api/pulse/send-email/route.ts).
+const CLIENT_PORTAL_URL =
+  process.env.NEXT_PUBLIC_CLIENT_PORTAL_URL ?? 'https://client.patina.cloud';
+
 interface InviteRequestBody {
   clientEmail?: string;
   clientName?: string;
@@ -129,6 +138,10 @@ export async function POST(request: NextRequest) {
             full_name: clientName,
             role: 'client',
           },
+          // Send the client to the CLIENT portal's callback, not GoTrue's
+          // site_url default (the designer portal). client.patina.cloud/**
+          // is already in the GoTrue redirect allow-list.
+          redirectTo: `${CLIENT_PORTAL_URL}/auth/callback?type=invite`,
         });
 
       if (inviteError) {

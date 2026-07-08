@@ -59,6 +59,8 @@ export type NotificationPriority = 'critical' | 'high' | 'normal' | 'low';
 
 export type DigestFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'never';
 
+export type ReminderCadence = 'immediate' | 'daily_digest';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // NOTIFICATION PREFERENCES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -106,6 +108,7 @@ export interface NotificationPreferences {
 
   // Digest
   digest_frequency: DigestFrequency;
+  reminder_cadence: ReminderCadence;
 
   // Quiet hours
   quiet_hours_enabled: boolean;

@@ -3,16 +3,9 @@
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import type { Proposal } from '@patina/supabase';
+import { formatCurrency } from '@patina/shared';
 import { useClientProposals, partitionProposals } from '@/hooks/use-proposals-client';
 import { StrataMark } from '@/components/strata-mark';
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });

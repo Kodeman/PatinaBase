@@ -581,6 +581,12 @@ async function startCheckout(
       mode: 'payment',
       customer: customerId,
       payment_method_types: ['card', 'us_bank_account'],
+      payment_method_options: {
+        // verification_method 'automatic' lets Financial Connections attempt
+        // instant bank-account verification before falling back to Stripe's
+        // micro-deposit flow (ported from portal/client-hardening).
+        us_bank_account: { verification_method: 'automatic' },
+      },
       line_items: [
         {
           // Defaults preserve invoice / po_payment behavior (one lump of

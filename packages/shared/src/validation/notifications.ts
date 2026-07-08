@@ -42,6 +42,8 @@ export const notificationPrioritySchema = z.enum(['critical', 'high', 'normal', 
 
 export const digestFrequencySchema = z.enum(['daily', 'weekly', 'biweekly', 'monthly', 'never']);
 
+export const reminderCadenceSchema = z.enum(['immediate', 'daily_digest']);
+
 // ─── Preference update schema ────────────────────────────────────────────
 
 export const notificationPreferencesUpdateSchema = z.object({
@@ -68,6 +70,7 @@ export const notificationPreferencesUpdateSchema = z.object({
   type_reengagement: z.boolean().optional(),
 
   digest_frequency: digestFrequencySchema.optional(),
+  reminder_cadence: reminderCadenceSchema.optional(),
 
   quiet_hours_enabled: z.boolean().optional(),
   quiet_hours_start: z.string().regex(/^\d{2}:\d{2}$/, 'Must be HH:MM format').optional(),

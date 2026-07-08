@@ -17,12 +17,18 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_ADDRESS = Deno.env.get('RESEND_FROM') ?? 'hello@patina.cloud';
 const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 interface ProposalRow {
   id: string;
   title: string;
   status: string;
   cc_email: string | null;
   valid_until: string | null;
+  client_id: string | null;
   designer: { full_name: string | null; email: string | null } | null;
   client: { full_name: string | null; email: string | null } | null;
 }
@@ -44,9 +50,19 @@ function formatDate(iso: string): string {
   });
 }
 
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return json({ error: 'method_not_allowed' }, 405);
   }
 
   let proposalId: string | undefined;
@@ -54,10 +70,10 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     proposalId = body?.proposalId;
   } catch {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 });
+    return json({ error: 'invalid_body' }, 400);
   }
   if (!proposalId) {
-    return new Response(JSON.stringify({ error: 'proposalId_required' }), { status: 400 });
+    return json({ error: 'proposalId_required' }, 400);
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -66,7 +82,7 @@ Deno.serve(async (req: Request) => {
     .from('proposals')
     .select(
       `
-      id, title, status, cc_email, valid_until,
+      id, title, status, cc_email, valid_until, client_id,
       designer:profiles!designer_id(full_name, email),
       client:profiles!client_id(full_name, email)
     `
@@ -76,7 +92,7 @@ Deno.serve(async (req: Request) => {
 
   if (error || !data) {
     console.error('proposal-nudge: lookup failed', error);
-    return new Response(JSON.stringify({ error: 'proposal_not_found' }), { status: 404 });
+    return json({ error: 'proposal_not_found' }, 404);
   }
 
   const proposal = data as unknown as ProposalRow;
@@ -84,15 +100,68 @@ Deno.serve(async (req: Request) => {
   // A nudge only makes sense while the proposal is in the client's hands.
   if (proposal.status !== 'sent' && proposal.status !== 'viewed') {
     console.warn('proposal-nudge: not nudgeable', proposalId, proposal.status);
-    return new Response(JSON.stringify({ error: 'not_nudgeable', status: proposal.status }), {
-      status: 422,
-    });
+    return json({ error: 'not_nudgeable', status: proposal.status }, 422);
   }
 
   const recipient = proposal.client?.email;
   if (!recipient) {
     console.warn('proposal-nudge: no client email for proposal', proposalId);
-    return new Response(JSON.stringify({ error: 'no_recipient' }), { status: 422 });
+    return json({ error: 'no_recipient' }, 422);
+  }
+
+  // Cadence gate — clients on the daily digest don't get a direct nudge email.
+  // Instead we write an in-app row (type 'proposal_nudge') that the
+  // notification-digest cron batches into one daily summary. `immediate`
+  // (the default) falls through to the email path below, unchanged.
+  if (proposal.client_id) {
+    const { data: pref } = await supabase
+      .from('notification_preferences')
+      .select('reminder_cadence')
+      .eq('user_id', proposal.client_id)
+      .maybeSingle();
+
+    if (pref?.reminder_cadence === 'daily_digest') {
+      const deepLink = `/proposals/${proposal.id}`;
+      try {
+        const { data: existing } = await supabase
+          .from('notification_log')
+          .select('id, metadata')
+          .eq('user_id', proposal.client_id)
+          .eq('type', 'proposal_nudge')
+          .eq('channel', 'in_app')
+          .contains('metadata', { deep_link: deepLink })
+          .limit(5);
+
+        // Skip if an unread nudge for this proposal is already queued so a
+        // repeated nudge doesn't stack duplicate rows in one digest window.
+        const hasUnreadDuplicate = ((existing ?? []) as Array<{ metadata: any }>).some(
+          (row) => !row.metadata?.read_at
+        );
+
+        if (!hasUnreadDuplicate) {
+          const { error: notifyErr } = await supabase.from('notification_log').insert({
+            user_id: proposal.client_id,
+            type: 'proposal_nudge',
+            channel: 'in_app',
+            status: 'delivered',
+            template_id: 'proposal-nudge',
+            metadata: {
+              proposal_id: proposal.id,
+              subject: 'A reminder about your proposal',
+              message: proposal.title,
+              deep_link: deepLink,
+            },
+          });
+          if (notifyErr) {
+            console.error('proposal-nudge: in-app insert failed', notifyErr);
+          }
+        }
+      } catch (notifyErr) {
+        console.error('proposal-nudge: in-app insert threw', notifyErr);
+      }
+
+      return json({ ok: true, deferred: 'digest' });
+    }
   }
 
   const designerName = proposal.designer?.full_name ?? 'Your designer';
@@ -142,10 +211,8 @@ Deno.serve(async (req: Request) => {
   if (!res.ok) {
     const text = await res.text();
     console.error('proposal-nudge: Resend failed', res.status, text);
-    return new Response(JSON.stringify({ error: 'send_failed', detail: text }), { status: 502 });
+    return json({ error: 'send_failed', detail: text }, 502);
   }
 
-  return new Response(JSON.stringify({ ok: true }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return json({ ok: true });
 });

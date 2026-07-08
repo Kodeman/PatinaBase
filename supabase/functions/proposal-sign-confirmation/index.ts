@@ -17,6 +17,11 @@ const FROM_ADDRESS = Deno.env.get('RESEND_FROM') ?? 'hello@patina.cloud';
 const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
 const DESIGNER_PORTAL_URL = Deno.env.get('DESIGNER_PORTAL_URL') ?? 'https://app.patina.cloud';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 interface ProposalRow {
   id: string;
   title: string;
@@ -74,9 +79,19 @@ async function sendEmail(opts: {
   return { ok: true };
 }
 
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return json({ error: 'method_not_allowed' }, 405);
   }
 
   let proposalId: string | undefined;
@@ -84,10 +99,10 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     proposalId = body?.proposalId;
   } catch {
-    return new Response(JSON.stringify({ error: 'invalid_body' }), { status: 400 });
+    return json({ error: 'invalid_body' }, 400);
   }
   if (!proposalId) {
-    return new Response(JSON.stringify({ error: 'proposalId_required' }), { status: 400 });
+    return json({ error: 'proposalId_required' }, 400);
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -106,7 +121,7 @@ Deno.serve(async (req: Request) => {
 
   if (error || !data) {
     console.error('proposal-sign-confirmation: lookup failed', error);
-    return new Response(JSON.stringify({ error: 'proposal_not_found' }), { status: 404 });
+    return json({ error: 'proposal_not_found' }, 404);
   }
 
   const proposal = data as unknown as ProposalRow;
@@ -168,7 +183,5 @@ Deno.serve(async (req: Request) => {
     results.designer = ok ? true : detail;
   }
 
-  return new Response(JSON.stringify({ ok: true, results }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return json({ ok: true, results });
 });

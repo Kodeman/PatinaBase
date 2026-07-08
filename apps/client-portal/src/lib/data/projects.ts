@@ -376,6 +376,139 @@ const summarisePhases = (
   return { phases, progressPercentage, currentPhaseLabel: asString(inProgress?.name), completed, nextPhase };
 };
 
+// ── Per-project attention counts (approvals + unread messages) ──
+//
+// These replace the hardwired zeros. Counts are PER PROJECT because the header
+// aggregates them (`projects.reduce(...)`) and the project cards display them
+// individually — so a per-project map is the only shape that keeps both correct.
+//
+// Scoping rules:
+//  • decisions  → client_decisions joined to designer_clients.client_id = auth.uid()
+//                 (client_decisions has no client_id column of its own; the
+//                 deciding client is identified via designer_clients). Mirrors the
+//                 notification-bell scoping so a designer can't see other clients'
+//                 pending decisions as "approvals".
+//  • proposals  → proposals.client_id = auth.uid(), status in (sent, viewed).
+//  • unread     → comms messages in the client's project threads created after
+//                 their last_read_at and not authored by them (mirrors the inbox
+//                 useInboxMessages unread rule).
+//
+// Note: decisions / proposals with a NULL project_id and messages in non-project
+// threads are not attributable to a project and are therefore excluded from these
+// per-project counts (they surface in the notification bell instead).
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const tallyByProject = (rows: unknown, key = 'project_id'): Map<string, number> => {
+  const map = new Map<string, number>();
+  for (const row of asArray<any>(rows)) {
+    const pid = row?.[key];
+    if (typeof pid === 'string' && pid) map.set(pid, (map.get(pid) ?? 0) + 1);
+  }
+  return map;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function countPendingDecisionsByProject(supabase: any, userId: string): Promise<Map<string, number>> {
+  const { data, error } = await supabase
+    .from('client_decisions')
+    .select('project_id, designer_clients!inner(client_id)')
+    .eq('status', 'pending')
+    .eq('designer_clients.client_id', userId);
+  if (error) throw error;
+  return tallyByProject(data);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function countAwaitingProposalsByProject(supabase: any, userId: string): Promise<Map<string, number>> {
+  const { data, error } = await supabase
+    .from('proposals')
+    .select('project_id')
+    .eq('client_id', userId)
+    .in('status', ['sent', 'viewed']);
+  if (error) throw error;
+  return tallyByProject(data);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function countUnreadMessagesByProject(supabase: any, userId: string): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+
+  const { data: participantRows, error: pErr } = await supabase
+    .from('comms_thread_participants')
+    .select('thread_id, last_read_at, archived_at, left_at')
+    .eq('profile_id', userId);
+  if (pErr) throw pErr;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const active = asArray<any>(participantRows).filter((p) => !p?.left_at && !p?.archived_at);
+  if (active.length === 0) return map;
+
+  const lastReadByThread = new Map<string, string>(
+    active.map((p) => [p.thread_id, p.last_read_at ?? '1970-01-01T00:00:00Z']),
+  );
+
+  const { data: threadRows, error: tErr } = await supabase
+    .from('comms_threads')
+    .select('id, project_id')
+    .in('id', active.map((p) => p.thread_id));
+  if (tErr) throw tErr;
+
+  const projectByThread = new Map<string, string>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const t of asArray<any>(threadRows)) {
+    if (t?.project_id) projectByThread.set(t.id, t.project_id);
+  }
+  const projectThreadIds = Array.from(projectByThread.keys());
+  if (projectThreadIds.length === 0) return map;
+
+  const { data: messageRows, error: mErr } = await supabase
+    .from('comms_messages')
+    .select('thread_id, sender_id, created_at')
+    .in('thread_id', projectThreadIds)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (mErr) throw mErr;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const m of asArray<any>(messageRows)) {
+    if (!m || m.sender_id === userId) continue; // own messages are never unread
+    const lastRead = lastReadByThread.get(m.thread_id);
+    const isUnread = !lastRead || new Date(m.created_at) > new Date(lastRead);
+    if (!isUnread) continue;
+    const pid = projectByThread.get(m.thread_id);
+    if (pid) map.set(pid, (map.get(pid) ?? 0) + 1);
+  }
+  return map;
+}
+
+/**
+ * Compute per-project approval (decisions + proposals) and unread-message
+ * counts for the signed-in client. Best-effort: a count failure must never
+ * break the projects read path (which previously 500'd), so on error we log and
+ * return empty maps → counts fall back to 0.
+ */
+async function computeProjectCounts(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+): Promise<{ approvalsByProject: Map<string, number>; unreadByProject: Map<string, number> }> {
+  try {
+    const [decisions, proposals, unreadByProject] = await Promise.all([
+      countPendingDecisionsByProject(supabase, userId),
+      countAwaitingProposalsByProject(supabase, userId),
+      countUnreadMessagesByProject(supabase, userId),
+    ]);
+    const approvalsByProject = new Map<string, number>();
+    for (const [pid, n] of decisions) approvalsByProject.set(pid, (approvalsByProject.get(pid) ?? 0) + n);
+    for (const [pid, n] of proposals) approvalsByProject.set(pid, (approvalsByProject.get(pid) ?? 0) + n);
+    return { approvalsByProject, unreadByProject };
+  } catch (error) {
+    console.warn('[Client Portal] Project count computation failed — counts default to 0', error);
+    return { approvalsByProject: new Map(), unreadByProject: new Map() };
+  }
+}
+
 // ── Public API (Supabase-backed; RLS scopes to projects.client_id = auth.uid()) ──
 
 const PROJECT_LIST_SELECT =
@@ -429,16 +562,11 @@ export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> =>
       .order('updated_at', { ascending: false });
     if (error) throw error;
 
-    const rows = asArray<any>(data);
-    const pending = await fetchPendingApprovalCounts(
-      supabase,
-      rows.map((r) => asString(r?.id)).filter(Boolean),
-    );
+    const { approvalsByProject, unreadByProject } = await computeProjectCounts(supabase, user.id);
 
-    return rows.map((row) => {
+    return asArray<any>(data).map((row) => {
       const { progressPercentage, currentPhaseLabel, nextPhase } = summarisePhases(row?.project_phases);
-      // unreadMessages remains a follow-up; approvalsPending is now real (pending
-      // client_decisions on the project).
+      const projectId = asString(row?.id);
       return mapProjectListItem({
         id: row?.id,
         name: row?.name,
@@ -448,7 +576,8 @@ export const fetchClientProjects = cache(async (): Promise<ProjectListItem[]> =>
         currentPhase: currentPhaseLabel || row?.current_phase,
         progressPercentage,
         nextMilestoneTitle: nextPhase?.name,
-        approvalsPending: pending.get(asString(row?.id)) ?? 0,
+        approvalsPending: approvalsByProject.get(projectId) ?? 0,
+        unreadMessages: unreadByProject.get(projectId) ?? 0,
       });
     });
   } catch (error) {
@@ -476,6 +605,8 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
       .maybeSingle();
     if (error) throw error;
     if (!row) throw new Error('Project not found');
+
+    const { approvalsByProject, unreadByProject } = await computeProjectCounts(supabase, user.id);
 
     const { phases, progressPercentage, currentPhaseLabel, completed, nextPhase } = summarisePhases(
       row.project_phases,
@@ -514,8 +645,8 @@ export const fetchClientProjectView = cache(async (projectId: string): Promise<C
       progressPercentage,
       completedMilestones: completed,
       totalMilestones: phases.length,
-      approvalsPending: pending.get(projectId) ?? 0,
-      unreadMessages: 0,
+      approvalsPending: approvalsByProject.get(projectId) ?? 0,
+      unreadMessages: unreadByProject.get(projectId) ?? 0,
       nextMilestone: nextPhase
         ? {
             id: nextPhase.id,

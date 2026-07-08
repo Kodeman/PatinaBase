@@ -73,6 +73,15 @@ export type NotificationPriority = 'critical' | 'high' | 'normal' | 'low';
 
 export type DigestFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'never';
 
+/**
+ * Cadence for non-urgent CLIENT reminder emails (proposal nudges, decision
+ * reminders). `immediate` sends each reminder as it fires; `daily_digest`
+ * suppresses the direct email (the in-app row still lands) and rolls the day's
+ * reminders into a single digest email. Transactional sends (proposal sent,
+ * invoice sent) are never affected.
+ */
+export type ReminderCadence = 'immediate' | 'daily_digest';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // NOTIFICATION PREFERENCES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -120,6 +129,9 @@ export interface NotificationPreferences {
 
   // Digest
   digest_frequency: DigestFrequency;
+
+  // Reminder cadence — batch non-urgent client reminders into a daily digest
+  reminder_cadence: ReminderCadence;
 
   // Quiet hours
   quiet_hours_enabled: boolean;

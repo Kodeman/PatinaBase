@@ -13,6 +13,7 @@ export type {
   NotificationResult,
   NotificationJob,
   DigestFrequency,
+  ReminderCadence,
 } from '@patina/shared/types';
 
 export {

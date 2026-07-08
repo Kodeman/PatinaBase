@@ -97,8 +97,13 @@ Deno.serve(async (_req: Request) => {
       if (updateErr) {
         console.error('decision-reminders: failed to stamp', d.id, updateErr);
       }
-    } else if (result.inAppOk && !recipientEmail) {
-      // In-app delivered but no email target — still stamp so we don't churn.
+    } else if (
+      result.inAppOk &&
+      (!recipientEmail || result.reason === 'cadence_digest')
+    ) {
+      // Delivered in-app only — either no email target, or the client is on the
+      // daily digest (the notification-digest cron will batch the email). Stamp
+      // so the 48h-window query doesn't re-pick this row every run.
       inAppOnly++;
       await supabase
         .from('client_decisions')

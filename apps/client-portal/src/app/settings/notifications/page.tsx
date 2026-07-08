@@ -185,6 +185,36 @@ export default function NotificationsSettingsPage() {
           </label>
         </Section>
 
+        <Section
+          title="Reminders"
+          description="How gentle nudges — proposal reminders and decision requests — reach you."
+        >
+          <label className="block">
+            <span className="block text-sm font-medium text-[#2C2926] mb-2">
+              Cadence
+            </span>
+            <select
+              value={prefs.reminder_cadence ?? 'immediate'}
+              onChange={(e) =>
+                update(
+                  'reminder_cadence',
+                  e.target.value as NotificationPreferences['reminder_cadence']
+                )
+              }
+              className="w-full max-w-xs px-3 py-2 border border-[#DDD4C8] rounded-md bg-white text-[#2C2926]"
+            >
+              <option value="immediate">Right away</option>
+              <option value="daily_digest">Daily summary</option>
+            </select>
+            <span className="block text-xs text-[#7A736C] mt-2">
+              “Daily summary” bundles non-urgent proposal and decision
+              reminders into a single email each day. A new proposal and
+              invoice reminders are time-sensitive and always arrive right
+              away, regardless of this setting.
+            </span>
+          </label>
+        </Section>
+
         <MessagesSection />
 
         <Section

@@ -83,7 +83,12 @@ Deno.serve(async (_req: Request) => {
         { userId: recipientUserId, email: recipientEmail, name: recipientName },
       );
       if (result.emailSent || result.inAppOk) overdueNotified++;
-      if (result.emailSkipped && result.reason && result.reason !== 'already_sent') {
+      if (
+        result.emailSkipped &&
+        result.reason &&
+        result.reason !== 'already_sent' &&
+        result.reason !== 'cadence_digest'
+      ) {
         console.warn('expire-decisions: overdue email skipped', d.id, result.reason);
       }
     }
