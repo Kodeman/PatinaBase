@@ -60,10 +60,20 @@ const KIND_TO_LOG_TYPE: Record<DecisionNotificationKind, string> = {
   decision_resolved: "decision_resolved",
 };
 
+// Kinds subject to the client's reminder_cadence preference. Both are
+// client-addressed reminders (produced by decision-reminders / expire-decisions)
+// and so are batchable into the daily digest. decision_resolved is addressed to
+// the DESIGNER and is never deferred.
+const CADENCE_ELIGIBLE_KINDS = new Set<DecisionNotificationKind>([
+  "decision_required",
+  "decision_overdue",
+]);
+
 interface PrefRow {
   channels_email: boolean | null;
   channels_in_app: boolean | null;
   type_project_milestone: boolean | null;
+  reminder_cadence: string | null;
   quiet_hours_enabled: boolean | null;
   quiet_hours_start: string | null;
   quiet_hours_end: string | null;
@@ -160,7 +170,7 @@ async function loadPreferences(
   const { data } = await supabase
     .from("notification_preferences")
     .select(
-      "channels_email, channels_in_app, type_project_milestone, " +
+      "channels_email, channels_in_app, type_project_milestone, reminder_cadence, " +
         "quiet_hours_enabled, quiet_hours_start, quiet_hours_end, timezone",
     )
     .eq("user_id", userId)
@@ -171,6 +181,7 @@ async function loadPreferences(
       channels_email: true,
       channels_in_app: true,
       type_project_milestone: true,
+      reminder_cadence: "immediate",
       quiet_hours_enabled: false,
       quiet_hours_start: "22:00",
       quiet_hours_end: "08:00",
@@ -325,6 +336,22 @@ export async function deliverDecisionNotification(
         emailSent: false,
         emailSkipped: true,
         reason: "email_channel_disabled",
+      };
+    }
+
+    // Cadence gate — a client on the daily digest defers non-urgent reminder
+    // EMAILS to the notification-digest cron. The in-app row already fired
+    // (step 1), so nothing is lost; the digest batches it. Only client reminder
+    // kinds are eligible (decision_resolved → designer stays immediate).
+    if (
+      CADENCE_ELIGIBLE_KINDS.has(kind) &&
+      pref.reminder_cadence === "daily_digest"
+    ) {
+      return {
+        inAppOk: inApp.ok,
+        emailSent: false,
+        emailSkipped: true,
+        reason: "cadence_digest",
       };
     }
 

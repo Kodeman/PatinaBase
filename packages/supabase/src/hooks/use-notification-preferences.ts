@@ -33,6 +33,7 @@ const DEFAULT_PREFERENCES: Omit<NotificationPreferences, 'id' | 'user_id' | 'cre
   type_seasonal_campaign: true,
   type_reengagement: true,
   digest_frequency: 'weekly',
+  reminder_cadence: 'immediate',
   quiet_hours_enabled: false,
   quiet_hours_start: '22:00',
   quiet_hours_end: '08:00',

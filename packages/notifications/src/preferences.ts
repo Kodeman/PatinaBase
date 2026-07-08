@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   NotificationPreferences,
   NotificationType,
+  ReminderCadence,
 } from './types';
 import {
   NOTIFICATION_TYPE_TO_PREFERENCE,
@@ -36,6 +37,7 @@ export const DEFAULT_PREFERENCES: Omit<NotificationPreferences, 'id' | 'user_id'
   type_reengagement: true,
 
   digest_frequency: 'weekly',
+  reminder_cadence: 'immediate',
 
   quiet_hours_enabled: false,
   quiet_hours_start: '22:00',
@@ -70,6 +72,29 @@ export async function getUserPreferences(
 
   if (error) throw error;
   return data as NotificationPreferences;
+}
+
+/**
+ * Resolve a user's reminder cadence, defaulting to `immediate` for any
+ * missing/legacy/invalid value (fail-open to the historical behaviour where
+ * every reminder emailed immediately).
+ */
+export function getReminderCadence(
+  preferences: Pick<NotificationPreferences, 'reminder_cadence'>
+): ReminderCadence {
+  return preferences?.reminder_cadence === 'daily_digest'
+    ? 'daily_digest'
+    : 'immediate';
+}
+
+/**
+ * True when the user has opted non-urgent reminders into the daily digest
+ * (so the nudge senders should skip the direct email).
+ */
+export function isReminderDigestUser(
+  preferences: Pick<NotificationPreferences, 'reminder_cadence'>
+): boolean {
+  return getReminderCadence(preferences) === 'daily_digest';
 }
 
 /**

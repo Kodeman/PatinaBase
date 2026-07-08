@@ -4430,6 +4430,8 @@ export type Database = {
           digest_frequency: Database["public"]["Enums"]["digest_frequency"]
           id: string
           last_digest_sent_at: string | null
+          last_reminder_digest_sent_at: string | null
+          reminder_cadence: string
           quiet_hours_enabled: boolean
           quiet_hours_end: string | null
           quiet_hours_start: string | null
@@ -4465,6 +4467,8 @@ export type Database = {
           digest_frequency?: Database["public"]["Enums"]["digest_frequency"]
           id?: string
           last_digest_sent_at?: string | null
+          last_reminder_digest_sent_at?: string | null
+          reminder_cadence?: string
           quiet_hours_enabled?: boolean
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
@@ -4500,6 +4504,8 @@ export type Database = {
           digest_frequency?: Database["public"]["Enums"]["digest_frequency"]
           id?: string
           last_digest_sent_at?: string | null
+          last_reminder_digest_sent_at?: string | null
+          reminder_cadence?: string
           quiet_hours_enabled?: boolean
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null

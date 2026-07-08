@@ -44,6 +44,13 @@ const DIGEST_OPTIONS: Array<{ value: DigestFrequency; label: string }> = [
   { value: 'monthly', label: 'Monthly' },
 ];
 
+type ReminderCadence = NotificationPreferences['reminder_cadence'];
+
+const REMINDER_CADENCE_OPTIONS: Array<{ value: ReminderCadence; label: string }> = [
+  { value: 'immediate', label: 'Right away' },
+  { value: 'daily_digest', label: 'Daily summary' },
+];
+
 const COMMON_TIMEZONES = [
   'America/New_York',
   'America/Chicago',
@@ -291,6 +298,31 @@ function PreferencesPageInner() {
                   value={opt.value}
                   checked={prefs.digest_frequency === opt.value}
                   onChange={() => update({ digest_frequency: opt.value })}
+                  className="h-4 w-4 border-[#DDD4C8] text-[#A3927C] focus:ring-[#A3927C]"
+                />
+                <span className="text-[15px] text-[#2C2926]">{opt.label}</span>
+              </label>
+            ))}
+          </fieldset>
+        </Section>
+
+        <Section
+          title="Reminders"
+          description="How gentle nudges — proposal reminders and decision requests — reach you. Time-sensitive messages always arrive right away."
+        >
+          <fieldset className="space-y-2">
+            <legend className="sr-only">Reminder cadence</legend>
+            {REMINDER_CADENCE_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className="flex items-center gap-3 cursor-pointer"
+              >
+                <input
+                  type="radio"
+                  name="reminder_cadence"
+                  value={opt.value}
+                  checked={(prefs.reminder_cadence ?? 'immediate') === opt.value}
+                  onChange={() => update({ reminder_cadence: opt.value })}
                   className="h-4 w-4 border-[#DDD4C8] text-[#A3927C] focus:ring-[#A3927C]"
                 />
                 <span className="text-[15px] text-[#2C2926]">{opt.label}</span>

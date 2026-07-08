@@ -28,6 +28,7 @@ interface ProposalRow {
   status: string;
   cc_email: string | null;
   valid_until: string | null;
+  client_id: string | null;
   designer: { full_name: string | null; email: string | null } | null;
   client: { full_name: string | null; email: string | null } | null;
 }
@@ -81,7 +82,7 @@ Deno.serve(async (req: Request) => {
     .from('proposals')
     .select(
       `
-      id, title, status, cc_email, valid_until,
+      id, title, status, cc_email, valid_until, client_id,
       designer:profiles!designer_id(full_name, email),
       client:profiles!client_id(full_name, email)
     `
@@ -106,6 +107,61 @@ Deno.serve(async (req: Request) => {
   if (!recipient) {
     console.warn('proposal-nudge: no client email for proposal', proposalId);
     return json({ error: 'no_recipient' }, 422);
+  }
+
+  // Cadence gate — clients on the daily digest don't get a direct nudge email.
+  // Instead we write an in-app row (type 'proposal_nudge') that the
+  // notification-digest cron batches into one daily summary. `immediate`
+  // (the default) falls through to the email path below, unchanged.
+  if (proposal.client_id) {
+    const { data: pref } = await supabase
+      .from('notification_preferences')
+      .select('reminder_cadence')
+      .eq('user_id', proposal.client_id)
+      .maybeSingle();
+
+    if (pref?.reminder_cadence === 'daily_digest') {
+      const deepLink = `/proposals/${proposal.id}`;
+      try {
+        const { data: existing } = await supabase
+          .from('notification_log')
+          .select('id, metadata')
+          .eq('user_id', proposal.client_id)
+          .eq('type', 'proposal_nudge')
+          .eq('channel', 'in_app')
+          .contains('metadata', { deep_link: deepLink })
+          .limit(5);
+
+        // Skip if an unread nudge for this proposal is already queued so a
+        // repeated nudge doesn't stack duplicate rows in one digest window.
+        const hasUnreadDuplicate = ((existing ?? []) as Array<{ metadata: any }>).some(
+          (row) => !row.metadata?.read_at
+        );
+
+        if (!hasUnreadDuplicate) {
+          const { error: notifyErr } = await supabase.from('notification_log').insert({
+            user_id: proposal.client_id,
+            type: 'proposal_nudge',
+            channel: 'in_app',
+            status: 'delivered',
+            template_id: 'proposal-nudge',
+            metadata: {
+              proposal_id: proposal.id,
+              subject: 'A reminder about your proposal',
+              message: proposal.title,
+              deep_link: deepLink,
+            },
+          });
+          if (notifyErr) {
+            console.error('proposal-nudge: in-app insert failed', notifyErr);
+          }
+        }
+      } catch (notifyErr) {
+        console.error('proposal-nudge: in-app insert threw', notifyErr);
+      }
+
+      return json({ ok: true, deferred: 'digest' });
+    }
   }
 
   const designerName = proposal.designer?.full_name ?? 'Your designer';
