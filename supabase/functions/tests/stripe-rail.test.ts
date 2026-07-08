@@ -91,10 +91,12 @@ const ids = {
   poB: '',
   poC: '',
   poD: '',
+  poE: '', // cancelled catalog PO → create-checkout 409 (test e4)
   payPaid: '', // PO_A deposit → paid via checkout.session.completed (tests b, d, e1)
   payFail: '', // PO_B balance → async_payment_failed (test c)
   payNonCatalog: '', // PO_C deposit → create-checkout 422
   payAlreadyPaid: '', // PO_D deposit, state=paid → create-checkout 409
+  payCancelled: '', // PO_E deposit, PO cancelled → create-checkout 409, no session
   invoice: '',
   invPay: '',
 };
@@ -138,14 +140,14 @@ async function seed() {
     created_by: ids.designerA,
   });
 
-  const po = (tag: string, isCatalog: boolean, pattern = 'fifty_fifty') =>
+  const po = (tag: string, isCatalog: boolean, pattern = 'fifty_fifty', status = 'confirmed') =>
     insert('purchase_orders', {
       designer_id: ids.designerA,
       project_id: ids.project,
       vendor_id: ids.vendor,
       payment_pattern: pattern,
       total_cents: 10000,
-      status: 'confirmed',
+      status,
       is_patina_catalog: isCatalog,
       po_number: `PO-${MARKER}-${tag}`,
       notes: MARKER,
@@ -155,6 +157,7 @@ async function seed() {
   ids.poB = await po('B', true);
   ids.poC = await po('C', false);
   ids.poD = await po('D', true);
+  ids.poE = await po('E', true, 'fifty_fifty', 'cancelled');
 
   ids.payPaid = await insert('po_payments', {
     purchase_order_id: ids.poA, kind: 'deposit', amount_cents: 5000, state: 'pending',
@@ -170,6 +173,10 @@ async function seed() {
   ids.payAlreadyPaid = await insert('po_payments', {
     purchase_order_id: ids.poD, kind: 'deposit', amount_cents: 5000, state: 'paid',
     paid_date: new Date().toISOString().slice(0, 10), notes: MARKER,
+  });
+  // Stale 'pending' payment on a CANCELLED PO — must be refused by checkout.
+  ids.payCancelled = await insert('po_payments', {
+    purchase_order_id: ids.poE, kind: 'deposit', amount_cents: 5000, state: 'pending', notes: MARKER,
   });
 
   ids.invoice = await insert('invoices', {
@@ -189,8 +196,8 @@ async function seed() {
 }
 
 async function cleanup() {
-  const payIds = [ids.payPaid, ids.payFail, ids.payNonCatalog, ids.payAlreadyPaid].filter(Boolean);
-  const poIds = [ids.poA, ids.poB, ids.poC, ids.poD].filter(Boolean);
+  const payIds = [ids.payPaid, ids.payFail, ids.payNonCatalog, ids.payAlreadyPaid, ids.payCancelled].filter(Boolean);
+  const poIds = [ids.poA, ids.poB, ids.poC, ids.poD, ids.poE].filter(Boolean);
   if (payIds.length) await admin.from('procurement_notifications').delete().in('subject_payment_id', payIds);
   if (ids.invoice) {
     await admin.from('designer_earnings').delete().eq('invoice_id', ids.invoice);
@@ -360,6 +367,24 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       });
       await res.body?.cancel();
       assertEquals(res.status, 409);
+    });
+
+    // (e4) A cancelled PO's stale pending payment is refused BEFORE Stripe —
+    // 409 with error 'po_cancelled', and no Checkout session pointer is stamped.
+    await t.step('create-checkout rejects cancelled PO (409, no session created)', async () => {
+      const tokenA = await signIn(`stripe-rail-a-${RUN}@example.test`);
+      const res = await fetch(CHECKOUT_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenA}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ po_payment_id: ids.payCancelled }),
+      });
+      const body = await res.json();
+      assertEquals(res.status, 409);
+      assertEquals(body.error, 'po_cancelled');
+      // The load-guard returns before any Stripe call — the session pointer on
+      // the payment row stays null (no session was ever created).
+      const row = await poPayment(ids.payCancelled);
+      assertEquals(row.stripe_checkout_session_id, null);
     });
   } finally {
     await cleanup();

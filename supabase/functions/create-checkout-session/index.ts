@@ -242,10 +242,19 @@ interface PoPaymentRow {
     id: string;
     designer_id: string;
     is_patina_catalog: boolean;
+    status: string;
     po_number: string | null;
     vendor: { id: string; name: string | null } | null;
   } | null;
 }
+
+// Terminal purchase-order statuses whose (possibly stale) pending payment rows
+// must never open a fresh Checkout. Mirrors the purchase_orders.status CHECK
+// vocabulary (migration 00148: draft/confirmed/in_production/shipped/delivered/
+// cancelled) and 00184's cancel cascade — 'cancelled' is the only dead-terminal
+// status; 'delivered' is a legitimate completed order that may still owe a
+// balance and stays payable.
+const PO_TERMINAL_DEAD_STATUSES = new Set<string>(['cancelled']);
 
 const PO_PAYMENT_KIND_LABEL: Record<string, string> = {
   deposit: 'Deposit',
@@ -266,7 +275,7 @@ async function loadPoPaymentPayable(
       id, purchase_order_id, kind, amount_cents, state, label,
       stripe_checkout_session_id, stripe_payment_intent_id,
       purchase_order:purchase_orders!po_payments_purchase_order_id_fkey(
-        id, designer_id, is_patina_catalog, po_number,
+        id, designer_id, is_patina_catalog, status, po_number,
         vendor:vendors!purchase_orders_vendor_id_fkey(id, name)
       )
     `
@@ -296,6 +305,21 @@ async function loadPoPaymentPayable(
         detail: 'This purchase order is paid directly with the vendor, not through Patina.',
       },
       422
+    );
+  }
+
+  // A cancelled (terminal-dead) PO is done — its cancel cascade (00184) rolls
+  // in-flight items back and detaches them, but a stale 'pending' payment row
+  // can survive. Refuse checkout before the per-payment guards so that stale
+  // row can never open a fresh session and charge for a cancelled order. Name
+  // the offending status in the body so the client can explain it.
+  if (PO_TERMINAL_DEAD_STATUSES.has(po.status)) {
+    return json(
+      {
+        error: 'po_cancelled',
+        detail: `This purchase order is ${po.status} and can no longer be paid.`,
+      },
+      409
     );
   }
 
