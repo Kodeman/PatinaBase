@@ -102,7 +102,11 @@ export async function reportProblem(
       .upload(path, photo, { contentType: photo.type || 'image/jpeg', upsert: false });
     if (!uploadError) {
       media = [path];
-      effectNote = effectNote ? `${effectNote}\n[photo attached]` : '[photo attached]';
+      // The storage path must ride the note text: apply_field_effect's
+      // flag_blocker branch drops p_effect.media, and (unlike an MMS) there is
+      // no sms_messages row to carry it — without this the photo is orphaned.
+      const marker = `[photo: ${path}]`;
+      effectNote = effectNote ? `${effectNote}\n${marker}` : marker;
     }
   }
 
