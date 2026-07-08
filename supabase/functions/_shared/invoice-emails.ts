@@ -345,6 +345,60 @@ export function buildPaymentReceiptEmail(
   return { subject, html };
 }
 
+export interface DirectOrderReceiptEmailParams {
+  /** Snapshot product name (direct_orders.product_name). */
+  orderName: string;
+  quantity: number;
+  /** Total charged (direct_orders.amount_cents). */
+  amountCents: number;
+  clientName?: string | null;
+  /** One-line shipping summary (name + address), if collected. */
+  shippingSummary?: string | null;
+  /** Absolute client-portal link to the order. */
+  portalUrl: string;
+  currency?: string;
+}
+
+/**
+ * Receipt sent to the client after a direct order ("buy now") is paid
+ * (payment-rail phase 5). Consumed by stripe-webhook on the direct_order
+ * settle. Mirrors buildPaymentReceiptEmail's frame; the copy sets the
+ * post-purchase expectation ("we'll be in touch about delivery") since a direct
+ * order has no project/invoice context.
+ */
+export function buildDirectOrderReceiptEmail(
+  params: DirectOrderReceiptEmailParams,
+): RenderedInvoiceEmail {
+  const clientName = params.clientName?.trim() || "there";
+  const qty = params.quantity > 0 ? params.quantity : 1;
+  const qtyPrefix = qty > 1 ? `${qty} × ` : "";
+
+  const subject = `Order confirmed — ${params.orderName}`;
+
+  const shippingBlock = params.shippingSummary?.trim()
+    ? `<p style="margin:0 0 12px"><strong>Shipping to:</strong> ${escapeHtml(
+        params.shippingSummary.trim(),
+      )}</p>`
+    : "";
+
+  const html = wrap(
+    `
+      <p>Hi ${escapeHtml(clientName)},</p>
+      <p>Thank you for your order! We received your payment of
+        <strong>${formatInvoiceCurrency(
+          params.amountCents,
+          params.currency,
+        )}</strong> for ${escapeHtml(`${qtyPrefix}${params.orderName}`)}.</p>
+      ${shippingBlock}
+      <p style="margin:0 0 12px;color:#766a5c"><em>We&rsquo;ll be in touch about delivery.</em></p>
+    `,
+    params.portalUrl,
+    "View order",
+  );
+
+  return { subject, html };
+}
+
 export interface PaymentFailedEmailParams {
   invoiceNumber: string;
   projectName: string;

@@ -11,6 +11,8 @@
 //                          `invoice_id` is accepted as an alias.
 //   { po_payment_id }    — an "Order via Patina" catalog PO payment row
 //                          (designer pays Patina). `poPaymentId` alias.
+//   { direct_order_id }  — a client "buy now" order for a Patina-managed
+//                          product (client pays). `directOrderId` alias.
 //
 // Shared flow (per payable):
 //   1. Auth: resolve the caller from the Authorization header.
@@ -86,11 +88,25 @@ interface CallerUser {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Payable {
-  payableType: 'invoice' | 'po_payment';
+  payableType: 'invoice' | 'po_payment' | 'direct_order';
   amountCents: number;
   /** ISO currency, already lowercased for Stripe. */
   currency: string;
   lineItemName: string;
+  /**
+   * Optional per-unit line-item shape. When set, the session bills
+   * `lineItemQuantity × lineItemUnitAmountCents` (a real quantity on the
+   * receipt) instead of one lump of `amountCents`. Both must multiply out to
+   * `amountCents`. Unset (invoice / po_payment) ⇒ one line of `amountCents`,
+   * exactly as before.
+   */
+  lineItemQuantity?: number;
+  lineItemUnitAmountCents?: number;
+  /**
+   * Collect a shipping address at Checkout (physical goods). Unset ⇒ no
+   * shipping collection, exactly as before for invoice / po_payment.
+   */
+  shippingAddressCollection?: Stripe.Checkout.SessionCreateParams.ShippingAddressCollection;
   existingSessionId: string | null;
   /** Copied onto the session AND payment_intent_data for webhook resolution. */
   metadata: Record<string, string>;
@@ -387,6 +403,110 @@ async function loadPoPaymentPayable(
   };
 }
 
+interface DirectOrderRow {
+  id: string;
+  client_id: string;
+  product_name: string;
+  quantity: number;
+  unit_price_cents: number;
+  amount_cents: number;
+  currency: string;
+  status: string;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+}
+
+/** direct_order payable — a client buying a Patina-managed product ("buy now"). */
+async function loadDirectOrderPayable(
+  admin: SupabaseClient,
+  caller: CallerUser,
+  directOrderId: string
+): Promise<Payable | Response> {
+  const { data, error } = await admin
+    .from('direct_orders')
+    .select(
+      `
+      id, client_id, product_name, quantity, unit_price_cents, amount_cents,
+      currency, status, stripe_checkout_session_id, stripe_payment_intent_id
+    `
+    )
+    .eq('id', directOrderId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('create-checkout-session: direct_order lookup failed', error);
+    return json({ error: 'lookup_failed', detail: error.message }, 500);
+  }
+  const order = data as unknown as DirectOrderRow | null;
+
+  // Only the owning client may pay. Not-found and not-owner both collapse to
+  // 404 so the endpoint doesn't confirm foreign ids exist.
+  if (!order || caller.id !== order.client_id) {
+    return json({ error: 'direct_order_not_found' }, 404);
+  }
+
+  if (order.status === 'paid') {
+    return json(
+      { error: 'direct_order_already_paid', detail: 'This order has already been paid.' },
+      409
+    );
+  }
+  if (order.status === 'canceled') {
+    return json(
+      { error: 'direct_order_canceled', detail: 'This order was canceled and can no longer be paid.' },
+      409
+    );
+  }
+  if (order.amount_cents <= 0) {
+    return json({ error: 'nothing_due', detail: 'This order has no balance due.' }, 409);
+  }
+
+  return {
+    payableType: 'direct_order',
+    amountCents: order.amount_cents,
+    currency: (order.currency || 'usd').toLowerCase(),
+    lineItemName: order.product_name,
+    // Bill quantity × unit price (a real quantity on the receipt), not one lump.
+    lineItemQuantity: order.quantity,
+    lineItemUnitAmountCents: order.unit_price_cents,
+    shippingAddressCollection: { allowed_countries: ['US'] },
+    existingSessionId: order.stripe_checkout_session_id,
+    metadata: { payable_type: 'direct_order', direct_order_id: order.id },
+    successUrl: `${CLIENT_PORTAL_URL}/orders?order=${order.id}&checkout=success`,
+    cancelUrl: `${CLIENT_PORTAL_URL}/orders?order=${order.id}&checkout=cancelled`,
+    processingDetail:
+      'A bank transfer for this order is already processing. Bank transfers take 3–5 business days to clear.',
+    // Nothing to fail — the pointer lives on this row and is overwritten when a
+    // fresh session is created below.
+    onStaleSession: async () => {},
+    async hasInFlightPayment(_sessionId: string) {
+      // A completed Checkout session still pointed-to by a not-yet-paid order =
+      // a payment in flight (card just cleared and the webhook hasn't landed, or
+      // an ACH debit settling). Do NOT require a stamped PaymentIntent — it's
+      // only stamped once the webhook processes, so a second session opened in
+      // that window would double-charge. A failed ACH already clears this
+      // pointer (see stripe-webhook), so a still-present pointer on a completed
+      // session is authoritative. Mirrors the fixed po_payment guard (f072ce2f).
+      const { data: fresh } = await admin
+        .from('direct_orders')
+        .select('status')
+        .eq('id', order.id)
+        .maybeSingle();
+      const row = fresh as { status: string } | null;
+      return !!row && row.status !== 'paid';
+    },
+    async onSessionCreated(sessionId: string) {
+      const { error: stampErr } = await admin
+        .from('direct_orders')
+        .update({ stripe_checkout_session_id: sessionId })
+        .eq('id', order.id);
+      if (stampErr) {
+        console.error('create-checkout-session: failed to stamp direct_order session id', stampErr);
+      }
+    },
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared driver: ensure Stripe customer → session reuse → create → persist.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -463,14 +583,19 @@ async function startCheckout(
       payment_method_types: ['card', 'us_bank_account'],
       line_items: [
         {
-          quantity: 1,
+          // Defaults preserve invoice / po_payment behavior (one lump of
+          // amountCents); direct_order sets a real per-unit quantity.
+          quantity: payable.lineItemQuantity ?? 1,
           price_data: {
             currency: payable.currency,
-            unit_amount: payable.amountCents,
+            unit_amount: payable.lineItemUnitAmountCents ?? payable.amountCents,
             product_data: { name: payable.lineItemName },
           },
         },
       ],
+      ...(payable.shippingAddressCollection
+        ? { shipping_address_collection: payable.shippingAddressCollection }
+        : {}),
       metadata: payable.metadata,
       payment_intent_data: { metadata: payable.metadata },
       success_url: payable.successUrl,
@@ -511,7 +636,8 @@ Deno.serve(async (req: Request) => {
   }
   const invoiceId: string | undefined = body?.invoiceId ?? body?.invoice_id;
   const poPaymentId: string | undefined = body?.po_payment_id ?? body?.poPaymentId;
-  if (!invoiceId && !poPaymentId) {
+  const directOrderId: string | undefined = body?.direct_order_id ?? body?.directOrderId;
+  if (!invoiceId && !poPaymentId && !directOrderId) {
     return json({ error: 'payable_id_required' }, 400);
   }
 
@@ -530,6 +656,8 @@ Deno.serve(async (req: Request) => {
   // ── Load + authorize the requested payable ───────────────────────────────
   const payableResult = poPaymentId
     ? await loadPoPaymentPayable(admin, caller, poPaymentId)
+    : directOrderId
+    ? await loadDirectOrderPayable(admin, caller, directOrderId)
     : await loadInvoicePayable(admin, caller, invoiceId as string);
   if (payableResult instanceof Response) {
     return payableResult;

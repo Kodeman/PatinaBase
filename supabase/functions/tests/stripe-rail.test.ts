@@ -99,17 +99,29 @@ const ids = {
   payCancelled: '', // PO_E deposit, PO cancelled → create-checkout 409, no session
   invoice: '',
   invPay: '',
+  // ── direct_order fixtures (00267) ──
+  product: '', // a buyable Patina-managed product for direct_orders FK
+  doPaid: '', // pending_payment → paid via checkout.session.completed (tests f, g, g2)
+  doFail: '', // pending_payment → async_payment_failed clears pointers (test h)
+  doCanceled: '', // status=canceled → create-checkout 409
+  doAlreadyPaid: '', // status=paid → create-checkout 409
 };
 const EVT = {
   inv: `evt_inv_${RUN}`,
   poPaid: `evt_po_paid_${RUN}`,
   poPaidPi: `evt_po_paid_pi_${RUN}`, // DISTINCT event, same PI as poPaid — exercises the settle guard
   poFail: `evt_po_fail_${RUN}`,
+  doPaid: `evt_do_paid_${RUN}`,
+  doPaidPi: `evt_do_paid_pi_${RUN}`, // DISTINCT event, same PI as doPaid — settle guard
+  doFail: `evt_do_fail_${RUN}`,
+  doFailOnPaid: `evt_do_fail_on_paid_${RUN}`, // async_payment_failed against the PAID order (short-circuit)
 };
 const SESS = {
   inv: `cs_inv_${RUN}`,
   poPaid: `cs_po_paid_${RUN}`,
   poFail: `cs_po_fail_${RUN}`,
+  doPaid: `cs_do_paid_${RUN}`,
+  doFail: `cs_do_fail_${RUN}`,
 };
 
 async function createUser(email: string): Promise<string> {
@@ -193,11 +205,53 @@ async function seed() {
     invoice_id: ids.invoice, amount_cents: 8000, method: 'stripe', status: 'pending',
     stripe_checkout_session_id: SESS.inv, recorded_by: ids.designerA,
   });
+
+  // ── direct_order fixtures ──
+  // A buyable Patina-managed product (catalog layer satisfies the
+  // catalog-requires-management CHECK with patina_managed=true; no owner_user_id
+  // needed). Only the FK target matters for these settle/checkout tests.
+  ids.product = await insert('products', {
+    name: `${MARKER} Product`,
+    captured_at: new Date().toISOString(),
+    layer: 'catalog',
+    status: 'published',
+    patina_managed: true,
+    price_retail: 5000,
+  });
+
+  // designerA is the buying client (has a real profile via the auth trigger),
+  // userB is the non-owner used for the 404 authz test.
+  const directOrder = (
+    sessionId: string | null,
+    status: string,
+    quantity = 1,
+  ) =>
+    insert('direct_orders', {
+      client_id: ids.designerA,
+      product_id: ids.product,
+      product_name: `${MARKER} Product`,
+      quantity,
+      unit_price_cents: 5000,
+      amount_cents: 5000 * quantity,
+      currency: 'usd',
+      status,
+      stripe_checkout_session_id: sessionId,
+    });
+
+  ids.doPaid = await directOrder(SESS.doPaid, 'pending_payment', 2);
+  ids.doFail = await directOrder(SESS.doFail, 'pending_payment');
+  ids.doCanceled = await directOrder(null, 'canceled');
+  ids.doAlreadyPaid = await insert('direct_orders', {
+    client_id: ids.designerA, product_id: ids.product, product_name: `${MARKER} Product`,
+    quantity: 1, unit_price_cents: 5000, amount_cents: 5000, currency: 'usd',
+    status: 'paid', paid_at: new Date().toISOString(),
+  });
 }
 
 async function cleanup() {
   const payIds = [ids.payPaid, ids.payFail, ids.payNonCatalog, ids.payAlreadyPaid, ids.payCancelled].filter(Boolean);
   const poIds = [ids.poA, ids.poB, ids.poC, ids.poD, ids.poE].filter(Boolean);
+  const doIds = [ids.doPaid, ids.doFail, ids.doCanceled, ids.doAlreadyPaid].filter(Boolean);
   if (payIds.length) await admin.from('procurement_notifications').delete().in('subject_payment_id', payIds);
   if (ids.invoice) {
     await admin.from('designer_earnings').delete().eq('invoice_id', ids.invoice);
@@ -206,9 +260,16 @@ async function cleanup() {
   }
   if (payIds.length) await admin.from('po_payments').delete().in('id', payIds);
   if (poIds.length) await admin.from('purchase_orders').delete().in('id', poIds);
+  // direct_orders.client_id FK is ON DELETE RESTRICT — delete orders before the
+  // buyer profile/user; product_id references products, so orders before product.
+  if (doIds.length) await admin.from('direct_orders').delete().in('id', doIds);
+  if (ids.product) await admin.from('products').delete().eq('id', ids.product);
   if (ids.project) await admin.from('projects').delete().eq('id', ids.project);
   if (ids.vendor) await admin.from('vendors').delete().eq('id', ids.vendor);
-  await admin.from('stripe_webhook_events').delete().in('id', [EVT.inv, EVT.poPaid, EVT.poPaidPi, EVT.poFail]);
+  await admin.from('stripe_webhook_events').delete().in('id', [
+    EVT.inv, EVT.poPaid, EVT.poPaidPi, EVT.poFail,
+    EVT.doPaid, EVT.doPaidPi, EVT.doFail, EVT.doFailOnPaid,
+  ]);
   if (ids.designerA) await admin.auth.admin.deleteUser(ids.designerA).catch(() => {});
   if (ids.userB) await admin.auth.admin.deleteUser(ids.userB).catch(() => {});
 }
@@ -223,6 +284,20 @@ async function poPayment(id: string) {
   return data as {
     state: string; paid_date: string | null;
     stripe_checkout_session_id: string | null; stripe_payment_intent_id: string | null;
+  };
+}
+
+async function directOrder(id: string) {
+  const { data, error } = await admin
+    .from('direct_orders')
+    .select('id, status, paid_at, stripe_checkout_session_id, stripe_payment_intent_id, shipping')
+    .eq('id', id)
+    .single();
+  if (error) throw new Error(error.message);
+  return data as {
+    status: string; paid_at: string | null;
+    stripe_checkout_session_id: string | null; stripe_payment_intent_id: string | null;
+    shipping: Record<string, unknown> | null;
   };
 }
 
@@ -385,6 +460,154 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       // the payment row stays null (no session was ever created).
       const row = await poPayment(ids.payCancelled);
       assertEquals(row.stripe_checkout_session_id, null);
+    });
+
+    // ═══ direct_order rail (00267) ═══════════════════════════════════════════
+
+    // (f) DIRECT_ORDER paid via checkout.session.completed → status/paid_at/PI +
+    // shipping persisted (top-level shipping_details + customer_details.email).
+    await t.step('direct_order checkout.session.completed → paid + shipping persisted', async () => {
+      const res = await postSigned(
+        WEBHOOK_URL,
+        stripeEvent(EVT.doPaid, 'checkout.session.completed', {
+          id: SESS.doPaid, object: 'checkout.session', payment_status: 'paid',
+          amount_total: 10000, payment_intent: `pi_do_${RUN}`,
+          shipping_details: {
+            name: 'Jane Buyer',
+            address: { line1: '1 Test St', city: 'Testville', state: 'CA', postal_code: '90210', country: 'US' },
+          },
+          customer_details: { email: `buyer-${RUN}@example.test` },
+          metadata: { payable_type: 'direct_order', direct_order_id: ids.doPaid },
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      const row = await directOrder(ids.doPaid);
+      assertEquals(row.status, 'paid');
+      assert(row.paid_at, 'paid_at stamped');
+      assertEquals(row.stripe_payment_intent_id, `pi_do_${RUN}`);
+      assert(row.shipping, 'shipping persisted');
+      assertEquals(row.shipping!.email, `buyer-${RUN}@example.test`);
+      assertEquals(row.shipping!.name, 'Jane Buyer');
+      assertEquals((row.shipping!.address as Record<string, unknown>).postal_code, '90210');
+    });
+
+    // (g) Exact replay of (f) is idempotent (event-id dedup).
+    await t.step('direct_order replay is idempotent', async () => {
+      const before = await directOrder(ids.doPaid);
+      const res = await postSigned(
+        WEBHOOK_URL,
+        stripeEvent(EVT.doPaid, 'checkout.session.completed', {
+          id: SESS.doPaid, object: 'checkout.session', payment_status: 'paid',
+          amount_total: 10000, payment_intent: `pi_do_${RUN}`,
+          metadata: { payable_type: 'direct_order', direct_order_id: ids.doPaid },
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      const row = await directOrder(ids.doPaid);
+      assertEquals(row.status, 'paid');
+      assertEquals(row.paid_at, before.paid_at); // unchanged
+    });
+
+    // (g2) DISTINCT event (payment_intent.succeeded) for the SAME PI after the
+    // settle. New event id defeats dedup, so this proves the settle guard:
+    // markDirectOrderPaid's .eq('status','pending_payment') no-ops on a paid row.
+    await t.step('direct_order payment_intent.succeeded after settle is a no-op (settle guard)', async () => {
+      const before = await directOrder(ids.doPaid);
+      assertEquals(before.status, 'paid');
+      const res = await postSigned(
+        WEBHOOK_URL,
+        stripeEvent(EVT.doPaidPi, 'payment_intent.succeeded', {
+          id: `pi_do_${RUN}`, object: 'payment_intent',
+          metadata: { payable_type: 'direct_order', direct_order_id: ids.doPaid },
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      const row = await directOrder(ids.doPaid);
+      assertEquals(row.status, 'paid');
+      assertEquals(row.paid_at, before.paid_at); // paid_at unchanged
+    });
+
+    // (h) DIRECT_ORDER async_payment_failed clears the session pointer + PI and
+    // leaves status pending_payment (no 'failed' status).
+    await t.step('direct_order async_payment_failed clears pointers, stays pending', async () => {
+      const before = await directOrder(ids.doFail);
+      assertEquals(before.stripe_checkout_session_id, SESS.doFail);
+      const res = await postSigned(
+        WEBHOOK_URL,
+        stripeEvent(EVT.doFail, 'checkout.session.async_payment_failed', {
+          id: SESS.doFail, object: 'checkout.session', payment_status: 'unpaid',
+          payment_intent: `pi_do_fail_${RUN}`,
+          metadata: { payable_type: 'direct_order', direct_order_id: ids.doFail },
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      const row = await directOrder(ids.doFail);
+      assertEquals(row.stripe_checkout_session_id, null); // cleared
+      assertEquals(row.stripe_payment_intent_id, null); // cleared
+      assertEquals(row.status, 'pending_payment'); // untouched
+    });
+
+    // (h2) async_payment_failed against the ALREADY-PAID order short-circuits:
+    // pointer NOT stripped, status stays paid (no spurious clear on a live order).
+    await t.step('direct_order async_payment_failed on a paid order is a no-op (short-circuit)', async () => {
+      const before = await directOrder(ids.doPaid);
+      assertEquals(before.status, 'paid');
+      assertEquals(before.stripe_checkout_session_id, SESS.doPaid);
+      const res = await postSigned(
+        WEBHOOK_URL,
+        stripeEvent(EVT.doFailOnPaid, 'checkout.session.async_payment_failed', {
+          id: SESS.doPaid, object: 'checkout.session', payment_status: 'unpaid',
+          payment_intent: `pi_do_${RUN}`,
+          metadata: { payable_type: 'direct_order', direct_order_id: ids.doPaid },
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      const row = await directOrder(ids.doPaid);
+      assertEquals(row.status, 'paid'); // untouched
+      assertEquals(row.stripe_checkout_session_id, SESS.doPaid); // pointer preserved
+    });
+
+    // (i) create-checkout rejects a non-owner (404) — before any Stripe call.
+    await t.step('direct_order create-checkout rejects non-owner (404)', async () => {
+      const tokenB = await signIn(`stripe-rail-b-${RUN}@example.test`);
+      const res = await fetch(CHECKOUT_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenB}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ direct_order_id: ids.doPaid }),
+      });
+      await res.body?.cancel();
+      assertEquals(res.status, 404);
+    });
+
+    // (j) create-checkout rejects a canceled order (409, direct_order_canceled).
+    await t.step('direct_order create-checkout rejects canceled order (409)', async () => {
+      const tokenA = await signIn(`stripe-rail-a-${RUN}@example.test`);
+      const res = await fetch(CHECKOUT_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenA}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ direct_order_id: ids.doCanceled }),
+      });
+      const body = await res.json();
+      assertEquals(res.status, 409);
+      assertEquals(body.error, 'direct_order_canceled');
+    });
+
+    // (k) create-checkout rejects an already-paid order (409).
+    await t.step('direct_order create-checkout rejects already-paid order (409)', async () => {
+      const tokenA = await signIn(`stripe-rail-a-${RUN}@example.test`);
+      const res = await fetch(CHECKOUT_URL, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokenA}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ direct_order_id: ids.doAlreadyPaid }),
+      });
+      const body = await res.json();
+      assertEquals(res.status, 409);
+      assertEquals(body.error, 'direct_order_already_paid');
     });
   } finally {
     await cleanup();
