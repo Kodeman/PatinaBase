@@ -989,6 +989,7 @@ export {
   // W1-T5 — cross-project FF&E items (rows-per-item By Status view)
   useProcurementItems,
   usePOPayments,
+  fetchPOPayments,
   useVendorPaymentTerms,
   useUpdateVendorPaymentTerms,
   useCreatePurchaseOrder,
@@ -1000,6 +1001,8 @@ export {
   // Wave 1 procurement overhaul — DB triggers (00184) own state propagation
   useUpdatePurchaseOrderStatus,
   invalidateFfeCaches,
+  // Phase 4 — Stripe Checkout, designer pays at order time (Order via Patina)
+  useStartPoCheckout,
   // Sprint 2 — Receiving, damage claims, calendar
   useReceivingInspections,
   useDamageClaims,
@@ -1132,6 +1135,18 @@ export type {
   FfeItemCoverage,
   FfeInvoiceCoverageMap,
 } from './use-invoices';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Direct orders — client "buy now" on Patina-managed products, the third
+// payable_type on the consolidated Stripe rail (migration 00267)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  useDirectOrders,
+  useCreateDirectOrder,
+  useStartDirectOrderCheckout,
+} from './use-direct-orders';
+export type { DirectOrder, DirectOrderStatus, DirectOrderShipping } from './use-direct-orders';
+
 // Aesthete Engine — Wave 3B hooks batch (design §5.2 prefill, §8 taste, §8.5 Your Eye)
 export {
   useProductDnaDraft,

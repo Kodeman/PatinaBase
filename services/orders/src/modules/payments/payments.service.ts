@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { v4 as uuidv4 } from 'uuid';
 import { Decimal } from '../../generated/prisma-client/runtime/library';
+import { assertStripeConfigured } from '../../config/stripe.module';
 
 @Injectable()
 export class PaymentsService {
@@ -25,6 +26,8 @@ export class PaymentsService {
    * Capture an authorized payment
    */
   async capturePayment(orderId: string, amount?: number, actor?: string) {
+    assertStripeConfigured(this.stripe);
+
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: { payments: true },
@@ -95,6 +98,8 @@ export class PaymentsService {
    * Cancel an authorized payment
    */
   async cancelPayment(orderId: string, actor?: string) {
+    assertStripeConfigured(this.stripe);
+
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
     });
@@ -154,6 +159,8 @@ export class PaymentsService {
    * Get payment details from Stripe
    */
   async getPaymentIntent(paymentIntentId: string) {
+    assertStripeConfigured(this.stripe);
+
     return this.stripe.paymentIntents.retrieve(paymentIntentId);
   }
 }

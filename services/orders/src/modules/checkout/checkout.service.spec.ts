@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { CheckoutService } from './checkout.service';
 import { PrismaClient } from '../../generated/prisma-client';
 import { ConfigService } from '@nestjs/config';
@@ -47,5 +48,59 @@ describe('CheckoutService - Order Numbers', () => {
     });
 
     expect(new Set(numbers).size).toBe(numbers.length);
+  });
+});
+
+describe('CheckoutService - Stripe unconfigured (parked payment rail)', () => {
+  let service: CheckoutService;
+  const mockPrisma = {
+    cart: { findUnique: jest.fn() },
+  } as unknown as PrismaClient;
+  const mockEvents = { publish: jest.fn() };
+  const config = { get: jest.fn() } as unknown as ConfigService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CheckoutService,
+        { provide: PrismaClient, useValue: mockPrisma },
+        { provide: ConfigService, useValue: config },
+        { provide: 'STRIPE_CLIENT', useValue: null },
+        { provide: 'EVENTS_SERVICE', useValue: mockEvents },
+      ],
+    }).compile();
+
+    service = module.get<CheckoutService>(CheckoutService);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('createCheckoutSession fails fast with 503 stripe_not_configured', async () => {
+    await expect(service.createCheckoutSession({ cartId: 'cart-1' } as any)).rejects.toMatchObject(
+      {
+        status: 503,
+      },
+    );
+
+    try {
+      await service.createCheckoutSession({ cartId: 'cart-1' } as any);
+      fail('expected createCheckoutSession to throw');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(ServiceUnavailableException);
+      expect(JSON.stringify(error.getResponse())).toContain('stripe_not_configured');
+    }
+
+    // Must fail before touching the database.
+    expect((mockPrisma as any).cart.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('createPaymentIntent fails fast with 503 stripe_not_configured', async () => {
+    await expect(service.createPaymentIntent({ cartId: 'cart-1' } as any)).rejects.toMatchObject({
+      status: 503,
+    });
+
+    expect((mockPrisma as any).cart.findUnique).not.toHaveBeenCalled();
   });
 });

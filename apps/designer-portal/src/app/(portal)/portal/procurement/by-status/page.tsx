@@ -51,6 +51,7 @@ import {
   PaymentPill,
   type PaymentPillState,
 } from '@/components/portal/procurement/payment-pill';
+import { payNowPayment } from '@/components/portal/procurement/vendor-section-card';
 import {
   EtaQuickEditDrawer,
   type EtaQuickEditPurchaseOrder,
@@ -145,7 +146,32 @@ function pickHeadlinePayment(po: ItemPurchaseOrder): {
   kind: string;
 } | null {
   if (po.is_patina_catalog) {
-    return { state: 'patina_handled', amount: null, dueDate: null, kind: '' };
+    // Phase 4 — designer pays at order time. Report the TRUE payment state
+    // instead of a blanket "Patina handled" fib: an unpaid catalog PO reads as
+    // its real pending/due row (via the shared payNowPayment predicate that
+    // also gates the By Vendor "Pay now" affordance — same rule, no
+    // duplication); a paid one falls through to read "Paid"; only a legacy
+    // catalog PO with no payment rows at all keeps the old static pill.
+    const payable = payNowPayment(po);
+    if (payable) {
+      return {
+        state: payable.state as PaymentPillState,
+        amount: payable.amount_cents,
+        dueDate: payable.due_date,
+        kind:
+          payable.kind === 'deposit'
+            ? 'Deposit'
+            : payable.kind === 'balance'
+              ? 'Balance'
+              : (payable.label ?? 'Milestone'),
+      };
+    }
+    if ((po.payments ?? []).length === 0) {
+      return { state: 'patina_handled', amount: null, dueDate: null, kind: '' };
+    }
+    // else: real payment rows exist but none actionable (all paid, or the PO
+    // is cancelled) — fall through to the general resolver so a paid catalog
+    // PO reads "Paid" rather than "Patina handled".
   }
   const payments = (po.payments ?? [])
     .slice()
@@ -490,15 +516,18 @@ function StageSection({
   const cfg = STAGE_CONFIG[bucket.stage];
 
   // Money summary: total paid (sum of paid po_payments) vs coming-due
-  // (sum of due or pending), excluding patina_catalog rows. Multiple items
-  // can share one PO, so dedupe by PO id to avoid double-counting payments.
+  // (sum of due or pending). Phase 4 — designer pays catalog POs at order
+  // time too, so their po_payments rows are real money and belong in this
+  // rollup same as any other PO; no more excluding is_patina_catalog.
+  // Multiple items can share one PO, so dedupe by PO id to avoid
+  // double-counting payments.
   const { paidCents, dueComingCents } = useMemo(() => {
     let paid = 0;
     let due = 0;
     const seenPoIds = new Set<string>();
     for (const item of bucket.items) {
       const po = item.purchase_order;
-      if (!po || po.is_patina_catalog || seenPoIds.has(po.id)) continue;
+      if (!po || seenPoIds.has(po.id)) continue;
       seenPoIds.add(po.id);
       for (const p of po.payments ?? []) {
         if (p.state === 'paid') paid += p.amount_cents;

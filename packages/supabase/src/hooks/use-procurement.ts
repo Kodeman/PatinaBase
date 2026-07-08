@@ -365,21 +365,31 @@ export function useProcurementItems(filters?: ProcurementItemFilters) {
 
 /**
  * Fetches all po_payments rows for a single purchase order, ordered by
+ * sort_order ascending. Extracted from usePOPayments so a one-shot caller
+ * (e.g. OrderViaPatina resolving the PO's single full_upfront payment id
+ * right after create_purchase_order returns — the RPC only returns the
+ * purchase_orders header row, no nested payments — before starting Stripe
+ * Checkout) can reuse the exact same query without subscribing to the cache.
+ */
+export async function fetchPOPayments(purchaseOrderId: string): Promise<POPayment[]> {
+  const supabase = getSupabase() as any;
+  const { data, error } = await supabase
+    .from('po_payments')
+    .select('*')
+    .eq('purchase_order_id', purchaseOrderId)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as POPayment[];
+}
+
+/**
+ * Fetches all po_payments rows for a single purchase order, ordered by
  * sort_order ascending.
  */
 export function usePOPayments(purchaseOrderId: string) {
   return useQuery({
     queryKey: ['po-payments', purchaseOrderId],
-    queryFn: async () => {
-      const supabase = getSupabase() as any;
-      const { data, error } = await supabase
-        .from('po_payments')
-        .select('*')
-        .eq('purchase_order_id', purchaseOrderId)
-        .order('sort_order', { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as POPayment[];
-    },
+    queryFn: () => fetchPOPayments(purchaseOrderId),
     enabled: !!purchaseOrderId,
   });
 }
@@ -800,6 +810,64 @@ export function useAdvancePaymentToDue() {
       queryClient.invalidateQueries({ queryKey: ['po-payments', purchaseOrderId] });
       queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       queryClient.invalidateQueries({ queryKey: ['purchase-order', purchaseOrderId] });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STRIPE CHECKOUT — Order via Patina, designer pays at order time (Phase 4)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Starts a Stripe Checkout session for a Patina-catalog PO's payment via the
+ * shared create-checkout-session edge function, dispatched on
+ * `{ po_payment_id }` (the designer-pays-Patina payable — as opposed to
+ * `{ invoiceId }`, the client-pays-designer payable useStartCheckout drives).
+ * "Order via Patina" collects payment at order time: the designer confirms
+ * the order, this hook is called immediately with the newly created PO's
+ * single po_payment id, and the caller redirects to the returned `url`.
+ * Settlement flips `po_payments.state` to 'paid' asynchronously via the
+ * stripe-webhook function — callers must poll, not assume (ACH can take
+ * days).
+ *
+ * Mirrors useStartCheckout (use-invoices.ts) exactly for error-surfacing:
+ * prefers the edge function's JSON `detail` over its `error` code, which
+ * itself beats the generic FunctionsHttpError message. The edge function
+ * 404s when the PO payment isn't the caller's (or doesn't exist), 422s when
+ * the vendor isn't Patina Catalog, and 409s when the payment is already
+ * paid, has nothing due, or has an ACH payment already in flight.
+ *
+ * `{ errorSurface: 'inline' }` — see useSendInvoice/useLogPOAcknowledgment
+ * (R83): callers that render their own inline failure state (e.g.
+ * OrderViaPatina, which must not roll back the just-created PO on a
+ * checkout-start failure) pass this to suppress the global mutation toast.
+ * Callers that just fire-and-redirect (e.g. the by-vendor "Pay now" button)
+ * omit it and get the default toast.
+ */
+export function useStartPoCheckout(options?: { errorSurface?: 'inline' }) {
+  return useMutation({
+    meta: options?.errorSurface ? { errorSurface: options.errorSurface } : undefined,
+    mutationFn: async ({ poPaymentId }: { poPaymentId: string }): Promise<{ url: string }> => {
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: { po_payment_id: poPaymentId },
+      });
+      if (error) {
+        // FunctionsHttpError carries the response; surface the JSON error
+        // code (e.g. po_payment_already_paid, po_not_patina_catalog) over
+        // the generic message.
+        let detail: string | undefined;
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          detail = body?.detail ?? body?.error;
+        } catch {
+          /* fall through to the generic message */
+        }
+        throw new Error(detail ?? error.message ?? 'Failed to start checkout');
+      }
+      if (data?.error) throw new Error(data.detail ?? data.error);
+      if (!data?.url) throw new Error('No checkout URL returned');
+      return data as { url: string };
     },
   });
 }

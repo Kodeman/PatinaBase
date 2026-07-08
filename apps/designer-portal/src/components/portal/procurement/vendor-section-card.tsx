@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { POPayment, PurchaseOrder } from '@patina/supabase';
+import { useStartPoCheckout } from '@patina/supabase';
 import { PaymentPill } from './payment-pill';
 import { LogAcknowledgmentPopover } from './log-acknowledgment-popover';
 import { PoSendPopover, clientVendorEmailHint } from './po-send-actions';
@@ -70,6 +71,77 @@ function poPaymentToPillProps(payment: POPayment) {
     amount: payment.amount_cents,
     dueDate: payment.state === 'paid' ? payment.paid_date : payment.due_date,
   };
+}
+
+// ─── Pay-now visibility (Phase 4 — designer pays at order time) ───────────
+
+/**
+ * The po_payment row a "Pay now" affordance should target for this PO, or
+ * `null` when none should render. Exported as a pure predicate (no React,
+ * no hooks) so the visibility rule has its own unit test without needing a
+ * component-rendering harness:
+ *
+ *   - vendor must be Patina Catalog (non-catalog POs are paid directly with
+ *     the vendor — Patina never handles that money);
+ *   - PO must not be cancelled (nothing left to pay for);
+ *   - at least one po_payment row must be unpaid (`pending` or `due`) with a
+ *     positive amount — mirrors the create-checkout-session edge function's
+ *     own guard (state !== 'paid' && amount_cents > 0), so "Pay now" is never
+ *     shown for a payment the edge function would 409 on.
+ *
+ * full_upfront (the only pattern OrderViaPatina creates) produces exactly
+ * one po_payments row, but the predicate doesn't assume that — it picks the
+ * lowest sort_order unpaid row so it degrades sensibly if a catalog PO ever
+ * carries a split pattern.
+ */
+export function payNowPayment(
+  po: Pick<PurchaseOrder, 'is_patina_catalog' | 'payments' | 'status'>,
+): POPayment | null {
+  if (!po.is_patina_catalog) return null;
+  if (po.status === 'cancelled') return null;
+  const payable = (po.payments ?? [])
+    .filter((p) => (p.state === 'pending' || p.state === 'due') && p.amount_cents > 0)
+    .sort((a, b) => a.sort_order - b.sort_order);
+  return payable[0] ?? null;
+}
+
+/**
+ * Persistent "Pay now" CTA for an unpaid Patina-catalog PO (Phase 4). Fires
+ * useStartPoCheckout and redirects to Stripe hosted Checkout on success; a
+ * failure surfaces via the global mutation-error toast (no options passed to
+ * useStartPoCheckout — same default as PoSendPopover/LogAcknowledgmentPopover
+ * in this file), since this is a plain retryable action, not a flow that
+ * needs to explain a just-completed side effect the way OrderViaPatina does.
+ */
+function PayNowButton({
+  poPaymentId,
+  amountCents,
+}: {
+  poPaymentId: string;
+  amountCents: number;
+}) {
+  const startCheckout = useStartPoCheckout();
+
+  return (
+    <Button
+      variant="primary"
+      size="sm"
+      onClick={() =>
+        startCheckout.mutate(
+          { poPaymentId },
+          {
+            onSuccess: ({ url }) => {
+              window.location.href = url;
+            },
+          },
+        )
+      }
+      disabled={startCheckout.isPending}
+      loading={startCheckout.isPending}
+    >
+      Pay now · {formatDollars(amountCents)}
+    </Button>
+  );
 }
 
 // ─── PO Status label ───────────────────────────────────────────────────────
@@ -143,6 +215,12 @@ interface VendorSectionCardProps {
    * orderable items (e.g. "No approved, unordered items for this vendor.").
    */
   orderAllDisabledReason?: string;
+  /**
+   * PO id to scroll into view and highlight on mount (Phase 4 — the
+   * ?po=<id>&checkout=success|cancelled Stripe Checkout return). `undefined`/
+   * `null` renders every row unhighlighted.
+   */
+  highlightPoId?: string | null;
 }
 
 export function VendorSectionCard({
@@ -153,6 +231,7 @@ export function VendorSectionCard({
   onOrderAllClick,
   orderAllLabel,
   orderAllDisabledReason,
+  highlightPoId,
 }: VendorSectionCardProps) {
   const [expanded, setExpanded] = useState(true);
   // Optimistic sent-at stamps: keyed by PO id so the row immediately renders
@@ -295,97 +374,155 @@ export function VendorSectionCard({
       {expanded && (
         <div className="border-t" style={{ borderColor: 'var(--border-subtle)' }}>
           {group.orders.map((po) => (
-            <div
+            <PoRow
               key={po.id}
-              className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3 last:border-b-0"
-              style={{ borderColor: 'var(--border-subtle)' }}
-            >
-              {/* Left: project + PO number + status + ETA */}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-[0.82rem] font-medium text-[var(--text-primary)]">
-                    {po.project?.name ?? 'Unknown project'}
-                  </span>
-                  {po.vendor_po_number && (
-                    <span className="font-mono text-[0.6rem] text-[var(--text-muted)]">
-                      {po.vendor_po_number}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-0.5 flex items-center gap-2">
-                  <PoStatusLabel status={po.status} />
-                  {po.confirmed_eta && (
-                    <span className="font-mono text-[0.58rem] text-[var(--text-muted)]">
-                      ETA {formatDate(po.confirmed_eta)}
-                    </span>
-                  )}
-                  {/* Vendor acknowledgment (W3-T3a, widened by 00190): any
-                      unacknowledged, non-cancelled, non-Patina-Catalog PO
-                      gets the log-acknowledgment popover — a vendor can
-                      acknowledge late, after the PO has advanced past draft
-                      (the RPC stamps acknowledged_at without moving the
-                      status; only draft → confirmed). Acknowledged POs show
-                      a muted "Ack {date}" meta instead. Patina Catalog
-                      orders have no vendor-ack loop, and cancelled POs are
-                      refused server-side. */}
-                  {po.acknowledged_at ? (
-                    <span className="font-mono text-[0.58rem] text-[var(--text-muted)]">
-                      Ack {formatDate(po.acknowledged_at)}
-                    </span>
-                  ) : !po.is_patina_catalog && po.status !== 'cancelled' ? (
-                    <LogAcknowledgmentPopover
-                      purchaseOrderId={po.id}
-                      vendorPoNumber={po.vendor_po_number}
-                      confirmedEta={po.confirmed_eta}
-                    />
-                  ) : null}
-                  {/* Outbound PO document (W4-T4): sent POs show a muted
-                      "Sent {date}" meta; unsent external-vendor POs get the
-                      send popover (Preview PDF / Email / Mark as sent).
-                      Patina Catalog orders have no outbound vendor doc, and
-                      cancelled POs can't be sent (server 409s).
-                      localSentByPoId provides an optimistic stamp so the row
-                      flips to "Sent" immediately after the popover confirms,
-                      without waiting for the purchase-orders cache refetch. */}
-                  {po.sent_at ?? localSentByPoId[po.id] ? (
-                    <span className="font-mono text-[0.58rem] text-[var(--text-muted)]">
-                      Sent {formatDate(po.sent_at ?? localSentByPoId[po.id])}
-                    </span>
-                  ) : !po.is_patina_catalog && po.status !== 'cancelled' ? (
-                    <PoSendPopover
-                      purchaseOrderId={po.id}
-                      vendorId={po.vendor_id}
-                      vendorEmailHint={clientVendorEmailHint(po.vendor)}
-                      onSent={(sentAtIso) =>
-                        setLocalSentByPoId((prev) => ({ ...prev, [po.id]: sentAtIso }))
-                      }
-                    />
-                  ) : null}
-                </div>
-              </div>
-
-              {/* Right: payment pills + total */}
-              <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
-                <span className="font-heading text-[0.85rem] font-semibold text-[var(--text-primary)]">
-                  {formatDollars(po.total_cents)}
-                </span>
-                <div className="flex flex-wrap justify-end gap-1">
-                  {po.is_patina_catalog ? (
-                    <PaymentPill state="patina_handled" />
-                  ) : (
-                    (po.payments ?? [])
-                      .slice()
-                      .sort((a, b) => a.sort_order - b.sort_order)
-                      .map((payment) => (
-                        <PaymentPill key={payment.id} {...poPaymentToPillProps(payment)} />
-                      ))
-                  )}
-                </div>
-              </div>
-            </div>
+              po={po}
+              highlighted={!!highlightPoId && po.id === highlightPoId}
+              localSentAt={localSentByPoId[po.id]}
+              onSent={(sentAtIso) =>
+                setLocalSentByPoId((prev) => ({ ...prev, [po.id]: sentAtIso }))
+              }
+            />
           ))}
         </div>
       )}
     </section>
+  );
+}
+
+// ─── PoRow ──────────────────────────────────────────────────────────────────
+
+function PoRow({
+  po,
+  highlighted,
+  localSentAt,
+  onSent,
+}: {
+  po: PurchaseOrder;
+  /** True when this row is the target of a ?po=<id> Checkout return
+   *  (Phase 4) — scrolls itself into view and renders a temporary tint. */
+  highlighted: boolean;
+  localSentAt?: string;
+  onSent: (sentAtIso: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  // The Checkout return lands here pre-addressed — scroll the named row into
+  // view, mirroring the Desk's act-addressed scroll (accounts-receivables).
+  useEffect(() => {
+    if (highlighted) ref.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [highlighted]);
+
+  const payable = payNowPayment(po);
+
+  return (
+    <div
+      ref={ref}
+      className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3 transition-colors last:border-b-0"
+      style={{
+        borderColor: 'var(--border-subtle)',
+        backgroundColor: highlighted ? 'rgba(196,165,123,0.12)' : undefined,
+      }}
+    >
+      {/* Left: project + PO number + status + ETA */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span className="text-[0.82rem] font-medium text-[var(--text-primary)]">
+            {po.project?.name ?? 'Unknown project'}
+          </span>
+          {po.vendor_po_number && (
+            <span className="font-mono text-[0.6rem] text-[var(--text-muted)]">
+              {po.vendor_po_number}
+            </span>
+          )}
+        </div>
+        <div className="mt-0.5 flex items-center gap-2">
+          <PoStatusLabel status={po.status} />
+          {po.confirmed_eta && (
+            <span className="font-mono text-[0.58rem] text-[var(--text-muted)]">
+              ETA {formatDate(po.confirmed_eta)}
+            </span>
+          )}
+          {/* Vendor acknowledgment (W3-T3a, widened by 00190): any
+              unacknowledged, non-cancelled, non-Patina-Catalog PO
+              gets the log-acknowledgment popover — a vendor can
+              acknowledge late, after the PO has advanced past draft
+              (the RPC stamps acknowledged_at without moving the
+              status; only draft → confirmed). Acknowledged POs show
+              a muted "Ack {date}" meta instead. Patina Catalog
+              orders have no vendor-ack loop, and cancelled POs are
+              refused server-side. */}
+          {po.acknowledged_at ? (
+            <span className="font-mono text-[0.58rem] text-[var(--text-muted)]">
+              Ack {formatDate(po.acknowledged_at)}
+            </span>
+          ) : !po.is_patina_catalog && po.status !== 'cancelled' ? (
+            <LogAcknowledgmentPopover
+              purchaseOrderId={po.id}
+              vendorPoNumber={po.vendor_po_number}
+              confirmedEta={po.confirmed_eta}
+            />
+          ) : null}
+          {/* Outbound PO document (W4-T4): sent POs show a muted
+              "Sent {date}" meta; unsent external-vendor POs get the
+              send popover (Preview PDF / Email / Mark as sent).
+              Patina Catalog orders have no outbound vendor doc, and
+              cancelled POs can't be sent (server 409s).
+              localSentAt provides an optimistic stamp so the row
+              flips to "Sent" immediately after the popover confirms,
+              without waiting for the purchase-orders cache refetch. */}
+          {po.sent_at ?? localSentAt ? (
+            <span className="font-mono text-[0.58rem] text-[var(--text-muted)]">
+              Sent {formatDate(po.sent_at ?? localSentAt)}
+            </span>
+          ) : !po.is_patina_catalog && po.status !== 'cancelled' ? (
+            <PoSendPopover
+              purchaseOrderId={po.id}
+              vendorId={po.vendor_id}
+              vendorEmailHint={clientVendorEmailHint(po.vendor)}
+              onSent={onSent}
+            />
+          ) : null}
+        </div>
+      </div>
+
+      {/* Right: payment pills / Pay now + total */}
+      <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
+        <span className="font-heading text-[0.85rem] font-semibold text-[var(--text-primary)]">
+          {formatDollars(po.total_cents)}
+        </span>
+        <div className="flex flex-wrap justify-end gap-1">
+          {po.is_patina_catalog ? (
+            payable ? (
+              // Phase 4 — designer pays at order time. This is the
+              // "PO exists but unpaid" recoverable state: OrderViaPatina's
+              // own checkout-start may have failed, or the designer closed
+              // Checkout without finishing — either way, the order is real
+              // and payment is always one click away from here.
+              <PayNowButton poPaymentId={payable.id} amountCents={payable.amount_cents} />
+            ) : (po.payments ?? []).length > 0 ? (
+              (po.payments ?? [])
+                .slice()
+                .sort((a, b) => a.sort_order - b.sort_order)
+                .map((payment) => (
+                  <PaymentPill key={payment.id} {...poPaymentToPillProps(payment)} />
+                ))
+            ) : (
+              // No payment rows at all — shouldn't happen post-00186 (the
+              // atomic RPC always inserts at least one), but keep the old
+              // static fallback for any pre-existing catalog PO missing rows.
+              <PaymentPill state="patina_handled" />
+            )
+          ) : (
+            (po.payments ?? [])
+              .slice()
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map((payment) => (
+                <PaymentPill key={payment.id} {...poPaymentToPillProps(payment)} />
+              ))
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

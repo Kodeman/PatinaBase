@@ -71,6 +71,23 @@ export interface MatchProduct {
   price_retail: number | null; // cents
   images: string[] | null;
   short_description: string | null;
+  /** True for Patina Catalog products (layer='catalog' implies this — 00152).
+   *  The create_direct_order RPC's own buyability gate (00267) is
+   *  `patina_managed OR vendor.is_patina_catalog` — broader than this single
+   *  column — but a client's RLS-scoped read of `products` only ever returns
+   *  catalog-layer rows (anything else the match RPC surfaced comes back as
+   *  `product: undefined` and never reaches the card), and catalog-layer rows
+   *  are patina_managed=true by CHECK constraint. So this column alone is a
+   *  correct (if narrower) proxy for buyability in the v1 buy surface,
+   *  without needing to also fetch vendor.is_patina_catalog. The RPC remains
+   *  the authority either way — this is a UX nicety, not the security
+   *  boundary. */
+  patina_managed: boolean;
+  /** Lifecycle status (00060/00129): 'draft' | 'in_review' | 'published' |
+   *  'deprecated' | 'archived'. The create_direct_order RPC deliberately does
+   *  NOT check this (00267 review note), so the UI is the only gate keeping
+   *  the Buy affordance off non-live products. */
+  status: string;
 }
 
 export interface WireConfig {
@@ -141,7 +158,8 @@ export async function fetchMatchProducts(
   productIds: string[],
 ): Promise<Map<string, MatchProduct>> {
   if (productIds.length === 0) return new Map();
-  const select = 'id,name,brand,category,price_retail,images,short_description';
+  const select =
+    'id,name,brand,category,price_retail,images,short_description,patina_managed,status';
   const url =
     `${config.baseUrl.replace(/\/+$/, '')}/rest/v1/products` +
     `?id=in.(${productIds.join(',')})&select=${select}`;
