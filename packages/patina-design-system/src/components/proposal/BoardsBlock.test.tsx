@@ -71,3 +71,55 @@ describe('BoardsBlock mode prop', () => {
     expect(container.textContent).not.toContain('west-elm.com')
   })
 })
+
+// The per-pin render-prop seams (B3 guest render · B4 verdicts · B5 drift /
+// send-to-schedule). Undefined by default so a guest share stays byte-stable.
+describe('BoardsBlock per-pin render props', () => {
+  it('renderPinOverlay draws a quiet overlay on product/capture tiles', () => {
+    const { container } = render(
+      <BoardComposition
+        board={productBoard()}
+        renderPinOverlay={(item) => <span>chip-{item.id}</span>}
+      />,
+    )
+    expect(container.textContent).toContain('chip-i1')
+  })
+
+  it('renderPinDetail draws an interactive block per pin in the Featured list', () => {
+    const { getAllByText } = render(
+      <BoardComposition
+        board={productBoard()}
+        renderPinDetail={(item) => <button>act-{item.id}</button>}
+      />,
+    )
+    expect(getAllByText('act-i1').length).toBeGreaterThan(0)
+  })
+
+  it('omitting both render props is byte-identical to the plain render (guest byte-stability)', () => {
+    const withUndefined = render(
+      <BoardComposition board={productBoard()} renderPinOverlay={undefined} renderPinDetail={undefined} />,
+    )
+    const plain = render(<BoardComposition board={productBoard()} />)
+    expect(withUndefined.container.innerHTML).toBe(plain.container.innerHTML)
+  })
+
+  it('does not invoke renderPinOverlay for non-product tiles', () => {
+    const noteBoard: BoardsBlockBoard = {
+      ...productBoard(),
+      items: [
+        { id: 'note-1', type: 'note', x: 0, y: 0, width: 200, height: 120, z_index: 0, content: 'Hi' },
+      ],
+    }
+    const seen: string[] = []
+    render(
+      <BoardComposition
+        board={noteBoard}
+        renderPinOverlay={(item) => {
+          seen.push(item.id)
+          return null
+        }}
+      />,
+    )
+    expect(seen).not.toContain('note-1')
+  })
+})

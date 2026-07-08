@@ -45,6 +45,17 @@ export interface BoardsBlockBoard {
 // changes presentation output, so the client copy stays byte-stable.
 export type BoardMode = 'presentation' | 'detail'
 
+// Host-supplied per-pin decoration (mirrors the `mark` seam so this stays
+// presentational — the caller owns all data/hooks). Both default to undefined,
+// so a guest share (which passes neither) renders byte-identically to today.
+//   • renderPinOverlay — a QUIET, non-interactive chip laid over a product/
+//     capture tile (designer verdict chip · "price moved" drift badge). Gets
+//     the mode so detail-only chips can gate themselves.
+//   • renderPinDetail  — an INTERACTIVE block under a pin in the Featured list
+//     (client Approve/Flag/Note · designer "send to the schedule").
+export type RenderPinOverlay = (item: BoardsBlockItem, mode: BoardMode) => React.ReactNode
+export type RenderPinDetail = (item: BoardsBlockItem) => React.ReactNode
+
 // ─── Snapshot shapes (written by the designer board editor into `data`) ──────
 
 interface ProductSnapshot {
@@ -175,11 +186,29 @@ function ScaledBoardCanvas({
 
 // ─── Item renderers (read-only, client-facing tone) ──────────────────────────
 
-function renderBoardItem(item: BoardsBlockItem, mode: BoardMode = 'presentation'): React.ReactNode {
+function renderBoardItem(
+  item: BoardsBlockItem,
+  mode: BoardMode = 'presentation',
+  renderPinOverlay?: RenderPinOverlay,
+): React.ReactNode {
   switch (item.type) {
     case 'product':
-    case 'capture':
-      return <ProductTile item={item} mode={mode} />
+    case 'capture': {
+      const tile = <ProductTile item={item} mode={mode} />
+      // Byte-identical to the bare tile when no overlay is supplied (or it
+      // returns nothing) — the guest/client presentation invariant.
+      if (!renderPinOverlay) return tile
+      const overlay = renderPinOverlay(item, mode)
+      if (!overlay) return tile
+      return (
+        <div className="relative h-full w-full">
+          {tile}
+          <div className="absolute right-1 top-1 z-10 flex flex-col items-end gap-1">
+            {overlay}
+          </div>
+        </div>
+      )
+    }
     case 'image':
       return <ImageTile item={item} />
     case 'room_scan':
@@ -395,7 +424,13 @@ function NoteCard({ item }: { item: BoardsBlockItem }) {
 
 // ─── Mobile fallback (stacked grid, in the array's z/created order) ──────────
 
-function StackedBoardItems({ items }: { items: BoardsBlockItem[] }) {
+function StackedBoardItems({
+  items,
+  renderPinOverlay,
+}: {
+  items: BoardsBlockItem[]
+  renderPinOverlay?: RenderPinOverlay
+}) {
   return (
     <div className="grid grid-cols-2 gap-2.5">
       {items.map((item) => {
@@ -424,12 +459,19 @@ function StackedBoardItems({ items }: { items: BoardsBlockItem[] }) {
               </p>
             )
           case 'product':
-          case 'capture':
+          case 'capture': {
+            const overlay = renderPinOverlay?.(item, 'presentation')
             return (
-              <div key={item.id}>
+              <div key={item.id} className={overlay ? 'relative' : undefined}>
                 <ProductTile item={item} />
+                {overlay && (
+                  <div className="absolute right-1 top-1 z-10 flex flex-col items-end gap-1">
+                    {overlay}
+                  </div>
+                )}
               </div>
             )
+          }
           case 'image':
           case 'room_scan': {
             if (!item.image_url) return null
@@ -454,7 +496,13 @@ function StackedBoardItems({ items }: { items: BoardsBlockItem[] }) {
 
 // ─── Featured pieces (product/capture snapshots, list style) ─────────────────
 
-function FeaturedPieces({ items }: { items: BoardsBlockItem[] }) {
+function FeaturedPieces({
+  items,
+  renderPinDetail,
+}: {
+  items: BoardsBlockItem[]
+  renderPinDetail?: RenderPinDetail
+}) {
   const pieces = items.filter((item) => item.type === 'product' || item.type === 'capture')
   if (pieces.length === 0) return null
 
@@ -470,11 +518,10 @@ function FeaturedPieces({ items }: { items: BoardsBlockItem[] }) {
         {pieces.map((item) => {
           const snap = (item.data ?? {}) as ProductSnapshot
           const imageUrl = item.image_url ?? snap.image_url ?? null
-          return (
-            <li
-              key={item.id}
-              className="flex items-center gap-3 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2.5"
-            >
+          // Host-supplied per-pin acts (client verdicts · send-to-schedule).
+          const detail = renderPinDetail?.(item)
+          const row = (
+            <>
               {imageUrl && (
                 <div
                   className="h-12 w-12 flex-shrink-0 overflow-hidden rounded"
@@ -497,6 +544,26 @@ function FeaturedPieces({ items }: { items: BoardsBlockItem[] }) {
                   {formatDollars(snap.price_cents)}
                 </span>
               )}
+            </>
+          )
+          // Byte-identical to the original list row when no detail is supplied.
+          if (!detail) {
+            return (
+              <li
+                key={item.id}
+                className="flex items-center gap-3 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2.5"
+              >
+                {row}
+              </li>
+            )
+          }
+          return (
+            <li
+              key={item.id}
+              className="rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2.5"
+            >
+              <div className="flex items-center gap-3">{row}</div>
+              <div className="mt-2">{detail}</div>
             </li>
           )
         })}
@@ -516,6 +583,10 @@ export interface BoardCompositionProps {
    * pins — used by the designer editor's preview toggle. See BoardMode.
    */
   mode?: BoardMode
+  /** Quiet non-interactive tile overlay (verdict chip · drift badge). */
+  renderPinOverlay?: RenderPinOverlay
+  /** Interactive per-pin block in the Featured list (verdict acts · send-to-schedule). */
+  renderPinDetail?: RenderPinDetail
 }
 
 /**
@@ -524,7 +595,13 @@ export interface BoardCompositionProps {
  * board has no items. Used directly by compact surfaces (the drafting mirror);
  * BoardsBlock maps it across a proposal's boards for the full document surfaces.
  */
-export function BoardComposition({ board, className, mode = 'presentation' }: BoardCompositionProps) {
+export function BoardComposition({
+  board,
+  className,
+  mode = 'presentation',
+  renderPinOverlay,
+  renderPinDetail,
+}: BoardCompositionProps) {
   const items = board.items ?? []
   if (items.length === 0) return null
 
@@ -549,16 +626,16 @@ export function BoardComposition({ board, className, mode = 'presentation' }: Bo
           canvasWidth={board.canvas_width}
           canvasHeight={board.canvas_height}
           backgroundColor={board.background_color}
-          renderItem={(item) => renderBoardItem(item, mode)}
+          renderItem={(item) => renderBoardItem(item, mode, renderPinOverlay)}
         />
       </div>
 
       {/* Mobile: stacked grid in the caller's array order (z-sorted). */}
       <div className="sm:hidden">
-        <StackedBoardItems items={items} />
+        <StackedBoardItems items={items} renderPinOverlay={renderPinOverlay} />
       </div>
 
-      <FeaturedPieces items={items} />
+      <FeaturedPieces items={items} renderPinDetail={renderPinDetail} />
     </div>
   )
 }
@@ -580,6 +657,10 @@ export interface BoardsBlockProps {
    * callers omit it, so their render is unchanged.
    */
   mode?: BoardMode
+  /** Quiet non-interactive tile overlay per pin (verdict chip · drift badge). */
+  renderPinOverlay?: RenderPinOverlay
+  /** Interactive per-pin block in the Featured list (verdict acts · send-to-schedule). */
+  renderPinDetail?: RenderPinDetail
 }
 
 /**
@@ -587,7 +668,14 @@ export interface BoardsBlockProps {
  * renders nothing when there is nothing to show. Callers own the engagement
  * wrapper (`data-section-type="boards"`) since it is client-portal-specific.
  */
-export function BoardsBlock({ boards, mark, heading = 'Mood Boards', mode = 'presentation' }: BoardsBlockProps) {
+export function BoardsBlock({
+  boards,
+  mark,
+  heading = 'Mood Boards',
+  mode = 'presentation',
+  renderPinOverlay,
+  renderPinDetail,
+}: BoardsBlockProps) {
   const visible = (boards ?? []).filter((b) => (b.items?.length ?? 0) > 0)
   if (visible.length === 0) return null
 
@@ -607,7 +695,14 @@ export function BoardsBlock({ boards, mark, heading = 'Mood Boards', mode = 'pre
           {heading}
         </h2>
         {visible.map((board) => (
-          <BoardComposition key={board.id} board={board} className="mt-6 first:mt-0" mode={mode} />
+          <BoardComposition
+            key={board.id}
+            board={board}
+            className="mt-6 first:mt-0"
+            mode={mode}
+            renderPinOverlay={renderPinOverlay}
+            renderPinDetail={renderPinDetail}
+          />
         ))}
       </section>
     </>

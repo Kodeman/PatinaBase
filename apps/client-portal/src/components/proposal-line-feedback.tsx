@@ -44,11 +44,15 @@ const ACT_BTN =
 export function LineFeedback({
   proposalId,
   itemId,
+  boardItemId,
   feedback,
 }: {
   proposalId: string;
-  itemId: string;
-  /** This line's verdicts (the client's own), ascending by created_at. */
+  /** Anchor: pass EXACTLY ONE of itemId (a schedule line) or boardItemId (a
+   *  board pin, B4). The chip/act/thread UI is otherwise anchor-agnostic. */
+  itemId?: string;
+  boardItemId?: string;
+  /** This anchor's verdicts (the client's own), ascending by created_at. */
   feedback: ItemFeedback[];
 }) {
   const submit = useSubmitVerdict();
@@ -62,7 +66,11 @@ export function LineFeedback({
   const act = async (verdict: Verdict, body?: string) => {
     setError(null);
     try {
-      await submit.mutateAsync({ proposalId, proposalItemId: itemId, verdict, body: body ?? null });
+      await submit.mutateAsync(
+        boardItemId
+          ? { proposalId, boardItemId, verdict, body: body ?? null }
+          : { proposalId, proposalItemId: itemId, verdict, body: body ?? null },
+      );
       setComposing(null);
       setDraft('');
     } catch (e) {

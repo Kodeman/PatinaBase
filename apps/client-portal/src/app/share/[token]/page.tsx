@@ -11,7 +11,7 @@
  */
 
 import { createServiceClient } from '@patina/supabase/server';
-import { type ProposalBoardSummary } from '@patina/supabase';
+import { type BoardsBlockBoard } from '@patina/design-system';
 import { normalizeShareVisibility, guestShareVisibility, isLikelyShareToken } from '@patina/utils';
 import { ProposalDocument } from '@/components/proposal-document';
 
@@ -86,11 +86,51 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
 
   if (!proposal) return <DeadLink />;
 
-  // Boards deliberately absent on guest shares until they ride document_shares
-  // in Wave 3 (B3) — the client-side board wrapper re-fetches under RLS and a
-  // guest gets zero rows anyway, so shipping summaries here would only leak
-  // board names/covers into an anonymous payload.
-  const boards: ProposalBoardSummary[] = [];
+  // Boards ride the share in Wave 3 (B3), but only when itemDetails is on — the
+  // same gate that governs the itemized piece list (a board IS the pieces, laid
+  // out). We resolve them SERVER-SIDE with the service client (active only,
+  // mirroring useBoardsWithItems) and pass fully-materialized boards straight to
+  // the render: the client-side useBoardsWithItems wrapper RLS-fetches ZERO rows
+  // for a guest, so we bypass it. feedbackEnabled stays false, so no verdict
+  // affordances ride along — a guest board is view-only, like the rest of the
+  // guest surface.
+  let resolvedBoards: BoardsBlockBoard[] = [];
+  if (visibility.itemDetails) {
+    const { data: boardRows } = await admin
+      .from('proposal_boards')
+      .select('*, proposal_board_items(*)')
+      .eq('proposal_id', proposalId)
+      .eq('status', 'active')
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: true })
+      .order('z_index', { ascending: true, referencedTable: 'proposal_board_items' });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolvedBoards = ((boardRows ?? []) as any[]).map((row) => {
+      const { proposal_board_items: items, ...board } = row;
+      return {
+        id: board.id as string,
+        name: board.name as string,
+        canvas_width: board.canvas_width as number,
+        canvas_height: board.canvas_height as number,
+        background_color: board.background_color as string,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        items: ((items ?? []) as any[]).map((it) => ({
+          id: it.id as string,
+          type: it.type as string,
+          x: it.x,
+          y: it.y,
+          width: it.width,
+          height: it.height,
+          z_index: it.z_index,
+          rotation: it.rotation,
+          image_url: it.image_url ?? null,
+          content: it.content ?? null,
+          data: it.data,
+        })),
+      };
+    });
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
@@ -102,7 +142,8 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         phases={phases ?? []}
         exclusions={exclusions ?? []}
         scopeRooms={scopeRooms ?? []}
-        boards={boards}
+        boards={[]}
+        resolvedBoards={resolvedBoards}
         visibility={visibility}
         feedbackEnabled={false}
         sharedByStudio={share.studio_name ?? undefined}

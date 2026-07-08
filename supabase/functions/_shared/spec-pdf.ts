@@ -311,6 +311,98 @@ export function computeRecordPct(
   return Math.round(((fill[0] + fill[1] + fill[2]) / 3) * 100);
 }
 
+// ─── Board model (pure) — B3 board export ────────────────────────────────────
+
+/** One pin the edge fn hands us, source is proposal_board_items. */
+export interface SpecBoardTileInput {
+  type: string; // product | capture | image | palette | note | room_scan
+  name: string | null; // data.name
+  imageUrl: string | null; // image_url ?? data.image_url
+  note: string | null; // note content
+  swatches: string[]; // palette hexes
+  priceCents: number | null; // data.price_cents — CLIENT snapshot price
+  sectionId: string | null; // data.section_id
+}
+
+export interface SpecBoardInput {
+  studioName: string;
+  projectName: string;
+  boardName: string;
+  sections: { id: string; name: string }[]; // proposal_boards.sections
+  tiles: SpecBoardTileInput[];
+}
+
+/**
+ * A rendered board tile. As with SpecLine, there is deliberately NO trade /
+ * markup / margin field — money-never-trade is STRUCTURAL. `clientPriceCents`
+ * is the ONLY money key and is OMITTED (key absent) when pricing is off or the
+ * pin has no price. Board snapshots never carry a trade cost, so a board sheet
+ * cannot leak one by construction.
+ */
+export interface SpecBoardTile {
+  name: string | null;
+  imageUrl: string | null;
+  note: string | null;
+  swatches: string[];
+  clientPriceCents?: number;
+}
+
+export interface SpecBoardSection {
+  name: string; // the trailing catch-all is 'Unsectioned'
+  tiles: SpecBoardTile[];
+}
+
+export interface SpecBoardModel {
+  boardName: string;
+  sections: SpecBoardSection[];
+  showPricing: boolean;
+}
+
+const UNSECTIONED_KEY = '__unsectioned__';
+
+/**
+ * Group a board's pins into its declared sections (order preserved; empty
+ * sections dropped; unsectioned pins in a trailing group). Client price rides
+ * only on product/capture tiles, only under `pricing`. Pure — unit-tested.
+ */
+export function buildBoardModel(input: SpecBoardInput, visibility: SpecVisibility): SpecBoardModel {
+  const showPricing = visibility.pricing !== false;
+  const nameById = new Map(input.sections.map((s) => [s.id, s.name]));
+  const declaredOrder = input.sections.map((s) => s.id);
+
+  const buckets = new Map<string, { name: string; tiles: SpecBoardTile[] }>();
+  const order: string[] = [];
+
+  for (const t of input.tiles) {
+    const sid = t.sectionId && nameById.has(t.sectionId) ? t.sectionId : UNSECTIONED_KEY;
+    const name = sid === UNSECTIONED_KEY ? 'Unsectioned' : nameById.get(sid)!;
+    if (!buckets.has(sid)) {
+      buckets.set(sid, { name, tiles: [] });
+      order.push(sid);
+    }
+    const tile: SpecBoardTile = {
+      name: t.name,
+      imageUrl: t.imageUrl,
+      note: t.note,
+      swatches: t.swatches,
+    };
+    if (showPricing && t.priceCents != null && (t.type === 'product' || t.type === 'capture')) {
+      tile.clientPriceCents = t.priceCents;
+    }
+    buckets.get(sid)!.tiles.push(tile);
+  }
+
+  const sections: SpecBoardSection[] = order
+    .sort((a, b) => {
+      if (a === UNSECTIONED_KEY) return 1;
+      if (b === UNSECTIONED_KEY) return -1;
+      return declaredOrder.indexOf(a) - declaredOrder.indexOf(b);
+    })
+    .map((sid) => ({ name: buckets.get(sid)!.name, tiles: buckets.get(sid)!.tiles }));
+
+  return { boardName: input.boardName, sections, showPricing };
+}
+
 // ─── Styles (ported from po-pdf.ts) ──────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -382,6 +474,31 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: '#5C4A3C',
   },
+
+  // Board sheet (B3) — section-grouped tile grid.
+  boardSection: { marginBottom: 18 },
+  boardSectionHeading: { fontSize: 12, fontWeight: 700, marginBottom: 8 },
+  boardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  boardTile: { width: 150, marginBottom: 6 },
+  boardTileImage: {
+    width: 150,
+    height: 150,
+    objectFit: 'cover',
+    border: '1pt solid #E5E2DD',
+    borderRadius: 2,
+    marginBottom: 4,
+  },
+  boardSwatchRow: {
+    flexDirection: 'row',
+    height: 28,
+    border: '1pt solid #E5E2DD',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  boardTileName: { fontSize: 9, color: '#2C2926' },
+  boardTilePrice: { fontSize: 10, fontWeight: 700, marginTop: 2 },
+  boardTileNote: { fontSize: 9, color: '#3D3A36', lineHeight: 1.3 },
 });
 
 // ─── Helpers (same shapes as po-pdf.ts) ──────────────────────────────────────
@@ -621,6 +738,72 @@ function ScheduleDocument(
   );
 }
 
+// ─── Board document tree (B3) ────────────────────────────────────────────────
+
+function BoardDocument(
+  model: SpecBoardModel,
+  header: { studioName: string; projectName: string },
+) {
+  return h(
+    Document,
+    null,
+    h(
+      Page,
+      { size: 'LETTER', style: styles.page, wrap: true },
+      // Header — the board is the title.
+      h(
+        View,
+        { style: styles.header },
+        h(Text, { style: styles.title }, model.boardName),
+        h(
+          Text,
+          { style: styles.meta },
+          [header.studioName, header.projectName].filter(Boolean).join(' · '),
+        ),
+      ),
+      // Section-grouped tile grid.
+      ...model.sections.map((section, sIdx) =>
+        h(
+          View,
+          { key: sIdx, style: styles.boardSection },
+          h(Text, { style: styles.boardSectionHeading }, section.name),
+          h(
+            View,
+            { style: styles.boardGrid },
+            ...section.tiles.map((tile, tIdx) =>
+              h(
+                View,
+                { key: tIdx, style: styles.boardTile, wrap: false },
+                tile.imageUrl ? h(Image, { style: styles.boardTileImage, src: tile.imageUrl }) : null,
+                tile.swatches.length > 0
+                  ? h(
+                      View,
+                      { style: styles.boardSwatchRow },
+                      ...tile.swatches.map((hex, i) =>
+                        h(View, { key: i, style: { flex: 1, backgroundColor: hex } }),
+                      ),
+                    )
+                  : null,
+                tile.name ? h(Text, { style: styles.boardTileName }, tile.name) : null,
+                tile.clientPriceCents != null
+                  ? h(Text, { style: styles.boardTilePrice }, fmt(tile.clientPriceCents))
+                  : null,
+                tile.note ? h(Text, { style: styles.boardTileNote }, tile.note) : null,
+              ),
+            ),
+          ),
+        ),
+      ),
+      // Provenance footer.
+      h(
+        Text,
+        { style: styles.footer },
+        [header.studioName, 'Generated by Patina · patina.cloud'].filter(Boolean).join(' · '),
+      ),
+    ),
+  );
+}
+
 // ─── Render entrypoints ──────────────────────────────────────────────────────
 
 /**
@@ -640,5 +823,14 @@ export async function renderSpecSchedulePdf(
   header: { studioName: string; projectName: string; title: string },
 ): Promise<Uint8Array> {
   const buffer = await renderToBuffer(ScheduleDocument(model, header));
+  return new Uint8Array(buffer);
+}
+
+/** Render a single board (B3) to PDF bytes — a section-grouped tile grid. */
+export async function renderBoardPdf(
+  model: SpecBoardModel,
+  header: { studioName: string; projectName: string },
+): Promise<Uint8Array> {
+  const buffer = await renderToBuffer(BoardDocument(model, header));
   return new Uint8Array(buffer);
 }

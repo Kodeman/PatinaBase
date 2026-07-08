@@ -18,11 +18,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // Server already running, so commenting out webServer config
-  // webServer: {
-  //   command: 'pnpm dev',
-  //   url: 'http://localhost:3002',
-  //   reuseExistingServer: true,
-  //   timeout: 120000,
-  // },
+  // Self-boots :3002 for the share/board specs, but reuses an already-running
+  // dev server when one is up (the usual local case).
+  webServer: {
+    command: 'pnpm dev',
+    url: 'http://localhost:3002',
+    reuseExistingServer: true,
+    timeout: 120000,
+  },
 });

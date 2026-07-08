@@ -1,11 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BoardCanvas,
   BoardComposition,
   ImagePaletteExtractor,
   type BoardItem,
+  type BoardsBlockItem,
+  type BoardMode,
   type BoardSection as CanvasBoardSection,
   type ExtractedSwatch,
 } from '@patina/design-system';
@@ -23,16 +25,29 @@ import {
   useUpsertSwatch,
   useProposal,
   useRoomScans,
+  useBoardFeedback,
+  useProductPrices,
+  useProposalScheduleItems,
+  useAddProposalItem,
   type ProposalBoardItem,
   type AddBoardItemInput,
   type BoardSection,
   type ProposalPalette,
   type RoomScan,
+  type ItemFeedback,
 } from '@patina/supabase';
 import {
   ProductPickerModal,
   type ProductPickResult,
 } from '../proposals/product-picker-modal';
+import { verdictChipSpec } from '@/lib/document/verdict-chip';
+import {
+  buildSendToScheduleArgs,
+  computeBoardDrift,
+  findScheduleTwin,
+  type PinScheduleSnapshot,
+  type ScheduleLineRef,
+} from '@/lib/scope/board-schedule';
 import { renderBoardItem } from './board-item-renderer';
 import { BoardSuggestionsRail } from './board-suggestions-rail';
 import {
@@ -71,7 +86,11 @@ const WIDTH_PRESETS: Array<{ label: string; width: number }> = [
 ];
 
 interface BoardEditorProps {
-  proposalId: string;
+  /** Owner — EXACTLY ONE (B8). proposalId for a proposal board; projectId for a
+   *  live project-owned board (00272). Proposal-only affordances (palettes, room
+   *  scans, send-to-schedule, client verdicts) hide in project mode. */
+  proposalId?: string;
+  projectId?: string;
   boardId: string;
 }
 
@@ -90,7 +109,12 @@ interface BoardEditorProps {
  * Mount with `key={boardId}` so switching boards remounts (unmount flushes
  * the pending layout for the previous board).
  */
-export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
+export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps) {
+  const isProject = !!projectId;
+  // First path segment for board-image uploads (00131 for proposals; 00272 leg
+  // for projects). One of the two is always set.
+  const ownerId = (projectId ?? proposalId)!;
+
   const { data: board } = useBoard(boardId);
 
   const addItem = useAddBoardItem();
@@ -98,6 +122,13 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
   const deleteItem = useDeleteBoardItem();
   const saveLayout = useSaveBoardLayout();
   const upsertBoard = useUpsertBoard();
+
+  // B4/B5 — proposal boards only. Board-pin verdicts (read-only chips), live
+  // product prices for the drift badge, and the schedule for twin detection.
+  const { data: pinVerdicts = [] } = useBoardFeedback(isProject ? undefined : proposalId);
+  const { data: scheduleItems = [] } = useProposalScheduleItems(
+    isProject ? undefined : proposalId,
+  );
 
   const [items, setItems] = useState<ProposalBoardItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -112,6 +143,52 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
   itemsRef.current = items;
   const dirtyRef = useRef<Set<string>>(new Set());
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── B4/B5 derivations (product/capture pins) ────────────────────────────────
+
+  // One batched price query for every linked product on the board (no N+1).
+  const pinProductIds = useMemo(
+    () => items.filter((it) => it.product_id).map((it) => it.product_id as string),
+    [items],
+  );
+  const { data: productPrices } = useProductPrices(pinProductIds);
+
+  // board_item_id → latest verdict (rows are ascending, so last write wins).
+  const verdictByItem = useMemo(() => {
+    const m = new Map<string, ItemFeedback>();
+    for (const v of pinVerdicts) if (v.board_item_id) m.set(v.board_item_id, v);
+    return m;
+  }, [pinVerdicts]);
+
+  // board_item_id → "the linked product's live price ≠ the pin's snapshot".
+  const driftByItem = useMemo(() => {
+    const priceById = new Map<string, number | null>();
+    if (productPrices) for (const [id, p] of productPrices) priceById.set(id, p.price_retail);
+    return computeBoardDrift(
+      items.map((it) => ({
+        id: it.id,
+        product_id: it.product_id,
+        snapshotPriceCents: (it.data as { price_cents?: number } | null)?.price_cents ?? null,
+      })),
+      priceById,
+    );
+  }, [items, productPrices]);
+
+  // board_item_id → the snapshot a schedule line would be seeded from (B5).
+  const pinSnapshotByItem = useMemo(() => {
+    const m = new Map<string, PinScheduleSnapshot>();
+    for (const it of items) {
+      const d = (it.data ?? {}) as { name?: string; price_cents?: number; image_url?: string };
+      m.set(it.id, {
+        type: it.type,
+        productId: it.product_id,
+        name: d.name ?? null,
+        imageUrl: it.image_url ?? d.image_url ?? null,
+        priceCents: typeof d.price_cents === 'number' ? d.price_cents : null,
+      });
+    }
+    return m;
+  }, [items]);
 
   // ── Layout autosave ─────────────────────────────────────────────────────────
 
@@ -418,6 +495,39 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
 
   const selected = selectedId ? (items.find((i) => i.id === selectedId) ?? null) : null;
 
+  // Quiet per-pin overlay (detail-mode language): the client's latest verdict
+  // (B4) + a "price moved" chip when the linked product drifted (B5, detail
+  // only). Proposal boards only carry verdicts; project boards show just drift.
+  const renderPinOverlay = (pin: BoardsBlockItem, mode: BoardMode) => {
+    const verdict = verdictByItem.get(pin.id);
+    const spec = verdict ? verdictChipSpec(verdict.verdict, verdict.resolved_at) : null;
+    const drift = mode === 'detail' && driftByItem.has(pin.id);
+    if (!spec && !drift) return null;
+    return (
+      <>
+        {spec && <VerdictPill label={spec.label} color={spec.color} />}
+        {drift && <DriftChip />}
+      </>
+    );
+  };
+
+  // "Send to the schedule" (B5) — proposal boards only (it creates a
+  // proposal_item). Product/capture pins only.
+  const renderPinDetail = isProject
+    ? undefined
+    : (pin: BoardsBlockItem) => {
+        const snap = pinSnapshotByItem.get(pin.id);
+        if (!snap || (snap.type !== 'product' && snap.type !== 'capture')) return null;
+        return (
+          <SendToScheduleControl
+            proposalId={proposalId!}
+            snap={snap}
+            boardScopeRoomId={board.scope_room_id ?? null}
+            scheduleItems={scheduleItems}
+          />
+        );
+      };
+
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
       {/* Canvas column */}
@@ -466,7 +576,12 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
                 Nothing on this board yet — switch to Edit and add something.
               </p>
             ) : (
-              <BoardComposition board={compositionBoard} mode={viewMode === 'detail' ? 'detail' : 'presentation'} />
+              <BoardComposition
+                board={compositionBoard}
+                mode={viewMode === 'detail' ? 'detail' : 'presentation'}
+                renderPinOverlay={renderPinOverlay}
+                renderPinDetail={renderPinDetail}
+              />
             )}
           </div>
         )}
@@ -503,6 +618,18 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
                 onSetCover={(imageUrl) =>
                   upsertBoard.mutate({ proposalId, boardId, coverImageUrl: imageUrl })
                 }
+                sendToSchedule={
+                  !isProject &&
+                  proposalId &&
+                  (selected.type === 'product' || selected.type === 'capture') ? (
+                    <SendToScheduleControl
+                      proposalId={proposalId}
+                      snap={pinSnapshotByItem.get(selected.id)!}
+                      boardScopeRoomId={board.scope_room_id ?? null}
+                      scheduleItems={scheduleItems}
+                    />
+                  ) : null
+                }
               />
             ) : (
               <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-xs text-[var(--text-muted)]">
@@ -526,14 +653,18 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
                 embeddings). Collapsible so it doesn't crowd the inspector. */}
             <BoardSuggestionsRail items={items} onAdd={addItemToBoard} />
 
-            {/* Add palette */}
-            <AddPaletteSection proposalId={proposalId} onAdd={addItemToBoard} />
+            {/* Add palette + room scan — proposal-only (project boards have no
+                proposal palettes / scope). */}
+            {!isProject && proposalId && (
+              <>
+                <AddPaletteSection proposalId={proposalId} onAdd={addItemToBoard} />
+                <RoomScansGate proposalId={proposalId} onAdd={addItemToBoard} />
+              </>
+            )}
 
-            {/* Add room scan */}
-            <RoomScansGate proposalId={proposalId} onAdd={addItemToBoard} />
-
-            {/* Upload image */}
-            <UploadImageSection proposalId={proposalId} boardId={boardId} onAdd={addItemToBoard} />
+            {/* Upload image — keyed on the owner id (00131 proposal leg or the
+                00272 project leg). */}
+            <UploadImageSection ownerId={ownerId} boardId={boardId} onAdd={addItemToBoard} />
 
             {/* Add note */}
             <AddNoteSection onAdd={addItemToBoard} />
@@ -870,11 +1001,12 @@ function RoomScansSection({
 // ─── Upload image ────────────────────────────────────────────────────────────
 
 function UploadImageSection({
-  proposalId,
+  ownerId,
   boardId,
   onAdd,
 }: {
-  proposalId: string;
+  /** First path segment — a proposal id (00131 leg) or project id (00272 leg). */
+  ownerId: string;
   boardId: string;
   onAdd: (input: Omit<AddBoardItemInput, 'boardId' | 'x' | 'y' | 'zIndex'>) => void;
 }) {
@@ -888,9 +1020,10 @@ function UploadImageSection({
       setErrorMessage(null);
       try {
         const supabase = createBrowserClient();
-        // First path segment = proposalId satisfies the 00131 storage RLS.
+        // First path segment = owner id satisfies the proposal-mood-boards RLS
+        // (00131 proposal leg / 00272 project leg).
         const ext = file.name.split('.').pop() ?? 'jpg';
-        const path = `${proposalId}/boards/${boardId}/${crypto.randomUUID()}.${ext}`;
+        const path = `${ownerId}/boards/${boardId}/${crypto.randomUUID()}.${ext}`;
         const { error } = await supabase.storage
           .from('proposal-mood-boards')
           .upload(path, file, { upsert: true, contentType: file.type });
@@ -903,7 +1036,7 @@ function UploadImageSection({
         setUploading(false);
       }
     },
-    [proposalId, boardId, onAdd],
+    [ownerId, boardId, onAdd],
   );
 
   return (
@@ -968,7 +1101,8 @@ function AddNoteSection({
 // ─── Item inspector ──────────────────────────────────────────────────────────
 
 interface ItemInspectorProps {
-  proposalId: string;
+  /** Undefined for a project-owned board (no proposal palette extraction). */
+  proposalId?: string;
   boardName: string;
   item: ProposalBoardItem;
   items: ProposalBoardItem[];
@@ -979,6 +1113,8 @@ interface ItemInspectorProps {
   onAssignSection: (itemId: string, sectionId: string | null) => void;
   onDelete: (itemId: string) => void;
   onSetCover: (imageUrl: string) => void;
+  /** "Send to the schedule" control for product/capture pins (B5); parent-built. */
+  sendToSchedule?: React.ReactNode;
 }
 
 function itemImageUrl(item: ProposalBoardItem): string | null {
@@ -999,6 +1135,7 @@ function ItemInspector({
   onAssignSection,
   onDelete,
   onSetCover,
+  sendToSchedule,
 }: ItemInspectorProps) {
   const imageUrl = itemImageUrl(item);
   const currentSectionId =
@@ -1148,8 +1285,14 @@ function ItemInspector({
           </Button>
         </div>
 
-        {/* Extract palette from image-bearing items */}
-        {imageUrl && (
+        {/* Send this pin to the schedule (B5) — parent supplies the control for
+            product/capture pins on a proposal board. */}
+        {sendToSchedule && (
+          <div className="border-t border-[var(--border-default)] pt-3">{sendToSchedule}</div>
+        )}
+
+        {/* Extract palette from image-bearing items (proposal boards only) */}
+        {imageUrl && proposalId && (
           <ExtractPalettePanel proposalId={proposalId} boardName={boardName} imageUrl={imageUrl} />
         )}
       </div>
@@ -1234,6 +1377,125 @@ function ExtractPalettePanel({
             </p>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── B5: send-to-schedule + quiet pin chips ──────────────────────────────────
+
+/** Quiet mono verdict pill for a board pin (B4, read-only, designer side). */
+function VerdictPill({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-[3px] px-1.5 py-0.5"
+      style={{
+        fontFamily: 'var(--font-mono, monospace)',
+        fontSize: '0.5rem',
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        color: 'var(--text-muted)',
+        backgroundColor: 'var(--bg-surface)',
+        border: '1px solid var(--border-default)',
+      }}
+    >
+      <span aria-hidden style={{ width: 6, height: 6, borderRadius: 9999, backgroundColor: color }} />
+      {label}
+    </span>
+  );
+}
+
+/** Quiet "price moved" mono chip (B5, detail mode). */
+function DriftChip() {
+  return (
+    <span
+      className="inline-flex items-center rounded-[3px] px-1.5 py-0.5"
+      title="This pin's linked product price changed since it was added"
+      style={{
+        fontFamily: 'var(--font-mono, monospace)',
+        fontSize: '0.5rem',
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        color: 'var(--color-clay, #a5552f)',
+        backgroundColor: 'var(--bg-surface)',
+        border: '1px solid var(--border-default)',
+      }}
+    >
+      price moved
+    </span>
+  );
+}
+
+/**
+ * "Send to the schedule" (B5): create a proposal_item from a product/capture
+ * pin's snapshot (name/image/price → sell side; product_id + room carried; a
+ * doc_code auto-suggested). Idempotence guard (the Wave-1 twin concept): if a
+ * line already exists for this product in this room, acknowledge it instead of
+ * duplicating. Quiet inline confirm; inline error on failure.
+ */
+function SendToScheduleControl({
+  proposalId,
+  snap,
+  boardScopeRoomId,
+  scheduleItems,
+}: {
+  proposalId: string;
+  snap: PinScheduleSnapshot;
+  boardScopeRoomId: string | null;
+  scheduleItems: ScheduleLineRef[];
+}) {
+  const addItem = useAddProposalItem();
+  const [status, setStatus] = useState<
+    null | { kind: 'added' | 'exists'; docCode: string | null; name: string | null }
+  >(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // A line already on this schedule for this product in this room (idempotence).
+  const twin = findScheduleTwin(scheduleItems, snap.productId, boardScopeRoomId);
+
+  const handleSend = async () => {
+    setError(null);
+    if (twin) {
+      setStatus({ kind: 'exists', docCode: twin.doc_code, name: twin.name });
+      return;
+    }
+    try {
+      const args = buildSendToScheduleArgs({
+        proposalId,
+        snap,
+        boardScopeRoomId,
+        existingCodes: scheduleItems.map((s) => s.doc_code),
+      });
+      await addItem.mutateAsync(args);
+      setStatus({ kind: 'added', docCode: args.docCode, name: snap.name });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add to the schedule.');
+    }
+  };
+
+  if (status) {
+    return (
+      <p className="type-meta-small text-[var(--text-muted)]">
+        {status.kind === 'added' ? 'Added to the schedule' : 'Already on the schedule'}
+        {status.docCode ? ` · ${status.docCode}` : ''}
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={addItem.isPending}
+        onClick={() => void handleSend()}
+      >
+        {addItem.isPending ? 'Sending…' : twin ? 'Already on the schedule' : 'Send to the schedule'}
+      </Button>
+      {error && (
+        <p className="type-meta-small text-[var(--color-clay,#a5552f)]" role="alert">
+          {error}
+        </p>
       )}
     </div>
   );

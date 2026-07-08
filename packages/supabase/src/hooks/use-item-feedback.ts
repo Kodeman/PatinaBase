@@ -62,6 +62,30 @@ export function useProposalFeedback(proposalId: string | undefined) {
   });
 }
 
+/**
+ * Every BOARD-PIN verdict on a proposal (via proposal_board_items →
+ * proposal_boards → proposal_id). The proposal-line feed above excludes board
+ * anchors (its `!inner` join is on proposal_items), so this is the parallel
+ * board feed (B4). Same 00267 RLS: designer sees all, client sees her own.
+ */
+export function useBoardFeedback(proposalId: string | undefined) {
+  return useQuery({
+    queryKey: ['board-feedback', proposalId],
+    enabled: !!proposalId,
+    queryFn: async (): Promise<ItemFeedback[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('item_feedback')
+        .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, verdict, body, resolved_at, resolved_by, created_at, updated_at, proposal_board_items!inner(board_id, proposal_boards!inner(proposal_id))')
+        .eq('proposal_board_items.proposal_boards.proposal_id', proposalId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ItemFeedback[];
+    },
+  });
+}
+
 /** The thread (created / replied / resolved / reopened) on one verdict. */
 export function useItemFeedbackThread(feedbackId: string | undefined) {
   return useQuery({
@@ -81,28 +105,39 @@ export function useItemFeedbackThread(feedbackId: string | undefined) {
   });
 }
 
-/** Client leaves a verdict on a line (INSERT; trigger writes the thread + notify). */
+/**
+ * Client leaves a verdict on a line OR a board pin (INSERT; the 00267 trigger
+ * writes the thread + notify for any anchor). Pass EXACTLY ONE of proposalItemId
+ * / boardItemId — the anchor CHECK (00267) enforces it. `client_id` is
+ * DB-defaulted to auth.uid(); never sent.
+ */
 export function useSubmitVerdict() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
       proposalId: string;
-      proposalItemId: string;
+      proposalItemId?: string;
+      boardItemId?: string;
       verdict: Verdict;
       body?: string | null;
     }): Promise<ItemFeedback> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
+      const anchor = input.boardItemId
+        ? { board_item_id: input.boardItemId }
+        : { proposal_item_id: input.proposalItemId };
       const { data, error } = await supabase
         .from('item_feedback')
-        .insert({ proposal_item_id: input.proposalItemId, verdict: input.verdict, body: input.body ?? null })
+        .insert({ ...anchor, verdict: input.verdict, body: input.body ?? null })
         .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, verdict, body, resolved_at, resolved_by, created_at, updated_at')
         .single();
       if (error) throw error;
       return data as ItemFeedback;
     },
     onSuccess: (_r, input) => {
+      // Refresh whichever feed the anchor belongs to (both are cheap).
       qc.invalidateQueries({ queryKey: ['proposal-feedback', input.proposalId] });
+      qc.invalidateQueries({ queryKey: ['board-feedback', input.proposalId] });
     },
   });
 }

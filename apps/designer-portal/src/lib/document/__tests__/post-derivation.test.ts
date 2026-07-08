@@ -401,4 +401,20 @@ describe('client_feedback verdicts (C4)', () => {
     expect(item.body).toBe('Can we see other options?');
     expect(item.row.needKind).toBe('lines_flagged');
   });
+
+  it('a BOARD-PIN flag derives identically to a line flag (B4 anchor-independence)', () => {
+    // notify_item_feedback emits the same type='client_feedback' + verdict for a
+    // board anchor as for a line, so the Record derivation — which keys on the
+    // verdict, not the anchor — routes a flagged pin to the SAME lines_flagged
+    // cross-reference. The pin's generic headline is the only visible difference.
+    const row = deriveRecordRow(
+      notif({
+        type: 'client_feedback',
+        metadata: { verdict: 'rejected', headline: 'Client flagged a line', deep_link: '/doc/pr1' },
+      }),
+    );
+    expect(row.kind).toBe('cross_reference');
+    expect(row.onDesk).toBe(true);
+    expect(row.needKind).toBe('lines_flagged');
+  });
 });
