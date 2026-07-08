@@ -18,5 +18,16 @@ enum ScreenRegistry {
         SystemSurfaceScreens.register(into: r, container: container, coordinator: coordinator)      // F: U1, U2, T1, T2
         ResilienceScreens.register(into: r, container: container, coordinator: coordinator)         // D: R3
         // A (Onboarding) is phase-based — wired via OnboardingHost in RootView, not routes.
+
+        // Phase 2 designer/pro flows (one registrar per wave; screens are placeholders
+        // until each wave agent ships).
+        WorkScreens.register(into: r, container: container, coordinator: coordinator)               // W: W1
+        ProjectsScreens.register(into: r, container: container, coordinator: coordinator)           // P: P1, P2
+        LeadsScreens.register(into: r, container: container, coordinator: coordinator)              // L: L1, L2
+        DecisionsScreens.register(into: r, container: container, coordinator: coordinator)          // D: D1, D2
+        MessagesScreens.register(into: r, container: container, coordinator: coordinator)           // M: M1, M2
+        ReceivingScreens.register(into: r, container: container, coordinator: coordinator)          // G: G1, G2, G3
+        QRApproveScreens.register(into: r, container: container, coordinator: coordinator)          // Q: Q1, Q2
+        SiteScanScreens.register(into: r, container: container, coordinator: coordinator)           // F: F1–F4
     }
 }

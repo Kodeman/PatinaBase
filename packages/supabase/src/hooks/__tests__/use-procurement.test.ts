@@ -1054,7 +1054,12 @@ describe('useCreateReceivingInspection', () => {
     expect(claimBuilder).toBeDefined();
     const claimInsert = claimBuilder.__chain.find((c) => c.method === 'insert');
     expect(claimInsert).toBeDefined();
-    const claimRow = claimInsert?.args[0] as Record<string, unknown>;
+    // The hook inserts an ARRAY of claim rows — one per damaged FF&E item, or a
+    // single PO-level row when none are specified (W5-T2 partial receiving).
+    const claimRows = claimInsert?.args[0] as Array<Record<string, unknown>>;
+    expect(Array.isArray(claimRows)).toBe(true);
+    expect(claimRows).toHaveLength(1);
+    const claimRow = claimRows[0];
     expect(claimRow.receiving_inspection_id).toBe('insp-damaged');
     expect(claimRow.state).toBe('drafted');
     // Description must contain vendor name AND PO number.

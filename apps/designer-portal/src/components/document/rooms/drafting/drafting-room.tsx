@@ -23,17 +23,22 @@
  * A Room — full-bleed paper, zero shadows (D4); reuses RoomShell's physics.
  */
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useProposal,
+  useProposalFeedback,
   useScopeBuilderSummary,
   useUpdateProposalItem,
   type ProposalItemType,
 } from '@patina/supabase';
+import { latestVerdictByLine } from '@patina/utils';
 import { RoomShell } from '../room-shell';
 import { StrataMark } from '../../strata-mark';
+import { StatusChip } from '../../status-chip';
+import { ProposalShareInstrument } from '../../proposal-share-instrument';
+import { verdictChipSpec } from '@/lib/document/verdict-chip';
 import { FacetSection } from './facet-section';
 import { ProposalPreviewRail } from '../../drafting/proposal-mirror';
 import { SendSheet } from '../../overlays/send-sheet';
@@ -53,6 +58,9 @@ import { ChangeOrderTermsEditor } from '@/components/portal/scope-builder/change
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { TermsAgreementBody } from './terms-agreement-body';
+import { ScheduleLineUnfold } from './schedule-line-unfold';
+import type { ComposeDecisionRequest } from '@/lib/document/compose-decision';
+import { ComposeDecisionSheet } from '@/components/document/coordination/compose-decision-sheet';
 
 const STATE_TONE: Record<string, { color: string; bg: string }> = {
   Outline: { color: 'var(--color-aged-oak)', bg: 'transparent' },
@@ -87,6 +95,52 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
   const { facets, summary: s, items, fill, pct, state, gaps } = useDraftingState(proposalId);
   const updateItem = useUpdateProposalItem();
   const queryClient = useQueryClient();
+
+  // C3 — the client's per-line verdicts, folded to the latest per line, so the
+  // schedule can wear an approve / flag / note chip beside each row (no chip
+  // when a line has no verdict). Shares the ['proposal-feedback', id] query with
+  // the line unfold — one fetch.
+  const { data: feedback = [] } = useProposalFeedback(proposalId);
+
+  // C4 — escalate a flagged line to a client Decision. The Drafting Room is its
+  // own route (no margin rail), so it hosts the composer itself. Available only
+  // once the proposal has a project + client — the composer's existing contract.
+  const composeProjectId = (proposal?.project_id as string | null) ?? null;
+  const composeClientUserId = (proposal?.client_id as string | null) ?? null;
+  const canComposeDecision = Boolean(composeProjectId && composeClientUserId);
+  const [composeRequest, setComposeRequest] = useState<ComposeDecisionRequest | null>(null);
+
+  // A1 — the Desk "N lines flagged" walk-in arrives at /drafting/<id>?flagged=1.
+  // Read it client-side (no useSearchParams → no Suspense boundary needed) and
+  // auto-open the oldest unresolved flag's line, its Alternatives band showing.
+  const [arrivingFlagged, setArrivingFlagged] = useState(false);
+  useEffect(() => {
+    setArrivingFlagged(new URLSearchParams(window.location.search).get('flagged') === '1');
+  }, []);
+  const firstFlaggedItemId = useMemo(() => {
+    if (!arrivingFlagged) return undefined;
+    const open = feedback.filter((f) => f.verdict === 'rejected' && !f.resolved_at && f.proposal_item_id);
+    if (open.length === 0) return undefined;
+    return open.reduce((a, b) => (a.created_at <= b.created_at ? a : b)).proposal_item_id ?? undefined;
+  }, [arrivingFlagged, feedback]);
+  const latestVerdict = useMemo(
+    () =>
+      latestVerdictByLine(
+        feedback.map((f) => ({
+          lineId: f.proposal_item_id ?? '',
+          verdict: f.verdict,
+          createdAt: f.created_at,
+          resolvedAt: f.resolved_at,
+        })),
+      ),
+    [feedback],
+  );
+  const renderVerdictChip = (item: { id: string }) => {
+    const v = latestVerdict.get(item.id);
+    if (!v) return null;
+    const spec = verdictChipSpec(v.verdict, v.resolvedAt);
+    return spec ? <StatusChip label={spec.label} color={spec.color} /> : null;
+  };
 
   // Payments needs the running total (Σ FF&E estimate + Σ design fees), like the
   // legacy shell computed for the milestone allocator.
@@ -166,7 +220,15 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
     <RoomShell
       title="The Drafting Room"
       count={pct > 0 ? `${pct}% drafted` : undefined}
-      action={sendAction}
+      // C2 — the share instrument rides beside the send act in the head: a quiet
+      // mono doorway into the tokenized share-link sheet (view-only client copy),
+      // seeded from the proposal's client-visibility tier.
+      action={
+        <div className="flex items-center gap-4">
+          <ProposalShareInstrument proposalId={proposalId} tier={proposal?.client_visibility_tier} />
+          {sendAction}
+        </div>
+      }
       // S10: no backTo — leaving returns to the stashed origin (the document the
       // designer walked in from, "← the document"), not the legacy proposals route.
     >
@@ -262,7 +324,27 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
                   </div>
                 </div>
               )}
-              <FFEScheduleBuilder proposalId={proposalId} />
+              {/* S5 — a row unfolds in place (Document grammar; the legacy
+                  /portal host keeps pencil-edit only). D4 inside the paper: the
+                  shared builder's bulk bar + filter popover carry shadow-lg in
+                  the old zones — strip them here without touching them (R3),
+                  the same move LineUnfold makes for the procurement panels. */}
+              <div className="contents [&_.shadow-lg]:shadow-none [&_.shadow-xl]:shadow-none">
+                <FFEScheduleBuilder
+                  proposalId={proposalId}
+                  initialUnfoldedId={firstFlaggedItemId}
+                  renderUnfold={(item, fold) => (
+                    <ScheduleLineUnfold
+                      item={item}
+                      proposalId={proposalId}
+                      onFold={fold}
+                      canComposeDecision={canComposeDecision}
+                      onComposeDecision={setComposeRequest}
+                    />
+                  )}
+                  renderVerdictChip={renderVerdictChip}
+                />
+              </div>
             </FacetSection>
 
             {/* Movement 3 · The Vision (palette + boards) — placed before the
@@ -377,6 +459,18 @@ export function DraftingRoom({ proposalId }: { proposalId: string }) {
         onClose={() => setSendOpen(false)}
         onSent={returnToDocument}
       />
+
+      {/* C4 — the escalate-to-Decision composer, opened from a flagged line's
+          Alternatives band. Mounted only with a project + client in hand. */}
+      {composeRequest && composeProjectId && (
+        <ComposeDecisionSheet
+          proposalId={proposalId}
+          projectId={composeProjectId}
+          clientUserId={composeClientUserId}
+          request={composeRequest}
+          onClose={() => setComposeRequest(null)}
+        />
+      )}
     </RoomShell>
   );
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # capture-run.sh — the "run" half of the Claude Code <-> Xcode loop.
 # Generates the project, builds for the simulator, boots it, installs, and
-# launches the Capture app — optionally jumping straight to one of the 32
+# launches the Capture app — optionally jumping straight to one of the 33
 # screens via the `-CaptureScreen <suffix>` harness.
 #
 # (capture-gate.sh is the "verify" half: build / unit tests / lint.)
@@ -24,7 +24,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SIM="${CAPTURE_SIM:-iPhone 17}"
-BUNDLE_ID="cloud.patina.capture"
+BUNDLE_ID="cloud.patina.field"
 DERIVED=".build/derived"          # under the gitignored .build/
 SCREEN="${1:-}"
 

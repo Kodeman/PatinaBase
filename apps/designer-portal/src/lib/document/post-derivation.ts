@@ -13,7 +13,12 @@
  * Everything else is a plain NOTICE (an event that happened — read it, move on).
  */
 
-import type { InboxNotification, InboxMessage } from '@patina/supabase';
+import type {
+  InboxNotification,
+  InboxMessage,
+  ProcurementNotification,
+  ProcurementNotificationKind,
+} from '@patina/supabase';
 import type { NeedKind, SectionKey } from './desk-derivation';
 import { sectionAnchorId } from './section-anchor';
 
@@ -115,7 +120,19 @@ export function deepLinkFor(n: InboxNotification): string | null {
  */
 export function deriveRecordRow(n: InboxNotification): RecordRow {
   const type = (n.type ?? '').toLowerCase();
-  const needKind = NOTIFICATION_NEED_KIND[type] ?? null;
+  // C4 (Schedule & Boards Wave 2): a per-line client verdict lands as ONE
+  // notification type ('client_feedback') for approve / flag / note. Only a FLAG
+  // is Desk-backed — the 'lines_flagged' need carries the act (resolve / revise)
+  // — so only a rejected verdict becomes a quiet cross-reference (R82). An
+  // approval or a note has no Desk act and reads as a plain notice. Handled here
+  // (not in NOTIFICATION_NEED_KIND) because that map keys on type alone and one
+  // type covers all three verdicts.
+  const needKind: NeedKind | null =
+    type === 'client_feedback'
+      ? metaString(n.metadata, 'verdict') === 'rejected'
+        ? 'lines_flagged'
+        : null
+      : (NOTIFICATION_NEED_KIND[type] ?? null);
   const docHref = documentHrefFor(n);
 
   if (needKind) {
@@ -133,6 +150,106 @@ export function deriveRecordRow(n: InboxNotification): RecordRow {
   const deep = deepLinkFor(n);
   const href = docHref ?? (isDocumentRoute(deep) ? deep : null);
   return { kind: 'notice', href, onDesk: false, needKind: null };
+}
+
+// ─── The unified Record item (Wave 0B) ───────────────────────────────────────
+//
+// The Record reads TWO ledgers: notification_log (the inbox feed) and
+// procurement_notifications (00151 — deposits/balances due, deliveries,
+// damage claims; written by triggers + pg_cron 00189, which never
+// double-write into notification_log). Both map into one RecordItem so the
+// sheet renders a single dated list and mark-read routes back to the right
+// table.
+
+export type RecordSource = 'inbox' | 'procurement';
+
+export interface RecordItem {
+  /** Stable list key across both feeds. */
+  key: string;
+  source: RecordSource;
+  /** Source-row id — what mark-read needs. */
+  id: string;
+  createdAt: string;
+  read: boolean;
+  title: string;
+  body: string;
+  /** The mono footer label (the inbox row's humanized type). */
+  typeLabel: string;
+  row: RecordRow;
+}
+
+/** An inbox (notification_log) notice as a Record item. */
+export function inboxRecordItem(n: InboxNotification): RecordItem {
+  return {
+    key: `inbox:${n.id}`,
+    source: 'inbox',
+    id: n.id,
+    createdAt: n.created_at,
+    read: isNotificationRead(n),
+    title: notificationTitle(n),
+    body: notificationBody(n),
+    typeLabel: formatType(n.type),
+    row: deriveRecordRow(n),
+  };
+}
+
+/**
+ * Procurement kind → the Desk {@link NeedKind} that already carries its act
+ * (R82, the NOTIFICATION_NEED_KIND rule): a drafted damage claim is a Desk
+ * need, so its Record row is a quiet cross-reference. The due/delivery kinds
+ * have no Desk need line — they are plain notices.
+ */
+export const PROCUREMENT_NEED_KIND: Partial<
+  Record<ProcurementNotificationKind, NeedKind>
+> = {
+  damage_claim_drafted: 'damage_claim',
+};
+
+const PROCUREMENT_KIND_TITLE: Record<ProcurementNotificationKind, string> = {
+  deposit_due: 'Deposit due',
+  balance_due: 'Balance due',
+  milestone_due: 'Milestone payment due',
+  delivery_this_week: 'Delivery this week',
+  damage_claim_drafted: 'Damage claim drafted',
+};
+
+/**
+ * A procurement notice as a Record item. The title carries the vendor when
+ * the joined PO names one ("Deposit due — Hewn Woodworks"); the body is the
+ * project name. Navigation follows the Record's own rule: a joined project
+ * makes it a document address (`/doc/{id}`), a need-backed kind with no
+ * project defers to the Desk, and anything unaddressable is read-only
+ * (href null) — the Post never bounces out to a zone.
+ */
+export function procurementRecordItem(n: ProcurementNotification): RecordItem {
+  const kindTitle = PROCUREMENT_KIND_TITLE[n.kind] ?? formatType(n.kind);
+  const vendorName = n.purchase_order?.vendor?.name ?? null;
+  const projectId = n.purchase_order?.project_id ?? null;
+  const needKind = PROCUREMENT_NEED_KIND[n.kind] ?? null;
+  const docHref = projectId ? `/doc/${projectId}` : null;
+
+  return {
+    key: `procurement:${n.id}`,
+    source: 'procurement',
+    id: n.id,
+    createdAt: n.created_at,
+    read: !!n.read_at,
+    title: vendorName ? `${kindTitle} — ${vendorName}` : kindTitle,
+    body: n.purchase_order?.project?.name ?? '',
+    typeLabel: 'Procurement',
+    row: needKind
+      ? { kind: 'cross_reference', href: docHref ?? '/desk', onDesk: true, needKind }
+      : { kind: 'notice', href: docHref, onDesk: false, needKind: null },
+  };
+}
+
+/** One dated ledger: both feeds merged, newest first. */
+export function mergeRecordItems(...feeds: RecordItem[][]): RecordItem[] {
+  return feeds
+    .flat()
+    .sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
 }
 
 // ─── Presentation helpers (pure — shared by the sheet, testable in isolation) ──

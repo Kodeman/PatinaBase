@@ -45,8 +45,8 @@ public final class AppCoordinator: Coordinator {
     /// `currentScreen` + companion context (R11).
     private var screenStack: [AppRoute] = []
 
-    /// The route shown when `navigationPath` is empty — `.heroFrame` or
-    /// `.designerHome` depending on the active home surface.
+    /// The route shown when `navigationPath` is empty — always `.heroFrame`
+    /// (the client home surface).
     private var rootScreen: AppRoute = .heroFrame
 
     /// Whether the companion sheet is expanded
@@ -287,17 +287,6 @@ public final class AppCoordinator: Coordinator {
             navigationPath = NavigationPath()
             updateContext(for: route)
 
-        case .designerHome:
-            // The root home surface is picked by `preferredHomeMode` in
-            // ContentView.mainHomeView — without flipping it, this route
-            // resets the path but lands the user back on the consumer
-            // home (R09).
-            SettingsService.shared.setPreferredHomeMode(.designer)
-            rootScreen = route
-            screenStack = []
-            navigationPath = NavigationPath()
-            updateContext(for: route)
-
         case .roomList, .yourSpaces, .roomProject, .roomSettings,
              .crossRoom, .manualRoomEntry, .roomDetail, .roomSavedItems,
              .table, .scanFlow, .emergence, .roomEmergence, .pieceDetail,
@@ -306,8 +295,7 @@ public final class AppCoordinator: Coordinator {
              .profile, .notifications, .designerConsultation,
              .projectList, .projectDetail,
              .decisionList, .decisionDetail,
-             .threadList, .threadDetail,
-             .receiveDelivery:
+             .threadList, .threadDetail:
             push(route)
             updateContext(for: route)
         }
@@ -342,8 +330,7 @@ public final class AppCoordinator: Coordinator {
     public func setCurrentScreen(_ route: AppRoute) {
         currentScreen = route
         // Keep the pop-restore fallback in sync with whichever home surface
-        // is actually showing (consumer vs designer) — root views call this
-        // from `.onAppear`.
+        // is actually showing — root views call this from `.onAppear`.
         if navigationPath.isEmpty { rootScreen = route }
         trackScreen(for: route)
         updateContext(for: route)
@@ -419,11 +406,9 @@ public final class AppCoordinator: Coordinator {
             companionContext.walkProgress = nil
 
         // MVP v1 expanded routes — clear viewing context.
-        case .designerHome,
-             .projectList, .projectDetail,
+        case .projectList, .projectDetail,
              .decisionList, .decisionDetail,
-             .threadList, .threadDetail,
-             .receiveDelivery:
+             .threadList, .threadDetail:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
         }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useCallback } from 'react';
+import { Fragment, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createBrowserClient } from '@patina/supabase';
 import type {
   Proposal,
@@ -18,11 +18,22 @@ import {
   TimelinePhasesBlock,
   ExclusionsBlock,
   ScopeRoomsBlock,
+  type BoardsBlockBoard,
 } from '@patina/design-system';
-import { proposalTierVisibility } from '@patina/utils';
+import {
+  shareVisibilityForTier,
+  blockVisibilityFromShare,
+  rollupVerdicts,
+  formatVerdictRollup,
+  recordCompletenessFill,
+  recordCompletenessPct,
+  type ShareVisibility,
+} from '@patina/utils';
+import { useProposalFeedback, type ItemFeedback } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { StrataMark } from '@/components/strata-mark';
 import { BoardsBlock } from '@/components/board-block';
+import { LineFeedback } from '@/components/proposal-line-feedback';
 import { proposalClientEvents } from '@/lib/analytics/events';
 
 interface ProposalDocumentProps {
@@ -34,6 +45,27 @@ interface ProposalDocumentProps {
   exclusions?: ProposalExclusion[];
   scopeRooms?: ProposalScopeRoom[];
   boards?: ProposalBoardSummary[];
+  /**
+   * Fully-materialized boards for a GUEST render (B3): the guest has no session,
+   * so the client-side useBoardsWithItems wrapper RLS-fetches zero rows — the
+   * share route resolves boards server-side and passes them here instead. When
+   * present, the board wrapper renders these directly and skips its own fetch.
+   */
+  resolvedBoards?: BoardsBlockBoard[];
+  /**
+   * A per-field visibility override. Passed by a guest share render (C2) with
+   * the share's ShareVisibility record. When absent, visibility is derived from
+   * the proposal's tier (the authed client's own copy).
+   */
+  visibility?: ShareVisibility;
+  /**
+   * Whether the per-line verdict loop (C3) is offered. The page computes this:
+   * authed client + proposals.feedback_enabled + not a guest share. Never true
+   * on a guest render.
+   */
+  feedbackEnabled?: boolean;
+  /** Guest share only: the studio name for the quiet "shared by" letterhead line. */
+  sharedByStudio?: string;
 }
 
 function formatCurrency(amount: number): string {
@@ -61,6 +93,10 @@ export function ProposalDocument({
   exclusions = [],
   scopeRooms = [],
   boards = [],
+  resolvedBoards,
+  visibility,
+  feedbackEnabled = false,
+  sharedByStudio,
 }: ProposalDocumentProps) {
   const { user } = useAuth();
   const hasRecordedOpen = useRef(false);
@@ -167,8 +203,38 @@ export function ProposalDocument({
   // blocks render here, so preview = truth. `tbd` placeholder pieces are studio
   // scaffolding and never reach the client (R43), so they fall out of the
   // itemized list at every tier.
-  const gate = proposalTierVisibility(proposal.client_visibility_tier);
+  // R86 + Wave-2 C1: the fielded law. `visibility` (a guest share's record) wins;
+  // otherwise the proposal's tier preset. The legacy block gate derives from the
+  // same record, so existing money-block behavior is unchanged.
+  const share = visibility ?? shareVisibilityForTier(proposal.client_visibility_tier);
+  const gate = blockVisibilityFromShare(share);
   const items = (proposal.items ?? []).filter((it) => it.item_type !== 'tbd');
+
+  // C3/C5 — the client's own verdicts on this proposal's lines (only when the
+  // loop is offered; a guest render passes feedbackEnabled=false so this is inert).
+  const { data: feedbackRows = [] } = useProposalFeedback(feedbackEnabled ? proposal.id : undefined);
+  const feedbackByItem = useMemo(() => {
+    const m = new Map<string, ItemFeedback[]>();
+    for (const f of feedbackRows) {
+      if (!f.proposal_item_id) continue;
+      const arr = m.get(f.proposal_item_id) ?? [];
+      arr.push(f);
+      m.set(f.proposal_item_id, arr);
+    }
+    return m;
+  }, [feedbackRows]);
+  const rollupText = useMemo(() => {
+    if (!feedbackEnabled) return '';
+    const verdicts = feedbackRows
+      .filter((f) => f.proposal_item_id)
+      .map((f) => ({
+        lineId: f.proposal_item_id as string,
+        verdict: f.verdict,
+        createdAt: f.created_at,
+        resolvedAt: f.resolved_at,
+      }));
+    return formatVerdictRollup(rollupVerdicts(items.length, verdicts));
+  }, [feedbackEnabled, feedbackRows, items.length]);
 
   // Mood boards render after the `concept` section when one exists, else just
   // before `selections`, else after the last section. A negative index means
@@ -181,6 +247,18 @@ export function ProposalDocument({
       : selectionsIndex >= 0
         ? selectionsIndex - 1
         : sections.length - 1;
+
+  // One board section, positioned by boardsAfterIndex. `resolvedBoards` (guest)
+  // renders directly; otherwise the wrapper fetches by proposalId under RLS.
+  // feedbackEnabled threads the per-pin verdict acts (B4) — never on a guest.
+  const boardsBlock = (
+    <BoardsBlock
+      boards={boards}
+      resolved={resolvedBoards}
+      proposalId={proposal.id}
+      feedbackEnabled={feedbackEnabled}
+    />
+  );
 
   return (
     <article
@@ -221,13 +299,23 @@ export function ProposalDocument({
               For {proposal.client.full_name}
             </p>
           )}
+          {rollupText && (
+            <p className="type-meta-small mt-1 text-[var(--text-muted)]">{rollupText}</p>
+          )}
         </div>
-        <span className="type-meta-small text-[var(--text-muted)]">
-          {formatDate(proposal.created_at)}
-        </span>
+        <div className="text-right">
+          <span className="type-meta-small block text-[var(--text-muted)]">
+            {formatDate(proposal.created_at)}
+          </span>
+          {sharedByStudio && (
+            <span className="type-meta-small mt-1 block text-[var(--text-muted)]">
+              Shared by {sharedByStudio}
+            </span>
+          )}
+        </div>
       </header>
 
-      {boardsAfterIndex < 0 && <BoardsBlock boards={boards} />}
+      {boardsAfterIndex < 0 && boardsBlock}
 
       {sections.map((section, index) => (
         <Fragment key={section.id}>
@@ -270,8 +358,17 @@ export function ProposalDocument({
               <SpacePlanBlock metadata={section.metadata} />
             )}
 
-            {section.type === 'selections' && items.length > 0 && (
-              <SelectionsList items={items} showPrices={gate.lineItems} />
+            {section.type === 'selections' && items.length > 0 && share.itemDetails && (
+              <SelectionsList
+                items={items}
+                showPrices={share.pricing}
+                showSupplier={share.supplierIdentity}
+                showLeadTimes={share.leadTimes}
+                showSourceUrls={share.sourceUrls}
+                proposalId={proposal.id}
+                feedbackEnabled={feedbackEnabled}
+                feedbackByItem={feedbackByItem}
+              />
             )}
 
             {section.type === 'investment' && (
@@ -340,7 +437,7 @@ export function ProposalDocument({
             )}
           </section>
         </div>
-        {index === boardsAfterIndex && <BoardsBlock boards={boards} />}
+        {index === boardsAfterIndex && boardsBlock}
         </Fragment>
       ))}
 
@@ -409,51 +506,146 @@ function SpacePlanBlock({ metadata }: { metadata: Record<string, unknown> }) {
   );
 }
 
+/**
+ * Bare host of a source URL, www-stripped — the quiet provenance tag (A2).
+ * Matches spec-pdf's host-only style ("Brand · host.com · …"). An invalid URL
+ * renders nothing (returns null).
+ */
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The record-completeness trust mark (A2) — three short stacked rules whose fill
+ * fractions come from recordCompletenessFill (identity+piece / commerce+folio /
+ * taught). A quiet echo of the designer Piece Room's Strata-Mark; the mono label
+ * beside it carries the reading, so the mark itself is aria-hidden. All three
+ * fully filled === a verified record (100%), consistent with spec-pdf.
+ */
+function RecordFillMark({ fill }: { fill: [number, number, number] }) {
+  const rows: { width: number; accent: string; opacity: string }[] = [
+    { width: 34, accent: 'bg-patina-mocha', opacity: '' },
+    { width: 27, accent: 'bg-patina-clay', opacity: 'opacity-70' },
+    { width: 20, accent: 'bg-patina-clay', opacity: 'opacity-35' },
+  ];
+  return (
+    <span aria-hidden className="inline-flex shrink-0 flex-col gap-[2px]">
+      {rows.map((row, i) => (
+        <span
+          key={i}
+          className="block h-[2px] rounded-full bg-[var(--border-subtle)]"
+          style={{ width: row.width }}
+        >
+          <span
+            className={`block h-full rounded-full ${row.accent} ${row.opacity}`}
+            style={{ width: `${Math.round(fill[i] * 100)}%` }}
+          />
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function SelectionsList({
   items,
   showPrices = true,
+  showSupplier = true,
+  showLeadTimes = false,
+  showSourceUrls = false,
+  proposalId,
+  feedbackEnabled = false,
+  feedbackByItem,
 }: {
   items: ProposalItem[];
   showPrices?: boolean;
+  // C1 fielded law — supplier identity is now independent of pricing (fixes the
+  // vendor/brand bundling defect), and lead times gate on their own field.
+  showSupplier?: boolean;
+  showLeadTimes?: boolean;
+  // A2 — makes the share's `sourceUrls` field real: the per-line source host.
+  showSourceUrls?: boolean;
+  proposalId: string;
+  feedbackEnabled?: boolean;
+  feedbackByItem?: Map<string, ItemFeedback[]>;
 }) {
   return (
     <ul className="mt-4 space-y-3">
-      {items.map((item) => (
-        <li
-          key={item.id}
-          className="flex items-center gap-3 rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2.5"
-        >
-          {(item.image_url || item.product?.images?.[0]) && (
-            <div
-              className="h-12 w-12 flex-shrink-0 overflow-hidden rounded"
-              style={{ background: 'var(--color-pearl, #f5f3ee)' }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={item.image_url || item.product?.images?.[0]!}
-                alt=""
-                className="h-full w-full object-cover"
-              />
+      {items.map((item) => {
+        const supplier = showSupplier ? item.vendor_name || item.product?.brand : null;
+        const leadWeeks = (item as { lead_time_weeks?: number | null }).lead_time_weeks;
+        const meta: string[] = [];
+        if (supplier) meta.push(supplier);
+        if (item.quantity > 1) meta.push(`Qty ${item.quantity}`);
+        if (showLeadTimes && leadWeeks) meta.push(`${leadWeeks} wk lead`);
+        // A2 — provenance trust surfaces. The source host is gated on the share's
+        // sourceUrls field; the record-completeness mark rides on a joined product
+        // (itemDetails already gates the whole list). hasTeaching = ≥1 taught style
+        // from the product_styles(count) embed; when the relation is unreadable the
+        // count is absent and it degrades to false (an un-taught record).
+        const product = item.product;
+        const sourceHost =
+          showSourceUrls && product?.source_url ? hostOf(product.source_url) : null;
+        const hasTeaching = (product?.product_styles?.[0]?.count ?? 0) > 0;
+        const fill = product ? recordCompletenessFill(product, hasTeaching) : null;
+        const pct = product ? recordCompletenessPct(product, hasTeaching) : null;
+        return (
+          <li
+            key={item.id}
+            className="rounded-[3px] border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2.5"
+          >
+            <div className="flex items-center gap-3">
+              {(item.image_url || item.product?.images?.[0]) && (
+                <div
+                  className="h-12 w-12 flex-shrink-0 overflow-hidden rounded"
+                  style={{ background: 'var(--color-pearl, #f5f3ee)' }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.image_url || item.product?.images?.[0]!}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="type-body-small font-medium text-[var(--text-primary)]">
+                  {item.name || item.product?.name || 'Item'}
+                </p>
+                {meta.length > 0 && (
+                  <p className="type-meta-small text-[var(--text-muted)]">{meta.join(' · ')}</p>
+                )}
+                {sourceHost && (
+                  <p className="type-meta-small text-[var(--text-muted)]">{sourceHost}</p>
+                )}
+                {fill && pct !== null && (
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <RecordFillMark fill={fill} />
+                    <span className="type-meta-small text-[var(--text-muted)]">
+                      {pct === 100 ? 'Verified record' : `Record ${pct}% complete`}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {showPrices && (
+                <span className="type-meta text-[var(--text-primary)]">
+                  {formatCurrency((item.line_total_cents || 0) / 100)}
+                </span>
+              )}
             </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="type-body-small font-medium text-[var(--text-primary)]">
-              {item.name || item.product?.name || 'Item'}
-            </p>
-            {(item.vendor_name || item.product?.brand) && (
-              <p className="type-meta-small text-[var(--text-muted)]">
-                {item.vendor_name || item.product?.brand}
-                {item.quantity > 1 && ` · Qty ${item.quantity}`}
-              </p>
+            {feedbackEnabled && (
+              <LineFeedback
+                proposalId={proposalId}
+                itemId={item.id}
+                feedback={feedbackByItem?.get(item.id) ?? []}
+              />
             )}
-          </div>
-          {showPrices && (
-            <span className="type-meta text-[var(--text-primary)]">
-              {formatCurrency((item.line_total_cents || 0) / 100)}
-            </span>
-          )}
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ul>
   );
 }

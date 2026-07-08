@@ -1,6 +1,7 @@
 export {
   useProducts,
   useProduct,
+  useProductPrices,
   useProductsWithVendorPricing,
   useProductWithVendorPricing,
   useCreateProduct,
@@ -65,6 +66,7 @@ export type {
   ProductSort,
   UseProductsOptions,
   CreateDraftProductInput,
+  ProductPrice,
 } from './use-products';
 export {
   useFFECategories,
@@ -329,6 +331,7 @@ export {
   useCreateProposal,
   useUpdateProposal,
   useAddProposalItem,
+  useProposalScheduleItems,
   useUpdateProposalItem,
   useRemoveProposalItem,
   useSendProposal,
@@ -694,6 +697,8 @@ export {
   useAddScopeRoom,
   useUpdateScopeRoom,
   useRemoveScopeRoom,
+  useReorderProposalItems,
+  useReorderProposalScopeRooms,
   useProposalPhases,
   useAddProposalPhase,
   useUpdateProposalPhase,
@@ -724,6 +729,7 @@ export {
   useProjectFFEItems,
   useUpdateFFEItemStatus,
   useUpdateFFEItemPricing,
+  useBulkReassignFfeVendor,
   useProjectPhases,
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
@@ -737,6 +743,8 @@ export type {
   ProjectPalette,
   ProjectPaletteSwatch,
   UpdateFFEItemPricingInput,
+  BulkReassignFfeVendorInput,
+  BulkReassignFfeVendorResult,
 } from './use-project-v2';
 export {
   // Proposal Activation
@@ -1070,16 +1078,26 @@ export type {
 export {
   useBoards,
   useBoard,
+  useBoardsWithItems,
   useUpsertBoard,
+  useDuplicateBoard,
   useDeleteBoard,
   useAddBoardItem,
   useUpdateBoardItem,
   useDeleteBoardItem,
   useSaveBoardLayout,
   useProjectBoards,
+  // B8 (00272/00273) — project-owned live boards
+  useProjectOwnedBoards,
+  useContinueBoardInProject,
+  // Pure helpers (00264 — exported for unit tests + reuse)
+  summarizeBoard,
+  buildDuplicateBoardItemRows,
 } from './use-boards';
 export type {
   BoardItemType,
+  BoardStatus,
+  BoardSection,
   ProposalBoard,
   ProposalBoardSummary,
   ProposalBoardItem,
@@ -1223,3 +1241,36 @@ export type {
   FeedbackFilters,
   CreateFeedbackInput,
 } from './use-feedback';
+
+// Schedule & Boards Wave 2 · Track C — document shares (C2) + per-line verdicts (C3)
+export {
+  useProposalShares,
+  useCreateShare,
+  useRevokeShare,
+} from './use-document-shares';
+export type { DocumentShare, CreatedShare } from './use-document-shares';
+export {
+  useProposalFeedback,
+  useBoardFeedback,
+  useItemFeedbackThread,
+  useSubmitVerdict,
+  useReplyToItemFeedback,
+  useResolveFeedback,
+} from './use-item-feedback';
+export type { ItemFeedback, ItemFeedbackEvent, Verdict } from './use-item-feedback';
+
+// Schedule & Boards Wave 3 · Track A — Designer-Taught Intelligence (A1/C4/B6/A3)
+export {
+  useTaughtAlternatives,
+  useLogSuggestionEvent,
+  useSwapLineToProduct,
+  useEscalateFeedbackToDecision,
+} from './use-taught-alternatives';
+export type {
+  TaughtAlternative,
+  SuggestionContext,
+  SuggestionAction,
+  SuggestionEventInput,
+} from './use-taught-alternatives';
+export { useCaptureFromUrl } from './use-capture-from-url';
+export type { CaptureFromUrlResult } from './use-capture-from-url';

@@ -1,6 +1,23 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ReactNode } from 'react';
+import {
+  DndContext,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Button, Input, Select, Textarea } from '@/components/ui/controls';
 import { proposalEvents } from '@/lib/analytics';
 import {
@@ -8,6 +25,7 @@ import {
   useAddScopeRoom,
   useUpdateScopeRoom,
   useRemoveScopeRoom,
+  useReorderProposalScopeRooms,
   useFFECategories,
   useCreateFFECategory,
   type FFECategory,
@@ -210,6 +228,7 @@ function RoomCard({
   editingId,
   onEdit,
   onCancelEdit,
+  dragHandle,
 }: {
   room: ScopeRoom;
   proposalId: string;
@@ -219,6 +238,8 @@ function RoomCard({
   editingId: string | null;
   onEdit: (id: string) => void;
   onCancelEdit: () => void;
+  /** S3 — sortable grip rendered beside the budget (hover-visible). */
+  dragHandle?: ReactNode;
 }) {
   const updateRoom = useUpdateScopeRoom();
   const removeRoom = useRemoveScopeRoom();
@@ -308,7 +329,7 @@ function RoomCard({
             {room.dimensions ? ` · ${room.dimensions}` : ''}
           </div>
         </div>
-        <div className="text-right">
+        <div className="flex items-start gap-1.5 text-right">
           <div
             style={{
               fontFamily: 'var(--font-display)',
@@ -319,6 +340,11 @@ function RoomCard({
           >
             {formatDollars(room.budget_cents)}
           </div>
+          {dragHandle && (
+            <span className="opacity-0 transition-opacity group-hover:opacity-100">
+              {dragHandle}
+            </span>
+          )}
         </div>
       </div>
 
@@ -377,6 +403,60 @@ function RoomCard({
           {removeRoom.isPending ? 'Removing...' : 'Remove'}
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ─── Sortable room wrapper (S3) ──────────────────────────────────────────────
+//
+// Vertical-list sortable around each card; the grip renders inside the card
+// header via render-prop so Edit/Remove clicks never start a drag.
+
+function SortableRoom({
+  id,
+  disabled,
+  children,
+}: {
+  id: string;
+  disabled?: boolean;
+  children: (dragHandle: ReactNode) => ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+
+  const handle = disabled ? null : (
+    <button
+      type="button"
+      aria-label="Reorder room"
+      className="cursor-grab rounded-sm p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] active:cursor-grabbing"
+      {...attributes}
+      {...listeners}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <circle cx="9" cy="5" r="1.6" />
+        <circle cx="15" cy="5" r="1.6" />
+        <circle cx="9" cy="12" r="1.6" />
+        <circle cx="15" cy="12" r="1.6" />
+        <circle cx="9" cy="19" r="1.6" />
+        <circle cx="15" cy="19" r="1.6" />
+      </svg>
+    </button>
+  );
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : undefined,
+        zIndex: isDragging ? 10 : undefined,
+        position: 'relative',
+      }}
+    >
+      {children(handle)}
     </div>
   );
 }
@@ -455,8 +535,27 @@ export function RoomsInScope({ proposalId }: RoomsInScopeProps) {
   const { data: ffeCategoryRows = [] } = useFFECategories({ proposalId });
   const addRoom = useAddScopeRoom();
   const createCategory = useCreateFFECategory();
+  const reorderRooms = useReorderProposalScopeRooms();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+
+  // S3 — drag starts after 6px of travel so card clicks stay clicks.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const typedRooms = rooms as ScopeRoom[];
+    const from = typedRooms.findIndex((r) => r.id === active.id);
+    const to = typedRooms.findIndex((r) => r.id === over.id);
+    if (from === -1 || to === -1) return;
+    const orderedIds = arrayMove(typedRooms, from, to).map((r) => r.id);
+    // Optimistic order with rollback lives in the hook (00263 RPC).
+    reorderRooms.mutate({ proposalId, orderedIds });
+  };
 
   // Map taxonomy rows -> picker options + slug→label lookup.
   const categoryOptions = useMemo<FFECategoryOption[]>(
@@ -534,22 +633,33 @@ export function RoomsInScope({ proposalId }: RoomsInScopeProps) {
         </div>
       )}
 
-      {/* Room cards */}
-      <div className="space-y-3">
-        {(rooms as ScopeRoom[]).map((room) => (
-          <RoomCard
-            key={room.id}
-            room={room}
-            proposalId={proposalId}
-            categories={categoryOptions}
-            categoryLookup={categoryLookup}
-            onCreateCustom={handleCreateCustomCategory}
-            editingId={editingId}
-            onEdit={setEditingId}
-            onCancelEdit={() => setEditingId(null)}
-          />
-        ))}
-      </div>
+      {/* Room cards — vertically sortable (S3); order persists via 00263. */}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext
+          items={(rooms as ScopeRoom[]).map((r) => r.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-3">
+            {(rooms as ScopeRoom[]).map((room) => (
+              <SortableRoom key={room.id} id={room.id} disabled={editingId === room.id}>
+                {(dragHandle) => (
+                  <RoomCard
+                    room={room}
+                    proposalId={proposalId}
+                    categories={categoryOptions}
+                    categoryLookup={categoryLookup}
+                    onCreateCustom={handleCreateCustomCategory}
+                    editingId={editingId}
+                    onEdit={setEditingId}
+                    onCancelEdit={() => setEditingId(null)}
+                    dragHandle={dragHandle}
+                  />
+                )}
+              </SortableRoom>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
 
       {/* Add room form / button */}
       {isAdding ? (

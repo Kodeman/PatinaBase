@@ -12,7 +12,7 @@ Patina is a custom home furnishing platform connecting interior designers with m
 - **Database**: Single Supabase PostgreSQL (self-hosted at api.patina.cloud)
 - **Backend**: 3 NestJS services (orders, media, projects) using Prisma with schema isolation
 - **Infrastructure**: Coolify + Cloudflare Tunnel (production), Docker Compose + Supabase CLI (local)
-- **Native**: iOS app (Swift/SwiftUI), Chrome extension (Plasmo)
+- **Native**: 2 iOS apps (Swift/SwiftUI) — client (Patina) + designer/trades (Patina Field), Chrome extension (Plasmo)
 
 ## Essential Commands
 
@@ -66,7 +66,7 @@ patina/
 │   ├── admin-portal/          # Next.js 15 — admin dashboard (port 3001)
 │   ├── client-portal/         # Next.js 15 — client-facing PWA (port 3002)
 │   ├── extension/             # Plasmo Chrome extension (product capture)
-│   └── mobile/                # Swift/SwiftUI iOS app (room scans, QR auth)
+│   └── mobile/                # 2 Swift/SwiftUI iOS apps — client (Patina) + designer/trades (Patina Field)
 ├── services/
 │   ├── orders/                # NestJS — Stripe payments, EasyPost shipping (port 3015)
 │   ├── media/                 # NestJS — image processing, MinIO/S3 storage (port 3014)

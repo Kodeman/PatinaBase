@@ -1,7 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import {
   useProjectBoards,
+  useProjectOwnedBoards,
+  useContinueBoardInProject,
   type ProjectBoard,
   type ProjectBoardItem,
 } from '@patina/supabase';
@@ -10,7 +13,9 @@ import {
   type BoardItem,
   type BoardStaticItem,
 } from '@patina/design-system';
+import { Button } from '@/components/ui/controls';
 import { renderBoardItem } from '@/components/portal/scope-builder/board-item-renderer';
+import { BoardsBuilder } from '@/components/portal/scope-builder/boards-builder';
 
 interface ProjectBoardsSectionProps {
   /** Pass null for non-UUID (mock/slug) projects to skip the query. */
@@ -18,15 +23,33 @@ interface ProjectBoardsSectionProps {
 }
 
 /**
- * Read-only mood boards carried onto an activated project (project_boards
- * snapshot rows — migration 00180). Renders nothing while loading or when
- * the project has no non-empty boards.
+ * Mood boards on an activated project. Two tiers:
+ *  - The FROZEN record snapshot carried at signing (project_boards, 00180),
+ *    rendered read-only. Each can be "continued in the project" (B8) — cloned
+ *    into a live, editable project-owned board while the snapshot stays the
+ *    record.
+ *  - The LIVE project-owned boards (00272), shown in the same board builder the
+ *    proposal stage uses, in project context.
  */
 export function ProjectBoardsSection({ projectId }: ProjectBoardsSectionProps) {
   const { data: boards = [], isLoading } = useProjectBoards(projectId);
+  const { data: liveBoards = [] } = useProjectOwnedBoards(projectId);
+  const continueBoard = useContinueBoardInProject();
+  const [continuingId, setContinuingId] = useState<string | null>(null);
 
-  const visible = boards.filter((b) => (b.items?.length ?? 0) > 0);
-  if (isLoading || visible.length === 0) return null;
+  const snapshotBoards = boards.filter((b) => (b.items?.length ?? 0) > 0);
+  const hasLive = liveBoards.length > 0;
+
+  if (isLoading || (snapshotBoards.length === 0 && !hasLive)) return null;
+
+  const handleContinue = (boardId: string) => {
+    if (!projectId) return;
+    setContinuingId(boardId);
+    continueBoard.mutate(
+      { projectBoardId: boardId, projectId },
+      { onSettled: () => setContinuingId(null) },
+    );
+  };
 
   return (
     <section className="mb-8">
@@ -46,16 +69,54 @@ export function ProjectBoardsSection({ projectId }: ProjectBoardsSectionProps) {
         </span>
       </div>
 
-      <div className="space-y-4">
-        {visible.map((board) => (
-          <ProjectBoardCard key={board.id} board={board} />
-        ))}
-      </div>
+      {snapshotBoards.length > 0 && (
+        <div className="space-y-4">
+          {snapshotBoards.map((board) => (
+            <ProjectBoardCard
+              key={board.id}
+              board={board}
+              onContinue={projectId ? () => handleContinue(board.id) : undefined}
+              continuing={continuingId === board.id}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Live, editable project-owned boards (B8). Mounted only once at least
+          one board has been continued (or a fresh one added in the builder). */}
+      {hasLive && (
+        <div className="mt-6">
+          <div className="mb-3 flex items-baseline justify-between">
+            <h4
+              style={{
+                fontFamily: 'var(--font-heading)',
+                fontWeight: 500,
+                fontSize: '1rem',
+                lineHeight: 1.35,
+              }}
+            >
+              Working boards
+            </h4>
+            <span className="font-mono text-[0.58rem] uppercase tracking-wider text-[var(--text-muted)]">
+              Editable · continued in the project
+            </span>
+          </div>
+          <BoardsBuilder projectId={projectId ?? undefined} />
+        </div>
+      )}
     </section>
   );
 }
 
-function ProjectBoardCard({ board }: { board: ProjectBoard }) {
+function ProjectBoardCard({
+  board,
+  onContinue,
+  continuing,
+}: {
+  board: ProjectBoard;
+  onContinue?: () => void;
+  continuing?: boolean;
+}) {
   // The JSONB snapshot items carry NO id/locked fields (the activation RPC
   // strips them — see migration 00180), so key by array index. The array is
   // pre-ordered by z_index then created_at.
@@ -82,9 +143,16 @@ function ProjectBoardCard({ board }: { board: ProjectBoard }) {
     <div className="overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)]">
       <div className="flex items-baseline justify-between border-b border-[var(--border-default)] px-4 py-2.5">
         <span className="font-body text-sm text-[var(--text-primary)]">{board.name}</span>
-        <span className="font-mono text-[0.55rem] uppercase tracking-wider text-[var(--text-muted)]">
-          {board.items.length} {board.items.length === 1 ? 'item' : 'items'}
-        </span>
+        <div className="flex items-center gap-3">
+          {onContinue && (
+            <Button variant="ghost" size="sm" disabled={continuing} onClick={onContinue}>
+              {continuing ? 'Continuing…' : 'Continue this board in the project'}
+            </Button>
+          )}
+          <span className="font-mono text-[0.55rem] uppercase tracking-wider text-[var(--text-muted)]">
+            {board.items.length} {board.items.length === 1 ? 'item' : 'items'}
+          </span>
+        </div>
       </div>
       <BoardStatic
         items={items}

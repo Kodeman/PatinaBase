@@ -34,12 +34,30 @@ export interface ProposalItem {
   budget_min_cents?: number | null;
   budget_max_cents?: number | null;
   ffe_category?: string | null;
+  // Dual pricing (00185) + scheduling detail (Schedule & Boards Wave 1)
+  markup_percent?: number | null;
+  lead_time_weeks?: number | null;
+  internal_notes?: string | null;
+  /** Short spec/catalog reference, e.g. CH-01 (00262). */
+  doc_code?: string | null;
+  /** Designer-defined field values, keyed by spec_field_defs.field_key (S6, 00268). */
+  custom_fields?: Record<string, unknown> | null;
   // Joined data
   product?: {
     id: string;
     name: string;
     images: string[] | null;
     brand: string | null;
+    // Provenance trust inputs (Schedule & Boards Wave 3 · A2). `source_url`
+    // drives the per-line source host; the rest + the teaching count feed
+    // recordCompletenessFill/Pct (mirrors the Piece Room + spec-pdf scoring).
+    source_url: string | null;
+    dimensions: unknown;
+    materials: string[] | null;
+    price_retail: number | null;
+    price_trade: number | null;
+    /** PostgREST aggregate embed: [{ count }] — ≥1 style ⇒ the record is "taught". */
+    product_styles?: { count: number }[];
   };
 }
 
@@ -150,7 +168,11 @@ export function useProposal(proposalId: string) {
           client:profiles!client_id(id, email, full_name),
           items:proposal_items(
             *,
-            product:products(id, name, images, brand)
+            product:products(
+              id, name, images, brand,
+              source_url, dimensions, materials, price_retail, price_trade,
+              product_styles(count)
+            )
           )
         `)
         .eq('id', proposalId)
@@ -334,6 +356,36 @@ export function useUpdateProposal(options?: { errorSurface?: 'inline' }) {
 /**
  * Add an item to a proposal
  */
+/**
+ * A proposal's schedule lines, slim projection for twin detection + doc_code
+ * suggestion (B5 board→schedule). Keyed on the SAME query key the FF&E schedule
+ * uses, so useAddProposalItem's invalidation refreshes it after a line is added.
+ */
+export function useProposalScheduleItems(proposalId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['proposal-items-schedule', proposalId ?? null],
+    enabled: !!proposalId,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('proposal_items')
+        .select('id, product_id, doc_code, scope_room_id, name, ffe_category')
+        .eq('proposal_id', proposalId)
+        .order('position', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        product_id: string | null;
+        doc_code: string | null;
+        scope_room_id: string | null;
+        name: string | null;
+        ffe_category: string | null;
+      }>;
+    },
+  });
+}
+
 export function useAddProposalItem() {
   const queryClient = useQueryClient();
 
@@ -348,12 +400,16 @@ export function useAddProposalItem() {
       notes,
       category,
       vendorName,
+      imageUrl,
       // Wave 1 — structured FF&E
       itemType,
       scopeRoomId,
       budgetMinCents,
       budgetMaxCents,
       ffeCategory,
+      // Schedule & Boards Wave 1 — spec instrument
+      docCode,
+      leadTimeWeeks,
     }: {
       proposalId: string;
       productId?: string;
@@ -364,11 +420,15 @@ export function useAddProposalItem() {
       notes?: string;
       category?: string;
       vendorName?: string;
+      /** Snapshot image (e.g. a board pin's image) carried onto the line. */
+      imageUrl?: string | null;
       itemType?: ProposalItemType;
       scopeRoomId?: string | null;
       budgetMinCents?: number | null;
       budgetMaxCents?: number | null;
       ffeCategory?: string | null;
+      docCode?: string | null;
+      leadTimeWeeks?: number | null;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -409,6 +469,7 @@ export function useAddProposalItem() {
           notes: notes || null,
           category: category || null,
           vendor_name: vendorName || null,
+          image_url: imageUrl || null,
           position: nextPosition,
           // Wave 1 columns. Defaults match the table defaults from 00066.
           item_type: itemType ?? 'fixed',
@@ -416,6 +477,9 @@ export function useAddProposalItem() {
           budget_min_cents: budgetMinCents ?? null,
           budget_max_cents: budgetMaxCents ?? null,
           ffe_category: ffeCategory ?? null,
+          // Schedule & Boards Wave 1 (00262 doc_code + existing lead_time_weeks).
+          doc_code: docCode ?? null,
+          lead_time_weeks: leadTimeWeeks ?? null,
         })
         .select()
         .single();
@@ -470,6 +534,16 @@ export function useUpdateProposalItem() {
           | 'product_id'
           | 'vendor_name'
           | 'category'
+          | 'doc_code'
+          | 'lead_time_weeks'
+          | 'internal_notes'
+          // S² Wave 2: financial lens (bulk markup writes client price + markup)
+          // and S6 custom field values. line_total_cents is still recomputed
+          // below from the merged unit_sell_price, so passing unit_sell_price
+          // (with no unit_price) folds through correctly.
+          | 'unit_sell_price'
+          | 'markup_percent'
+          | 'custom_fields'
         >
       >;
     }) => {

@@ -31,11 +31,12 @@ import { useActivateProposal } from '@patina/supabase';
 import { familyLabel } from '@/lib/document/family-label';
 import { useProposalWatch } from '@/hooks/use-proposal-watch';
 import { useProposalProject } from '@/hooks/use-proposal-project';
-import { useNudgeProposal } from '@/hooks/use-proposals';
+import { useNudgeProposal, useProposal } from '@/hooks/use-proposals';
 import type { ProposalWatchModel } from '@/lib/document/proposal-watch-derivation';
 import { Stamp } from './stamp';
 import { Instrument, InstrumentRow } from './instrument';
 import { ProposalVersionHistory } from './proposal-version-history';
+import { ProposalShareInstrument } from './proposal-share-instrument';
 import { ProposalPreview } from './proposal-preview';
 import { ProposalPreviewRail } from './drafting/proposal-mirror';
 import { SendSheet } from './overlays/send-sheet';
@@ -107,6 +108,10 @@ export function ProposalWatch({
   const router = useRouter();
   const qc = useQueryClient();
   const { watch: w } = useProposalWatch(proposalId);
+  // The proposal's client-visibility tier seeds the share-link matrix (cached —
+  // the same read the letterhead instruments already hold).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: proposal } = useProposal(proposalId) as { data: any };
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [reviseOpen, setReviseOpen] = useState(false);
@@ -279,6 +284,7 @@ export function ProposalWatch({
             Mark signed
           </Instrument>
         )}
+        <ProposalShareInstrument proposalId={proposalId} tier={proposal?.client_visibility_tier} />
         <ProposalVersionHistory proposalId={proposalId} />
       </InstrumentRow>
 

@@ -35,6 +35,7 @@ import {
   ScopeRoomsBlock,
   ExclusionsBlock,
   TimelinePhasesBlock,
+  BoardComposition,
 } from '@patina/design-system';
 
 const getSupabase = () => createBrowserClient() as any;
@@ -64,6 +65,7 @@ export function useProposalMirrorData(proposalId: string) {
         { data: exclusions },
         { data: milestones },
         { data: phases },
+        { data: boardsRaw },
       ] = await Promise.all([
         // The rolled-up investment number is proposals.total_amount, plus the
         // tier that governs the whole render (R86). NO trade/cost/margin column.
@@ -113,6 +115,20 @@ export function useProposalMirrorData(proposalId: string) {
           .select('name, duration_weeks, sort_order')
           .eq('proposal_id', proposalId)
           .order('sort_order', { ascending: true }),
+        // Mood boards — the SAME render the client copy carries (no tier gate;
+        // boards aren't tier-gated). Items inlined + z-ordered for BoardComposition.
+        // status='active' mirrors useBoardsWithItems so this preview never shows
+        // an archived board the client's copy would hide (00264 — preview is truth).
+        supabase
+          .from('proposal_boards')
+          .select(
+            'id, name, canvas_width, canvas_height, background_color, sort_order, proposal_board_items(*)',
+          )
+          .eq('proposal_id', proposalId)
+          .eq('status', 'active')
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: true })
+          .order('z_index', { ascending: true, referencedTable: 'proposal_board_items' }),
       ]);
 
       const roomNameById = new Map<string, string>(
@@ -151,6 +167,16 @@ export function useProposalMirrorData(proposalId: string) {
           .map((s) => ({ id: s.id, name: s.name as string | null, hex: s.hex as string })),
       }));
 
+      // Boards → the shared BoardComposition shape (items inlined, z-ordered).
+      const boards = ((boardsRaw ?? []) as AnyRow[]).map((b) => ({
+        id: b.id as string,
+        name: b.name as string,
+        canvas_width: b.canvas_width as number,
+        canvas_height: b.canvas_height as number,
+        background_color: b.background_color as string,
+        items: (b.proposal_board_items ?? []) as AnyRow[],
+      }));
+
       return {
         proposal,
         tier: ((proposal as AnyRow)?.client_visibility_tier ?? 'milestone') as ClientVisibilityTier,
@@ -161,6 +187,7 @@ export function useProposalMirrorData(proposalId: string) {
         exclusions: (exclusions ?? []) as AnyRow[],
         milestones: (milestones ?? []) as AnyRow[],
         phases: (phases ?? []) as AnyRow[],
+        boards,
         totalCents: (proposal as AnyRow)?.total_amount ?? 0,
       };
     },
@@ -328,6 +355,20 @@ export function ProposalPreviewRail({
                   ))}
                 </div>
               </div>
+            ))}
+        </section>
+      )}
+
+      {/* Mood boards — the SAME BoardComposition the client copy renders,
+          placed where the client places it: after the visual/palette story,
+          before the money. Boards aren't tier-gated, so no gate here. */}
+      {data.boards.some((b) => b.items.length > 0) && (
+        <section className="mb-6">
+          <MirrorSectionLabel>Mood boards</MirrorSectionLabel>
+          {data.boards
+            .filter((b) => b.items.length > 0)
+            .map((b) => (
+              <BoardComposition key={b.id} board={b} className="mb-4 last:mb-0" />
             ))}
         </section>
       )}

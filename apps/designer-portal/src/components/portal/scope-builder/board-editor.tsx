@@ -1,13 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BoardCanvas,
+  BoardComposition,
   ImagePaletteExtractor,
   type BoardItem,
+  type BoardsBlockItem,
+  type BoardMode,
+  type BoardSection as CanvasBoardSection,
   type ExtractedSwatch,
 } from '@patina/design-system';
-import { Button, IconButton, Input, Textarea } from '@/components/ui/controls';
+import { Button, IconButton, Input, Select, Textarea } from '@/components/ui/controls';
 import {
   createBrowserClient,
   useBoard,
@@ -21,17 +25,45 @@ import {
   useUpsertSwatch,
   useProposal,
   useRoomScans,
+  useBoardFeedback,
+  useProductPrices,
+  useProposalScheduleItems,
+  useAddProposalItem,
   type ProposalBoardItem,
   type AddBoardItemInput,
+  type BoardSection,
   type ProposalPalette,
   type RoomScan,
+  type ItemFeedback,
 } from '@patina/supabase';
 import {
   ProductPickerModal,
   type ProductPickResult,
 } from '../proposals/product-picker-modal';
+import { verdictChipSpec } from '@/lib/document/verdict-chip';
+import {
+  buildSendToScheduleArgs,
+  computeBoardDrift,
+  findScheduleTwin,
+  type PinScheduleSnapshot,
+  type ScheduleLineRef,
+} from '@/lib/scope/board-schedule';
 import { renderBoardItem } from './board-item-renderer';
 import { BoardSuggestionsRail } from './board-suggestions-rail';
+import {
+  addSection,
+  arrangeBoardItems,
+  deleteSection,
+  moveSection,
+  renameSection,
+  sectionBounds,
+  type ArrangeItem,
+} from './board-arrange';
+
+type ViewMode = 'edit' | 'presentation' | 'detail';
+
+// Snap grid spacing (px) — matches BoardCanvas's default gridSize.
+const SNAP_GRID = 20;
 
 // Debounced layout autosave interval — mirrors the blur/600ms idiom used by
 // the palette swatch editor.
@@ -54,7 +86,11 @@ const WIDTH_PRESETS: Array<{ label: string; width: number }> = [
 ];
 
 interface BoardEditorProps {
-  proposalId: string;
+  /** Owner — EXACTLY ONE (B8). proposalId for a proposal board; projectId for a
+   *  live project-owned board (00272). Proposal-only affordances (palettes, room
+   *  scans, send-to-schedule, client verdicts) hide in project mode. */
+  proposalId?: string;
+  projectId?: string;
   boardId: string;
 }
 
@@ -73,7 +109,12 @@ interface BoardEditorProps {
  * Mount with `key={boardId}` so switching boards remounts (unmount flushes
  * the pending layout for the previous board).
  */
-export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
+export function BoardEditor({ proposalId, projectId, boardId }: BoardEditorProps) {
+  const isProject = !!projectId;
+  // First path segment for board-image uploads (00131 for proposals; 00272 leg
+  // for projects). One of the two is always set.
+  const ownerId = (projectId ?? proposalId)!;
+
   const { data: board } = useBoard(boardId);
 
   const addItem = useAddBoardItem();
@@ -82,14 +123,72 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
   const saveLayout = useSaveBoardLayout();
   const upsertBoard = useUpsertBoard();
 
+  // B4/B5 — proposal boards only. Board-pin verdicts (read-only chips), live
+  // product prices for the drift badge, and the schedule for twin detection.
+  const { data: pinVerdicts = [] } = useBoardFeedback(isProject ? undefined : proposalId);
+  const { data: scheduleItems = [] } = useProposalScheduleItems(
+    isProject ? undefined : proposalId,
+  );
+
   const [items, setItems] = useState<ProposalBoardItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('edit');
+  const [snap, setSnap] = useState(false);
+  // Local mirror of board.sections so section edits feel instant; write-through
+  // to the board row happens in persistSections.
+  const [sections, setSections] = useState<BoardSection[]>([]);
 
   const itemsRef = useRef<ProposalBoardItem[]>(items);
   itemsRef.current = items;
   const dirtyRef = useRef<Set<string>>(new Set());
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── B4/B5 derivations (product/capture pins) ────────────────────────────────
+
+  // One batched price query for every linked product on the board (no N+1).
+  const pinProductIds = useMemo(
+    () => items.filter((it) => it.product_id).map((it) => it.product_id as string),
+    [items],
+  );
+  const { data: productPrices } = useProductPrices(pinProductIds);
+
+  // board_item_id → latest verdict (rows are ascending, so last write wins).
+  const verdictByItem = useMemo(() => {
+    const m = new Map<string, ItemFeedback>();
+    for (const v of pinVerdicts) if (v.board_item_id) m.set(v.board_item_id, v);
+    return m;
+  }, [pinVerdicts]);
+
+  // board_item_id → "the linked product's live price ≠ the pin's snapshot".
+  const driftByItem = useMemo(() => {
+    const priceById = new Map<string, number | null>();
+    if (productPrices) for (const [id, p] of productPrices) priceById.set(id, p.price_retail);
+    return computeBoardDrift(
+      items.map((it) => ({
+        id: it.id,
+        product_id: it.product_id,
+        snapshotPriceCents: (it.data as { price_cents?: number } | null)?.price_cents ?? null,
+      })),
+      priceById,
+    );
+  }, [items, productPrices]);
+
+  // board_item_id → the snapshot a schedule line would be seeded from (B5).
+  const pinSnapshotByItem = useMemo(() => {
+    const m = new Map<string, PinScheduleSnapshot>();
+    for (const it of items) {
+      const d = (it.data ?? {}) as { name?: string; price_cents?: number; image_url?: string };
+      m.set(it.id, {
+        type: it.type,
+        productId: it.product_id,
+        name: d.name ?? null,
+        imageUrl: it.image_url ?? d.image_url ?? null,
+        priceCents: typeof d.price_cents === 'number' ? d.price_cents : null,
+      });
+    }
+    return m;
+  }, [items]);
 
   // ── Layout autosave ─────────────────────────────────────────────────────────
 
@@ -138,6 +237,13 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
     if (dirtyRef.current.size > 0) return;
     setItems(board.items);
   }, [board]);
+
+  // Mirror the board's persisted sections. Sections change through
+  // persistSections (which sets local state first), so re-syncing from a
+  // refetch just confirms the same value.
+  useEffect(() => {
+    setSections(board?.sections ?? []);
+  }, [board?.sections]);
 
   // ── Local mutation helpers ──────────────────────────────────────────────────
 
@@ -223,6 +329,62 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
     [boardId, deleteItem],
   );
 
+  // ── Sections ──────────────────────────────────────────────────────────────
+
+  const { mutate: upsertBoardMutate } = upsertBoard;
+
+  /** Optimistic local set + write-through to proposal_boards.sections. */
+  const persistSections = useCallback(
+    (next: BoardSection[]) => {
+      setSections(next);
+      upsertBoardMutate({ proposalId, boardId, sections: next });
+    },
+    [proposalId, boardId, upsertBoardMutate],
+  );
+
+  /** Assign (or clear, sectionId=null) the selected item's section membership. */
+  const assignSection = useCallback(
+    (itemId: string, sectionId: string | null) => {
+      flushLayoutRef.current();
+      const item = itemsRef.current.find((i) => i.id === itemId);
+      if (!item) return;
+      const nextData = { ...(item.data ?? {}), section_id: sectionId };
+      mergeLocal(itemId, { data: nextData });
+      updateItem.mutate({ itemId, boardId, data: nextData });
+    },
+    [boardId, mergeLocal, updateItem],
+  );
+
+  /**
+   * Auto-lay-out every item into a tidy grid (grouped by section when sections
+   * exist). Writes ONLY x/y through the same dirty→debounced-flush path a drag
+   * uses, so freeform editing keeps working afterward.
+   */
+  const handleArrange = useCallback(() => {
+    if (!board) return;
+    const arrangeItems: ArrangeItem[] = itemsRef.current.map((it) => ({
+      id: it.id,
+      type: it.type,
+      width: Number(it.width),
+      height: it.height === null ? null : Number(it.height),
+      data: it.data as { section_id?: string | null } | null,
+    }));
+    const positions = arrangeBoardItems(arrangeItems, sections, {
+      canvasWidth: board.canvas_width,
+    });
+    if (positions.length === 0) return;
+    const byId = new Map(positions.map((p) => [p.id, p]));
+    setItems((prev) =>
+      prev.map((it) => {
+        const pos = byId.get(it.id);
+        if (!pos || (Number(it.x) === pos.x && Number(it.y) === pos.y)) return it;
+        dirtyRef.current.add(it.id);
+        return { ...it, x: pos.x, y: pos.y };
+      }),
+    );
+    scheduleFlush();
+  }, [board, sections, scheduleFlush]);
+
   // ── Canvas callbacks ────────────────────────────────────────────────────────
 
   const handleItemsChange = useCallback(
@@ -299,96 +461,226 @@ export function BoardEditor({ proposalId, boardId }: BoardEditorProps) {
     data: it,
   }));
 
+  // Live section bands (edit mode only) — each wraps its assigned items, so it
+  // tracks them in freeform, not just after Arrange. Sections with no items are
+  // skipped (sectionBounds → null).
+  const canvasSections: CanvasBoardSection[] = sections
+    .map((s): CanvasBoardSection | null => {
+      const bounds = sectionBounds(
+        items.map((it) => ({
+          id: it.id,
+          type: it.type,
+          width: Number(it.width),
+          height: it.height === null ? null : Number(it.height),
+          data: it.data as { section_id?: string | null } | null,
+          x: Number(it.x),
+          y: Number(it.y),
+        })),
+        s.id,
+      );
+      return bounds ? { id: s.id, name: s.name, color: s.color, bounds } : null;
+    })
+    .filter((s): s is CanvasBoardSection => s !== null);
+
+  // Read-only composition for the Presentation/Detail preview toggle — the SAME
+  // shared block the client copy renders.
+  const compositionBoard = {
+    id: board.id,
+    name: board.name,
+    canvas_width: board.canvas_width,
+    canvas_height: board.canvas_height,
+    background_color: board.background_color,
+    items,
+  };
+
   const selected = selectedId ? (items.find((i) => i.id === selectedId) ?? null) : null;
+
+  // Quiet per-pin overlay (detail-mode language): the client's latest verdict
+  // (B4) + a "price moved" chip when the linked product drifted (B5, detail
+  // only). Proposal boards only carry verdicts; project boards show just drift.
+  const renderPinOverlay = (pin: BoardsBlockItem, mode: BoardMode) => {
+    const verdict = verdictByItem.get(pin.id);
+    const spec = verdict ? verdictChipSpec(verdict.verdict, verdict.resolved_at) : null;
+    const drift = mode === 'detail' && driftByItem.has(pin.id);
+    if (!spec && !drift) return null;
+    return (
+      <>
+        {spec && <VerdictPill label={spec.label} color={spec.color} />}
+        {drift && <DriftChip />}
+      </>
+    );
+  };
+
+  // "Send to the schedule" (B5) — proposal boards only (it creates a
+  // proposal_item). Product/capture pins only.
+  const renderPinDetail = isProject
+    ? undefined
+    : (pin: BoardsBlockItem) => {
+        const snap = pinSnapshotByItem.get(pin.id);
+        if (!snap || (snap.type !== 'product' && snap.type !== 'capture')) return null;
+        return (
+          <SendToScheduleControl
+            proposalId={proposalId!}
+            snap={snap}
+            boardScopeRoomId={board.scope_room_id ?? null}
+            scheduleItems={scheduleItems}
+          />
+        );
+      };
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-      {/* Canvas */}
-      <div className="max-h-[70vh] overflow-auto rounded-md border border-[var(--border-default)]">
-        <BoardCanvas
-          items={canvasItems}
-          layout="freeform"
-          showGrid={false}
-          width={board.canvas_width}
-          height={board.canvas_height}
-          backgroundColor={board.background_color}
-          onItemsChange={handleItemsChange}
-          onItemClick={(item) => setSelectedId(String(item.id))}
-          onItemDelete={(itemId) => handleDeleteItem(String(itemId))}
-          renderItem={(item) => (
-            <div
-              className={
-                selectedId === String(item.id)
-                  ? 'h-full w-full rounded-sm ring-2 ring-[var(--accent-primary)] ring-offset-1'
-                  : 'h-full w-full'
-              }
-            >
-              {renderBoardItem(item)}
-            </div>
-          )}
-          className="border-0"
+      {/* Canvas column */}
+      <div className="space-y-2">
+        <BoardViewToolbar
+          viewMode={viewMode}
+          onViewMode={setViewMode}
+          snap={snap}
+          onToggleSnap={() => setSnap((s) => !s)}
+          onArrange={handleArrange}
+          itemCount={items.length}
         />
+
+        {viewMode === 'edit' ? (
+          <div className="max-h-[70vh] overflow-auto rounded-md border border-[var(--border-default)]">
+            <BoardCanvas
+              items={canvasItems}
+              sections={canvasSections}
+              layout={snap ? 'grid' : 'freeform'}
+              gridSize={SNAP_GRID}
+              showGrid={snap}
+              width={board.canvas_width}
+              height={board.canvas_height}
+              backgroundColor={board.background_color}
+              onItemsChange={handleItemsChange}
+              onItemClick={(item) => setSelectedId(String(item.id))}
+              onItemDelete={(itemId) => handleDeleteItem(String(itemId))}
+              renderItem={(item) => (
+                <div
+                  className={
+                    selectedId === String(item.id)
+                      ? 'h-full w-full rounded-sm ring-2 ring-[var(--accent-primary)] ring-offset-1'
+                      : 'h-full w-full'
+                  }
+                >
+                  {renderBoardItem(item)}
+                </div>
+              )}
+              className="border-0"
+            />
+          </div>
+        ) : (
+          <div className="max-h-[70vh] overflow-auto rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
+            {items.length === 0 ? (
+              <p className="py-8 text-center text-sm text-[var(--text-muted)]">
+                Nothing on this board yet — switch to Edit and add something.
+              </p>
+            ) : (
+              <BoardComposition
+                board={compositionBoard}
+                mode={viewMode === 'detail' ? 'detail' : 'presentation'}
+                renderPinOverlay={renderPinOverlay}
+                renderPinDetail={renderPinDetail}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {/* Sidebar */}
       <div className="space-y-4">
-        {selected ? (
-          <ItemInspector
-            proposalId={proposalId}
-            boardName={board.name}
-            item={selected}
-            items={items}
-            onClose={() => setSelectedId(null)}
-            onCommitField={commitField}
-            onMergeLocal={(itemId, patch) => {
-              // Rotation drags follow the debounced layout path.
-              mergeLocal(itemId, patch);
-              if (patch.rotation !== undefined || patch.z_index !== undefined) {
-                dirtyRef.current.add(itemId);
-                scheduleFlush();
-              }
-            }}
-            onDelete={handleDeleteItem}
-            onSetCover={(imageUrl) =>
-              upsertBoard.mutate({ proposalId, boardId, coverImageUrl: imageUrl })
-            }
-          />
-        ) : (
+        {viewMode !== 'edit' ? (
           <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-xs text-[var(--text-muted)]">
-            Select an item on the canvas to edit it, or add something below.
+            Previewing the client&rsquo;s view
+            {viewMode === 'detail' ? ' with sourcing detail' : ''}. Switch to Edit to make changes.
           </div>
+        ) : (
+          <>
+            {selected ? (
+              <ItemInspector
+                proposalId={proposalId}
+                boardName={board.name}
+                item={selected}
+                items={items}
+                sections={sections}
+                onClose={() => setSelectedId(null)}
+                onCommitField={commitField}
+                onMergeLocal={(itemId, patch) => {
+                  // Rotation drags follow the debounced layout path.
+                  mergeLocal(itemId, patch);
+                  if (patch.rotation !== undefined || patch.z_index !== undefined) {
+                    dirtyRef.current.add(itemId);
+                    scheduleFlush();
+                  }
+                }}
+                onAssignSection={assignSection}
+                onDelete={handleDeleteItem}
+                onSetCover={(imageUrl) =>
+                  upsertBoard.mutate({ proposalId, boardId, coverImageUrl: imageUrl })
+                }
+                sendToSchedule={
+                  !isProject &&
+                  proposalId &&
+                  (selected.type === 'product' || selected.type === 'capture') ? (
+                    <SendToScheduleControl
+                      proposalId={proposalId}
+                      snap={pinSnapshotByItem.get(selected.id)!}
+                      boardScopeRoomId={board.scope_room_id ?? null}
+                      scheduleItems={scheduleItems}
+                    />
+                  ) : null
+                }
+              />
+            ) : (
+              <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-xs text-[var(--text-muted)]">
+                Select an item on the canvas to edit it, or add something below.
+              </div>
+            )}
+
+            {/* Sections — create / rename / delete / reorder. Arrange lives on
+                the toolbar. */}
+            <BoardSectionsPanel sections={sections} onChange={persistSections} />
+
+            {/* Add product / capture */}
+            <SidebarSection title="Products & captures">
+              <Button variant="secondary" size="sm" onClick={() => setPickerOpen(true)}>
+                + Add product or capture
+              </Button>
+            </SidebarSection>
+
+            {/* Similar-product suggestions (hidden until a product item exists and
+                the similarity RPC returns matches — degrades silently without
+                embeddings). Collapsible so it doesn't crowd the inspector. */}
+            <BoardSuggestionsRail items={items} onAdd={addItemToBoard} />
+
+            {/* Add palette + room scan — proposal-only (project boards have no
+                proposal palettes / scope). */}
+            {!isProject && proposalId && (
+              <>
+                <AddPaletteSection proposalId={proposalId} onAdd={addItemToBoard} />
+                <RoomScansGate proposalId={proposalId} onAdd={addItemToBoard} />
+              </>
+            )}
+
+            {/* Upload image — keyed on the owner id (00131 proposal leg or the
+                00272 project leg). */}
+            <UploadImageSection ownerId={ownerId} boardId={boardId} onAdd={addItemToBoard} />
+
+            {/* Add note */}
+            <AddNoteSection onAdd={addItemToBoard} />
+          </>
         )}
-
-        {/* Add product / capture */}
-        <SidebarSection title="Products & captures">
-          <Button variant="secondary" size="sm" onClick={() => setPickerOpen(true)}>
-            + Add product or capture
-          </Button>
-        </SidebarSection>
-
-        {/* Similar-product suggestions (hidden until a product item exists and
-            the similarity RPC returns matches — degrades silently without
-            embeddings). Collapsible so it doesn't crowd the inspector. */}
-        <BoardSuggestionsRail items={items} onAdd={addItemToBoard} />
-
-        {/* Add palette */}
-        <AddPaletteSection proposalId={proposalId} onAdd={addItemToBoard} />
-
-        {/* Add room scan */}
-        <RoomScansGate proposalId={proposalId} onAdd={addItemToBoard} />
-
-        {/* Upload image */}
-        <UploadImageSection proposalId={proposalId} boardId={boardId} onAdd={addItemToBoard} />
-
-        {/* Add note */}
-        <AddNoteSection onAdd={addItemToBoard} />
       </div>
 
       <ProductPickerModal
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onPick={handlePick}
-        scope="catalog"
+        // Full 3-layer library (personal/studio/catalog) + cross-layer search,
+        // matching the FF&E add (ffe/page.tsx pickerScope="library"). The
+        // Captures and Quick-create-draft tabs are scope-independent (the modal
+        // shell renders them for both scopes), so both still work here.
+        scope="library"
       />
     </div>
   );
@@ -401,6 +693,160 @@ function SidebarSection({ title, children }: { title: string; children: React.Re
     <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-4">
       <span className="type-meta mb-3 block text-[var(--accent-primary)]">{title}</span>
       {children}
+    </div>
+  );
+}
+
+// ─── View toolbar (Edit / Presentation / Detail + snap + arrange) ────────────
+
+const VIEW_LABELS: Record<ViewMode, string> = {
+  edit: 'Edit',
+  presentation: 'Presentation',
+  detail: 'Detail',
+};
+
+function BoardViewToolbar({
+  viewMode,
+  onViewMode,
+  snap,
+  onToggleSnap,
+  onArrange,
+  itemCount,
+}: {
+  viewMode: ViewMode;
+  onViewMode: (mode: ViewMode) => void;
+  snap: boolean;
+  onToggleSnap: () => void;
+  onArrange: () => void;
+  itemCount: number;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="inline-flex overflow-hidden rounded-md border border-[var(--border-default)]">
+        {(['edit', 'presentation', 'detail'] as ViewMode[]).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            aria-pressed={viewMode === mode}
+            onClick={() => onViewMode(mode)}
+            className={`px-3 py-1.5 text-xs transition-colors ${
+              viewMode === mode
+                ? 'bg-[var(--accent-primary)] text-white'
+                : 'bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            {VIEW_LABELS[mode]}
+          </button>
+        ))}
+      </div>
+
+      {viewMode === 'edit' && (
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant={snap ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={onToggleSnap}
+            aria-pressed={snap}
+          >
+            {snap ? 'Snap: on' : 'Snap: off'}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={onArrange} disabled={itemCount === 0}>
+            Arrange
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Sections panel (create / rename / delete / reorder) ─────────────────────
+
+function BoardSectionsPanel({
+  sections,
+  onChange,
+}: {
+  sections: BoardSection[];
+  onChange: (next: BoardSection[]) => void;
+}) {
+  return (
+    <SidebarSection title="Sections">
+      {sections.length === 0 ? (
+        <p className="mb-2 text-xs text-[var(--text-muted)]">
+          Group items into named sections, then use Arrange to lay them out by section.
+        </p>
+      ) : (
+        <div className="mb-2 space-y-1.5">
+          {sections.map((section, index) => (
+            <SectionRow
+              key={section.id}
+              section={section}
+              isFirst={index === 0}
+              isLast={index === sections.length - 1}
+              onRename={(name) => onChange(renameSection(sections, section.id, name))}
+              onMove={(dir) => onChange(moveSection(sections, section.id, dir))}
+              onDelete={() => onChange(deleteSection(sections, section.id))}
+            />
+          ))}
+        </div>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onChange(addSection(sections, ''))}
+      >
+        + Add section
+      </Button>
+    </SidebarSection>
+  );
+}
+
+function SectionRow({
+  section,
+  isFirst,
+  isLast,
+  onRename,
+  onMove,
+  onDelete,
+}: {
+  section: BoardSection;
+  isFirst: boolean;
+  isLast: boolean;
+  onRename: (name: string) => void;
+  onMove: (dir: -1 | 1) => void;
+  onDelete: () => void;
+}) {
+  const [draft, setDraft] = useState(section.name);
+  // Keep the draft in step if the persisted name changes underneath (e.g. after
+  // a reorder re-key would remount, but a rename refetch would not).
+  useEffect(() => setDraft(section.name), [section.name]);
+
+  const commit = () => {
+    if (draft.trim() && draft !== section.name) onRename(draft);
+    else setDraft(section.name);
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') setDraft(section.name);
+        }}
+        className="h-7 flex-1"
+        aria-label={`Section name: ${section.name}`}
+      />
+      <IconButton label="Move section up" variant="ghost" size="sm" disabled={isFirst} onClick={() => onMove(-1)}>
+        ↑
+      </IconButton>
+      <IconButton label="Move section down" variant="ghost" size="sm" disabled={isLast} onClick={() => onMove(1)}>
+        ↓
+      </IconButton>
+      <IconButton label="Delete section" variant="ghost" size="sm" onClick={onDelete}>
+        ×
+      </IconButton>
     </div>
   );
 }
@@ -555,11 +1001,12 @@ function RoomScansSection({
 // ─── Upload image ────────────────────────────────────────────────────────────
 
 function UploadImageSection({
-  proposalId,
+  ownerId,
   boardId,
   onAdd,
 }: {
-  proposalId: string;
+  /** First path segment — a proposal id (00131 leg) or project id (00272 leg). */
+  ownerId: string;
   boardId: string;
   onAdd: (input: Omit<AddBoardItemInput, 'boardId' | 'x' | 'y' | 'zIndex'>) => void;
 }) {
@@ -573,9 +1020,10 @@ function UploadImageSection({
       setErrorMessage(null);
       try {
         const supabase = createBrowserClient();
-        // First path segment = proposalId satisfies the 00131 storage RLS.
+        // First path segment = owner id satisfies the proposal-mood-boards RLS
+        // (00131 proposal leg / 00272 project leg).
         const ext = file.name.split('.').pop() ?? 'jpg';
-        const path = `${proposalId}/boards/${boardId}/${crypto.randomUUID()}.${ext}`;
+        const path = `${ownerId}/boards/${boardId}/${crypto.randomUUID()}.${ext}`;
         const { error } = await supabase.storage
           .from('proposal-mood-boards')
           .upload(path, file, { upsert: true, contentType: file.type });
@@ -588,7 +1036,7 @@ function UploadImageSection({
         setUploading(false);
       }
     },
-    [proposalId, boardId, onAdd],
+    [ownerId, boardId, onAdd],
   );
 
   return (
@@ -653,15 +1101,20 @@ function AddNoteSection({
 // ─── Item inspector ──────────────────────────────────────────────────────────
 
 interface ItemInspectorProps {
-  proposalId: string;
+  /** Undefined for a project-owned board (no proposal palette extraction). */
+  proposalId?: string;
   boardName: string;
   item: ProposalBoardItem;
   items: ProposalBoardItem[];
+  sections: BoardSection[];
   onClose: () => void;
   onCommitField: (itemId: string, patch: Partial<ProposalBoardItem>) => void;
   onMergeLocal: (itemId: string, patch: Partial<ProposalBoardItem>) => void;
+  onAssignSection: (itemId: string, sectionId: string | null) => void;
   onDelete: (itemId: string) => void;
   onSetCover: (imageUrl: string) => void;
+  /** "Send to the schedule" control for product/capture pins (B5); parent-built. */
+  sendToSchedule?: React.ReactNode;
 }
 
 function itemImageUrl(item: ProposalBoardItem): string | null {
@@ -675,13 +1128,18 @@ function ItemInspector({
   boardName,
   item,
   items,
+  sections,
   onClose,
   onCommitField,
   onMergeLocal,
+  onAssignSection,
   onDelete,
   onSetCover,
+  sendToSchedule,
 }: ItemInspectorProps) {
   const imageUrl = itemImageUrl(item);
+  const currentSectionId =
+    (item.data as { section_id?: string | null } | null)?.section_id ?? '';
 
   const bringForward = () => {
     const maxZ = items.reduce((m, i) => Math.max(m, i.z_index), 0);
@@ -757,6 +1215,26 @@ function ItemInspector({
           </div>
         </div>
 
+        {/* Section membership (only when the board has sections) */}
+        {sections.length > 0 && (
+          <div>
+            <span className="mb-1 block text-xs text-[var(--text-muted)]">Section</span>
+            <Select
+              value={currentSectionId}
+              onChange={(e) => onAssignSection(item.id, e.target.value || null)}
+              wrapperClassName="w-full"
+              aria-label="Assign to section"
+            >
+              <option value="">Unsorted</option>
+              {sections.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+
         {/* Rotation */}
         <div>
           <span className="mb-1 block text-xs text-[var(--text-muted)]">
@@ -807,8 +1285,14 @@ function ItemInspector({
           </Button>
         </div>
 
-        {/* Extract palette from image-bearing items */}
-        {imageUrl && (
+        {/* Send this pin to the schedule (B5) — parent supplies the control for
+            product/capture pins on a proposal board. */}
+        {sendToSchedule && (
+          <div className="border-t border-[var(--border-default)] pt-3">{sendToSchedule}</div>
+        )}
+
+        {/* Extract palette from image-bearing items (proposal boards only) */}
+        {imageUrl && proposalId && (
           <ExtractPalettePanel proposalId={proposalId} boardName={boardName} imageUrl={imageUrl} />
         )}
       </div>
@@ -893,6 +1377,125 @@ function ExtractPalettePanel({
             </p>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── B5: send-to-schedule + quiet pin chips ──────────────────────────────────
+
+/** Quiet mono verdict pill for a board pin (B4, read-only, designer side). */
+function VerdictPill({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-[3px] px-1.5 py-0.5"
+      style={{
+        fontFamily: 'var(--font-mono, monospace)',
+        fontSize: '0.5rem',
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        color: 'var(--text-muted)',
+        backgroundColor: 'var(--bg-surface)',
+        border: '1px solid var(--border-default)',
+      }}
+    >
+      <span aria-hidden style={{ width: 6, height: 6, borderRadius: 9999, backgroundColor: color }} />
+      {label}
+    </span>
+  );
+}
+
+/** Quiet "price moved" mono chip (B5, detail mode). */
+function DriftChip() {
+  return (
+    <span
+      className="inline-flex items-center rounded-[3px] px-1.5 py-0.5"
+      title="This pin's linked product price changed since it was added"
+      style={{
+        fontFamily: 'var(--font-mono, monospace)',
+        fontSize: '0.5rem',
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        color: 'var(--color-clay, #a5552f)',
+        backgroundColor: 'var(--bg-surface)',
+        border: '1px solid var(--border-default)',
+      }}
+    >
+      price moved
+    </span>
+  );
+}
+
+/**
+ * "Send to the schedule" (B5): create a proposal_item from a product/capture
+ * pin's snapshot (name/image/price → sell side; product_id + room carried; a
+ * doc_code auto-suggested). Idempotence guard (the Wave-1 twin concept): if a
+ * line already exists for this product in this room, acknowledge it instead of
+ * duplicating. Quiet inline confirm; inline error on failure.
+ */
+function SendToScheduleControl({
+  proposalId,
+  snap,
+  boardScopeRoomId,
+  scheduleItems,
+}: {
+  proposalId: string;
+  snap: PinScheduleSnapshot;
+  boardScopeRoomId: string | null;
+  scheduleItems: ScheduleLineRef[];
+}) {
+  const addItem = useAddProposalItem();
+  const [status, setStatus] = useState<
+    null | { kind: 'added' | 'exists'; docCode: string | null; name: string | null }
+  >(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // A line already on this schedule for this product in this room (idempotence).
+  const twin = findScheduleTwin(scheduleItems, snap.productId, boardScopeRoomId);
+
+  const handleSend = async () => {
+    setError(null);
+    if (twin) {
+      setStatus({ kind: 'exists', docCode: twin.doc_code, name: twin.name });
+      return;
+    }
+    try {
+      const args = buildSendToScheduleArgs({
+        proposalId,
+        snap,
+        boardScopeRoomId,
+        existingCodes: scheduleItems.map((s) => s.doc_code),
+      });
+      await addItem.mutateAsync(args);
+      setStatus({ kind: 'added', docCode: args.docCode, name: snap.name });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add to the schedule.');
+    }
+  };
+
+  if (status) {
+    return (
+      <p className="type-meta-small text-[var(--text-muted)]">
+        {status.kind === 'added' ? 'Added to the schedule' : 'Already on the schedule'}
+        {status.docCode ? ` · ${status.docCode}` : ''}
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={addItem.isPending}
+        onClick={() => void handleSend()}
+      >
+        {addItem.isPending ? 'Sending…' : twin ? 'Already on the schedule' : 'Send to the schedule'}
+      </Button>
+      {error && (
+        <p className="type-meta-small text-[var(--color-clay,#a5552f)]" role="alert">
+          {error}
+        </p>
       )}
     </div>
   );

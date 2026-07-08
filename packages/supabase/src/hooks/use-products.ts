@@ -401,6 +401,46 @@ export function useProduct(id: string) {
   });
 }
 
+/** Current retail/trade price (cents) for a product, by id. */
+export interface ProductPrice {
+  price_retail: number | null;
+  price_trade: number | null;
+}
+
+/**
+ * Current prices for a SET of product ids in one round trip (no N+1). Powers
+ * the board "price moved" drift badge (B5): compare a pin's snapshot price
+ * against the live product price. Returns a Map keyed by product id; missing /
+ * empty input yields an empty Map. Lazy — pass only the ids actually on screen.
+ */
+export function useProductPrices(productIds: Array<string | null | undefined>) {
+  const ids = Array.from(
+    new Set(productIds.filter((v): v is string => !!v)),
+  ).sort();
+  return useQuery({
+    queryKey: ['product-prices', ids],
+    enabled: ids.length > 0,
+    queryFn: async (): Promise<Map<string, ProductPrice>> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getAuthSupabase() as any;
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, price_retail, price_trade')
+        .in('id', ids);
+      if (error) throw error;
+      const map = new Map<string, ProductPrice>();
+      for (const row of (data ?? []) as Array<{
+        id: string;
+        price_retail: number | null;
+        price_trade: number | null;
+      }>) {
+        map.set(row.id, { price_retail: row.price_retail, price_trade: row.price_trade });
+      }
+      return map;
+    },
+  });
+}
+
 /**
  * Fetch single product with enriched vendor pricing data
  * Includes designer cost calculation, tier info, certifications, and lead times

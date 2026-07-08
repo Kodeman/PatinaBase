@@ -24,7 +24,21 @@ public enum CaptureRoute: Hashable, Sendable {
     case syncStatus           // U1
     case settings             // T1
     case account              // T2
-    case project(String)      // project context
+    case project(String)      // P2 — project detail (reuses the pre-existing project route)
+
+    // ── Phase 2 — designer/pro flows (pushed) ──
+    case work                                            // W1 — Work dashboard
+    case projectList                                     // P1
+    case leadList                                        // L1
+    case leadDetail(String)                              // L2
+    case decisionList                                    // D1
+    case decisionDetail(String)                          // D2
+    case inbox                                           // M1
+    case thread(String)                                  // M2
+    case receiving                                       // G1 — arriving POs
+    case qrScan                                          // Q1
+    case siteScanSetup                                   // F1
+    case siteScan(projectID: String?, projectRoomID: String?)  // F2 (hosts F3/F4)
 }
 
 /// Sheets / overlays (presented over the viewfinder or a screen).
@@ -43,6 +57,10 @@ public enum CaptureSheet: Hashable, Identifiable, Sendable {
     case photoImport          // R3/E3
     case cullDeck             // V2
 
+    // ── Phase 2 — designer/pro flows (presented) ──
+    case receivingInspection(poID: String)  // G2 → G3 as internal steps
+    case qrApprove(payload: String)         // Q2 — approve/reject portal login
+
     public var id: String {
         switch self {
         case .specimenSheet(let u): return "specimen-\(u)"
@@ -58,6 +76,8 @@ public enum CaptureSheet: Hashable, Identifiable, Sendable {
         case .inboxTerminal(let u): return "inbox-\(u)"
         case .photoImport: return "photo-import"
         case .cullDeck: return "cull-deck"
+        case .receivingInspection(let poID): return "receiving-inspection-\(poID)"
+        case .qrApprove(let payload): return "qr-approve-\(payload)"
         }
     }
 }

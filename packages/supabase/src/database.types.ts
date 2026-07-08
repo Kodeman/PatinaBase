@@ -142,6 +142,141 @@ export type Database = {
           },
         ]
       }
+      aesthete_audit: {
+        Row: {
+          check_name: string
+          created_at: string | null
+          detail: Json | null
+          id: number
+          passed: boolean
+          week: string
+        }
+        Insert: {
+          check_name: string
+          created_at?: string | null
+          detail?: Json | null
+          id?: never
+          passed: boolean
+          week: string
+        }
+        Update: {
+          check_name?: string
+          created_at?: string | null
+          detail?: Json | null
+          id?: never
+          passed?: boolean
+          week?: string
+        }
+        Relationships: []
+      }
+      aesthete_jobs: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string | null
+          dedupe_key: string | null
+          id: number
+          kind: string
+          last_error: string | null
+          payload: Json | null
+          product_id: string | null
+          run_after: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          dedupe_key?: string | null
+          id?: never
+          kind: string
+          last_error?: string | null
+          payload?: Json | null
+          product_id?: string | null
+          run_after?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          dedupe_key?: string | null
+          id?: never
+          kind?: string
+          last_error?: string | null
+          payload?: Json | null
+          product_id?: string | null
+          run_after?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aesthete_jobs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aesthete_jobs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "aesthete_jobs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "aesthete_jobs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "aesthete_jobs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      aesthete_spend_ledger: {
+        Row: {
+          cache_read_tokens: number | null
+          day: string
+          input_tokens: number | null
+          output_tokens: number | null
+          products: number | null
+          usd: number | null
+        }
+        Insert: {
+          cache_read_tokens?: number | null
+          day: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          products?: number | null
+          usd?: number | null
+        }
+        Update: {
+          cache_read_tokens?: number | null
+          day?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          products?: number | null
+          usd?: number | null
+        }
+        Relationships: []
+      }
       api_keys: {
         Row: {
           created_at: string
@@ -314,6 +449,30 @@ export type Database = {
           subject?: string
           template_id?: string | null
           to_email?: string
+        }
+        Relationships: []
+      }
+      ask_embed_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          embedding: string
+          expires_at: string
+          model_version: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          embedding: string
+          expires_at?: string
+          model_version: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          embedding?: string
+          expires_at?: string
+          model_version?: string
         }
         Relationships: []
       }
@@ -519,6 +678,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      bias_templates: {
+        Row: {
+          description: string | null
+          name: string
+          pattern: string
+        }
+        Insert: {
+          description?: string | null
+          name: string
+          pattern: string
+        }
+        Update: {
+          description?: string | null
+          name?: string
+          pattern?: string
+        }
+        Relationships: []
       }
       campaign_analytics: {
         Row: {
@@ -1464,6 +1641,7 @@ export type Database = {
           quiz_responses: Json | null
           style_preferences: string[] | null
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           archetype?: string | null
@@ -1474,6 +1652,7 @@ export type Database = {
           quiz_responses?: Json | null
           style_preferences?: string[] | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           archetype?: string | null
@@ -1484,6 +1663,7 @@ export type Database = {
           quiz_responses?: Json | null
           style_preferences?: string[] | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -1557,6 +1737,102 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_style_profiles: {
+        Row: {
+          archetype_primary: string | null
+          archetype_weights: Json
+          boldness: number | null
+          budget: Json
+          complexity: number | null
+          confidence: number | null
+          craftsmanship: number | null
+          created_at: string | null
+          formality: number | null
+          functional_priorities: Json | null
+          id: string
+          is_current: boolean
+          material_affinities: Json | null
+          patina_affinity: number | null
+          quiz_session_id: string | null
+          session_key: string
+          source: string
+          spectrum_confidence: Json
+          style_vector: string | null
+          timelessness: number | null
+          updated_at: string | null
+          user_id: string | null
+          version: number
+          warmth: number | null
+        }
+        Insert: {
+          archetype_primary?: string | null
+          archetype_weights?: Json
+          boldness?: number | null
+          budget?: Json
+          complexity?: number | null
+          confidence?: number | null
+          craftsmanship?: number | null
+          created_at?: string | null
+          formality?: number | null
+          functional_priorities?: Json | null
+          id?: string
+          is_current?: boolean
+          material_affinities?: Json | null
+          patina_affinity?: number | null
+          quiz_session_id?: string | null
+          session_key: string
+          source?: string
+          spectrum_confidence?: Json
+          style_vector?: string | null
+          timelessness?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          version?: number
+          warmth?: number | null
+        }
+        Update: {
+          archetype_primary?: string | null
+          archetype_weights?: Json
+          boldness?: number | null
+          budget?: Json
+          complexity?: number | null
+          confidence?: number | null
+          craftsmanship?: number | null
+          created_at?: string | null
+          formality?: number | null
+          functional_priorities?: Json | null
+          id?: string
+          is_current?: boolean
+          material_affinities?: Json | null
+          patina_affinity?: number | null
+          quiz_session_id?: string | null
+          session_key?: string
+          source?: string
+          spectrum_confidence?: Json
+          style_vector?: string | null
+          timelessness?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          version?: number
+          warmth?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_style_profiles_archetype_primary_fkey"
+            columns: ["archetype_primary"]
+            isOneToOne: false
+            referencedRelation: "styles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_style_profiles_quiz_session_id_fkey"
+            columns: ["quiz_session_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -3078,6 +3354,176 @@ export type Database = {
           },
         ]
       }
+      designer_portfolio_items: {
+        Row: {
+          caption: string | null
+          created_at: string | null
+          designer_id: string
+          embedding: string | null
+          id: string
+          status: string
+          storage_path: string
+          updated_at: string | null
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string | null
+          designer_id: string
+          embedding?: string | null
+          id?: string
+          status?: string
+          storage_path: string
+          updated_at?: string | null
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string | null
+          designer_id?: string
+          embedding?: string | null
+          id?: string
+          status?: string
+          storage_path?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      designer_style_confidence: {
+        Row: {
+          designer_id: string
+          judgment_count: number | null
+          level: string
+          style_id: string
+          updated_at: string | null
+          weight: number | null
+        }
+        Insert: {
+          designer_id: string
+          judgment_count?: number | null
+          level: string
+          style_id: string
+          updated_at?: string | null
+          weight?: number | null
+        }
+        Update: {
+          designer_id?: string
+          judgment_count?: number | null
+          level?: string
+          style_id?: string
+          updated_at?: string | null
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "designer_style_confidence_style_id_fkey"
+            columns: ["style_id"]
+            isOneToOne: false
+            referencedRelation: "styles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      designer_taste_profiles: {
+        Row: {
+          boldness: number | null
+          complexity: number | null
+          confidence_map: Json
+          craftsmanship: number | null
+          designer_id: string
+          deviation_from_house: Json | null
+          drift_flag: boolean | null
+          formality: number | null
+          judgments_processed_at: string | null
+          portfolio_centroid: string | null
+          reliability: number
+          retired_at: string | null
+          sources: Json
+          taste_vector: string | null
+          theta: number[] | null
+          timelessness: number | null
+          updated_at: string | null
+          version: number
+          warmth: number | null
+        }
+        Insert: {
+          boldness?: number | null
+          complexity?: number | null
+          confidence_map?: Json
+          craftsmanship?: number | null
+          designer_id: string
+          deviation_from_house?: Json | null
+          drift_flag?: boolean | null
+          formality?: number | null
+          judgments_processed_at?: string | null
+          portfolio_centroid?: string | null
+          reliability?: number
+          retired_at?: string | null
+          sources?: Json
+          taste_vector?: string | null
+          theta?: number[] | null
+          timelessness?: number | null
+          updated_at?: string | null
+          version?: number
+          warmth?: number | null
+        }
+        Update: {
+          boldness?: number | null
+          complexity?: number | null
+          confidence_map?: Json
+          craftsmanship?: number | null
+          designer_id?: string
+          deviation_from_house?: Json | null
+          drift_flag?: boolean | null
+          formality?: number | null
+          judgments_processed_at?: string | null
+          portfolio_centroid?: string | null
+          reliability?: number
+          retired_at?: string | null
+          sources?: Json
+          taste_vector?: string | null
+          theta?: number[] | null
+          timelessness?: number | null
+          updated_at?: string | null
+          version?: number
+          warmth?: number | null
+        }
+        Relationships: []
+      }
+      designer_taste_snapshots: {
+        Row: {
+          created_at: string | null
+          designer_id: string
+          id: number
+          reliability: number | null
+          sources: Json | null
+          spectrums: Json | null
+          taste_vector: string | null
+          theta: number[] | null
+          version: number
+        }
+        Insert: {
+          created_at?: string | null
+          designer_id: string
+          id?: never
+          reliability?: number | null
+          sources?: Json | null
+          spectrums?: Json | null
+          taste_vector?: string | null
+          theta?: number[] | null
+          version: number
+        }
+        Update: {
+          created_at?: string | null
+          designer_id?: string
+          id?: never
+          reliability?: number | null
+          sources?: Json | null
+          spectrums?: Json | null
+          taste_vector?: string | null
+          theta?: number[] | null
+          version?: number
+        }
+        Relationships: []
+      }
       designer_teaching_stats: {
         Row: {
           accuracy_score: number | null
@@ -3234,6 +3680,83 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      dna_vocab: {
+        Row: {
+          attribute: string
+          family: string
+          label: string | null
+          sort: number | null
+          value: string
+        }
+        Insert: {
+          attribute: string
+          family: string
+          label?: string | null
+          sort?: number | null
+          value: string
+        }
+        Update: {
+          attribute?: string
+          family?: string
+          label?: string | null
+          sort?: number | null
+          value?: string
+        }
+        Relationships: []
+      }
+      document_shares: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          label: string | null
+          last_viewed_at: string | null
+          proposal_id: string
+          status: string
+          token_hash: string
+          updated_at: string
+          view_count: number
+          visibility: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          label?: string | null
+          last_viewed_at?: string | null
+          proposal_id: string
+          status?: string
+          token_hash: string
+          updated_at?: string
+          view_count?: number
+          visibility: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          label?: string | null
+          last_viewed_at?: string | null
+          proposal_id?: string
+          status?: string
+          token_hash?: string
+          updated_at?: string
+          view_count?: number
+          visibility?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_shares_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       editorial_stories: {
         Row: {
@@ -3543,6 +4066,127 @@ export type Database = {
           },
         ]
       }
+      feedback: {
+        Row: {
+          app_version: string | null
+          bucket: string
+          created_at: string
+          created_by: string
+          element: string | null
+          id: string
+          note: string | null
+          resolution: string | null
+          route: string | null
+          screen_name: string | null
+          screenshot_path: string | null
+          shipped_seen_at: string | null
+          status: string
+          updated_at: string
+          viewport: string | null
+          weight: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          bucket: string
+          created_at?: string
+          created_by?: string
+          element?: string | null
+          id?: string
+          note?: string | null
+          resolution?: string | null
+          route?: string | null
+          screen_name?: string | null
+          screenshot_path?: string | null
+          shipped_seen_at?: string | null
+          status?: string
+          updated_at?: string
+          viewport?: string | null
+          weight?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          bucket?: string
+          created_at?: string
+          created_by?: string
+          element?: string | null
+          id?: string
+          note?: string | null
+          resolution?: string | null
+          route?: string | null
+          screen_name?: string | null
+          screenshot_path?: string | null
+          shipped_seen_at?: string | null
+          status?: string
+          updated_at?: string
+          viewport?: string | null
+          weight?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedback_events: {
+        Row: {
+          actor: string
+          created_at: string
+          feedback_id: string
+          id: string
+          kind: string
+          payload: Json
+        }
+        Insert: {
+          actor?: string
+          created_at?: string
+          feedback_id: string
+          id?: string
+          kind: string
+          payload?: Json
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          feedback_id?: string
+          id?: string
+          kind?: string
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_events_actor_fkey"
+            columns: ["actor"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_events_actor_fkey"
+            columns: ["actor"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_events_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: false
+            referencedRelation: "feedback"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ffe_categories: {
         Row: {
           created_at: string
@@ -3614,6 +4258,309 @@ export type Database = {
           },
         ]
       }
+      field_captures: {
+        Row: {
+          app_version: string | null
+          artifacts_sha256: Json
+          barcode_symbology: string | null
+          barcode_value: string | null
+          capture_schema_version: number
+          captured_accuracy_m: number | null
+          captured_at: string
+          captured_lat: number | null
+          captured_lng: number | null
+          captured_timezone: string | null
+          catalog_match_product_id: string | null
+          category: string | null
+          client_capture_id: string
+          colors: string[] | null
+          committed_at: string | null
+          created_at: string
+          designer_id: string
+          destination: string
+          device_model: string | null
+          dimensions: Json | null
+          finish: string | null
+          guesses: Json
+          id: string
+          material_tags: string[] | null
+          materials: string[] | null
+          media_manifest_url: string | null
+          notes: string | null
+          organization_id: string | null
+          os_version: string | null
+          photos: Json
+          price_retail_cents: number | null
+          price_trade_cents: number | null
+          primary_photo_path: string | null
+          product_id: string | null
+          project_id: string | null
+          project_room_id: string | null
+          provenance: Json
+          raw_payload: Json
+          shelf: string | null
+          sku: string | null
+          status: string
+          style_tags: string[] | null
+          subcategory: string | null
+          synced_at: string | null
+          thumbnail_url: string | null
+          title: string | null
+          updated_at: string
+          upload_completed_at: string | null
+          upload_error: string | null
+          upload_progress: number
+          vendor_id: string | null
+          vendor_name: string | null
+          venue_label: string | null
+          venue_place_id: string | null
+          voice_audio_path: string | null
+          voice_duration_seconds: number | null
+          voice_partial_transcript: string | null
+          voice_transcript: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          artifacts_sha256?: Json
+          barcode_symbology?: string | null
+          barcode_value?: string | null
+          capture_schema_version?: number
+          captured_accuracy_m?: number | null
+          captured_at?: string
+          captured_lat?: number | null
+          captured_lng?: number | null
+          captured_timezone?: string | null
+          catalog_match_product_id?: string | null
+          category?: string | null
+          client_capture_id: string
+          colors?: string[] | null
+          committed_at?: string | null
+          created_at?: string
+          designer_id: string
+          destination?: string
+          device_model?: string | null
+          dimensions?: Json | null
+          finish?: string | null
+          guesses?: Json
+          id?: string
+          material_tags?: string[] | null
+          materials?: string[] | null
+          media_manifest_url?: string | null
+          notes?: string | null
+          organization_id?: string | null
+          os_version?: string | null
+          photos?: Json
+          price_retail_cents?: number | null
+          price_trade_cents?: number | null
+          primary_photo_path?: string | null
+          product_id?: string | null
+          project_id?: string | null
+          project_room_id?: string | null
+          provenance?: Json
+          raw_payload?: Json
+          shelf?: string | null
+          sku?: string | null
+          status?: string
+          style_tags?: string[] | null
+          subcategory?: string | null
+          synced_at?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          upload_completed_at?: string | null
+          upload_error?: string | null
+          upload_progress?: number
+          vendor_id?: string | null
+          vendor_name?: string | null
+          venue_label?: string | null
+          venue_place_id?: string | null
+          voice_audio_path?: string | null
+          voice_duration_seconds?: number | null
+          voice_partial_transcript?: string | null
+          voice_transcript?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          artifacts_sha256?: Json
+          barcode_symbology?: string | null
+          barcode_value?: string | null
+          capture_schema_version?: number
+          captured_accuracy_m?: number | null
+          captured_at?: string
+          captured_lat?: number | null
+          captured_lng?: number | null
+          captured_timezone?: string | null
+          catalog_match_product_id?: string | null
+          category?: string | null
+          client_capture_id?: string
+          colors?: string[] | null
+          committed_at?: string | null
+          created_at?: string
+          designer_id?: string
+          destination?: string
+          device_model?: string | null
+          dimensions?: Json | null
+          finish?: string | null
+          guesses?: Json
+          id?: string
+          material_tags?: string[] | null
+          materials?: string[] | null
+          media_manifest_url?: string | null
+          notes?: string | null
+          organization_id?: string | null
+          os_version?: string | null
+          photos?: Json
+          price_retail_cents?: number | null
+          price_trade_cents?: number | null
+          primary_photo_path?: string | null
+          product_id?: string | null
+          project_id?: string | null
+          project_room_id?: string | null
+          provenance?: Json
+          raw_payload?: Json
+          shelf?: string | null
+          sku?: string | null
+          status?: string
+          style_tags?: string[] | null
+          subcategory?: string | null
+          synced_at?: string | null
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          upload_completed_at?: string | null
+          upload_error?: string | null
+          upload_progress?: number
+          vendor_id?: string | null
+          vendor_name?: string | null
+          venue_label?: string | null
+          venue_place_id?: string | null
+          voice_audio_path?: string | null
+          voice_duration_seconds?: number | null
+          voice_partial_transcript?: string | null
+          voice_transcript?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_captures_catalog_match_product_id_fkey"
+            columns: ["catalog_match_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_captures_catalog_match_product_id_fkey"
+            columns: ["catalog_match_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "field_captures_catalog_match_product_id_fkey"
+            columns: ["catalog_match_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "field_captures_catalog_match_product_id_fkey"
+            columns: ["catalog_match_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "field_captures_catalog_match_product_id_fkey"
+            columns: ["catalog_match_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "field_captures_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_captures_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_captures_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_captures_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_captures_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_captures_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "field_captures_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "field_captures_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "field_captures_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "field_captures_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_captures_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_captures_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       founding_designer_applications: {
         Row: {
           auth_user_id: string | null
@@ -3624,8 +4571,10 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
+          lead_attribution: Json | null
           location: string | null
           motivation: string | null
+          posthog_distinct_id: string | null
           referral_source: string | null
           review_notes: string | null
           reviewed_at: string | null
@@ -3644,8 +4593,10 @@ export type Database = {
           first_name: string
           id?: string
           last_name: string
+          lead_attribution?: Json | null
           location?: string | null
           motivation?: string | null
+          posthog_distinct_id?: string | null
           referral_source?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
@@ -3664,8 +4615,10 @@ export type Database = {
           first_name?: string
           id?: string
           last_name?: string
+          lead_attribution?: Json | null
           location?: string | null
           motivation?: string | null
+          posthog_distinct_id?: string | null
           referral_source?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
@@ -3674,6 +4627,63 @@ export type Database = {
           status?: Database["public"]["Enums"]["application_review_status"]
           updated_at?: string
           website?: string | null
+        }
+        Relationships: []
+      }
+      house_taste: {
+        Row: {
+          boldness: number | null
+          complexity: number | null
+          computed_from: Json
+          craftsmanship: number | null
+          created_at: string | null
+          curated_by: string | null
+          curated_overrides: Json | null
+          formality: number | null
+          id: string
+          notes: string | null
+          status: string
+          taste_vector: string
+          theta: number[] | null
+          timelessness: number | null
+          version: number
+          warmth: number | null
+        }
+        Insert: {
+          boldness?: number | null
+          complexity?: number | null
+          computed_from?: Json
+          craftsmanship?: number | null
+          created_at?: string | null
+          curated_by?: string | null
+          curated_overrides?: Json | null
+          formality?: number | null
+          id?: string
+          notes?: string | null
+          status?: string
+          taste_vector: string
+          theta?: number[] | null
+          timelessness?: number | null
+          version: number
+          warmth?: number | null
+        }
+        Update: {
+          boldness?: number | null
+          complexity?: number | null
+          computed_from?: Json
+          craftsmanship?: number | null
+          created_at?: string | null
+          curated_by?: string | null
+          curated_overrides?: Json | null
+          formality?: number | null
+          id?: string
+          notes?: string | null
+          status?: string
+          taste_vector?: string
+          theta?: number[] | null
+          timelessness?: number | null
+          version?: number
+          warmth?: number | null
         }
         Relationships: []
       }
@@ -4038,6 +5048,105 @@ export type Database = {
           },
         ]
       }
+      item_feedback: {
+        Row: {
+          board_item_id: string | null
+          body: string | null
+          client_id: string
+          created_at: string
+          ffe_item_id: string | null
+          id: string
+          proposal_item_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+          verdict: string
+        }
+        Insert: {
+          board_item_id?: string | null
+          body?: string | null
+          client_id?: string
+          created_at?: string
+          ffe_item_id?: string | null
+          id?: string
+          proposal_item_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+          verdict: string
+        }
+        Update: {
+          board_item_id?: string | null
+          body?: string | null
+          client_id?: string
+          created_at?: string
+          ffe_item_id?: string | null
+          id?: string
+          proposal_item_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          updated_at?: string
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "item_feedback_board_item_id_fkey"
+            columns: ["board_item_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_board_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_feedback_ffe_item_id_fkey"
+            columns: ["ffe_item_id"]
+            isOneToOne: false
+            referencedRelation: "project_ffe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_feedback_proposal_item_id_fkey"
+            columns: ["proposal_item_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      item_feedback_events: {
+        Row: {
+          actor: string
+          body: string | null
+          created_at: string
+          feedback_id: string
+          id: string
+          kind: string
+        }
+        Insert: {
+          actor?: string
+          body?: string | null
+          created_at?: string
+          feedback_id: string
+          id?: string
+          kind: string
+        }
+        Update: {
+          actor?: string
+          body?: string | null
+          created_at?: string
+          feedback_id?: string
+          id?: string
+          kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "item_feedback_events_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: false
+            referencedRelation: "item_feedback"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           accepted_at: string | null
@@ -4169,8 +5278,10 @@ export type Database = {
           description: string | null
           email: string
           id: string
+          lead_attribution: Json | null
           location: string | null
           materials: string | null
+          posthog_distinct_id: string | null
           referral_source: string | null
           review_notes: string | null
           reviewed_at: string | null
@@ -4189,8 +5300,10 @@ export type Database = {
           description?: string | null
           email: string
           id?: string
+          lead_attribution?: Json | null
           location?: string | null
           materials?: string | null
+          posthog_distinct_id?: string | null
           referral_source?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
@@ -4209,8 +5322,10 @@ export type Database = {
           description?: string | null
           email?: string
           id?: string
+          lead_attribution?: Json | null
           location?: string | null
           materials?: string | null
+          posthog_distinct_id?: string | null
           referral_source?: string | null
           review_notes?: string | null
           reviewed_at?: string | null
@@ -4327,6 +5442,81 @@ export type Database = {
           },
         ]
       }
+      match_events: {
+        Row: {
+          context: Json | null
+          created_at: string | null
+          designer_id: string | null
+          house_version: number | null
+          id: number
+          latency_ms: number | null
+          results: Json
+          session_key: string | null
+          source: string
+          user_id: string | null
+          w: number | null
+          w_effective: number | null
+          weights_version: number | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string | null
+          designer_id?: string | null
+          house_version?: number | null
+          id?: never
+          latency_ms?: number | null
+          results: Json
+          session_key?: string | null
+          source: string
+          user_id?: string | null
+          w?: number | null
+          w_effective?: number | null
+          weights_version?: number | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string | null
+          designer_id?: string | null
+          house_version?: number | null
+          id?: never
+          latency_ms?: number | null
+          results?: Json
+          session_key?: string | null
+          source?: string
+          user_id?: string | null
+          w?: number | null
+          w_effective?: number | null
+          weights_version?: number | null
+        }
+        Relationships: []
+      }
+      match_weight_profiles: {
+        Row: {
+          created_at: string | null
+          is_active: boolean
+          name: string
+          notes: string | null
+          version: number
+          weights: Json
+        }
+        Insert: {
+          created_at?: string | null
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          version: number
+          weights: Json
+        }
+        Update: {
+          created_at?: string | null
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          version?: number
+          weights?: Json
+        }
+        Relationships: []
+      }
       material_compatibility: {
         Row: {
           compatibility: string | null
@@ -4351,6 +5541,69 @@ export type Database = {
           material_a?: string
           material_b?: string
           notes?: string | null
+        }
+        Relationships: []
+      }
+      newsletter_subscribers: {
+        Row: {
+          confirmation_token: string | null
+          confirmed: boolean
+          created_at: string
+          email: string
+          id: string
+          lead_attribution: Json | null
+          posthog_distinct_id: string | null
+          referrer: string | null
+          signup_page: string | null
+          source: string
+          subscribed: boolean
+          updated_at: string
+          user_agent: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          confirmation_token?: string | null
+          confirmed?: boolean
+          created_at?: string
+          email: string
+          id?: string
+          lead_attribution?: Json | null
+          posthog_distinct_id?: string | null
+          referrer?: string | null
+          signup_page?: string | null
+          source?: string
+          subscribed?: boolean
+          updated_at?: string
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          confirmation_token?: string | null
+          confirmed?: boolean
+          created_at?: string
+          email?: string
+          id?: string
+          lead_attribution?: Json | null
+          posthog_distinct_id?: string | null
+          referrer?: string | null
+          signup_page?: string | null
+          source?: string
+          subscribed?: boolean
+          updated_at?: string
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
         }
         Relationships: []
       }
@@ -5385,6 +6638,264 @@ export type Database = {
           },
         ]
       }
+      product_dna: {
+        Row: {
+          accent_colors: string[] | null
+          ambiance: string | null
+          arm_profile: string | null
+          attr_source: Json
+          back_profile: string | null
+          character_trajectory: string | null
+          collection: string | null
+          color_histogram: Json | null
+          color_saturation: number | null
+          color_temperature: number | null
+          color_value: number | null
+          comfort: number | null
+          confidence: Json
+          context: Json | null
+          craftsmanship_tier: number | null
+          created_at: string | null
+          dna_version: number
+          dominant_color: string | null
+          durability_for: string[] | null
+          edition: string | null
+          era: string | null
+          flexibility: number | null
+          joinery: string | null
+          lead_time_days: number | null
+          leg_style: string | null
+          line_quality: number | null
+          maintenance_reality: Json | null
+          material_honesty: number | null
+          mood_keywords: string[] | null
+          negative_space: number | null
+          origin_country: string | null
+          originating_designer: string | null
+          palette_family: string | null
+          patina_potential: number | null
+          pattern_density: number | null
+          price_tier: string | null
+          primary_function: string | null
+          product_id: string
+          proportion_notes: string | null
+          provenance_story: string | null
+          sheen: number | null
+          silhouette: string | null
+          solidity: number | null
+          surface_texture: string | null
+          sustainability: string[] | null
+          symmetry: string | null
+          updated_at: string | null
+          value_story: string | null
+          visual_scale: number | null
+        }
+        Insert: {
+          accent_colors?: string[] | null
+          ambiance?: string | null
+          arm_profile?: string | null
+          attr_source?: Json
+          back_profile?: string | null
+          character_trajectory?: string | null
+          collection?: string | null
+          color_histogram?: Json | null
+          color_saturation?: number | null
+          color_temperature?: number | null
+          color_value?: number | null
+          comfort?: number | null
+          confidence?: Json
+          context?: Json | null
+          craftsmanship_tier?: number | null
+          created_at?: string | null
+          dna_version?: number
+          dominant_color?: string | null
+          durability_for?: string[] | null
+          edition?: string | null
+          era?: string | null
+          flexibility?: number | null
+          joinery?: string | null
+          lead_time_days?: number | null
+          leg_style?: string | null
+          line_quality?: number | null
+          maintenance_reality?: Json | null
+          material_honesty?: number | null
+          mood_keywords?: string[] | null
+          negative_space?: number | null
+          origin_country?: string | null
+          originating_designer?: string | null
+          palette_family?: string | null
+          patina_potential?: number | null
+          pattern_density?: number | null
+          price_tier?: string | null
+          primary_function?: string | null
+          product_id: string
+          proportion_notes?: string | null
+          provenance_story?: string | null
+          sheen?: number | null
+          silhouette?: string | null
+          solidity?: number | null
+          surface_texture?: string | null
+          sustainability?: string[] | null
+          symmetry?: string | null
+          updated_at?: string | null
+          value_story?: string | null
+          visual_scale?: number | null
+        }
+        Update: {
+          accent_colors?: string[] | null
+          ambiance?: string | null
+          arm_profile?: string | null
+          attr_source?: Json
+          back_profile?: string | null
+          character_trajectory?: string | null
+          collection?: string | null
+          color_histogram?: Json | null
+          color_saturation?: number | null
+          color_temperature?: number | null
+          color_value?: number | null
+          comfort?: number | null
+          confidence?: Json
+          context?: Json | null
+          craftsmanship_tier?: number | null
+          created_at?: string | null
+          dna_version?: number
+          dominant_color?: string | null
+          durability_for?: string[] | null
+          edition?: string | null
+          era?: string | null
+          flexibility?: number | null
+          joinery?: string | null
+          lead_time_days?: number | null
+          leg_style?: string | null
+          line_quality?: number | null
+          maintenance_reality?: Json | null
+          material_honesty?: number | null
+          mood_keywords?: string[] | null
+          negative_space?: number | null
+          origin_country?: string | null
+          originating_designer?: string | null
+          palette_family?: string | null
+          patina_potential?: number | null
+          pattern_density?: number | null
+          price_tier?: string | null
+          primary_function?: string | null
+          product_id?: string
+          proportion_notes?: string | null
+          provenance_story?: string | null
+          sheen?: number | null
+          silhouette?: string | null
+          solidity?: number | null
+          surface_texture?: string | null
+          sustainability?: string[] | null
+          symmetry?: string | null
+          updated_at?: string | null
+          value_story?: string | null
+          visual_scale?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_dna_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_dna_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_dna_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_dna_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_dna_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      product_dna_drafts: {
+        Row: {
+          created_at: string | null
+          draft: Json
+          id: number
+          model: string
+          overall_confidence: number | null
+          product_id: string
+          prompt_version: string
+        }
+        Insert: {
+          created_at?: string | null
+          draft: Json
+          id?: never
+          model: string
+          overall_confidence?: number | null
+          product_id: string
+          prompt_version: string
+        }
+        Update: {
+          created_at?: string | null
+          draft?: Json
+          id?: never
+          model?: string
+          overall_confidence?: number | null
+          product_id?: string
+          prompt_version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_dna_drafts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_dna_drafts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_dna_drafts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_dna_drafts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_dna_drafts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
       product_engagement: {
         Row: {
           add_to_room_rate: number | null
@@ -5632,11 +7143,13 @@ export type Database = {
           assigned_by: string
           boldness: number | null
           complexity: number | null
+          confidence: Json
           craftsmanship: number | null
           created_at: string | null
           formality: number | null
           id: string
           product_id: string
+          source: string
           timelessness: number | null
           updated_at: string | null
           warmth: number | null
@@ -5645,11 +7158,13 @@ export type Database = {
           assigned_by: string
           boldness?: number | null
           complexity?: number | null
+          confidence?: Json
           craftsmanship?: number | null
           created_at?: string | null
           formality?: number | null
           id?: string
           product_id: string
+          source?: string
           timelessness?: number | null
           updated_at?: string | null
           warmth?: number | null
@@ -5658,11 +7173,13 @@ export type Database = {
           assigned_by?: string
           boldness?: number | null
           complexity?: number | null
+          confidence?: Json
           craftsmanship?: number | null
           created_at?: string | null
           formality?: number | null
           id?: string
           product_id?: string
+          source?: string
           timelessness?: number | null
           updated_at?: string | null
           warmth?: number | null
@@ -5922,9 +7439,13 @@ export type Database = {
       }
       products: {
         Row: {
+          aesthete_model_version: string | null
           aesthete_vector: string | null
+          aesthete_vector_at: string | null
           available_colors: string[] | null
           brand: string | null
+          capture_provenance: Json | null
+          capture_source: string | null
           captured_at: string
           captured_by: string | null
           catalog_equivalent_id: string | null
@@ -5937,6 +7458,7 @@ export type Database = {
           dimensions: Json | null
           embedding: string | null
           embedding_updated_at: string | null
+          field_capture_id: string | null
           finish: string | null
           id: string
           images: string[] | null
@@ -5968,6 +7490,7 @@ export type Database = {
           source_url: string | null
           status: string
           studio_id: string | null
+          style_caption: string | null
           style_tags: string[] | null
           subcategory: string | null
           tags: string[] | null
@@ -5977,9 +7500,13 @@ export type Database = {
           vendor_id: string | null
         }
         Insert: {
+          aesthete_model_version?: string | null
           aesthete_vector?: string | null
+          aesthete_vector_at?: string | null
           available_colors?: string[] | null
           brand?: string | null
+          capture_provenance?: Json | null
+          capture_source?: string | null
           captured_at: string
           captured_by?: string | null
           catalog_equivalent_id?: string | null
@@ -5992,6 +7519,7 @@ export type Database = {
           dimensions?: Json | null
           embedding?: string | null
           embedding_updated_at?: string | null
+          field_capture_id?: string | null
           finish?: string | null
           id?: string
           images?: string[] | null
@@ -6023,6 +7551,7 @@ export type Database = {
           source_url?: string | null
           status?: string
           studio_id?: string | null
+          style_caption?: string | null
           style_tags?: string[] | null
           subcategory?: string | null
           tags?: string[] | null
@@ -6032,9 +7561,13 @@ export type Database = {
           vendor_id?: string | null
         }
         Update: {
+          aesthete_model_version?: string | null
           aesthete_vector?: string | null
+          aesthete_vector_at?: string | null
           available_colors?: string[] | null
           brand?: string | null
+          capture_provenance?: Json | null
+          capture_source?: string | null
           captured_at?: string
           captured_by?: string | null
           catalog_equivalent_id?: string | null
@@ -6047,6 +7580,7 @@ export type Database = {
           dimensions?: Json | null
           embedding?: string | null
           embedding_updated_at?: string | null
+          field_capture_id?: string | null
           finish?: string | null
           id?: string
           images?: string[] | null
@@ -6078,6 +7612,7 @@ export type Database = {
           source_url?: string | null
           status?: string
           studio_id?: string | null
+          style_caption?: string | null
           style_tags?: string[] | null
           subcategory?: string | null
           tags?: string[] | null
@@ -6121,6 +7656,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_promotion_candidates"
             referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "products_field_capture_id_fkey"
+            columns: ["field_capture_id"]
+            isOneToOne: false
+            referencedRelation: "field_captures"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "products_merged_into_id_fkey"
@@ -6506,6 +8048,7 @@ export type Database = {
           doc_type: string
           id: string
           project_id: string | null
+          proposal_id: string | null
           section_key: string | null
           size_bytes: number | null
           status: string | null
@@ -6527,6 +8070,7 @@ export type Database = {
           doc_type?: string
           id?: string
           project_id?: string | null
+          proposal_id?: string | null
           section_key?: string | null
           size_bytes?: number | null
           status?: string | null
@@ -6548,6 +8092,7 @@ export type Database = {
           doc_type?: string
           id?: string
           project_id?: string | null
+          proposal_id?: string | null
           section_key?: string | null
           size_bytes?: number | null
           status?: string | null
@@ -6572,6 +8117,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_documents_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
             referencedColumns: ["id"]
           },
           {
@@ -6606,6 +8158,7 @@ export type Database = {
           budget_max_cents: number | null
           budget_min_cents: number | null
           created_at: string
+          doc_code: string | null
           eta: string | null
           ffe_category: string | null
           id: string
@@ -6640,6 +8193,7 @@ export type Database = {
           budget_max_cents?: number | null
           budget_min_cents?: number | null
           created_at?: string
+          doc_code?: string | null
           eta?: string | null
           ffe_category?: string | null
           id?: string
@@ -6674,6 +8228,7 @@ export type Database = {
           budget_max_cents?: number | null
           budget_min_cents?: number | null
           created_at?: string
+          doc_code?: string | null
           eta?: string | null
           ffe_category?: string | null
           id?: string
@@ -7690,6 +9245,7 @@ export type Database = {
           client_id: string | null
           client_profile_id: string | null
           client_visibility_tier: string
+          closure_checklist: Json | null
           committed_cents: number | null
           completed_at: string | null
           created_at: string | null
@@ -7704,6 +9260,7 @@ export type Database = {
           lead_designer_id: string | null
           name: string
           notes: string | null
+          portfolio_snapshot: Json | null
           proposal_id: string | null
           scope_boundaries: Json | null
           share_token: string | null
@@ -7727,6 +9284,7 @@ export type Database = {
           client_id?: string | null
           client_profile_id?: string | null
           client_visibility_tier?: string
+          closure_checklist?: Json | null
           committed_cents?: number | null
           completed_at?: string | null
           created_at?: string | null
@@ -7741,6 +9299,7 @@ export type Database = {
           lead_designer_id?: string | null
           name: string
           notes?: string | null
+          portfolio_snapshot?: Json | null
           proposal_id?: string | null
           scope_boundaries?: Json | null
           share_token?: string | null
@@ -7764,6 +9323,7 @@ export type Database = {
           client_id?: string | null
           client_profile_id?: string | null
           client_visibility_tier?: string
+          closure_checklist?: Json | null
           committed_cents?: number | null
           completed_at?: string | null
           created_at?: string | null
@@ -7778,6 +9338,7 @@ export type Database = {
           lead_designer_id?: string | null
           name?: string
           notes?: string | null
+          portfolio_snapshot?: Json | null
           proposal_id?: string | null
           scope_boundaries?: Json | null
           share_token?: string | null
@@ -8102,7 +9663,9 @@ export type Database = {
           name: string
           proposal_id: string
           scope_room_id: string | null
+          sections: Json
           sort_order: number
+          status: string
           updated_at: string
         }
         Insert: {
@@ -8115,7 +9678,9 @@ export type Database = {
           name: string
           proposal_id: string
           scope_room_id?: string | null
+          sections?: Json
           sort_order?: number
+          status?: string
           updated_at?: string
         }
         Update: {
@@ -8128,7 +9693,9 @@ export type Database = {
           name?: string
           proposal_id?: string
           scope_room_id?: string | null
+          sections?: Json
           sort_order?: number
+          status?: string
           updated_at?: string
         }
         Relationships: [
@@ -8405,6 +9972,7 @@ export type Database = {
           category: string | null
           created_at: string
           description: string | null
+          doc_code: string | null
           ffe_category: string | null
           id: string
           image_url: string | null
@@ -8433,6 +10001,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           description?: string | null
+          doc_code?: string | null
           ffe_category?: string | null
           id?: string
           image_url?: string | null
@@ -8461,6 +10030,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           description?: string | null
+          doc_code?: string | null
           ffe_category?: string | null
           id?: string
           image_url?: string | null
@@ -9055,7 +10625,10 @@ export type Database = {
           designer_id: string
           discount_amount: number | null
           discount_percent: number | null
+          feedback_enabled: boolean
           id: string
+          last_nudged_at: string | null
+          nudge_count: number
           parent_proposal_id: string | null
           payment_notes: string | null
           payment_terms: string | null
@@ -9094,7 +10667,10 @@ export type Database = {
           designer_id: string
           discount_amount?: number | null
           discount_percent?: number | null
+          feedback_enabled?: boolean
           id?: string
+          last_nudged_at?: string | null
+          nudge_count?: number
           parent_proposal_id?: string | null
           payment_notes?: string | null
           payment_terms?: string | null
@@ -9133,7 +10709,10 @@ export type Database = {
           designer_id?: string
           discount_amount?: number | null
           discount_percent?: number | null
+          feedback_enabled?: boolean
           id?: string
+          last_nudged_at?: string | null
+          nudge_count?: number
           parent_proposal_id?: string | null
           payment_notes?: string | null
           payment_terms?: string | null
@@ -9338,6 +10917,60 @@ export type Database = {
           token_hash?: string | null
           user_email?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      quiz_option_loadings: {
+        Row: {
+          archetype_loadings: Json | null
+          budget: Json | null
+          image_embedding: string | null
+          material_loadings: Json | null
+          option_key: string
+          other: Json | null
+          question_key: string
+          question_weight: number
+          spectrum_deltas: Json
+        }
+        Insert: {
+          archetype_loadings?: Json | null
+          budget?: Json | null
+          image_embedding?: string | null
+          material_loadings?: Json | null
+          option_key: string
+          other?: Json | null
+          question_key: string
+          question_weight?: number
+          spectrum_deltas?: Json
+        }
+        Update: {
+          archetype_loadings?: Json | null
+          budget?: Json | null
+          image_embedding?: string | null
+          material_loadings?: Json | null
+          option_key?: string
+          other?: Json | null
+          question_key?: string
+          question_weight?: number
+          spectrum_deltas?: Json
+        }
+        Relationships: []
+      }
+      quiz_rate_limits: {
+        Row: {
+          ip_hash: string
+          n: number
+          window_start: string
+        }
+        Insert: {
+          ip_hash: string
+          n?: number
+          window_start: string
+        }
+        Update: {
+          ip_hash?: string
+          n?: number
+          window_start?: string
         }
         Relationships: []
       }
@@ -9867,6 +11500,7 @@ export type Database = {
           photos_manifest_url: string | null
           processed_at: string | null
           project_id: string | null
+          project_room_id: string | null
           quality_grade: string | null
           room_id: string | null
           room_type: string | null
@@ -9920,6 +11554,7 @@ export type Database = {
           photos_manifest_url?: string | null
           processed_at?: string | null
           project_id?: string | null
+          project_room_id?: string | null
           quality_grade?: string | null
           room_id?: string | null
           room_type?: string | null
@@ -9973,6 +11608,7 @@ export type Database = {
           photos_manifest_url?: string | null
           processed_at?: string | null
           project_id?: string | null
+          project_room_id?: string | null
           quality_grade?: string | null
           room_id?: string | null
           room_type?: string | null
@@ -9999,6 +11635,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scans_project_room_id_fkey"
+            columns: ["project_room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
             referencedColumns: ["id"]
           },
           {
@@ -10462,6 +12105,51 @@ export type Database = {
           },
         ]
       }
+      signature_biases: {
+        Row: {
+          description: string | null
+          designer_id: string
+          direction: string
+          displayed_strength: number | null
+          evidence: Json | null
+          feature_group: string
+          id: string
+          learned_strength: number | null
+          name: string
+          status: string
+          updated_at: string | null
+          version: number
+        }
+        Insert: {
+          description?: string | null
+          designer_id: string
+          direction: string
+          displayed_strength?: number | null
+          evidence?: Json | null
+          feature_group: string
+          id?: string
+          learned_strength?: number | null
+          name: string
+          status?: string
+          updated_at?: string | null
+          version?: number
+        }
+        Update: {
+          description?: string | null
+          designer_id?: string
+          direction?: string
+          displayed_strength?: number | null
+          evidence?: Json | null
+          feature_group?: string
+          id?: string
+          learned_strength?: number | null
+          name?: string
+          status?: string
+          updated_at?: string | null
+          version?: number
+        }
+        Relationships: []
+      }
       spatial_context: {
         Row: {
           context_text: string
@@ -10620,6 +12308,35 @@ export type Database = {
         }
         Relationships: []
       }
+      style_centroids: {
+        Row: {
+          centroid: string
+          computed_at: string | null
+          n_products: number
+          style_id: string
+        }
+        Insert: {
+          centroid: string
+          computed_at?: string | null
+          n_products: number
+          style_id: string
+        }
+        Update: {
+          centroid?: string
+          computed_at?: string | null
+          n_products?: number
+          style_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "style_centroids_style_id_fkey"
+            columns: ["style_id"]
+            isOneToOne: true
+            referencedRelation: "styles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       styles: {
         Row: {
           color_hex: string | null
@@ -10700,6 +12417,410 @@ export type Database = {
           id?: string
           is_system?: boolean | null
           name?: string
+        }
+        Relationships: []
+      }
+      taste_corrections: {
+        Row: {
+          client_profile_id: string | null
+          created_at: string | null
+          designer_id: string
+          direction: Json
+          free_text: string | null
+          id: number
+          product_id: string | null
+          replacement_product_id: string | null
+          subject: string
+          surface: string | null
+        }
+        Insert: {
+          client_profile_id?: string | null
+          created_at?: string | null
+          designer_id: string
+          direction?: Json
+          free_text?: string | null
+          id?: never
+          product_id?: string | null
+          replacement_product_id?: string | null
+          subject: string
+          surface?: string | null
+        }
+        Update: {
+          client_profile_id?: string | null
+          created_at?: string | null
+          designer_id?: string
+          direction?: Json
+          free_text?: string | null
+          id?: never
+          product_id?: string | null
+          replacement_product_id?: string | null
+          subject?: string
+          surface?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_taste_corrections_client_profile"
+            columns: ["client_profile_id"]
+            isOneToOne: false
+            referencedRelation: "client_style_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taste_corrections_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taste_corrections_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_corrections_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_corrections_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_corrections_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_corrections_replacement_product_id_fkey"
+            columns: ["replacement_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taste_corrections_replacement_product_id_fkey"
+            columns: ["replacement_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_corrections_replacement_product_id_fkey"
+            columns: ["replacement_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_corrections_replacement_product_id_fkey"
+            columns: ["replacement_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_corrections_replacement_product_id_fkey"
+            columns: ["replacement_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
+      taste_judgments: {
+        Row: {
+          choice: string
+          client_profile_id: string | null
+          context: string
+          created_at: string | null
+          designer_id: string
+          id: number
+          kind: string
+          latency_ms: number | null
+          product_a: string
+          product_b: string
+          session_id: string | null
+        }
+        Insert: {
+          choice: string
+          client_profile_id?: string | null
+          context?: string
+          created_at?: string | null
+          designer_id: string
+          id?: never
+          kind?: string
+          latency_ms?: number | null
+          product_a: string
+          product_b: string
+          session_id?: string | null
+        }
+        Update: {
+          choice?: string
+          client_profile_id?: string | null
+          context?: string
+          created_at?: string | null
+          designer_id?: string
+          id?: never
+          kind?: string
+          latency_ms?: number | null
+          product_a?: string
+          product_b?: string
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_taste_judgments_client_profile"
+            columns: ["client_profile_id"]
+            isOneToOne: false
+            referencedRelation: "client_style_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taste_judgments_product_a_fkey"
+            columns: ["product_a"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taste_judgments_product_a_fkey"
+            columns: ["product_a"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_judgments_product_a_fkey"
+            columns: ["product_a"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_judgments_product_a_fkey"
+            columns: ["product_a"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_judgments_product_a_fkey"
+            columns: ["product_a"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_judgments_product_b_fkey"
+            columns: ["product_b"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taste_judgments_product_b_fkey"
+            columns: ["product_b"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_judgments_product_b_fkey"
+            columns: ["product_b"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_judgments_product_b_fkey"
+            columns: ["product_b"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_judgments_product_b_fkey"
+            columns: ["product_b"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_judgments_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "teaching_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      taste_probe_queue: {
+        Row: {
+          answered_judgment_id: number | null
+          created_at: string | null
+          designer_id: string
+          due_at: string
+          id: number
+          product_a: string
+          product_b: string
+          source_judgment_id: number
+          status: string
+        }
+        Insert: {
+          answered_judgment_id?: number | null
+          created_at?: string | null
+          designer_id: string
+          due_at: string
+          id?: never
+          product_a: string
+          product_b: string
+          source_judgment_id: number
+          status?: string
+        }
+        Update: {
+          answered_judgment_id?: number | null
+          created_at?: string | null
+          designer_id?: string
+          due_at?: string
+          id?: never
+          product_a?: string
+          product_b?: string
+          source_judgment_id?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "taste_probe_queue_answered_judgment_id_fkey"
+            columns: ["answered_judgment_id"]
+            isOneToOne: false
+            referencedRelation: "taste_judgments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taste_probe_queue_product_a_fkey"
+            columns: ["product_a"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taste_probe_queue_product_a_fkey"
+            columns: ["product_a"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_probe_queue_product_a_fkey"
+            columns: ["product_a"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_probe_queue_product_a_fkey"
+            columns: ["product_a"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_probe_queue_product_a_fkey"
+            columns: ["product_a"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_probe_queue_product_b_fkey"
+            columns: ["product_b"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "taste_probe_queue_product_b_fkey"
+            columns: ["product_b"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_probe_queue_product_b_fkey"
+            columns: ["product_b"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_probe_queue_product_b_fkey"
+            columns: ["product_b"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_probe_queue_product_b_fkey"
+            columns: ["product_b"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "taste_probe_queue_source_judgment_id_fkey"
+            columns: ["source_judgment_id"]
+            isOneToOne: false
+            referencedRelation: "taste_judgments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      taste_rules: {
+        Row: {
+          action: string
+          created_at: string | null
+          designer_id: string | null
+          id: string
+          magnitude: number | null
+          owner_scope: string
+          predicate: Json
+          scope: string
+          scope_value: string | null
+          status: string
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          designer_id?: string | null
+          id?: string
+          magnitude?: number | null
+          owner_scope: string
+          predicate: Json
+          scope?: string
+          scope_value?: string | null
+          status?: string
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          designer_id?: string | null
+          id?: string
+          magnitude?: number | null
+          owner_scope?: string
+          predicate?: Json
+          scope?: string
+          scope_value?: string | null
+          status?: string
         }
         Relationships: []
       }
@@ -11437,6 +13558,7 @@ export type Database = {
           id: string
           message: string | null
           scope: string | null
+          sent_at: string | null
           status: string
           timeline: string | null
           updated_at: string
@@ -11448,6 +13570,7 @@ export type Database = {
           id?: string
           message?: string | null
           scope?: string | null
+          sent_at?: string | null
           status?: string
           timeline?: string | null
           updated_at?: string
@@ -11459,6 +13582,7 @@ export type Database = {
           id?: string
           message?: string | null
           scope?: string | null
+          sent_at?: string | null
           status?: string
           timeline?: string | null
           updated_at?: string
@@ -11861,14 +13985,17 @@ export type Database = {
         Row: {
           assigned_admin_id: string | null
           auth_user_id: string | null
+          channel: string | null
           company_name: string | null
           converted_at: string | null
           created_at: string
           cta_text: string | null
           disqualified_reason: string | null
           email: string
+          fbclid: string | null
           first_touch_attribution: Json | null
           full_name: string | null
+          gclid: string | null
           id: string
           ip_address: unknown
           last_contacted_at: string | null
@@ -11893,14 +14020,17 @@ export type Database = {
         Insert: {
           assigned_admin_id?: string | null
           auth_user_id?: string | null
+          channel?: string | null
           company_name?: string | null
           converted_at?: string | null
           created_at?: string
           cta_text?: string | null
           disqualified_reason?: string | null
           email: string
+          fbclid?: string | null
           first_touch_attribution?: Json | null
           full_name?: string | null
+          gclid?: string | null
           id?: string
           ip_address?: unknown
           last_contacted_at?: string | null
@@ -11925,14 +14055,17 @@ export type Database = {
         Update: {
           assigned_admin_id?: string | null
           auth_user_id?: string | null
+          channel?: string | null
           company_name?: string | null
           converted_at?: string | null
           created_at?: string
           cta_text?: string | null
           disqualified_reason?: string | null
           email?: string
+          fbclid?: string | null
           first_touch_attribution?: Json | null
           full_name?: string | null
+          gclid?: string | null
           id?: string
           ip_address?: unknown
           last_contacted_at?: string | null
@@ -12115,6 +14248,51 @@ export type Database = {
           },
         ]
       }
+      why_phrase_alts: {
+        Row: {
+          band: string
+          sort: number | null
+          template: string
+          term: string
+          variant: number
+        }
+        Insert: {
+          band: string
+          sort?: number | null
+          template: string
+          term: string
+          variant?: number
+        }
+        Update: {
+          band?: string
+          sort?: number | null
+          template?: string
+          term?: string
+          variant?: number
+        }
+        Relationships: []
+      }
+      why_phrases: {
+        Row: {
+          band: string
+          sort: number | null
+          template: string
+          term: string
+        }
+        Insert: {
+          band: string
+          sort?: number | null
+          template: string
+          term: string
+        }
+        Update: {
+          band?: string
+          sort?: number | null
+          template?: string
+          term?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       consumer_funnel: {
@@ -12218,6 +14396,8 @@ export type Database = {
           project_id: string | null
           project_status: string | null
           proposal_id: string | null
+          proposal_last_opened_at: string | null
+          proposal_open_count: number | null
           proposal_sent_at: string | null
           proposal_status: string | null
           proposal_updated_at: string | null
@@ -12260,6 +14440,16 @@ export type Database = {
           project_id: string | null
           role: string | null
           status_raw: string | null
+        }
+        Relationships: []
+      }
+      product_behavior_stats: {
+        Row: {
+          product_id: string | null
+          saves: number | null
+          skips: number | null
+          smoothed_save_rate: number | null
+          views: number | null
         }
         Relationships: []
       }
@@ -12740,6 +14930,42 @@ export type Database = {
           },
         ]
       }
+      v_house_taste_public: {
+        Row: {
+          boldness: number | null
+          complexity: number | null
+          craftsmanship: number | null
+          created_at: string | null
+          formality: number | null
+          status: string | null
+          timelessness: number | null
+          version: number | null
+          warmth: number | null
+        }
+        Insert: {
+          boldness?: number | null
+          complexity?: number | null
+          craftsmanship?: number | null
+          created_at?: string | null
+          formality?: number | null
+          status?: string | null
+          timelessness?: number | null
+          version?: number | null
+          warmth?: number | null
+        }
+        Update: {
+          boldness?: number | null
+          complexity?: number | null
+          craftsmanship?: number | null
+          created_at?: string | null
+          formality?: number | null
+          status?: string | null
+          timelessness?: number | null
+          version?: number | null
+          warmth?: number | null
+        }
+        Relationships: []
+      }
       v_promotion_candidates: {
         Row: {
           has_order_history: boolean | null
@@ -12835,15 +15061,128 @@ export type Database = {
       }
     }
     Functions: {
+      _ae_pick_why_phrase: {
+        Args: { p_band: string; p_seed: string; p_term: string }
+        Returns: string
+      }
+      _aesthete_budget_term: {
+        Args: {
+          p_bmax: number
+          p_bmin: number
+          p_craft: number
+          p_has_story: boolean
+          p_omega: number
+          p_price: number
+        }
+        Returns: {
+          over_anchor: boolean
+          softened: boolean
+          t: number
+        }[]
+      }
+      _aesthete_context_term: {
+        Args: { p_dims: Json; p_room_l: number; p_room_w: number }
+        Returns: number
+      }
+      _aesthete_function_term: {
+        Args: {
+          p_comfort: number
+          p_complexity: number
+          p_durability: string[]
+          p_flexibility: number
+          p_fp: Json
+          p_primary_function: string
+        }
+        Returns: number
+      }
+      _aesthete_geometric_median: {
+        Args: { p_vectors: string[] }
+        Returns: Record<string, unknown>
+      }
+      _aesthete_interpretable_groups: { Args: never; Returns: string[] }
+      _aesthete_material_bucket: {
+        Args: { p_material: string }
+        Returns: string
+      }
+      _aesthete_material_color_term: {
+        Args: {
+          p_aff: Json
+          p_client_warmth: number
+          p_color_temp: number
+          p_materials: string[]
+        }
+        Returns: number
+      }
+      _aesthete_phi: { Args: { p_product_id: string }; Returns: number[] }
+      _aesthete_primary_archetype: {
+        Args: { p_product_id: string }
+        Returns: string
+      }
+      _aesthete_product_spectrum: {
+        Args: { p_product_id: string }
+        Returns: {
+          conf: Json
+          origin: string
+          spectrums: Json
+        }[]
+      }
+      _aesthete_rule_cond: {
+        Args: { p_attrs: Json; p_cond: Json }
+        Returns: boolean
+      }
+      _aesthete_rule_matches: {
+        Args: { p_attrs: Json; p_predicate: Json }
+        Returns: boolean
+      }
+      _aesthete_spectrum_distance: {
+        Args: { p_cs: Json; p_ps: Json }
+        Returns: number
+      }
+      _aesthete_spectrum_term: {
+        Args: { p_cc: Json; p_cs: Json; p_pc: Json; p_ps: Json }
+        Returns: number
+      }
+      _aesthete_taste_term: {
+        Args: { p_product_id: string; p_theta: number[] }
+        Returns: number
+      }
+      _aesthete_theta_blend: {
+        Args: { p_theta_d: number[]; p_theta_h: number[]; p_w_eff: number }
+        Returns: number[]
+      }
+      _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
+      _compute_quiz_profile: { Args: { p_answers: Json }; Returns: Json }
+      activate_house_taste: { Args: { p_version: number }; Returns: undefined }
       activate_project_v2: { Args: { input: Json }; Returns: string }
       activate_proposal_as_project: {
         Args: { p_proposal_id: string; p_start_date?: string }
         Returns: string
       }
+      aesthete_ask_knn: {
+        Args: { p_embedding: string; p_filters?: Json }
+        Returns: {
+          match_source: string
+          product_id: string
+          rank: number
+        }[]
+      }
+      aesthete_dev_demo_seed: { Args: never; Returns: string }
+      aesthete_house_portfolio_nightly: { Args: never; Returns: Json }
+      aesthete_jobs_janitor: { Args: never; Returns: Json }
+      aesthete_quiz_janitor: { Args: never; Returns: Json }
+      aesthete_search: {
+        Args: { p_filters?: Json; p_query: string }
+        Returns: {
+          match_source: string
+          product_id: string
+          rank: number
+        }[]
+      }
       aggregate_user_style_signals: {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      app_setting: { Args: { p_name: string }; Returns: string }
       apply_decision: {
         Args: {
           p_decision_id: string
@@ -12851,6 +15190,15 @@ export type Database = {
           p_selected_option_id: string
         }
         Returns: undefined
+      }
+      apply_designer_reliability: {
+        Args: {
+          p_confidence_map?: Json
+          p_designer_id: string
+          p_reliability: number
+          p_style_confidence?: Json
+        }
+        Returns: Json
       }
       apply_invoice_payment_effects: {
         Args: { p_invoice_id: string }
@@ -12861,6 +15209,16 @@ export type Database = {
         Returns: string[]
       }
       apply_scope_change: { Args: { p_request_id: string }; Returns: undefined }
+      apply_starvation_decay: { Args: never; Returns: Json }
+      apply_taste_refit: {
+        Args: {
+          p_designer_id: string
+          p_diagnostics?: Json
+          p_theta: number[]
+          p_watermark: string
+        }
+        Returns: Json
+      }
       assign_po_number: {
         Args: { p_po_id: string }
         Returns: {
@@ -12901,6 +15259,30 @@ export type Database = {
         Returns: number
       }
       chase_invoice: { Args: { p_invoice_id: string }; Returns: string }
+      claim_aesthete_jobs: {
+        Args: { p_batch: number; p_kind: string }
+        Returns: {
+          attempts: number
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string | null
+          dedupe_key: string | null
+          id: number
+          kind: string
+          last_error: string | null
+          payload: Json | null
+          product_id: string | null
+          run_after: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "aesthete_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_quiz_session: { Args: { p_session_key: string }; Returns: Json }
       clone_proposal: {
         Args: {
           p_mode?: string
@@ -12909,7 +15291,72 @@ export type Database = {
         }
         Returns: string
       }
+      close_project: {
+        Args: { p_closure?: Json; p_project_id: string; p_snapshot?: Json }
+        Returns: {
+          actual_cents: number | null
+          brief_document_url: string | null
+          budget_cents: number | null
+          budget_max: number | null
+          budget_min: number | null
+          change_order_terms: Json | null
+          client_id: string | null
+          client_profile_id: string | null
+          client_visibility_tier: string
+          closure_checklist: Json | null
+          committed_cents: number | null
+          completed_at: string | null
+          created_at: string | null
+          created_by: string
+          current_phase: string | null
+          design_fee_cents: number | null
+          designer_id: string | null
+          expected_completion_date: string | null
+          id: string
+          kickoff_date: string | null
+          kickoff_message: string | null
+          lead_designer_id: string | null
+          name: string
+          notes: string | null
+          portfolio_snapshot: Json | null
+          proposal_id: string | null
+          scope_boundaries: Json | null
+          share_token: string | null
+          site_address: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          studio_id: string | null
+          target_end_date: string | null
+          timeline_end: string | null
+          timeline_start: string | null
+          total_amount_cents: number | null
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "projects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      commit_field_capture: {
+        Args: {
+          p_client_capture_id: string
+          p_destination: string
+          p_organization_id?: string
+          p_payload: Json
+          p_project_id?: string
+          p_project_room_id?: string
+          p_shelf?: string
+        }
+        Returns: Json
+      }
       comms_resolve_role: { Args: { p_user_id: string }; Returns: string }
+      complete_aesthete_job: {
+        Args: { p_error?: string; p_id: number; p_status: string }
+        Returns: undefined
+      }
+      compute_house_taste_draft: { Args: never; Returns: string }
       consume_capture: {
         Args: {
           p_capture_id: string
@@ -12919,6 +15366,18 @@ export type Database = {
           p_scope_room_id: string
         }
         Returns: string
+      }
+      create_document_share: {
+        Args: {
+          p_expires_at?: string
+          p_label?: string
+          p_proposal_id: string
+          p_visibility?: Json
+        }
+        Returns: {
+          id: string
+          token: string
+        }[]
       }
       create_purchase_order: {
         Args: {
@@ -12969,6 +15428,11 @@ export type Database = {
         Returns: undefined
       }
       demote_to_personal: { Args: { p_product_id: string }; Returns: string }
+      derive_signature_biases: {
+        Args: { p_designer_id: string }
+        Returns: Json
+      }
+      dismiss_field_capture: { Args: { p_capture_id: string }; Returns: Json }
       draft_invoice_from_milestone: {
         Args: { p_milestone_id: string }
         Returns: string
@@ -12978,7 +15442,12 @@ export type Database = {
         Returns: Json
       }
       expire_room_scan_associations: { Args: never; Returns: number }
+      export_designer_taste: { Args: { p_designer_id: string }; Returns: Json }
       ffe_status_rank: { Args: { p_status: string }; Returns: number }
+      field_capture_jsonb_text_array: {
+        Args: { p_value: Json }
+        Returns: string[]
+      }
       find_products_for_style: {
         Args: { match_count?: number; style_id: string }
         Returns: {
@@ -13033,6 +15502,28 @@ export type Database = {
           variant: string
         }[]
       }
+      get_aesthete_matches: {
+        Args: {
+          p_category?: string
+          p_designer_id?: string
+          p_explore_ratio?: number
+          p_layer?: string
+          p_limit?: number
+          p_offset?: number
+          p_room_id?: string
+          p_session_key: string
+          p_w?: number
+          p_weights_profile?: string
+        }
+        Returns: {
+          confidence: number
+          is_exploration: boolean
+          product_id: string
+          rank: number
+          score: number
+          why: Json
+        }[]
+      }
       get_conversation_history: {
         Args: { p_cursor?: string; p_limit?: number; p_user_id: string }
         Returns: {
@@ -13083,6 +15574,10 @@ export type Database = {
           responded_count: number
           total_count: number
         }[]
+      }
+      get_designer_reliability_inputs: {
+        Args: { p_designer_id: string }
+        Returns: Json
       }
       get_embedding_stats: {
         Args: never
@@ -13176,6 +15671,19 @@ export type Database = {
           role: string
         }[]
       }
+      get_taste_refit_designers: {
+        Args: never
+        Returns: {
+          designer_id: string
+          drift_flag: boolean
+          last_processed_at: string
+          n_unprocessed: number
+        }[]
+      }
+      get_taste_refit_payload: {
+        Args: { p_designer_id: string }
+        Returns: Json
+      }
       get_user_permissions: { Args: { p_user_id: string }; Returns: string[] }
       grant_role_to_user: {
         Args: { p_granted_by?: string; p_role_name: string; p_user_id: string }
@@ -13205,6 +15713,7 @@ export type Database = {
         Args: { body?: Json; fn_name: string }
         Returns: number
       }
+      is_aesthete_lead: { Args: { p_user_id: string }; Returns: boolean }
       is_comms_admin: { Args: { p_user_id: string }; Returns: boolean }
       is_comms_thread_participant: {
         Args: { p_thread_id: string; p_user_id: string }
@@ -13265,6 +15774,20 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      item_feedback_gate: {
+        Args: {
+          p_board_item_id: string
+          p_ffe_item_id: string
+          p_proposal_item_id: string
+        }
+        Returns: {
+          client_id: string
+          designer_id: string
+          feedback_enabled: boolean
+          proposal_id: string
+          status: string
+        }[]
+      }
       link_studio_to_catalog_for_vendor: {
         Args: { p_vendor_id: string }
         Returns: number
@@ -13313,9 +15836,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      mark_capture_upload_complete: {
+        Args: { p_capture_id: string }
+        Returns: undefined
+      }
+      mark_feedback_seen: { Args: { p_id: string }; Returns: undefined }
       mark_scan_upload_complete: {
         Args: { p_scan_id: string }
         Returns: undefined
+      }
+      match_designers_for_client: {
+        Args: { p_session_key: string }
+        Returns: {
+          confidence: Json
+          designer_id: string
+          similarity: number
+        }[]
       }
       may_resolve_coordination_item: {
         Args: {
@@ -13323,6 +15859,10 @@ export type Database = {
           item: Database["public"]["Tables"]["client_decisions"]["Row"]
         }
         Returns: boolean
+      }
+      merge_capture_artifact_sha256: {
+        Args: { p_capture_id: string; p_kind: string; p_sha: string }
+        Returns: undefined
       }
       merge_scan_artifact_sha256: {
         Args: { p_kind: string; p_scan_id: string; p_sha: string }
@@ -13354,7 +15894,21 @@ export type Database = {
         Args: { p_decision_id: string }
         Returns: string
       }
+      notify_item_feedback: { Args: { p_feedback_id: string }; Returns: string }
+      nudge_proposal: { Args: { p_proposal_id: string }; Returns: string }
+      open_project_direct: {
+        Args: {
+          p_budget_max_cents?: number
+          p_budget_min_cents?: number
+          p_client_id?: string
+          p_id?: string
+          p_start_date?: string
+          p_title: string
+        }
+        Returns: string
+      }
       po_status_to_ffe_stage: { Args: { p_po_status: string }; Returns: string }
+      preview_taste_update: { Args: { p_judgment_id: number }; Returns: Json }
       process_style_quiz: {
         Args: { quiz_answers: Json; timings?: Json }
         Returns: Json
@@ -13372,6 +15926,28 @@ export type Database = {
           p_vendor_contact: Json
         }
         Returns: string
+      }
+      react_to_feedback: {
+        Args: { p_emoji: string; p_id: string }
+        Returns: {
+          actor: string
+          created_at: string
+          feedback_id: string
+          id: string
+          kind: string
+          payload: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "feedback_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      realtime_project_access: { Args: { topic: string }; Returns: boolean }
+      recompute_portfolio_centroid: {
+        Args: { p_designer_id: string }
+        Returns: Json
       }
       record_invoice_payment: {
         Args: {
@@ -13401,6 +15977,82 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "invoice_payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_offline_signature: {
+        Args: {
+          p_auto_activate?: boolean
+          p_proposal_id: string
+          p_signed_name: string
+          p_start_date?: string
+        }
+        Returns: string
+      }
+      refresh_designer_teaching_stats: { Args: never; Returns: number }
+      refresh_product_behavior_stats: { Args: never; Returns: undefined }
+      refresh_style_centroids: { Args: never; Returns: number }
+      reopen_item_feedback: {
+        Args: { p_feedback_id: string }
+        Returns: {
+          board_item_id: string | null
+          body: string | null
+          client_id: string
+          created_at: string
+          ffe_item_id: string | null
+          id: string
+          proposal_item_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+          verdict: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "item_feedback"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      reorder_proposal_items: {
+        Args: { p_ordered_ids: string[]; p_proposal_id: string }
+        Returns: undefined
+      }
+      reorder_proposal_scope_rooms: {
+        Args: { p_ordered_ids: string[]; p_proposal_id: string }
+        Returns: undefined
+      }
+      reply_to_feedback: {
+        Args: { p_id: string; p_text: string }
+        Returns: {
+          actor: string
+          created_at: string
+          feedback_id: string
+          id: string
+          kind: string
+          payload: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "feedback_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      reply_to_item_feedback: {
+        Args: { p_body: string; p_feedback_id: string }
+        Returns: {
+          actor: string
+          body: string | null
+          created_at: string
+          feedback_id: string
+          id: string
+          kind: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "item_feedback_events"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -13461,6 +16113,42 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      resolve_document_share: {
+        Args: { p_token: string }
+        Returns: {
+          label: string
+          proposal_id: string
+          studio_name: string
+          visibility: Json
+        }[]
+      }
+      resolve_item_feedback: {
+        Args: { p_feedback_id: string }
+        Returns: {
+          board_item_id: string | null
+          body: string | null
+          client_id: string
+          created_at: string
+          ffe_item_id: string | null
+          id: string
+          proposal_item_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+          verdict: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "item_feedback"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      retire_designer_taste: {
+        Args: { p_designer_id: string }
+        Returns: undefined
+      }
+      revoke_document_share: { Args: { p_share_id: string }; Returns: boolean }
       revoke_role_from_user: {
         Args: { p_role_name: string; p_user_id: string }
         Returns: boolean
@@ -13468,6 +16156,15 @@ export type Database = {
       revoke_room_scan_access: {
         Args: { p_association_id: string; p_reason?: string }
         Returns: boolean
+      }
+      route_field_capture: {
+        Args: {
+          p_capture_id: string
+          p_project_id?: string
+          p_project_room_id?: string
+          p_shelf?: string
+        }
+        Returns: Json
       }
       rpc_mark_thread_read: { Args: { p_thread_id: string }; Returns: boolean }
       rpc_soft_delete_message: {
@@ -13494,6 +16191,14 @@ export type Database = {
           project_id: string
           thread_id: string
           unread_count: number
+        }[]
+      }
+      run_aesthete_drift_audit: {
+        Args: { p_now?: string }
+        Returns: {
+          check_name: string
+          detail: Json
+          passed: boolean
         }[]
       }
       search_products: {
@@ -13536,6 +16241,7 @@ export type Database = {
           text_score: number
         }[]
       }
+      seed_house_from_validated_catalog: { Args: never; Returns: string }
       send_proposal: {
         Args: {
           p_cc_email?: string
@@ -13558,7 +16264,10 @@ export type Database = {
           designer_id: string
           discount_amount: number | null
           discount_percent: number | null
+          feedback_enabled: boolean
           id: string
+          last_nudged_at: string | null
+          nudge_count: number
           parent_proposal_id: string | null
           payment_notes: string | null
           payment_terms: string | null
@@ -13609,6 +16318,41 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "weekly_pulses"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_document_client: {
+        Args: {
+          p_client_id: string
+          p_engagement_kind: string
+          p_target_id: string
+        }
+        Returns: undefined
+      }
+      set_feedback_status: {
+        Args: { p_id: string; p_note?: string; p_status: string }
+        Returns: {
+          app_version: string | null
+          bucket: string
+          created_at: string
+          created_by: string
+          element: string | null
+          id: string
+          note: string | null
+          resolution: string | null
+          route: string | null
+          screen_name: string | null
+          screenshot_path: string | null
+          shipped_seen_at: string | null
+          status: string
+          updated_at: string
+          viewport: string | null
+          weight: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "feedback"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -13666,7 +16410,10 @@ export type Database = {
           designer_id: string
           discount_amount: number | null
           discount_percent: number | null
+          feedback_enabled: boolean
           id: string
+          last_nudged_at: string | null
+          nudge_count: number
           parent_proposal_id: string | null
           payment_notes: string | null
           payment_terms: string | null
@@ -13724,8 +16471,45 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      submit_style_quiz: {
+        Args: {
+          p_answers: Json
+          p_attribution?: Json
+          p_session_key: string
+          p_source?: string
+          p_timings?: Json
+        }
+        Returns: Json
+      }
+      submit_taste_correction: {
+        Args: {
+          p_client_profile_id?: string
+          p_direction?: Json
+          p_free_text?: string
+          p_product_id?: string
+          p_replacement_product_id?: string
+          p_subject: string
+          p_surface?: string
+        }
+        Returns: Json
+      }
+      submit_taste_judgment: {
+        Args: {
+          p_choice: string
+          p_client_profile_id?: string
+          p_context?: string
+          p_latency_ms?: number
+          p_pair: Json
+        }
+        Returns: Json
+      }
+      update_my_biases: { Args: { p_overrides: Json }; Returns: Json }
       user_has_role: {
         Args: { p_role_name: string; p_user_id: string }
+        Returns: boolean
+      }
+      user_has_role_domain: {
+        Args: { p_domain: string; p_user_id: string }
         Returns: boolean
       }
       user_is_org_member: {
@@ -13736,6 +16520,9 @@ export type Database = {
         }
         Returns: boolean
       }
+      vec_lerp: { Args: { a: string; b: string; w: number }; Returns: string }
+      vec_normalize: { Args: { v: string }; Returns: string }
+      vec_scale: { Args: { k: number; v: string }; Returns: string }
       void_invoice: {
         Args: { p_invoice_id: string; p_reason: string }
         Returns: {
@@ -13792,6 +16579,10 @@ export type Database = {
         | "approved"
         | "rejected"
         | "archived"
+        | "pending"
+        | "waitlisted"
+        | "onboarding"
+        | "active"
       audience_type: "all" | "segment" | "individual"
       audit_status: "success" | "failure" | "denied"
       campaign_status:
@@ -14026,6 +16817,10 @@ export const Constants = {
         "approved",
         "rejected",
         "archived",
+        "pending",
+        "waitlisted",
+        "onboarding",
+        "active",
       ],
       audience_type: ["all", "segment", "individual"],
       audit_status: ["success", "failure", "denied"],

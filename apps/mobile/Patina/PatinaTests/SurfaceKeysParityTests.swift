@@ -82,13 +82,6 @@ struct SurfaceKeysParityTests {
         "ios-app/first-launch-tour/step-2-saved",
         "ios-app/first-launch-tour/step-3-profile",
 
-        // IOSApp/Designer (G10 — Sprint 3 iOS Features sweep)
-        "ios-app/designer",
-        "ios-app/designer/studio-today",
-        "ios-app/designer/pending-decision",
-        "ios-app/designer/open-lead",
-        "ios-app/designer/consultation",
-
         // IOSApp/QRAuth (G10)
         "ios-app/qr-auth",
         "ios-app/qr-auth/scan-intro",
@@ -119,8 +112,8 @@ struct SurfaceKeysParityTests {
 
     @Test
     func surfaceKeyCountMatchesWebSpec() {
-        #expect(SurfaceKeys.allKnown.count == 57)
-        #expect(Self.expectedSurfaceKeys.count == 57)
+        #expect(SurfaceKeys.allKnown.count == 52)
+        #expect(Self.expectedSurfaceKeys.count == 52)
     }
 
     @Test
@@ -216,15 +209,6 @@ struct SurfaceKeysParityTests {
         #expect(SurfaceKeys.IOSApp.FirstLaunchTour.step1Home == "ios-app/first-launch-tour/step-1-home")
         #expect(SurfaceKeys.IOSApp.FirstLaunchTour.step2Saved == "ios-app/first-launch-tour/step-2-saved")
         #expect(SurfaceKeys.IOSApp.FirstLaunchTour.step3Profile == "ios-app/first-launch-tour/step-3-profile")
-    }
-
-    @Test
-    func iosAppDesignerAccessors() {
-        #expect(SurfaceKeys.IOSApp.Designer.root == "ios-app/designer")
-        #expect(SurfaceKeys.IOSApp.Designer.studioToday == "ios-app/designer/studio-today")
-        #expect(SurfaceKeys.IOSApp.Designer.pendingDecision == "ios-app/designer/pending-decision")
-        #expect(SurfaceKeys.IOSApp.Designer.openLead == "ios-app/designer/open-lead")
-        #expect(SurfaceKeys.IOSApp.Designer.consultation == "ios-app/designer/consultation")
     }
 
     @Test

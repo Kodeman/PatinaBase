@@ -208,6 +208,7 @@ struct MeasureSheet: View {
 import CaptureKitMocks
 
 #Preview("N3 · Measure") {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     let specimen = store.newDraft()
     return MeasureSheet(

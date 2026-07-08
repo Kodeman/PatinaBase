@@ -15,6 +15,9 @@ import CaptureKit
 struct S2CreateProjectScreen: View {
     let store: CaptureStore
     let coordinator: CaptureCoordinator
+    /// Real mode: inserts into public.projects before caching locally. nil in mock
+    /// mode → the local-only path (unchanged harness behavior).
+    let projectCreator: (any CaptureProjectCreating)?
 
     @AppStorage("capture.lastProjectId") private var lastProjectId = ""
     @AppStorage("capture.lastProjectName") private var lastProjectName = ""
@@ -24,6 +27,8 @@ struct S2CreateProjectScreen: View {
     @State private var name = ""
     @State private var addRoom = false
     @State private var room = ""
+    @State private var creating = false
+    @State private var createError: String?
 
     var body: some View {
         ScrollView {
@@ -65,11 +70,18 @@ struct S2CreateProjectScreen: View {
 
                 Spacer(minLength: 8)
 
-                RouteActionButton("Create & assign", systemImage: "checkmark", kind: .primary) {
+                RouteActionButton(creating ? "Creating…" : "Create & assign",
+                                  systemImage: "checkmark", kind: .primary) {
                     create()
                 }
-                .disabled(trimmedName.isEmpty)
-                .opacity(trimmedName.isEmpty ? 0.5 : 1)
+                .disabled(trimmedName.isEmpty || creating)
+                .opacity(trimmedName.isEmpty || creating ? 0.5 : 1)
+
+                if let createError {
+                    Label(createError, systemImage: "exclamationmark.triangle")
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.rust)
+                }
 
                 Text("New projects sync across your devices and the web app.")
                     .font(CaptureType.footnote)
@@ -90,14 +102,38 @@ struct S2CreateProjectScreen: View {
 
     private func create() {
         let projectName = trimmedName
-        guard !projectName.isEmpty else { return }
+        guard !projectName.isEmpty, !creating else { return }
+        createError = nil
 
-        let project = CaptureProjectRef(name: projectName)
+        // Mock mode (no creator): local-only, exactly as before.
+        guard let projectCreator else {
+            persistAndAdvance(name: projectName, remoteId: nil)
+            return
+        }
+
+        // Real mode: create server-side FIRST; only cache locally on success, so a
+        // failure leaves no phantom local project.
+        creating = true
+        Task { @MainActor in
+            defer { creating = false }
+            do {
+                let remoteId = try await projectCreator.createProject(name: projectName)
+                persistAndAdvance(name: projectName, remoteId: remoteId)
+            } catch {
+                createError = "Couldn’t create it just now — check your connection and try again."
+            }
+        }
+    }
+
+    /// Cache the ref locally (carrying any server id), set the last-used handles
+    /// S1 reads, then return to S1. `lastProjectId` is the REMOTE id in real mode
+    /// so the venue carries a routable project into the commit RPC.
+    private func persistAndAdvance(name projectName: String, remoteId: String?) {
+        let project = CaptureProjectRef(remoteId: remoteId, name: projectName)
         store.context.insert(project)
         try? store.save()
 
-        // Make it the new last-used so S1 pre-selects it.
-        lastProjectId = project.id.uuidString
+        lastProjectId = remoteId ?? project.id.uuidString
         lastProjectName = projectName
         let trimmedRoom = room.trimmingCharacters(in: .whitespacesAndNewlines)
         if addRoom, !trimmedRoom.isEmpty { lastRoom = trimmedRoom }
@@ -112,7 +148,8 @@ struct S2CreateProjectScreen: View {
 }
 
 #Preview {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
-    return S2CreateProjectScreen(store: store, coordinator: CaptureCoordinator())
+    return S2CreateProjectScreen(store: store, coordinator: CaptureCoordinator(), projectCreator: nil)
         .modelContainer(store.container)
 }

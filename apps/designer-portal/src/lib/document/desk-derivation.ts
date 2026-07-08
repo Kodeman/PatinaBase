@@ -88,6 +88,8 @@ export type NeedKind =
   | 'damage_claim'
   | 'proposal_declined'
   | 'proposal_expired'
+  // C4 (Schedule & Boards Wave 2): the client flagged lines on a live proposal.
+  | 'lines_flagged'
   | 'new_lead'
   | 'reconnect_due'
   | 'hesitating_proposal'
@@ -122,6 +124,20 @@ export interface ReceivableSignal {
   invoiceLabel: string;
 }
 
+/** C4 flagged-lines input (built client-side from item_feedback by
+ *  lib/document/desk-flagged-lines.ts — the same Wave 2.1 precedent as conflicts
+ *  and receivables). A proposal with unresolved client rejections rises as the
+ *  folder's need line ("N lines flagged on {doc}"); the act — respond / resolve /
+ *  revise — lives in the document's line unfold. Keyed by proposal_id. Typed
+ *  structurally here (not imported) to keep this module dependency-free. */
+export interface DeskFlaggedSignal {
+  /** How many lines the client has flagged and not-yet-resolved. */
+  count: number;
+  /** The proposal's title, for the need line. */
+  docTitle: string;
+  proposalId: string;
+}
+
 export interface NeedLine {
   kind: NeedKind;
   text: string;
@@ -134,6 +150,10 @@ export interface NeedLine {
    *  Typed structurally to keep this module dependency-free (no command-bar
    *  import); folder-card maps it onto openLedger(). */
   ledger?: { name: string; context?: { page?: string; invoiceId?: string; projectId?: string } };
+  /** When set, the folder's act follows this href instead of /doc/[engagement_id].
+   *  The lines_flagged walk-in points at the Drafting Room (?flagged=1), where the
+   *  flagged line's Alternatives band lives. Typed structurally; folder-card maps it. */
+  deepLink?: string;
 }
 
 export interface DeskFolder {
@@ -270,6 +290,11 @@ const NEED_RANK: Record<NeedKind, number> = {
   damage_claim: 3,
   proposal_declined: 4,
   proposal_expired: 5,
+  // C4: a client flag on a live proposal is a proposal-cluster need — the client
+  // actively raised a concern and is waiting on the designer, so it sorts just
+  // under the terminal proposal states and above a fresh lead / a silent
+  // hesitation. Fractional to stay surgical (the sort is numeric).
+  lines_flagged: 5.5,
   new_lead: 6,
   // R65: a due reconnect is a real need but a soft one — it sorts just under a
   // fresh inquiry (a new lead outranks a scheduled touchpoint) and above the
@@ -328,6 +353,7 @@ export function deriveNeed(
   now: Date,
   conflict?: DeskConflictInput | null,
   receivable?: ReceivableSignal | null,
+  flagged?: DeskFlaggedSignal | null,
 ): NeedLine | null {
   if (row.is_archived || row.is_paused) return null;
 
@@ -391,6 +417,24 @@ export function deriveNeed(
         text: 'Proposal expired — revise or follow up',
         stamp: { label: 'EXPIRED', ...STAMP.terracotta },
         urgent: false,
+      };
+    }
+    // C4: the client has flagged lines on a still-live proposal — a concrete
+    // concern raised on the copy, waiting on the designer to respond (resolve /
+    // revise). It's a stronger, more actionable need than a silent hesitation,
+    // so it rises above the sent-unopened / viewed-unsigned nudges below. The
+    // clay FLAGGED stamp matches the line's own verdict chip.
+    if (flagged && flagged.count > 0) {
+      const n = flagged.count;
+      return {
+        kind: 'lines_flagged',
+        text:
+          n === 1
+            ? `1 line flagged on ${flagged.docTitle}`
+            : `${n} lines flagged on ${flagged.docTitle}`,
+        stamp: { label: 'FLAGGED', color: 'var(--color-clay)' },
+        urgent: false,
+        deepLink: `/drafting/${flagged.proposalId}?flagged=1`,
       };
     }
     if (row.proposal_status === 'sent' && row.proposal_sent_at && !row.proposal_viewed_at) {
@@ -668,6 +712,7 @@ export function partitionDesk(
   now: Date,
   conflicts?: ReadonlyMap<string, DeskConflictInput>,
   receivables?: ReadonlyMap<string, ReceivableSignal>,
+  flaggedLines?: ReadonlyMap<string, DeskFlaggedSignal>,
 ): { folders: DeskFolder[]; chips: MotionChip[] } {
   const folders: DeskFolder[] = [];
   const chips: MotionChip[] = [];
@@ -676,7 +721,10 @@ export function partitionDesk(
     if (row.is_archived) continue;
     const conflict = row.project_id ? (conflicts?.get(row.project_id) ?? null) : null;
     const receivable = row.project_id ? (receivables?.get(row.project_id) ?? null) : null;
-    const need = deriveNeed(row, now, conflict, receivable);
+    // C4: flagged lines are keyed by proposal_id (a proposal engagement carries
+    // proposal_id, project_id null).
+    const flagged = row.proposal_id ? (flaggedLines?.get(row.proposal_id) ?? null) : null;
+    const need = deriveNeed(row, now, conflict, receivable, flagged);
     if (need) {
       folders.push({ row, need });
       continue;

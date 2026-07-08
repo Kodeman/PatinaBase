@@ -2,7 +2,7 @@
 //  Capture
 //
 //  Team D — Flow 4 (resilience & edges). The R3 `.photoImport` degraded-mode
-//  sheet ("Camera is off for Patina") + the ResilienceScreens registrar. This
+//  sheet ("Camera is off for Patina Field") + the ResilienceScreens registrar. This
 //  sheet doubles as the E3 share-import finisher: same surface, reflected id.
 //
 //  Registers ONLY `.photoImport`. (R1/R4 ship as composable overlays — see
@@ -19,11 +19,11 @@ import CaptureKit
 /// share-sheet hand-off that needs finishing (E3). Drives copy + the reflected
 /// accessibility id so XCUITest/MobAI can tell the two entries apart.
 enum PhotoImportContext {
-    case denied        // R3 — camera off for Patina
-    case shareImport   // E3 — "Save to Patina" share extension hand-off
+    case denied        // R3 — camera off for Patina Field
+    case shareImport   // E3 — "Save to Patina Field" share extension hand-off
 
     var screenID: CaptureScreenID { self == .shareImport ? .e3ShareSheet : .r3Denied }
-    var title: String { self == .shareImport ? "Saved to Patina" : "Camera is off for Patina" }
+    var title: String { self == .shareImport ? "Saved to Patina Field" : "Camera is off for Patina Field" }
     var blurb: String {
         self == .shareImport
             ? "These shots are in. Finish the record now, or pick more from Photos and add them by hand."
@@ -236,6 +236,7 @@ enum ResilienceScreens {
 
 @MainActor
 private func photoImportPreview(_ context: PhotoImportContext) -> some View {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     return PhotoImportSheet(store: store,
                             coordinator: CaptureCoordinator(),

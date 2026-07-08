@@ -28,7 +28,11 @@
  */
 
 import { test, expect } from '../fixtures/auth';
-import { adminDb, deleteProposalCascade } from '../helpers/supabase-admin';
+import {
+  adminDb,
+  deleteProposalCascade,
+  cloneProposalViaRpc,
+} from '../helpers/supabase-admin';
 
 // Deterministic dev-seed UUIDs — see supabase/seed/dev-accounts.sql.
 const DEV_DESIGNER_ID = 'a0000000-0000-0000-0000-000000000004';
@@ -149,11 +153,12 @@ test.describe.serial('proposal boards: create → add items → persist', () => 
   // ────────────────────────────────────────────────────────────────────────
   // Step 3: Add a product via the ProductPickerModal
   //
-  // Same testid-driven pattern proposal-build.spec.ts uses for FF&E (the
-  // board editor mounts the SAME modal with scope="catalog"), so this is the
-  // proven-stable way to drive it. If this ever turns flaky, fall back to
-  // seeding the proposal_board_items row via adminDb and keeping the render
-  // assertions.
+  // Same testid-driven pattern proposal-build.spec.ts uses for FF&E. The board
+  // editor mounts the SAME modal with scope="library" (full 3-layer picker);
+  // typing "chair" runs the cross-layer ilike search, which still surfaces the
+  // seeded catalog product, and the Captures/draft tabs are unchanged. If this
+  // ever turns flaky, fall back to seeding the proposal_board_items row via
+  // adminDb and keeping the render assertions.
   // ────────────────────────────────────────────────────────────────────────
   test('add a product item via the picker', async ({ authenticatedPage: page }) => {
     await page.goto(`/portal/proposals/${proposalId}/scope?tab=boards`, {
@@ -171,9 +176,15 @@ test.describe.serial('proposal boards: create → add items → persist', () => 
     await searchInput.waitFor({ state: 'visible', timeout: 10_000 });
     await searchInput.fill('chair');
 
-    const firstResult = pickerModal.getByTestId('product-picker-result').first();
-    await firstResult.waitFor({ state: 'visible', timeout: 15_000 });
-    await firstResult.click();
+    // Target the seed product BY NAME — under scope="library" the cross-layer
+    // search surfaces every layer's matches (seed data has two catalog chairs,
+    // and "Oak Reading Chair" sorts first), so .first() is scope-sensitive.
+    const seedResult = pickerModal
+      .getByTestId('product-picker-result')
+      .filter({ hasText: SEED_PRODUCT_NAME })
+      .first();
+    await seedResult.waitFor({ state: 'visible', timeout: 15_000 });
+    await seedResult.click();
 
     // Picker closes itself on pick; the product card then renders on the
     // canvas with the snapshot name.
@@ -346,5 +357,100 @@ test.describe.serial('proposal boards: create → add items → persist', () => 
     expect(new Set(items.map((i) => i.type))).toEqual(new Set(['note', 'product']));
     const product = items.find((i) => i.type === 'product');
     expect(product!.product_id).toBe(SEED_PRODUCT_VELVET_CHAIR);
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Step 7: Revising (cloning) the proposal carries the board + items forward
+  //
+  // Direct regression for the 00176→00260 gap: clone_proposal used to deep-copy
+  // every child table EXCEPT proposal_boards / proposal_board_items, so revising
+  // a sent proposal silently dropped its boards. 00260 adds the boards carry.
+  // clone_proposal is invoked via its RPC (service role → executes + bypasses
+  // RLS for the assertion reads) exactly as useEnterRevision drives it in-app.
+  // ────────────────────────────────────────────────────────────────────────
+  test('revising (cloning) the proposal carries the board + items forward', async () => {
+    const newProposalId = await cloneProposalViaRpc(proposalId, 'revision', 'carry boards e2e');
+    expect(newProposalId, 'clone returned a new proposal id').toBeTruthy();
+    expect(newProposalId).not.toBe(proposalId);
+
+    try {
+      // The clone carries exactly one board — a NEW row, not the source board.
+      const { data: clonedBoards, error: bErr } = await adminDb
+        .from('proposal_boards')
+        .select('id, name, canvas_width, canvas_height, background_color')
+        .eq('proposal_id', newProposalId);
+      if (bErr) throw bErr;
+      expect(clonedBoards, 'clone carries exactly one board').toHaveLength(1);
+      expect(clonedBoards![0].name).toBe('Board 1');
+      const clonedBoardId = clonedBoards![0].id as string;
+      expect(clonedBoardId, 'cloned board is a fresh row').not.toBe(boardId);
+
+      // Both items carried with their snapshots intact, remapped onto the clone.
+      const { data: clonedItems, error: iErr } = await adminDb
+        .from('proposal_board_items')
+        .select('type, content, data, product_id')
+        .eq('board_id', clonedBoardId);
+      if (iErr) throw iErr;
+      expect(clonedItems, 'clone carries both items').toHaveLength(2);
+      expect(new Set(clonedItems!.map((i) => i.type))).toEqual(new Set(['note', 'product']));
+
+      const clonedNote = clonedItems!.find((i) => i.type === 'note');
+      expect(clonedNote!.content).toBe(NOTE_TEXT);
+
+      const clonedProduct = clonedItems!.find((i) => i.type === 'product');
+      expect(clonedProduct!.product_id).toBe(SEED_PRODUCT_VELVET_CHAIR);
+      expect((clonedProduct!.data as { name?: string }).name).toBe(SEED_PRODUCT_NAME);
+    } finally {
+      // The source proposal cleans up in afterAll; tidy the clone here.
+      if (process.env.KEEP_TEST_PROPOSAL !== 'true') {
+        await deleteProposalCascade(newProposalId).catch((err) => {
+          console.error('[proposal-boards] clone cleanup failed:', err);
+        });
+      }
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Step 8: Archive filter (00264) — archive hides the board from the Active
+  // view + flips status; the Archived tab still shows it; unarchive restores.
+  //
+  // Runs last and restores the board to active, so it can't disturb the
+  // shared assertions above. The shared-render exclusion (useBoardsWithItems
+  // status='active') is unit-tested in use-boards.test.ts; this covers the
+  // designer-side builder UI + the DB status flip.
+  // ────────────────────────────────────────────────────────────────────────
+  test('archive hides a board from the active view; unarchive restores it', async ({
+    authenticatedPage: page,
+  }) => {
+    await page.goto(`/portal/proposals/${proposalId}/scope?tab=boards`, {
+      waitUntil: 'networkidle',
+    });
+
+    const statusOf = async () => {
+      const { data, error } = await adminDb
+        .from('proposal_boards')
+        .select('status')
+        .eq('id', boardId)
+        .single();
+      if (error) throw error;
+      return (data as { status: string }).status;
+    };
+
+    // Board 1 is the active board; archive it via the board-level action.
+    await page.getByRole('button', { name: /^archive$/i }).click();
+    await expect
+      .poll(statusOf, { message: 'archive should flip status', timeout: 15_000 })
+      .toBe('archived');
+
+    // The Archived tab appears; switch to it and the board is still there.
+    await page.getByRole('button', { name: /archived ·/i }).click();
+    await expect(page.getByText('Board 1').first()).toBeVisible({ timeout: 15_000 });
+
+    // Unarchive restores it to active (the board is the selected one in the
+    // Archived view, so the board-level Unarchive action is present).
+    await page.getByRole('button', { name: /^unarchive$/i }).click();
+    await expect
+      .poll(statusOf, { message: 'unarchive should restore active', timeout: 15_000 })
+      .toBe('active');
   });
 });

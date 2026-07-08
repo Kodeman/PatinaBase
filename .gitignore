@@ -103,3 +103,4 @@ packages/patina-design-system/.dssync-tailwind.css
 # OpenNext / wrangler build artifacts (portals on Cloudflare Workers)
 .open-next/
 .wrangler/
+.superpowers/

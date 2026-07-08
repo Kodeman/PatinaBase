@@ -19,6 +19,10 @@ export interface FFEItemCardProps {
   imageUrl?: string | null;
   roomName?: string | null;
   vendorName?: string | null;
+  /** Short spec/catalog reference (00262), rendered mono over the name. Hidden when absent. */
+  docCode?: string | null;
+  /** Pre-formatted lead-time bucket label (e.g. "3–4 wks"). Hidden when absent. */
+  leadTimeLabel?: string | null;
   quantity?: number | null;
   /** Pre-formatted line total or budget range (e.g. "$4,200" or "$2k – $4k"). */
   unitTotalLabel?: string | null;
@@ -69,6 +73,8 @@ export function FFEItemCard({
   imageUrl,
   roomName,
   vendorName,
+  docCode,
+  leadTimeLabel,
   quantity,
   unitTotalLabel,
   etaLabel,
@@ -160,6 +166,11 @@ export function FFEItemCard({
 
       {/* Body */}
       <div className="flex flex-1 flex-col gap-1.5 p-2.5">
+        {docCode && (
+          <span className="font-mono text-[0.58rem] uppercase tracking-[0.08em] text-[var(--color-clay)]">
+            {docCode}
+          </span>
+        )}
         <div className="flex items-start justify-between gap-2">
           <span className="line-clamp-2 font-body text-[0.8rem] font-medium text-[var(--text-primary)]">
             {name}
@@ -187,6 +198,9 @@ export function FFEItemCard({
         )}
         {vendorName && (
           <div className="type-meta-small text-[var(--text-muted)]">{vendorName}</div>
+        )}
+        {leadTimeLabel && (
+          <div className="type-meta-small text-[var(--text-muted)]">Lead {leadTimeLabel}</div>
         )}
 
         <div className="mt-auto flex items-baseline justify-between gap-2 pt-1">

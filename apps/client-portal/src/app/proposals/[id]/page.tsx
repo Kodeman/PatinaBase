@@ -84,6 +84,11 @@ export default function ClientProposalDetailPage({
   const isActionable =
     (proposal.status === 'sent' || proposal.status === 'viewed') && !isPassedExpiry;
 
+  // C3 — the per-line verdict loop is offered while the proposal is live for
+  // review and the per-proposal gate (proposals.feedback_enabled, 00267) is on.
+  const feedbackEnabled =
+    isActionable && (proposal as { feedback_enabled?: boolean }).feedback_enabled !== false;
+
   const proposalAudit = proposal as unknown as {
     signed_at?: string | null;
     signed_by_name?: string | null;
@@ -167,6 +172,7 @@ export default function ClientProposalDetailPage({
         exclusions={exclusions ?? []}
         scopeRooms={scopeRooms ?? []}
         boards={boards ?? []}
+        feedbackEnabled={feedbackEnabled}
       />
 
       {isActionable && (

@@ -198,14 +198,12 @@ public final class CompanionViewModel {
         case .roomSettings: return "room_settings"
         case .crossRoom: return "cross_room"
         case .manualRoomEntry: return "manual_room_entry"
-        case .designerHome: return "designer_home"
         case .projectList: return "project_list"
         case .projectDetail: return "project_detail"
         case .decisionList: return "decision_list"
         case .decisionDetail: return "decision_detail"
         case .threadList: return "thread_list"
         case .threadDetail: return "thread_detail"
-        case .receiveDelivery: return "receive_delivery"
         }
     }
 

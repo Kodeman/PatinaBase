@@ -27,17 +27,6 @@ struct DailyGreetingHeader: View {
     /// PT-3-7: unread-notification count rendered as a badge over the bell.
     /// 0 hides the badge.
     var unreadCount: Int = 0
-    /// PT-4-10: dual-role mode chip. When non-nil a mono chip
-    /// ("DESIGNER" / "CONSUMER") renders left of the help glyph; tapping it
-    /// flips the saved home preference and re-routes `mainHomeView`.
-    var roleChip: RoleChip? = nil
-
-    /// PT-4-10: the dual-role mode-switch chip descriptor. `label` is the
-    /// mono text shown; `onTap` performs the switch + analytics.
-    struct RoleChip {
-        let label: String
-        let onTap: () -> Void
-    }
 
     var body: some View {
         HStack(alignment: .top) {
@@ -68,22 +57,6 @@ struct DailyGreetingHeader: View {
             .firstLaunchTourAnchor(.homeGreeting)
             Spacer()
             HStack(spacing: 4) {
-                // PT-4-10: dual-role mode-switch chip.
-                if let roleChip {
-                    Button(action: roleChip.onTap) {
-                        MonoLabel(text: roleChip.label, size: PatinaTypography.monoSmall, color: PatinaColors.Text.secondary, tracking: 1.5)
-                            .padding(.horizontal, PatinaSpacing.sm)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule().fill(PatinaColors.Background.secondary)
-                            )
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Switch home mode")
-                    .accessibilityHint("Switches between your designer and consumer home.")
-                    .accessibilityIdentifier("DailyRoomView.RoleChip")
-                }
                 // PT-3-7: bell (notifications) glyph with unread-count badge.
                 if let onBellTap {
                     Button(action: onBellTap) {
@@ -185,8 +158,7 @@ private struct UnreadBadge: View {
             onHelpTap: {},
             onMonogramTap: {},
             onBellTap: {},
-            unreadCount: 3,
-            roleChip: .init(label: "DESIGNER", onTap: {})
+            unreadCount: 3
         )
     }
     .background(PatinaColors.Background.primary)

@@ -16,8 +16,16 @@ import {
   letterTitle,
   relTime,
   NOTIFICATION_NEED_KIND,
+  PROCUREMENT_NEED_KIND,
+  inboxRecordItem,
+  procurementRecordItem,
+  mergeRecordItems,
 } from '../post-derivation';
-import type { InboxNotification, InboxMessage } from '@patina/supabase';
+import type {
+  InboxNotification,
+  InboxMessage,
+  ProcurementNotification,
+} from '@patina/supabase';
 
 function notif(over: Partial<InboxNotification> = {}): InboxNotification {
   return {
@@ -210,5 +218,203 @@ describe('relTime', () => {
   });
   it('is empty for an unparseable value', () => {
     expect(relTime('not-a-date', now)).toBe('');
+  });
+});
+
+// ─── The unified Record (Wave 0B — procurement_notifications in the Post) ────
+
+function procNotif(over: Partial<ProcurementNotification> = {}): ProcurementNotification {
+  return {
+    id: 'pn1',
+    user_id: 'u1',
+    kind: 'deposit_due',
+    subject_purchase_order_id: 'po1',
+    subject_payment_id: null,
+    subject_inspection_id: null,
+    read_at: null,
+    created_at: '2026-07-01T12:00:00Z',
+    purchase_order: {
+      id: 'po1',
+      vendor_id: 'v1',
+      project_id: 'p-42',
+      vendor: { id: 'v1', name: 'Hewn Woodworks' },
+      project: { id: 'p-42', name: 'Walker Residence' },
+    },
+    ...over,
+  };
+}
+
+describe('procurementRecordItem', () => {
+  it('maps a due notice to a plain Record notice at the document', () => {
+    const item = procurementRecordItem(procNotif());
+    expect(item).toMatchObject({
+      key: 'procurement:pn1',
+      source: 'procurement',
+      id: 'pn1',
+      read: false,
+      title: 'Deposit due — Hewn Woodworks',
+      body: 'Walker Residence',
+      typeLabel: 'Procurement',
+      row: { kind: 'notice', href: '/doc/p-42', onDesk: false, needKind: null },
+    });
+  });
+
+  it('titles every kind without a vendor join', () => {
+    const titles: Record<string, string> = {
+      deposit_due: 'Deposit due',
+      balance_due: 'Balance due',
+      milestone_due: 'Milestone payment due',
+      delivery_this_week: 'Delivery this week',
+      damage_claim_drafted: 'Damage claim drafted',
+    };
+    for (const [kind, title] of Object.entries(titles)) {
+      const item = procurementRecordItem(
+        procNotif({ kind: kind as ProcurementNotification['kind'], purchase_order: null }),
+      );
+      expect(item.title).toBe(title);
+      expect(item.body).toBe('');
+    }
+  });
+
+  it('damage_claim_drafted is need-backed — a cross-reference, never its own act (R82)', () => {
+    expect(PROCUREMENT_NEED_KIND.damage_claim_drafted).toBe('damage_claim');
+    const item = procurementRecordItem(procNotif({ kind: 'damage_claim_drafted' }));
+    expect(item.row).toEqual({
+      kind: 'cross_reference',
+      href: '/doc/p-42',
+      onDesk: true,
+      needKind: 'damage_claim',
+    });
+  });
+
+  it('a need-backed row with no project defers to the Desk', () => {
+    const item = procurementRecordItem(
+      procNotif({ kind: 'damage_claim_drafted', purchase_order: null }),
+    );
+    expect(item.row.href).toBe('/desk');
+    expect(item.row.kind).toBe('cross_reference');
+  });
+
+  it('a plain notice with no project is read-only (href null) — never bounces to a zone', () => {
+    const item = procurementRecordItem(procNotif({ purchase_order: null }));
+    expect(item.row.href).toBeNull();
+    expect(item.row.kind).toBe('notice');
+  });
+
+  it('reads read state from read_at', () => {
+    expect(procurementRecordItem(procNotif()).read).toBe(false);
+    expect(
+      procurementRecordItem(procNotif({ read_at: '2026-07-01T13:00:00Z' })).read,
+    ).toBe(true);
+  });
+});
+
+describe('inboxRecordItem', () => {
+  it('carries the inbox derivation through the unified shape', () => {
+    const item = inboxRecordItem(
+      notif({
+        type: 'invoice_overdue',
+        metadata: { project_id: 'p-9', subject: 'Invoice 12 overdue', read_at: '2026-07-01T13:00:00Z' },
+      }),
+    );
+    expect(item).toMatchObject({
+      key: 'inbox:n1',
+      source: 'inbox',
+      id: 'n1',
+      read: true,
+      title: 'Invoice 12 overdue',
+      typeLabel: 'Invoice Overdue',
+      row: { kind: 'cross_reference', href: '/doc/p-9', onDesk: true },
+    });
+  });
+});
+
+describe('mergeRecordItems', () => {
+  it('merges both feeds newest-first', () => {
+    const merged = mergeRecordItems(
+      [
+        inboxRecordItem(notif({ id: 'a', created_at: '2026-07-01T10:00:00Z' })),
+        inboxRecordItem(notif({ id: 'b', created_at: '2026-07-01T12:00:00Z' })),
+      ],
+      [procurementRecordItem(procNotif({ id: 'c', created_at: '2026-07-01T11:00:00Z' }))],
+    );
+    expect(merged.map((i) => i.key)).toEqual(['inbox:b', 'procurement:c', 'inbox:a']);
+  });
+
+  it('keys never collide across feeds sharing a row id', () => {
+    const merged = mergeRecordItems(
+      [inboxRecordItem(notif({ id: 'same' }))],
+      [procurementRecordItem(procNotif({ id: 'same' }))],
+    );
+    expect(new Set(merged.map((i) => i.key)).size).toBe(2);
+  });
+});
+
+describe('client_feedback verdicts (C4)', () => {
+  it('a FLAG (rejected) becomes a Desk cross-reference to lines_flagged (R82)', () => {
+    const row = deriveRecordRow(
+      notif({ type: 'client_feedback', metadata: { verdict: 'rejected', deep_link: '/doc/pr1' } }),
+    );
+    expect(row.kind).toBe('cross_reference');
+    expect(row.onDesk).toBe(true);
+    expect(row.needKind).toBe('lines_flagged');
+    // No project_id on the notice → the cross-reference defers to the Desk.
+    expect(row.href).toBe('/desk');
+  });
+
+  it('an APPROVAL is a plain notice that follows its document deep link', () => {
+    const row = deriveRecordRow(
+      notif({ type: 'client_feedback', metadata: { verdict: 'approved', deep_link: '/doc/pr1' } }),
+    );
+    expect(row.kind).toBe('notice');
+    expect(row.onDesk).toBe(false);
+    expect(row.needKind).toBeNull();
+    expect(row.href).toBe('/doc/pr1');
+  });
+
+  it('a NOTE (comment) is a plain notice', () => {
+    const row = deriveRecordRow(
+      notif({ type: 'client_feedback', metadata: { verdict: 'comment' } }),
+    );
+    expect(row.kind).toBe('notice');
+    expect(row.needKind).toBeNull();
+  });
+
+  it('a verdict-less client_feedback is a plain notice', () => {
+    const row = deriveRecordRow(notif({ type: 'client_feedback', metadata: {} }));
+    expect(row.kind).toBe('notice');
+    expect(row.needKind).toBeNull();
+  });
+
+  it('renders title from the subject/headline and body from the preview', () => {
+    const item = inboxRecordItem(
+      notif({
+        type: 'client_feedback',
+        metadata: {
+          headline: 'Sarah flagged a line',
+          preview: 'Can we see other options?',
+          verdict: 'rejected',
+        },
+      }),
+    );
+    expect(item.title).toBe('Sarah flagged a line');
+    expect(item.body).toBe('Can we see other options?');
+    expect(item.row.needKind).toBe('lines_flagged');
+  });
+
+  it('a BOARD-PIN flag derives identically to a line flag (B4 anchor-independence)', () => {
+    // notify_item_feedback emits the same type='client_feedback' + verdict for a
+    // board anchor as for a line, so the Record derivation — which keys on the
+    // verdict, not the anchor — routes a flagged pin to the SAME lines_flagged
+    // cross-reference. The pin's generic headline is the only visible difference.
+    const row = deriveRecordRow(
+      notif({
+        type: 'client_feedback',
+        metadata: { verdict: 'rejected', headline: 'Client flagged a line', deep_link: '/doc/pr1' },
+      }),
+    );
+    expect(row.kind).toBe('cross_reference');
+    expect(row.onDesk).toBe(true);
+    expect(row.needKind).toBe('lines_flagged');
   });
 });

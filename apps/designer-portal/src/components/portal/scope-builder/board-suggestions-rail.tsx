@@ -1,26 +1,30 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/controls';
 import {
-  useSimilarProducts,
+  useTaughtAlternatives,
+  useLogSuggestionEvent,
   type AddBoardItemInput,
   type ProposalBoardItem,
+  type TaughtAlternative,
 } from '@patina/supabase';
 
 /**
- * "More like this" rail for the board editor sidebar.
+ * "More like this" rail (B6 — taught) for the board editor sidebar.
  *
  * Anchors on the LAST-ADDED product item on the board (highest created_at,
- * z_index as the tie-break) and surfaces vector-similar catalog products via
- * useSimilarProducts → find_products_similar_to RPC. Each card's Add button
- * routes through the editor's shared add-item path (snapshot into data, drop
- * near canvas center, z = max+1) — the same shape the ProductPickerModal pick
- * produces.
+ * z_index as the tie-break) and surfaces alternatives ranked from the designer's
+ * OWN corpus first — find_taught_alternatives boosts the personal, then studio,
+ * layers ahead of the shared catalog, the same taught ranking the flagged-line
+ * Alternatives band uses. Each shown / add / dismiss is logged as a
+ * suggestion_event (context 'board_rail') — the Designer-Taught loop's receipts.
+ * Each card's Add routes through the editor's shared add-item path (snapshot into
+ * data, drop near canvas center, z = max+1).
  *
  * Degrades silently: no product items, RPC error, missing embeddings (the RPC
- * returns an empty set when the anchor has no embedding — common in local
- * dev), or every suggestion already on the board → renders nothing.
+ * returns empty when the anchor has no embedding — common in local dev), or
+ * every suggestion already on / dismissed from the board → renders nothing.
  */
 
 function formatDollars(cents: number): string {
@@ -37,6 +41,8 @@ interface BoardSuggestionsRailProps {
 
 export function BoardSuggestionsRail({ items, onAdd }: BoardSuggestionsRailProps) {
   const [open, setOpen] = useState(true);
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
+  const logEvent = useLogSuggestionEvent();
 
   // Last-added product item on the board (created_at desc, z_index desc).
   const anchor = useMemo(() => {
@@ -49,19 +55,68 @@ export function BoardSuggestionsRail({ items, onAdd }: BoardSuggestionsRailProps
     })[0];
   }, [items]);
 
-  // Hooks must run unconditionally; the query disables itself on ''.
-  const { data: similar = [], isError } = useSimilarProducts(anchor?.product_id ?? '', 6);
+  const boardId = anchor?.board_id ?? null;
 
-  // Don't re-suggest products that are already on the board.
+  // Corpus-first taught alternatives. Hooks run unconditionally; the query
+  // disables itself on '' and swallows missing-RPC / no-embedding into [].
+  const { data: similar = [], isError } = useTaughtAlternatives(anchor?.product_id ?? '', 6);
+
+  // Don't re-suggest products already on the board or dismissed this session.
   const onBoard = useMemo(
     () => new Set(items.map((i) => i.product_id).filter(Boolean)),
     [items],
   );
-  const suggestions = similar.filter((p) => !onBoard.has(p.id));
+  const suggestions = useMemo(
+    () => similar.filter((p) => !onBoard.has(p.id) && !dismissed.has(p.id)),
+    [similar, onBoard, dismissed],
+  );
 
-  // Degrade silently — no rail without an anchor, on error, or when the RPC
-  // comes back empty (e.g. no embeddings in this environment).
+  // Log the shown batch once per distinct product set — a training receipt.
+  const shownKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (suggestions.length === 0 || !boardId) return;
+    const key = suggestions.map((p) => p.id).join(',');
+    if (shownKeyRef.current === key) return;
+    shownKeyRef.current = key;
+    logEvent.mutate(
+      suggestions.map((p, i) => ({
+        context: 'board_rail' as const,
+        action: 'shown' as const,
+        productId: p.id,
+        boardId,
+        rank: i,
+      })),
+    );
+    // logEvent identity is stable; re-run only when the shown set changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestions, boardId]);
+
+  // Degrade silently — no rail without an anchor, on error, or when nothing is
+  // left to show.
   if (!anchor || isError || suggestions.length === 0) return null;
+
+  const add = (p: TaughtAlternative, rank: number) => {
+    if (boardId) {
+      logEvent.mutate({ context: 'board_rail', action: 'accepted', productId: p.id, boardId, rank });
+    }
+    onAdd({
+      type: 'product',
+      productId: p.id,
+      imageUrl: p.images?.[0] ?? null,
+      data: {
+        name: p.name,
+        price_cents: p.price_retail,
+        image_url: p.images?.[0] ?? null,
+      },
+    });
+  };
+
+  const dismiss = (p: TaughtAlternative, rank: number) => {
+    setDismissed((s) => new Set(s).add(p.id));
+    if (boardId) {
+      logEvent.mutate({ context: 'board_rail', action: 'dismissed', productId: p.id, boardId, rank });
+    }
+  };
 
   return (
     <div
@@ -74,14 +129,14 @@ export function BoardSuggestionsRail({ items, onAdd }: BoardSuggestionsRailProps
         aria-expanded={open}
         className="flex w-full items-center justify-between"
       >
-        <span className="type-meta block text-[var(--accent-primary)]">More like this</span>
+        <span className="type-meta block text-[var(--accent-primary)]">More like this · from your library</span>
         <span aria-hidden className="text-xs text-[var(--text-muted)]">
           {open ? '−' : '+'}
         </span>
       </button>
       {open && (
         <div className="mt-3 space-y-1.5">
-          {suggestions.map((p) => (
+          {suggestions.map((p, i) => (
             <div key={p.id} className="flex items-center gap-2">
               <div
                 className="h-9 w-9 shrink-0 overflow-hidden rounded-sm border border-[var(--border-default)] bg-[var(--bg-muted)]"
@@ -101,30 +156,26 @@ export function BoardSuggestionsRail({ items, onAdd }: BoardSuggestionsRailProps
                 <p className="truncate text-sm" title={p.name}>
                   {p.name}
                 </p>
-                {typeof p.price_retail === 'number' && (
-                  <p className="text-xs text-[var(--text-muted)]">
-                    {formatDollars(p.price_retail)}
-                  </p>
-                )}
+                <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                  {(p.layer === 'personal' || p.layer === 'studio') && (
+                    <span className="type-meta text-[var(--accent-primary)]">
+                      {p.layer === 'personal' ? 'Yours' : 'Studio'}
+                    </span>
+                  )}
+                  {typeof p.price_retail === 'number' && <span>{formatDollars(p.price_retail)}</span>}
+                </p>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  onAdd({
-                    type: 'product',
-                    productId: p.id,
-                    imageUrl: p.images?.[0] ?? null,
-                    data: {
-                      name: p.name,
-                      price_cents: p.price_retail,
-                      image_url: p.images?.[0] ?? null,
-                    },
-                  })
-                }
-              >
+              <Button variant="ghost" size="sm" onClick={() => add(p, i)}>
                 Add
               </Button>
+              <button
+                type="button"
+                aria-label={`Dismiss ${p.name}`}
+                onClick={() => dismiss(p, i)}
+                className="rounded-sm px-1.5 py-1 text-sm leading-none text-[var(--text-muted)] hover:text-[var(--text-default)]"
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>

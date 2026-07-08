@@ -22,6 +22,10 @@ import {
 } from '@/lib/document/desk-derivation';
 import { buildDeskConflicts } from '@/lib/document/desk-conflicts';
 import { buildDeskReceivables } from '@/lib/document/desk-receivables';
+import {
+  buildDeskFlaggedLines,
+  type FlaggedLineRow,
+} from '@/lib/document/desk-flagged-lines';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
@@ -33,6 +37,47 @@ export interface DeskData {
 
 /** Conflict window: today → +120d covers any configured install horizon. */
 const CONFLICT_WINDOW_DAYS = 120;
+
+/** Flatten the item_feedback→proposal_items→proposals embed into the flagged-row
+ *  shape buildDeskFlaggedLines reads. Tolerant of PostgREST returning a to-one
+ *  embed as either an object or a single-element array. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function flattenFlaggedRows(rows: any): FlaggedLineRow[] {
+  if (!Array.isArray(rows)) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  return rows
+    .map((r) => {
+      const pi = one(r?.proposal_items);
+      const proposal = one(pi?.proposals);
+      return {
+        proposalId: pi?.proposal_id as string,
+        proposalTitle: (proposal?.title ?? null) as string | null,
+      };
+    })
+    .filter((r) => !!r.proposalId);
+}
+
+/** B4: the board-pin equivalent — item_feedback→proposal_board_items→
+ *  proposal_boards→proposals. Folds into the SAME FlaggedLineRow shape, so a
+ *  board flag and a line flag on one proposal sum into one Desk folder. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function flattenBoardFlaggedRows(rows: any): FlaggedLineRow[] {
+  if (!Array.isArray(rows)) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  return rows
+    .map((r) => {
+      const pbi = one(r?.proposal_board_items);
+      const pb = one(pbi?.proposal_boards);
+      const proposal = one(pb?.proposals);
+      return {
+        proposalId: pb?.proposal_id as string,
+        proposalTitle: (proposal?.title ?? null) as string | null,
+      };
+    })
+    .filter((r) => !!r.proposalId);
+}
 
 export function useDeskEngagements() {
   return useQuery<DeskData>({
@@ -48,6 +93,8 @@ export function useDeskEngagements() {
         { data, error },
         { data: events, error: eventsError },
         { data: invoices, error: invoicesError },
+        { data: flaggedFeedback, error: flaggedError },
+        { data: boardFlagged, error: boardFlaggedError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -63,15 +110,48 @@ export function useDeskEngagements() {
             'id, project_id, status, due_date, total_cents, amount_paid_cents, invoice_number, ar_last_chased_at',
           )
           .in('status', ['sent', 'partially_paid']),
+        // C4: unresolved per-line client rejections → the "N lines flagged" need.
+        // RLS scopes item_feedback to the designer's own proposals; the inner
+        // join carries the proposal id + title for the need line. (Same join the
+        // proposal-feedback hook uses, so the relationship names are proven.)
+        supabase
+          .from('item_feedback')
+          .select('proposal_items!inner(proposal_id, proposals!inner(title))')
+          .eq('verdict', 'rejected')
+          .is('resolved_at', null),
+        // B4: unresolved board-PIN rejections → the same "N lines flagged" need.
+        // proposal_board_items → proposal_boards → proposals(title). Project-owned
+        // boards (proposal_id NULL) never carry verdicts, so the inner join to
+        // proposals scopes this to proposal-stage boards automatically.
+        supabase
+          .from('item_feedback')
+          .select('proposal_board_items!inner(proposal_boards!inner(proposal_id, proposals!inner(title)))')
+          .eq('verdict', 'rejected')
+          .is('resolved_at', null),
       ]);
       if (error) throw error;
       const now = new Date();
-      // The Desk never dies on a side feed — conflicts/receivables stay quiet.
+      // The Desk never dies on a side feed — conflicts/receivables/flags stay quiet.
       const conflicts = eventsError ? undefined : buildDeskConflicts(events ?? []);
       const receivables = invoicesError
         ? undefined
         : buildDeskReceivables((invoices ?? []) as Invoice[], now);
-      return partitionDesk((data ?? []) as DocumentStateRow[], now, conflicts, receivables);
+      // Line flags + board-pin flags fold together by proposal_id (one folder,
+      // summed count). Each source degrades to [] on its own error.
+      const flaggedLines =
+        flaggedError && boardFlaggedError
+          ? undefined
+          : buildDeskFlaggedLines([
+              ...(flaggedError ? [] : flattenFlaggedRows(flaggedFeedback)),
+              ...(boardFlaggedError ? [] : flattenBoardFlaggedRows(boardFlagged)),
+            ]);
+      return partitionDesk(
+        (data ?? []) as DocumentStateRow[],
+        now,
+        conflicts,
+        receivables,
+        flaggedLines,
+      );
     },
   });
 }

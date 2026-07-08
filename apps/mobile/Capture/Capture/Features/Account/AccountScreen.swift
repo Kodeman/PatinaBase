@@ -31,6 +31,7 @@ struct AccountScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 identityCard
+                workRow
                 workspaceSection
                 deviceSection
                 actions
@@ -75,6 +76,13 @@ struct AccountScreen: View {
                     .foregroundStyle(CaptureColor.ink)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                if let sub = identitySubLabel {
+                    Text(sub)
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.inkSoft)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
             Spacer()
         }
@@ -84,8 +92,51 @@ struct AccountScreen: View {
     }
 
     private var identityLabel: String {
-        // SessionProviding exposes no email/display-name; fall back to userID.
-        session.userID ?? "Not signed in"
+        // Prefer the human name, then email, then the raw user id.
+        session.displayName ?? session.userEmail ?? session.userID ?? "Not signed in"
+    }
+
+    /// Email shown beneath the name when we have both and they differ.
+    private var identitySubLabel: String? {
+        guard let email = session.userEmail, email != identityLabel else { return nil }
+        return email
+    }
+
+    // MARK: work (W1 — designer/pro dashboard)
+
+    private var workRow: some View {
+        Button {
+            analytics.event("work.open", ["from": "account"])
+            coordinator.navigate(to: .work)
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(CaptureColor.brass.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "briefcase.fill")
+                        .font(CaptureType.title2)
+                        .foregroundStyle(CaptureColor.brass)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Work")
+                        .font(CaptureType.bodyEmph)
+                        .foregroundStyle(CaptureColor.ink)
+                    Text("Projects, leads, decisions, messages")
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.inkSoft)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.line2)
+            }
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 14).fill(CaptureColor.paper3))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(CaptureColor.line, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("account.work")
     }
 
     // MARK: workspace + plan
@@ -206,7 +257,9 @@ struct AccountScreen: View {
         analytics.event("account.sign_out", ["unsynced": String(unsyncedCount)])
         Task {
             await session.signOut()
-            coordinator.goBack()
+            // Clear the pushed stack and drop back to onboarding (O1).
+            coordinator.popToRoot()
+            coordinator.phase = .auth
         }
     }
 
@@ -244,6 +297,7 @@ struct AccountScreen: View {
 import CaptureKitMocks
 
 #Preview {
+    // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
     let s = store.newDraft()
     s.title = "Oak console"
