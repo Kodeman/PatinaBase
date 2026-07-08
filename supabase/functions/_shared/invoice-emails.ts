@@ -399,6 +399,66 @@ export function buildDirectOrderReceiptEmail(
   return { subject, html };
 }
 
+export interface PaymentRefundedEmailParams {
+  invoiceNumber: string;
+  projectName: string;
+  /** Greeting name for the designer (this email is designer-facing). */
+  designerName?: string | null;
+  /** The amount actually refunded on this event. */
+  refundedAmountCents: number;
+  /** The original payment amount the refund was drawn against. */
+  paymentAmountCents: number;
+  /** true ⇒ partial refund (no accounting change; review in Stripe). */
+  partial: boolean;
+  /** Absolute designer-portal link to the invoice. */
+  portalUrl: string;
+  currency?: string;
+}
+
+/**
+ * Designer-facing notice sent when a Stripe payment on one of their invoices is
+ * refunded (payment-rail phase 6). Consumed by stripe-webhook on the
+ * charge.refunded → invoice branch. FULL refunds have already reversed the
+ * invoice/earnings accounting by the time this sends (the copy says so);
+ * PARTIAL refunds change nothing on the books and point the designer to Stripe.
+ * Frame mirrors the other invoice emails; all interpolated values are escaped.
+ */
+export function buildPaymentRefundedEmail(
+  params: PaymentRefundedEmailParams,
+): RenderedInvoiceEmail {
+  const designerName = params.designerName?.trim() || "there";
+  const refundLabel = formatInvoiceCurrency(params.refundedAmountCents, params.currency);
+  const paymentLabel = formatInvoiceCurrency(params.paymentAmountCents, params.currency);
+
+  const subject = params.partial
+    ? `Partial refund processed — invoice ${params.invoiceNumber}`
+    : `Refund processed — invoice ${params.invoiceNumber}`;
+
+  const body = params.partial
+    ? `<p>A <strong>partial refund</strong> of <strong>${refundLabel}</strong> was processed against the
+        ${paymentLabel} payment on invoice <strong>${escapeHtml(params.invoiceNumber)}</strong> for
+        ${escapeHtml(params.projectName)}.</p>
+      <p style="margin:0 0 12px">The invoice balance and your earnings are <strong>unchanged</strong> —
+        partial-refund accounting isn&rsquo;t automated yet. Reconcile this refund in your Stripe
+        dashboard, then adjust the invoice by hand if needed.</p>`
+    : `<p>A <strong>refund</strong> of <strong>${refundLabel}</strong> was processed for the ${paymentLabel}
+        payment on invoice <strong>${escapeHtml(params.invoiceNumber)}</strong> for
+        ${escapeHtml(params.projectName)}.</p>
+      <p style="margin:0 0 12px">This invoice has been reopened and the reversed payment removed from your
+        earnings automatically. Any milestone this payment settled is outstanding again.</p>`;
+
+  const html = wrap(
+    `
+      <p>Hi ${escapeHtml(designerName)},</p>
+      ${body}
+    `,
+    params.portalUrl,
+    "View invoice",
+  );
+
+  return { subject, html };
+}
+
 export interface PaymentFailedEmailParams {
   invoiceNumber: string;
   projectName: string;

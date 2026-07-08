@@ -31,8 +31,15 @@
 //   payment_intent.succeeded / payment_intent.payment_failed
 //                                       belt-and-suspenders by PI id — only
 //                                       flips rows still pending.
-//   charge.refunded                     recorded in the events ledger only
-//                                       (refund state machine is v2).
+//   charge.refunded                     refund reconciliation v1 (00268).
+//                                       Resolve the payable by charge.payment_intent
+//                                       across invoice_payments → po_payments →
+//                                       direct_orders. FULL refund flips state
+//                                       (guarded) and the 00268 trigger reverses
+//                                       invoice/earnings/milestone accounting;
+//                                       PARTIAL refund changes no row, only
+//                                       logs + notifies (partial accounting is
+//                                       still v2). Unmatched PI → log + 200.
 //   everything else                     acknowledged 200, no-op.
 //
 // On a flip to succeeded: receipt email to the client via the
@@ -57,12 +64,15 @@ import {
   buildDirectOrderReceiptEmail,
   buildPaymentFailedEmail,
   buildPaymentReceiptEmail,
+  buildPaymentRefundedEmail,
   formatInvoiceCurrency,
 } from '../_shared/invoice-emails.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
+// Designer-facing links (refund notices go to the designer's portal invoice).
+const DESIGNER_PORTAL_URL = Deno.env.get('DESIGNER_PORTAL_URL') ?? 'https://app.patina.cloud';
 
 // Pinned — bump deliberately alongside the npm:stripe major.
 const STRIPE_API_VERSION = '2025-02-24.acacia';
@@ -713,7 +723,7 @@ async function markPoPaid(
 async function notifyPoPayment(
   admin: SupabaseClient,
   row: PoPaymentRow,
-  kind: 'payment_received' | 'payment_failed'
+  kind: 'payment_received' | 'payment_failed' | 'payment_refunded'
 ): Promise<void> {
   try {
     const { data: po } = await admin
@@ -1193,6 +1203,322 @@ async function handleDirectOrderPaymentIntentSettled(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// charge.refunded — refund reconciliation v1 (00268).
+//
+// A dashboard-initiated refund arrives as charge.refunded on the Charge object.
+// We resolve the payable by charge.payment_intent across the three tables in
+// order (invoice_payments → po_payments → direct_orders). FULL refunds flip the
+// payable's state guarded on its settled value — the 00268 trigger owns invoice
+// rollup/status/earnings-reversal/milestone-unpay for invoices; po/direct_order
+// carry their own state column. PARTIAL refunds flip NO row (partial accounting
+// is still v2) — they only log + notify. Unmatched PI → log + 200 (a refund for
+// a charge Patina never recorded must not error-loop Stripe's retries).
+//
+// Idempotency: the event-id claim dedups exact replays; the state guards dedup
+// distinct-event replays of the SAME full refund (the second event finds the
+// row already non-settled and the guarded UPDATE no-ops → no double side effect).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Full vs partial refund on the pinned API version's Charge shape. */
+function isFullRefund(charge: Stripe.Charge): { full: boolean; refunded: number; captured: number } {
+  // amount_captured is the actually-charged amount (== amount for a fully
+  // captured charge); fall back to amount if absent. amount_refunded is the
+  // running total refunded across all refunds on the charge.
+  const captured = charge.amount_captured ?? charge.amount ?? 0;
+  const refunded = charge.amount_refunded ?? 0;
+  // charge.refunded is Stripe's own "fully refunded" boolean; the amount check
+  // is the robust belt-and-suspenders (and covers a zero-captured edge).
+  const full = charge.refunded === true || (captured > 0 && refunded >= captured);
+  return { full, refunded, captured };
+}
+
+/** Designer email + in_app notification after an invoice payment refund. Never throws. */
+async function sendInvoiceRefundSideEffects(
+  admin: SupabaseClient,
+  row: PaymentRow,
+  opts: { partial: boolean; refundedAmount: number }
+): Promise<void> {
+  try {
+    // Reload AFTER any flip — the 00268 trigger has already reopened the
+    // invoice / cleared paid_at (full refund), so this reads post-refund truth.
+    const invoice = await loadInvoiceJoined(admin, row.invoice_id);
+    if (!invoice) return;
+
+    const invoiceNumber = invoice.invoice_number ?? 'Invoice';
+    const projectName = invoice.project?.name ?? 'your project';
+    const designerName = designerDisplayName(invoice);
+    const portalUrl = `${DESIGNER_PORTAL_URL}/portal/billing/invoices/${invoice.id}`;
+    const refundLabel = formatInvoiceCurrency(opts.refundedAmount, invoice.currency);
+
+    // Designer-facing email (this is the designer's money, not the client's).
+    const { data: designerProfile } = await admin
+      .from('profiles')
+      .select('email, full_name')
+      .eq('id', invoice.designer_id)
+      .maybeSingle();
+    const designerEmail = (designerProfile as { email?: string | null } | null)?.email ?? null;
+
+    if (designerEmail) {
+      const rendered = buildPaymentRefundedEmail({
+        invoiceNumber,
+        projectName,
+        designerName,
+        refundedAmountCents: opts.refundedAmount,
+        paymentAmountCents: row.amount_cents,
+        partial: opts.partial,
+        portalUrl,
+        currency: invoice.currency,
+      });
+      const sendResult = await sendCompliantEmail(admin, {
+        to: designerEmail,
+        subject: rendered.subject,
+        html: rendered.html,
+        userId: invoice.designer_id,
+        notificationType: 'invoice_payment_refunded',
+        category: 'operational',
+        templateId: 'invoice-payment-refunded',
+        metadata: {
+          invoice_id: invoice.id,
+          project_id: invoice.project_id,
+          invoice_payment_id: row.id,
+          refunded_cents: opts.refundedAmount,
+          partial: opts.partial,
+          subject: rendered.subject,
+          message: `${refundLabel} refunded on ${invoiceNumber}.`,
+          deep_link: `/portal/billing/invoices/${invoice.id}`,
+        },
+      });
+      if (!sendResult.success && !sendResult.suppressed) {
+        console.error('stripe-webhook: refund email failed', sendResult.error);
+      }
+    } else {
+      console.warn('stripe-webhook: no designer email for refund notice on invoice', invoice.id);
+    }
+
+    // Designer in-app notification (mirrors the failure path's notification_log).
+    const subject = opts.partial
+      ? `Partial refund on ${invoiceNumber} — ${refundLabel}`
+      : `Refund processed on ${invoiceNumber} — ${refundLabel}`;
+    const { error: notifyErr } = await admin.from('notification_log').insert({
+      user_id: invoice.designer_id,
+      type: 'invoice_payment_refunded',
+      channel: 'in_app',
+      status: 'delivered',
+      template_id: 'invoice-payment-refunded-designer',
+      metadata: {
+        invoice_id: invoice.id,
+        project_id: invoice.project_id,
+        invoice_payment_id: row.id,
+        refunded_cents: opts.refundedAmount,
+        partial: opts.partial,
+        subject,
+        message: opts.partial
+          ? `${projectName}: partial refund of ${refundLabel} on ${invoiceNumber} — reconcile in Stripe (balance unchanged).`
+          : `${projectName}: ${refundLabel} refunded on ${invoiceNumber} — the invoice has been reopened and earnings reversed.`,
+        deep_link: `/portal/billing/invoices/${invoice.id}`,
+      },
+    });
+    if (notifyErr) {
+      console.error('stripe-webhook: designer refund notification insert failed', notifyErr);
+    }
+  } catch (err) {
+    console.error('stripe-webhook: invoice refund side effects failed', err);
+  }
+}
+
+async function handleInvoiceRefund(
+  admin: SupabaseClient,
+  row: PaymentRow,
+  full: boolean,
+  refundedAmount: number,
+  capturedAmount: number
+): Promise<void> {
+  if (!full) {
+    // PARTIAL: change no row (partial accounting is v2). Log + notify.
+    console.log(
+      `stripe-webhook: partial refund ${refundedAmount} on invoice_payment ${row.id} (captured ${capturedAmount}) — no state change (v2)`
+    );
+    await sendInvoiceRefundSideEffects(admin, row, { partial: true, refundedAmount });
+    return;
+  }
+  // FULL: flip succeeded → refunded (guard makes the distinct-event replay a
+  // no-op). The 00268 trigger reverses the accounting.
+  const { data: flipped, error } = await admin
+    .from('invoice_payments')
+    .update({ status: 'refunded' })
+    .eq('id', row.id)
+    .eq('status', 'succeeded')
+    .select('id');
+  if (error) {
+    throw new Error(`failed to mark invoice_payment ${row.id} refunded: ${error.message}`);
+  }
+  if ((flipped ?? []).length > 0) {
+    await sendInvoiceRefundSideEffects(admin, row, { partial: false, refundedAmount });
+  }
+}
+
+async function handlePoRefund(
+  admin: SupabaseClient,
+  row: PoPaymentRow,
+  full: boolean,
+  refundedAmount: number,
+  capturedAmount: number
+): Promise<void> {
+  if (!full) {
+    // PARTIAL: no state flip. Log + informational notification (procurement_
+    // notifications has no free-form detail column, so the amounts live in the
+    // structured log; the row just signals "a refund happened, review Stripe").
+    console.log(
+      `stripe-webhook: partial refund ${refundedAmount} on po_payment ${row.id} (captured ${capturedAmount}) — state kept (v2)`
+    );
+    await notifyPoPayment(admin, row, 'payment_refunded');
+    return;
+  }
+  // FULL: paid → refunded, keeping paid_date (historical fact). Guard on 'paid'
+  // so a distinct-event replay no-ops.
+  const { data: flipped, error } = await admin
+    .from('po_payments')
+    .update({ state: 'refunded' })
+    .eq('id', row.id)
+    .eq('state', 'paid')
+    .select('id');
+  if (error) {
+    throw new Error(`failed to mark po_payment ${row.id} refunded: ${error.message}`);
+  }
+  if ((flipped ?? []).length > 0) {
+    await notifyPoPayment(admin, row, 'payment_refunded');
+  }
+}
+
+async function handleDirectOrderRefund(
+  admin: SupabaseClient,
+  row: DirectOrderRow,
+  full: boolean,
+  refundedAmount: number,
+  capturedAmount: number
+): Promise<void> {
+  if (!full) {
+    console.log(
+      `stripe-webhook: partial refund ${refundedAmount} on direct_order ${row.id} (captured ${capturedAmount}) — status kept (v2)`
+    );
+    await sendDirectOrderRefundOpsEmail(admin, row.id, { partial: true, refundedAmount });
+    return;
+  }
+  // FULL: paid → refunded (guard on 'paid' → distinct-event replay no-ops).
+  const { data: flipped, error } = await admin
+    .from('direct_orders')
+    .update({ status: 'refunded' })
+    .eq('id', row.id)
+    .eq('status', 'paid')
+    .select('id');
+  if (error) {
+    throw new Error(`failed to mark direct_order ${row.id} refunded: ${error.message}`);
+  }
+  if ((flipped ?? []).length > 0) {
+    await sendDirectOrderRefundOpsEmail(admin, row.id, { partial: false, refundedAmount });
+  }
+}
+
+/** Ops heads-up that a direct order was refunded (needs fulfillment reversal). Never throws. */
+async function sendDirectOrderRefundOpsEmail(
+  admin: SupabaseClient,
+  orderId: string,
+  opts: { partial: boolean; refundedAmount: number }
+): Promise<void> {
+  try {
+    const order = await resolveDirectOrder(admin, null, null, orderId);
+    if (!order) return;
+    const opsEmail = Deno.env.get('OPS_NOTIFY_EMAIL');
+    if (!opsEmail) {
+      console.warn(
+        'stripe-webhook: OPS_NOTIFY_EMAIL unset — skipping refund ops notice for direct_order',
+        order.id
+      );
+      return;
+    }
+    const refundLabel = formatInvoiceCurrency(opts.refundedAmount, order.currency);
+    const amountLabel = formatInvoiceCurrency(order.amount_cents, order.currency);
+    const kind = opts.partial ? 'Partial refund' : 'Refund';
+    // Escape every interpolated value (product_name is user-influenced snapshot).
+    const opsHtml = `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:560px;color:#2c2926;line-height:1.55">
+        <p>${escapeHtmlSafe(kind)} processed on a direct order${opts.partial ? ' (no status change)' : ''}.</p>
+        <p style="margin:0 0 8px"><strong>Order:</strong> ${escapeHtmlSafe(order.id)}</p>
+        <p style="margin:0 0 8px"><strong>Product:</strong> ${escapeHtmlSafe(order.product_name)}</p>
+        <p style="margin:0 0 8px"><strong>Refunded:</strong> ${escapeHtmlSafe(refundLabel)} of ${escapeHtmlSafe(amountLabel)}</p>
+        <p style="margin:0 0 8px"><strong>Status:</strong> ${escapeHtmlSafe(order.status)}</p>
+      </div>`;
+    const opsResult = await sendCompliantEmail(admin, {
+      to: opsEmail,
+      subject: `${kind} — direct order ${order.product_name} (${refundLabel})`,
+      html: opsHtml,
+      category: 'operational',
+      templateId: 'direct-order-refund-ops',
+    });
+    if (!opsResult.success && !opsResult.suppressed) {
+      console.error('stripe-webhook: direct_order refund ops email failed', opsResult.error);
+    }
+  } catch (err) {
+    console.error('stripe-webhook: direct_order refund ops side effect failed', err);
+  }
+}
+
+/** Minimal HTML escape for interpolated ops-email values (matches _shared/invoice-emails). */
+function escapeHtmlSafe(s: string): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+async function handleChargeRefunded(admin: SupabaseClient, event: Stripe.Event): Promise<void> {
+  const charge = event.data.object as Stripe.Charge;
+  const paymentIntentId =
+    typeof charge.payment_intent === 'string'
+      ? charge.payment_intent
+      : charge.payment_intent?.id ?? null;
+  if (!paymentIntentId) {
+    console.warn('stripe-webhook: charge.refunded without a payment_intent', event.id);
+    return;
+  }
+
+  const { full, refunded, captured } = isFullRefund(charge);
+
+  // Resolve across the three payable tables in order.
+  const { data: invPay } = await admin
+    .from('invoice_payments')
+    .select(PAYMENT_COLS)
+    .eq('stripe_payment_intent_id', paymentIntentId)
+    .maybeSingle();
+  if (invPay) {
+    return handleInvoiceRefund(admin, invPay as PaymentRow, full, refunded, captured);
+  }
+
+  const { data: poPay } = await admin
+    .from('po_payments')
+    .select(PO_PAYMENT_COLS)
+    .eq('stripe_payment_intent_id', paymentIntentId)
+    .maybeSingle();
+  if (poPay) {
+    return handlePoRefund(admin, poPay as PoPaymentRow, full, refunded, captured);
+  }
+
+  const { data: directOrd } = await admin
+    .from('direct_orders')
+    .select(DIRECT_ORDER_COLS)
+    .eq('stripe_payment_intent_id', paymentIntentId)
+    .maybeSingle();
+  if (directOrd) {
+    return handleDirectOrderRefund(admin, directOrd as DirectOrderRow, full, refunded, captured);
+  }
+
+  // Unmatched refund (e.g. a charge Patina never recorded) — acknowledge, don't loop.
+  console.warn('stripe-webhook: charge.refunded — no payable row for PI', paymentIntentId, event.id);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Entry point
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1264,8 +1590,7 @@ Deno.serve(async (req: Request) => {
         await handlePaymentIntentSettled(admin, event, 'failed');
         break;
       case 'charge.refunded':
-        // v2 territory: record only (payload already in stripe_webhook_events).
-        console.log('stripe-webhook: charge.refunded recorded (no state change, v2)', event.id);
+        await handleChargeRefunded(admin, event);
         break;
       default:
         // Unsubscribed/uninteresting event — acknowledged, ledgered, ignored.

@@ -115,6 +115,12 @@ const EVT = {
   doPaidPi: `evt_do_paid_pi_${RUN}`, // DISTINCT event, same PI as doPaid — settle guard
   doFail: `evt_do_fail_${RUN}`,
   doFailOnPaid: `evt_do_fail_on_paid_${RUN}`, // async_payment_failed against the PAID order (short-circuit)
+  // ── refund reconciliation (00268) ──
+  refundInvPartial: `evt_refund_inv_partial_${RUN}`, // partial invoice refund → no state change
+  refundInv: `evt_refund_inv_${RUN}`, // full invoice refund → reversed
+  refundInvReplay: `evt_refund_inv_replay_${RUN}`, // DISTINCT event, same PI — no double reversal
+  refundPo: `evt_refund_po_${RUN}`, // full po_payment refund → state refunded
+  refundDo: `evt_refund_do_${RUN}`, // full direct_order refund → status refunded
 };
 const SESS = {
   inv: `cs_inv_${RUN}`,
@@ -266,9 +272,15 @@ async function cleanup() {
   if (ids.product) await admin.from('products').delete().eq('id', ids.product);
   if (ids.project) await admin.from('projects').delete().eq('id', ids.project);
   if (ids.vendor) await admin.from('vendors').delete().eq('id', ids.vendor);
+  // notification_log refund rows (user cascade also clears them, but be tidy).
+  if (ids.designerA) {
+    await admin.from('notification_log').delete()
+      .eq('user_id', ids.designerA).eq('type', 'invoice_payment_refunded');
+  }
   await admin.from('stripe_webhook_events').delete().in('id', [
     EVT.inv, EVT.poPaid, EVT.poPaidPi, EVT.poFail,
     EVT.doPaid, EVT.doPaidPi, EVT.doFail, EVT.doFailOnPaid,
+    EVT.refundInvPartial, EVT.refundInv, EVT.refundInvReplay, EVT.refundPo, EVT.refundDo,
   ]);
   if (ids.designerA) await admin.auth.admin.deleteUser(ids.designerA).catch(() => {});
   if (ids.userB) await admin.auth.admin.deleteUser(ids.userB).catch(() => {});
@@ -309,6 +321,67 @@ async function notifCount(paymentId: string, kind: string): Promise<number> {
     .eq('kind', kind);
   if (error) throw new Error(error.message);
   return count ?? 0;
+}
+
+// ── refund reconciliation helpers (00268) ────────────────────────────────────
+async function invoiceRow(id: string) {
+  const { data, error } = await admin
+    .from('invoices').select('id, status, amount_paid_cents, paid_at').eq('id', id).single();
+  if (error) throw new Error(error.message);
+  return data as { status: string; amount_paid_cents: number; paid_at: string | null };
+}
+
+async function invoicePaymentStatus(id: string): Promise<string> {
+  const { data, error } = await admin
+    .from('invoice_payments').select('status').eq('id', id).single();
+  if (error) throw new Error(error.message);
+  return (data as { status: string }).status;
+}
+
+/** Net sum of designer_earnings for an invoice (credits + reversals). */
+async function earningsNet(invoiceId: string): Promise<number> {
+  const { data, error } = await admin
+    .from('designer_earnings').select('net_amount').eq('invoice_id', invoiceId);
+  if (error) throw new Error(error.message);
+  return (data as { net_amount: number }[]).reduce((s, r) => s + r.net_amount, 0);
+}
+
+/** How many reversal contra rows exist for a given refunded payment. */
+async function reversalCount(paymentId: string): Promise<number> {
+  const { count, error } = await admin
+    .from('designer_earnings')
+    .select('id', { count: 'exact', head: true })
+    .eq('reverses_invoice_payment_id', paymentId);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/** notification_log refund rows for a payment, optionally filtered by partial flag. */
+async function refundNotifCount(paymentId: string, partial: boolean): Promise<number> {
+  const { data, error } = await admin
+    .from('notification_log')
+    .select('metadata')
+    .eq('type', 'invoice_payment_refunded');
+  if (error) throw new Error(error.message);
+  return (data as { metadata: Record<string, unknown> }[]).filter(
+    (r) => r.metadata?.invoice_payment_id === paymentId && r.metadata?.partial === partial,
+  ).length;
+}
+
+function chargeRefundedEvent(
+  eventId: string,
+  paymentIntentId: string,
+  opts: { full: boolean; captured: number; refunded: number; chargeId?: string },
+) {
+  return stripeEvent(eventId, 'charge.refunded', {
+    id: opts.chargeId ?? `ch_${eventId}`,
+    object: 'charge',
+    payment_intent: paymentIntentId,
+    amount: opts.captured,
+    amount_captured: opts.captured,
+    amount_refunded: opts.refunded,
+    refunded: opts.full,
+  });
 }
 
 Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t) => {
@@ -608,6 +681,107 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       const body = await res.json();
       assertEquals(res.status, 409);
       assertEquals(body.error, 'direct_order_already_paid');
+    });
+
+    // ═══ refund reconciliation (00268) ═══════════════════════════════════════
+    // invPay was settled to 'succeeded' in step (a): invoice is 'paid' with one
+    // 8000 earnings credit. These steps refund it and the other paid payables.
+
+    // (d) PARTIAL refund of the settled invoice payment → NO state change,
+    // notification (marked partial) inserted. Run before the full refund.
+    await t.step('invoice PARTIAL refund → no state change + partial notification', async () => {
+      const before = await invoiceRow(ids.invoice);
+      assertEquals(before.status, 'paid');
+      const res = await postSigned(
+        WEBHOOK_URL,
+        chargeRefundedEvent(EVT.refundInvPartial, `pi_inv_${RUN}`, {
+          full: false, captured: 8000, refunded: 2000,
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      // Nothing on the books moved.
+      assertEquals(await invoicePaymentStatus(ids.invPay), 'succeeded');
+      const after = await invoiceRow(ids.invoice);
+      assertEquals(after.status, 'paid');
+      assertEquals(after.amount_paid_cents, 8000);
+      assertEquals(await earningsNet(ids.invoice), 8000); // credit untouched
+      assertEquals(await reversalCount(ids.invPay), 0); // no reversal on partial
+      assert((await refundNotifCount(ids.invPay, true)) >= 1, 'partial refund notification exists');
+    });
+
+    // (a) FULL refund of the settled invoice payment → payment refunded, invoice
+    // reverted (paid → sent), earnings reversed to net 0 (00268 trigger).
+    await t.step('invoice FULL refund → refunded + invoice reverted + earnings reversed', async () => {
+      const res = await postSigned(
+        WEBHOOK_URL,
+        chargeRefundedEvent(EVT.refundInv, `pi_inv_${RUN}`, {
+          full: true, captured: 8000, refunded: 8000,
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      assertEquals(await invoicePaymentStatus(ids.invPay), 'refunded');
+      const inv = await invoiceRow(ids.invoice);
+      assertEquals(inv.status, 'sent'); // sole payment refunded → back to sent
+      assertEquals(inv.amount_paid_cents, 0);
+      assertEquals(inv.paid_at, null);
+      assertEquals(await reversalCount(ids.invPay), 1); // exactly one contra row
+      assertEquals(await earningsNet(ids.invoice), 0); // credit + reversal net to 0
+      assert((await refundNotifCount(ids.invPay, false)) >= 1, 'full refund notification exists');
+    });
+
+    // (e) DISTINCT-event replay of (a) (new event id, same PI) → the succeeded
+    // guard no-ops the flip, so no second reversal, no second notification.
+    await t.step('invoice FULL refund distinct-event replay → no double reversal', async () => {
+      const res = await postSigned(
+        WEBHOOK_URL,
+        chargeRefundedEvent(EVT.refundInvReplay, `pi_inv_${RUN}`, {
+          full: true, captured: 8000, refunded: 8000,
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      assertEquals(await invoicePaymentStatus(ids.invPay), 'refunded');
+      assertEquals(await reversalCount(ids.invPay), 1); // STILL exactly one
+      assertEquals(await earningsNet(ids.invoice), 0);
+      assertEquals((await invoiceRow(ids.invoice)).status, 'sent');
+      assertEquals(await refundNotifCount(ids.invPay, false), 1); // no second notice
+    });
+
+    // (b) FULL refund of the paid po_payment → state 'refunded' (paid_date kept)
+    // + payment_refunded procurement notification.
+    await t.step('po_payment FULL refund → state refunded + notification', async () => {
+      const before = await poPayment(ids.payPaid);
+      assertEquals(before.state, 'paid');
+      const res = await postSigned(
+        WEBHOOK_URL,
+        chargeRefundedEvent(EVT.refundPo, `pi_po_${RUN}`, {
+          full: true, captured: 5000, refunded: 5000,
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      const row = await poPayment(ids.payPaid);
+      assertEquals(row.state, 'refunded');
+      assert(row.paid_date, 'paid_date kept (historical fact)');
+      assertEquals(await notifCount(ids.payPaid, 'payment_refunded'), 1);
+    });
+
+    // (c) FULL refund of the paid direct_order → status 'refunded'.
+    await t.step('direct_order FULL refund → status refunded', async () => {
+      const before = await directOrder(ids.doPaid);
+      assertEquals(before.status, 'paid');
+      const res = await postSigned(
+        WEBHOOK_URL,
+        chargeRefundedEvent(EVT.refundDo, `pi_do_${RUN}`, {
+          full: true, captured: 10000, refunded: 10000,
+        }),
+      );
+      assertEquals(res.status, 200);
+      await res.body?.cancel();
+      const row = await directOrder(ids.doPaid);
+      assertEquals(row.status, 'refunded');
     });
   } finally {
     await cleanup();
