@@ -516,15 +516,18 @@ function StageSection({
   const cfg = STAGE_CONFIG[bucket.stage];
 
   // Money summary: total paid (sum of paid po_payments) vs coming-due
-  // (sum of due or pending), excluding patina_catalog rows. Multiple items
-  // can share one PO, so dedupe by PO id to avoid double-counting payments.
+  // (sum of due or pending). Phase 4 — designer pays catalog POs at order
+  // time too, so their po_payments rows are real money and belong in this
+  // rollup same as any other PO; no more excluding is_patina_catalog.
+  // Multiple items can share one PO, so dedupe by PO id to avoid
+  // double-counting payments.
   const { paidCents, dueComingCents } = useMemo(() => {
     let paid = 0;
     let due = 0;
     const seenPoIds = new Set<string>();
     for (const item of bucket.items) {
       const po = item.purchase_order;
-      if (!po || po.is_patina_catalog || seenPoIds.has(po.id)) continue;
+      if (!po || seenPoIds.has(po.id)) continue;
       seenPoIds.add(po.id);
       for (const p of po.payments ?? []) {
         if (p.state === 'paid') paid += p.amount_cents;
