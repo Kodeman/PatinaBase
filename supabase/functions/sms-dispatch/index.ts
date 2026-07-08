@@ -17,6 +17,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
+import { sendPartySms } from "../_shared/sms.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,6 +30,13 @@ interface SmsJob {
   // looked up server-side) and/or an explicit `to` number.
   userId?: string;
   to?: string;
+
+  // Field Coordination party path (00284): a project_parties id. Delegates to
+  // the shared sendPartySms (party consent gate, conversation/message logging,
+  // dev-mode, quiet hours). templateKey/projectId/vars ride alongside.
+  partyId?: string;
+  templateKey?: string;
+  projectId?: string;
 
   // Content: either a ready-to-send `body`, or a templateId + vars that the
   // shared renderer interpolates. Template text comes from the email template's
@@ -59,6 +67,15 @@ serve(async (req) => {
   try {
     const job: SmsJob = await req.json();
     const type = job.type || "sms-notification";
+
+    // ── Field Coordination party path (00284) ────────────────────────────
+    // A partyId job delegates entirely to the shared sendPartySms. Internal
+    // callers (triggers/cron via the service-role JWT) bypass authorization;
+    // a USER JWT (Track D's "Send text" composer) must be on the party's
+    // project team. The party-consent gate lives inside sendPartySms.
+    if (job.partyId) {
+      return await handlePartySms(req, supabase, job, corsHeaders);
+    }
 
     if (!job.userId && !job.to) {
       return new Response(
@@ -250,6 +267,100 @@ serve(async (req) => {
     );
   }
 });
+
+// ─── Field Coordination party path helpers (00284) ────────────────────────
+
+/** Decode (without verifying — the platform's verify_jwt already did) the role
+ * + sub from a Bearer token, to tell an internal service-role call from a user. */
+function decodeBearerClaims(
+  authHeader: string | null,
+): { role?: string; sub?: string } | null {
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const parts = authHeader.slice(7).split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+/** Is `userId` on `projectId`'s team (owning designer or an active member)? */
+async function isProjectTeamMember(
+  supabase: ReturnType<typeof createClient>,
+  projectId: string,
+  userId: string,
+): Promise<boolean> {
+  const { data: proj } = await supabase
+    .from("projects")
+    .select("designer_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  if ((proj as { designer_id?: string } | null)?.designer_id === userId) return true;
+  const { data: tm } = await supabase
+    .from("project_team_members")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("user_id", userId)
+    .is("removed_at", null)
+    .limit(1)
+    .maybeSingle();
+  return !!tm;
+}
+
+async function handlePartySms(
+  req: Request,
+  supabase: ReturnType<typeof createClient>,
+  job: SmsJob,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+  const claims = decodeBearerClaims(req.headers.get("Authorization"));
+  const isInternal = claims?.role === "service_role";
+
+  // A user JWT must be on the party's project team before we send on its behalf.
+  if (!isInternal) {
+    const sub = claims?.sub;
+    if (!sub) {
+      return new Response(JSON.stringify({ error: "unauthenticated" }), {
+        status: 401,
+        headers: jsonHeaders,
+      });
+    }
+    const { data: party } = await supabase
+      .from("project_parties")
+      .select("project_id")
+      .eq("id", job.partyId!)
+      .maybeSingle();
+    const projectId = (party as { project_id?: string } | null)?.project_id;
+    if (!projectId) {
+      return new Response(JSON.stringify({ error: "party_not_found" }), {
+        status: 404,
+        headers: jsonHeaders,
+      });
+    }
+    if (!(await isProjectTeamMember(supabase, projectId, sub))) {
+      return new Response(JSON.stringify({ error: "not_authorized" }), {
+        status: 403,
+        headers: jsonHeaders,
+      });
+    }
+  }
+
+  const result = await sendPartySms(supabase, {
+    partyId: job.partyId,
+    projectId: job.projectId,
+    body: job.body,
+    templateKey: job.templateKey,
+    vars: job.vars,
+  });
+
+  return new Response(JSON.stringify({ success: result.sent, ...result }), {
+    headers: jsonHeaders,
+  });
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
