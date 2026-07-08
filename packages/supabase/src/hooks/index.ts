@@ -1135,6 +1135,18 @@ export type {
   FfeItemCoverage,
   FfeInvoiceCoverageMap,
 } from './use-invoices';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Direct orders — client "buy now" on Patina-managed products, the third
+// payable_type on the consolidated Stripe rail (migration 00267)
+// ═══════════════════════════════════════════════════════════════════════════
+export {
+  useDirectOrders,
+  useCreateDirectOrder,
+  useStartDirectOrderCheckout,
+} from './use-direct-orders';
+export type { DirectOrder, DirectOrderStatus, DirectOrderShipping } from './use-direct-orders';
+
 // Aesthete Engine — Wave 3B hooks batch (design §5.2 prefill, §8 taste, §8.5 Your Eye)
 export {
   useProductDnaDraft,

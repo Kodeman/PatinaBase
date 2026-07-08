@@ -15,8 +15,9 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShoppingBag } from 'lucide-react';
 import type { StyleQuizProfile } from '@patina/types';
+import { useCreateDirectOrder, useStartDirectOrderCheckout } from '@patina/supabase';
 import {
   AestheteQuizError,
   DEFAULT_SESSION_STORAGE_KEY,
@@ -100,14 +101,39 @@ function ProfilePanel({ profile }: { profile: StyleQuizProfile }) {
 
 // ─── match cards ─────────────────────────────────────────────────────────────
 
-function MatchCard({ match, product }: { match: AestheteMatchRow; product?: MatchProduct }) {
+function MatchCard({
+  match,
+  product,
+  isAuthenticated,
+  onSignInRequired,
+}: {
+  match: AestheteMatchRow;
+  product?: MatchProduct;
+  isAuthenticated: boolean;
+  onSignInRequired: () => void;
+}) {
   // Exploration rows: pull the server's honest stretch phrase out of the
   // reason list and wear it as the card's marker instead (no duplication).
   const stretchReason = match.why.top_reasons.find((r) => r.term === 'exploration');
   const reasons = match.why.top_reasons.filter((r) => r.term !== 'exploration').slice(0, 3);
-  const price = formatPriceCents(product?.price_retail);
   const band = confidenceBand(match.why.confidence);
   const image = product?.images?.[0];
+
+  // Buy affordance gate: patina_managed (a correct proxy for the
+  // create_direct_order RPC's real gate — patina_managed OR
+  // vendor.is_patina_catalog — since a client's RLS-scoped read of `products`
+  // only ever returns layer='catalog' rows, which are patina_managed=true by
+  // CHECK constraint; see MatchProduct.patina_managed) AND status='published'
+  // (the RPC deliberately does NOT recheck lifecycle status at create time,
+  // so this is the only guard keeping a draft/archived product off the
+  // storefront) AND a real price. The RPC re-validates everything server-side
+  // regardless — this client-side gate only keeps the Buy button honest.
+  const price = formatPriceCents(product?.price_retail);
+  const buyable =
+    !!product &&
+    product.patina_managed === true &&
+    product.status === 'published' &&
+    (product.price_retail ?? 0) > 0;
 
   return (
     <article
@@ -136,9 +162,19 @@ function MatchCard({ match, product }: { match: AestheteMatchRow; product?: Matc
           <h3 className="type-item-name text-[var(--text-primary)]">
             {product?.name ?? 'A piece from the catalog'}
           </h3>
-          {price && <span className="shrink-0 font-mono text-sm text-[var(--text-body)]">{price}</span>}
+          {buyable && price && (
+            <span className="shrink-0 font-mono text-sm text-[var(--text-body)]">{price}</span>
+          )}
         </div>
         {product?.brand && <p className="mt-0.5 type-meta text-[var(--text-muted)]">{product.brand}</p>}
+
+        {buyable && product && (
+          <BuyButton
+            productId={product.id}
+            isAuthenticated={isAuthenticated}
+            onSignInRequired={onSignInRequired}
+          />
+        )}
 
         {reasons.length > 0 && (
           <ul className="mt-4 space-y-1.5" data-match-reasons>
@@ -162,6 +198,68 @@ function MatchCard({ match, product }: { match: AestheteMatchRow; product?: Matc
         </p>
       </div>
     </article>
+  );
+}
+
+/**
+ * "Buy" — mints a qty-1 direct order then starts Stripe Checkout, redirecting
+ * on success. Unauthenticated visitors go to sign-in first (create_direct_order
+ * requires auth.uid(); routing there instead of letting the RPC's "not
+ * authenticated" exception surface keeps the failure honest without being a
+ * raw Postgres error). Failure renders inline on the card — no fake success,
+ * no toast (this page is anon-reachable and has no global mutation toast).
+ */
+function BuyButton({
+  productId,
+  isAuthenticated,
+  onSignInRequired,
+}: {
+  productId: string;
+  isAuthenticated: boolean;
+  onSignInRequired: () => void;
+}) {
+  const createOrder = useCreateDirectOrder({ errorSurface: 'inline' });
+  const startCheckout = useStartDirectOrderCheckout({ errorSurface: 'inline' });
+  const [error, setError] = useState<string | null>(null);
+  const buying = createOrder.isPending || startCheckout.isPending;
+
+  const handleBuy = async () => {
+    if (!isAuthenticated) {
+      onSignInRequired();
+      return;
+    }
+    setError(null);
+    try {
+      const order = await createOrder.mutateAsync({ productId, quantity: 1 });
+      const { url } = await startCheckout.mutateAsync({ directOrderId: order.id });
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to start checkout.');
+    }
+  };
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => void handleBuy()}
+        disabled={buying}
+        className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg bg-patina-clay px-4 py-1.5 type-meta font-medium text-white transition-colors hover:bg-patina-aged-oak disabled:opacity-60"
+        data-buy-button
+      >
+        {buying ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        ) : (
+          <ShoppingBag className="h-3.5 w-3.5" aria-hidden />
+        )}
+        Buy
+      </button>
+      {error && (
+        <p className="mt-2 type-meta-small text-patina-terracotta" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -228,7 +326,7 @@ function MatchesError({ error, onRetry }: { error: Error; onRetry: () => void })
 }
 
 export function ResultsView() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, signIn } = useAuth();
   const [sessionKey, setSessionKey] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
   const [foreignSession, setForeignSession] = useState(false);
@@ -347,6 +445,8 @@ export function ResultsView() {
                   key={match.product_id}
                   match={match}
                   product={matchesQuery.data.products.get(match.product_id)}
+                  isAuthenticated={isAuthenticated}
+                  onSignInRequired={() => void signIn('/quiz/results')}
                 />
               ))}
             </div>
