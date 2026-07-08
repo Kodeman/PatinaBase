@@ -24,6 +24,8 @@ import {
   blockVisibilityFromShare,
   rollupVerdicts,
   formatVerdictRollup,
+  recordCompletenessFill,
+  recordCompletenessPct,
   type ShareVisibility,
 } from '@patina/utils';
 import { useProposalFeedback, type ItemFeedback } from '@patina/supabase';
@@ -341,6 +343,7 @@ export function ProposalDocument({
                 showPrices={share.pricing}
                 showSupplier={share.supplierIdentity}
                 showLeadTimes={share.leadTimes}
+                showSourceUrls={share.sourceUrls}
                 proposalId={proposal.id}
                 feedbackEnabled={feedbackEnabled}
                 feedbackByItem={feedbackByItem}
@@ -482,11 +485,56 @@ function SpacePlanBlock({ metadata }: { metadata: Record<string, unknown> }) {
   );
 }
 
+/**
+ * Bare host of a source URL, www-stripped — the quiet provenance tag (A2).
+ * Matches spec-pdf's host-only style ("Brand · host.com · …"). An invalid URL
+ * renders nothing (returns null).
+ */
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The record-completeness trust mark (A2) — three short stacked rules whose fill
+ * fractions come from recordCompletenessFill (identity+piece / commerce+folio /
+ * taught). A quiet echo of the designer Piece Room's Strata-Mark; the mono label
+ * beside it carries the reading, so the mark itself is aria-hidden. All three
+ * fully filled === a verified record (100%), consistent with spec-pdf.
+ */
+function RecordFillMark({ fill }: { fill: [number, number, number] }) {
+  const rows: { width: number; accent: string; opacity: string }[] = [
+    { width: 34, accent: 'bg-patina-mocha', opacity: '' },
+    { width: 27, accent: 'bg-patina-clay', opacity: 'opacity-70' },
+    { width: 20, accent: 'bg-patina-clay', opacity: 'opacity-35' },
+  ];
+  return (
+    <span aria-hidden className="inline-flex shrink-0 flex-col gap-[2px]">
+      {rows.map((row, i) => (
+        <span
+          key={i}
+          className="block h-[2px] rounded-full bg-[var(--border-subtle)]"
+          style={{ width: row.width }}
+        >
+          <span
+            className={`block h-full rounded-full ${row.accent} ${row.opacity}`}
+            style={{ width: `${Math.round(fill[i] * 100)}%` }}
+          />
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function SelectionsList({
   items,
   showPrices = true,
   showSupplier = true,
   showLeadTimes = false,
+  showSourceUrls = false,
   proposalId,
   feedbackEnabled = false,
   feedbackByItem,
@@ -497,6 +545,8 @@ function SelectionsList({
   // vendor/brand bundling defect), and lead times gate on their own field.
   showSupplier?: boolean;
   showLeadTimes?: boolean;
+  // A2 — makes the share's `sourceUrls` field real: the per-line source host.
+  showSourceUrls?: boolean;
   proposalId: string;
   feedbackEnabled?: boolean;
   feedbackByItem?: Map<string, ItemFeedback[]>;
@@ -510,6 +560,17 @@ function SelectionsList({
         if (supplier) meta.push(supplier);
         if (item.quantity > 1) meta.push(`Qty ${item.quantity}`);
         if (showLeadTimes && leadWeeks) meta.push(`${leadWeeks} wk lead`);
+        // A2 — provenance trust surfaces. The source host is gated on the share's
+        // sourceUrls field; the record-completeness mark rides on a joined product
+        // (itemDetails already gates the whole list). hasTeaching = ≥1 taught style
+        // from the product_styles(count) embed; when the relation is unreadable the
+        // count is absent and it degrades to false (an un-taught record).
+        const product = item.product;
+        const sourceHost =
+          showSourceUrls && product?.source_url ? hostOf(product.source_url) : null;
+        const hasTeaching = (product?.product_styles?.[0]?.count ?? 0) > 0;
+        const fill = product ? recordCompletenessFill(product, hasTeaching) : null;
+        const pct = product ? recordCompletenessPct(product, hasTeaching) : null;
         return (
           <li
             key={item.id}
@@ -535,6 +596,17 @@ function SelectionsList({
                 </p>
                 {meta.length > 0 && (
                   <p className="type-meta-small text-[var(--text-muted)]">{meta.join(' · ')}</p>
+                )}
+                {sourceHost && (
+                  <p className="type-meta-small text-[var(--text-muted)]">{sourceHost}</p>
+                )}
+                {fill && pct !== null && (
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <RecordFillMark fill={fill} />
+                    <span className="type-meta-small text-[var(--text-muted)]">
+                      {pct === 100 ? 'Verified record' : `Record ${pct}% complete`}
+                    </span>
+                  </div>
                 )}
               </div>
               {showPrices && (

@@ -122,6 +122,12 @@ export interface ItemComposerProps {
   onClose: () => void;
   /** After create / update (draft or published) — the host invalidates + closes. */
   onCreated: () => void;
+  /** C4 — prefill product-linked options on a FRESH compose (rejected + alts). */
+  initialOptions?: DecisionOptionValue[];
+  /** C4 — prefill the prompt/title on a FRESH compose. */
+  initialTitle?: string;
+  /** C4 — fires with the created item (CREATE only), for the escalate back-link. */
+  onCreatedItem?: (item: CoordinationItem) => void;
 }
 
 // ─── the subject-matter taxonomy (00084 decision_type) for a selection ────────
@@ -174,6 +180,9 @@ export function ItemComposer({
   editItem = null,
   onClose,
   onCreated,
+  initialOptions,
+  initialTitle,
+  onCreatedItem,
 }: ItemComposerProps) {
   const createItem = useCreateCoordinationItem(projectId);
   const updateItem = useUpdateCoordinationItem(projectId);
@@ -197,7 +206,7 @@ export function ItemComposer({
   );
   const [court, setCourt] = useState<Court>(editItem?.court ?? 'client');
   const [courtPartyId, setCourtPartyId] = useState<string | null>(editItem?.court_party_id ?? null);
-  const [prompt, setPrompt] = useState(editItem?.title ?? '');
+  const [prompt, setPrompt] = useState(editItem?.title ?? initialTitle ?? '');
   const [context, setContext] = useState(editItem?.context ?? '');
   const [phaseId, setPhaseId] = useState<string | null>(editItem?.phase_id ?? null);
   const [due, setDue] = useState(editItem?.due_date ? editItem.due_date.slice(0, 10) : '');
@@ -229,6 +238,8 @@ export function ItemComposer({
         .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
         .map(optionToValue);
     }
+    // C4 — a fresh compose prefilled from a flagged line (rejected + taught alts).
+    if (initialOptions && initialOptions.length > 0) return initialOptions;
     return [emptyOption(), emptyOption()];
   });
   const [saving, setSaving] = useState(false);
@@ -336,7 +347,7 @@ export function ItemComposer({
         }
       } else {
         // CREATE — draft or publish straight to pending (one act).
-        await createItem.mutateAsync({
+        const created = await createItem.mutateAsync({
           designerClientId,
           projectId,
           title,
@@ -353,6 +364,8 @@ export function ItemComposer({
           blockedTaskIds: blockedTaskIds.length > 0 ? blockedTaskIds : undefined,
           status: asDraft ? 'draft' : 'pending',
         });
+        // C4 — hand the created decision to the host so it can link the flag.
+        if (created && onCreatedItem) onCreatedItem(created as CoordinationItem);
       }
 
       onCreated();

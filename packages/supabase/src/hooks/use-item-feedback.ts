@@ -24,6 +24,8 @@ export interface ItemFeedback {
   body: string | null;
   resolved_at: string | null;
   resolved_by: string | null;
+  // Set when the designer escalates this flag to a client Decision (Wave 3 · C4).
+  decision_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -51,7 +53,7 @@ export function useProposalFeedback(proposalId: string | undefined) {
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('item_feedback')
-        .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, verdict, body, resolved_at, resolved_by, created_at, updated_at, proposal_items!inner(proposal_id)')
+        .select('id, proposal_item_id, ffe_item_id, board_item_id, client_id, verdict, body, resolved_at, resolved_by, decision_id, created_at, updated_at, proposal_items!inner(proposal_id)')
         .eq('proposal_items.proposal_id', proposalId)
         .order('created_at', { ascending: true });
       if (error) throw error;

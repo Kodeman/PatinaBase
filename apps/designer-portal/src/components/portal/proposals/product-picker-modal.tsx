@@ -8,10 +8,13 @@ import {
   useLayerProducts,
   useLayerCounts,
   useCrossLayerSearch,
+  useCaptureFromUrl,
+  useCaptureProduct,
   type ProposalCapture,
   type LayerProductLayer,
   type LayerProductRow,
 } from '@patina/supabase';
+import { useAuth } from '@/hooks/use-auth';
 import { Button, FilterPill, IconButton, Input, Select } from '@/components/ui/controls';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -589,6 +592,102 @@ function capturePriceCents(c: ProposalCapture): number | null {
   return null;
 }
 
+/**
+ * Add-from-URL (A3, capture mode). Reads a pasted product page server-side
+ * behind the SSRF-guarded `capture-from-url` edge function, drops a personal
+ * draft via `captureProduct`, then picks it — mirroring the CapturesTab's own
+ * promote-then-pick flow. Inline error only (R83: no toast).
+ */
+function AddFromUrl({ onPick }: { onPick: (pick: TabPick) => void }) {
+  const { user } = useAuth();
+  const captureFromUrl = useCaptureFromUrl();
+  const captureProduct = useCaptureProduct();
+  const [url, setUrl] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const busy = captureFromUrl.isPending || captureProduct.isPending;
+
+  const handleAdd = async () => {
+    const trimmed = url.trim();
+    if (!trimmed || busy) return;
+    setError(null);
+    if (!user?.id) {
+      setError('Sign in to add a product from a URL.');
+      return;
+    }
+    try {
+      const extracted = await captureFromUrl.mutateAsync({ url: trimmed, mode: 'capture' });
+      const result = await captureProduct.mutateAsync({
+        name: extracted.name ?? undefined,
+        images: extracted.images ?? undefined,
+        sourceUrl: extracted.sourceUrl ?? trimmed,
+        priceRetailCents: extracted.priceRetailCents ?? undefined,
+        description: extracted.description ?? undefined,
+        detectedVendorName: extracted.brand ?? undefined,
+        ownerUserId: user.id,
+        captureSource: 'url_paste',
+      });
+      setUrl('');
+      onPick({
+        productId: result.productId,
+        name: extracted.name?.trim() || trimmed,
+        imageUrl: extracted.images?.[0] ?? null,
+        priceCents: extracted.priceRetailCents ?? null,
+        priceTradeCents: null, // URL captures carry no trade cost
+        vendorName: extracted.brand ?? null,
+        layer: 'personal',
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That URL could not be read.');
+    }
+  };
+
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-sm border border-dashed p-3"
+      style={{ borderColor: 'var(--border-default)' }}
+    >
+      <span className="type-meta">Add from URL</span>
+      <div className="flex gap-2">
+        <Input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void handleAdd();
+            }
+          }}
+          placeholder="https://… paste a product page"
+          disabled={busy}
+          data-testid="add-from-url-input"
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          type="button"
+          onClick={() => void handleAdd()}
+          disabled={busy || !url.trim()}
+          data-testid="add-from-url-submit"
+        >
+          {busy ? 'Reading…' : 'Add'}
+        </Button>
+      </div>
+      <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+        We read the page for name, image, and price, then drop a draft in your personal library.
+      </p>
+      {error && (
+        <div
+          role="alert"
+          className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+        >
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CapturesTab({ onPick }: { onPick: (pick: TabPick) => void }) {
   const { data: captures = [], isLoading, isError, error } = useProposalCaptures({
     status: 'inbox',
@@ -627,6 +726,8 @@ function CapturesTab({ onPick }: { onPick: (pick: TabPick) => void }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <AddFromUrl onPick={onPick} />
+
       {isLoading && (
         <div className="py-8 text-center type-body" style={messageStyle}>
           Loading captures…

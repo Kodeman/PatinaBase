@@ -1236,3 +1236,19 @@ export {
   useResolveFeedback,
 } from './use-item-feedback';
 export type { ItemFeedback, ItemFeedbackEvent, Verdict } from './use-item-feedback';
+
+// Schedule & Boards Wave 3 · Track A — Designer-Taught Intelligence (A1/C4/B6/A3)
+export {
+  useTaughtAlternatives,
+  useLogSuggestionEvent,
+  useSwapLineToProduct,
+  useEscalateFeedbackToDecision,
+} from './use-taught-alternatives';
+export type {
+  TaughtAlternative,
+  SuggestionContext,
+  SuggestionAction,
+  SuggestionEventInput,
+} from './use-taught-alternatives';
+export { useCaptureFromUrl } from './use-capture-from-url';
+export type { CaptureFromUrlResult } from './use-capture-from-url';

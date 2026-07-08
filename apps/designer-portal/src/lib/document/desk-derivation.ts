@@ -150,6 +150,10 @@ export interface NeedLine {
    *  Typed structurally to keep this module dependency-free (no command-bar
    *  import); folder-card maps it onto openLedger(). */
   ledger?: { name: string; context?: { page?: string; invoiceId?: string; projectId?: string } };
+  /** When set, the folder's act follows this href instead of /doc/[engagement_id].
+   *  The lines_flagged walk-in points at the Drafting Room (?flagged=1), where the
+   *  flagged line's Alternatives band lives. Typed structurally; folder-card maps it. */
+  deepLink?: string;
 }
 
 export interface DeskFolder {
@@ -430,6 +434,7 @@ export function deriveNeed(
             : `${n} lines flagged on ${flagged.docTitle}`,
         stamp: { label: 'FLAGGED', color: 'var(--color-clay)' },
         urgent: false,
+        deepLink: `/drafting/${flagged.proposalId}?flagged=1`,
       };
     }
     if (row.proposal_status === 'sent' && row.proposal_sent_at && !row.proposal_viewed_at) {

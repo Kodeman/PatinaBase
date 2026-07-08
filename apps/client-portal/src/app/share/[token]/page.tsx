@@ -70,8 +70,10 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       .from('proposals')
       .select(
         // Guest payload carries the client's NAME (letterhead) but never their
-        // email — this HTML reaches anyone holding the link.
-        '*, client:profiles!client_id(id,full_name), items:proposal_items(*, product:products(id,name,images,brand))',
+        // email — this HTML reaches anyone holding the link. Product join widened
+        // for A2 provenance (source host + record-completeness inputs); the count
+        // embed reads under the service client, so a guest carries the same mark.
+        '*, client:profiles!client_id(id,full_name), items:proposal_items(*, product:products(id,name,images,brand,source_url,dimensions,materials,price_retail,price_trade,product_styles(count)))',
       )
       .eq('id', proposalId)
       .single(),
