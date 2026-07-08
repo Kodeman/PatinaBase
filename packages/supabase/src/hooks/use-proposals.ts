@@ -48,6 +48,16 @@ export interface ProposalItem {
     name: string;
     images: string[] | null;
     brand: string | null;
+    // Provenance trust inputs (Schedule & Boards Wave 3 · A2). `source_url`
+    // drives the per-line source host; the rest + the teaching count feed
+    // recordCompletenessFill/Pct (mirrors the Piece Room + spec-pdf scoring).
+    source_url: string | null;
+    dimensions: unknown;
+    materials: string[] | null;
+    price_retail: number | null;
+    price_trade: number | null;
+    /** PostgREST aggregate embed: [{ count }] — ≥1 style ⇒ the record is "taught". */
+    product_styles?: { count: number }[];
   };
 }
 
@@ -158,7 +168,11 @@ export function useProposal(proposalId: string) {
           client:profiles!client_id(id, email, full_name),
           items:proposal_items(
             *,
-            product:products(id, name, images, brand)
+            product:products(
+              id, name, images, brand,
+              source_url, dimensions, materials, price_retail, price_trade,
+              product_styles(count)
+            )
           )
         `)
         .eq('id', proposalId)
