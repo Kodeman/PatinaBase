@@ -53,6 +53,14 @@ export interface Proposal {
   project_address: string | null;
   client_visibility_tier: 'full' | 'milestone' | 'curated' | null;
   total_amount: number;
+  // Payment terms (migration 00014). `select('*')` already returns these; the
+  // interface just hadn't caught up. NOTE: `deposit_percent` is deliberately
+  // NOT typed here — it defaults to 50.00 in the DB and no authoring UI ever
+  // sets it, so a non-null value doesn't mean a designer actually chose a
+  // deposit. `payment_terms` / `payment_notes` have no default (stay NULL
+  // until explicitly set), so their presence is a real signal.
+  payment_terms: string | null;
+  payment_notes: string | null;
   status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'revised';
   valid_until: string | null;
   sent_at: string | null;
