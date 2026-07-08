@@ -308,7 +308,7 @@ function PreferencesPageInner() {
 
         <Section
           title="Reminders"
-          description="How gentle nudges — proposal reminders and decision requests — reach you. Time-sensitive messages always arrive right away."
+          description="How gentle nudges — proposal reminders and decision requests — reach you. Invoice reminders and other time-sensitive messages always arrive right away, regardless of this setting."
         >
           <fieldset className="space-y-2">
             <legend className="sr-only">Reminder cadence</legend>

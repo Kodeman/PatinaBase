@@ -207,9 +207,10 @@ export default function NotificationsSettingsPage() {
               <option value="daily_digest">Daily summary</option>
             </select>
             <span className="block text-xs text-[#7A736C] mt-2">
-              “Daily summary” bundles non-urgent reminders into a single email
-              each day. Time-sensitive messages — a new proposal, an invoice —
-              always arrive right away.
+              “Daily summary” bundles non-urgent proposal and decision
+              reminders into a single email each day. A new proposal and
+              invoice reminders are time-sensitive and always arrive right
+              away, regardless of this setting.
             </span>
           </label>
         </Section>
