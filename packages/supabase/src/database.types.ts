@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
@@ -3155,6 +3135,7 @@ export type Database = {
           project_id: string | null
           proposal_id: string | null
           proposal_item_id: string | null
+          reverses_invoice_payment_id: string | null
           source_type: string
           status: string
         }
@@ -3176,6 +3157,7 @@ export type Database = {
           project_id?: string | null
           proposal_id?: string | null
           proposal_item_id?: string | null
+          reverses_invoice_payment_id?: string | null
           source_type: string
           status?: string
         }
@@ -3197,6 +3179,7 @@ export type Database = {
           project_id?: string | null
           proposal_id?: string | null
           proposal_item_id?: string | null
+          reverses_invoice_payment_id?: string | null
           source_type?: string
           status?: string
         }
@@ -3248,6 +3231,13 @@ export type Database = {
             columns: ["proposal_item_id"]
             isOneToOne: false
             referencedRelation: "proposal_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_earnings_reverses_invoice_payment_id_fkey"
+            columns: ["reverses_invoice_payment_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_payments"
             referencedColumns: ["id"]
           },
         ]
@@ -3680,6 +3670,107 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      direct_orders: {
+        Row: {
+          amount_cents: number
+          client_id: string
+          created_at: string
+          currency: string
+          id: string
+          paid_at: string | null
+          product_id: string
+          product_name: string
+          quantity: number
+          shipping: Json | null
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+          unit_price_cents: number
+        }
+        Insert: {
+          amount_cents: number
+          client_id: string
+          created_at?: string
+          currency?: string
+          id?: string
+          paid_at?: string | null
+          product_id: string
+          product_name: string
+          quantity: number
+          shipping?: Json | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          unit_price_cents: number
+        }
+        Update: {
+          amount_cents?: number
+          client_id?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          paid_at?: string | null
+          product_id?: string
+          product_name?: string
+          quantity?: number
+          shipping?: Json | null
+          status?: string
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          unit_price_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "direct_orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "direct_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "direct_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "direct_orders_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
       }
       dna_vocab: {
         Row: {
@@ -5054,6 +5145,7 @@ export type Database = {
           body: string | null
           client_id: string
           created_at: string
+          decision_id: string | null
           ffe_item_id: string | null
           id: string
           proposal_item_id: string | null
@@ -5067,6 +5159,7 @@ export type Database = {
           body?: string | null
           client_id?: string
           created_at?: string
+          decision_id?: string | null
           ffe_item_id?: string | null
           id?: string
           proposal_item_id?: string | null
@@ -5080,6 +5173,7 @@ export type Database = {
           body?: string | null
           client_id?: string
           created_at?: string
+          decision_id?: string | null
           ffe_item_id?: string | null
           id?: string
           proposal_item_id?: string | null
@@ -5095,6 +5189,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "proposal_board_items"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_feedback_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "client_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_feedback_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "task_blocked_state"
+            referencedColumns: ["blocking_item_id"]
           },
           {
             foreignKeyName: "item_feedback_ffe_item_id_fkey"
@@ -5684,10 +5792,10 @@ export type Database = {
           id: string
           last_digest_sent_at: string | null
           last_reminder_digest_sent_at: string | null
-          reminder_cadence: string
           quiet_hours_enabled: boolean
           quiet_hours_end: string | null
           quiet_hours_start: string | null
+          reminder_cadence: string
           timezone: string
           type_account_security: boolean
           type_back_in_stock: boolean
@@ -5721,10 +5829,10 @@ export type Database = {
           id?: string
           last_digest_sent_at?: string | null
           last_reminder_digest_sent_at?: string | null
-          reminder_cadence?: string
           quiet_hours_enabled?: boolean
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
+          reminder_cadence?: string
           timezone?: string
           type_account_security?: boolean
           type_back_in_stock?: boolean
@@ -5758,10 +5866,10 @@ export type Database = {
           id?: string
           last_digest_sent_at?: string | null
           last_reminder_digest_sent_at?: string | null
-          reminder_cadence?: string
           quiet_hours_enabled?: boolean
           quiet_hours_end?: string | null
           quiet_hours_start?: string | null
+          reminder_cadence?: string
           timezone?: string
           type_account_security?: boolean
           type_back_in_stock?: boolean
@@ -6403,6 +6511,8 @@ export type Database = {
           purchase_order_id: string
           sort_order: number
           state: Database["public"]["Enums"]["po_payment_state"]
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
           updated_at: string
         }
         Insert: {
@@ -6417,6 +6527,8 @@ export type Database = {
           purchase_order_id: string
           sort_order?: number
           state?: Database["public"]["Enums"]["po_payment_state"]
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -6431,6 +6543,8 @@ export type Database = {
           purchase_order_id?: string
           sort_order?: number
           state?: Database["public"]["Enums"]["po_payment_state"]
+          stripe_checkout_session_id?: string | null
+          stripe_payment_intent_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -8164,6 +8278,7 @@ export type Database = {
           budget_max_cents: number | null
           budget_min_cents: number | null
           created_at: string
+          custom_fields: Json
           doc_code: string | null
           eta: string | null
           ffe_category: string | null
@@ -8199,6 +8314,7 @@ export type Database = {
           budget_max_cents?: number | null
           budget_min_cents?: number | null
           created_at?: string
+          custom_fields?: Json
           doc_code?: string | null
           eta?: string | null
           ffe_category?: string | null
@@ -8234,6 +8350,7 @@ export type Database = {
           budget_max_cents?: number | null
           budget_min_cents?: number | null
           created_at?: string
+          custom_fields?: Json
           doc_code?: string | null
           eta?: string | null
           ffe_category?: string | null
@@ -9667,7 +9784,8 @@ export type Database = {
           created_at: string
           id: string
           name: string
-          proposal_id: string
+          project_id: string | null
+          proposal_id: string | null
           scope_room_id: string | null
           sections: Json
           sort_order: number
@@ -9682,7 +9800,8 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
-          proposal_id: string
+          project_id?: string | null
+          proposal_id?: string | null
           scope_room_id?: string | null
           sections?: Json
           sort_order?: number
@@ -9697,7 +9816,8 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
-          proposal_id?: string
+          project_id?: string | null
+          proposal_id?: string | null
           scope_room_id?: string | null
           sections?: Json
           sort_order?: number
@@ -9705,6 +9825,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "proposal_boards_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "proposal_boards_proposal_id_fkey"
             columns: ["proposal_id"]
@@ -9977,6 +10104,7 @@ export type Database = {
           budget_min_cents: number | null
           category: string | null
           created_at: string
+          custom_fields: Json
           description: string | null
           doc_code: string | null
           ffe_category: string | null
@@ -10006,6 +10134,7 @@ export type Database = {
           budget_min_cents?: number | null
           category?: string | null
           created_at?: string
+          custom_fields?: Json
           description?: string | null
           doc_code?: string | null
           ffe_category?: string | null
@@ -10035,6 +10164,7 @@ export type Database = {
           budget_min_cents?: number | null
           category?: string | null
           created_at?: string
+          custom_fields?: Json
           description?: string | null
           doc_code?: string | null
           ffe_category?: string | null
@@ -12233,6 +12363,57 @@ export type Database = {
           },
         ]
       }
+      spec_field_defs: {
+        Row: {
+          created_at: string
+          field_key: string
+          id: string
+          kind: string
+          name: string
+          project_id: string | null
+          proposal_id: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          field_key: string
+          id?: string
+          kind?: string
+          name: string
+          project_id?: string | null
+          proposal_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          field_key?: string
+          id?: string
+          kind?: string
+          name?: string
+          project_id?: string | null
+          proposal_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spec_field_defs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spec_field_defs_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spectrum_calibration_products: {
         Row: {
           created_at: string | null
@@ -12396,6 +12577,92 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "styles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      suggestion_events: {
+        Row: {
+          action: string
+          board_id: string | null
+          context: string
+          created_at: string
+          designer_id: string
+          feedback_id: string | null
+          id: string
+          product_id: string
+          rank: number | null
+        }
+        Insert: {
+          action: string
+          board_id?: string | null
+          context: string
+          created_at?: string
+          designer_id?: string
+          feedback_id?: string | null
+          id?: string
+          product_id: string
+          rank?: number | null
+        }
+        Update: {
+          action?: string
+          board_id?: string | null
+          context?: string
+          created_at?: string
+          designer_id?: string
+          feedback_id?: string | null
+          id?: string
+          product_id?: string
+          rank?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suggestion_events_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suggestion_events_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: false
+            referencedRelation: "item_feedback"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suggestion_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suggestion_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "suggestion_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "suggestion_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "suggestion_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
           },
         ]
       }
@@ -15373,6 +15640,35 @@ export type Database = {
         }
         Returns: string
       }
+      continue_board_in_project: {
+        Args: { p_project_board_id: string }
+        Returns: string
+      }
+      create_direct_order: {
+        Args: { p_product_id: string; p_quantity?: number }
+        Returns: {
+          amount_cents: number
+          client_id: string
+          created_at: string
+          currency: string
+          id: string
+          paid_at: string | null
+          product_id: string
+          product_name: string
+          quantity: number
+          shipping: Json | null
+          status: string
+          stripe_checkout_session_id: string | null
+          stripe_payment_intent_id: string | null
+          unit_price_cents: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "direct_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_document_share: {
         Args: {
           p_expires_at?: string
@@ -15443,6 +15739,29 @@ export type Database = {
         Args: { p_milestone_id: string }
         Returns: string
       }
+      escalate_item_feedback_to_decision: {
+        Args: { p_decision_id: string; p_feedback_id: string }
+        Returns: {
+          board_item_id: string | null
+          body: string | null
+          client_id: string
+          created_at: string
+          decision_id: string | null
+          ffe_item_id: string | null
+          id: string
+          proposal_item_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          updated_at: string
+          verdict: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "item_feedback"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       evaluate_collection_rules: {
         Args: { p_collection_id: string }
         Returns: Json
@@ -15487,6 +15806,22 @@ export type Database = {
           name: string
           price_retail: number
           similarity: number
+        }[]
+      }
+      find_taught_alternatives: {
+        Args: { p_match_count?: number; p_product_id: string }
+        Returns: {
+          brand: string
+          category: string
+          id: string
+          images: string[]
+          layer: string
+          materials: string[]
+          name: string
+          price_retail: number
+          similarity: number
+          source_url: string
+          style_tags: string[]
         }[]
       }
       flip_pending_balance_to_due: {
@@ -16006,6 +16341,7 @@ export type Database = {
           body: string | null
           client_id: string
           created_at: string
+          decision_id: string | null
           ffe_item_id: string | null
           id: string
           proposal_item_id: string | null
@@ -16135,6 +16471,7 @@ export type Database = {
           body: string | null
           client_id: string
           created_at: string
+          decision_id: string | null
           ffe_item_id: string | null
           id: string
           proposal_item_id: string | null
@@ -16509,6 +16846,50 @@ export type Database = {
         }
         Returns: Json
       }
+      swap_line_to_product: {
+        Args: {
+          p_feedback_id: string
+          p_product_id: string
+          p_proposal_item_id: string
+          p_rank?: number
+        }
+        Returns: {
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          category: string | null
+          created_at: string
+          custom_fields: Json
+          description: string | null
+          doc_code: string | null
+          ffe_category: string | null
+          id: string
+          image_url: string | null
+          internal_notes: string | null
+          item_type: string
+          lead_time_weeks: number | null
+          line_total_cents: number
+          markup_percent: number | null
+          name: string
+          notes: string | null
+          position: number
+          product_id: string | null
+          proposal_id: string
+          quantity: number
+          room: string | null
+          scope_room_id: string | null
+          unit_price: number
+          unit_sell_price: number
+          updated_at: string
+          vendor_id: string | null
+          vendor_name: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "proposal_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_my_biases: { Args: { p_overrides: Json }; Returns: Json }
       user_has_role: {
         Args: { p_role_name: string; p_user_id: string }
@@ -16648,13 +17029,16 @@ export type Database = {
         | "admin_team"
       ownership_type: "family" | "private" | "pe-backed" | "public"
       po_payment_kind: "deposit" | "balance" | "milestone"
-      po_payment_state: "pending" | "due" | "paid"
+      po_payment_state: "pending" | "due" | "paid" | "refunded"
       procurement_notification_kind:
         | "deposit_due"
         | "balance_due"
         | "milestone_due"
         | "delivery_this_week"
         | "damage_claim_drafted"
+        | "payment_received"
+        | "payment_failed"
+        | "payment_refunded"
       production_model: "stock" | "mto" | "custom" | "mixed"
       project_status: "active" | "completed" | "archived" | "on_hold" | "draft"
       purchase_order_payment_pattern:
@@ -16802,9 +17186,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       account_deletion_status: [
@@ -16895,13 +17276,16 @@ export const Constants = {
       ],
       ownership_type: ["family", "private", "pe-backed", "public"],
       po_payment_kind: ["deposit", "balance", "milestone"],
-      po_payment_state: ["pending", "due", "paid"],
+      po_payment_state: ["pending", "due", "paid", "refunded"],
       procurement_notification_kind: [
         "deposit_due",
         "balance_due",
         "milestone_due",
         "delivery_this_week",
         "damage_claim_drafted",
+        "payment_received",
+        "payment_failed",
+        "payment_refunded",
       ],
       production_model: ["stock", "mto", "custom", "mixed"],
       project_status: ["active", "completed", "archived", "on_hold", "draft"],
@@ -16930,4 +17314,3 @@ export const Constants = {
     },
   },
 } as const
-
