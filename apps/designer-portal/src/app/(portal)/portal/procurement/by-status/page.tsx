@@ -522,7 +522,9 @@ function StageSection({
   // (sum of due or pending). Phase 4 — designer pays catalog POs at order
   // time too, so their po_payments rows are real money and belong in this
   // rollup same as any other PO; no more excluding is_patina_catalog.
-  // Multiple items can share one PO, so dedupe by PO id to avoid
+  // Refunded rows (00277) are excluded entirely: the money is neither
+  // held (paid) nor coming due, so counting them anywhere inflates the
+  // header. Multiple items can share one PO, so dedupe by PO id to avoid
   // double-counting payments.
   const { paidCents, dueComingCents } = useMemo(() => {
     let paid = 0;
@@ -534,7 +536,8 @@ function StageSection({
       seenPoIds.add(po.id);
       for (const p of po.payments ?? []) {
         if (p.state === 'paid') paid += p.amount_cents;
-        else due += p.amount_cents; // pending + due
+        else if (p.state === 'pending' || p.state === 'due') due += p.amount_cents;
+        // 'refunded' — intentionally not counted in either column.
       }
     }
     return { paidCents: paid, dueComingCents: due };
