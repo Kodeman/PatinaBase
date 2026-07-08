@@ -36,6 +36,35 @@ async function mintShare(visibility: Record<string, boolean>) {
   return { token, id: data!.id as string };
 }
 
+const BOARD_NAME = 'Guest Board (e2e)';
+const BOARD_PIN_NAME = 'Guest Board Sofa';
+
+// Seed an ACTIVE board + one product pin on the proposal, so a guest share with
+// itemDetails on renders it (B3). Returns a cleanup that removes them.
+async function seedBoard() {
+  const { data: board, error: boardErr } = await admin
+    .from('proposal_boards')
+    .insert({ proposal_id: PROPOSAL_ID, name: BOARD_NAME, status: 'active', sort_order: 999 })
+    .select('id')
+    .single();
+  if (boardErr) throw boardErr;
+  const boardId = board!.id as string;
+  const { error: itemErr } = await admin.from('proposal_board_items').insert({
+    board_id: boardId,
+    type: 'product',
+    x: 40,
+    y: 40,
+    width: 220,
+    height: 260,
+    z_index: 0,
+    data: { name: BOARD_PIN_NAME, price_cents: 250000 },
+  });
+  if (itemErr) throw itemErr;
+  return async () => {
+    await admin.from('proposal_boards').delete().eq('id', boardId); // items cascade
+  };
+}
+
 test.describe('guest share link (C2)', () => {
   test('renders the doc under the visibility matrix, then dies on revoke', async ({ page }) => {
     const { token, id } = await mintShare({
@@ -78,5 +107,35 @@ test.describe('guest share link (C2)', () => {
   test('a garbage token is a calm dead link', async ({ page }) => {
     await page.goto('/share/deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef');
     await expect(page.getByText(/isn.t available/i)).toBeVisible({ timeout: 20000 });
+  });
+
+  // B3 — a share WITH a board renders it read-only for a guest, and carries NO
+  // verdict affordances (feedback is forced off on a guest share).
+  test('a share with a board renders it view-only for a guest (B3)', async ({ page }) => {
+    const cleanup = await seedBoard();
+    try {
+      const { token } = await mintShare({
+        pricing: true,
+        roomBudgets: false,
+        paymentSchedule: true,
+        supplierIdentity: false,
+        sourceUrls: false,
+        itemDetails: true, // the gate that lets boards through
+        leadTimes: true,
+        feedbackEnabled: false,
+      });
+
+      await page.goto(`/share/${token}`);
+      await expect(page.getByRole('heading', { name: PROPOSAL_TITLE })).toBeVisible({ timeout: 20000 });
+      // The board section + its pin render (name shows on the pin + featured list).
+      await expect(page.getByText(BOARD_NAME).first()).toBeVisible();
+      await expect(page.getByText(BOARD_PIN_NAME).first()).toBeVisible();
+      // Guest: pins carry NO verdict affordances.
+      await expect(page.getByRole('button', { name: /Approve/i })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Flag/i })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Note/i })).toHaveCount(0);
+    } finally {
+      await cleanup();
+    }
   });
 });

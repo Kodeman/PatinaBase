@@ -18,6 +18,7 @@ import {
   TimelinePhasesBlock,
   ExclusionsBlock,
   ScopeRoomsBlock,
+  type BoardsBlockBoard,
 } from '@patina/design-system';
 import {
   shareVisibilityForTier,
@@ -42,6 +43,13 @@ interface ProposalDocumentProps {
   exclusions?: ProposalExclusion[];
   scopeRooms?: ProposalScopeRoom[];
   boards?: ProposalBoardSummary[];
+  /**
+   * Fully-materialized boards for a GUEST render (B3): the guest has no session,
+   * so the client-side useBoardsWithItems wrapper RLS-fetches zero rows — the
+   * share route resolves boards server-side and passes them here instead. When
+   * present, the board wrapper renders these directly and skips its own fetch.
+   */
+  resolvedBoards?: BoardsBlockBoard[];
   /**
    * A per-field visibility override. Passed by a guest share render (C2) with
    * the share's ShareVisibility record. When absent, visibility is derived from
@@ -83,6 +91,7 @@ export function ProposalDocument({
   exclusions = [],
   scopeRooms = [],
   boards = [],
+  resolvedBoards,
   visibility,
   feedbackEnabled = false,
   sharedByStudio,
@@ -237,6 +246,18 @@ export function ProposalDocument({
         ? selectionsIndex - 1
         : sections.length - 1;
 
+  // One board section, positioned by boardsAfterIndex. `resolvedBoards` (guest)
+  // renders directly; otherwise the wrapper fetches by proposalId under RLS.
+  // feedbackEnabled threads the per-pin verdict acts (B4) — never on a guest.
+  const boardsBlock = (
+    <BoardsBlock
+      boards={boards}
+      resolved={resolvedBoards}
+      proposalId={proposal.id}
+      feedbackEnabled={feedbackEnabled}
+    />
+  );
+
   return (
     <article
       className="proposal-print-area mx-auto rounded-lg bg-white shadow-sm"
@@ -292,7 +313,7 @@ export function ProposalDocument({
         </div>
       </header>
 
-      {boardsAfterIndex < 0 && <BoardsBlock boards={boards} />}
+      {boardsAfterIndex < 0 && boardsBlock}
 
       {sections.map((section, index) => (
         <Fragment key={section.id}>
@@ -413,7 +434,7 @@ export function ProposalDocument({
             )}
           </section>
         </div>
-        {index === boardsAfterIndex && <BoardsBlock boards={boards} />}
+        {index === boardsAfterIndex && boardsBlock}
         </Fragment>
       ))}
 
