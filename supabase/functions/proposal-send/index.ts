@@ -57,7 +57,7 @@ function formatCurrency(amount: number): string {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(amount / 100); // amount is in cents (proposals.total_amount)
 }
 
 function formatDate(iso: string): string {
