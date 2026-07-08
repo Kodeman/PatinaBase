@@ -278,6 +278,7 @@ export {
   useReassignCoordinationItem,
   useSubmitCoordinationRevision,
   useCoordinationRealtime,
+  useAddProjectParty,
 } from './use-coordination';
 export type {
   Court,
@@ -288,12 +289,37 @@ export type {
   CoordinationItemRevision,
   CoordinationThreadPost,
   ProjectParty,
+  PartyKind,
   CourtCount,
   CreateCoordinationItemInput,
   UpdateCoordinationItemInput,
   ResolveCoordinationItemInput,
+  AddProjectPartyInput,
 } from './use-coordination';
-export { usePeopleDirectory, usePerson, peopleKeys } from './use-people';
+// Field Coordination (Wave 5) — SMS triage, cross-project field rollup, and the
+// per-party thread / composer / field-link data layer.
+export { useSmsReviewQueue, useReviewSmsMessage, smsReviewKeys } from './use-sms-review';
+export type { SmsReviewMessage, FieldParsedIntent, ReviewSmsInput } from './use-sms-review';
+export { useFieldActivity, fieldActivityKeys } from './use-field-activity';
+export type { FieldActivityRow } from './use-field-activity';
+export {
+  usePartySmsThread,
+  useSendPartySms,
+  useActiveFieldLink,
+  useCreateFieldLink,
+  useRevokeFieldLink,
+  useFieldMediaUrl,
+  fieldLinkUrl,
+  partySmsKeys,
+} from './use-party-sms';
+export type { PartySmsMessage, FieldLinkToken } from './use-party-sms';
+export {
+  usePeopleDirectory,
+  usePerson,
+  peopleKeys,
+  FIELD_ROSTER_ROLES,
+  isFieldRosterRole,
+} from './use-people';
 export type { PartyRole, PeopleDirectoryRow, PeopleFilters } from './use-people';
 export {
   // Client Reviews
@@ -733,6 +759,7 @@ export {
   useProjectPhases,
   useCreateProjectPhase,
   useUpdateProjectPhaseStatus,
+  useUpdateProjectPhaseDates,
   useProjectPaymentMilestones,
   useUpdatePaymentMilestoneStatus,
   useProjectFinancials,

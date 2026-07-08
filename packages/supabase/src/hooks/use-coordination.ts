@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { createBrowserClient } from '../client';
 import type { ClientDecisionOption, DecisionType } from './use-decisions';
+import { peopleKeys } from './use-people';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Track 5 — Project Coordination data layer (the ball-in-court).
@@ -25,20 +26,48 @@ const getSupabase = () => createBrowserClient();
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type Court = 'designer' | 'client' | 'gc' | 'vendor';
+// The ball-in-court axis (00213 court CHECK, widened by 00281 with the field
+// kinds so a task/item can sit in a sub/installer/receiver court). Field-kind
+// labels/colors live in @patina/types field-config + coordination/party.ts.
+export type Court =
+  | 'designer'
+  | 'client'
+  | 'gc'
+  | 'vendor'
+  | 'sub'
+  | 'installer'
+  | 'receiver';
 export type CoordinationKind = 'selection' | 'rfi' | 'submittal' | 'signoff' | 'punch';
 export type BlocksKind = 'none' | 'ffe' | 'task' | 'phase';
 export type CoordinationStatus = 'draft' | 'pending' | 'responded' | 'expired';
 
-/** A project_parties row (00212) the court / owner can point at. */
+/** The project_parties.party_kind vocab (00212 + 00281 field kinds). */
+export type PartyKind =
+  | 'gc'
+  | 'vendor'
+  | 'client_rep'
+  | 'other'
+  | 'sub'
+  | 'installer'
+  | 'receiver';
+
+/** A project_parties row (00212/00281) the court / owner can point at. */
 export interface ProjectParty {
   id: string;
   project_id: string;
-  party_kind: 'gc' | 'vendor' | 'client_rep' | 'other';
+  party_kind: PartyKind;
   display_name: string;
   company_name: string | null;
   email: string | null;
   phone: string | null;
+  /** E.164-normalized phone (00281, derived by trigger from `phone`). */
+  phone_e164: string | null;
+  /** The party's trade — free TEXT, vocab in @patina/types field-config (00281). */
+  trade: string | null;
+  /** TCPA consent state (00281): not_asked | pending | granted | opted_out. */
+  sms_consent_status: 'not_asked' | 'pending' | 'granted' | 'opted_out';
+  sms_consented_at: string | null;
+  sms_opt_out_at: string | null;
   vendor_id: string | null;
   profile_id: string | null;
   created_at: string;
@@ -265,7 +294,15 @@ export function useCourtSummary(projectId: string | null | undefined) {
   });
 }
 
-const COURT_ORDER: Court[] = ['designer', 'client', 'gc', 'vendor'];
+const COURT_ORDER: Court[] = [
+  'designer',
+  'client',
+  'gc',
+  'vendor',
+  'sub',
+  'installer',
+  'receiver',
+];
 
 /** Per-court open/overdue/next-due rollup over the items list (the select body). */
 function summarizeCourts(items: CoordinationItem[], now: Date = new Date()): CourtCount[] {
@@ -309,6 +346,58 @@ export function useProjectParties(projectId: string | null | undefined) {
         .order('created_at', { ascending: true });
       if (error) throw error;
       return (data ?? []) as ProjectParty[];
+    },
+  });
+}
+
+export interface AddProjectPartyInput {
+  projectId: string;
+  partyKind: PartyKind;
+  displayName: string;
+  companyName?: string | null;
+  trade?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  /** Whether to text this party updates. true → sms_consent_status 'pending',
+   *  which fires the opt-in invite server-side (Track B DB trigger); false →
+   *  'not_asked'. The UI only writes the row; it never sends the invite. */
+  textUpdates?: boolean;
+}
+
+/**
+ * Add a field party (gc / sub / installer / receiver) to a project. Inserts a
+ * project_parties row; the 00281 trigger normalizes phone_e164, and — per the
+ * Track B contract — a row written with a phone + sms_consent_status='pending'
+ * fires the opt-in SMS invite server-side. The UI writes the row only.
+ */
+export function useAddProjectParty() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AddProjectPartyInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const wantsText = input.textUpdates && !!input.phone?.trim();
+      const { data, error } = await supabase
+        .from('project_parties')
+        .insert({
+          project_id: input.projectId,
+          party_kind: input.partyKind,
+          display_name: input.displayName,
+          company_name: input.companyName?.trim() || null,
+          trade: input.trade?.trim() || null,
+          phone: input.phone?.trim() || null,
+          email: input.email?.trim() || null,
+          sms_consent_status: wantsText ? 'pending' : 'not_asked',
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as ProjectParty;
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['project-parties', data.project_id] });
+      // The party joins the People Room roster (people_directory, 00281).
+      void queryClient.invalidateQueries({ queryKey: peopleKeys.all });
     },
   });
 }
