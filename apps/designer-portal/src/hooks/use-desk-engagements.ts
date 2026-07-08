@@ -58,6 +58,27 @@ function flattenFlaggedRows(rows: any): FlaggedLineRow[] {
     .filter((r) => !!r.proposalId);
 }
 
+/** B4: the board-pin equivalent — item_feedback→proposal_board_items→
+ *  proposal_boards→proposals. Folds into the SAME FlaggedLineRow shape, so a
+ *  board flag and a line flag on one proposal sum into one Desk folder. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function flattenBoardFlaggedRows(rows: any): FlaggedLineRow[] {
+  if (!Array.isArray(rows)) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const one = (v: any) => (Array.isArray(v) ? v[0] : v);
+  return rows
+    .map((r) => {
+      const pbi = one(r?.proposal_board_items);
+      const pb = one(pbi?.proposal_boards);
+      const proposal = one(pb?.proposals);
+      return {
+        proposalId: pb?.proposal_id as string,
+        proposalTitle: (proposal?.title ?? null) as string | null,
+      };
+    })
+    .filter((r) => !!r.proposalId);
+}
+
 export function useDeskEngagements() {
   return useQuery<DeskData>({
     queryKey: ['document-state', 'desk'],
@@ -73,6 +94,7 @@ export function useDeskEngagements() {
         { data: events, error: eventsError },
         { data: invoices, error: invoicesError },
         { data: flaggedFeedback, error: flaggedError },
+        { data: boardFlagged, error: boardFlaggedError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -97,6 +119,15 @@ export function useDeskEngagements() {
           .select('proposal_items!inner(proposal_id, proposals!inner(title))')
           .eq('verdict', 'rejected')
           .is('resolved_at', null),
+        // B4: unresolved board-PIN rejections → the same "N lines flagged" need.
+        // proposal_board_items → proposal_boards → proposals(title). Project-owned
+        // boards (proposal_id NULL) never carry verdicts, so the inner join to
+        // proposals scopes this to proposal-stage boards automatically.
+        supabase
+          .from('item_feedback')
+          .select('proposal_board_items!inner(proposal_boards!inner(proposal_id, proposals!inner(title)))')
+          .eq('verdict', 'rejected')
+          .is('resolved_at', null),
       ]);
       if (error) throw error;
       const now = new Date();
@@ -105,9 +136,15 @@ export function useDeskEngagements() {
       const receivables = invoicesError
         ? undefined
         : buildDeskReceivables((invoices ?? []) as Invoice[], now);
-      const flaggedLines = flaggedError
-        ? undefined
-        : buildDeskFlaggedLines(flattenFlaggedRows(flaggedFeedback));
+      // Line flags + board-pin flags fold together by proposal_id (one folder,
+      // summed count). Each source degrades to [] on its own error.
+      const flaggedLines =
+        flaggedError && boardFlaggedError
+          ? undefined
+          : buildDeskFlaggedLines([
+              ...(flaggedError ? [] : flattenFlaggedRows(flaggedFeedback)),
+              ...(boardFlaggedError ? [] : flattenBoardFlaggedRows(boardFlagged)),
+            ]);
       return partitionDesk(
         (data ?? []) as DocumentStateRow[],
         now,

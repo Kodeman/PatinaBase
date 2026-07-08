@@ -23,10 +23,12 @@ export interface SpecPdfVisibility {
 }
 
 export interface SpecPdfRequest {
-  kind: 'item' | 'document';
+  kind: 'item' | 'document' | 'board';
   proposalId?: string;
   projectId?: string;
   itemId?: string;
+  /** Required for kind 'board' — a section-grouped tile grid of one board (B3). */
+  boardId?: string;
   visibility?: SpecPdfVisibility;
 }
 

@@ -67,4 +67,15 @@ describe('buildDeskFlaggedLines', () => {
     expect(map.size).toBe(1);
     expect(map.get('pr1')?.count).toBe(1);
   });
+
+  it('folds board-pin flags into the SAME proposal folder as line flags (B4)', () => {
+    // use-desk-engagements concats line rows + board-pin rows into one array;
+    // both resolve to {proposalId, proposalTitle}, so a board flag and a line
+    // flag on one proposal sum into a single lines_flagged folder.
+    const lineFlags = [row({}), row({})]; // 2 schedule-line flags on pr1
+    const boardFlags = [row({}), row({})]; // 2 board-pin flags on pr1
+    const map = buildDeskFlaggedLines([...lineFlags, ...boardFlags]);
+    expect(map.size).toBe(1);
+    expect(map.get('pr1')?.count).toBe(4);
+  });
 });
