@@ -95,6 +95,25 @@ export interface OrderAssistantProps {
    * refreshes its list. Optional; the By Vendor view does not use it.
    */
   onCreated?: () => void;
+  /**
+   * Number of PendingOrder entries remaining in the caller's queue,
+   * INCLUDING this one ("Order all N" / FF&E bulk "Generate POs" enqueue
+   * one entry per vendor-or-project). Undefined/1 means this is the only
+   * order in the session.
+   *
+   * Item 11 fix: the catalog one-click path used to `window.location.href`
+   * straight to Stripe Checkout the moment ANY catalog PO in the queue was
+   * created — navigating the whole tab away mid-queue silently abandoned
+   * every PendingOrder still behind it (their component state was never
+   * lost so much as never reached). When `queueLength > 1`, the catalog
+   * submit creates the PO and resolves its po_payment as before but does
+   * NOT redirect — it stays on the created panel with a manual "Pay now"
+   * button, so `onOpenChange(false)` (Done) always advances the caller's
+   * queue instead of leaving the app. Once the queue is down to its last
+   * entry, `queueLength` is 1 (or omitted) and today's immediate redirect
+   * applies again — nothing is left behind to abandon.
+   */
+  queueLength?: number;
 }
 
 // ─── Step machine ──────────────────────────────────────────────────────────

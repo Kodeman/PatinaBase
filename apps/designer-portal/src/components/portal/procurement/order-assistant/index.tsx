@@ -90,7 +90,11 @@ export type {
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export function OrderAssistant(props: OrderAssistantProps) {
-  const { open, onOpenChange, vendor, project, ffeItems, scopeDisclaimer, onCreated } = props;
+  const { open, onOpenChange, vendor, project, ffeItems, scopeDisclaimer, onCreated, queueLength } =
+    props;
+  // Item 11 — more than one PendingOrder still queued behind this one. See
+  // the queueLength doc in types.ts for why this changes the catalog path.
+  const isQueued = (queueLength ?? 1) > 1;
 
   // Vendor TRADE total — Σ COALESCE(trade, unit) × qty (00186), matching the
   // server-computed `purchase_orders.total_cents`. Drives the header display,
@@ -261,8 +265,20 @@ export function OrderAssistant(props: OrderAssistantProps) {
   // recoverable, inline message shown on the created panel.
   const [catalogCheckoutError, setCatalogCheckoutError] = useState<string | null>(null);
 
+  // Item 11 — multi-order queue. Set on the created panel instead of
+  // auto-redirecting when `isQueued` is true at submit time: the resolved
+  // po_payment id backing a manual "Pay now" button, plus its own pending/
+  // error state (kept separate from `isRedirecting`/`catalogCheckoutError`,
+  // which describe the auto-redirect path).
+  const [deferredPoPaymentId, setDeferredPoPaymentId] = useState<string | null>(null);
+  const [payNowPending, setPayNowPending] = useState(false);
+  const [payNowError, setPayNowError] = useState<string | null>(null);
+
   // "Busy" = the create mutation is in flight OR we're mid Stripe redirect.
   // Both must block close/back/skip and keep the primary control disabled.
+  // The deferred manual "Pay now" click (payNowPending) is NOT busy in this
+  // sense — the PO already exists and the queue must stay closeable while
+  // that request is in flight.
   const isBusy = createPO.isPending || isRedirecting;
 
   // ─── One-click Patina order (S3.10 → Phase 4 pay-at-order) ──────────────
@@ -273,6 +289,8 @@ export function OrderAssistant(props: OrderAssistantProps) {
   const handleCatalogSubmit = async () => {
     setSubmitError(null);
     setCatalogCheckoutError(null);
+    setDeferredPoPaymentId(null);
+    setPayNowError(null);
     if (hasBlockedItems) {
       procurementEvents.orderBlocked({
         blocked_item_count: blockedItems.length,
@@ -321,8 +339,36 @@ export function OrderAssistant(props: OrderAssistantProps) {
       project_id: project.id,
     });
     // The PO now exists — from here it is NEVER rolled back. Notify the caller
-    // (advances its queue / refreshes lists), then hand off to Stripe Checkout.
+    // (advances its queue / refreshes lists) first either way.
     onCreated?.();
+
+    // Item 11 — more than one PendingOrder is still queued behind this one.
+    // Auto-redirecting here would navigate the whole tab to Stripe and
+    // silently abandon every entry still behind it in the caller's queue.
+    // Create the PO (already done above) and resolve its po_payment so the
+    // created panel can offer a manual "Pay now" instead — Done still
+    // advances the queue normally.
+    if (isQueued) {
+      toast(
+        `Order placed via Patina — pay from the panel below, or later from By Vendor.`,
+        'success',
+      );
+      try {
+        const payments = await fetchPOPayments(po.id);
+        setDeferredPoPaymentId(payments[0]?.id ?? null);
+      } catch {
+        // Resolution failure just means the created panel won't offer the
+        // inline "Pay now" button — the persistent one on By Vendor still
+        // picks up the unpaid po_payment once caches refresh, so this is
+        // never fatal to the order.
+        setDeferredPoPaymentId(null);
+      }
+      setCreatedPo(po);
+      goToStep('created');
+      return;
+    }
+
+    // Single order — unchanged: hand off to Stripe Checkout immediately.
     toast(
       `Order placed via Patina — redirecting you to payment…`,
       'success',
@@ -350,6 +396,21 @@ export function OrderAssistant(props: OrderAssistantProps) {
       );
       setCreatedPo(po);
       goToStep('created');
+    }
+  };
+
+  // ─── Manual "Pay now" from the created panel (Item 11 deferred path) ────
+  const handleDeferredPayNow = async () => {
+    if (!deferredPoPaymentId || payNowPending) return;
+    setPayNowError(null);
+    setPayNowPending(true);
+    try {
+      const { url } = await startCheckout.mutateAsync({ poPaymentId: deferredPoPaymentId });
+      window.location.href = url;
+      // Navigating away — no further state updates past this point.
+    } catch (err) {
+      setPayNowPending(false);
+      setPayNowError(err instanceof Error ? err.message : "Payment couldn't be started.");
     }
   };
 
@@ -386,6 +447,11 @@ export function OrderAssistant(props: OrderAssistantProps) {
     setCopyState('idle');
     setIsRedirecting(false);
     setCatalogCheckoutError(null);
+    // Item 11 — deferred manual "Pay now" state must not leak from one
+    // queue entry's created panel into the next entry's review step.
+    setDeferredPoPaymentId(null);
+    setPayNowPending(false);
+    setPayNowError(null);
     // Soft-gate + sidemark session state (W3-T3b). The sidemark VALUE is not
     // cleared here — the prefill effect above owns it and re-generates as
     // soon as the edited flag drops (clearing it here would clobber the
@@ -719,6 +785,15 @@ export function OrderAssistant(props: OrderAssistantProps) {
                   itemCount={ffeItems.length}
                   isCatalog={isCatalog}
                   checkoutError={catalogCheckoutError}
+                  deferredPayNow={
+                    deferredPoPaymentId
+                      ? {
+                          pending: payNowPending,
+                          error: payNowError,
+                          onPayNow: () => void handleDeferredPayNow(),
+                        }
+                      : null
+                  }
                 />
               )}
 
@@ -819,6 +894,7 @@ function CreatedConfirmation({
   itemCount,
   isCatalog,
   checkoutError,
+  deferredPayNow,
 }: {
   po: PurchaseOrder;
   vendor: OrderAssistantVendor;
@@ -830,6 +906,20 @@ function CreatedConfirmation({
    * honest, recoverable message directing the designer to "Pay now".
    */
   checkoutError?: string | null;
+  /**
+   * Item 11 — set only on the catalog path when this order was created as
+   * part of a multi-order queue (`queueLength > 1`). The PO was NOT
+   * auto-redirected to Stripe (that would abandon the rest of the queue),
+   * so this renders a manual "Pay now" button instead — reusing the same
+   * useStartPoCheckout mutation and resolved po_payment id, just deferred
+   * to an explicit click. `null`/`undefined` means the single-order
+   * auto-redirect path applies and no manual button is shown.
+   */
+  deferredPayNow?: {
+    pending: boolean;
+    error: string | null;
+    onPayNow: () => void;
+  } | null;
 }) {
   return (
     <>
@@ -859,9 +949,33 @@ function CreatedConfirmation({
           {isCatalog
             ? checkoutError
               ? `Order placed, but payment wasn’t completed — ${checkoutError} You can pay Patina any time from Procurement → By Vendor using “Pay now” on this order.`
-              : 'Order placed — finish paying Patina from Procurement → By Vendor using “Pay now” on this order.'
+              : deferredPayNow
+                ? 'Order placed — each payment opens Stripe, so pay them one at a time. Pay now below, or any time from Procurement → By Vendor.'
+                : 'Order placed — finish paying Patina from Procurement → By Vendor using “Pay now” on this order.'
             : 'Track payments and vendor acknowledgment from Procurement → By Vendor.'}
         </p>
+        {deferredPayNow && (
+          <div className="mt-3">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={deferredPayNow.onPayNow}
+              disabled={deferredPayNow.pending}
+              loading={deferredPayNow.pending}
+            >
+              Pay now · {formatDollars(po.total_cents)}
+            </Button>
+            {deferredPayNow.error && (
+              <p
+                className="mt-2 text-[0.7rem]"
+                style={{ color: 'var(--color-terracotta,#D4A090)' }}
+                role="alert"
+              >
+                {deferredPayNow.error}
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       {!isCatalog && (

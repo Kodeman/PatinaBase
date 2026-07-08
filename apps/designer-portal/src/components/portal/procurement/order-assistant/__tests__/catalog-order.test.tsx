@@ -209,6 +209,71 @@ describe('OrderAssistant — catalog order (Phase 4 pay-at-order)', () => {
     expect(hrefSet).toBeNull();
   });
 
+  // ─── Item 11 — multi-order queue must not be abandoned by the redirect ──
+  it('multi-queue (queueLength > 1): creates the PO, resolves its payment, but does NOT redirect — renders a manual Pay-now button instead', async () => {
+    createMutateAsync.mockResolvedValue({ id: 'po-1', total_cents: 5000 });
+    fetchPOPaymentsMock.mockResolvedValue([{ id: 'pp-1', amount_cents: 5000, state: 'pending' }]);
+    // startCheckout must NOT be reached on this path — leave it unmocked so
+    // any call would surface as a hard failure.
+
+    renderAssistant({ queueLength: 2 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' })); // review → coverage
+    fireEvent.click(screen.getByRole('button', { name: /one-click order via patina/i }));
+
+    // The PO is still created and its po_payment still resolved (the "pay
+    // buttons" need it) — only the redirect itself is skipped.
+    await waitFor(() => expect(fetchPOPaymentsMock).toHaveBeenCalledWith('po-1'));
+    expect(createMutateAsync).toHaveBeenCalledTimes(1);
+    expect(createMutateAsync.mock.calls[0][0]).toMatchObject({
+      paymentPattern: 'full_upfront',
+      isPatinaCatalog: true,
+    });
+
+    // No redirect happened, and the manual "Pay now" button is on screen —
+    // the created panel, not a blown-away tab.
+    expect(hrefSet).toBeNull();
+    expect(startCheckoutMutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByText(/Purchase order created/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /pay now/i }),
+    ).toBeInTheDocument();
+    // Honest copy — no lying about how payment gets finished.
+    expect(screen.getByText(/pay them one at a time/i)).toBeInTheDocument();
+  });
+
+  it('multi-queue: clicking the manual Pay-now button starts checkout and redirects (deferred, not automatic)', async () => {
+    createMutateAsync.mockResolvedValue({ id: 'po-1', total_cents: 5000 });
+    fetchPOPaymentsMock.mockResolvedValue([{ id: 'pp-1', amount_cents: 5000, state: 'pending' }]);
+    startCheckoutMutateAsync.mockResolvedValue({ url: 'https://stripe.test/session/deferred' });
+
+    renderAssistant({ queueLength: 3 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: /one-click order via patina/i }));
+
+    const payNowButton = await screen.findByRole('button', { name: /pay now/i });
+    expect(hrefSet).toBeNull(); // confirms no auto-redirect happened before the click
+
+    fireEvent.click(payNowButton);
+
+    await waitFor(() => expect(hrefSet).toBe('https://stripe.test/session/deferred'));
+    expect(startCheckoutMutateAsync).toHaveBeenCalledWith({ poPaymentId: 'pp-1' });
+  });
+
+  it('queueLength: 1 is equivalent to omitting it — still redirects immediately (single-entry queue keeps today\'s behavior)', async () => {
+    createMutateAsync.mockResolvedValue({ id: 'po-1', total_cents: 5000 });
+    fetchPOPaymentsMock.mockResolvedValue([{ id: 'pp-1', amount_cents: 5000, state: 'pending' }]);
+    startCheckoutMutateAsync.mockResolvedValue({ url: 'https://stripe.test/session/single' });
+
+    renderAssistant({ queueLength: 1 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: /one-click order via patina/i }));
+
+    await waitFor(() => expect(hrefSet).toBe('https://stripe.test/session/single'));
+  });
+
   it('non-catalog path is unchanged: no checkout is started', async () => {
     createMutateAsync.mockResolvedValue({ id: 'po-2', total_cents: 5000 });
 

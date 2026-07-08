@@ -1011,6 +1011,11 @@ export default function FFEPipelinePage({ params }: { params: Promise<{ id: stri
               ? `${poQueue.length} vendor orders queued — you'll confirm each in turn.`
               : undefined
           }
+          // Item 11 — more than one PendingOrder still queued behind this
+          // one (bulk "Generate POs"). The catalog one-click path must not
+          // auto-redirect to Stripe while poQueue still has entries after
+          // this one — that would navigate the tab away and abandon them.
+          queueLength={poQueue.length}
         />
       )}
     </div>
