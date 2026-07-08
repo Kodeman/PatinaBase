@@ -42,6 +42,7 @@ import { MarginRail } from '@/components/document/margin-rail';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountBand } from '@/components/document/account-band';
+import { PhaseTimeline } from '@/components/document/phase-timeline';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
@@ -433,6 +434,15 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             Project section. Studio eyes only; never mirrored. */}
         {row.engagement_kind === 'project' && row.project_id && (
           <AccountBand projectId={row.project_id} clientName={row.client_name} />
+        )}
+
+        {/* Field Coordination (light-PM slice): the phase schedule as a
+            horizontal band — status-tinted segments, a today line, popover date
+            editing. Project-wide (shows across project/install/care stages),
+            mounted with the AccountBand at the top of the project document so it
+            reads as a project overview above the section work. */}
+        {row.engagement_kind === 'project' && row.project_id && (
+          <PhaseTimeline projectId={row.project_id} />
         )}
 
         {/* The active section — exactly one (§4). */}

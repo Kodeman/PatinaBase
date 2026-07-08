@@ -15,7 +15,34 @@ const getSupabase = () => createBrowserClient();
 // (lib/document/people-derivation.ts), never stored.
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type PartyRole = 'client' | 'maker' | 'gc' | 'team' | 'lead';
+// The People Room roster discriminator. The field kinds (gc / sub / installer /
+// receiver) arrive from the people_directory party branch (00281) with `role`
+// set to the concrete party_kind; their canonical vocab/labels live in
+// @patina/types field-config. `gc` predates Field Coordination (00221).
+export type PartyRole =
+  | 'client'
+  | 'maker'
+  | 'gc'
+  | 'team'
+  | 'lead'
+  | 'sub'
+  | 'installer'
+  | 'receiver';
+
+/** The field-coordination roster kinds (gc + the sites trades). A row of these
+ *  roles is a `project_parties` row (person_id = the party id) and opens the
+ *  field party profile sheet rather than the generic relationship profile. */
+export const FIELD_ROSTER_ROLES: readonly PartyRole[] = [
+  'gc',
+  'sub',
+  'installer',
+  'receiver',
+] as const;
+
+/** True when a roster role is a field party (per-project, SMS-reachable). */
+export function isFieldRosterRole(role: string | null | undefined): role is PartyRole {
+  return !!role && (FIELD_ROSTER_ROLES as readonly string[]).includes(role);
+}
 
 /** A row of `public.people_directory`. The canonical party shape. */
 export interface PeopleDirectoryRow {

@@ -8,7 +8,14 @@
 
 import { fmtDay } from './format';
 
-export type MarginKind = 'decision' | 'message' | 'invoice' | 'pulse' | 'time' | 'note';
+export type MarginKind =
+  | 'decision'
+  | 'message'
+  | 'invoice'
+  | 'pulse'
+  | 'time'
+  | 'note'
+  | 'field_sms';
 export type MarginAnchorKind = 'line' | 'section' | 'letterhead';
 
 export interface MarginItemRow {
@@ -35,6 +42,9 @@ const ACCENT: Record<MarginKind, { border: string; label: string }> = {
   time: { border: 'var(--color-mocha)', label: 'var(--color-mocha)' },
   // R14: Mocha-adjacent, distinct from time — Aged Oak.
   note: { border: 'var(--color-aged-oak)', label: 'var(--color-aged-oak)' },
+  // Field Coordination: the field-triage accent (golden-hour) — a needs_review
+  // text reads with the same warm urgency the Desk triage card wears.
+  field_sms: { border: 'var(--color-golden-hour)', label: '#B89A2E' },
 };
 
 export function marginAccent(kind: MarginKind): { border: string; label: string } {
@@ -70,6 +80,8 @@ export function deriveKindLine(row: MarginItemRow): string {
       const due = row.payload.due_date as string | null | undefined;
       return due ? `Note · due ${fmtDay(due)}` : 'Note';
     }
+    case 'field_sms':
+      return row.state === 'needs_review' ? 'Field text · needs review' : 'Field text';
   }
 }
 
@@ -83,7 +95,10 @@ export function isResolved(row: MarginItemRow): boolean {
     (row.kind === 'decision' && row.state === 'responded') ||
     (row.kind === 'message' && row.payload.own_voice === true) ||
     (row.kind === 'pulse' && row.state === 'sent') ||
-    (row.kind === 'note' && row.state === 'escalated')
+    (row.kind === 'note' && row.state === 'escalated') ||
+    // A field text that was applied/logged is a record — it sinks to Settled;
+    // a needs_review one stays raised (it wants the designer's read).
+    (row.kind === 'field_sms' && row.state !== 'needs_review')
   );
 }
 
@@ -93,11 +108,14 @@ const DAY_MS = 86_400_000;
  *  follows the Desk's D5 gate — it floats Friday onward, never earlier. */
 function needsActionRank(row: MarginItemRow, now: Date): number | null {
   if (row.kind === 'decision' && row.state === 'overdue') return 0;
-  if (row.kind === 'note' && row.state === 'due') return 1;
+  // A field text needing review floats just under an overdue decision — a trade
+  // is waiting on the designer's read.
+  if (row.kind === 'field_sms' && row.state === 'needs_review') return 1;
+  if (row.kind === 'note' && row.state === 'due') return 2;
   if (row.kind === 'pulse' && row.state === 'due') {
     const weekOf = row.payload.week_of as string | null | undefined;
     if (weekOf && now.getTime() >= new Date(`${weekOf}T00:00:00`).getTime() + 4 * DAY_MS) {
-      return 2;
+      return 3;
     }
   }
   return null;

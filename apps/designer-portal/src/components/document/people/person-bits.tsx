@@ -16,6 +16,10 @@ const AVATAR_BG: Record<PartyRole, string> = {
   gc: 'var(--color-dusty-blue)',
   team: 'var(--color-clay)',
   lead: 'var(--color-terracotta)',
+  // Field kinds (00281) — the site trades, distinct but in the warm palette.
+  sub: 'var(--color-mocha)',
+  installer: 'var(--color-golden-hour)',
+  receiver: 'var(--color-terracotta)',
 };
 
 const BADGE: Record<PartyRole, { color: string; border: string }> = {
@@ -24,6 +28,9 @@ const BADGE: Record<PartyRole, { color: string; border: string }> = {
   gc: { color: 'var(--color-dusty-blue)', border: 'var(--color-dusty-blue)' },
   team: { color: 'var(--color-clay)', border: 'var(--color-clay)' },
   lead: { color: 'var(--color-terracotta)', border: 'var(--color-terracotta)' },
+  sub: { color: 'var(--color-mocha)', border: 'var(--color-mocha)' },
+  installer: { color: '#B89A2E', border: 'var(--color-golden-hour)' },
+  receiver: { color: 'var(--color-terracotta)', border: 'var(--color-terracotta)' },
 };
 
 const DOT_BG: Record<PartyStatus, string> = {

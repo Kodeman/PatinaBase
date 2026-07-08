@@ -538,6 +538,49 @@ export function useUpdateProjectPhaseStatus() {
   });
 }
 
+/**
+ * Set a phase's schedule dates (the light-PM slice — Field Coordination Wave 5).
+ * project_phases already carries start_date / target_end_date DATE columns
+ * (00066); the phase-timeline band reads and writes THOSE. Pass a bare
+ * `YYYY-MM-DD` or null to clear. Nothing else on the phase changes.
+ */
+export function useUpdateProjectPhaseDates() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      phaseId,
+      projectId,
+      startDate,
+      targetEndDate,
+    }: {
+      phaseId: string;
+      projectId: string;
+      /** Omit to leave a column untouched; pass null to clear it. */
+      startDate?: string | null;
+      targetEndDate?: string | null;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const updates: Record<string, unknown> = {};
+      if (startDate !== undefined) updates.start_date = startDate || null;
+      if (targetEndDate !== undefined) updates.target_end_date = targetEndDate || null;
+
+      const { data, error } = await supabase
+        .from('project_phases')
+        .update(updates)
+        .eq('id', phaseId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+    },
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PROJECT PAYMENT MILESTONES
 // ═══════════════════════════════════════════════════════════════════════════

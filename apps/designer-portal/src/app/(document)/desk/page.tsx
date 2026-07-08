@@ -24,6 +24,7 @@ import { FolderCard } from '@/components/document/folder-card';
 import { InMotionChip } from '@/components/document/in-motion-chip';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import { DeskReconnect } from '@/components/document/desk-reconnect';
+import { FieldDesk } from '@/components/document/field/field-desk';
 import { CaptureLeadSheet } from '@/components/document/overlays/capture-lead-sheet';
 import { OpenProjectSheet } from '@/components/document/overlays/open-project-sheet';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
@@ -204,6 +205,12 @@ export default function DeskPage() {
           population over the unified directory; renders nothing when no tie is
           due, so it never adds noise to a clean Desk. */}
       <DeskReconnect />
+
+      {/* Field Coordination — "In the field": needs-review text triage + the
+          softer field need-lines (opt-ins owed, field tasks overdue). Its own
+          populations over the SMS/field read models; renders nothing when there
+          is no field work. */}
+      <FieldDesk />
 
       {/* The capture front door (G1 · R62) — an overlay over the Desk, never a
           route; the Desk beneath does not unmount (D1). */}

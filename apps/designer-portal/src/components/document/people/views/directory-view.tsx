@@ -12,13 +12,16 @@
  */
 
 import { useMemo } from 'react';
-import { usePeopleDirectory, type PartyRole } from '@patina/supabase';
+import { usePeopleDirectory, isFieldRosterRole, type PartyRole } from '@patina/supabase';
 import { ViewHeader } from '../view-shell';
 import { PersonRow } from '../directory/person-row';
 import { MakersMarketplace } from '../directory/makers-marketplace';
 import type { PeopleViewProps } from '../types';
 
-export type DirectoryRole = PartyRole | 'all';
+// 'field' is a client-side grouping over the field-coordination kinds
+// (gc / sub / installer / receiver, 00281) — the query still reads 'all' and
+// filters in memory, since people_directory has no combined server filter.
+export type DirectoryRole = PartyRole | 'all' | 'field';
 
 /** The Makers filter reads two ways (R78): the admitted roster, or the whole
  *  marketplace (discovery + save-as-admission). A lens, never a route. */
@@ -29,27 +32,33 @@ const ROLE_TABS: Array<[DirectoryRole, string]> = [
   ['client', 'Clients'],
   ['lead', 'Leads'],
   ['maker', 'Makers'],
-  ['gc', 'GCs'],
+  // The field crew — GCs, subs, installers, receivers (00281) — as one group.
+  ['field', 'Field'],
   ['team', 'Team'],
 ];
 
 /** Roster ordering: the people you act on (clients, leads) first, then your
- *  network (GCs, makers), then your studio — name within each band. */
+ *  network (field crew, makers), then your studio — name within each band. */
 const ROLE_ORDER: Record<PartyRole, number> = {
   client: 0,
   lead: 1,
   gc: 2,
-  maker: 3,
-  team: 4,
+  sub: 3,
+  installer: 4,
+  receiver: 5,
+  maker: 6,
+  team: 7,
 };
 
-/** Empty-state copy is filter-aware so the roster never reads as "broken". */
-const EMPTY_COPY: Record<DirectoryRole, string> = {
+/** Empty-state copy is filter-aware so the roster never reads as "broken".
+ *  Partial — unlisted roles fall back to the 'all' copy. */
+const EMPTY_COPY: Partial<Record<DirectoryRole, string>> = {
   all: 'No one on your roster yet. Add a client, or capture a lead, and they land here.',
   client: 'No clients yet. Add one with “+ Add” above and they appear here at once.',
   lead: 'No open leads. New inquiries land here, owing a reply within a day.',
   maker: 'No makers yet. Makers you order through Patina and your own shops gather here.',
-  gc: 'No general contractors yet. GCs join from the projects they run with you.',
+  field:
+    'No field crew yet. Add a GC, sub, installer, or receiver from “+ Add” — with a phone and a text opt-in, you can coordinate them here.',
   team: 'Just you so far. Studio teammates appear here as you bring them on.',
 };
 
@@ -70,19 +79,22 @@ export function DirectoryView({
   makerLens: MakerLens;
   onMakerLens: (lens: MakerLens) => void;
 }) {
-  const { data, isLoading } = usePeopleDirectory({ role });
+  // 'field' groups four kinds — read 'all' and narrow in memory (below).
+  const queryRole = role === 'field' ? 'all' : role;
+  const { data, isLoading } = usePeopleDirectory({ role: queryRole });
   const now = useMemo(() => new Date(), []);
   const marketplace = role === 'maker' && makerLens === 'marketplace';
 
   const rows = useMemo(() => {
     const list = [...(data ?? [])];
-    list.sort(
+    const scoped = role === 'field' ? list.filter((p) => isFieldRosterRole(p.role)) : list;
+    scoped.sort(
       (a, b) =>
         ROLE_ORDER[a.role] - ROLE_ORDER[b.role] ||
         a.display_name.localeCompare(b.display_name),
     );
-    return list;
-  }, [data]);
+    return scoped;
+  }, [data, role]);
 
   return (
     <>
@@ -160,7 +172,7 @@ export function DirectoryView({
       ) : rows.length === 0 ? (
         <div className="rounded-[10px] border border-dashed border-[var(--doc-ink-border)] bg-white/40 px-5 py-8 text-center">
           <p className="text-[0.76rem] leading-relaxed text-[var(--color-aged-oak)]">
-            {EMPTY_COPY[role]}
+            {EMPTY_COPY[role] ?? EMPTY_COPY.all}
             {role === 'maker' && (
               <>
                 {' '}

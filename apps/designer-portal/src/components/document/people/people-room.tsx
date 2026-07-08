@@ -14,11 +14,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { usePeopleDirectory, type PartyRole } from '@patina/supabase';
+import { usePeopleDirectory, isFieldRosterRole, type PartyRole } from '@patina/supabase';
 import { deriveNurtureQueue, humanizeSince } from '@/lib/document/people-derivation';
 import { RoomShell } from '../rooms/room-shell';
 import { DirectoryView, type DirectoryRole, type MakerLens } from './views/directory-view';
 import { PersonProfile } from './views/person-profile';
+import { PartyProfileSheet } from './party-profile-sheet';
 import { ThreadsView } from './views/threads-view';
 import { NurtureView } from './views/nurture-view';
 import { ReviewsView } from './views/reviews-view';
@@ -55,6 +56,10 @@ export function PeopleRoom() {
   const router = useRouter();
   const [view, setView] = useState<PeopleView>('directory');
   const [openPerson, setOpenPerson] = useState<{ id: string; role: PartyRole } | null>(null);
+  // Field parties (gc/sub/installer/receiver) open the field-coordination party
+  // sheet (SMS thread + field link) rather than the relationship profile (D1:
+  // an overlay over the Room, which never unmounts).
+  const [openParty, setOpenParty] = useState<{ id: string; role: PartyRole } | null>(null);
   const [pendingThreadId, setPendingThreadId] = useState<string | null>(null);
   const [ask, setAsk] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -85,10 +90,23 @@ export function PeopleRoom() {
     const role = params.get('role');
     const thread = params.get('thread');
     const add = params.get('add');
-    const roles: PartyRole[] = ['client', 'lead', 'maker', 'gc', 'team'];
+    const roles: PartyRole[] = [
+      'client',
+      'lead',
+      'maker',
+      'gc',
+      'team',
+      'sub',
+      'installer',
+      'receiver',
+    ];
     if (person && role && (roles as string[]).includes(role)) {
-      setOpenPerson({ id: person, role: role as PartyRole });
-      if (role === 'maker') setRoleFilter('maker');
+      if (isFieldRosterRole(role)) {
+        setOpenParty({ id: person, role: role as PartyRole });
+      } else {
+        setOpenPerson({ id: person, role: role as PartyRole });
+        if (role === 'maker') setRoleFilter('maker');
+      }
     } else if (thread) {
       setPendingThreadId(thread);
       setView('threads');
@@ -119,7 +137,9 @@ export function PeopleRoom() {
 
   const nav: PeopleViewProps = {
     openPerson: (id, role) => {
-      setOpenPerson({ id, role });
+      // A field party opens the field sheet; everyone else the relationship profile.
+      if (isFieldRosterRole(role)) setOpenParty({ id, role });
+      else setOpenPerson({ id, role });
     },
     openThread: (threadId) => {
       setOpenPerson(null);
@@ -292,6 +312,15 @@ export function PeopleRoom() {
           setNotice(message);
         }}
         onGoToLeads={() => router.push('/portal/pipeline')}
+      />
+
+      {/* Field party sheet — the SMS/field-link surface for a GC / sub /
+          installer / receiver, over the Room (D1). */}
+      <PartyProfileSheet
+        open={!!openParty}
+        partyId={openParty?.id ?? null}
+        role={openParty?.role ?? 'sub'}
+        onClose={() => setOpenParty(null)}
       />
 
       {toast && (

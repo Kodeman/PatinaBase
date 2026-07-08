@@ -19,6 +19,7 @@
  */
 
 import type { PartyRole, PeopleDirectoryRow } from '@patina/supabase';
+import { getFieldTradeLabel } from '@patina/types';
 
 export type { PartyRole };
 
@@ -121,6 +122,14 @@ export function roleLabel(role: PartyRole): string {
       return 'Team';
     case 'lead':
       return 'Lead';
+    // Field kinds (00281) — short badge labels (the field-config vocab spells
+    // 'Subcontractor' in full; the roster badge wants a tight token).
+    case 'sub':
+      return 'Sub';
+    case 'installer':
+      return 'Installer';
+    case 'receiver':
+      return 'Receiver';
   }
 }
 
@@ -174,6 +183,16 @@ export function deriveStatusDot(p: DirectoryPerson, now: Date): PartyStatus {
     case 'gc':
     case 'team':
       return 'active';
+
+    // Field kinds (00281): the dot reflects SMS consent (status_raw carries
+    // sms_consent_status for the field branch). Texting = active; invited but
+    // not yet replied = warm; opted out / never asked = cool.
+    case 'sub':
+    case 'installer':
+    case 'receiver':
+      if (p.status_raw === 'granted') return 'active';
+      if (p.status_raw === 'pending') return 'warm';
+      return 'cool';
   }
 }
 
@@ -197,6 +216,10 @@ export function isNurtureDue(p: DirectoryPerson, now: Date): boolean {
     case 'maker':
     case 'gc':
     case 'team':
+    // Field parties are coordinated over SMS, not nurtured — never "due" here.
+    case 'sub':
+    case 'installer':
+    case 'receiver':
       return false;
   }
 }
@@ -245,6 +268,17 @@ export function deriveRelationshipLine(
 
     case 'team':
       return { text: `Studio · ${humanizeTeamRole(p.status_raw)}`, due: false };
+
+    // Field kinds (00281): the trade + the project they work. Consent reads off
+    // the roster's consent chip, so the line stays about the work, not status.
+    case 'sub':
+    case 'installer':
+    case 'receiver': {
+      const trade = getFieldTradeLabel(p.meta?.['trade'] as string | undefined);
+      const proj = String(p.meta?.['project_name'] ?? '').trim();
+      const bits = [trade || null, proj || null].filter(Boolean);
+      return { text: bits.join(' · ') || 'Field party', due: false };
+    }
   }
 }
 

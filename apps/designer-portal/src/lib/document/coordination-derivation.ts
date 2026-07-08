@@ -16,8 +16,16 @@
 // TYPES — the shapes the surfaces read (a subset of the widened row)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** The four ball-in-court tokens (00213 court CHECK). */
-export type Court = 'designer' | 'client' | 'gc' | 'vendor';
+/** The ball-in-court tokens (00213 court CHECK, widened by 00281 with the field
+ *  kinds so a task/item can sit in a sub/installer/receiver court). */
+export type Court =
+  | 'designer'
+  | 'client'
+  | 'gc'
+  | 'vendor'
+  | 'sub'
+  | 'installer'
+  | 'receiver';
 
 /** The five workflow shapes (00213 coordination_kind CHECK). */
 export type CoordinationKind = 'selection' | 'rfi' | 'submittal' | 'signoff' | 'punch';
@@ -58,8 +66,18 @@ export interface CoordinationTaskLike {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Canonical court display order: the designer's own court leads (the prototype's
- *  "In your court" pill is always first + hot), then client, GC, vendor. */
-export const COURT_ORDER: readonly Court[] = ['designer', 'client', 'gc', 'vendor'] as const;
+ *  "In your court" pill is always first + hot), then client, GC, vendor, and the
+ *  field kinds (00281). Empty non-designer courts are hidden by the renderers,
+ *  so the field courts only surface a pill/group when they carry an open item. */
+export const COURT_ORDER: readonly Court[] = [
+  'designer',
+  'client',
+  'gc',
+  'vendor',
+  'sub',
+  'installer',
+  'receiver',
+] as const;
 
 /** An item is OPEN (awaiting a move) when it is pending. draft/responded/expired
  *  are not in anyone's live court for the court bar's counts. */
