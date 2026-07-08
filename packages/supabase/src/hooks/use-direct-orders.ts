@@ -15,7 +15,7 @@ const getSupabase = () => createBrowserClient();
 // TYPES (mirror migration 00267)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type DirectOrderStatus = 'pending_payment' | 'paid' | 'canceled';
+export type DirectOrderStatus = 'pending_payment' | 'paid' | 'canceled' | 'refunded';
 
 /** Stripe Checkout Session's `shipping_details` + `customer_details.email`, persisted on paid settle. */
 export interface DirectOrderShipping {

@@ -1073,12 +1073,12 @@ async function sendDirectOrderPaidEmails(admin: SupabaseClient, orderId: string)
       const opsHtml = `
         <div style="font-family:Inter,Arial,sans-serif;max-width:560px;color:#2c2926;line-height:1.55">
           <p>A direct order was just paid and needs fulfillment.</p>
-          <p style="margin:0 0 8px"><strong>Order:</strong> ${order.id}</p>
-          <p style="margin:0 0 8px"><strong>Product:</strong> ${order.product_name}</p>
-          <p style="margin:0 0 8px"><strong>Quantity:</strong> ${order.quantity}</p>
-          <p style="margin:0 0 8px"><strong>Amount:</strong> ${amountLabel}</p>
-          <p style="margin:0 0 8px"><strong>Buyer:</strong> ${clientEmail ?? 'unknown'}</p>
-          <p style="margin:0 0 8px"><strong>Ship to:</strong> ${shippingSummary ?? 'not collected'}</p>
+          <p style="margin:0 0 8px"><strong>Order:</strong> ${escapeHtmlSafe(order.id)}</p>
+          <p style="margin:0 0 8px"><strong>Product:</strong> ${escapeHtmlSafe(order.product_name)}</p>
+          <p style="margin:0 0 8px"><strong>Quantity:</strong> ${escapeHtmlSafe(String(order.quantity))}</p>
+          <p style="margin:0 0 8px"><strong>Amount:</strong> ${escapeHtmlSafe(amountLabel)}</p>
+          <p style="margin:0 0 8px"><strong>Buyer:</strong> ${escapeHtmlSafe(clientEmail ?? 'unknown')}</p>
+          <p style="margin:0 0 8px"><strong>Ship to:</strong> ${escapeHtmlSafe(shippingSummary ?? 'not collected')}</p>
         </div>`;
       const opsResult = await sendCompliantEmail(admin, {
         to: opsEmail,
@@ -1378,7 +1378,7 @@ async function handlePoRefund(
   // so a distinct-event replay no-ops.
   const { data: flipped, error } = await admin
     .from('po_payments')
-    .update({ state: 'refunded' })
+    .update({ state: 'refunded', stripe_checkout_session_id: null })
     .eq('id', row.id)
     .eq('state', 'paid')
     .select('id');
@@ -1407,7 +1407,7 @@ async function handleDirectOrderRefund(
   // FULL: paid → refunded (guard on 'paid' → distinct-event replay no-ops).
   const { data: flipped, error } = await admin
     .from('direct_orders')
-    .update({ status: 'refunded' })
+    .update({ status: 'refunded', stripe_checkout_session_id: null })
     .eq('id', row.id)
     .eq('status', 'paid')
     .select('id');
@@ -1487,29 +1487,38 @@ async function handleChargeRefunded(admin: SupabaseClient, event: Stripe.Event):
   const { full, refunded, captured } = isFullRefund(charge);
 
   // Resolve across the three payable tables in order.
-  const { data: invPay } = await admin
+  const { data: invPay, error: invPayError } = await admin
     .from('invoice_payments')
     .select(PAYMENT_COLS)
     .eq('stripe_payment_intent_id', paymentIntentId)
     .maybeSingle();
+  if (invPayError) {
+    throw new Error(`failed to look up invoice_payments for PI ${paymentIntentId}: ${invPayError.message}`);
+  }
   if (invPay) {
     return handleInvoiceRefund(admin, invPay as PaymentRow, full, refunded, captured);
   }
 
-  const { data: poPay } = await admin
+  const { data: poPay, error: poPayError } = await admin
     .from('po_payments')
     .select(PO_PAYMENT_COLS)
     .eq('stripe_payment_intent_id', paymentIntentId)
     .maybeSingle();
+  if (poPayError) {
+    throw new Error(`failed to look up po_payments for PI ${paymentIntentId}: ${poPayError.message}`);
+  }
   if (poPay) {
     return handlePoRefund(admin, poPay as PoPaymentRow, full, refunded, captured);
   }
 
-  const { data: directOrd } = await admin
+  const { data: directOrd, error: directOrdError } = await admin
     .from('direct_orders')
     .select(DIRECT_ORDER_COLS)
     .eq('stripe_payment_intent_id', paymentIntentId)
     .maybeSingle();
+  if (directOrdError) {
+    throw new Error(`failed to look up direct_orders for PI ${paymentIntentId}: ${directOrdError.message}`);
+  }
   if (directOrd) {
     return handleDirectOrderRefund(admin, directOrd as DirectOrderRow, full, refunded, captured);
   }

@@ -766,6 +766,11 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       assertEquals(row.state, 'refunded');
       assert(row.paid_date, 'paid_date kept (historical fact)');
       assertEquals(await notifCount(ids.payPaid, 'payment_refunded'), 1);
+      // Stale checkout session pointer cleared so a re-payable row doesn't 409
+      // forever against the checkout driver's in-flight predicate; the PI stays
+      // (it's the refund-resolution key).
+      assertEquals(row.stripe_checkout_session_id, null);
+      assertEquals(row.stripe_payment_intent_id, `pi_po_${RUN}`);
     });
 
     // (c) FULL refund of the paid direct_order → status 'refunded'.
@@ -782,6 +787,10 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       await res.body?.cancel();
       const row = await directOrder(ids.doPaid);
       assertEquals(row.status, 'refunded');
+      // Stale checkout session pointer cleared (same reasoning as the po_payment
+      // full-refund case above); the PI stays (refund-resolution key).
+      assertEquals(row.stripe_checkout_session_id, null);
+      assertEquals(row.stripe_payment_intent_id, `pi_do_${RUN}`);
     });
   } finally {
     await cleanup();

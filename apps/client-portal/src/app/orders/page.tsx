@@ -23,6 +23,7 @@ type ConfirmState = 'confirming' | 'confirmed' | 'ach_pending' | null;
 
 function statusLabel(order: DirectOrder): string {
   if (order.status === 'paid') return 'Paid';
+  if (order.status === 'refunded') return 'Refunded';
   if (order.status === 'canceled') return 'Canceled';
   // pending_payment with a stamped PaymentIntent means Checkout completed and
   // an ACH debit is in flight (settles in 3–5 business days) — the same
