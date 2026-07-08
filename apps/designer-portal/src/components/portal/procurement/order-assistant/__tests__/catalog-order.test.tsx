@@ -18,7 +18,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 // ─── Controllable mock fns (module-level so factories close over them) ───────
 const createMutateAsync = jest.fn();
@@ -156,6 +156,28 @@ function renderAssistant(overrides: Partial<OrderAssistantProps> = {}) {
   return render(<OrderAssistant {...props} />);
 }
 
+/**
+ * Manually-resolvable promise — lets a test hold an await open while it
+ * interacts with the UI mid-flight (busy-gate + stale-continuation tests).
+ */
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  let reject!: (e: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+/** Flush pending microtasks inside act() so awaited continuations settle. */
+const flushMicrotasks = () =>
+  act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
 describe('OrderAssistant — catalog order (Phase 4 pay-at-order)', () => {
   it('creates a full_upfront PO, resolves its payment, starts checkout, and redirects', async () => {
     createMutateAsync.mockResolvedValue({ id: 'po-1', total_cents: 5000 });
@@ -272,6 +294,87 @@ describe('OrderAssistant — catalog order (Phase 4 pay-at-order)', () => {
     fireEvent.click(screen.getByRole('button', { name: /one-click order via patina/i }));
 
     await waitFor(() => expect(hrefSet).toBe('https://stripe.test/session/single'));
+  });
+
+  // ─── Review fix 1 — the queued resolution window is busy-gated ──────────
+  it('multi-queue: double-clicking during po_payment resolution creates exactly one PO, and close is blocked', async () => {
+    createMutateAsync.mockResolvedValue({ id: 'po-1', total_cents: 5000 });
+    // Hold the resolution open so we can interact mid-await.
+    const resolution = deferred<Array<{ id: string; amount_cents: number; state: string }>>();
+    fetchPOPaymentsMock.mockReturnValue(resolution.promise);
+
+    renderAssistant({ queueLength: 2 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: /one-click order via patina/i }));
+
+    // createPO resolves on a microtask, then the po_payment resolution hangs
+    // on our deferred. createPO.isPending is false again by now (mocked
+    // permanently false, mirroring the real post-settle state) — the
+    // isResolving busy gate is the ONLY thing keeping the panel inert.
+    const busyButton = await screen.findByRole('button', { name: /placing order/i });
+    expect(busyButton).toBeDisabled();
+
+    // A second click on the primary must be a no-op (duplicate-PO window).
+    fireEvent.click(busyButton);
+    // And every dismissal/navigation affordance is blocked mid-resolution —
+    // closing would advance the queue under the in-flight continuation.
+    // (The submit fires from the coverage step, so the left footer button
+    // is "Back"; the header ✕ is "Close".)
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
+
+    await act(async () => {
+      resolution.resolve([{ id: 'pp-1', amount_cents: 5000, state: 'pending' }]);
+    });
+    await screen.findByText(/Purchase order created/i);
+
+    expect(createMutateAsync).toHaveBeenCalledTimes(1);
+    expect(fetchPOPaymentsMock).toHaveBeenCalledTimes(1);
+    expect(hrefSet).toBeNull();
+  });
+
+  // ─── Review fix 2 — Done mid Pay-now must not navigate later ────────────
+  it('multi-queue: Done clicked while Pay-now is in flight → the late checkout URL does NOT navigate (stale continuation bails)', async () => {
+    createMutateAsync.mockResolvedValue({ id: 'po-1', total_cents: 5000 });
+    fetchPOPaymentsMock.mockResolvedValue([{ id: 'pp-1', amount_cents: 5000, state: 'pending' }]);
+    const checkout = deferred<{ url: string }>();
+    startCheckoutMutateAsync.mockReturnValue(checkout.promise);
+
+    const onOpenChange = jest.fn();
+    const props = {
+      open: true,
+      onOpenChange,
+      vendor: { ...baseVendor, is_patina_catalog: true },
+      project,
+      ffeItems,
+      queueLength: 2,
+    } as OrderAssistantProps;
+    const { rerender } = render(<OrderAssistant {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: /one-click order via patina/i }));
+
+    const payNowButton = await screen.findByRole('button', { name: /pay now/i });
+    fireEvent.click(payNowButton);
+    expect(startCheckoutMutateAsync).toHaveBeenCalledWith({ poPaymentId: 'pp-1' });
+
+    // Done must stay clickable while Pay-now is in flight — the queue has
+    // to remain advanceable (payment is always recoverable from By Vendor).
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    // Parent honors the close (queue advances / panel unmounts).
+    rerender(<OrderAssistant {...props} open={false} />);
+
+    // The checkout URL arrives AFTER the panel moved on — navigating now
+    // would yank the tab to Stripe and abandon the remaining queue, i.e.
+    // the exact bug the deferred path exists to fix. The stale
+    // continuation must bail silently.
+    await act(async () => {
+      checkout.resolve({ url: 'https://stripe.test/session/late' });
+    });
+    await flushMicrotasks();
+    expect(hrefSet).toBeNull();
   });
 
   it('non-catalog path is unchanged: no checkout is started', async () => {

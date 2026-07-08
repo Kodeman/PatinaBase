@@ -273,13 +273,39 @@ export function OrderAssistant(props: OrderAssistantProps) {
   const [deferredPoPaymentId, setDeferredPoPaymentId] = useState<string | null>(null);
   const [payNowPending, setPayNowPending] = useState(false);
   const [payNowError, setPayNowError] = useState<string | null>(null);
+  // True while the queued catalog path resolves the just-created PO's
+  // po_payment (post-create, pre-created-panel). The PO already exists, so
+  // this window must be un-interactable exactly like `isRedirecting`:
+  // re-clicking the primary would create a DUPLICATE PO, and closing would
+  // advance the queue under an in-flight continuation.
+  const [isResolving, setIsResolving] = useState(false);
 
-  // "Busy" = the create mutation is in flight OR we're mid Stripe redirect.
-  // Both must block close/back/skip and keep the primary control disabled.
-  // The deferred manual "Pay now" click (payNowPending) is NOT busy in this
-  // sense — the PO already exists and the queue must stay closeable while
-  // that request is in flight.
-  const isBusy = createPO.isPending || isRedirecting;
+  // Stale-continuation guard for every async hop that survives a panel
+  // transition (queued po_payment resolution, deferred Pay-now). Bumped on
+  // any close (closePanel) and on any panel-context change (open/vendor/
+  // project) — a continuation that captured an older value must bail
+  // silently rather than mutate the NEXT queue entry's panel or yank the
+  // tab to Stripe after the designer has moved on.
+  const panelSessionRef = useRef(0);
+  useEffect(() => {
+    panelSessionRef.current += 1;
+  }, [open, vendor.id, project.id]);
+
+  // "Busy" = the create mutation is in flight, we're mid Stripe redirect,
+  // or the queued path is resolving its po_payment. All three must block
+  // close/back/skip and keep the primary control disabled. The deferred
+  // manual "Pay now" click (payNowPending) is NOT busy in this sense — the
+  // PO already exists and the queue must stay closeable while that request
+  // is in flight (its continuation is stale-guarded instead).
+  const isBusy = createPO.isPending || isRedirecting || isResolving;
+
+  // Single close path for Done / ✕ / overlay / Skip / coverage's
+  // create-invoice link: invalidate in-flight continuations FIRST, then
+  // hand control back to the caller (which advances its queue).
+  const closePanel = () => {
+    panelSessionRef.current += 1;
+    onOpenChange(false);
+  };
 
   // ─── One-click Patina order (S3.10 → Phase 4 pay-at-order) ──────────────
   // For catalog routing, skip the external-vendor details step, create the PO
@@ -353,16 +379,29 @@ export function OrderAssistant(props: OrderAssistantProps) {
         `Order placed via Patina — pay from the panel below, or later from By Vendor.`,
         'success',
       );
+      // Busy-gate the resolution window: createPO.isPending has already
+      // dropped, so without this the primary button is re-clickable
+      // (duplicate PO) and Done/✕/Back/Skip are live mid-await.
+      const session = panelSessionRef.current;
+      setIsResolving(true);
+      let paymentId: string | null = null;
       try {
         const payments = await fetchPOPayments(po.id);
-        setDeferredPoPaymentId(payments[0]?.id ?? null);
+        paymentId = payments[0]?.id ?? null;
       } catch {
         // Resolution failure just means the created panel won't offer the
         // inline "Pay now" button — the persistent one on By Vendor still
         // picks up the unpaid po_payment once caches refresh, so this is
         // never fatal to the order.
-        setDeferredPoPaymentId(null);
+        paymentId = null;
       }
+      // Stale-continuation guard: if the panel closed or its context
+      // changed while we awaited (queue advanced), these state updates
+      // would land on the NEXT entry's panel — bail silently. The reset
+      // effect has already cleared isResolving for the new context.
+      if (panelSessionRef.current !== session) return;
+      setIsResolving(false);
+      setDeferredPoPaymentId(paymentId);
       setCreatedPo(po);
       goToStep('created');
       return;
@@ -400,15 +439,27 @@ export function OrderAssistant(props: OrderAssistantProps) {
   };
 
   // ─── Manual "Pay now" from the created panel (Item 11 deferred path) ────
+  // Done stays clickable while this is in flight (the queue must remain
+  // advanceable — the payment is always recoverable from By Vendor), so the
+  // success continuation MUST be stale-guarded: if Done was clicked mid-
+  // await, navigating would yank the tab to Stripe after the queue advanced
+  // and re-open the very abandonment bug the deferred path exists to fix.
   const handleDeferredPayNow = async () => {
     if (!deferredPoPaymentId || payNowPending) return;
+    const session = panelSessionRef.current;
     setPayNowError(null);
     setPayNowPending(true);
     try {
       const { url } = await startCheckout.mutateAsync({ poPaymentId: deferredPoPaymentId });
+      // Panel closed / queue advanced mid-await → do NOT navigate. The
+      // unpaid po_payment stays one click away via By Vendor "Pay now".
+      if (panelSessionRef.current !== session) return;
       window.location.href = url;
       // Navigating away — no further state updates past this point.
     } catch (err) {
+      // Same guard on the failure path — don't paint a stale error (or
+      // flip pending state) onto the next entry's panel.
+      if (panelSessionRef.current !== session) return;
       setPayNowPending(false);
       setPayNowError(err instanceof Error ? err.message : "Payment couldn't be started.");
     }
@@ -447,8 +498,11 @@ export function OrderAssistant(props: OrderAssistantProps) {
     setCopyState('idle');
     setIsRedirecting(false);
     setCatalogCheckoutError(null);
-    // Item 11 — deferred manual "Pay now" state must not leak from one
-    // queue entry's created panel into the next entry's review step.
+    // Item 11 — deferred manual "Pay now" + queued-resolution state must
+    // not leak from one queue entry's created panel into the next entry's
+    // review step. (Their in-flight continuations are separately
+    // invalidated via panelSessionRef.)
+    setIsResolving(false);
     setDeferredPoPaymentId(null);
     setPayNowPending(false);
     setPayNowError(null);
@@ -596,7 +650,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
 
   const handleSkip = () => {
     if (isBusy) return;
-    onOpenChange(false);
+    closePanel();
   };
 
   // ─── Footer wiring ──────────────────────────────────────────────────────
@@ -647,7 +701,9 @@ export function OrderAssistant(props: OrderAssistantProps) {
   const primaryLabel =
     isRedirecting
       ? 'Redirecting to payment…'
-      : isSubmitStep && hasBlockedItems
+      : isResolving
+        ? 'Placing order…'
+        : isSubmitStep && hasBlockedItems
         ? 'Blocked — decision pending'
         : isSubmitStep && isCatalog
           ? gateIsUncovered
@@ -674,7 +730,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-40 bg-black/20"
-            onClick={() => !isBusy && onOpenChange(false)}
+            onClick={() => !isBusy && closePanel()}
             aria-hidden="true"
           />
           <motion.div
@@ -751,7 +807,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
                   isLoading={coverageQuery.isLoading}
                   isError={coverageQuery.isError}
                   uncovered={uncovered}
-                  onCreateInvoice={() => onOpenChange(false)}
+                  onCreateInvoice={closePanel}
                 />
               )}
 
@@ -829,7 +885,7 @@ export function OrderAssistant(props: OrderAssistantProps) {
               {step === 'created' ? (
                 <>
                   <span />
-                  <Button variant="primary" size="sm" onClick={() => onOpenChange(false)}>
+                  <Button variant="primary" size="sm" onClick={closePanel}>
                     Done
                   </Button>
                 </>
