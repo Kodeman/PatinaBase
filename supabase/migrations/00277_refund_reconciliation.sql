@@ -1,9 +1,9 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00273 — Refund reconciliation v1 (partially lifts the "refund state machine
+-- 00277 — Refund reconciliation v1 (partially lifts the "refund state machine
 --          is v2" deferral)
 --
 -- The consolidated Stripe rail now settles three payable types (invoice 00178,
--- po_payment 00271, direct_order 00272). `charge.refunded` has been ledger-only
+-- po_payment 00275, direct_order 00276). `charge.refunded` has been ledger-only
 -- since 00178 — the webhook's own comment reads "refund state machine is v2".
 -- Real money is about to flow, and a dashboard-initiated refund must not leave
 -- an invoice reading "paid", designer earnings credited, or a direct order
@@ -77,9 +77,9 @@ COMMENT ON TYPE public.procurement_notification_kind IS
   '(00184 lifecycle triggers, manual flips, or the daily po-payments-due-daily pg_cron job from 00189). '
   'delivery_this_week: produced by the delivery-this-week-weekly pg_cron job (00189). '
   'damage_claim_drafted: fired on INSERT into damage_claims with state = ''drafted''. '
-  'payment_received / payment_failed: fired by the stripe-webhook po_payment branch (00271) when an '
+  'payment_received / payment_failed: fired by the stripe-webhook po_payment branch (00275) when an '
   '"Order via Patina" purchase-order payment settles or its ACH transfer fails. '
-  'payment_refunded: fired by the stripe-webhook charge.refunded branch (00273) when a paid po_payment '
+  'payment_refunded: fired by the stripe-webhook charge.refunded branch (00277) when a paid po_payment '
   'is refunded (full → state flips to ''refunded''; partial → state kept, notification is informational).';
 
 -- ─── PART 1: direct_orders.status += 'refunded' (idempotent drop + re-add) ───
@@ -106,7 +106,7 @@ ALTER TABLE public.designer_earnings
     REFERENCES public.invoice_payments(id) ON DELETE SET NULL;
 
 COMMENT ON COLUMN public.designer_earnings.reverses_invoice_payment_id IS
-  'Set only on a refund CONTRA row (00273): the invoice_payments.id whose '
+  'Set only on a refund CONTRA row (00277): the invoice_payments.id whose '
   'earnings this negative row reverses. NULL on all forward credit rows. '
   'Partial-unique (uniq_designer_earnings_reversal) so a payment is reversed at '
   'most once — replay-safe. The original credit keeps its invoice_payment_id; '
@@ -207,7 +207,7 @@ BEGIN
   ON CONFLICT (invoice_payment_id) WHERE invoice_payment_id IS NOT NULL
   DO NOTHING;
 
-  -- 00273 REVERSE EFFECT 1 — earnings contra rows for refunded payments.
+  -- 00277 REVERSE EFFECT 1 — earnings contra rows for refunded payments.
   -- designer_earnings carries settlement/payout state (status/payout_id/
   -- paid_at), so we never DELETE the credit — we post a negative mirror that
   -- nets it out in any aggregate while both rows stay auditable. The reversal
@@ -253,7 +253,7 @@ BEGIN
       AND li.milestone_id = m.id
       AND m.status <> 'paid';
   ELSIF v_was_paid AND v_new_status <> 'paid' THEN
-    -- 00273 REVERSE EFFECT 2 — a refund dropped the invoice below fully-paid.
+    -- 00277 REVERSE EFFECT 2 — a refund dropped the invoice below fully-paid.
     -- Un-pay the milestone lines this invoice paid through: they return to
     -- 'outstanding' (issue-time state; the invoice is still live and billing
     -- them) with paid_at cleared. Symmetric with the forward flip; idempotent
@@ -276,7 +276,7 @@ REVOKE ALL ON FUNCTION public.apply_invoice_payment_effects(UUID) FROM PUBLIC, a
 GRANT EXECUTE ON FUNCTION public.apply_invoice_payment_effects(UUID) TO service_role;
 
 COMMENT ON FUNCTION public.apply_invoice_payment_effects(UUID) IS
-  'Single source of truth for invoice payment side effects (00178 + 00273 '
+  'Single source of truth for invoice payment side effects (00178 + 00277 '
   'refund reversal). Recomputes amount_paid over succeeded payments, derives '
   'status (never resurrects void), stamps/clears paid_at, upserts one earnings '
   'credit per succeeded payment, posts a negative earnings contra row per '

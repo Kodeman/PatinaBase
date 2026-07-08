@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00270 — Auto-draft the deposit invoice at proposal signature
+-- 00274 — Auto-draft the deposit invoice at proposal signature
 --
 -- Decision reversal: 00206 (R34) wired on_date milestones to
 -- draft_invoice_from_milestone and left a note — "on_signing stays a
@@ -269,7 +269,7 @@ BEGIN
     ORDER BY sort_order LIMIT 1
   ) WHERE id = v_project_id;
 
-  -- 00270: the kickoff milestone (sort_order = 0, seeded 'outstanding' at
+  -- 00274: the kickoff milestone (sort_order = 0, seeded 'outstanding' at
   -- signing) is stamped trigger_kind = 'on_signing'. The NOT EXISTS guard is
   -- defensive-only — v_project_id is fresh from the INSERT above, so no
   -- project_payment_milestones row for it can already exist — but it keeps
@@ -315,7 +315,7 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 00270: auto-draft the deposit invoice. Draft only (review-then-send per
+  -- 00274: auto-draft the deposit invoice. Draft only (review-then-send per
   -- R26/R11 stands — the designer still uses Issue & Send). Guarded to
   -- amount_cents > 0 because draft_invoice_from_milestone (00204) has no
   -- zero-amount special case of its own. Wrapped so drafting can NEVER fail
@@ -447,7 +447,7 @@ END;
 $function$;
 
 COMMENT ON FUNCTION public.activate_proposal_as_project(uuid, date) IS
-  'Bridges an accepted proposal into an active project (body lineage: 00140 → 00167 → 00180 → 00199 → 00270). '
-  '00270 delta: the kickoff (sort_order=0) payment milestone is stamped trigger_kind=''on_signing'' and, when its '
+  'Bridges an accepted proposal into an active project (body lineage: 00140 → 00167 → 00180 → 00199 → 00274). '
+  '00274 delta: the kickoff (sort_order=0) payment milestone is stamped trigger_kind=''on_signing'' and, when its '
   'amount_cents > 0, immediately drafts its invoice via draft_invoice_from_milestone (00204) — draft only, guarded '
   'so drafting can never fail activation. Supersedes 00206''s "on_signing stays a designer act" note.';

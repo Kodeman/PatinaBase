@@ -99,7 +99,7 @@ const ids = {
   payCancelled: '', // PO_E deposit, PO cancelled → create-checkout 409, no session
   invoice: '',
   invPay: '',
-  // ── direct_order fixtures (00272) ──
+  // ── direct_order fixtures (00276) ──
   product: '', // a buyable Patina-managed product for direct_orders FK
   doPaid: '', // pending_payment → paid via checkout.session.completed (tests f, g, g2)
   doFail: '', // pending_payment → async_payment_failed clears pointers (test h)
@@ -115,7 +115,7 @@ const EVT = {
   doPaidPi: `evt_do_paid_pi_${RUN}`, // DISTINCT event, same PI as doPaid — settle guard
   doFail: `evt_do_fail_${RUN}`,
   doFailOnPaid: `evt_do_fail_on_paid_${RUN}`, // async_payment_failed against the PAID order (short-circuit)
-  // ── refund reconciliation (00273) ──
+  // ── refund reconciliation (00277) ──
   refundInvPartial: `evt_refund_inv_partial_${RUN}`, // partial invoice refund → no state change
   refundInv: `evt_refund_inv_${RUN}`, // full invoice refund → reversed
   refundInvReplay: `evt_refund_inv_replay_${RUN}`, // DISTINCT event, same PI — no double reversal
@@ -323,7 +323,7 @@ async function notifCount(paymentId: string, kind: string): Promise<number> {
   return count ?? 0;
 }
 
-// ── refund reconciliation helpers (00273) ────────────────────────────────────
+// ── refund reconciliation helpers (00277) ────────────────────────────────────
 async function invoiceRow(id: string) {
   const { data, error } = await admin
     .from('invoices').select('id, status, amount_paid_cents, paid_at').eq('id', id).single();
@@ -535,7 +535,7 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       assertEquals(row.stripe_checkout_session_id, null);
     });
 
-    // ═══ direct_order rail (00272) ═══════════════════════════════════════════
+    // ═══ direct_order rail (00276) ═══════════════════════════════════════════
 
     // (f) DIRECT_ORDER paid via checkout.session.completed → status/paid_at/PI +
     // shipping persisted (top-level shipping_details + customer_details.email).
@@ -683,7 +683,7 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
       assertEquals(body.error, 'direct_order_already_paid');
     });
 
-    // ═══ refund reconciliation (00273) ═══════════════════════════════════════
+    // ═══ refund reconciliation (00277) ═══════════════════════════════════════
     // invPay was settled to 'succeeded' in step (a): invoice is 'paid' with one
     // 8000 earnings credit. These steps refund it and the other paid payables.
 
@@ -711,7 +711,7 @@ Deno.test('payable_type dispatch — invoice back-compat + po_payment', async (t
     });
 
     // (a) FULL refund of the settled invoice payment → payment refunded, invoice
-    // reverted (paid → sent), earnings reversed to net 0 (00273 trigger).
+    // reverted (paid → sent), earnings reversed to net 0 (00277 trigger).
     await t.step('invoice FULL refund → refunded + invoice reverted + earnings reversed', async () => {
       const res = await postSigned(
         WEBHOOK_URL,
