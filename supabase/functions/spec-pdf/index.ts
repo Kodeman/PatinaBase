@@ -12,22 +12,28 @@
 // separate service-role `admin` client does the loads. Not-found and not-owned
 // BOTH collapse to a 404 so foreign proposal/project/item ids aren't confirmed.
 //
-// Body: { kind: 'item' | 'document', proposalId?, projectId?, itemId?,
-//         visibility?: SpecVisibility }
+// Body: { kind: 'item' | 'document' | 'board', proposalId?, projectId?,
+//         itemId?, boardId?, visibility?: SpecVisibility }
 //   · exactly one of proposalId / projectId is required
 //   · kind 'item' additionally requires itemId
+//   · kind 'board' additionally requires boardId (a section-grouped tile grid;
+//     client price only, never trade — same structural money invariant)
 // Returns: 200 application/pdf (attachment), or the JSON error idiom.
 
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
+  buildBoardModel,
   buildItemModel,
   buildScheduleModel,
   computeRecordPct,
   fmtDate,
+  renderBoardPdf,
   renderSpecItemPdf,
   renderSpecSchedulePdf,
+  type SpecBoardModel,
+  type SpecBoardTileInput,
   type SpecItemInput,
   type SpecItemModel,
   type SpecLineInput,
@@ -65,10 +71,11 @@ async function getCallerUser(req: Request) {
 // ─── Body parsing ────────────────────────────────────────────────────────────
 
 interface SpecPdfPayload {
-  kind: 'item' | 'document';
+  kind: 'item' | 'document' | 'board';
   proposalId: string | null;
   projectId: string | null;
   itemId: string | null;
+  boardId: string | null;
   visibility: SpecVisibility;
 }
 
@@ -79,7 +86,9 @@ function parseBody(
   const b = raw as Record<string, unknown>;
 
   const kind = b.kind;
-  if (kind !== 'item' && kind !== 'document') return { ok: false, error: 'invalid_kind' };
+  if (kind !== 'item' && kind !== 'document' && kind !== 'board') {
+    return { ok: false, error: 'invalid_kind' };
+  }
 
   const proposalId = typeof b.proposalId === 'string' && b.proposalId ? b.proposalId : null;
   const projectId = typeof b.projectId === 'string' && b.projectId ? b.projectId : null;
@@ -91,12 +100,15 @@ function parseBody(
   const itemId = typeof b.itemId === 'string' && b.itemId ? b.itemId : null;
   if (kind === 'item' && !itemId) return { ok: false, error: 'item_id_required' };
 
+  const boardId = typeof b.boardId === 'string' && b.boardId ? b.boardId : null;
+  if (kind === 'board' && !boardId) return { ok: false, error: 'board_id_required' };
+
   const visibility =
     b.visibility && typeof b.visibility === 'object'
       ? (b.visibility as SpecVisibility)
       : {};
 
-  return { ok: true, payload: { kind, proposalId, projectId, itemId, visibility } };
+  return { ok: true, payload: { kind, proposalId, projectId, itemId, boardId, visibility } };
 }
 
 // ─── Normalization helpers ───────────────────────────────────────────────────
@@ -205,7 +217,13 @@ type Prepared =
       header: { studioName: string; projectName: string; title: string };
       filename: string;
     }
-  | { kind: 'item'; model: SpecItemModel; filename: string };
+  | { kind: 'item'; model: SpecItemModel; filename: string }
+  | {
+      kind: 'board';
+      model: SpecBoardModel;
+      header: { studioName: string; projectName: string };
+      filename: string;
+    };
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -225,7 +243,7 @@ Deno.serve(async (req: Request) => {
   if (!parsed.ok) {
     return json({ error: parsed.error }, 400);
   }
-  const { kind, proposalId, projectId, itemId, visibility } = parsed.payload;
+  const { kind, proposalId, projectId, itemId, boardId, visibility } = parsed.payload;
 
   const caller = await getCallerUser(req);
   if (!caller) {
@@ -280,6 +298,63 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     const studioName = (designerProfile as any)?.full_name?.trim() || 'Patina Designer';
 
+    if (kind === 'board') {
+      // ── Board export (B3) — the board must belong to the owner (404-collapse).
+      // A section-grouped tile grid. Client price rides only on product/capture
+      // pins under `pricing`; a board snapshot never carries a trade cost, so
+      // the money-never-trade invariant holds structurally.
+      const { data: boardRow, error: boardErr } = await admin
+        .from('proposal_boards')
+        .select(
+          'id, name, sections, proposal_id, project_id, proposal_board_items(id, type, image_url, content, data, z_index)',
+        )
+        .eq('id', boardId!)
+        .order('z_index', { ascending: true, referencedTable: 'proposal_board_items' })
+        .maybeSingle();
+      if (boardErr) throw boardErr;
+      const board = boardRow as any;
+      const boardOwnerId = isProposal ? board?.proposal_id : board?.project_id;
+      if (!board || boardOwnerId !== ownerId) {
+        return json({ error: 'not_found' }, 404);
+      }
+
+      const sections = ((board.sections ?? []) as any[])
+        .filter((s) => s && s.id != null)
+        .map((s) => ({ id: String(s.id), name: String(s.name ?? 'Section') }));
+
+      const tiles: SpecBoardTileInput[] = ((board.proposal_board_items ?? []) as any[]).map((it) => {
+        const data = (it.data ?? {}) as Record<string, any>;
+        const swatches = Array.isArray(data.swatches)
+          ? (data.swatches as any[]).map((sw) => String(sw?.hex ?? sw ?? '')).filter(Boolean)
+          : [];
+        return {
+          type: String(it.type),
+          name: typeof data.name === 'string' ? data.name : null,
+          imageUrl: it.image_url ?? (typeof data.image_url === 'string' ? data.image_url : null),
+          note: it.content ?? null,
+          swatches,
+          priceCents: typeof data.price_cents === 'number' ? data.price_cents : null,
+          sectionId: typeof data.section_id === 'string' ? data.section_id : null,
+        };
+      });
+
+      const model = buildBoardModel(
+        {
+          studioName,
+          projectName: ownerName,
+          boardName: (board.name as string)?.trim() || 'Board',
+          sections,
+          tiles,
+        },
+        visibility,
+      );
+      prepared = {
+        kind: 'board',
+        model,
+        header: { studioName, projectName: ownerName },
+        filename: `board-${slug((board.name as string) || (board.id as string))}.pdf`,
+      };
+    } else {
     // ── spec_field_defs (custom schedule columns), ordered ─────────────────
     const { data: defsData, error: defsError } = await admin
       .from('spec_field_defs')
@@ -461,6 +536,7 @@ Deno.serve(async (req: Request) => {
         filename: `spec-${safeFilePart(item.code || itemId!)}.pdf`,
       };
     }
+    }
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     console.error('spec-pdf: lookup failed', detail);
@@ -473,7 +549,9 @@ Deno.serve(async (req: Request) => {
     pdfBytes =
       prepared.kind === 'document'
         ? await renderSpecSchedulePdf(prepared.model, prepared.header)
-        : await renderSpecItemPdf(prepared.model);
+        : prepared.kind === 'board'
+          ? await renderBoardPdf(prepared.model, prepared.header)
+          : await renderSpecItemPdf(prepared.model);
   } catch (err) {
     const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     console.error('spec-pdf: PDF render failed', detail);

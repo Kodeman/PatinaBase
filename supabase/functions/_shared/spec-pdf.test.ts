@@ -13,11 +13,14 @@
 
 import { assertEquals } from 'https://deno.land/std@0.168.0/testing/asserts.ts';
 import {
+  buildBoardModel,
   buildItemModel,
   buildScheduleModel,
   computeRecordPct,
+  renderBoardPdf,
   renderSpecItemPdf,
   renderSpecSchedulePdf,
+  type SpecBoardInput,
   type SpecItemInput,
   type SpecLineInput,
 } from './spec-pdf.ts';
@@ -289,6 +292,136 @@ Deno.test('renderSpecSchedulePdf — produces a valid PDF', async () => {
 Deno.test('renderSpecItemPdf — produces a valid PDF', async () => {
   const model = buildItemModel(itemBase, {});
   const bytes = await renderSpecItemPdf(model);
+  assertEquals(bytes instanceof Uint8Array, true);
+  assertEquals(bytes.length > 1000, true);
+});
+
+// ─── Board model (B3) ─────────────────────────────────────────────────────────
+
+function boardInput(overrides: Partial<SpecBoardInput> = {}): SpecBoardInput {
+  return {
+    studioName: 'Studio Patina',
+    projectName: 'Maple Residence',
+    boardName: 'Living Room',
+    sections: [
+      { id: 'sofa-wall', name: 'Sofa wall' },
+      { id: 'reading-nook', name: 'Reading nook' },
+    ],
+    tiles: [
+      {
+        type: 'product',
+        name: 'Walnut sectional',
+        imageUrl: 'https://cdn.example.com/sofa.jpg',
+        note: null,
+        swatches: [],
+        priceCents: 480000,
+        sectionId: 'sofa-wall',
+      },
+      {
+        type: 'note',
+        name: null,
+        imageUrl: null,
+        note: 'Keep the palette warm',
+        swatches: [],
+        priceCents: null,
+        sectionId: 'reading-nook',
+      },
+      {
+        type: 'image',
+        name: null,
+        imageUrl: 'https://cdn.example.com/mood.jpg',
+        note: null,
+        swatches: [],
+        priceCents: null,
+        sectionId: null, // unsectioned
+      },
+    ],
+    ...overrides,
+  };
+}
+
+Deno.test('board model: pricing on → product tile carries client price, no trade key', () => {
+  const model = buildBoardModel(boardInput(), { pricing: true });
+  const forbidden = ['trade', 'markup', 'margin'];
+  const scan = (obj: Record<string, unknown>) => {
+    for (const key of Object.keys(obj)) {
+      const lower = key.toLowerCase();
+      for (const bad of forbidden) assertEquals(lower.includes(bad), false);
+    }
+  };
+  // Every tile + section is scanned; the money invariant is structural.
+  for (const section of model.sections) {
+    scan(section as unknown as Record<string, unknown>);
+    for (const tile of section.tiles) scan(tile as unknown as Record<string, unknown>);
+  }
+  scan(model as unknown as Record<string, unknown>);
+
+  const sofaTile = model.sections.find((s) => s.name === 'Sofa wall')!.tiles[0];
+  assertEquals('clientPriceCents' in sofaTile, true);
+  assertEquals(sofaTile.clientPriceCents, 480000);
+});
+
+Deno.test('board model: pricing off → client price key ABSENT (not undefined)', () => {
+  const model = buildBoardModel(boardInput(), { pricing: false });
+  const sofaTile = model.sections.find((s) => s.name === 'Sofa wall')!.tiles[0];
+  assertEquals('clientPriceCents' in sofaTile, false);
+});
+
+Deno.test('board model: non-product tiles never carry a price even with pricing on', () => {
+  const model = buildBoardModel(boardInput(), { pricing: true });
+  const nook = model.sections.find((s) => s.name === 'Reading nook')!;
+  assertEquals('clientPriceCents' in nook.tiles[0], false); // the note
+  const unsectioned = model.sections.find((s) => s.name === 'Unsectioned')!;
+  assertEquals('clientPriceCents' in unsectioned.tiles[0], false); // the image
+});
+
+Deno.test('board model: declared section order preserved, unsectioned LAST, empty declared sections dropped', () => {
+  const model = buildBoardModel(boardInput(), {});
+  assertEquals(
+    model.sections.map((s) => s.name),
+    ['Sofa wall', 'Reading nook', 'Unsectioned'],
+  );
+});
+
+Deno.test('board model: a pin whose section_id is unknown falls into Unsectioned', () => {
+  const input = boardInput({
+    sections: [{ id: 'known', name: 'Known' }],
+    tiles: [
+      {
+        type: 'product',
+        name: 'Orphan',
+        imageUrl: null,
+        note: null,
+        swatches: [],
+        priceCents: 1000,
+        sectionId: 'ghost-section',
+      },
+    ],
+  });
+  const model = buildBoardModel(input, { pricing: true });
+  assertEquals(model.sections.length, 1);
+  assertEquals(model.sections[0].name, 'Unsectioned');
+});
+
+Deno.test('renderBoardPdf smoke — real bytes', async () => {
+  // Drop image urls so the render doesn't fetch at test time.
+  const input = boardInput({
+    tiles: [
+      {
+        type: 'product',
+        name: 'Walnut sectional',
+        imageUrl: null,
+        note: null,
+        swatches: [],
+        priceCents: 480000,
+        sectionId: 'sofa-wall',
+      },
+    ],
+  });
+  const bytes = await renderBoardPdf(buildBoardModel(input, { pricing: true }), {
+    studioName: 'Studio Patina',
+    projectName: 'Maple Residence',
+  });
   assertEquals(bytes instanceof Uint8Array, true);
   assertEquals(bytes.length > 1000, true);
 });
