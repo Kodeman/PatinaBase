@@ -9,14 +9,28 @@ import SwiftUI
 
 /// Patina Design System - Centered empty/zero state with an icon, title,
 /// supporting body, and an optional call-to-action button.
-struct PatinaEmptyState: View {
+public struct PatinaEmptyState: View {
     let icon: String
     let title: String
     let message: String
     var ctaTitle: String?
     var ctaAction: (() -> Void)?
 
-    var body: some View {
+    public init(
+        icon: String,
+        title: String,
+        message: String,
+        ctaTitle: String? = nil,
+        ctaAction: (() -> Void)? = nil
+    ) {
+        self.icon = icon
+        self.title = title
+        self.message = message
+        self.ctaTitle = ctaTitle
+        self.ctaAction = ctaAction
+    }
+
+    public var body: some View {
         VStack(spacing: PatinaSpacing.md) {
             Image(systemName: icon)
                 .font(.system(size: 40, weight: .light))

@@ -8,10 +8,10 @@
 import SwiftUI
 
 /// Patina Design System - Compact status badge with semantic states.
-struct PatinaStatusBadge: View {
+public struct PatinaStatusBadge: View {
 
     /// Semantic state driving the badge's color and default icon.
-    enum State {
+    public enum State {
         case info
         case success
         case warning
@@ -39,7 +39,12 @@ struct PatinaStatusBadge: View {
     let state: State
     let text: String
 
-    var body: some View {
+    public init(state: State, text: String) {
+        self.state = state
+        self.text = text
+    }
+
+    public var body: some View {
         HStack(spacing: PatinaSpacing.xs) {
             Image(systemName: state.icon)
                 .font(PatinaTypography.caption)

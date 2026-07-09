@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		CBA446972F6C5997005441C3 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = CBA446962F6C5997005441C3 /* PostHog */; };
+		DE516B1700000000000000A3 /* PatinaDesignKit in Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000A2 /* PatinaDesignKit */; };
+		DE516B1700000000000000A4 /* PatinaDesignKit in Embed Frameworks */ = {isa = PBXBuildFile; productRef = DE516B1700000000000000A2 /* PatinaDesignKit */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		CBB2D0C32F1D65F8007686CD /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C22F1D65F8007686CD /* Auth */; };
 		CBB2D0C52F1D65F8007686CD /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C42F1D65F8007686CD /* Functions */; };
 		CBB2D0C72F1D65F8007686CD /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0C62F1D65F8007686CD /* PostgREST */; };
@@ -15,6 +17,20 @@
 		CBB2D0CB2F1D65F8007686CD /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0CA2F1D65F8007686CD /* Storage */; };
 		CBB2D0CD2F1D65F8007686CD /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = CBB2D0CC2F1D65F8007686CD /* Supabase */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		DE516B1700000000000000A5 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				DE516B1700000000000000A4 /* PatinaDesignKit in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXContainerItemProxy section */
 		CBB2D0242F1D20F8007686CD /* PBXContainerItemProxy */ = {
@@ -76,6 +92,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DE516B1700000000000000A3 /* PatinaDesignKit in Frameworks */,
 				CBB2D0C72F1D65F8007686CD /* PostgREST in Frameworks */,
 				CBB2D0C52F1D65F8007686CD /* Functions in Frameworks */,
 				CBA446972F6C5997005441C3 /* PostHog in Frameworks */,
@@ -134,6 +151,7 @@
 				CBB2D0122F1D20F7007686CD /* Sources */,
 				CBB2D0132F1D20F7007686CD /* Frameworks */,
 				CBB2D0142F1D20F7007686CD /* Resources */,
+				DE516B1700000000000000A5 /* Embed Frameworks */,
 				CBB2D0412F1D5E34007686CD /* SwiftLint */,
 			);
 			buildRules = (
@@ -145,6 +163,7 @@
 			);
 			name = Patina;
 			packageProductDependencies = (
+				DE516B1700000000000000A2 /* PatinaDesignKit */,
 				CBB2D0C22F1D65F8007686CD /* Auth */,
 				CBB2D0C42F1D65F8007686CD /* Functions */,
 				CBB2D0C62F1D65F8007686CD /* PostgREST */,
@@ -236,6 +255,7 @@
 			mainGroup = CBB2D00D2F1D20F7007686CD;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				DE516B1700000000000000A1 /* XCLocalSwiftPackageReference "../PatinaDesignKit" */,
 				CBB2D0C12F1D65F8007686CD /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				CBA446952F6C5997005441C3 /* XCRemoteSwiftPackageReference "posthog-ios" */,
 				CBC32DEA2F8687DE006575E7 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
@@ -697,6 +717,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		DE516B1700000000000000A1 /* XCLocalSwiftPackageReference "../PatinaDesignKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../PatinaDesignKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		CBA446952F6C5997005441C3 /* XCRemoteSwiftPackageReference "posthog-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -725,6 +752,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		DE516B1700000000000000A2 /* PatinaDesignKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = PatinaDesignKit;
+		};
 		CBA446962F6C5997005441C3 /* PostHog */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = CBA446952F6C5997005441C3 /* XCRemoteSwiftPackageReference "posthog-ios" */;

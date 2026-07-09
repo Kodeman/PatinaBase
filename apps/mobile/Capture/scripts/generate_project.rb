@@ -186,6 +186,50 @@ link_remote_package(project, app,
                     url: 'https://github.com/PostHog/posthog-ios.git',
                     minimum_version: '3.48.0', product: 'PostHog')
 
+# ── Local SPM packages ──────────────────────────────────────────────────────
+# PatinaDesignKit (R27 Wave 0): the shared design-system package at
+# apps/mobile/PatinaDesignKit, linked into BOTH the app target and the
+# CaptureKit framework. Safe to link twice because the package's library
+# product is .dynamic — Xcode builds one dylib, embeds it once in the app,
+# and CaptureKit resolves it at load time (a static product in both places
+# would duplicate every symbol). The design-layer rule still holds: the
+# package is SwiftUI-only, no SDKs.
+def link_local_package(project, targets, relative_path:, product:, embed_in: [])
+  ref = project.new(Xcodeproj::Project::Object::XCLocalSwiftPackageReference)
+  ref.relative_path = relative_path
+  project.root_object.package_references << ref
+
+  targets.each do |target|
+    # Local package product deps carry no `package` backlink (matches what
+    # Xcode itself writes when adding a local package).
+    dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+    dep.product_name = product
+    target.package_product_dependencies << dep
+
+    build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+    build_file.product_ref = dep
+    target.frameworks_build_phase.files << build_file
+
+    # xcodebuild does NOT auto-embed dynamic package products (verified: the
+    # device .app had no Frameworks/ copy and would dyld-crash at launch), so
+    # the app target embeds the framework explicitly — same PBXBuildFile-with-
+    # productRef shape Xcode writes when a package product is dragged into an
+    # Embed Frameworks phase.
+    next unless embed_in.include?(target)
+    embed_phase = target.copy_files_build_phases.find { |p| p.name == 'Embed Frameworks' }
+    raise "no Embed Frameworks phase on #{target.name}" unless embed_phase
+    embed_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+    embed_file.product_ref = dep
+    embed_file.settings = { 'ATTRIBUTES' => %w[CodeSignOnCopy RemoveHeadersOnCopy] }
+    embed_phase.files << embed_file
+  end
+  ref
+end
+
+link_local_package(project, [app, kit],
+                   relative_path: '../PatinaDesignKit', product: 'PatinaDesignKit',
+                   embed_in: [app])
+
 # Deterministic UUIDs so re-running this script on an unchanged source tree
 # leaves `git status` clean instead of rewriting every object identifier.
 # Called twice: pass 1 assigns content-derived UUIDs, but PBXContainerItemProxy

@@ -7,6 +7,7 @@
 import SwiftUI
 import SwiftData
 import CaptureKit
+import PatinaDesignKit
 
 @main
 struct CaptureApp: App {
@@ -14,6 +15,10 @@ struct CaptureApp: App {
 
     init() {
         CaptureFonts.registerIfNeeded()
+        // R27 Wave 0: shared design-kit fonts (PlayfairDisplay/Inter/DMMono)
+        // are registered but UNUSED — CaptureType still renders the Capture
+        // faces. The value flip is Wave 1.
+        PatinaFonts.registerAll()
     }
 
     var body: some Scene {

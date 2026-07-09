@@ -8,7 +8,7 @@
 import SwiftUI
 
 /// Surface styles available for `PatinaCard`.
-enum PatinaCardStyle {
+public enum PatinaCardStyle {
     /// Soft cream fill — the default resting surface.
     case surface
     /// Off-white fill with a lift shadow — for content that floats.
@@ -19,16 +19,16 @@ enum PatinaCardStyle {
 
 /// Patina Design System - Card container wrapping content in a tokenized,
 /// rounded surface.
-struct PatinaCard<Content: View>: View {
+public struct PatinaCard<Content: View>: View {
     let style: PatinaCardStyle
     @ViewBuilder let content: Content
 
-    init(style: PatinaCardStyle = .surface, @ViewBuilder content: () -> Content) {
+    public init(style: PatinaCardStyle = .surface, @ViewBuilder content: () -> Content) {
         self.style = style
         self.content = content()
     }
 
-    var body: some View {
+    public var body: some View {
         content
             .padding(PatinaSpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)

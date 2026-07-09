@@ -132,13 +132,20 @@ public struct PatinaButton: View {
 // The remaining feature-view migrations off `AuthButton` are tracked in a
 // later T-DS call-site batch.
 
-struct AuthButton: View {
+public struct AuthButton: View {
     let title: String
     let icon: String?
     let style: AuthButtonVariant
     let action: () -> Void
 
-    enum AuthButtonVariant {
+    public init(title: String, icon: String?, style: AuthButtonVariant, action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.style = style
+        self.action = action
+    }
+
+    public enum AuthButtonVariant {
         case apple, google, email
     }
 
@@ -147,7 +154,7 @@ struct AuthButton: View {
         return Image(systemName: icon)
     }
 
-    var body: some View {
+    public var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 if let icon, !icon.isEmpty {
@@ -173,8 +180,10 @@ struct AuthButton: View {
 
 // MARK: - Pressable Button Style
 
-struct PressableButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
+public struct PressableButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.9 : 1.0)

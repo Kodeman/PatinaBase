@@ -85,7 +85,11 @@ cmd_lint_delta() {
     echo "✓ lint-delta: no touched Swift files under $PROJECT_DIR_REL"; return 0
   fi
 
-  local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
+  # NB: expand $tmp NOW (double quotes) — with a deferred single-quote trap,
+  # the RETURN trap fires after the `local` is out of scope and `set -u`
+  # aborts the whole gate with "tmp: unbound variable" even when every tier
+  # passed (first tripped by R27 Wave 0, which touched Patina Swift files).
+  local tmp; tmp="$(mktemp -d)"; trap "rm -rf '$tmp'" RETURN
   # HEAD counts
   ( cd "$PROJECT_DIR" && swiftlint lint --quiet --config "$CONFIG" --reporter json $touched ) \
     > "$tmp/head.json" 2>/dev/null || true

@@ -9,26 +9,38 @@ import SwiftUI
 
 /// Patina Design System - Header for presented sheets, with an optional
 /// eyebrow, a serif title, and optional leading/trailing action buttons.
-struct PatinaSheetHeader: View {
+public struct PatinaSheetHeader: View {
     let title: String
     var eyebrow: String?
     var leadingAction: Action?
     var trailingAction: Action?
 
+    public init(
+        title: String,
+        eyebrow: String? = nil,
+        leadingAction: Action? = nil,
+        trailingAction: Action? = nil
+    ) {
+        self.title = title
+        self.eyebrow = eyebrow
+        self.leadingAction = leadingAction
+        self.trailingAction = trailingAction
+    }
+
     /// An icon-driven header action.
-    struct Action {
+    public struct Action {
         let systemImage: String
         let accessibilityLabel: String
         let handler: () -> Void
 
-        init(systemImage: String, accessibilityLabel: String, handler: @escaping () -> Void) {
+        public init(systemImage: String, accessibilityLabel: String, handler: @escaping () -> Void) {
             self.systemImage = systemImage
             self.accessibilityLabel = accessibilityLabel
             self.handler = handler
         }
     }
 
-    var body: some View {
+    public var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: PatinaSpacing.md) {
             actionButton(leadingAction)
 
