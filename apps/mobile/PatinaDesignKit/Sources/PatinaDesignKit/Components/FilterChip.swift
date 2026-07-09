@@ -8,12 +8,18 @@
 import SwiftUI
 
 /// Pill-shaped filter chip used in recommendation filters, quiz options, etc.
-struct FilterChip: View {
+public struct FilterChip: View {
     let title: String
     let isActive: Bool
     var action: (() -> Void)? = nil
 
-    var body: some View {
+    public init(title: String, isActive: Bool, action: (() -> Void)? = nil) {
+        self.title = title
+        self.isActive = isActive
+        self.action = action
+    }
+
+    public var body: some View {
         Button {
             action?()
         } label: {

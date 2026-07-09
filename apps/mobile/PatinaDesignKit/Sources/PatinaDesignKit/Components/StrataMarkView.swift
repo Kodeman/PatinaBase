@@ -70,7 +70,7 @@ public struct StrataMarkView: View {
 
     private func startBreathing() {
         withAnimation(
-            .easeInOut(duration: CompanionConstants.breathingDuration)  // 3s per spec
+            .easeInOut(duration: 3.0)  // 3s per spec (CompanionConstants.breathingDuration; inlined — app-local type)
             .repeatForever(autoreverses: true)
         ) {
             breatheScale = 1.08

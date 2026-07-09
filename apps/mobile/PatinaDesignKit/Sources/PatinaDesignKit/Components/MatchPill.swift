@@ -7,10 +7,14 @@
 
 import SwiftUI
 
-struct MatchPill: View {
+public struct MatchPill: View {
     let score: Int
 
-    var body: some View {
+    public init(score: Int) {
+        self.score = score
+    }
+
+    public var body: some View {
         Text("\(score)% match")
             .font(PatinaTypography.monoLabel)
             .tracking(0.5)
