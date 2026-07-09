@@ -31,7 +31,7 @@ Register ONE campaign under the brand:
 3. Enable **Advanced Opt-Out** on the Messaging Service — carrier-grade STOP/START/HELP with custom copy:
    - STOP reply: `You're opted out of Patina project texts. No more messages will be sent. Reply START to rejoin.`
    - HELP reply: `Patina relays project updates for your design studio. ~1 msg/day. Reply STOP to opt out. Questions: hello@patina.cloud`
-4. Set the Messaging Service **inbound webhook** to the deployed `sms-inbound` function URL. The URL must equal `SMS_INBOUND_PUBLIC_URL` **byte-for-byte, query string included** — the Twilio signature is computed over it. (Validate whether Strata still needs `?apikey=` on public functions; if yes it must be part of this URL.)
+4. Set the Messaging Service **inbound webhook** to the deployed `sms-inbound` function URL: `https://bkvcixdmuyejfzcijpdg.supabase.co/functions/v1/sms-inbound` (validated live 2026-07-09: reachable with **no `?apikey=`**, unsigned POSTs 403). The URL must equal `SMS_INBOUND_PUBLIC_URL` **byte-for-byte** — the Twilio signature is computed over it.
 5. Optional: set the status callback URL to the same function (delivery receipts update `sms_messages.twilio_status`).
 
 ## 4. Secrets (Strata edge function secrets / Vault, 00258 pattern)
