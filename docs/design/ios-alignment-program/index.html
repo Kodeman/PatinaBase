@@ -328,6 +328,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
 .ruling .ask{font-size:13px;color:var(--ink-soft)}
 .ruling .rec{margin-top:13px;padding-top:12px;border-top:1px solid var(--hair);font-size:13px;color:var(--ink)}
 .ruling .rec b{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--green);display:block;margin-bottom:4px}
+.ruling .stamp{float:right;font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--moss);border:1px solid var(--moss);padding:2px 9px;border-radius:99px;margin-left:10px}
+.rulings .ruling{border-left:2px solid var(--moss)}
 
 /* ---------- conventions strip ---------- */
 .conv{margin-top:26px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-mute);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
@@ -383,7 +385,7 @@ footer .signoff{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;co
       <div>APPS REVIEWED<b>Patina (client) + Patina Field</b></div>
       <div>EVIDENCE<b>51 Field + 23 Patina screens · simulator</b></div>
       <div>SUCCESSOR TO<b>iOS Master Plan R01–R26 · June 2026</b></div>
-      <div>ASKS<b>R27 – R33</b></div>
+      <div>RULINGS<b>R27 – R33 · RATIFIED</b></div>
     </div>
   </div>
 </header>
@@ -425,7 +427,7 @@ footer .signoff{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;co
       <div class="row"><div class="k">Patina client</div><div class="v">Commit the <b>core rail + shell</b>: nav shell, proposals + e-sign, invoices + pay, budget, documents. Reviews, scope-changes, direct-orders and GDPR export sequence as backlog.</div></div>
     </div>
 
-    <div class="takeaway rv"><b>What this section means</b>These three truths are the whole case. <em>Seven rulings — R27 through R33 — turn them into a program that nobody starts until you sign.</em></div>
+    <div class="takeaway rv"><b>What this section means</b>These three truths are the whole case. <em>Seven rulings — R27 through R33 — turned them into a program; all seven were ratified 2026-07-09, and Waves 0–4 are unlocked.</em></div>
   </div>
 </section>
 
@@ -992,52 +994,52 @@ footer .signoff{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;co
 <!-- ================= 09 ASKS ================= -->
 <section id="asks">
   <div class="wrap">
-    <div class="eyebrow rv"><span class="num">09</span> Asks · R27 – R33</div>
-    <h2 class="rv">Seven rulings. <em>Then the work begins.</em></h2>
-    <p class="lede rv">These continue the iOS lineage from the June Master Plan (R01–R26). Each is a single decision with a recommendation; ruling all seven unlocks Waves 0–4.</p>
+    <div class="eyebrow rv"><span class="num">09</span> Rulings · R27 – R33</div>
+    <h2 class="rv">Seven rulings, <em>all ratified.</em></h2>
+    <p class="lede rv">These continue the iOS lineage from the June Master Plan (R01–R26). Kody ratified all seven on 2026-07-09, each as recommended — <b>Waves 0–4 are unlocked, and Wave 0 (PatinaDesignKit) is underway.</b></p>
 
     <div class="rulings rv">
       <div class="ruling">
-        <div class="rid">R27 · The shared kit</div>
+        <div class="rid"><span class="stamp">Ruled · 2026-07-09</span>R27 · The shared kit</div>
         <h5>Create <code>apps/mobile/PatinaDesignKit</code></h5>
         <p class="ask">A local SwiftUI-only Swift package, fonts included, consumed by both apps. Fallback: a verbatim port into CaptureKit behind a hex-parity gate.</p>
-        <div class="rec"><b>Recommend</b>Build the package. Decide the fallback inside Wave 0 if the tooling resists.</div>
+        <div class="rec"><b>Ruled</b>Build the PatinaDesignKit package; fallback pre-agreed if the tooling resists.</div>
       </div>
       <div class="ruling">
-        <div class="rid">R28 · The verdigris split</div>
+        <div class="rid"><span class="stamp">Ruled · 2026-07-09</span>R28 · The verdigris split</div>
         <h5>Two roles, two targets</h5>
         <p class="ask">Field's verdigris is both "primary action" and "success" today. Remap action-uses → clay, success-uses → success #7A9B76.</p>
-        <div class="rec"><b>Recommend</b>Split. A blanket mapping green-brands the app.</div>
+        <div class="rec"><b>Ruled</b>Split by use — action → clay, success → #7A9B76.</div>
       </div>
       <div class="ruling">
-        <div class="rid">R29 · The shell</div>
+        <div class="rid"><span class="stamp">Ruled · 2026-07-09</span>R29 · The shell</div>
         <h5>Studio rail, not a tab bar</h5>
         <p class="ask">Ship the home-hub rail now; revisit a tab bar after Track D ships and real usage exists.</p>
-        <div class="rec"><b>Recommend</b>Rail. Re-ask the tab-bar question with data, later.</div>
+        <div class="rec"><b>Ruled</b>Studio rail; the tab bar is re-asked post-Track-D.</div>
       </div>
       <div class="ruling">
-        <div class="rid">R30 · Checkout return</div>
+        <div class="rid"><span class="stamp">Ruled · 2026-07-09</span>R30 · Checkout return</div>
         <h5>How Safari hands back</h5>
         <p class="ask">Poll on Safari dismiss (zero backend change) vs. adding a <code>patina://</code> success-redirect param to create-checkout-session (one edge-fn change, snappier return).</p>
-        <div class="rec"><b>Recommend</b>Poll first; add the deep-link as a fast-follow if the dismissal feel is dead.</div>
+        <div class="rec"><b>Ruled</b>Poll first; deep-link fast-follow if the dismissal feels dead.</div>
       </div>
       <div class="ruling">
-        <div class="rid">R31 · The fake rooms</div>
+        <div class="rid"><span class="stamp">Ruled · 2026-07-09</span>R31 · The fake rooms</div>
         <h5>Kill the seeded mocks</h5>
         <p class="ask">Delete <code>RoomSummary.mockAll</code> seeding for new / guest users; replace with a PatinaEmptyState scan CTA.</p>
-        <div class="rec"><b>Recommend</b>Yes. The fresh walk shows them contradicting real state.</div>
+        <div class="rec"><b>Ruled</b>Delete the seeded mock rooms.</div>
       </div>
       <div class="ruling">
-        <div class="rid">R32 · Backlog ratified</div>
+        <div class="rid"><span class="stamp">Ruled · 2026-07-09</span>R32 · Backlog ratified</div>
         <h5>Confirm what stays uncommitted</h5>
         <p class="ask">Reviews → scope changes → direct orders → GDPR export / erase stay out of scope, in that order.</p>
-        <div class="rec"><b>Recommend</b>Yes. Sequence acknowledged, not started.</div>
+        <div class="rec"><b>Ruled</b>Backlog ratified as sequenced.</div>
       </div>
       <div class="ruling">
-        <div class="rid">R33 · Retire the fonts</div>
+        <div class="rid"><span class="stamp">Ruled · 2026-07-09</span>R33 · Retire the fonts</div>
         <h5>Drop the Field typefaces</h5>
         <p class="ask">Remove Fraunces / Hanken Grotesk / IBM Plex Mono from the Field bundle after the rebrand lands.</p>
-        <div class="rec"><b>Recommend</b>Yes. Dead weight once the swap is in.</div>
+        <div class="rec"><b>Ruled</b>Retire the Field typefaces after the swap is verified on-screen.</div>
       </div>
     </div>
   </div>
@@ -1048,7 +1050,7 @@ footer .signoff{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;co
   <div class="wrap">
     <div class="eyebrow rv"><span class="num">10</span> Later</div>
     <h2 class="rv">Named, sequenced, <em>not committed.</em></h2>
-    <p class="lede rv">Held deliberately out of the core rail so the program stays shippable. R32 ratifies this list; nothing here starts without a later, separate go-ahead.</p>
+    <p class="lede rv">Held deliberately out of the core rail so the program stays shippable. R32 ratified this list (2026-07-09); nothing here starts without a later, separate go-ahead.</p>
     <div class="backlog rv">
       <div class="item"><span class="n">01</span><b>Client reviews surface</b> — the first backlog item once the rail lands.</div>
       <div class="item"><span class="n">02</span><b>Scope-change requests</b> — client-initiated change orders.</div>
@@ -1063,7 +1065,7 @@ footer .signoff{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;co
     <footer class="rv">
       <div>
         <div class="sig">Two apps, one Patina — measured, then ruled.</div>
-        <div class="signoff">Prepared for Kody's ratification. Nothing in Tracks A–E starts until R27–R33 are ruled.<br>iOS Alignment &amp; Client Completion · v1 · 2026-07-09</div>
+        <div class="signoff">Ratified by Kody 2026-07-09 — Waves 0–4 unlocked; Wave 0 in flight.<br>iOS Alignment &amp; Client Completion · v1 · 2026-07-09</div>
       </div>
       <div class="links">
         <a href="../ios-ux-review/index.html">← June 2026 iOS Master Plan · R01–R26</a>
