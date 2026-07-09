@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — Two Apps, One Patina · iOS Alignment Program</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* deck chrome — June idiom (deliberately more saturated than product clay) */
+  --paper:#F6F2E9;
+  --paper-deep:#EFE8DA;
+  --cream:#FBF8F2;
+  --ink:#2C2926;
+  --ink-soft:#5A5248;
+  --ink-mute:#8A7F70;
+  --clay:#A8674A;
+  --clay-deep:#8C4F36;
+  --oak:#C9A87C;
+  --gold:#8A6D2E;
+  --green:#5B7355;
+  --moss:#6E7050;
+  --error:#9C3D2E;
+  --warn:#B07C2A;
+  --calm:#7A7466;
+  --charcoal:#211E1B;
+  /* Field brand identity (content, not chrome) */
+  --verdigris:#3C7C6C;
+  --brass:#A07C38;
+  --rust:#9A5A3E;
+  /* true product clay (used ONLY for swatches/mocks) */
+  --true-clay:#C4A57B;
+  --hair:rgba(44,41,38,.14);
+  --hair-strong:rgba(44,41,38,.30);
+  --serif:'Playfair Display',Georgia,serif;
+  --sans:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+  --mono:'DM Mono','SF Mono',ui-monospace,monospace;
+  /* Field mock faces */
+  --f-serif:'Fraunces',Georgia,serif;
+  --f-sans:'Hanken Grotesk',-apple-system,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:999;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+::selection{background:var(--clay);color:var(--cream)}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--clay);outline-offset:3px;border-radius:2px}
+
+/* ---------- progress + nav ---------- */
+#bar{position:fixed;top:0;left:0;height:3px;background:var(--clay);width:0;z-index:1000;transition:width .1s linear}
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:900;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px 28px;
+  background:color-mix(in srgb,var(--paper) 88%,transparent);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--hair);
+}
+nav .mark{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-soft)}
+nav .mark b{color:var(--clay);font-weight:500}
+nav .links{display:flex;gap:20px}
+nav .links a{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);text-decoration:none;transition:color .2s}
+nav .links a:hover{color:var(--clay)}
+@media(max-width:1040px){nav .links{display:none}}
+
+/* ---------- structure ---------- */
+.wrap{max-width:1180px;margin:0 auto;padding:0 36px}
+section{padding:104px 0 34px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--clay);display:flex;align-items:center;gap:14px;margin-bottom:22px}
+.eyebrow::before{content:"";width:34px;height:1px;background:var(--clay)}
+.eyebrow .num{color:var(--ink-mute)}
+h2{font-family:var(--serif);font-weight:500;font-size:clamp(30px,4vw,46px);line-height:1.12;letter-spacing:-.01em;max-width:820px}
+h2 em{font-style:italic;color:var(--clay)}
+.lede{font-size:17.5px;color:var(--ink-soft);max-width:720px;margin-top:20px}
+.lede b{color:var(--ink);font-weight:600}
+code{font-family:var(--mono);font-size:.86em;background:var(--paper-deep);padding:1px 6px;border-radius:3px;color:var(--clay-deep);white-space:nowrap}
+
+/* ---------- app identity tags ---------- */
+.app-tag{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft);display:inline-flex;align-items:center;gap:7px}
+.app-tag::before{content:"";width:9px;height:9px;border-radius:2px;display:inline-block}
+.app-tag.field::before{background:var(--verdigris)}
+.app-tag.patina::before{background:var(--true-clay)}
+.flip{display:inline-flex;align-items:center;gap:8px;vertical-align:middle}
+.flip i{width:15px;height:15px;border-radius:3px;display:inline-block;border:1px solid var(--hair-strong)}
+.flip .ar{font-family:var(--mono);color:var(--ink-mute)}
+
+/* ---------- cover ---------- */
+header.cover{min-height:100svh;display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden}
+.strata{position:absolute;right:-90px;top:50%;transform:translateY(-50%);width:600px;height:600px;pointer-events:none}
+.strata .col{position:absolute;top:8%;bottom:8%;width:150px}
+.strata .col.field{right:250px;opacity:.34}
+.strata .col.patina{right:70px;opacity:.92}
+.strata .col div{position:absolute;left:0;right:0;border-radius:999px;transform:rotate(-9deg)}
+.col.field .b1{top:6%;height:88px;background:linear-gradient(105deg,#4E9483,var(--verdigris) 60%,#2E6155)}
+.col.field .b2{top:40%;height:112px;background:linear-gradient(105deg,#B78F45,var(--brass) 55%,#7E6026)}
+.col.field .b3{top:74%;height:78px;background:linear-gradient(105deg,#B06B4C,var(--rust) 60%,#7C4530)}
+.col.patina .b1{top:6%;height:88px;background:linear-gradient(105deg,#D8BC92,var(--oak) 60%,#B98F60)}
+.col.patina .b2{top:40%;height:112px;background:linear-gradient(105deg,#D0B488,var(--true-clay) 55%,#A98A5C)}
+.col.patina .b3{top:74%;height:78px;background:linear-gradient(105deg,#3A352F,#211E1B)}
+@media(max-width:1040px){.strata{opacity:.22}}
+.cover .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.32em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:30px;animation:rise .9s .1s both}
+.cover h1{font-family:var(--serif);font-weight:500;font-size:clamp(54px,9vw,116px);line-height:1.0;letter-spacing:-.02em;max-width:900px;animation:rise .9s .25s both}
+.cover h1 em{font-style:italic;color:var(--clay)}
+.cover .sub{margin-top:32px;font-size:18px;color:var(--ink-soft);max-width:600px;animation:rise .9s .4s both}
+.cover .meta{margin-top:52px;display:flex;gap:40px;flex-wrap:wrap;animation:rise .9s .55s both}
+.cover .meta div{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-mute)}
+.cover .meta b{display:block;color:var(--ink);font-weight:500;margin-top:5px;font-size:12.5px;text-transform:none;letter-spacing:.02em}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+
+/* ---------- reveal ---------- */
+.rv{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+.rv.on{opacity:1;transform:none}
+
+/* ---------- truths ---------- */
+.truths{margin-top:54px;border-top:1px solid var(--ink)}
+.truth{display:grid;grid-template-columns:88px 1fr;gap:26px;padding:30px 4px;border-bottom:1px solid var(--hair);align-items:start}
+.truth .tn{font-family:var(--serif);font-style:italic;font-size:44px;color:var(--clay);line-height:1}
+.truth h4{font-family:var(--serif);font-size:22px;font-weight:600;margin-bottom:8px}
+.truth p{font-size:14.5px;color:var(--ink-soft);max-width:820px}
+@media(max-width:680px){.truth{grid-template-columns:1fr;gap:10px}.truth .tn{font-size:32px}}
+
+.settled{margin-top:40px;border:1px solid var(--hair);border-left:2px solid var(--green);background:var(--cream);padding:26px 28px}
+.settled .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--green);margin-bottom:14px}
+.settled .row{display:grid;grid-template-columns:150px 1fr;gap:20px;padding:12px 0;border-top:1px solid var(--hair);font-size:14px}
+.settled .row:first-of-type{border-top:none}
+.settled .row .k{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink);text-transform:uppercase}
+.settled .row .v{color:var(--ink-soft)}
+.settled .row .v b{color:var(--ink)}
+@media(max-width:640px){.settled .row{grid-template-columns:1fr;gap:6px}}
+
+/* ---------- takeaway ---------- */
+.takeaway{margin-top:38px;padding:18px 22px;border:1px solid var(--hair);border-left:2px solid var(--clay);background:var(--cream);font-size:14px;color:var(--ink-soft);max-width:900px}
+.takeaway b{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--clay);display:block;margin-bottom:6px}
+.takeaway em{font-style:normal;color:var(--ink);font-weight:600}
+
+/* ---------- scorecard ---------- */
+.scorehead{display:flex;align-items:baseline;gap:18px;margin-top:52px;flex-wrap:wrap}
+.scorehead .title{font-family:var(--serif);font-size:26px;font-weight:500}
+.scorehead .id{font-size:13px;color:var(--ink-mute)}
+.score{margin-top:16px;border-top:1px solid var(--ink)}
+.score .row{display:grid;grid-template-columns:210px 1fr 76px;gap:22px;align-items:center;padding:18px 6px;border-bottom:1px solid var(--hair)}
+.score .row:hover{background:var(--cream)}
+.score .area{font-family:var(--serif);font-size:18.5px;font-weight:500}
+.score .note{font-size:12.5px;color:var(--ink-soft)}
+.score .grade{font-family:var(--serif);font-style:italic;font-size:28px;text-align:right;line-height:1}
+.g-a{color:var(--green)} .g-b{color:var(--gold)} .g-c{color:var(--warn)} .g-d{color:var(--clay-deep)} .g-f{color:var(--error)}
+@media(max-width:820px){.score .row{grid-template-columns:1fr 60px}.score .note{grid-column:1 / -1;grid-row:2}}
+.walknote{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink-mute);margin-top:14px}
+
+/* ---------- filmstrip ---------- */
+.strip{display:flex;gap:20px;overflow-x:auto;padding:30px 4px 16px;scroll-snap-type:x proximity}
+.strip::-webkit-scrollbar{height:6px}
+.strip::-webkit-scrollbar-thumb{background:var(--oak);border-radius:99px}
+.shot{flex:0 0 auto;scroll-snap-align:start;width:210px}
+.frame{border-radius:26px;overflow:hidden;background:var(--charcoal);padding:7px;border:1px solid var(--hair-strong);transition:transform .35s ease,border-color .35s ease}
+.shot:hover .frame{transform:translateY(-5px);border-color:var(--clay)}
+.frame img{display:block;width:100%;border-radius:20px}
+.shot figcaption{margin-top:12px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ink-mute);line-height:1.55}
+.shot figcaption b{display:block;color:var(--ink);font-weight:500;font-size:10.5px;letter-spacing:.02em}
+.flag{display:inline-block;margin-top:6px;font-family:var(--mono);font-size:9px;padding:2.5px 8px;border-radius:99px;letter-spacing:.1em;text-transform:uppercase}
+.flag.bug{background:rgba(156,61,46,.12);color:var(--error)}
+.flag.ok{background:rgba(91,115,85,.16);color:var(--green)}
+.flag.note{background:rgba(138,127,112,.14);color:var(--calm)}
+.flag.dark{background:var(--charcoal);color:var(--oak)}
+
+/* ---------- contact sheet ---------- */
+.band{font-family:var(--mono);font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--clay);margin:44px 0 0;padding-bottom:9px;border-bottom:1px solid var(--ink)}
+.band span{color:var(--ink-mute);letter-spacing:.1em}
+.flowlabel{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-mute);margin:22px 0 12px}
+.flowlabel b{color:var(--ink)}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:14px}
+.thumb{display:block;text-decoration:none}
+.thumb .tf{border-radius:13px;overflow:hidden;background:var(--charcoal);padding:5px;border:1px solid var(--hair);transition:border-color .25s}
+.thumb .tf img{display:block;width:100%;border-radius:9px}
+.thumb:hover .tf{border-color:var(--clay)}
+.thumb .cap{font-family:var(--mono);font-size:9px;letter-spacing:.04em;color:var(--ink-mute);margin-top:7px;line-height:1.5}
+.thumb .cap b{display:block;color:var(--ink);font-size:9.5px;letter-spacing:.02em}
+.thumb .mini-flag{color:var(--error)}
+
+/* ---------- pairs ---------- */
+.pairset{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:30px;margin-top:20px}
+.pairunit .twoup{display:flex;gap:16px;justify-content:center;align-items:flex-start}
+.pairunit .col-lab{display:flex;justify-content:space-between;max-width:340px;margin:0 auto 12px;gap:10px}
+.pairunit figcaption{font-size:12.5px;color:var(--ink-soft);text-align:center;margin-top:16px;max-width:340px;margin-left:auto;margin-right:auto}
+.pairunit figcaption b{color:var(--ink)}
+
+/* ---------- device / phone frame ---------- */
+.device{width:296px;border-radius:34px;background:var(--charcoal);padding:9px;border:1px solid var(--hair-strong)}
+.device .screen{border-radius:26px;overflow:hidden;background:#fff;position:relative}
+.device img{display:block;width:100%}
+.device.sm{width:152px;border-radius:24px;padding:6px}
+.device.sm .screen{border-radius:19px}
+.mocklab{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);text-align:center;margin-top:12px}
+.mocklab b{color:var(--ink);display:block;margin-bottom:2px}
+
+/* ---------- mock screens ---------- */
+.mk{min-height:430px;padding:20px 17px 20px;display:flex;flex-direction:column}
+.mk .top{display:flex;justify-content:space-between;align-items:center;font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+.mk .photo{height:118px;border-radius:12px;margin:15px 0 16px;display:flex;align-items:flex-end;padding:9px;font-size:9px;letter-spacing:.14em;text-transform:uppercase}
+.mk .title{font-size:25px;line-height:1.08;margin-bottom:5px;font-weight:600}
+.mk .maker{font-size:11.5px;margin-bottom:16px}
+.mk .spec{display:flex;justify-content:space-between;font-size:11px;padding:9px 0;border-bottom:1px solid}
+.mk .spec .k{letter-spacing:.06em}
+.mk .badge{align-self:flex-start;margin-top:14px;font-size:9px;letter-spacing:.14em;text-transform:uppercase;padding:4px 10px;border-radius:99px}
+.mk .btn{margin-top:auto;text-align:center;padding:13px;border-radius:13px;font-weight:600;font-size:14px}
+.mk-field{background:#F5F1E8;color:#211E18;font-family:var(--f-sans)}
+.mk-field .title{font-family:var(--f-serif)}
+.mk-field .top,.mk-field .spec .k,.mk-field .badge,.mk-field .photo{font-family:var(--f-mono)}
+.mk-field .top{color:var(--verdigris)}
+.mk-field .photo{background:linear-gradient(135deg,#E7DDC9,#D6C8AC);color:#8c7f63}
+.mk-field .maker{color:#6A5F4E}
+.mk-field .spec{border-color:rgba(33,30,24,.13)}
+.mk-field .badge{color:var(--brass);border:1px solid var(--brass)}
+.mk-field .btn{background:var(--verdigris);color:#F5F1E8}
+.mk-patina{background:#FAF7F2;color:#2C2926;font-family:var(--sans)}
+.mk-patina .title{font-family:var(--serif)}
+.mk-patina .top,.mk-patina .spec .k,.mk-patina .badge,.mk-patina .photo{font-family:var(--mono)}
+.mk-patina .top{color:#B08D5A}
+.mk-patina .photo{background:linear-gradient(135deg,#EFE7DB,#E1D4C0);color:#a2917a}
+.mk-patina .maker{color:#5C4A3C}
+.mk-patina .spec{border-color:rgba(44,41,38,.12)}
+.mk-patina .badge{color:#8C6A3E;border:1px solid var(--true-clay)}
+.mk-patina .btn{background:var(--true-clay);color:#2C2926}
+
+/* studio rail mock */
+.mk-studio{min-height:470px;padding:22px 18px 18px;background:#FAF7F2;color:#2C2926;font-family:var(--sans);display:flex;flex-direction:column}
+.mk-studio .greet{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#B08D5A}
+.mk-studio .h{font-family:var(--serif);font-size:26px;font-weight:500;margin:5px 0 22px}
+.mk-studio .seclab{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:#8A7F70;padding-bottom:10px;border-bottom:1px solid rgba(44,41,38,.16)}
+.srow{display:flex;justify-content:space-between;align-items:center;padding:15px 2px;border-bottom:1px solid rgba(44,41,38,.1)}
+.srow .st{font-family:var(--serif);font-size:18px;font-weight:500}
+.srow .sm{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:#8A7F70;margin-top:2px}
+.pill-count{background:var(--true-clay);color:#2C2926;font-family:var(--mono);font-size:11px;padding:3px 10px;border-radius:99px}
+.pill-mute{font-family:var(--mono);font-size:14px;color:#b7ac9c}
+.mk-studio .sub{margin-top:auto;padding-top:14px;border-top:1px solid rgba(44,41,38,.1);display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#8A7F70}
+
+/* ---------- findings cards ---------- */
+.findings{margin-top:34px;display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+.card{background:var(--cream);border:1px solid var(--hair);border-radius:4px;padding:22px 22px 18px;transition:border-color .25s,transform .25s}
+.card:hover{border-color:var(--clay);transform:translateY(-2px)}
+.card .chips{display:flex;gap:8px;margin-bottom:13px;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;padding:3.5px 10px;border-radius:99px}
+.chip.blk{background:var(--error);color:var(--cream)}
+.chip.sys{background:rgba(176,124,42,.16);color:var(--warn);border:1px solid rgba(176,124,42,.4)}
+.chip.p1{background:rgba(176,124,42,.12);color:var(--warn);border:1px solid rgba(176,124,42,.3)}
+.chip.p2{background:transparent;color:var(--calm);border:1px solid var(--hair)}
+.chip.ev{background:rgba(168,103,74,.1);color:var(--clay)}
+.chip.fed{background:transparent;color:var(--ink-mute);border:1px dashed var(--hair)}
+.card h5{font-family:var(--serif);font-size:17.5px;font-weight:600;line-height:1.28;margin-bottom:8px}
+.card p{font-size:13px;color:var(--ink-soft)}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin-top:44px}
+.tablewrap::-webkit-scrollbar{height:6px}
+.tablewrap::-webkit-scrollbar-thumb{background:var(--oak);border-radius:99px}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+.tbl th{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-mute);text-align:left;padding:12px 14px;border-bottom:1px solid var(--ink);font-weight:500;vertical-align:bottom}
+.tbl td{padding:14px 14px;border-bottom:1px solid var(--hair);vertical-align:top}
+.tbl tr:hover td{background:var(--cream)}
+.tbl .t{font-weight:600}
+.tbl .cite{font-family:var(--mono);font-size:11px;color:var(--ink-soft);line-height:1.6}
+.tbl .cite b{color:var(--clay-deep);font-weight:500}
+.tbl .sz{font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:var(--ink);white-space:nowrap}
+.tbl .route{font-family:var(--mono);font-size:11px;color:var(--ink-mute);white-space:nowrap}
+.sw{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid var(--hair-strong);vertical-align:-2px;margin-right:7px}
+.hex{font-family:var(--mono);font-size:11px;color:var(--ink)}
+.hex.mut{color:var(--ink-mute)}
+.sub{font-size:11px;color:var(--ink-mute);margin-top:4px}
+.tbl b.flip-note{color:var(--clay);font-weight:600}
+
+/* ---------- font map ---------- */
+.fontmap{margin-top:34px;border-top:1px solid var(--hair)}
+.fontmap .row{display:grid;grid-template-columns:1fr 40px 1fr 130px;gap:12px;align-items:center;padding:16px 6px;border-bottom:1px solid var(--hair)}
+.fontmap .face{font-size:24px;line-height:1}
+.fontmap .face small{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);margin-top:6px}
+.fontmap .ar{text-align:center;font-family:var(--mono);color:var(--ink-mute)}
+.fontmap .role{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-mute)}
+.fm-fr{font-family:var(--f-serif)} .fm-pd{font-family:var(--serif)}
+.fm-hg{font-family:var(--f-sans);font-weight:500} .fm-in{font-family:var(--sans);font-weight:500}
+.fm-ip{font-family:var(--f-mono)} .fm-dm{font-family:var(--mono)}
+@media(max-width:640px){.fontmap .row{grid-template-columns:1fr 26px 1fr;grid-template-rows:auto auto}.fontmap .role{grid-column:1 / -1}.fontmap .face{font-size:20px}}
+
+/* ---------- component map ---------- */
+.compmap{margin-top:38px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px 30px}
+.compmap .m{display:flex;align-items:baseline;gap:9px;font-size:13px;color:var(--ink-soft);padding:7px 0;border-bottom:1px solid var(--hair)}
+.compmap .m .from{color:var(--ink-mute)}
+.compmap .m .to{font-family:var(--mono);font-size:11.5px;color:var(--clay-deep)}
+.compmap .m .ar{color:var(--ink-mute)}
+.mech{margin-top:30px;font-family:var(--mono);font-size:12px;line-height:1.9;color:var(--ink-soft);background:var(--cream);border:1px solid var(--hair);padding:18px 22px}
+.mech b{color:var(--ink)}
+
+/* ---------- problem quote ---------- */
+.pullquote{margin-top:36px;font-family:var(--serif);font-style:italic;font-size:clamp(21px,2.6vw,28px);line-height:1.35;color:var(--ink);border-left:2px solid var(--clay);padding:6px 0 6px 26px;max-width:760px}
+.mock-2up{display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start;margin-top:40px}
+.mock-2up .txt{flex:1 1 320px;min-width:300px}
+.mock-2up .txt p{font-size:14px;color:var(--ink-soft);margin-bottom:14px}
+.mock-2up .txt p b{color:var(--ink)}
+
+/* ---------- risks ---------- */
+.risks{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:44px}
+.risk{border:1px solid var(--hair);background:var(--cream);border-radius:4px;padding:18px 20px}
+.risk .rn{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--ink-mute)}
+.risk h5{font-family:var(--serif);font-size:16px;font-weight:600;margin:7px 0 8px;line-height:1.25}
+.risk p{font-size:12.5px;color:var(--ink-soft)}
+.risk .mit{margin-top:11px;padding-top:10px;border-top:1px dashed var(--hair);font-size:12.5px;color:var(--ink-soft)}
+.risk .mit b{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--green);display:block;margin-bottom:4px}
+
+/* ---------- rulings ---------- */
+.rulings{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px;margin-top:44px}
+.ruling{border:1px solid var(--hair);background:var(--cream);border-radius:4px;padding:22px 24px 20px}
+.ruling .rid{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--clay)}
+.ruling h5{font-family:var(--serif);font-size:19px;font-weight:600;margin:8px 0 9px;line-height:1.22}
+.ruling .ask{font-size:13px;color:var(--ink-soft)}
+.ruling .rec{margin-top:13px;padding-top:12px;border-top:1px solid var(--hair);font-size:13px;color:var(--ink)}
+.ruling .rec b{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--green);display:block;margin-bottom:4px}
+
+/* ---------- conventions strip ---------- */
+.conv{margin-top:26px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-mute);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.conv span{color:var(--ink)}
+.conv .dot{color:var(--oak)}
+
+/* ---------- backlog ---------- */
+.backlog{margin-top:40px;columns:2;column-gap:48px;font-size:13.5px;color:var(--ink-soft)}
+@media(max-width:720px){.backlog{columns:1}}
+.backlog .item{break-inside:avoid;padding:11px 0;border-bottom:1px solid var(--hair)}
+.backlog .item .n{font-family:var(--mono);font-size:10px;color:var(--ink-mute);letter-spacing:.14em;margin-right:8px}
+.backlog .item b{color:var(--ink)}
+
+footer{margin-top:96px;border-top:1px solid var(--ink);padding:44px 0 72px;display:flex;justify-content:space-between;gap:34px;flex-wrap:wrap}
+footer .sig{font-family:var(--serif);font-style:italic;font-size:22px;max-width:460px}
+footer .links{display:flex;flex-direction:column;gap:9px}
+footer .links a{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);text-decoration:none;transition:color .2s}
+footer .links a:hover{color:var(--clay)}
+footer .signoff{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink-mute);margin-top:14px;max-width:440px;line-height:1.8;text-transform:none}
+
+@media print{
+  nav,#bar{display:none}
+  body::before{display:none}
+  section{padding:36px 0}
+  .rv{opacity:1;transform:none}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation:none !important;transition:none !important;scroll-behavior:auto !important}
+  .rv{opacity:1 !important;transform:none !important}
+}
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<nav>
+  <div class="mark">PATINA <b>/</b> iOS ALIGNMENT PROGRAM</div>
+  <div class="links">
+    <a href="#situation">Situation</a><a href="#scorecard">Scorecard</a><a href="#evidence">Evidence</a><a href="#rebrand">Rebrand</a><a href="#shell">Shell</a><a href="#rail">Rail</a><a href="#program">Program</a><a href="#asks">Asks</a>
+  </div>
+</nav>
+
+<!-- ================= COVER ================= -->
+<header class="cover">
+  <div class="strata">
+    <div class="col field"><div class="b1"></div><div class="b2"></div><div class="b3"></div></div>
+    <div class="col patina"><div class="b1"></div><div class="b2"></div><div class="b3"></div></div>
+  </div>
+  <div class="wrap">
+    <div class="kicker">iOS · Design Alignment &amp; Client Completion · 2026-07-09</div>
+    <h1>Two apps.<br>One <em>Patina.</em></h1>
+    <p class="sub">Patina Field runs 51 screens of real designer tooling wearing another company's clothes. The Patina client app wears the brand perfectly — and hides its best rooms behind a push notification. This is the program that fixes both.</p>
+    <div class="meta">
+      <div>APPS REVIEWED<b>Patina (client) + Patina Field</b></div>
+      <div>EVIDENCE<b>51 Field + 23 Patina screens · simulator</b></div>
+      <div>SUCCESSOR TO<b>iOS Master Plan R01–R26 · June 2026</b></div>
+      <div>ASKS<b>R27 – R33</b></div>
+    </div>
+  </div>
+</header>
+
+<!-- ================= 01 SITUATION ================= -->
+<section id="situation">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">01</span> The Situation</div>
+    <h2 class="rv">One company is shipping <em>two brands.</em></h2>
+    <p class="lede rv">Both iOS apps are built by the same team, on the same backend, for the same designers and clients. One looks unmistakably like Patina. The other looks like a competitor. Neither is finished. The good news buried under all of it: <b>the work ahead is assembly, not invention.</b></p>
+
+    <div class="truths rv">
+      <div class="truth">
+        <div class="tn">I.</div>
+        <div>
+          <h4>Patina Field is off-brand by design.</h4>
+          <p>The July app split gave Field a deliberate "field instrument" identity — verdigris, brass, rust; Fraunces / Hanken Grotesk / IBM Plex Mono; light-only. It is internally disciplined: lint-enforced tokens, Dynamic Type throughout. <b>The engine is strong; the brand is wrong.</b> Nothing is shared with the client app — no common package, hand-synced ports for QR auth and media upload, and roughly 900 color call sites living on a fork.</p>
+        </div>
+      </div>
+      <div class="truth">
+        <div class="tn">II.</div>
+        <div>
+          <h4>The Patina client app is on-brand but rail-less.</h4>
+          <p>Its tokens are the exact canonical hexes; dark mode and 14 shared components already exist. But there is <b>no persistent navigation shell.</b> ProjectListView, ThreadListView and DecisionListView are fully built, wired to live Supabase data — and reachable only when a push notification happens to arrive. The app also has zero transactional surface: no proposals, invoices, payments, budget or documents, all of which the client web portal ships today.</p>
+        </div>
+      </div>
+      <div class="truth">
+        <div class="tn">III.</div>
+        <div>
+          <h4>The backend is already done.</h4>
+          <p>Every feature this program adds to the client app mirrors an existing client-portal surface — same tables, same RPCs, same edge functions, all RLS-tested in production. <b>No new migrations are expected.</b> This is an assembly program, not an invention program.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="settled rv">
+      <div class="lbl">Scope — already ruled by Kody</div>
+      <div class="row"><div class="k">Patina Field</div><div class="v"><b>Full rebrand</b> onto Patina tokens — no half measures, no "field-flavored" variant.</div></div>
+      <div class="row"><div class="k">Patina client</div><div class="v">Commit the <b>core rail + shell</b>: nav shell, proposals + e-sign, invoices + pay, budget, documents. Reviews, scope-changes, direct-orders and GDPR export sequence as backlog.</div></div>
+    </div>
+
+    <div class="takeaway rv"><b>What this section means</b>These three truths are the whole case. <em>Seven rulings — R27 through R33 — turn them into a program that nobody starts until you sign.</em></div>
+  </div>
+</section>
+
+<!-- ================= 02 SCORECARD ================= -->
+<section id="scorecard">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">02</span> Scorecard</div>
+    <h2 class="rv">Graded against the <em>canonical language.</em></h2>
+    <p class="lede rv">The bar is the same for both: the Vision palette hexes in the portals' <code>globals.css</code>, Playfair / Inter / DM Mono, and The Document principles — typography-first, zero shadows, StrataMark devices, editorial motion. Grades below are <b>vs. that brand</b>, so a disciplined app in the wrong language still fails the brand rows honestly.</p>
+
+    <!-- PATINA -->
+    <div class="scorehead rv"><span class="app-tag patina">Patina — client</span><span class="title">On-brand, unfinished</span><span class="id">the language is right; the rooms are hidden</span></div>
+    <div class="score rv">
+      <div class="row"><div><div class="area">Palette &amp; tokens</div></div><div class="note">Exact canonical hexes — clay #C4A57B, offWhite #FAF7F2, … — plus a full warm DarkPalette and <code>patinaDynamic()</code>.</div><div class="grade g-a">A</div></div>
+      <div class="row"><div><div class="area">Typography</div></div><div class="note">Playfair / Inter / DM Mono; ~30 Dynamic-Type tokens. Ratchet still carries 148 raw <code>.font(.system(size:</code> baselines.</div><div class="grade g-a">A−</div></div>
+      <div class="row"><div><div class="area">Component kit</div></div><div class="note">14 shared components (PatinaButton / AsyncImage / Card / EmptyState …); features still bypass tokens in places (ratchet C = 146).</div><div class="grade g-b">B+</div></div>
+      <div class="row"><div><div class="area">Dark mode</div></div><div class="note">~620 colors adopted June 10; on-device re-walk still owed, and the fresh sim walk found companion-scrim bleed. Treat as sim-verified.</div><div class="grade g-c">B−</div></div>
+      <div class="row"><div><div class="area">Navigation &amp; discoverability</div></div><div class="note">No shell. Projects / Messages / Decisions inboxes are orphaned — push-only. Companion quick-actions are the de-facto menu.</div><div class="grade g-d">D</div></div>
+      <div class="row"><div><div class="area">Client feature completeness</div></div><div class="note">Decisions flow is complete (e-sign consent) but push-only; projects read-only; proposals / invoices / budget / documents absent.</div><div class="grade g-d">D</div></div>
+      <div class="row"><div><div class="area">Polish</div></div><div class="note">Stuck onboarding on the style reveal, 3 fake seeded rooms, an error-not-empty notifications feed, wrapped stepper labels, blank resonance tiles.</div><div class="grade g-c">C+</div></div>
+    </div>
+
+    <!-- FIELD -->
+    <div class="scorehead rv" style="margin-top:64px"><span class="app-tag field">Patina Field</span><span class="title">Off-brand, complete</span><span class="id">a different company's design, disciplined internally</span></div>
+    <div class="score rv">
+      <div class="row"><div><div class="area">Palette &amp; tokens</div></div><div class="note">Verdigris #3C7C6C / brass #A07C38 / rust #9A5A3E on paper &amp; ink — a different company's palette. Lint-enforced, so the fork is disciplined.</div><div class="grade g-f">F<span style="font-size:13px"> vs brand</span></div></div>
+      <div class="row"><div><div class="area">Typography</div></div><div class="note">Fraunces / Hanken Grotesk / IBM Plex Mono — zero overlap with the brand faces. Dynamic-Type discipline itself is good.</div><div class="grade g-f">F<span style="font-size:13px"> vs brand</span></div></div>
+      <div class="row"><div><div class="area">Component kit</div></div><div class="note">Only 3 shared components; buttons and rows are re-invented per flow (<code>SiteScanPrimaryButton</code> et al.).</div><div class="grade g-d">D</div></div>
+      <div class="row"><div><div class="area">Dark mode</div></div><div class="note">None. Light-only paper &amp; ink; camera chrome is the only dark surface in the app.</div><div class="grade g-f">F</div></div>
+      <div class="row"><div><div class="area">Feature completeness</div></div><div class="note">All 51 screens built; every Work flow on real Supabase services — receiving, site-scan, QR approve, leads, messages.</div><div class="grade g-a">A−</div></div>
+      <div class="row"><div><div class="area">Internal consistency</div></div><div class="note">14 divergent date-format idioms, hardcoded portal/media base URLs, an F4 upload dead-end, a P1 silent refresh error, Settings is a template.</div><div class="grade g-c">C+</div></div>
+    </div>
+    <p class="walknote rv">Fresh sim walk 2026-07-09; grades reflect what a new guest user actually sees, not what the code intends.</p>
+
+    <div class="takeaway rv"><b>What this section means</b>Field's two F rows are exactly the ask — <em>R27 (shared kit), R28 (verdigris split), R33 (retire the fonts).</em> Patina's two D rows are Track C (the shell → R29), Track D (the money rail) and R31 (kill the fake rooms).</div>
+  </div>
+</section>
+
+<!-- ================= 03 EVIDENCE ================= -->
+<section id="evidence">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">03</span> The Evidence</div>
+    <h2 class="rv">What the simulator actually showed <em>a guest.</em></h2>
+    <p class="lede rv">Every shot below was captured on 2026-07-09 in the simulator. The Field app runs on <code>CaptureKitMocks</code> by design, so its screens are sim-verified mock UI. The Patina shots are all guest / mock / empty-state — no signed-in data — which is itself half the finding.</p>
+  </div>
+
+  <!-- Patina filmstrip -->
+  <div class="wrap rv">
+    <div class="flowlabel"><span class="app-tag patina" style="letter-spacing:.18em">Patina · client</span> &nbsp;— key screens, all guest / mock</div>
+    <div class="strip">
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/01-auth.png" alt="Patina welcome screen" loading="lazy"></div><figcaption><b>Welcome</b>Apple / Google / Email + Browse as Guest<span class="flag note">Guest</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/08-style-quiz-result.png" alt="Style quiz result" loading="lazy"></div><figcaption><b>Style result</b>"Warm Minimal" · 65% confidence<span class="flag note">Mock</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/09-home-coachmark-tour.png" alt="Home coach-mark tour" loading="lazy"></div><figcaption><b>Home tour</b>First-run coach-mark overlay<span class="flag ok">On-brand</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/10-home-daily-room.png" alt="Daily Room home with seeded rooms" loading="lazy"></div><figcaption><b>Daily Room</b>3 seeded rooms: Living 12 / Bedroom 8 / Office 5<span class="flag bug">Fake rooms → R31</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/11-companion-overlay.png" alt="Companion overlay" loading="lazy"></div><figcaption><b>Companion</b>The de-facto navigation menu<span class="flag note">Only rail today</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/13-notifications-error-guest.png" alt="Notifications error state" loading="lazy"></div><figcaption><b>Notifications</b>Renders an error, not an empty state<span class="flag bug">Error-not-empty</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/14-profile.png" alt="Profile screen" loading="lazy"></div><figcaption><b>Profile</b>0 Rooms / 0 Saved<span class="flag bug">Contradicts home</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/16-help-panel-empty.png" alt="Empty help panel" loading="lazy"></div><figcaption><b>Help</b>"No help articles yet"<span class="flag bug">Unpopulated</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/17-scan-entry-manual.png" alt="Manual room entry" loading="lazy"></div><figcaption><b>Manual entry</b>Steppers wrap: "Win dow s" / "Door s"<span class="flag bug">Label wrap</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/18-style-discovery-resonance.png" alt="Style resonance tiles" loading="lazy"></div><figcaption><b>Resonance</b>Blank gradient tiles, no room imagery<span class="flag bug">No imagery</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/20-recommendations-empty.png" alt="Recommendations empty" loading="lazy"></div><figcaption><b>Recommendations</b>0 pieces for a guest<span class="flag note">Empty</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/21-home-daily-room-dark.png" alt="Daily Room dark mode" loading="lazy"></div><figcaption><b>Daily Room · dark</b>Near-white scrim rises from the FAB<span class="flag dark">Dark</span><span class="flag bug">Scrim bleed</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/22-settings-dark.png" alt="Settings dark mode" loading="lazy"></div><figcaption><b>Settings · dark</b>Appearance picker<span class="flag dark">Dark</span></figcaption></figure>
+      <figure class="shot"><div class="frame"><img src="screenshots/patina/23-profile-dark.png" alt="Profile dark mode" loading="lazy"></div><figcaption><b>Profile · dark</b>Warm graphite surfaces<span class="flag dark">Dark</span></figcaption></figure>
+    </div>
+  </div>
+
+  <!-- Field contact sheet -->
+  <div class="wrap rv">
+    <div class="band">Patina Field — all 51 screens <span>· tap any to open · iPhone 17 sim · CaptureKitMocks</span></div>
+
+    <div class="flowlabel">Capture flows <b>— O · E · C · N · R · S · V · U · T</b></div>
+
+    <div class="flowlabel" style="margin-top:8px;color:var(--verdigris)">O — Onboarding</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/O1.welcome.png"><div class="tf"><img src="screenshots/field/O1.welcome.png" alt="O1 welcome" loading="lazy"></div><div class="cap"><b>O1</b>welcome</div></a>
+      <a class="thumb" href="screenshots/field/O2.connect.png"><div class="tf"><img src="screenshots/field/O2.connect.png" alt="O2 connect" loading="lazy"></div><div class="cap"><b>O2</b>connect</div></a>
+      <a class="thumb" href="screenshots/field/O3.camera-priming.png"><div class="tf"><img src="screenshots/field/O3.camera-priming.png" alt="O3 camera priming" loading="lazy"></div><div class="cap"><b>O3</b>camera priming</div></a>
+      <a class="thumb" href="screenshots/field/O4.ready.png"><div class="tf"><img src="screenshots/field/O4.ready.png" alt="O4 ready" loading="lazy"></div><div class="cap"><b>O4</b>ready</div></a>
+    </div>
+
+    <div class="flowlabel" style="color:var(--verdigris)">E — Entry points</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/E1.app-icon.png"><div class="tf"><img src="screenshots/field/E1.app-icon.png" alt="E1 app icon" loading="lazy"></div><div class="cap"><b>E1</b>app icon <span class="mini-flag">≡ viewfinder</span></div></a>
+      <a class="thumb" href="screenshots/field/E2.system-entry.png"><div class="tf"><img src="screenshots/field/E2.system-entry.png" alt="E2 system entry" loading="lazy"></div><div class="cap"><b>E2</b>system entry</div></a>
+      <a class="thumb" href="screenshots/field/E3.share-sheet.png"><div class="tf"><img src="screenshots/field/E3.share-sheet.png" alt="E3 share sheet" loading="lazy"></div><div class="cap"><b>E3</b>share sheet</div></a>
+    </div>
+
+    <div class="flowlabel" style="color:var(--verdigris)">C — Capture</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/C1.viewfinder.png"><div class="tf"><img src="screenshots/field/C1.viewfinder.png" alt="C1 viewfinder" loading="lazy"></div><div class="cap"><b>C1</b>viewfinder</div></a>
+      <a class="thumb" href="screenshots/field/C2.framing.png"><div class="tf"><img src="screenshots/field/C2.framing.png" alt="C2 framing" loading="lazy"></div><div class="cap"><b>C2</b>framing</div></a>
+      <a class="thumb" href="screenshots/field/C3.specimen-forms.png"><div class="tf"><img src="screenshots/field/C3.specimen-forms.png" alt="C3 specimen forms" loading="lazy"></div><div class="cap"><b>C3</b>specimen forms</div></a>
+      <a class="thumb" href="screenshots/field/C4.multi-shot.png"><div class="tf"><img src="screenshots/field/C4.multi-shot.png" alt="C4 multi shot" loading="lazy"></div><div class="cap"><b>C4</b>multi-shot</div></a>
+      <a class="thumb" href="screenshots/field/C5.specimen-sheet.png"><div class="tf"><img src="screenshots/field/C5.specimen-sheet.png" alt="C5 specimen sheet" loading="lazy"></div><div class="cap"><b>C5</b>specimen sheet</div></a>
+    </div>
+
+    <div class="flowlabel" style="color:var(--verdigris)">N — Intake methods</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/N1.tag-ocr.png"><div class="tf"><img src="screenshots/field/N1.tag-ocr.png" alt="N1 tag ocr" loading="lazy"></div><div class="cap"><b>N1</b>tag OCR</div></a>
+      <a class="thumb" href="screenshots/field/N2.scan.png"><div class="tf"><img src="screenshots/field/N2.scan.png" alt="N2 scan" loading="lazy"></div><div class="cap"><b>N2</b>scan</div></a>
+      <a class="thumb" href="screenshots/field/N3.measure.png"><div class="tf"><img src="screenshots/field/N3.measure.png" alt="N3 measure" loading="lazy"></div><div class="cap"><b>N3</b>measure</div></a>
+      <a class="thumb" href="screenshots/field/N4.voice.png"><div class="tf"><img src="screenshots/field/N4.voice.png" alt="N4 voice" loading="lazy"></div><div class="cap"><b>N4</b>voice</div></a>
+      <a class="thumb" href="screenshots/field/N5.smart-guess.png"><div class="tf"><img src="screenshots/field/N5.smart-guess.png" alt="N5 smart guess" loading="lazy"></div><div class="cap"><b>N5</b>smart guess</div></a>
+    </div>
+
+    <div class="flowlabel" style="color:var(--verdigris)">R — Capture recovery</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/R1.low-light.png"><div class="tf"><img src="screenshots/field/R1.low-light.png" alt="R1 low light" loading="lazy"></div><div class="cap"><b>R1</b>low light</div></a>
+      <a class="thumb" href="screenshots/field/R2.ocr-fallback.png"><div class="tf"><img src="screenshots/field/R2.ocr-fallback.png" alt="R2 ocr fallback" loading="lazy"></div><div class="cap"><b>R2</b>OCR fallback</div></a>
+      <a class="thumb" href="screenshots/field/R3.denied.png"><div class="tf"><img src="screenshots/field/R3.denied.png" alt="R3 denied" loading="lazy"></div><div class="cap"><b>R3</b>permission denied</div></a>
+      <a class="thumb" href="screenshots/field/R4.offline.png"><div class="tf"><img src="screenshots/field/R4.offline.png" alt="R4 offline" loading="lazy"></div><div class="cap"><b>R4</b>offline</div></a>
+    </div>
+
+    <div class="flowlabel" style="color:var(--verdigris)">S — Save &amp; assign</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/S1.assign.png"><div class="tf"><img src="screenshots/field/S1.assign.png" alt="S1 assign" loading="lazy"></div><div class="cap"><b>S1</b>assign</div></a>
+      <a class="thumb" href="screenshots/field/S2.create-project.png"><div class="tf"><img src="screenshots/field/S2.create-project.png" alt="S2 create project" loading="lazy"></div><div class="cap"><b>S2</b>create project</div></a>
+      <a class="thumb" href="screenshots/field/S3.destination.png"><div class="tf"><img src="screenshots/field/S3.destination.png" alt="S3 destination" loading="lazy"></div><div class="cap"><b>S3</b>destination</div></a>
+      <a class="thumb" href="screenshots/field/S4.saved.png"><div class="tf"><img src="screenshots/field/S4.saved.png" alt="S4 saved" loading="lazy"></div><div class="cap"><b>S4</b>saved</div></a>
+      <a class="thumb" href="screenshots/field/S5.inbox.png"><div class="tf"><img src="screenshots/field/S5.inbox.png" alt="S5 inbox" loading="lazy"></div><div class="cap"><b>S5</b>inbox</div></a>
+    </div>
+
+    <div class="flowlabel" style="color:var(--verdigris)">V — Session review</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/V1.session-tray.png"><div class="tf"><img src="screenshots/field/V1.session-tray.png" alt="V1 session tray" loading="lazy"></div><div class="cap"><b>V1</b>session tray</div></a>
+      <a class="thumb" href="screenshots/field/V2.cull.png"><div class="tf"><img src="screenshots/field/V2.cull.png" alt="V2 cull" loading="lazy"></div><div class="cap"><b>V2</b>cull</div></a>
+      <a class="thumb" href="screenshots/field/V3.detail.png"><div class="tf"><img src="screenshots/field/V3.detail.png" alt="V3 detail" loading="lazy"></div><div class="cap"><b>V3</b>detail</div></a>
+    </div>
+
+    <div class="flowlabel" style="color:var(--verdigris)">U — Sync &amp; search</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/U1.sync.png"><div class="tf"><img src="screenshots/field/U1.sync.png" alt="U1 sync" loading="lazy"></div><div class="cap"><b>U1</b>sync</div></a>
+      <a class="thumb" href="screenshots/field/U2.library-search.png"><div class="tf"><img src="screenshots/field/U2.library-search.png" alt="U2 library search" loading="lazy"></div><div class="cap"><b>U2</b>library search</div></a>
+    </div>
+
+    <div class="flowlabel" style="color:var(--verdigris)">T — Settings &amp; account</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/T1.settings.png"><div class="tf"><img src="screenshots/field/T1.settings.png" alt="T1 settings" loading="lazy"></div><div class="cap"><b>T1</b>settings <span class="mini-flag">template</span></div></a>
+      <a class="thumb" href="screenshots/field/T2.account.png"><div class="tf"><img src="screenshots/field/T2.account.png" alt="T2 account" loading="lazy"></div><div class="cap"><b>T2</b>account</div></a>
+    </div>
+
+    <div class="band" style="margin-top:40px">Work flows <span>· W · P · L · D · M · G · Q · F</span></div>
+
+    <div class="flowlabel" style="color:var(--verdigris)">W — Work home &nbsp;·&nbsp; P — Projects</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/W1.work.png"><div class="tf"><img src="screenshots/field/W1.work.png" alt="W1 work" loading="lazy"></div><div class="cap"><b>W1</b>work home</div></a>
+      <a class="thumb" href="screenshots/field/P1.project-list.png"><div class="tf"><img src="screenshots/field/P1.project-list.png" alt="P1 project list" loading="lazy"></div><div class="cap"><b>P1</b>project list <span class="mini-flag">silent refresh err</span></div></a>
+      <a class="thumb" href="screenshots/field/P2.project-detail.png"><div class="tf"><img src="screenshots/field/P2.project-detail.png" alt="P2 project detail" loading="lazy"></div><div class="cap"><b>P2</b>project detail</div></a>
+    </div>
+
+    <div class="flowlabel" style="color:var(--verdigris)">L — Leads &nbsp;·&nbsp; D — Decisions &nbsp;·&nbsp; M — Messages</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/L1.lead-list.png"><div class="tf"><img src="screenshots/field/L1.lead-list.png" alt="L1 lead list" loading="lazy"></div><div class="cap"><b>L1</b>lead list</div></a>
+      <a class="thumb" href="screenshots/field/L2.lead-detail.png"><div class="tf"><img src="screenshots/field/L2.lead-detail.png" alt="L2 lead detail" loading="lazy"></div><div class="cap"><b>L2</b>lead detail</div></a>
+      <a class="thumb" href="screenshots/field/D1.decision-list.png"><div class="tf"><img src="screenshots/field/D1.decision-list.png" alt="D1 decision list" loading="lazy"></div><div class="cap"><b>D1</b>decision list</div></a>
+      <a class="thumb" href="screenshots/field/D2.decision-detail.png"><div class="tf"><img src="screenshots/field/D2.decision-detail.png" alt="D2 decision detail" loading="lazy"></div><div class="cap"><b>D2</b>decision detail</div></a>
+      <a class="thumb" href="screenshots/field/M1.inbox.png"><div class="tf"><img src="screenshots/field/M1.inbox.png" alt="M1 inbox" loading="lazy"></div><div class="cap"><b>M1</b>inbox</div></a>
+      <a class="thumb" href="screenshots/field/M2.thread.png"><div class="tf"><img src="screenshots/field/M2.thread.png" alt="M2 thread" loading="lazy"></div><div class="cap"><b>M2</b>thread</div></a>
+    </div>
+
+    <div class="flowlabel" style="color:var(--verdigris)">G — Receiving &nbsp;·&nbsp; Q — QR approval &nbsp;·&nbsp; F — Site scan</div>
+    <div class="thumbs">
+      <a class="thumb" href="screenshots/field/G1.arriving.png"><div class="tf"><img src="screenshots/field/G1.arriving.png" alt="G1 arriving" loading="lazy"></div><div class="cap"><b>G1</b>arriving</div></a>
+      <a class="thumb" href="screenshots/field/G2.inspection.png"><div class="tf"><img src="screenshots/field/G2.inspection.png" alt="G2 inspection" loading="lazy"></div><div class="cap"><b>G2</b>inspection</div></a>
+      <a class="thumb" href="screenshots/field/G3.outcome.png"><div class="tf"><img src="screenshots/field/G3.outcome.png" alt="G3 outcome" loading="lazy"></div><div class="cap"><b>G3</b>outcome</div></a>
+      <a class="thumb" href="screenshots/field/Q1.qr-scan.png"><div class="tf"><img src="screenshots/field/Q1.qr-scan.png" alt="Q1 qr scan" loading="lazy"></div><div class="cap"><b>Q1</b>QR scan</div></a>
+      <a class="thumb" href="screenshots/field/Q2.qr-approve.png"><div class="tf"><img src="screenshots/field/Q2.qr-approve.png" alt="Q2 qr approve" loading="lazy"></div><div class="cap"><b>Q2</b>QR approve</div></a>
+      <a class="thumb" href="screenshots/field/F1.scan-setup.png"><div class="tf"><img src="screenshots/field/F1.scan-setup.png" alt="F1 scan setup" loading="lazy"></div><div class="cap"><b>F1</b>scan setup</div></a>
+      <a class="thumb" href="screenshots/field/F2.site-scan.png"><div class="tf"><img src="screenshots/field/F2.site-scan.png" alt="F2 site scan" loading="lazy"></div><div class="cap"><b>F2</b>site scan</div></a>
+      <a class="thumb" href="screenshots/field/F3.scan-review.png"><div class="tf"><img src="screenshots/field/F3.scan-review.png" alt="F3 scan review" loading="lazy"></div><div class="cap"><b>F3</b>scan review</div></a>
+      <a class="thumb" href="screenshots/field/F4.scan-upload.png"><div class="tf"><img src="screenshots/field/F4.scan-upload.png" alt="F4 scan upload" loading="lazy"></div><div class="cap"><b>F4</b>scan upload <span class="mini-flag">dead-end</span></div></a>
+    </div>
+  </div>
+
+  <!-- Same job, two brands -->
+  <div class="wrap rv">
+    <div class="band" style="margin-top:56px">Same job, two brands <span>· same role, same company, unrelated design languages</span></div>
+    <div class="pairset">
+      <figure class="pairunit">
+        <div class="col-lab"><span class="app-tag field">Field · account</span><span class="app-tag patina">Patina · profile</span></div>
+        <div class="twoup">
+          <div class="device sm"><div class="screen"><img src="screenshots/field/T2.account.png" alt="Field account" loading="lazy"></div></div>
+          <div class="device sm"><div class="screen"><img src="screenshots/patina/14-profile.png" alt="Patina profile" loading="lazy"></div></div>
+        </div>
+        <figcaption><b>The account screen.</b> One reads verdigris and Fraunces; one reads clay and Playfair. Same person, same login.</figcaption>
+      </figure>
+      <figure class="pairunit">
+        <div class="col-lab"><span class="app-tag field">Field · settings</span><span class="app-tag patina">Patina · settings</span></div>
+        <div class="twoup">
+          <div class="device sm"><div class="screen"><img src="screenshots/field/T1.settings.png" alt="Field settings" loading="lazy"></div></div>
+          <div class="device sm"><div class="screen"><img src="screenshots/patina/15-settings.png" alt="Patina settings" loading="lazy"></div></div>
+        </div>
+        <figcaption><b>Settings.</b> The same list of dials, drawn by two design systems that share no token.</figcaption>
+      </figure>
+      <figure class="pairunit">
+        <div class="col-lab"><span class="app-tag field">Field · welcome</span><span class="app-tag patina">Patina · welcome</span></div>
+        <div class="twoup">
+          <div class="device sm"><div class="screen"><img src="screenshots/field/O1.welcome.png" alt="Field welcome" loading="lazy"></div></div>
+          <div class="device sm"><div class="screen"><img src="screenshots/patina/01-auth.png" alt="Patina welcome" loading="lazy"></div></div>
+        </div>
+        <figcaption><b>First impression.</b> The very first screen a user sees already tells them these are two companies.</figcaption>
+      </figure>
+    </div>
+    <p class="walknote">All shots simulator, 2026-07-09 · Field runs on mocks by design · Patina shots guest / mock where noted · real-data device shots for these surfaces live in the <a href="../ios-ux-review/index.html" style="color:var(--clay);text-decoration:none">June 2026 Master Plan</a>.</p>
+  </div>
+
+  <!-- What the walk surfaced -->
+  <div class="wrap rv">
+    <div class="band" style="margin-top:56px">What the walk surfaced <span>· fresh Patina sim walk, 2026-07-09 · committed to Track E</span></div>
+    <div class="findings">
+      <div class="card"><div class="chips"><span class="chip blk">Ship-blocker</span><span class="chip ev">Reproduced</span></div>
+        <h5>Onboarding never releases the user</h5>
+        <p>Tapping "View Recommendations" on the style reveal sets <code>hasCompletedOnboarding</code>, but the phase observer never flips <code>.onboarding → .main</code>. The user is stuck on the reveal until they force-relaunch. This is the worst thing in the app and Track E fixes it first.</p></div>
+      <div class="card"><div class="chips"><span class="chip sys">Systemic</span><span class="chip ev">21 / 23</span></div>
+        <h5>Dark-mode companion scrim bleeds</h5>
+        <p>A bright, near-white gradient band rises ~15% from the bottom of every dark screen that shows the companion button — the FAB scrim was never themed for dark. It appears on nearly every dark capture.</p></div>
+      <div class="card"><div class="chips"><span class="chip p1">Trust</span><span class="chip ev">10 vs 14 / 20</span><span class="chip fed">→ R31</span></div>
+        <h5>Mock rooms contradict real state</h5>
+        <p>Home shows 3 seeded rooms with item counts while Profile says 0 Rooms / 0 Saved and Recommendations is empty. A brand-new user is shown a life they don't have. Strengthens the case to kill the fake rooms.</p></div>
+      <div class="card"><div class="chips"><span class="chip p1">Guest</span><span class="chip ev">Shot 13</span></div>
+        <h5>Notifications shows an error, not an empty state</h5>
+        <p>A guest's first look at the notifications feed is an error screen. It should invite, not apologize — an empty state with a clear next step.</p></div>
+      <div class="card"><div class="chips"><span class="chip p2">Content</span><span class="chip ev">Shot 16</span></div>
+        <h5>Help content is unpopulated</h5>
+        <p>"No help articles yet" appears everywhere help is offered, alongside the known <code>HelpArticleStubView</code> "coming soon". The surface is wired; the content isn't.</p></div>
+      <div class="card"><div class="chips"><span class="chip p2">Layout</span><span class="chip ev">Shot 17</span></div>
+        <h5>Stepper labels wrap mid-word</h5>
+        <p>In manual room entry, "Windows" and "Doors" break to "Win dow s" and "Door s". A width / line-break constraint, small but conspicuous on the first data-entry screen.</p></div>
+      <div class="card"><div class="chips"><span class="chip p1">Content</span><span class="chip ev">Shot 18</span></div>
+        <h5>Resonance tiles have no imagery</h5>
+        <p>The style-discovery resonance grid renders as plain gradients with no room photos — the same class of gap the June plan flagged on the quiz, resurfacing on a new screen.</p></div>
+    </div>
+    <div class="takeaway"><b>What this section means</b>The orphaned inboxes could not be screenshotted <em>at all</em> — deep links only handle auth / room / piece, and a simulated push produced no tappable banner in guest mode. The review itself could not reach Projects, Messages or Decisions without a notification. That is the argument for <em>R29 — build the shell.</em></div>
+  </div>
+</section>
+
+<!-- ================= 04 REBRAND ================= -->
+<section id="rebrand">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">04</span> One Brand</div>
+    <h2 class="rv">Field, re-skinned onto <em>Patina tokens.</em></h2>
+    <p class="lede rv">The rebrand is mostly a value swap: <span class="flip"><i style="background:var(--verdigris)"></i><span class="ar">→</span><i style="background:var(--true-clay)"></i></span> and two font substitutions. Below is the full token remap — old swatch to new light and dark values — with the one mapping decision that needs a ruling called out.</p>
+
+    <div class="tablewrap rv">
+      <table class="tbl">
+        <thead><tr><th>Field token — today</th><th>→ Patina token · light</th><th>Dark · via patinaDynamic</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="sw" style="background:#F5F1E8"></span><span class="hex">paper</span> <span class="hex mut">#F5F1E8</span></td>
+            <td><span class="sw" style="background:#FAF7F2"></span><span class="hex">offWhite</span> <span class="hex mut">#FAF7F2</span></td>
+            <td><span class="sw" style="background:#211E1B"></span><span class="hex">warm graphite</span> <span class="hex mut">#211E1B</span></td>
+            <td>background</td>
+          </tr>
+          <tr>
+            <td><span class="sw" style="background:#E9E2D0"></span><span class="hex">paper3</span></td>
+            <td><span class="sw" style="background:#E5E2DD"></span><span class="hex">pearl</span> <span class="hex mut">#E5E2DD</span></td>
+            <td><span class="sw" style="background:#2A2623"></span><span class="hex">dark elevated</span></td>
+            <td>raised surface</td>
+          </tr>
+          <tr>
+            <td><span class="sw" style="background:#211E18"></span><span class="hex">ink</span> <span class="hex mut">#211E18</span></td>
+            <td><span class="sw" style="background:#2C2926"></span><span class="hex">charcoal</span> <span class="hex mut">#2C2926</span></td>
+            <td><span class="sw" style="background:#F2ECE3"></span><span class="hex">warm white</span></td>
+            <td>primary text</td>
+          </tr>
+          <tr>
+            <td><span class="sw" style="background:#5C5142"></span><span class="hex">inkSoft</span></td>
+            <td><span class="sw" style="background:#5C4A3C"></span><span class="hex">mocha</span> <span class="hex mut">#5C4A3C</span></td>
+            <td><span class="sw" style="background:#A79B8B"></span><span class="hex">muted warm</span></td>
+            <td>secondary text</td>
+          </tr>
+          <tr style="background:rgba(168,103,74,.05)">
+            <td><span class="sw" style="background:#3C7C6C"></span><span class="hex">verdigris</span> <span class="hex mut">#3C7C6C</span><div class="sub">action uses · ~most of 83 refs</div></td>
+            <td><span class="sw" style="background:#C4A57B"></span><span class="hex">clay</span> <span class="hex mut">#C4A57B</span></td>
+            <td><span class="sw" style="background:#C4A57B"></span><span class="hex">clay</span></td>
+            <td><b class="flip-note">primary actions — the brand flip</b></td>
+          </tr>
+          <tr>
+            <td><span class="sw" style="background:#3C7C6C"></span><span class="hex">verdigris</span><div class="sub">success uses</div></td>
+            <td><span class="sw" style="background:#7A9B76"></span><span class="hex">success</span> <span class="hex mut">#7A9B76</span></td>
+            <td><span class="sw" style="background:#6E8C6A"></span><span class="hex">success dark</span></td>
+            <td>confirmations, sync-ok</td>
+          </tr>
+          <tr>
+            <td><span class="sw" style="background:#A07C38"></span><span class="hex">brass</span> <span class="hex mut">#A07C38</span></td>
+            <td><span class="sw" style="background:#E8C547"></span><span class="hex">goldenHour</span> <span style="margin-left:6px"></span><span class="sw" style="background:#D4A574"></span><span class="hex">warning</span></td>
+            <td><span class="hex mut">—</span></td>
+            <td>highlights vs. warnings — classified per use</td>
+          </tr>
+          <tr>
+            <td><span class="sw" style="background:#9A5A3E"></span><span class="hex">rust</span> <span class="hex mut">#9A5A3E</span></td>
+            <td><span class="sw" style="background:#D4A090"></span><span class="hex">terracotta</span> <span style="margin-left:6px"></span><span class="sw" style="background:#C77B6E"></span><span class="hex">error</span></td>
+            <td><span class="hex mut">—</span></td>
+            <td>destructive vs. error — classified per use</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="walknote rv" style="margin-top:16px">A blanket verdigris → success mapping would make Field a green-branded app. The action / success split — and the brass and rust per-use classifications — is ask <b style="color:var(--clay)">R28</b>.</p>
+
+    <!-- font map -->
+    <div class="wrap rv" style="padding:0">
+      <div class="flowlabel" style="margin-top:44px">Font map <b>— names and Dynamic-Type anchors survive; only the faces change</b></div>
+      <div class="fontmap">
+        <div class="row">
+          <div class="face fm-fr">Fraunces<small>Field display</small></div>
+          <div class="ar">→</div>
+          <div class="face fm-pd">Playfair Display<small>Patina display</small></div>
+          <div class="role">display / serif</div>
+        </div>
+        <div class="row">
+          <div class="face fm-hg">Hanken Grotesk<small>Field body</small></div>
+          <div class="ar">→</div>
+          <div class="face fm-in">Inter<small>Patina body</small></div>
+          <div class="role">body</div>
+        </div>
+        <div class="row">
+          <div class="face fm-ip">IBM Plex Mono<small>Field meta</small></div>
+          <div class="ar">→</div>
+          <div class="face fm-dm">DM Mono<small>Patina meta</small></div>
+          <div class="role">meta / eyebrow</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- component map -->
+    <div class="wrap rv" style="padding:0">
+      <div class="flowlabel" style="margin-top:40px">Component adoption <b>— per-flow atoms fold into the shared kit</b></div>
+      <div class="compmap">
+        <div class="m"><span class="from">per-flow buttons</span><span class="ar">→</span><span class="to">PatinaButton</span></div>
+        <div class="m"><span class="from">FieldPlaceholderScreen</span><span class="ar">→</span><span class="to">PatinaEmptyState</span></div>
+        <div class="m"><span class="from">meta labels</span><span class="ar">→</span><span class="to">MonoLabel</span></div>
+        <div class="m"><span class="from">flow cards</span><span class="ar">→</span><span class="to">PatinaCard</span></div>
+        <div class="m"><span class="from">status chips</span><span class="ar">→</span><span class="to">PatinaStatusBadge</span></div>
+        <div class="m"><span class="from">inputs</span><span class="ar">→</span><span class="to">PatinaTextField</span></div>
+        <div class="m"><span class="from">ProvenanceBadge</span><span class="ar">→</span><span class="to">stays · re-skinned</span></div>
+        <div class="m"><span class="from">SpecimenFieldRow</span><span class="ar">→</span><span class="to">stays · re-skinned</span></div>
+      </div>
+      <p class="walknote">ProvenanceBadge and SpecimenFieldRow remain Field-domain components — re-skinned, not replaced. Dark mode arrives free with <code>patinaDynamic</code>.</p>
+    </div>
+
+    <!-- the mock -->
+    <div class="wrap rv" style="padding:0">
+      <div class="flowlabel" style="margin-top:48px">The flip, on one screen <b>— Field's C5 specimen sheet</b></div>
+      <div class="mock-2up">
+        <div>
+          <div class="device"><div class="screen"><img src="screenshots/field/C5.specimen-sheet.png" alt="C5 specimen sheet, shipping today" loading="lazy"></div></div>
+          <div class="mocklab"><b>Shipping today</b>screenshot · Field</div>
+        </div>
+        <div>
+          <div class="device"><div class="screen">
+            <div class="mk mk-field">
+              <div class="top"><span>Specimen · 04</span><span>✕</span></div>
+              <div class="title">Walnut<br>Lounge Chair</div>
+              <div class="maker">Hearth &amp; Grain · Asheville, NC</div>
+              <div class="photo">specimen photo</div>
+              <div class="spec"><span class="k">Dimensions</span><span>30 × 32 × 29 in</span></div>
+              <div class="spec"><span class="k">Materials</span><span>Black walnut, wool</span></div>
+              <div class="spec"><span class="k">Finish</span><span>Hand-rubbed oil</span></div>
+              <span class="badge">◈ Provenance verified</span>
+              <div class="btn">Add to project</div>
+            </div>
+          </div></div>
+          <div class="mocklab"><b>Today</b>CSS mock · verdigris / Fraunces</div>
+        </div>
+        <div>
+          <div class="device"><div class="screen">
+            <div class="mk mk-patina">
+              <div class="top"><span>Specimen · 04</span><span>✕</span></div>
+              <div class="title">Walnut<br>Lounge Chair</div>
+              <div class="maker">Hearth &amp; Grain · Asheville, NC</div>
+              <div class="photo">specimen photo</div>
+              <div class="spec"><span class="k">Dimensions</span><span>30 × 32 × 29 in</span></div>
+              <div class="spec"><span class="k">Materials</span><span>Black walnut, wool</span></div>
+              <div class="spec"><span class="k">Finish</span><span>Hand-rubbed oil</span></div>
+              <span class="badge">◈ Provenance verified</span>
+              <div class="btn">Add to project</div>
+            </div>
+          </div></div>
+          <div class="mocklab"><b>After</b>CSS mock · clay / Playfair</div>
+        </div>
+      </div>
+      <p class="walknote" style="margin-top:18px"><b style="color:var(--error)">CSS mock, not a build.</b> Same layout, same data — only the tokens change. The right-hand frame is HTML re-skinned in Patina values to show intent, not a shipped screen.</p>
+    </div>
+
+    <div class="mech rv">
+      Mechanics · a shared <b>PatinaDesignKit</b> Swift package (ask R27). <code>CaptureColor</code> / <code>CaptureType</code> become aliases, so ~900 call sites compile unchanged while the values flip beneath them — <b>Wave B.1 restyles all 51 screens with a 2-file diff.</b> Component adoption and the dark-mode audit then sweep in 4 parallel flow bundles (B.2).
+    </div>
+
+    <div class="takeaway rv"><b>What this section means</b>Three rulings live here: <em>R27</em> (create the shared kit), <em>R28</em> (split verdigris into clay-action + success), and <em>R33</em> (retire Fraunces / Hanken / IBM Plex once the swap lands).</div>
+  </div>
+</section>
+
+<!-- ================= 05 SHELL ================= -->
+<section id="shell">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">05</span> The Shell</div>
+    <h2 class="rv">The client app has rooms <em>with no doors.</em></h2>
+    <p class="lede rv">The client app's only navigation is home + companion + push notifications. Projects, Messages and Decisions exist and work — a client can only find them if a push happens to arrive.</p>
+    <blockquote class="pullquote rv">The review itself could not reach Projects, Messages or Decisions without a notification. We couldn't even screenshot them.</blockquote>
+
+    <div class="mock-2up rv">
+      <div>
+        <div class="device"><div class="screen">
+          <div class="mk-studio">
+            <div class="greet">Tuesday · Good morning</div>
+            <div class="h">Your studio</div>
+            <div class="seclab">Studio</div>
+            <div class="srow"><div><div class="st">Projects</div><div class="sm">2 active</div></div><span class="pill-mute">›</span></div>
+            <div class="srow"><div><div class="st">Messages</div><div class="sm">3 unread</div></div><span class="pill-count">3</span></div>
+            <div class="srow"><div><div class="st">Decisions</div><div class="sm">1 waiting on you</div></div><span class="pill-count">1</span></div>
+            <div class="srow"><div><div class="st">Notifications</div><div class="sm">up to date</div></div><span class="pill-mute">›</span></div>
+            <div class="sub"><span>Companion · quick actions</span><span>Profile</span></div>
+          </div>
+        </div></div>
+        <div class="mocklab"><b>Studio rail</b>wireframe · Patina tokens · not a build</div>
+      </div>
+      <div class="txt">
+        <p><b>Recommendation (ask R29): a "Studio" hub rail on the DailyRoom home — not a tab bar.</b></p>
+        <p><b>The architecture argues for it.</b> The app is a single NavigationStack + coordinator + companion-overlay. A TabView retrofit re-plumbs all of that; a home-hub rail rides the structure that already exists.</p>
+        <p><b>The Document argues for it.</b> Its language is typography-first hubs — a Playfair title, DM Mono meta and a count badge per row — not chrome.</p>
+        <p><b>The data argues for it.</b> There are only ~2 real top-level destinations today. The tab-bar question is properly re-asked <i>after</i> the transactional rail exists — a post-Track-D review clause.</p>
+        <p>Badge counts come from a <code>BadgeCountService</code> — pending <code>client_decisions</code> + unread comms, mirroring the portal's use-inbox queries — refreshing on foreground and push. Realtime only if publication membership verifies; otherwise it polls, so a correct floor is always guaranteed. Companion quick-actions and profile rows stay as secondary entries.</p>
+      </div>
+    </div>
+
+    <div class="takeaway rv"><b>What this section means</b>One ruling: <em>R29 — build the rail now, revisit the tab bar after the money rail ships and real usage exists.</em></div>
+  </div>
+</section>
+
+<!-- ================= 06 RAIL ================= -->
+<section id="rail">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">06</span> The Rail</div>
+    <h2 class="rv">Six surfaces the client app <em>doesn't have yet.</em></h2>
+    <p class="lede rv">Every screen below mirrors a shipping client-portal surface. The backend exists, is RLS-tested, and is in production. This is the transactional spine the app is missing — assembled, not invented.</p>
+
+    <div class="tablewrap rv">
+      <table class="tbl">
+        <thead><tr><th>New iOS surface</th><th>Mirrors</th><th>Backend reused</th><th>Size</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="t">ProposalList / ProposalDetail</span><div class="sub">sections, phases, milestones, exclusions, scope rooms; boards as image grid</div></td>
+            <td class="route">/proposals<br>/proposals/[id]</td>
+            <td class="cite"><b>proposals</b>, proposal_sections / items + phases / milestones / exclusions / scope-rooms tables · <b>use-proposals-client</b> hooks</td>
+            <td class="sz">L</td>
+          </tr>
+          <tr>
+            <td><span class="t">ProposalSignSheet</span><div class="sub">typed-name e-signature</div></td>
+            <td class="route">/proposals/[id]/sign</td>
+            <td class="cite">RPC <b>sign_proposal(…)</b> — migration 00210, SECURITY DEFINER, idempotent · then <b>proposal-sign-confirmation</b> edge fn</td>
+            <td class="sz">in L</td>
+          </tr>
+          <tr>
+            <td><span class="t">InvoiceList / InvoiceDetail</span><div class="sub">line items, ACH-pending state</div></td>
+            <td class="route">/invoices<br>/invoices/[invoiceId]</td>
+            <td class="cite"><b>invoices</b> tables via <b>use-invoices.ts</b> queries</td>
+            <td class="sz">M</td>
+          </tr>
+          <tr>
+            <td><span class="t">Pay flow</span><div class="sub">SFSafariViewController → Stripe Checkout → poll on dismiss</div></td>
+            <td class="route">portal Pay button</td>
+            <td class="cite"><b>create-checkout-session</b> edge fn (verifies caller, reuses open sessions) · <b>stripe-webhook</b> settles</td>
+            <td class="sz">in M</td>
+          </tr>
+          <tr>
+            <td><span class="t">BudgetView</span><div class="sub">payment schedule + invoice totals</div></td>
+            <td class="route">/budget</td>
+            <td class="cite">pure composition of the two clients above</td>
+            <td class="sz">S</td>
+          </tr>
+          <tr>
+            <td><span class="t">DocumentList → QuickLook</span><div class="sub">preview signed documents inline</div></td>
+            <td class="route">/documents</td>
+            <td class="cite"><b>project_documents</b> (client_visible = true), signed URL from <b>project-documents</b> bucket</td>
+            <td class="sz">S</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="walknote rv" style="margin-top:16px">Apple posture — furniture and design services are physical goods / services, so external web payment is compliant under 3.1.3(e). The flow stays a clear web handoff with zero IAP language.</p>
+
+    <div class="takeaway rv"><b>What this section means</b>One ruling on the mechanics: <em>R30 — how Checkout returns.</em> Poll on Safari dismiss (zero backend change) versus a <code>patina://</code> success redirect (one edge-fn change, snappier return).</div>
+  </div>
+</section>
+
+<!-- ================= 07 PROGRAM ================= -->
+<section id="program">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">07</span> The Program</div>
+    <h2 class="rv">Five tracks, <em>five waves.</em></h2>
+    <p class="lede rv">Track A lays the shared kit; B rebrands Field; C builds the shell; D assembles the money rail; E clears the committed debts. Waves gate on the merge bar — there is no CI, so the gates <i>are</i> the review.</p>
+
+    <div class="tablewrap rv">
+      <table class="tbl">
+        <thead><tr><th>Wave</th><th>Parallel lanes</th><th>Deps</th><th>Gate</th><th>Level</th><th>Size</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="sz">0</td>
+            <td><b>Track A</b> — PatinaDesignKit package + both-app linkage <span class="sub" style="display:inline">(single agent; nothing else runs)</span></td>
+            <td class="route">ratification</td>
+            <td class="cite">ios-gate + capture-gate + token ratchet</td>
+            <td class="route">sim</td>
+            <td class="sz">M</td>
+          </tr>
+          <tr>
+            <td class="sz">1</td>
+            <td><b>B.1</b> value / font flip ∥ <b>C.1</b> Studio rail + badges ∥ <b>E.1</b> Patina polish debts ∥ <b>E.2</b> Field debts</td>
+            <td class="route">0</td>
+            <td class="cite">gates + 51-screen shots before / after</td>
+            <td class="route">sim · F4 fix → device</td>
+            <td class="sz">M·M·M·S</td>
+          </tr>
+          <tr>
+            <td class="sz">2</td>
+            <td><b>B.2</b> component adoption + dark audit (4 flow bundles, serialized merges) ∥ <b>D.1</b> proposals ∥ <b>D.2</b> invoices</td>
+            <td class="route">1</td>
+            <td class="cite">gates + dark shots + swiftlint --strict</td>
+            <td class="route">sim · checkout vs Stripe test</td>
+            <td class="sz">L·L·M</td>
+          </tr>
+          <tr>
+            <td class="sz">3</td>
+            <td><b>D.3</b> budget ∥ <b>D.4</b> documents ∥ <b>C.2</b> badge hardening ∥ <b>B.3</b> ratchet re-baseline + font dedup</td>
+            <td class="route">2</td>
+            <td class="cite">gates + new ratchet baselines</td>
+            <td class="route">sim</td>
+            <td class="sz">S each</td>
+          </tr>
+          <tr>
+            <td class="sz">4</td>
+            <td>Device verification pass — camera / LiDAR / scan / upload — + TestFlight prep</td>
+            <td class="route">1–3</td>
+            <td class="cite">device runs</td>
+            <td class="route"><b style="color:var(--clay-deep)">device</b></td>
+            <td class="sz">M</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="conv rv">
+      <span>worktree-pinned subagents</span><span class="dot">·</span><span>explicit pathspec commits</span><span class="dot">·</span><span>gates are the merge bar (no CI)</span><span class="dot">·</span><span>claims leveled: compile-green &lt; sim-verified &lt; device-verified</span>
+    </div>
+
+    <!-- risks -->
+    <div class="eyebrow rv" style="margin-top:80px"><span class="num">08</span> Where This Bites</div>
+    <h2 class="rv">Nine risks, <em>each with a defense.</em></h2>
+    <div class="risks rv">
+      <div class="risk"><div class="rn">RISK 01</div><h5>pbxproj regeneration collisions</h5><p>Parallel Field component waves each add and remove project files.</p><div class="mit"><b>Defense</b>File adds / removes funneled through one integrator; merges serialized.</div></div>
+      <div class="risk"><div class="rn">RISK 02</div><h5>Verdigris blanket-remap green-brands Field</h5><p>A single mapping paints the whole app green.</p><div class="mit"><b>Defense</b>R28 split-classification happens <i>before</i> the value flip.</div></div>
+      <div class="risk"><div class="rn">RISK 03</div><h5>CaptureKit freeze vs. the design swap</h5><p>The kit is meant to be frozen; the swap touches its color / type surface.</p><div class="mit"><b>Defense</b>CaptureColor / CaptureType stay API-stable aliases; freeze exemption documented.</div></div>
+      <div class="risk"><div class="rn">RISK 04</div><h5>Token-ratchet baselines shift under big diffs</h5><p>Large sweeps move the raw-usage counts the ratchet guards.</p><div class="mit"><b>Defense</b>Re-baseline only in B.3, never mid-wave.</div></div>
+      <div class="risk"><div class="rn">RISK 05</div><h5>Apple reviewer friction on external payments</h5><p>Web-payment handoffs draw scrutiny.</p><div class="mit"><b>Defense</b>Clear web handoff, 3.1.3(e) rationale in the review notes.</div></div>
+      <div class="risk"><div class="rn">RISK 06</div><h5>Boards-fidelity rabbit hole</h5><p>Proposal boards tempt a full canvas rebuild.</p><div class="mit"><b>Defense</b>Thumbnails only; the canvas is backlog.</div></div>
+      <div class="risk"><div class="rn">RISK 07</div><h5>Realtime badge counts unverified</h5><p>Publication membership for live counts isn't confirmed.</p><div class="mit"><b>Defense</b>Poll-on-foreground floor; a publication add would be migration 00285+.</div></div>
+      <div class="risk"><div class="rn">RISK 08</div><h5>.dynamic SPM product in a generated project</h5><p>The least-trodden Xcode-generation path.</p><div class="mit"><b>Defense</b>Wave 0 proves it on device; fallback pre-agreed in R27.</div></div>
+      <div class="risk"><div class="rn">RISK 09</div><h5>ACH settles slowly</h5><p>Payments can sit pending for days.</p><div class="mit"><b>Defense</b>Pending-state copy sets expectations; the portal already models this.</div></div>
+    </div>
+    <div class="takeaway rv"><b>What this section means</b>Two of these defenses are themselves rulings — <em>R28</em> (the split before the flip) and the <em>R27</em> fallback (verbatim port if the package path resists). Nothing here starts before Wave 0 proves the kit.</div>
+  </div>
+</section>
+
+<!-- ================= 09 ASKS ================= -->
+<section id="asks">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">09</span> Asks · R27 – R33</div>
+    <h2 class="rv">Seven rulings. <em>Then the work begins.</em></h2>
+    <p class="lede rv">These continue the iOS lineage from the June Master Plan (R01–R26). Each is a single decision with a recommendation; ruling all seven unlocks Waves 0–4.</p>
+
+    <div class="rulings rv">
+      <div class="ruling">
+        <div class="rid">R27 · The shared kit</div>
+        <h5>Create <code>apps/mobile/PatinaDesignKit</code></h5>
+        <p class="ask">A local SwiftUI-only Swift package, fonts included, consumed by both apps. Fallback: a verbatim port into CaptureKit behind a hex-parity gate.</p>
+        <div class="rec"><b>Recommend</b>Build the package. Decide the fallback inside Wave 0 if the tooling resists.</div>
+      </div>
+      <div class="ruling">
+        <div class="rid">R28 · The verdigris split</div>
+        <h5>Two roles, two targets</h5>
+        <p class="ask">Field's verdigris is both "primary action" and "success" today. Remap action-uses → clay, success-uses → success #7A9B76.</p>
+        <div class="rec"><b>Recommend</b>Split. A blanket mapping green-brands the app.</div>
+      </div>
+      <div class="ruling">
+        <div class="rid">R29 · The shell</div>
+        <h5>Studio rail, not a tab bar</h5>
+        <p class="ask">Ship the home-hub rail now; revisit a tab bar after Track D ships and real usage exists.</p>
+        <div class="rec"><b>Recommend</b>Rail. Re-ask the tab-bar question with data, later.</div>
+      </div>
+      <div class="ruling">
+        <div class="rid">R30 · Checkout return</div>
+        <h5>How Safari hands back</h5>
+        <p class="ask">Poll on Safari dismiss (zero backend change) vs. adding a <code>patina://</code> success-redirect param to create-checkout-session (one edge-fn change, snappier return).</p>
+        <div class="rec"><b>Recommend</b>Poll first; add the deep-link as a fast-follow if the dismissal feel is dead.</div>
+      </div>
+      <div class="ruling">
+        <div class="rid">R31 · The fake rooms</div>
+        <h5>Kill the seeded mocks</h5>
+        <p class="ask">Delete <code>RoomSummary.mockAll</code> seeding for new / guest users; replace with a PatinaEmptyState scan CTA.</p>
+        <div class="rec"><b>Recommend</b>Yes. The fresh walk shows them contradicting real state.</div>
+      </div>
+      <div class="ruling">
+        <div class="rid">R32 · Backlog ratified</div>
+        <h5>Confirm what stays uncommitted</h5>
+        <p class="ask">Reviews → scope changes → direct orders → GDPR export / erase stay out of scope, in that order.</p>
+        <div class="rec"><b>Recommend</b>Yes. Sequence acknowledged, not started.</div>
+      </div>
+      <div class="ruling">
+        <div class="rid">R33 · Retire the fonts</div>
+        <h5>Drop the Field typefaces</h5>
+        <p class="ask">Remove Fraunces / Hanken Grotesk / IBM Plex Mono from the Field bundle after the rebrand lands.</p>
+        <div class="rec"><b>Recommend</b>Yes. Dead weight once the swap is in.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 10 BACKLOG ================= -->
+<section id="backlog">
+  <div class="wrap">
+    <div class="eyebrow rv"><span class="num">10</span> Later</div>
+    <h2 class="rv">Named, sequenced, <em>not committed.</em></h2>
+    <p class="lede rv">Held deliberately out of the core rail so the program stays shippable. R32 ratifies this list; nothing here starts without a later, separate go-ahead.</p>
+    <div class="backlog rv">
+      <div class="item"><span class="n">01</span><b>Client reviews surface</b> — the first backlog item once the rail lands.</div>
+      <div class="item"><span class="n">02</span><b>Scope-change requests</b> — client-initiated change orders.</div>
+      <div class="item"><span class="n">03</span><b>Direct "buy now" orders</b> — one-tap purchase outside a proposal.</div>
+      <div class="item"><span class="n">04</span><b>GDPR export / erase</b> — data-rights self-service.</div>
+      <div class="item"><span class="n">05</span><b>Board-canvas fidelity</b> — beyond the thumbnail image grid.</div>
+      <div class="item"><span class="n">06</span><b>Tab-bar re-evaluation</b> — the post-Track-D review clause from R29.</div>
+      <div class="item"><span class="n">07</span><b>Patina companion mock-fallback removal</b> — behind real auth.</div>
+      <div class="item"><span class="n">08</span><b>Field Settings (T1) real dials</b> — replace the template screen.</div>
+    </div>
+
+    <footer class="rv">
+      <div>
+        <div class="sig">Two apps, one Patina — measured, then ruled.</div>
+        <div class="signoff">Prepared for Kody's ratification. Nothing in Tracks A–E starts until R27–R33 are ruled.<br>iOS Alignment &amp; Client Completion · v1 · 2026-07-09</div>
+      </div>
+      <div class="links">
+        <a href="../ios-ux-review/index.html">← June 2026 iOS Master Plan · R01–R26</a>
+        <a href="../the-document/DECISIONS.md">The Document — DECISIONS · D4, typography-first</a>
+        <a href="#situation">↑ Back to the situation</a>
+      </div>
+    </footer>
+  </div>
+</section>
+
+<script>
+const bar=document.getElementById('bar');
+addEventListener('scroll',()=>{
+  const h=document.documentElement;
+  bar.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%';
+},{passive:true});
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target)}}),{threshold:.06});
+document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>
