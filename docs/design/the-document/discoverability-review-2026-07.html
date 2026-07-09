@@ -130,6 +130,8 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
 .pd-idxcard .pd-idxcard-kicker{ font-family:var(--pd-mono); font-size:9px; text-transform:uppercase; letter-spacing:0.1em; color:var(--pd-oak); margin:0 0 6px; }
 .pd-idxcard .pd-idxcard-title{ font-family:var(--pd-serif); font-size:1.15rem; color:var(--pd-charcoal); margin:0 0 4px; }
 .pd-idxcard .pd-idxcard-sub{ font-size:0.85rem; color:var(--pd-oak); margin:0; }
+.pd-idxcard-icons{ display:flex; gap:11px; align-items:center; margin:8px 0 10px; }
+.pd-idxcard-icons svg{ display:block; stroke:var(--pd-oak); fill:none; stroke-width:1.5; }
 .pd-feeds{ display:flex; flex-wrap:wrap; gap:14px; margin-top:6px; padding-left:8px; }
 .pd-feed{ display:flex; flex-direction:column; align-items:flex-start; gap:6px; }
 .pd-feed-arrow{ font-family:var(--pd-mono); color:var(--pd-clay); font-size:16px; line-height:1; padding-left:6px; }
@@ -260,11 +262,11 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
       <li class="pd-rail-item"><a href="#s2" data-target="s2"><span class="pd-rail-notch" aria-hidden="true"></span><span class="pd-rail-folio">§2</span><span class="pd-rail-label">Failure Classes</span></a></li>
       <li class="pd-rail-item"><a href="#s3" data-target="s3"><span class="pd-rail-notch" aria-hidden="true"></span><span class="pd-rail-folio">§3</span><span class="pd-rail-label">Foundation</span></a></li>
       <li class="pd-rail-item"><a href="#s4" data-target="s4"><span class="pd-rail-notch" aria-hidden="true"></span><span class="pd-rail-folio">§4</span><span class="pd-rail-label">The Rulings</span></a></li>
-      <li class="pd-rail-item"><a href="#s5" data-target="s5"><span class="pd-rail-notch" aria-hidden="true"></span><span class="pd-rail-folio">§5</span><span class="pd-rail-label">The Fork</span></a></li>
+      <li class="pd-rail-item"><a href="#s5" data-target="s5"><span class="pd-rail-notch" aria-hidden="true"></span><span class="pd-rail-folio">§5</span><span class="pd-rail-label">One Move</span></a></li>
       <li class="pd-rail-item"><a href="#s6" data-target="s6"><span class="pd-rail-notch" aria-hidden="true"></span><span class="pd-rail-folio">§6</span><span class="pd-rail-label">Roadmap</span></a></li>
       <li class="pd-rail-item"><a href="#s7" data-target="s7"><span class="pd-rail-notch" aria-hidden="true"></span><span class="pd-rail-folio">§7</span><span class="pd-rail-label">Decision</span></a></li>
     </ul>
-    <p class="pd-rail-note">You are using draft ruling <b>R96</b> right now — this rail is the Thumb Index.</p>
+    <p class="pd-rail-note">This rail is the deck's own table of contents — the same standing index R95 proposes for the Desk.</p>
   </div>
 </nav>
 
@@ -594,7 +596,7 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
   </div>
 
   <div class="pd-col" style="margin-top:2rem;">
-    <p>Underneath all six sits one structural repair: a shared <b>studio-surface registry</b> — a single source of truth for the rooms, ledgers, and verbs — feeding the bottom drawer, the palette, and any future index from the same list. The palette froze precisely because these definitions drifted apart. One registry ends the drift.</p>
+    <p>Underneath all six sits one structural repair: a shared <b>studio-surface registry</b> — a single source of truth for the rooms, the ledgers, and the verbs — feeding the bottom drawer, the palette, and any future index from the same list. The palette froze precisely because these definitions drifted apart; one registry ends the drift. And each surface carries one thing more: its own icon. That mark is the surface's signature wherever it appears — on its door in the drawer, on its row in ⌘K, on its line in the Contents Page, at the head of its sheet — so a designer learns a shape once and reads it everywhere. One definition, one icon, no surface described twice.</p>
   </div>
 
   <div class="pd-registry">
@@ -602,6 +604,7 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
     <div class="pd-idxcard">
       <p class="pd-idxcard-kicker">Studio-surface registry</p>
       <p class="pd-idxcard-title">Rooms · Ledgers · Verbs</p>
+      <div class="pd-idxcard-icons" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><svg width="14" height="14" viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg><svg width="14" height="14" viewBox="0 0 24 24"><path d="M4 4h13l3 4v13H4z"/><path d="M8 10h8M8 14h5"/></svg><svg width="14" height="14" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 20c0-3.4 2.7-6 6.2-6s6.2 2.6 6.2 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.7 13.3c2.6.4 4.5 2.6 4.5 5.4"/></svg><svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></div>
       <p class="pd-idxcard-sub">One definition per surface — nothing hand-listed twice.</p>
     </div>
     <div class="pd-feeds">
@@ -813,32 +816,32 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
 
             <div class="fxa-group-label">Rooms &amp; ledgers</div>
             <div class="fxa-row">
-              <svg class="fxa-row-icon" viewBox="0 0 16 16"><path d="M3 3h4v10H3zM9 3h4v10H9z"/></svg>
+              <svg class="fxa-row-icon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
               <span class="fxa-row-main"><span class="fxa-row-label">Library ↗</span><span class="fxa-row-sub">room</span></span>
               <span class="fxa-chip">G L</span>
             </div>
             <div class="fxa-row">
-              <svg class="fxa-row-icon" viewBox="0 0 16 16"><circle cx="8" cy="5.4" r="2.2"/><path d="M3 14c0-2.8 2.2-5 5-5s5 2.2 5 5"/></svg>
+              <svg class="fxa-row-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 20c0-3.4 2.7-6 6.2-6s6.2 2.6 6.2 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.7 13.3c2.6.4 4.5 2.6 4.5 5.4"/></svg>
               <span class="fxa-row-main"><span class="fxa-row-label">People ↗</span><span class="fxa-row-sub">room</span></span>
               <span class="fxa-chip">G P</span>
             </div>
             <div class="fxa-row">
-              <svg class="fxa-row-icon" viewBox="0 0 16 16"><path d="M2 5.5 8 2l6 3.5v6L8 15l-6-3.5v-6Z"/><path d="M2 5.5 8 9l6-3.5M8 9v6"/></svg>
+              <svg class="fxa-row-icon" viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>
               <span class="fxa-row-main"><span class="fxa-row-label">Orders</span><span class="fxa-row-sub">ledger</span></span>
               <span class="fxa-chip">G O</span>
             </div>
             <div class="fxa-row">
-              <svg class="fxa-row-icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 5v6M6.1 6.9c0-1 .9-1.5 1.9-1.5s1.9.5 1.9 1.3c0 1.7-3.8 1-3.8 2.7 0 .8.9 1.3 1.9 1.3s1.9-.6 1.9-1.4"/></svg>
+              <svg class="fxa-row-icon" viewBox="0 0 24 24"><path d="M4 4h13l3 4v13H4z"/><path d="M8 10h8M8 14h5"/></svg>
               <span class="fxa-row-main"><span class="fxa-row-label">Accounts</span><span class="fxa-row-sub">ledger</span></span>
               <span class="fxa-chip">G A</span>
             </div>
             <div class="fxa-row">
-              <svg class="fxa-row-icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.6 1.5"/></svg>
+              <svg class="fxa-row-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
               <span class="fxa-row-main"><span class="fxa-row-label">Hours</span><span class="fxa-row-sub">ledger</span></span>
               <span class="fxa-chip">G H</span>
             </div>
             <div class="fxa-row">
-              <svg class="fxa-row-icon" viewBox="0 0 16 16"><path d="M2 4h12v8H2z"/><path d="m2 4 6 5 6-5"/></svg>
+              <svg class="fxa-row-icon" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg>
               <span class="fxa-row-main"><span class="fxa-row-label">The Post</span><span class="fxa-row-sub">letters · the record</span></span>
             </div>
           </div>
@@ -1232,6 +1235,8 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
 .fxb-toc-leader{flex:1 1 auto;min-width:10px;height:0;border-bottom:1px dotted var(--fxb-pearl);margin-bottom:5px;}
 .fxb-toc-glyph{font-family:var(--fxb-mono);font-size:13px;color:var(--fxb-aged-oak);flex-shrink:0;}
 .fxb-toc-sheet{font-family:var(--fxb-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--fxb-aged-oak);flex-shrink:0;}
+.fxb-toc-ico{display:inline-flex;align-items:center;align-self:center;flex-shrink:0;margin-right:3px;}
+.fxb-toc-ico svg{display:block;stroke:var(--fxb-aged-oak);fill:none;stroke-width:1.5;}
 .fxb-toc-begin{display:flex;align-items:baseline;gap:8px;}
 .fxb-toc-emdash{font-family:var(--fxb-mono);font-size:13px;color:var(--fxb-clay);flex-shrink:0;}
 .fxb-toc-begin .fxb-toc-label{white-space:normal;}
@@ -1302,18 +1307,18 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
     <div class="fxb-toc-col">
       <p class="fxb-toc-col-head">Rooms</p>
       <ul>
-        <li class="fxb-toc-row"><span class="fxb-toc-label">The Library</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
-        <li class="fxb-toc-row"><span class="fxb-toc-label">The People Room</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
-        <li class="fxb-toc-row"><span class="fxb-toc-label">The Drafting Room</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
+        <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="fxb-toc-label">The Library</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
+        <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 20c0-3.4 2.7-6 6.2-6s6.2 2.6 6.2 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.7 13.3c2.6.4 4.5 2.6 4.5 5.4"/></svg></span><span class="fxb-toc-label">The People Room</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
+        <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 3l3.5 7.5L12 21l-3.5-10.5L12 3z"/><path d="M12 10.5V16"/></svg></span><span class="fxb-toc-label">The Drafting Room</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
       </ul>
     </div>
     <div class="fxb-toc-col">
       <p class="fxb-toc-col-head">Ledgers</p>
       <ul>
-        <li class="fxb-toc-row"><span class="fxb-toc-label">Orders</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
-        <li class="fxb-toc-row"><span class="fxb-toc-label">Accounts</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
-        <li class="fxb-toc-row"><span class="fxb-toc-label">Hours</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
-        <li class="fxb-toc-row"><span class="fxb-toc-label">The Post</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
+        <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></span><span class="fxb-toc-label">Orders</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
+        <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M4 4h13l3 4v13H4z"/><path d="M8 10h8M8 14h5"/></svg></span><span class="fxb-toc-label">Accounts</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
+        <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span><span class="fxb-toc-label">Hours</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
+        <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg></span><span class="fxb-toc-label">The Post</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
       </ul>
     </div>
     <div class="fxb-toc-col">
@@ -1336,18 +1341,18 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
       <div class="fxb-toc-col">
         <p class="fxb-toc-col-head">Rooms</p>
         <ul>
-          <li class="fxb-toc-row"><span class="fxb-toc-label">The Library</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
-          <li class="fxb-toc-row"><span class="fxb-toc-label">The People Room</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
-          <li class="fxb-toc-row"><span class="fxb-toc-label">The Drafting Room</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
+          <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="fxb-toc-label">The Library</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
+          <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 20c0-3.4 2.7-6 6.2-6s6.2 2.6 6.2 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.7 13.3c2.6.4 4.5 2.6 4.5 5.4"/></svg></span><span class="fxb-toc-label">The People Room</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
+          <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 3l3.5 7.5L12 21l-3.5-10.5L12 3z"/><path d="M12 10.5V16"/></svg></span><span class="fxb-toc-label">The Drafting Room</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-glyph">&#8599;</span></li>
         </ul>
       </div>
       <div class="fxb-toc-col">
         <p class="fxb-toc-col-head">Ledgers</p>
         <ul>
-          <li class="fxb-toc-row"><span class="fxb-toc-label">Orders</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
-          <li class="fxb-toc-row"><span class="fxb-toc-label">Accounts</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
-          <li class="fxb-toc-row"><span class="fxb-toc-label">Hours</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
-          <li class="fxb-toc-row"><span class="fxb-toc-label">The Post</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
+          <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></span><span class="fxb-toc-label">Orders</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
+          <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M4 4h13l3 4v13H4z"/><path d="M8 10h8M8 14h5"/></svg></span><span class="fxb-toc-label">Accounts</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
+          <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span><span class="fxb-toc-label">Hours</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
+          <li class="fxb-toc-row"><span class="fxb-toc-ico" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M9.5 18a2.5 2.5 0 0 0 5 0"/></svg></span><span class="fxb-toc-label">The Post</span><span class="fxb-toc-leader" aria-hidden="true"></span><span class="fxb-toc-sheet">sheet</span></li>
         </ul>
       </div>
       <div class="fxb-toc-col">
@@ -1373,256 +1378,209 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
     </div>
   </article>
 
-  <!-- R96 · Option C · fxc -->
+  <!-- R96 · The Laid Sheet · fxe -->
   <article class="pd-ruling" id="r96">
     <div class="pd-ruling-head">
       <span class="pd-ruling-id">Draft Ruling · R96</span>
       <span class="pd-stamp">Proposed</span>
-      <span class="pd-stamp pd-stamp--supersede">Supersedes D1 · D8</span>
+      <span class="pd-stamp pd-stamp--supersede">Amends D14</span>
     </div>
-    <p class="pd-ruling-title">The Thumb <em>Index</em></p>
-    <p class="pd-amends">Supersedes D1 and D8 · gated on the flight ledger.</p>
+    <p class="pd-ruling-title">The Laid <em>Sheet</em></p>
+    <p class="pd-amends">Amends D14's presentation — the two weights and their physics stand; supersedes nothing.</p>
     <div class="pd-col">
-      <p>A dictionary notches its own edge so your thumb finds the letter without opening the book. This carries wayfinding everywhere: a recessive thumb-index rail down the margin and a running head at the top of every document, so the studio's structure travels with you into an open proposal, an open project, an open invoice. It is the boldest move here and the truest to the metaphor — and the most invasive. It requires superseding D1 and D8, and it should be gated on data before it is built.</p>
+      <p>The rooms are paper places. Library, People, the Drafting Room — a designer walks into each one, full-screen, on warm stock. The ledgers are not. Reach for Orders, Accounts, Hours, or The Post and a charcoal panel rises from the bottom of the screen behind a black scrim: light text on dark glass, a slide-up over a paper product. The deck's own reconstruction shows the seam — the drawer's doors promise the studio's warm surfaces and hand back a dark elevator. It is a real disjoint, and it is skin, not structure: the physics is right, the finish is borrowed from somewhere else.</p>
     </div>
-    <p class="pd-meta"><b>Effort: L</b> · Risk: permanent chrome on every surface is exactly the novelty tax that stranded Arc — worth it only if the data demands it.</p>
+    <div class="pd-fork">
+      <div class="pd-forkcol pd-forkcol--everywhere">
+        <p class="pd-fork-title">All <em>rooms</em></p>
+        <ul class="pd-classlist">
+          <li>One physics for everything — every surface a room you walk into, nothing to reconcile.</li>
+          <li>But a ten-second glance at Orders or Hours would put the whole document down: walk out, walk back, find your place again.</li>
+          <li>Breaks the glance-and-put-back weight D14 draws, and the guarantee that a sheet never unmounts the document beneath it.</li>
+          <li>Turns the studio's cheapest, most frequent motion into its most expensive.</li>
+        </ul>
+      </div>
+      <div class="pd-forkcol pd-forkcol--home">
+        <p class="pd-fork-title">The Laid <em>Sheet</em></p>
+        <ul class="pd-classlist">
+          <li>Keep D14's two weights — pull a sheet and put it back; walk into a room.</li>
+          <li>Redraw the sheet in the paper the product already uses elsewhere: warm veil, doc-paper panel, centered and squared — not raised in the dark.</li>
+          <li>An icon and a running head name the surface; a clear put-back closes it; the document stays mounted underneath the whole time.</li>
+          <li>Convergence, not invention — this treatment already ships on other flows.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="pd-col">
+      <p>Recommend the Laid Sheet. The disjoint is skin, not physics — this converges the ledgers onto a pattern the product already runs, changing how a sheet looks, not how it behaves.</p>
+    </div>
+    <p class="pd-meta"><b>Effort: M</b> · Risk: a sheet that grows tabs or its own navigation stops being a sheet and becomes a modal app — guardrail: a sheet stays one page.</p>
     <div class="pd-mock">
+<section class="fxe-root">
 <style>
-.fxc-root {
-  --fxc-off-white: #FAF7F2;
-  --fxc-doc-paper: #FCFAF6;
-  --fxc-sheet-2: #EFE9DD;
-  --fxc-sheet-3: #E2DACA;
-  --fxc-sheet-front: #F7F2EB;
-  --fxc-sheet-back: #F1EBE2;
-  --fxc-charcoal: #2C2926;
-  --fxc-mocha: #5C4A3C;
-  --fxc-aged-oak: #8B7355;
-  --fxc-pearl: #E5E2DD;
-  --fxc-ink-border: rgba(44,41,38,0.18);
-  --fxc-clay: #C4A57B;
-  --fxc-sage: #A8B5A0;
-  --fxc-dusty-blue: #8B9CAD;
-  --fxc-terracotta: #D4A090;
-  --fxc-golden-hour: #E8C547;
-  --fxc-serif: "Playfair Display", Georgia, serif;
-  --fxc-sans: "Inter", -apple-system, "Helvetica Neue", sans-serif;
-  --fxc-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+.fxe-root { --fxe-grounds:#FAF7F2; --fxe-paper:#FCFAF6; --fxe-sheet2:#EFE9DD; --fxe-sheet3:#E2DACA; --fxe-ink:#2C2926; --fxe-mocha:#5C4A3C; --fxe-oak:#8B7355; --fxe-pearl:#E5E2DD; --fxe-ink-border:rgba(44,41,38,0.18); --fxe-clay:#C4A57B; --fxe-sage:#A8B5A0; --fxe-terracotta:#D4A090; --fxe-golden:#E8C547; --fxe-serif:'Playfair Display',Georgia,serif; --fxe-sans:'Inter',-apple-system,BlinkMacSystemFont,sans-serif; --fxe-mono:'DM Mono','SF Mono',ui-monospace,monospace; }
+.fxe-root, .fxe-root *, .fxe-root *::before, .fxe-root *::after { box-sizing:border-box; }
+.fxe-root { max-width:960px; margin:0 auto; padding:0.5rem 0 0.25rem; font-family:var(--fxe-sans); color:var(--fxe-ink); }
 
-  background: var(--fxc-off-white);
-  color: var(--fxc-mocha);
-  font-family: var(--fxc-sans);
-  padding: 28px clamp(16px, 4vw, 36px) 36px;
-  box-sizing: border-box;
-  position: relative;
+/* head */
+.fxe-head { margin-bottom:1.85rem; }
+.fxe-eyebrow { font-family:var(--fxe-mono); font-size:10.5px; text-transform:uppercase; letter-spacing:0.12em; color:var(--fxe-oak); margin:0 0 0.55rem; }
+.fxe-title { font-family:var(--fxe-serif); font-weight:400; font-size:clamp(1.55rem,3.6vw,2.05rem); line-height:1.15; color:var(--fxe-ink); margin:0 0 0.6rem; }
+.fxe-title em { font-style:italic; color:var(--fxe-clay); }
+.fxe-dek { font-family:var(--fxe-sans); font-size:13.5px; line-height:1.6; color:var(--fxe-mocha); max-width:600px; margin:0; }
+
+/* pair */
+.fxe-pair { display:flex; flex-wrap:wrap; gap:2rem; align-items:flex-start; }
+.fxe-panel { flex:1 1 360px; min-width:300px; max-width:460px; }
+.fxe-panel-label { display:flex; align-items:center; gap:10px; margin-bottom:0.65rem; }
+.fxe-panel-name { font-family:var(--fxe-mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:var(--fxe-mocha); }
+.fxe-stamp { display:inline-block; transform:rotate(-1.5deg); white-space:nowrap; border-radius:3px; border:1.5px solid; background:transparent; padding:3px 9px; font-family:var(--fxe-mono); font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; }
+.fxe-stamp-today { border-color:var(--fxe-mocha); color:var(--fxe-mocha); }
+.fxe-stamp-proposed { border-color:var(--fxe-clay); color:var(--fxe-clay); }
+
+/* mini screen shell (shared) */
+.fxe-mini { position:relative; height:308px; border-radius:7px; overflow:hidden; border:1px solid var(--fxe-ink-border); background:var(--fxe-paper); }
+.fxe-doc-ground { position:absolute; inset:0; padding:22px 24px; background:var(--fxe-paper); }
+.fxe-doc-letterhead { font-family:var(--fxe-serif); font-size:15px; color:var(--fxe-ink); margin:0 0 12px; }
+.fxe-doc-letterhead span { font-style:italic; color:var(--fxe-oak); }
+.fxe-strata { display:flex; flex-direction:column; gap:4px; width:64px; margin:0 0 18px; }
+.fxe-strata span { display:block; height:2px; background:var(--fxe-oak); opacity:0.45; }
+.fxe-strata span:nth-child(1) { width:100%; } .fxe-strata span:nth-child(2) { width:80%; } .fxe-strata span:nth-child(3) { width:60%; }
+.fxe-doc-greek { height:8px; border-radius:2px; background:rgba(44,41,38,0.10); width:88%; margin:0 0 9px; }
+.fxe-doc-greek-2 { width:60%; margin-bottom:0; }
+
+/* BEFORE: dark veil + bottom-docked charcoal sheet */
+.fxe-veil-dark { position:absolute; inset:0; background:rgba(0,0,0,0.35); }
+.fxe-sheet-dark { position:absolute; left:0; right:0; bottom:0; background:#2C2926; border-top:1px solid rgba(250,247,242,0.14); border-radius:10px 10px 0 0; padding:13px 17px 15px; }
+.fxe-sheet-dark-head { font-family:var(--fxe-mono); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.09em; color:rgba(250,247,242,0.9); margin:0 0 7px; }
+.fxe-sheet-dark-pages { font-family:var(--fxe-mono); font-size:8px; text-transform:uppercase; letter-spacing:0.06em; color:rgba(250,247,242,0.4); margin:0 0 10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fxe-row-dark { font-size:10.5px; line-height:1.4; color:rgba(250,247,242,0.82); padding:6px 0; border-bottom:1px solid rgba(250,247,242,0.08); }
+.fxe-row-dark:last-child { border-bottom:none; padding-bottom:0; }
+
+/* AFTER: warm veil + centered paper folio */
+.fxe-veil-warm { position:absolute; inset:0; background:rgba(20,18,16,0.45); }
+.fxe-sheet-paper { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:79%; background:var(--fxe-paper); border:1px solid #D8CCB8; border-radius:5px; padding:14px 17px 13px; }
+.fxe-sheet-paper-head { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+.fxe-orders-icon { display:inline-flex; flex-shrink:0; }
+.fxe-orders-icon svg { stroke:var(--fxe-oak); }
+.fxe-sheet-paper-title { flex:1; font-family:var(--fxe-mono); font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--fxe-ink); }
+.fxe-sheet-paper-title em { font-style:normal; color:var(--fxe-clay); }
+.fxe-sheet-paper-esc { font-family:var(--fxe-mono); font-size:8px; text-transform:uppercase; letter-spacing:0.07em; color:var(--fxe-oak); white-space:nowrap; }
+.fxe-rule { height:1px; background:var(--fxe-pearl); margin:0 0 9px; }
+.fxe-tabs { display:flex; gap:13px; margin:0 0 11px; }
+.fxe-tab { font-family:var(--fxe-mono); font-size:8.5px; text-transform:uppercase; letter-spacing:0.07em; color:var(--fxe-oak); }
+.fxe-tab.fxe-tab-active { color:var(--fxe-clay); }
+.fxe-row-paper { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid var(--fxe-pearl); font-size:10.5px; color:var(--fxe-ink); }
+.fxe-row-paper:last-child { border-bottom:none; }
+.fxe-ink-stamp { display:inline-block; flex-shrink:0; transform:rotate(-1.5deg); white-space:nowrap; border-radius:3px; border:1.5px solid; background:transparent; padding:2px 7px; font-family:var(--fxe-mono); font-size:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.09em; }
+.fxe-ink-stamp-clay { border-color:var(--fxe-clay); color:var(--fxe-clay); }
+.fxe-ink-stamp-sage { border-color:var(--fxe-sage); color:var(--fxe-sage); }
+.fxe-foot { margin-top:10px; font-family:var(--fxe-mono); font-size:9px; font-style:italic; letter-spacing:0.01em; color:var(--fxe-oak); }
+
+/* caption strip */
+.fxe-caption { margin-top:1.75rem; padding-top:1rem; border-top:1px solid var(--fxe-pearl); font-family:var(--fxe-mono); font-size:11px; letter-spacing:0.01em; line-height:1.65; color:var(--fxe-mocha); }
+.fxe-caption em { font-style:italic; color:var(--fxe-clay); }
+
+@media (max-width:700px) {
+  .fxe-panel { flex:1 1 100%; max-width:100%; }
 }
-.fxc-root * { box-sizing: border-box; }
-.fxc-root svg.fxc-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
-
-/* ── head ── */
-.fxc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
-.fxc-eyebrow { font-family: var(--fxc-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fxc-aged-oak); margin: 0 0 6px; }
-.fxc-h1 { font-family: var(--fxc-serif); font-weight: 500; font-size: 27px; letter-spacing: -0.01em; color: var(--fxc-charcoal); margin: 0; }
-.fxc-h1 em { font-style: italic; color: var(--fxc-clay); }
-.fxc-sub { font-family: var(--fxc-sans); font-size: 13px; color: var(--fxc-mocha); margin: 6px 0 0; max-width: 46ch; line-height: 1.55; }
-
-.fxc-stamp { font-family: var(--fxc-mono); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fxc-terracotta); border: 1.5px solid var(--fxc-terracotta); border-radius: 3px; background: transparent; padding: 6px 12px; transform: rotate(-1.5deg); white-space: nowrap; margin-top: 2px; }
-
-/* ── panels ── */
-.fxc-panels { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
-.fxc-panel { flex: 1 1 360px; min-width: 300px; max-width: 100%; }
-.fxc-panel-label { font-family: var(--fxc-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fxc-aged-oak); margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
-.fxc-panel-label::after { content: ""; flex: 1; height: 1px; background: var(--fxc-pearl); }
-
-.fxc-page { position: relative; overflow: hidden; background: var(--fxc-doc-paper); border: 1px solid var(--fxc-pearl); border-radius: 7px; min-height: 380px; }
-.fxc-page--hover { background: var(--fxc-doc-paper); }
-
-/* running head */
-.fxc-runhead { display: flex; justify-content: space-between; padding: 12px 16px 8px 40px; font-family: var(--fxc-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fxc-aged-oak); border-bottom: 1px solid var(--fxc-pearl); }
-
-/* letterhead + body */
-.fxc-content { padding: 16px 16px 18px 40px; display: flex; gap: 14px; }
-.fxc-body { flex: 1 1 auto; min-width: 0; }
-.fxc-mark { display: inline-flex; flex-direction: column; gap: 4px; margin-bottom: 9px; }
-.fxc-mark span { display: block; height: 2px; border-radius: 999px; background: var(--fxc-clay); }
-.fxc-mark span:nth-child(1) { width: 62px; }
-.fxc-mark span:nth-child(2) { width: 50px; }
-.fxc-mark span:nth-child(3) { width: 37px; opacity: 0.55; }
-
-.fxc-title { font-family: var(--fxc-serif); font-weight: 500; font-size: 21px; letter-spacing: -0.01em; color: var(--fxc-charcoal); margin: 0; line-height: 1.2; }
-.fxc-vitals { font-family: var(--fxc-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--fxc-aged-oak); margin: 5px 0 14px; }
-
-.fxc-root p.fxc-para { font-family: var(--fxc-sans); font-size: 12.5px; line-height: 1.62; color: var(--fxc-mocha); margin: 0 0 11px; }
-.fxc-root p.fxc-para:last-child { margin-bottom: 0; }
-
-/* margin rail (right) */
-.fxc-margin { flex: 0 0 118px; display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
-.fxc-mlabel { font-family: var(--fxc-mono); font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fxc-aged-oak); margin: 0 0 2px; }
-.fxc-mitem { border: 1px solid var(--fxc-pearl); border-radius: 5px; background: var(--fxc-doc-paper); padding: 7px 8px; }
-.fxc-mitem--decision { border-left: 2.5px solid var(--fxc-clay); }
-.fxc-mitem--money { border-left: 2.5px solid var(--fxc-dusty-blue); }
-.fxc-mkind { font-family: var(--fxc-mono); font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fxc-aged-oak); margin: 0 0 3px; }
-.fxc-mtext { font-family: var(--fxc-sans); font-size: 10.5px; color: var(--fxc-charcoal); line-height: 1.35; margin: 0; }
-
-/* ── thumb index rail ── */
-.fxc-rail { position: absolute; left: 0; top: 0; bottom: 0; width: 28px; display: flex; flex-direction: column; z-index: 3; }
-.fxc-notch { position: relative; flex: 1 1 0; display: flex; align-items: center; justify-content: center; opacity: 0.45; color: var(--fxc-charcoal); }
-.fxc-notch--active { opacity: 1; color: var(--fxc-clay); }
-.fxc-notch--active::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; background: var(--fxc-clay); border-radius: 1px; }
-.fxc-glyph { width: 14px; height: 14px; display: block; }
-
-.fxc-rail--wide { width: 150px; background: var(--fxc-sheet-front); border-right: 1px solid var(--fxc-pearl); }
-.fxc-rail--wide .fxc-notch { justify-content: flex-start; gap: 9px; padding-left: 11px; opacity: 1; color: var(--fxc-aged-oak); }
-.fxc-rail--wide .fxc-notch--active { color: var(--fxc-charcoal); }
-.fxc-rail--wide .fxc-notch--active .fxc-rlabel { color: var(--fxc-clay); }
-.fxc-rlabel { font-family: var(--fxc-mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
-
-.fxc-caption { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--fxc-pearl); font-family: var(--fxc-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fxc-aged-oak); }
 </style>
 
-<section class="fxc-root">
+<div class="fxe-head">
+  <p class="fxe-eyebrow">The Document — Orders Ledger</p>
+  <h2 class="fxe-title">The Laid <em>Sheet</em></h2>
+  <p class="fxe-dek">The ledger sheets (Orders, Accounts, Hours) currently slide up as a dark, bottom-docked elevator — a different product bolted under the paper. The rooms already answer this: converge the ledger onto the paper folio treatment in use elsewhere.</p>
+</div>
 
-  <svg class="fxc-defs" aria-hidden="true">
-    <defs>
-      <symbol id="fxc-i-desk" viewBox="0 0 14 14"><path d="M1.5 4.5h11M3 4.5v7M11 4.5v7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
-      <symbol id="fxc-i-library" viewBox="0 0 14 14"><path d="M7 2.8C5.6 2 3.3 2 1.8 2.6v8.6c1.5-.6 3.8-.6 5.2.2 1.4-.8 3.7-.8 5.2-.2V2.6C10.7 2 8.4 2 7 2.8z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></symbol>
-      <symbol id="fxc-i-people" viewBox="0 0 14 14"><circle cx="4.9" cy="4.9" r="1.7" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="10.1" cy="5.9" r="1.3" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M1.4 12c.3-2.2 1.7-3.5 3.5-3.5s3.2 1.3 3.5 3.5M8.5 12c.2-1.5 1.1-2.4 2.3-2.4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></symbol>
-      <symbol id="fxc-i-orders" viewBox="0 0 14 14"><path d="M1.5 4.2 7 1.8l5.5 2.4L7 6.6 1.5 4.2Z M1.5 4.2v6.4L7 13l5.5-2.4V4.2 M7 6.6V13" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></symbol>
-      <symbol id="fxc-i-accounts" viewBox="0 0 14 14"><path d="M3 1.5h8v11l-1.3-1-1.3 1-1.4-1-1.4 1-1.3-1-1.3 1v-11Z M4.5 4.5h5M4.5 7h5M4.5 9.3h3" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linejoin="round" stroke-linecap="round"/></symbol>
-      <symbol id="fxc-i-hours" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.3" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M7 4v3l2.2 1.2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></symbol>
-      <symbol id="fxc-i-post" viewBox="0 0 14 14"><path d="M1.5 3.2h11v7.6h-11z M1.7 3.4 7 8l5.3-4.6" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linejoin="round" stroke-linecap="round"/></symbol>
-    </defs>
-  </svg>
+<div class="fxe-pair">
 
-  <div class="fxc-head">
-    <div>
-      <p class="fxc-eyebrow">Option C</p>
-      <h2 class="fxc-h1">The <em>Thumb</em> Index</h2>
-      <p class="fxc-sub">An open document carrying a persistent recessive edge rail + running head — the doors live at the page's own margin, not a sidebar.</p>
+  <div class="fxe-panel">
+    <div class="fxe-panel-label">
+      <span class="fxe-stamp fxe-stamp-today">Today</span>
+      <span class="fxe-panel-name">doc-sheet.tsx · bottom slide</span>
     </div>
-    <div class="fxc-stamp">Supersedes D1 · D8</div>
-  </div>
-
-  <div class="fxc-panels">
-
-    <div class="fxc-panel">
-      <p class="fxc-panel-label">At rest</p>
-      <div class="fxc-page">
-        <div class="fxc-rail" aria-hidden="true">
-          <div class="fxc-notch fxc-notch--active"><svg class="fxc-glyph"><use href="#fxc-i-desk"></use></svg></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-library"></use></svg></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-people"></use></svg></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-orders"></use></svg></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-accounts"></use></svg></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-hours"></use></svg></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-post"></use></svg></div>
-        </div>
-        <div class="fxc-runhead"><span>Riverside · Install</span><span>The Document</span></div>
-        <div class="fxc-content">
-          <div class="fxc-body">
-            <div class="fxc-mark"><span></span><span></span><span></span></div>
-            <h3 class="fxc-title">Riverside — Install</h3>
-            <p class="fxc-vitals">The Morrow household · Install · 4 in motion</p>
-            <p class="fxc-para">Hollis &amp; Sons confirmed crating for Thursday, with delivery slotted into the Riverside window on the 14th. Loading-dock access after 6pm still needs the super's written sign-off before the crew can commit the day.</p>
-            <p class="fxc-para">Sofa fabric is the last open selection before upholstery cuts — the sage bouclé and the dustier taupe weave are the finalists. A call by Friday keeps Hollis &amp; Sons on their current slot.</p>
-          </div>
-          <div class="fxc-margin">
-            <p class="fxc-mlabel">In the margin</p>
-            <div class="fxc-mitem fxc-mitem--decision">
-              <p class="fxc-mkind">Decision</p>
-              <p class="fxc-mtext">Pending · sofa fabric</p>
-            </div>
-            <div class="fxc-mitem fxc-mitem--money">
-              <p class="fxc-mkind">Invoice</p>
-              <p class="fxc-mtext">Invoice drawn · $12,400</p>
-            </div>
-          </div>
-        </div>
+    <div class="fxe-mini">
+      <div class="fxe-doc-ground">
+        <p class="fxe-doc-letterhead">Hollis &amp; Sons <span>— Sitting Room</span></p>
+        <div class="fxe-strata"><span></span><span></span><span></span></div>
+        <div class="fxe-doc-greek"></div>
+        <div class="fxe-doc-greek fxe-doc-greek-2"></div>
+      </div>
+      <div class="fxe-veil-dark"></div>
+      <div class="fxe-sheet-dark">
+        <p class="fxe-sheet-dark-head">Orders</p>
+        <p class="fxe-sheet-dark-pages">Ledger &middot; Week &middot; Receiving &middot; Vendors</p>
+        <div class="fxe-row-dark">Hollis &amp; Sons — 4 lines in transit &middot; ETA Jul 14</div>
+        <div class="fxe-row-dark">Bergman Textiles — 1 line &middot; received Jul 9</div>
       </div>
     </div>
-
-    <div class="fxc-panel">
-      <p class="fxc-panel-label">Reached-for</p>
-      <div class="fxc-page fxc-page--hover">
-        <div class="fxc-rail fxc-rail--wide" aria-hidden="true">
-          <div class="fxc-notch fxc-notch--active"><svg class="fxc-glyph"><use href="#fxc-i-desk"></use></svg><span class="fxc-rlabel">The Desk</span></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-library"></use></svg><span class="fxc-rlabel">Library ↗</span></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-people"></use></svg><span class="fxc-rlabel">People ↗</span></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-orders"></use></svg><span class="fxc-rlabel">Orders</span></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-accounts"></use></svg><span class="fxc-rlabel">Accounts</span></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-hours"></use></svg><span class="fxc-rlabel">Hours</span></div>
-          <div class="fxc-notch"><svg class="fxc-glyph"><use href="#fxc-i-post"></use></svg><span class="fxc-rlabel">The Post</span></div>
-        </div>
-        <div class="fxc-runhead"><span>Riverside · Install</span><span>The Document</span></div>
-        <div class="fxc-content">
-          <div class="fxc-body">
-            <div class="fxc-mark"><span></span><span></span><span></span></div>
-            <h3 class="fxc-title">Riverside — Install</h3>
-            <p class="fxc-vitals">The Morrow household · Install · 4 in motion</p>
-            <p class="fxc-para">Hollis &amp; Sons confirmed crating for Thursday, with delivery slotted into the Riverside window on the 14th. Loading-dock access after 6pm still needs the super's written sign-off before the crew can commit the day.</p>
-            <p class="fxc-para">Sofa fabric is the last open selection before upholstery cuts — the sage bouclé and the dustier taupe weave are the finalists. A call by Friday keeps Hollis &amp; Sons on their current slot.</p>
-          </div>
-          <div class="fxc-margin">
-            <p class="fxc-mlabel">In the margin</p>
-            <div class="fxc-mitem fxc-mitem--decision">
-              <p class="fxc-mkind">Decision</p>
-              <p class="fxc-mtext">Pending · sofa fabric</p>
-            </div>
-            <div class="fxc-mitem fxc-mitem--money">
-              <p class="fxc-mkind">Invoice</p>
-              <p class="fxc-mtext">Invoice drawn · $12,400</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
   </div>
 
-  <p class="fxc-caption">Edge furniture, not a sidebar: hairlines by default, labels only when reached for, counts never.</p>
+  <div class="fxe-panel">
+    <div class="fxe-panel-label">
+      <span class="fxe-stamp fxe-stamp-proposed">Proposed</span>
+      <span class="fxe-panel-name">paper-folio-sheet.tsx · centered</span>
+    </div>
+    <div class="fxe-mini">
+      <div class="fxe-doc-ground">
+        <p class="fxe-doc-letterhead">Hollis &amp; Sons <span>— Sitting Room</span></p>
+        <div class="fxe-strata"><span></span><span></span><span></span></div>
+        <div class="fxe-doc-greek"></div>
+        <div class="fxe-doc-greek fxe-doc-greek-2"></div>
+      </div>
+      <div class="fxe-veil-warm"></div>
+      <div class="fxe-sheet-paper">
+        <div class="fxe-sheet-paper-head">
+          <span class="fxe-orders-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="1.5"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></span>
+          <span class="fxe-sheet-paper-title">Orders <em>&middot; the week</em></span>
+          <span class="fxe-sheet-paper-esc">Put back &middot; Esc</span>
+        </div>
+        <div class="fxe-rule"></div>
+        <div class="fxe-tabs">
+          <span class="fxe-tab fxe-tab-active">Ledger</span>
+          <span class="fxe-tab">Week</span>
+          <span class="fxe-tab">Receiving</span>
+          <span class="fxe-tab">Vendors</span>
+        </div>
+        <div class="fxe-row-paper"><span>Hollis &amp; Sons — 4 lines &middot; ETA Jul 14</span><span class="fxe-ink-stamp fxe-ink-stamp-clay">In transit</span></div>
+        <div class="fxe-row-paper"><span>Bergman Textiles — 1 line &middot; Jul 9</span><span class="fxe-ink-stamp fxe-ink-stamp-sage">Received</span></div>
+        <p class="fxe-foot">the document stays in hand beneath</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="fxe-caption">Same physics, different skin: the ledger becomes paper laid over the work — the treatment the product already uses elsewhere (<em>paper-folio-sheet</em>).</p>
 
 </section>
     </div>
     <div class="pd-ratify-row">
-      <label class="pd-ratify pd-ratify--hold"><input type="checkbox" class="pd-check" data-ruling="R96"><span class="pd-ratify-label">Ratify <b>R96</b> — The Thumb Index<span class="pd-hold-note">HOLD — gated on flight data</span></span></label>
+      <label class="pd-ratify"><input type="checkbox" class="pd-check" data-ruling="R96"><span class="pd-ratify-label">Ratify <b>R96</b> — The Laid Sheet</span></label>
     </div>
   </article>
 </section>
 
-<!-- ============================ §5 THE FORK ============================ -->
+<!-- ============================ §5 ONE MOVE ============================ -->
 <section id="s5" class="pd-section pd-reveal" aria-labelledby="s5-title">
-  <div class="pd-shead"><span class="pd-strata pd-strata--state" aria-hidden="true"><i></i><i></i><i></i></span><span class="pd-folio">§5 · The Fork</span></div>
-  <h2 class="pd-h2" id="s5-title">Fix it at home, or carry it <em>everywhere</em></h2>
+  <div class="pd-shead"><span class="pd-strata pd-strata--state" aria-hidden="true"><i></i><i></i><i></i></span><span class="pd-folio">§5 · One Move</span></div>
+  <h2 class="pd-h2" id="s5-title">Four rulings, <em>one move</em></h2>
   <div class="pd-col">
-    <p>The real decision is B versus C: fix wayfinding at home, or carry it everywhere. B teaches the studio's shape from a single standing page on the Desk. C stamps that shape onto every surface a designer opens. Both answer the same recall problem; they differ only in how much permanent structure they add.</p>
+    <p>The four are not a menu to choose from — they compose into a single move. The palette teaches at the door; the margins teach in place; the Desk keeps a standing index of everything the studio holds; and the ledgers stop arriving in the dark and lie down as paper. Each one answers the same recall problem from a different distance, and none of them adds a shred of permanent chrome to the inside of an open document.</p>
   </div>
-
-  <div class="pd-fork">
-    <div class="pd-forkcol pd-forkcol--home">
-      <p class="pd-fork-kicker">R95 · The Contents Page</p>
-      <p class="pd-fork-title">Fix it <em>at home</em></p>
-      <p>One standing page on the Desk teaches the studio's shape. Structure is added in exactly one place; the rest of the interface is untouched.</p>
-    </div>
-    <div class="pd-forkcol pd-forkcol--everywhere">
-      <p class="pd-fork-kicker">R96 · The Thumb Index</p>
-      <p class="pd-fork-title">Carry it <em>everywhere</em></p>
-      <p>The same shape is stamped onto every surface a designer opens — permanent chrome on the proposal, the project, the invoice. Truest to the metaphor, and the most invasive.</p>
-    </div>
-  </div>
-
   <div class="pd-col" style="margin-top:2rem;">
-    <p>Ship A, D, and B now. Together they are the “combo” pattern NN/g found winning — quiet-but-visible with on-demand depth — and they cost the canon almost nothing. Hold C. It is earned only if, after A, D, and B have landed and the ledger has run, the flight data still shows designers fleeing from <em>inside</em> open documents. Arc's lesson is the order of operations: instrument first, alter the metaphor-bearing chrome second, and only when the numbers ask for it.</p>
+    <p>That is the pattern NN/g found winning — quiet-but-visible wayfinding paired with depth on demand, the “combo.” It costs the canon almost nothing: R93 and R94 sit within it, R95 amends R5, and R96 amends D14's <em>presentation</em>. D1 and D8 stand untouched. There is nothing here to hold and nothing to gate — the instrumentation runs alongside, so the numbers can confirm the move rather than gate it.</p>
   </div>
 
   <div class="pd-recommend">
-    <span class="pd-stamp--recommend">Recommended: R93 + R94 + R95 · R96 gated on data</span>
+    <span class="pd-stamp--recommend">Recommended: R93 · R94 · R95 · R96</span>
   </div>
+
 </section>
 
 <!-- ============================ §6 ROADMAP ============================ -->
 <section id="s6" class="pd-section pd-reveal" aria-labelledby="s6-title">
   <div class="pd-shead"><span class="pd-strata pd-strata--state" aria-hidden="true"><i></i><i></i><i></i></span><span class="pd-folio">§6 · Roadmap</span></div>
-  <h2 class="pd-h2" id="s6-title">Instrument first. Alter the chrome only when the numbers ask.</h2>
+  <h2 class="pd-h2" id="s6-title">Instrument first, ship the four, then read the ledger.</h2>
 
   <ol class="pd-ladder">
     <li class="pd-rung pd-rung--settled">
@@ -1630,29 +1588,33 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
       <div>
         <p class="pd-rung-phase">Phase 0 · Foundation</p>
         <h3 class="pd-rung-title">Land the floor</h3>
-        <p class="pd-rung-scope">Land F1 through F6 and the studio-surface registry: instrument the palette, read the flight ledger, make People search real, give /help a door, name the Bell, and put every surface behind one registry.</p>
+        <p class="pd-rung-scope">Land F1 through F6 and the studio-surface registry with its icon set: instrument the palette, read the flight ledger, make People search real, land person rows on the person, give /help a door, name the Bell, and put every surface — door, palette row, index line, sheet head — behind one registry and one mark.</p>
         <span class="pd-nogate">No ruling required — starts on approval</span>
       </div>
     </li>
     <li class="pd-rung pd-rung--active">
       <div class="pd-rung-mark"><span class="pd-strata" aria-hidden="true"><i></i><i></i><i></i></span></div>
       <div>
-        <p class="pd-rung-phase">Phase 1 · Teach in place</p>
-        <h3 class="pd-rung-title">Ship A, then D, then B</h3>
-        <p class="pd-rung-scope">The populated palette, then the marginalia, then the contents page. B carries the single ruling in this phase.</p>
-        <span class="pd-gate">Ruling gate · Amend R5 — add “the index”</span>
+        <p class="pd-rung-phase">Phase 1 · Ship the four rulings</p>
+        <h3 class="pd-rung-title">Teach in place, then lay the sheet down</h3>
+        <p class="pd-rung-scope">The populated palette, the marginalia, the Contents Page, and the Laid Sheet — the whole composition ships together.</p>
+        <div class="pd-gates" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">
+          <span class="pd-gate">Ruling gate · Amend R5 — add “the index”</span>
+          <span class="pd-gate">Ruling gate · Amend D14 — the laid sheet</span>
+        </div>
       </div>
     </li>
     <li class="pd-rung pd-rung--future">
       <div class="pd-rung-mark"><span class="pd-strata" aria-hidden="true"><i></i><i></i><i></i></span></div>
       <div>
-        <p class="pd-rung-phase">Phase 2 · Read, then decide</p>
-        <h3 class="pd-rung-title">Build C only if it is earned</h3>
-        <p class="pd-rung-scope">With the ledger populated, watch where designers still flee. Build C only if earned — then close the P0 gaps (vendor creation, invoice settlement) in the order the flight rank names them, not the order we assume.</p>
-        <span class="pd-gate">Ruling gate · Supersede D1 · D8</span>
+        <p class="pd-rung-phase">Phase 2 · Read, then close</p>
+        <h3 class="pd-rung-title">Let the numbers name what's next</h3>
+        <p class="pd-rung-scope">With the ledger populated and the new instrumentation live, read where designers still flee — then close the P0 feature gaps (vendor creation, invoice settlement) in the order the flight rank names them, not the order we assume. Revisit any ruling the numbers contradict.</p>
+        <span class="pd-nogate">No ruling — reads the evidence the floor was built to gather.</span>
       </div>
     </li>
   </ol>
+
 </section>
 
 <!-- ============================ §7 DECISION ============================ -->
@@ -1667,7 +1629,7 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
     <li><label class="pd-ratify"><input type="checkbox" class="pd-check" data-ruling="R93"><span class="pd-ratify-label"><b>R93 · The Populated Palette</b> — furnish ⌘K so it teaches.</span></label></li>
     <li><label class="pd-ratify"><input type="checkbox" class="pd-check" data-ruling="R94"><span class="pd-ratify-label"><b>R94 · The Marginalia</b> — let empty states and first-touch notes explain the studio in place.</span></label></li>
     <li><label class="pd-ratify"><input type="checkbox" class="pd-check" data-ruling="R95"><span class="pd-ratify-label"><b>R95 · The Contents Page</b> — amend R5 to add a standing “index” surface on the Desk.</span></label></li>
-    <li class="pd-decision--hold"><label class="pd-ratify pd-ratify--hold"><input type="checkbox" class="pd-check" data-ruling="R96"><span class="pd-ratify-label"><b>R96 · The Thumb Index</b> — supersede D1 and D8 to carry wayfinding onto every document.<span class="pd-hold-note">Recommend HOLD — pending the flight data</span></span></label></li>
+    <li><label class="pd-ratify"><input type="checkbox" class="pd-check" data-ruling="R96"><span class="pd-ratify-label"><b>R96 · The Laid Sheet</b> — amend D14's presentation so the ledgers open as centered paper, not a dark slide-up.</span></label></li>
   </ul>
 
   <p class="pd-summary">You are ratifying: <span id="ratify-summary-value">nothing yet — Foundation F1–F6 still proceeds on approval.</span></p>
@@ -1708,7 +1670,7 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
   root.classList.add('pd-js');
 
   var RULINGS = { R93:'R93', R94:'R94', R95:'R95', R96:'R96' };
-  var STORE = 'pd-discoverability-ratify-v1';
+  var STORE = 'pd-discoverability-ratify-v2';
 
   function loadState(){
     try { return JSON.parse(localStorage.getItem(STORE)) || {}; }
@@ -1730,7 +1692,6 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
       return;
     }
     var txt = picked.join(', ');
-    if(state.R96){ txt += ' — note R96 is held, gated on flight data.'; }
     el.textContent = txt;
   }
 
@@ -1762,7 +1723,7 @@ main.pd-main{ max-width:1000px; margin:0 auto; padding:0 24px 150px; }
   /* ---- scroll-spy: rail + top strip ---- */
   var ORDER = {
     s0:'§0 · Cover', s1:'§1 · Evidence', s2:'§2 · Failure Classes', s3:'§3 · Foundation',
-    s4:'§4 · The Rulings', s5:'§5 · The Fork', s6:'§6 · Roadmap', s7:'§7 · Decision'
+    s4:'§4 · The Rulings', s5:'§5 · One Move', s6:'§6 · Roadmap', s7:'§7 · Decision'
   };
   var railItems = {};
   Array.prototype.slice.call(document.querySelectorAll('.pd-rail-item')).forEach(function(li){
