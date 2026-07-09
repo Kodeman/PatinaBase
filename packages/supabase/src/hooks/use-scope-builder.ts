@@ -58,7 +58,7 @@ export interface ProposalPaymentMilestone {
 // SCOPE ROOMS
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function useProposalScopeRooms(proposalId: string) {
+export function useProposalScopeRooms(proposalId: string | null | undefined) {
   return useQuery({
     queryKey: ['proposal-scope-rooms', proposalId],
     queryFn: async () => {

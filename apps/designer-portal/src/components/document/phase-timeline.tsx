@@ -150,7 +150,7 @@ export function PhaseTimeline({ projectId }: { projectId: string }) {
                 key={p.id}
                 type="button"
                 onClick={() => openEditor(p)}
-                title={`${phaseLabel(p)} · ${fmtDay(p.start_date)} – ${fmtDay(p.target_end_date)}`}
+                title={`${phaseLabel(p)} · ${p.start_date ? fmtDay(p.start_date) : '—'} – ${p.target_end_date ? fmtDay(p.target_end_date) : '—'}`}
                 className={`absolute top-[3px] flex h-[calc(100%-6px)] items-center overflow-hidden rounded-[4px] px-2 text-left transition-opacity hover:opacity-90 ${
                   editId === p.id ? 'outline outline-[1.5px] outline-offset-[1px] outline-[var(--color-clay)]' : ''
                 } ${muted ? 'border border-dashed border-[var(--color-aged-oak)]' : ''}`}

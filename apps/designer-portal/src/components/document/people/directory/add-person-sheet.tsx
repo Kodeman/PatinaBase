@@ -38,7 +38,8 @@ import type { DirectoryRole } from '../views/directory-view';
 export type AddedPersonKind = 'client' | 'maker' | 'gc' | 'sub' | 'installer' | 'receiver';
 
 const FIELD_KINDS: AddedPersonKind[] = ['gc', 'sub', 'installer', 'receiver'];
-const isFieldKind = (k: AddedPersonKind): k is PartyKind => (FIELD_KINDS as string[]).includes(k);
+const isFieldKind = (k: AddedPersonKind): k is Extract<AddedPersonKind, PartyKind> =>
+  (FIELD_KINDS as string[]).includes(k);
 /** Trade is a meaningful field only for the trade kinds (sub / installer). */
 const showsTrade = (k: AddedPersonKind) => k === 'sub' || k === 'installer';
 
