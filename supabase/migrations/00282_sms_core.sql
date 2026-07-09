@@ -779,7 +779,9 @@ union all
 -- ── time (daily summary — a query, not a table; spec §5) ────────────────────
 select
   'time'::text                              as kind,
-  uuid_generate_v5(
+  -- Schema-qualified (unlike the 00219 original): the prod push session's
+  -- search_path does not include `extensions`, so the bare name fails there.
+  extensions.uuid_generate_v5(
     'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid,
     te.project_id::text || te.day::text
   )                                         as item_id,
