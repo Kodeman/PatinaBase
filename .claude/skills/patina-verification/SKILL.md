@@ -4,7 +4,7 @@ description: Use before claiming any Patina change is done, fixed, or passing â€
 ---
 # Patina Verification
 
-Last verified: 2026-07-08 (main @ 593876c1, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
+Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
 
 ## Use when / Don't use when
 - USE when: about to claim a change is done/fixed/passing; picking which command actually gates a target (type-check vs build vs test vs lint) before running it; a signal looks too good (UI shows data, a suite says pass, a CI badge is green, a migration ledger has a row) and you need to know whether to trust it.

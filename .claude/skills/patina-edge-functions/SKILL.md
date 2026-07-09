@@ -4,7 +4,7 @@ description: Use when creating, editing, testing, or deploying Supabase edge fun
 ---
 # Patina Supabase edge functions (Deno)
 
-Last verified: 2026-07-08 (main @ 593876c1, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
+Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
 
 ## Use when / Don't use when
 - USE when: adding/editing `supabase/functions/<name>/index.ts` or `_shared/*`; changing `config.toml [functions.*]`; deciding `verify_jwt`; a webhook or cron-invoked function 401s / runs stale / doesn't fire; email isn't sending; a stray `deno.lock` appears at repo root.

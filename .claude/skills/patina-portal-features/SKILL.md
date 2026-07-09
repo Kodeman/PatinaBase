@@ -4,7 +4,7 @@ description: Use when adding or changing pages, routes, components, hooks, or da
 ---
 # Building Portal Features (Next.js portals)
 
-Last verified: 2026-07-08 (main @ 593876c1, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
+Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
 
 Primary exemplar throughout: the **procurement** zone in `apps/designer-portal`. Read it before inventing a new pattern.
 

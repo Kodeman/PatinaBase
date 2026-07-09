@@ -4,7 +4,7 @@ description: Use when building, changing, or verifying either iOS app under apps
 ---
 # iOS Verification: Patina & Patina Field (apps/mobile)
 
-Last verified: 2026-07-08 (main @ 593876c1, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
+Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
 
 ## Use when / Don't use when
 

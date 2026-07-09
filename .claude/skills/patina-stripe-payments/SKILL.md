@@ -4,7 +4,7 @@ description: Use when working on Patina payments — Stripe Checkout sessions, s
 ---
 # Patina Stripe Payments
 
-Last verified: 2026-07-08 (main @ 593876c1, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
+Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
 
 ## Use when / Don't use when
 Use when: touching Checkout, `stripe-webhook`, invoices, PO/deposit/direct-order payments, refunds, payment migrations, Stripe keys/secrets, or a `400 invalid_signature`; or when payments look dormant/unconfigured.

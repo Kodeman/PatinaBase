@@ -4,7 +4,7 @@ description: Use when starting or debugging Patina locally — pnpm dev:* script
 ---
 # Patina Local Development
 
-Last verified: 2026-07-08 (main @ 593876c1, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
+Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
 
 ## Use when / Don't use when
 - USE when: booting the stack locally; a dev server is wrong/stale/orphaned or a port is taken; gated UI is missing in dev; auth or app emails don't show; a sign-in on one portal logs you out of another; before `supabase db reset`, seed edits, or any bulk local mutation.

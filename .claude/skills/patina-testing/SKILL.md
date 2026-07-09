@@ -4,7 +4,7 @@ description: Use when writing, fixing, or debugging Patina tests — a jest.mock
 ---
 # Patina Testing
 
-Last verified: 2026-07-08 (main @ 593876c1, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
+Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
 
 ## Use when / Don't use when
 - USE when: writing or debugging a Jest unit test in any portal, a Vitest test in `packages/supabase`/`packages/patina-design-system`, a NestJS service spec, a Playwright e2e spec, or a Deno test under `supabase/functions/`; a `jest.mock()` appears to do nothing; a suite throws `SyntaxError: Unexpected token 'export'` (or similar) touching `@portabletext/react`; an e2e spec is flaky or races the database; flag-gated UI is missing specifically under Playwright.

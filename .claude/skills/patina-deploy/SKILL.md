@@ -4,7 +4,7 @@ description: Use when shipping anything to Patina production — portals to Clou
 ---
 # Patina Production Deploy (Cloudflare + Strata)
 
-Last verified: 2026-07-08 (main @ 593876c1, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
+Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
 
 Production is **Supabase Cloud project "Strata" (ref `bkvcixdmuyejfzcijpdg`)** + **Cloudflare** (Workers for the 4 portals, Containers for the 3 NestJS services + media processor + inference). The old self-hosted Coolify box is **DEAD**.
 

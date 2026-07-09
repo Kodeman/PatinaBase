@@ -4,7 +4,7 @@ description: Use when investigating or operating Patina production (Strata Supab
 ---
 # Patina Production Ops (Strata + Cloudflare)
 
-Last verified: 2026-07-08 (main @ 593876c1, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
+Last verified: 2026-07-09 (main @ c4de810d, migrations head 00284). Re-verify load-bearing claims if the repo has moved.
 
 Production = **Supabase Cloud "Strata" (ref `bkvcixdmuyejfzcijpdg`)** + **Cloudflare** (portals on Workers, services on Containers). The self-hosted Coolify box is **DEAD** — never SSH/deploy/reconfigure it.
 
@@ -96,7 +96,7 @@ From `supabase/config.toml`, only these skip JWT: `stripe-webhook` (Stripe-signa
 - `get_advisors` surfaces security/perf lints (RLS gaps, missing indexes).
 
 ## Active punch list (state may have moved — verify live before acting)
-Reported open post-cutover: designer PDF route WASM-broken on Workers; cron-trigger / DLQ semantics on the new stack still being settled; inference-worker deploy state uncertain; old-box decommission pending; Stripe **LIVE** keys owed (sandbox is live — see patina-stripe-payments); `po_payments` self-mark-paid RLS hole open; **Field/SMS program ship owed** (migrations 00281–00284 + `sms-dispatch`/`field-daily`/`sms-inbound` + pg_cron + Twilio 10DLC brand/campaign registration + Twilio secrets — runbook `docs/field/sms-10dlc-runbook.md`, per DECISIONS.md I53). These are memory/report-sourced, not all repo-verifiable — confirm each live before you rely on or "fix" it.
+Reported open post-cutover: designer PDF route WASM-broken on Workers; cron-trigger / DLQ semantics on the new stack still being settled; inference-worker deploy state uncertain; old-box decommission pending; Stripe **LIVE** keys owed (sandbox is live — see patina-stripe-payments); `po_payments` self-mark-paid RLS hole open; **Field/SMS shipped 2026-07-09** (00281–00284 on Strata, `sms-dispatch`/`field-daily`/`sms-inbound` live) but **SMS is dormant** until Twilio 10DLC brand/campaign registration + Twilio secrets land (runbook `docs/field/sms-10dlc-runbook.md`; the Twilio webhook URL needs NO `?apikey=` on Cloud). These are memory/report-sourced, not all repo-verifiable — confirm each live before you rely on or "fix" it.
 
 ## Name-collision warning
 "**Strata**" means THREE things — the Supabase Cloud **project** (prod), the `StrataMark` **design-system component** (`packages/patina-design-system/src/components/StrataMark/`), and an old **Coolify project** name (`infra/coolify/*`, DEAD). Read context before acting on "Strata".
