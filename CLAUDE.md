@@ -193,7 +193,10 @@ Prod mutations require an explicit user request in the current session; a "ship 
 
 ## Important Conventions
 
-- **Using Fable**: when the session model is Fable, Fable plans, orchestrates, and does the adversarial review — it does not execute. Sonnet/Opus subagents do the execution; on completion Fable reviews, then returns to the user or re-instructs the subagents.
+- **Using Fable**: when the session model is Fable, use Fable **only** for planning, architecture, and orchestration (including the adversarial review of returned work) — it never executes, even for tasks that look quick. Dispatch all execution — code changes, migrations, tests, deploys, debugging legwork, bulk research — to subagents on the model that fits the task; on completion Fable reviews, then returns to the user or re-instructs the subagents.
+  - **Opus** — complex implementation, hard debugging, cross-cutting refactors, work where the first attempt must be right.
+  - **Sonnet** — standard feature/hook/edge-function implementation, test writing, most execution.
+  - **Haiku** — mechanical edits, renames, bulk changes, file searches, simple lookups.
 - **Auth**: always Supabase Auth. Never add NextAuth.
 - **Data access**: `@patina/supabase` hooks for Supabase data; `@patina/api-routes` proxy for NestJS service data. No ad-hoc `fetch` to services.
 - **Types**: import from `@patina/types`, never redefine.
