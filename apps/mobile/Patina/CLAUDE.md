@@ -13,9 +13,10 @@ the sibling app, `apps/mobile/Capture` ("Patina Field") — see
 - **Auth**: Supabase Auth (GoTrue). Access via `SupabaseClientManager.shared`.
   Never introduce Firebase, NextAuth, Teenybase, or local keychain token
   managers — the app has a single Supabase session source of truth.
-- **Database**: Supabase PostgreSQL (self-hosted at `api.patina.cloud`).
-  PostgREST accessed through `RoomsAPIClient`, `ProductAPIClient`,
-  `FeedAPIClient` in `Patina/Core/Network/`.
+- **Database**: Supabase PostgreSQL — Supabase Cloud "Strata" in prod, local
+  CLI stack in dev; the per-env URL comes from `Secrets.swift`. PostgREST
+  accessed through `RoomsAPIClient`, `ProductAPIClient`, `FeedAPIClient` in
+  `Patina/Core/Network/`.
 - **Realtime / Storage**: Supabase Realtime + Storage via the supabase-swift
   SDK. Scan artifacts go to the `room-scans` bucket with RLS keyed on
   `{artifactType}/{userId}/{roomId}/...` (see migration `00077`).

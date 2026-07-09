@@ -13,4 +13,4 @@ TypeScript types and Zod validation schemas. No implementations.
 - Types are source of truth; Zod schemas derive from them
 - Export everything via barrel files (`index.ts`)
 - No React dependencies - this is pure data layer
-- Used by all apps via `@strata/shared`
+- Used by all apps via `@patina/shared`

@@ -2,7 +2,8 @@
 
 Two native Swift/SwiftUI apps live under `apps/mobile/`, split by audience.
 Both share the monorepo's Supabase-first architecture (Supabase Auth/GoTrue,
-no NextAuth, same `api.patina.cloud` backend) — see the root `CLAUDE.md`.
+no NextAuth, same Supabase backend as the portals — Supabase Cloud "Strata"
+in prod, per-env URL from each app's `Secrets.swift`) — see the root `CLAUDE.md`.
 
 - **`Patina/`** — **Patina**, the client app (`cloud.patina.app`). Room
   capture, a daily companion experience, style quiz/recommendations, and

@@ -11,7 +11,7 @@ pnpm db:generate  # Generate TypeScript types
 
 ## Migrations
 
-Sequential numbered files in `migrations/`. Never modify existing migrations - always create new ones.
+Sequential hand-numbered files in `migrations/` (`NNNNN_slug.sql` — never `supabase migration new`, it emits timestamp names that break the ordering). Never modify a migration that has been applied to prod — fix forward with a new one. Editing in place is the standard remediation only while a migration is still unapplied on prod (e.g. `ced1a2fe` fixing 00282 after its transactional push failed). Full authoring rules: the `patina-db-migrations` skill.
 
 ## Conventions
 
@@ -19,6 +19,7 @@ Sequential numbered files in `migrations/`. Never modify existing migrations - a
 - RLS enabled on all tables
 - pgvector for embeddings — 768-dim canonical aesthetic space (see `docs/prds/AE/aesthete-engine-system-design.md`); the Aesthete Engine delivery program is tracked in `docs/prds/AE/aesthete-engine-delivery-plan.md`
 - Use `created_at` and `updated_at` timestamps
+- ⚠ **Schema-qualify extension functions** in migrations (`extensions.uuid_generate_v5(...)`, etc.) — the prod `db push` session's `search_path` does not include `extensions`, so bare calls that pass locally fail on Strata with 42883 (bit 00282; fixed in `ced1a2fe`)
 - ⚠ **Grants on fresh local stacks**: Supabase flipped platform defaults 2026-05-30 — new local stacks no longer auto-grant table/function privileges to anon/authenticated at creation, so a fresh `supabase start` breaks every pre-00285 object (42501). `seed/00-legacy-grants.sql` (first in `[db.seed] sql_paths`) restores the legacy posture for never-explicitly-managed objects on every local `db reset`; it never runs on prod. Migrations written after the flip must include explicit `GRANT`s for anything portals reach (00282/00283 style) — never rely on creation-time defaults.
 
 ## Project money columns (post-00139)
@@ -32,7 +33,11 @@ Pre-00139 rows have `total_amount_cents` backfilled from `budget_cents` and may 
 
 ## Proposal → project activation
 
-`activate_proposal_as_project(p_proposal_id, p_start_date)` (latest body in `00262_spec_doc_codes.sql`; lineage: 00140 richer carry → 00167 created_by fix → 00180 boards carry → 00185 dual pricing → 00199 vendor_id carry → 00262 doc_code carry) is the bridge. Preconditions: `proposals.status = 'accepted'` and `proposals.project_id IS NULL`.
+`activate_proposal_as_project(p_proposal_id, p_start_date)` is the bridge. Lineage: 00140 richer carry → 00167 created_by fix → 00180 boards carry → 00185 dual pricing → 00199 vendor_id carry → 00262 doc_code carry → 00269 custom_fields carry → 00274 deposit autodraft → **00279 dual-pricing reconcile (head at last check)**. It is redefined whole-body (~19×) — this list WILL drift; before editing, find the live head and copy that body verbatim:
+
+```bash
+grep -rln "CREATE OR REPLACE FUNCTION[^(]*activate_proposal_as_project" migrations/*.sql | sort | tail -1
+``` Preconditions: `proposals.status = 'accepted'` and `proposals.project_id IS NULL`.
 
 Status transitions and side effects:
 

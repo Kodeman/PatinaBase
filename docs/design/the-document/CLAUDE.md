@@ -1,5 +1,6 @@
 # CLAUDE.md — The Document workstream
 
+> **Historical seed (2026-06-11)** — this was the template for `apps/designer-portal/CLAUDE.md`, which carries the repo-reality corrections and WINS wherever the two differ. Stack facts below are stale (`@strata/*` naming, React 18, self-hosted Supabase, a `prototypes/` dir that doesn't exist). Design intent (D1–D11, source-of-truth hierarchy) remains authoritative via the app copy.
 > Place this file at `apps/designer-portal/CLAUDE.md` (or merge into it if one exists — existing repo instructions win on repo mechanics; this file wins on Document-workstream design intent).
 > Companion files live in `docs/design/the-document/`: `the-document-spec.md`, `DECISIONS.md`, `prototypes/`.
 
