@@ -20,7 +20,11 @@ import PackageDescription
 let package = Package(
     name: "PatinaDesignKit",
     platforms: [
-        .iOS(.v18) // both apps target iOS 18+ (Patina + Capture DEPLOYMENT = 18.0)
+        // Compatible floor across both consumers: the Patina app target's
+        // IPHONEOS_DEPLOYMENT_TARGET is 17.6 (despite the "iOS 18+" doc note);
+        // Capture's generator pins 18.0. A package floor must be <= every
+        // consumer, so 17.6 it is.
+        .iOS("17.6")
     ],
     products: [
         .library(
