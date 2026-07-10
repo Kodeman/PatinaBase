@@ -132,11 +132,11 @@ struct CameraPrimingScreen: View {
             Label("No camera access — you can still import from Photos instead.",
                   systemImage: "photo.on.rectangle.angled")
                 .font(CaptureType.footnote)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
                 .multilineTextAlignment(.leading)
 
             Button("Continue", action: onContinue)
-                .buttonStyle(OnboardingFilledButtonStyle(tint: CaptureColor.rust))
+                .buttonStyle(OnboardingFilledButtonStyle(tint: CaptureColor.error))
 
             Button("Open Settings", action: onOpenSettings)
                 .buttonStyle(OnboardingGhostButtonStyle())

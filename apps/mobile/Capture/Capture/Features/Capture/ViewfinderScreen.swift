@@ -61,6 +61,10 @@ struct ViewfinderScreen: View {
             }
         }
         .background(CaptureColor.ink.ignoresSafeArea())
+        // Camera chrome is deliberately dark (same rule as Patina's capture
+        // surfaces): pin light so the dynamic tokens keep their designed
+        // values instead of inverting under system dark mode.
+        .environment(\.colorScheme, .light)
         .animation(cardAnimation, value: model.cardSpecimen?.id)
         .animation(cardAnimation, value: model.isHolding)
         .task { await model.start() }
@@ -178,7 +182,7 @@ private struct CameraAccessDeniedNotice: View {
         VStack(spacing: 12) {
             Image(systemName: "camera.slash")
                 .font(CaptureType.title)
-                .foregroundStyle(CaptureColor.rust2)
+                .foregroundStyle(CaptureColor.error)
 
             Text("Camera access is off for Patina Field")
                 .font(CaptureType.callout)

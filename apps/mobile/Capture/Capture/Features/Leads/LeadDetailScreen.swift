@@ -145,7 +145,7 @@ struct LeadDetailScreen: View {
             Text("The ask")
                 .font(CaptureType.eyebrow)
                 .textCase(.uppercase)
-                .foregroundStyle(CaptureColor.brass)
+                .foregroundStyle(CaptureColor.verdigrisInk)
             Text(note)
                 .font(CaptureType.title2)
                 .foregroundStyle(CaptureColor.ink)

@@ -66,9 +66,7 @@ enum LeadFormat {
 
     static func receivedDate(_ date: Date?) -> String? {
         guard let date else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, yyyy"
-        return formatter.string(from: date)
+        return CaptureDates.mediumDate(date)
     }
 
     // MARK: - Status chip (L1 source chip uses brass directly; this is the L2
@@ -83,10 +81,10 @@ enum LeadFormat {
 
     static func statusColor(_ raw: String) -> Color {
         switch raw {
-        case "new":                return CaptureColor.brass
+        case "new":                return CaptureColor.goldenHour
         case "viewed":              return CaptureColor.inkSoft
-        case "contacted", "accepted": return CaptureColor.verdigris
-        case "declined", "expired": return CaptureColor.rust
+        case "contacted", "accepted": return CaptureColor.success
+        case "declined", "expired": return CaptureColor.terracotta
         default:                   return CaptureColor.inkSoft
         }
     }

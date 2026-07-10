@@ -128,7 +128,7 @@ struct LibrarySearchScreen: View {
         HStack(spacing: 8) {
             Image(systemName: "diamond.fill")
                 .font(.caption2)
-                .foregroundStyle(CaptureColor.brass)
+                .foregroundStyle(CaptureColor.warning)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Already in your library")
                     .font(CaptureType.footnote.weight(.semibold))
@@ -141,8 +141,8 @@ struct LibrarySearchScreen: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(CaptureColor.brass2.opacity(0.18)))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(CaptureColor.brass.opacity(0.4), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 10).fill(CaptureColor.warning.opacity(0.18)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(CaptureColor.warning.opacity(0.4), lineWidth: 1))
         .padding(.horizontal, 20)
         .padding(.bottom, 10)
     }
@@ -219,7 +219,7 @@ struct LibrarySearchScreen: View {
         let (text, color): (String, Color) = {
             switch s.destination {
             case .library: return ("library", CaptureColor.verdigris)
-            case .inbox: return ("inbox", CaptureColor.brass)
+            case .inbox: return ("inbox", CaptureColor.warning)
             case .undecided: return ("draft", CaptureColor.inkSoft)
             }
         }()

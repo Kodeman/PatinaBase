@@ -120,7 +120,7 @@ struct ArrivingPOsScreen: View {
                         .foregroundStyle(CaptureColor.inkSoft)
                 }
                 if let eta = po.eta {
-                    Text("ETA \(eta.formatted(date: .abbreviated, time: .omitted))")
+                    Text("ETA \(CaptureDates.mediumDate(eta))")
                         .font(CaptureType.monoSmall)
                         .foregroundStyle(CaptureColor.inkSoft)
                 }
@@ -133,7 +133,7 @@ struct ArrivingPOsScreen: View {
     }
 
     private func statusChip(_ status: String) -> some View {
-        let color: Color = status == "shipped" ? CaptureColor.verdigris : CaptureColor.brass
+        let color: Color = status == "shipped" ? CaptureColor.success : CaptureColor.warning
         return Text(status.replacingOccurrences(of: "_", with: " ").capitalized)
             .font(CaptureType.eyebrow)
             .foregroundStyle(color)

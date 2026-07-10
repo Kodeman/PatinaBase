@@ -92,18 +92,46 @@ struct ProjectListScreen: View {
 
     private var list: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                ForEach(model.items) { project in
-                    if project.id != model.items.first?.id {
-                        Divider().background(CaptureColor.line)
-                    }
-                    row(project)
+            VStack(spacing: 14) {
+                // A failed refresh with stale rows still on screen surfaces the
+                // error (same banner idiom as D1's DecisionListScreen) rather
+                // than silently keeping the old list with no sign the
+                // pull-to-refresh didn't land.
+                if let message = model.errorMessage {
+                    inlineErrorBanner(message)
                 }
+                VStack(spacing: 0) {
+                    ForEach(model.items) { project in
+                        if project.id != model.items.first?.id {
+                            Divider().background(CaptureColor.line)
+                        }
+                        row(project)
+                    }
+                }
+                .projectsCard()
             }
-            .projectsCard()
             .padding(20)
         }
         .refreshable { await model.load() }
+    }
+
+    /// Shown above the (still-visible, stale) list when a refresh fails —
+    /// distinct from `ProjectsErrorState`, which replaces the whole screen
+    /// only when there are no rows to fall back on.
+    private func inlineErrorBanner(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(CaptureColor.error)
+            Text(message)
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.error)
+            Spacer()
+            Button("Retry") { Task { await model.load() } }
+                .font(CaptureType.footnote.weight(.semibold))
+                .foregroundStyle(CaptureColor.error)
+        }
+        .padding(12)
+        .background(CaptureColor.error.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private func row(_ project: FieldProject) -> some View {
@@ -159,7 +187,7 @@ struct ProjectListScreen: View {
         if let client = project.clientName { parts.append("client \(client)") }
         if !project.status.isEmpty { parts.append(ProjectsFormat.humanize(project.status)) }
         if let updated = project.updatedAt {
-            parts.append("updated \(updated.formatted(date: .abbreviated, time: .omitted))")
+            parts.append("updated \(CaptureDates.mediumDate(updated))")
         }
         return parts.joined(separator: ", ")
     }

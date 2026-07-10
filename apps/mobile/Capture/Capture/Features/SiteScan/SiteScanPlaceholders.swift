@@ -24,7 +24,7 @@ struct SiteScanSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(CaptureType.eyebrow).textCase(.uppercase)
-                .foregroundStyle(CaptureColor.brass)
+                .foregroundStyle(CaptureColor.goldenHour)
                 .padding(.leading, 4)
             VStack(alignment: .leading, spacing: 0) { content() }
                 .padding(14)
@@ -71,7 +71,7 @@ struct SiteScanBackdrop: View {
             Image(systemName: "camera.metering.matrix")
                 .font(CaptureType.display)
                 .imageScale(.large)
-                .foregroundStyle(CaptureColor.brass.opacity(reduceMotion ? 0.28 : (pulse ? 0.35 : 0.18)))
+                .foregroundStyle(CaptureColor.goldenHour.opacity(reduceMotion ? 0.28 : (pulse ? 0.35 : 0.18)))
                 .accessibilityHidden(true)
         }
         .onAppear {

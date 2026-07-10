@@ -112,6 +112,9 @@ struct QRScanScreen: View {
         }
         .navigationTitle("Scan to sign in")
         .navigationBarTitleDisplayMode(.inline)
+        // Camera scan chrome stays deliberately dark — pin light so the
+        // dynamic tokens keep their designed values under system dark mode.
+        .environment(\.colorScheme, .light)
         .accessibilityIdentifier(CaptureScreenID.q1QRScan.rawValue)
         .task { analytics.screen(CaptureScreenID.q1QRScan.rawValue) }
         .onDisappear { model.stop() }
@@ -136,7 +139,7 @@ struct QRScanScreen: View {
             if let errorMessage = model.errorMessage {
                 Text(errorMessage)
                     .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.rust2)
+                    .foregroundStyle(CaptureColor.error)
                     .multilineTextAlignment(.center)
                     .transition(reduceMotion ? .identity : .opacity)
             }
@@ -155,7 +158,7 @@ struct QRScanScreen: View {
             VStack(spacing: 18) {
                 Image(systemName: "qrcode.viewfinder")
                     .font(CaptureType.display)
-                    .foregroundStyle(CaptureColor.brass)
+                    .foregroundStyle(CaptureColor.goldenHour)
                     .accessibilityHidden(true)
 
                 Text("Scanner needs a real device")
@@ -187,7 +190,7 @@ struct QRScanScreen: View {
                 if let errorMessage = model.errorMessage {
                     Text(errorMessage)
                         .font(CaptureType.footnote)
-                        .foregroundStyle(CaptureColor.rust2)
+                        .foregroundStyle(CaptureColor.error)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 28)
                 }

@@ -74,7 +74,7 @@ private struct S3Content: View {
             if let routeError {
                 Label(routeError, systemImage: "exclamationmark.triangle")
                     .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.rust)
+                    .foregroundStyle(CaptureColor.error)
             }
 
             Spacer(minLength: 0)
@@ -86,7 +86,7 @@ private struct S3Content: View {
                                  title: String, blurb: String) -> some View {
         let isRecommended = destination == recommended
         let isRouting = routing == destination
-        let accent = destination == .library ? CaptureColor.verdigris : CaptureColor.brass
+        let accent = destination == .library ? CaptureColor.verdigris : CaptureColor.warning
 
         return Button {
             choose(destination)

@@ -27,7 +27,7 @@ struct ReadyScreen: View {
                 Spacer(minLength: 16)
 
                 VStack(spacing: 18) {
-                    OnboardingGlyph(symbol: "checkmark", tint: CaptureColor.verdigris)
+                    OnboardingGlyph(symbol: "checkmark", tint: CaptureColor.success)
 
                     VStack(spacing: 10) {
                         Text("You’re set")
@@ -79,7 +79,7 @@ struct ReadyScreen: View {
         HStack(spacing: 14) {
             Image(systemName: hardwareEntry == .actionButton ? "smallcircle.filled.circle" : "switch.2")
                 .font(CaptureType.title)
-                .foregroundStyle(CaptureColor.brass)
+                .foregroundStyle(CaptureColor.verdigrisInk)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(hardwareEntry == .actionButton ? "Action Button → Capture" : "Control Center → Capture")

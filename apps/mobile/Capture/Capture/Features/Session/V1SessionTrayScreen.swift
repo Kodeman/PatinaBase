@@ -67,7 +67,7 @@ struct V1SessionTrayScreen: View {
                 Spacer()
                 Text("Done \(doneCount)")
                     .font(CaptureType.eyebrow)
-                    .foregroundStyle(CaptureColor.verdigris)
+                    .foregroundStyle(CaptureColor.success)
             }
 
             VStack(spacing: 0) {

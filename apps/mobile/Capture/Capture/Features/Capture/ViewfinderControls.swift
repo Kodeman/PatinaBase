@@ -46,7 +46,7 @@ struct ViewfinderVenueChip: View {
                 .lineLimit(1)
             Text("· auto")
                 .font(CaptureType.eyebrow)
-                .foregroundStyle(CaptureColor.brass2)
+                .foregroundStyle(CaptureColor.goldenHour)
         }
         .foregroundStyle(CaptureColor.paper)
         .padding(.horizontal, 10).padding(.vertical, 7)
@@ -89,10 +89,10 @@ struct ViewfinderNightChip: View {
             Image(systemName: "moon.stars.fill").font(CaptureType.footnote)
             Text("Night").font(CaptureType.eyebrow).textCase(.uppercase)
         }
-        .foregroundStyle(CaptureColor.brass2)
+        .foregroundStyle(CaptureColor.goldenHour)
         .padding(.horizontal, 9).padding(.vertical, 6)
         .background(.black.opacity(0.42), in: Capsule())
-        .overlay(Capsule().stroke(CaptureColor.brass.opacity(0.5), lineWidth: 1))
+        .overlay(Capsule().stroke(CaptureColor.goldenHour.opacity(0.5), lineWidth: 1))
         .accessibilityLabel("Night capture suggested")
     }
 }
@@ -109,7 +109,7 @@ struct ViewfinderTorchPill: View {
                     .opacity(on ? 1 : 0.7)
                 Text(on ? "On" : "Auto").font(CaptureType.eyebrow).textCase(.uppercase)
             }
-            .foregroundStyle(on ? CaptureColor.brass2 : CaptureColor.paper)
+            .foregroundStyle(on ? CaptureColor.goldenHour : CaptureColor.paper)
             .padding(.horizontal, 9).padding(.vertical, 6)
             .background(.black.opacity(0.42), in: Capsule())
         }
@@ -131,7 +131,7 @@ struct ViewfinderLowLightHint: View {
             }
             .foregroundStyle(CaptureColor.paper)
             .padding(.horizontal, 14).padding(.vertical, 9)
-            .background(CaptureColor.rust.opacity(0.85), in: Capsule())
+            .background(CaptureColor.terracotta.opacity(0.85), in: Capsule())
         }
         .accessibilityLabel("Low light. Tap to turn on the torch.")
     }
@@ -145,7 +145,7 @@ struct ViewfinderLevelReadout: View {
     var body: some View {
         Text(isLevel ? "Hold steady · level" : "Tilt to level the frame")
             .font(CaptureType.footnote)
-            .foregroundStyle(isLevel ? CaptureColor.verdigris2 : CaptureColor.paper.opacity(0.7))
+            .foregroundStyle(isLevel ? CaptureColor.success : CaptureColor.paper.opacity(0.7))
             .accessibilityLabel(isLevel ? "Level" : "Not level")
     }
 }
@@ -170,7 +170,7 @@ struct ViewfinderControlCluster: View {
         Button(action: action) {
             Image(systemName: system)
                 .font(CaptureType.body)
-                .foregroundStyle(active ? CaptureColor.brass2 : CaptureColor.paper)
+                .foregroundStyle(active ? CaptureColor.goldenHour : CaptureColor.paper)
                 .frame(width: 42, height: 42)
                 .background(.black.opacity(0.38), in: Circle())
         }
@@ -193,7 +193,7 @@ struct ViewfinderModeSelector: View {
                             .font(CaptureType.eyebrow)
                             .foregroundStyle(item == mode ? CaptureColor.paper : CaptureColor.paper.opacity(0.45))
                         Circle()
-                            .fill(item == mode ? CaptureColor.brass2 : .clear)
+                            .fill(item == mode ? CaptureColor.goldenHour : .clear)
                             .frame(width: 4, height: 4)
                     }
                 }
@@ -214,10 +214,10 @@ struct ViewfinderShutter: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(isHolding ? CaptureColor.brass2 : CaptureColor.paper.opacity(0.4), lineWidth: 4)
+                .stroke(isHolding ? CaptureColor.goldenHour : CaptureColor.paper.opacity(0.4), lineWidth: 4)
                 .frame(width: 78, height: 78)
             Circle()
-                .fill(isHolding ? CaptureColor.brass2 : CaptureColor.paper)
+                .fill(isHolding ? CaptureColor.goldenHour : CaptureColor.paper)
                 .frame(width: capturing ? 56 : 62, height: capturing ? 56 : 62)
             if isHolding {
                 Text("\(count)")
@@ -264,7 +264,7 @@ struct ViewfinderMultiShotOverlay: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
-                Circle().fill(CaptureColor.brass2).frame(width: 9, height: 9)
+                Circle().fill(CaptureColor.goldenHour).frame(width: 9, height: 9)
                 Text("holding · \(count)")
                     .font(CaptureType.monoBody)
                     .foregroundStyle(CaptureColor.paper)

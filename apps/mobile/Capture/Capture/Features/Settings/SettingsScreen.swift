@@ -170,7 +170,7 @@ struct SettingsScreen: View {
             Text(title)
                 .font(CaptureType.eyebrow)
                 .textCase(.uppercase)
-                .foregroundStyle(CaptureColor.brass)
+                .foregroundStyle(CaptureColor.verdigrisInk)
                 .padding(.leading, 4)
             VStack(spacing: 0) { content() }
                 .background(RoundedRectangle(cornerRadius: 14).fill(CaptureColor.paper3))

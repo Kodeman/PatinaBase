@@ -76,10 +76,7 @@ final class SiteScanSetupModel {
     }
 
     nonisolated static func defaultName() -> String {
-        let df = DateFormatter()
-        df.dateStyle = .medium
-        df.timeStyle = .none
-        return "Site scan \(df.string(from: Date()))"
+        "Site scan \(CaptureDates.mediumDate(Date()))"
     }
 }
 
@@ -139,7 +136,7 @@ struct SiteScanSetupScreen: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle")
                 .font(CaptureType.bodyEmph)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.terracotta)
                 .accessibilityHidden(true)
             Text("This device has no LiDAR, so a real scan isn't available here. You can still walk the demo flow.")
                 .font(CaptureType.footnote)
@@ -147,7 +144,7 @@ struct SiteScanSetupScreen: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(CaptureColor.rust.opacity(0.10)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(CaptureColor.terracotta.opacity(0.10)))
         .accessibilityElement(children: .combine)
     }
 
@@ -211,7 +208,7 @@ struct SiteScanSetupScreen: View {
     private func inlineError(_ message: String) -> some View {
         Text(message)
             .font(CaptureType.footnote)
-            .foregroundStyle(CaptureColor.rust)
+            .foregroundStyle(CaptureColor.error)
     }
 
     private func start() {

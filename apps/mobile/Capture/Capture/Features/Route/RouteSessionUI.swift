@@ -65,7 +65,7 @@ struct RouteActionButton: View {
     private var background: Color {
         switch kind {
         case .primary: return CaptureColor.verdigris
-        case .danger: return CaptureColor.rust
+        case .danger: return CaptureColor.error
         case .secondary, .ghost: return Color.clear
         }
     }
@@ -173,9 +173,9 @@ enum RouteRowKind {
     }
     var color: Color {
         switch self {
-        case .ready: return CaptureColor.verdigris   // value / trustworthy
-        case .inbox: return CaptureColor.brass        // a decision deferred
-        case .guess: return CaptureColor.rust         // friction / needs a look
+        case .ready: return CaptureColor.success   // value / trustworthy
+        case .inbox: return CaptureColor.warning        // a decision deferred
+        case .guess: return CaptureColor.terracotta         // friction / needs a look
         }
     }
 }
@@ -219,9 +219,7 @@ enum RouteFormat {
     }
 
     static func time(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
+        CaptureDates.time(date)
     }
 
     static func displayPrice(_ cents: Int?) -> String? {

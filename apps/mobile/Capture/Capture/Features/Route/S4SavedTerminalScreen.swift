@@ -20,11 +20,11 @@ struct S4SavedTerminalScreen: View {
 
             ZStack {
                 Circle()
-                    .fill(CaptureColor.verdigris.opacity(0.12))
+                    .fill(CaptureColor.success.opacity(0.12))
                     .frame(width: 96, height: 96)
                 Image(systemName: "checkmark")
                     .font(CaptureType.display)
-                    .foregroundStyle(CaptureColor.verdigris)
+                    .foregroundStyle(CaptureColor.success)
             }
             .scaleEffect(appeared ? 1 : 0.6)
             .opacity(appeared ? 1 : 0)
@@ -46,7 +46,7 @@ struct S4SavedTerminalScreen: View {
                 Text("Specimen saved")
                     .font(CaptureType.eyebrow)
                     .textCase(.uppercase)
-                    .foregroundStyle(CaptureColor.verdigris)
+                    .foregroundStyle(CaptureColor.success)
                 Text("Photos, measures, the tag and your voice note — reusable in seconds, months from now.")
                     .font(CaptureType.callout)
                     .foregroundStyle(CaptureColor.inkSoft)

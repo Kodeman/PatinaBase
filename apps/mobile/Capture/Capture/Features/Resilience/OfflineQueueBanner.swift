@@ -22,7 +22,7 @@ struct OfflineQueueBanner: View {
             HStack(spacing: 10) {
                 Image(systemName: "wifi.slash")
                     .font(CaptureType.callout)
-                    .foregroundStyle(CaptureColor.rust2)
+                    .foregroundStyle(CaptureColor.terracotta)
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -49,7 +49,7 @@ struct OfflineQueueBanner: View {
                 .foregroundStyle(CaptureColor.ink)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
-                .background(Capsule().fill(CaptureColor.brass2))
+                .background(Capsule().fill(CaptureColor.warning))
 
                 if onTap != nil {
                     Image(systemName: "chevron.up")
@@ -64,7 +64,7 @@ struct OfflineQueueBanner: View {
                 RoundedRectangle(cornerRadius: 12).fill(CaptureColor.ink.opacity(0.78))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12).stroke(CaptureColor.rust2.opacity(0.45), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12).stroke(CaptureColor.terracotta.opacity(0.45), lineWidth: 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }

@@ -41,11 +41,11 @@ public struct FieldPlaceholderScreen: View {
 
             ZStack {
                 Circle()
-                    .fill(CaptureColor.brass.opacity(0.12))
+                    .fill(CaptureColor.verdigrisInk.opacity(0.12))
                     .frame(width: 72, height: 72)
                 Image(systemName: symbol)
                     .font(CaptureType.title)
-                    .foregroundStyle(CaptureColor.brass)
+                    .foregroundStyle(CaptureColor.verdigrisInk)
             }
             .accessibilityHidden(true)
 

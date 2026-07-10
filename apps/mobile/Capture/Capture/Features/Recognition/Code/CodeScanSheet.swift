@@ -89,7 +89,7 @@ struct CodeScanSheet: View {
                 RecognitionCard {
                     Text(catalogTitle == nil ? "No catalog match" : "Catalog match")
                         .font(CaptureType.eyebrow).textCase(.uppercase)
-                        .foregroundStyle(catalogTitle == nil ? CaptureColor.rust : CaptureColor.brass)
+                        .foregroundStyle(catalogTitle == nil ? CaptureColor.terracotta : CaptureColor.verdigrisInk)
                     Text(catalogTitle ?? "Kept as a reference on the record")
                         .font(CaptureType.title2)
                         .foregroundStyle(CaptureColor.ink)
@@ -101,7 +101,7 @@ struct CodeScanSheet: View {
                         if catalogTitle != nil {
                             Text("linked")
                                 .font(CaptureType.eyebrow).textCase(.uppercase)
-                                .foregroundStyle(CaptureColor.verdigris)
+                                .foregroundStyle(CaptureColor.success)
                         }
                     }
                 }

@@ -20,6 +20,21 @@ public enum AppConfiguration {
         launchArgValue("-CaptureSupabaseAnonKey") ?? Secrets.supabaseAnonKey
     }
 
+    /// Designer portal origin (QR sign-in approval verifies against it).
+    /// Defaults to production; overridable via `-CapturePortalBaseURL <url>`
+    /// for local-stack testing, mirroring `-CaptureSupabaseURL`.
+    public static var portalBaseURL: URL {
+        if let raw = launchArgValue("-CapturePortalBaseURL"), let url = URL(string: raw) { return url }
+        return URL(string: "https://app.patina.cloud")!
+    }
+
+    /// Media service origin (receiving photo uploads). Defaults to
+    /// production; overridable via `-CaptureMediaBaseURL <url>`.
+    public static var mediaBaseURL: URL {
+        if let raw = launchArgValue("-CaptureMediaBaseURL"), let url = URL(string: raw) { return url }
+        return URL(string: "https://media.patina.cloud")!
+    }
+
     public static let appGroupID = "group.cloud.patina.field"
     public static let urlScheme = "field"
     public static let authCallback = "field://auth/callback"

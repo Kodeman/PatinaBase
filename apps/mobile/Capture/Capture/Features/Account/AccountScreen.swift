@@ -112,11 +112,11 @@ struct AccountScreen: View {
             HStack(spacing: 14) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(CaptureColor.brass.opacity(0.12))
+                        .fill(CaptureColor.verdigrisInk.opacity(0.12))
                         .frame(width: 44, height: 44)
                     Image(systemName: "briefcase.fill")
                         .font(CaptureType.title2)
-                        .foregroundStyle(CaptureColor.brass)
+                        .foregroundStyle(CaptureColor.verdigrisInk)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Work")
@@ -181,7 +181,7 @@ struct AccountScreen: View {
             Text("This device")
                 .font(CaptureType.eyebrow)
                 .textCase(.uppercase)
-                .foregroundStyle(CaptureColor.brass)
+                .foregroundStyle(CaptureColor.verdigrisInk)
                 .padding(.leading, 4)
             HStack {
                 HStack(spacing: 8) {
@@ -218,9 +218,9 @@ struct AccountScreen: View {
     }
 
     private var deviceSyncColor: Color {
-        if snapshot.failed > 0 { return CaptureColor.rust }
-        if unsyncedCount > 0 || snapshot.uploading > 0 { return CaptureColor.brass }
-        return CaptureColor.verdigris
+        if snapshot.failed > 0 { return CaptureColor.error }
+        if unsyncedCount > 0 || snapshot.uploading > 0 { return CaptureColor.warning }
+        return CaptureColor.success
     }
 
     // MARK: actions
@@ -236,10 +236,10 @@ struct AccountScreen: View {
             } label: {
                 Text("Sign out")
                     .font(CaptureType.bodyEmph)
-                    .foregroundStyle(CaptureColor.rust)
+                    .foregroundStyle(CaptureColor.error)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(CaptureColor.rust.opacity(0.5), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(CaptureColor.error.opacity(0.5), lineWidth: 1))
             }
             if unsyncedCount > 0 {
                 Text("Signing out keeps queued captures on-device until they sync.")

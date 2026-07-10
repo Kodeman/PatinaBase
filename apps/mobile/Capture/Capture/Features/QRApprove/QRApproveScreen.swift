@@ -261,7 +261,7 @@ struct QRApproveScreen: View {
             summaryRow(
                 icon: "clock",
                 text: model.phase == .expired ? "Expired" : "Expires in \(model.countdownLabel)",
-                tint: model.phase == .expired || model.isExpiryWarning ? CaptureColor.rust : CaptureColor.ink
+                tint: model.phase == .expired || model.isExpiryWarning ? CaptureColor.warning : CaptureColor.ink
             )
         }
         .padding(18)
@@ -283,20 +283,20 @@ struct QRApproveScreen: View {
 
     private var expiryWarning: some View {
         HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(CaptureColor.rust)
-            Text("This request expires soon").font(CaptureType.footnote).foregroundStyle(CaptureColor.rust)
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(CaptureColor.warning)
+            Text("This request expires soon").font(CaptureType.footnote).foregroundStyle(CaptureColor.warning)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(CaptureColor.rust.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(CaptureColor.warning.opacity(0.12)))
     }
 
     private var expiredNotice: some View {
         VStack(spacing: 8) {
             Image(systemName: "clock.badge.exclamationmark")
                 .font(CaptureType.title)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
             Text("This sign-in request has expired")
                 .font(CaptureType.bodyEmph)
                 .foregroundStyle(CaptureColor.ink)
@@ -320,12 +320,12 @@ struct QRApproveScreen: View {
 
     private func errorBanner(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(CaptureColor.rust)
-            Text(message).font(CaptureType.footnote).foregroundStyle(CaptureColor.rust)
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(CaptureColor.error)
+            Text(message).font(CaptureType.footnote).foregroundStyle(CaptureColor.error)
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(CaptureColor.rust.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(CaptureColor.error.opacity(0.12)))
     }
 
     // MARK: - Actions
@@ -386,7 +386,7 @@ struct QRApproveScreen: View {
         Button(role: .destructive) { model.reject() } label: {
             Text("Reject")
                 .font(CaptureType.bodyEmph)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
         }
@@ -423,7 +423,7 @@ struct QRApproveScreen: View {
             VStack(spacing: 16) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 64))
-                    .foregroundStyle(CaptureColor.verdigris2)
+                    .foregroundStyle(CaptureColor.success)
                 Text("Signed in on the web")
                     .font(CaptureType.title)
                     .foregroundStyle(CaptureColor.paper)

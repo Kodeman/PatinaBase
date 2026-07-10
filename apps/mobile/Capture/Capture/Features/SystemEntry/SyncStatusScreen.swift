@@ -36,7 +36,7 @@ struct SyncStatusScreen: View {
                     analytics.event(isPaused ? "sync.pause" : "sync.resume")
                 }
                 .font(CaptureType.callout)
-                .foregroundStyle(isPaused ? CaptureColor.verdigris : CaptureColor.rust)
+                .foregroundStyle(isPaused ? CaptureColor.verdigris : CaptureColor.error)
             }
         }
         .task {
@@ -58,7 +58,7 @@ struct SyncStatusScreen: View {
             if let detail = headlineDetail {
                 Text(detail)
                     .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.rust)
+                    .foregroundStyle(CaptureColor.error)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -79,8 +79,8 @@ struct SyncStatusScreen: View {
     }
 
     private var headlineColor: Color {
-        if isPaused || snapshot.failed > 0 || snapshot.lastError != nil { return CaptureColor.rust }
-        if rows.count > 0 && uploaded == rows.count { return CaptureColor.verdigris }
+        if isPaused || snapshot.failed > 0 || snapshot.lastError != nil { return CaptureColor.error }
+        if rows.count > 0 && uploaded == rows.count { return CaptureColor.success }
         return CaptureColor.inkSoft
     }
 
@@ -95,7 +95,7 @@ struct SyncStatusScreen: View {
             VStack(spacing: 10) {
                 Image(systemName: "checkmark.seal")
                     .font(.largeTitle)
-                    .foregroundStyle(CaptureColor.verdigris)
+                    .foregroundStyle(CaptureColor.success)
                 Text("Everything's uploaded")
                     .font(CaptureType.body)
                     .foregroundStyle(CaptureColor.inkSoft)
@@ -142,7 +142,7 @@ struct SyncStatusScreen: View {
     private func statusPill(_ status: RowStatus, progress: Int) -> some View {
         HStack(spacing: 6) {
             if status == .uploading {
-                ProgressView().controlSize(.mini).tint(CaptureColor.brass)
+                ProgressView().controlSize(.mini).tint(CaptureColor.goldenHour)
             }
             Text(status.label(progress: progress))
                 .font(CaptureType.eyebrow)
@@ -171,7 +171,7 @@ struct SyncStatusScreen: View {
                     .padding(.vertical, 14)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(isPaused || rows.isEmpty ? CaptureColor.inkSoft : CaptureColor.verdigris)
+                            .fill(isPaused || rows.isEmpty ? CaptureColor.inkSoft : CaptureColor.success)
                     )
             }
             .disabled(isPaused || rows.isEmpty)
@@ -235,10 +235,10 @@ struct SyncStatusScreen: View {
         }
         var color: Color {
             switch self {
-            case .synced: return CaptureColor.verdigris
-            case .uploading: return CaptureColor.brass
+            case .synced: return CaptureColor.success
+            case .uploading: return CaptureColor.goldenHour
             case .queued: return CaptureColor.inkSoft
-            case .retry: return CaptureColor.rust
+            case .retry: return CaptureColor.error
             }
         }
     }
