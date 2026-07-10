@@ -2,8 +2,9 @@
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
-import { Loader2, LogOut, Settings, User } from 'lucide-react';
+import { Loader2, LogOut, Settings, Smartphone, User } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@patina/design-system';
+import { ConnectFieldModal } from '@/components/portal/connect-field-modal';
 import {
   useAvailability,
   useSetAvailability,
@@ -50,6 +51,7 @@ export function AccountMenu({ user }: AccountMenuProps) {
   // hydration so SSR markup and first client paint match.
   const hydrated = useHydrated();
   const [open, setOpen] = useState(false);
+  const [connectFieldOpen, setConnectFieldOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const { data: status } = useAvailability();
@@ -70,6 +72,7 @@ export function AccountMenu({ user }: AccountMenuProps) {
   }, [signOut]);
 
   return (
+    <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
@@ -148,6 +151,18 @@ export function AccountMenu({ user }: AccountMenuProps) {
               {label}
             </Link>
           ))}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              setConnectFieldOpen(true);
+            }}
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+          >
+            <Smartphone className="h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
+            Connect Patina Field…
+          </button>
         </div>
 
         {/* Sign out */}
@@ -168,5 +183,7 @@ export function AccountMenu({ user }: AccountMenuProps) {
         </div>
       </PopoverContent>
     </Popover>
+    <ConnectFieldModal open={connectFieldOpen} onOpenChange={setConnectFieldOpen} />
+    </>
   );
 }

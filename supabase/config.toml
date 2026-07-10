@@ -276,6 +276,13 @@ verify_jwt = false
 [functions.comms-mute]
 verify_jwt = false
 
+# Web→Field QR handoff (designer portal → Patina Field iOS). The gateway MUST
+# verify the caller's JWT; the function then mints a magiclink token ONLY for
+# the caller's own verified identity (never an arbitrary email). Explicit here
+# for intent, though verify_jwt = true is the platform default.
+[functions.field-login-token]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
