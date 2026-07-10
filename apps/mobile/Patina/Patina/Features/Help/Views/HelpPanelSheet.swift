@@ -160,25 +160,15 @@ public struct HelpPanelSheet: View {
         }
     }
 
+    // Wave 1 E.1: rows no longer link anywhere. `HelpArticleSummary` has no
+    // body to show — the projection carries only title + one-sentence answer
+    // — so the old NavigationLink landed on a "Full article view is coming
+    // soon" stub. Until the Sprint 3 portable-text renderer ships, the row
+    // IS the article: title + full answer inline, no dead-end affordance.
     private var articleList: some View {
         List(articles) { article in
-            NavigationLink {
-                HelpArticleStubView(article: article)
-                    .onAppear {
-                        // Track that the user navigated into an article at
-                        // least once during this panel session — the property
-                        // is reported on `panelClosed`.
-                        articleOpened = true
-                        HelpAnalytics.shared.articleOpened(
-                            articleKey: article.id,
-                            fromSurfaceKey: surfaceKey,
-                            fromSearch: false
-                        )
-                    }
-            } label: {
-                articleRow(for: article)
-            }
-            .accessibilityIdentifier("HelpPanelSheet.ArticleRow.\(article.id)")
+            articleRow(for: article)
+                .accessibilityIdentifier("HelpPanelSheet.ArticleRow.\(article.id)")
         }
         .listStyle(.plain)
         .accessibilityIdentifier("HelpPanelSheet.ArticleList")
@@ -190,10 +180,12 @@ public struct HelpPanelSheet: View {
                 .font(.headline)
                 .foregroundStyle(.primary)
             if !article.summary.isEmpty {
+                // The one-sentence answer is the whole payload — render it
+                // in full rather than teasing a fuller view that doesn't
+                // exist yet.
                 Text(article.summary)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
             }
         }
         .padding(.vertical, 2)
