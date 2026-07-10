@@ -50,6 +50,14 @@ export interface HelpStateBlob {
 export interface TourStateBackend {
   getTourState: (tourId: string) => TourState
   setTourState: (tourId: string, patch: TourState) => void
+  /**
+   * Hard-clear this backend's record for `tourId`. OPTIONAL — only
+   * network-backed backends (Supabase) implement it; the localStorage default
+   * is cleared directly by the module-level `clearTourState`. The
+   * `TourController` replay path dispatches here so a completed/abandoned
+   * record is dropped from the authoritative store, not just localStorage.
+   */
+  clearTourState?: (tourId: string) => void
 }
 
 /**

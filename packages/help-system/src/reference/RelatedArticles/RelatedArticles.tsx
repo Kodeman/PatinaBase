@@ -27,6 +27,7 @@ import { useQuery } from '@tanstack/react-query'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { getSanityClient } from '../../sanityClient'
+import { HELP_EVENTS, safeCapture } from '../../analytics'
 
 // Local cn — same convention as sibling components, keeps the package
 // self-contained for test runs without depending on @patina/design-system.
@@ -47,6 +48,14 @@ export interface RelatedArticlesProps {
   surfaceKeys?: string[]
   /** Surface-key prefix to query siblings under the same parent surface. */
   surfaceKeyPrefix?: string
+  /**
+   * The surface the user is clicking FROM, for the `from_surface_key` on the
+   * `help.related_article.clicked` event. Prefix mode derives this from
+   * `surfaceKeyPrefix`, but FEATURED (`surfaceKeys`) + `articleIds` modes have
+   * no prefix — pass this so the click-through funnel isn't logged as
+   * 'unknown' (e.g. the Help Center front page passing its own surface key).
+   */
+  fromSurfaceKey?: string
   /** Maximum number of articles to render. Defaults to 5. */
   max?: number
   /** Optional click handler — fires alongside the analytics event. */
@@ -66,19 +75,8 @@ interface RelatedArticleRow {
   excerpt: string
 }
 
-// ─── PostHog helper — safe capture ────────────────────────────────────────────
-
-type PostHogLike = { capture: (event: string, props?: Record<string, unknown>) => void }
-
-function safeCapture(event: string, props: Record<string, unknown>): void {
-  if (typeof window === 'undefined') return
-  try {
-    const ph = (window as unknown as { posthog?: PostHogLike }).posthog
-    ph?.capture(event, props)
-  } catch {
-    // analytics must never crash the UI
-  }
-}
+// Analytics route through the shared `safeCapture` + `HELP_EVENTS` taxonomy of
+// record (../../analytics) — no local capture path (matches TourController).
 
 // ─── GROQ queries (parameterized — never interpolate caller input) ────────────
 
@@ -262,6 +260,7 @@ export function RelatedArticles({
   articleIds,
   surfaceKeys,
   surfaceKeyPrefix,
+  fromSurfaceKey: fromSurfaceKeyProp,
   max = DEFAULT_MAX,
   onArticleClick,
   heading = 'Related articles',
@@ -341,12 +340,17 @@ export function RelatedArticles({
   // Empty state → render NOTHING (spec §4 / task contract).
   if (articles.length === 0) return null
 
-  const fromSurfaceKey = surfaceKeyPrefix && surfaceKeyPrefix.length > 0
-    ? surfaceKeyPrefix
-    : 'unknown'
+  // from_surface_key precedence: explicit prop (the only signal FEATURED /
+  // articleIds modes have) > prefix mode's own key > 'unknown'.
+  const fromSurfaceKey =
+    fromSurfaceKeyProp && fromSurfaceKeyProp.length > 0
+      ? fromSurfaceKeyProp
+      : surfaceKeyPrefix && surfaceKeyPrefix.length > 0
+        ? surfaceKeyPrefix
+        : 'unknown'
 
   const handleClick = (article: RelatedArticleRow) => {
-    safeCapture('help.related_article.clicked', {
+    safeCapture(HELP_EVENTS.RELATED_ARTICLE_CLICKED, {
       from_surface_key: fromSurfaceKey,
       to_surface_key: article.surfaceKey,
       to_article_id: article._id,

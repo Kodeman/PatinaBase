@@ -44,7 +44,7 @@ import type {
 import type { TourState } from '../proactive/TourController/tourState'
 import {
   TOUR_STATE_STORAGE_PREFIX,
-  clearTourState,
+  clearLocalTourState,
 } from '../proactive/TourController/tourState'
 import type { FeatureAnnouncementState } from '../proactive/FeatureAnnouncementCoachmark/featureAnnouncementState'
 import { _clearAllFeatureAnnouncementState } from '../proactive/FeatureAnnouncementCoachmark/featureAnnouncementState'
@@ -178,6 +178,18 @@ export function createSupabaseTourStateBackend(
       cache.blob = {
         ...cache.blob,
         tours: { ...prevTours, [tourId]: next },
+      }
+      scheduleWrite(cache, client, userId)
+    },
+    clearTourState(tourId: string): void {
+      const prevTours = cache.blob.tours
+      // No record → nothing to clear (avoid a needless write-through).
+      if (!prevTours || !(tourId in prevTours)) return
+      const nextTours = { ...prevTours }
+      delete nextTours[tourId]
+      cache.blob = {
+        ...cache.blob,
+        tours: nextTours,
       }
       scheduleWrite(cache, client, userId)
     },
@@ -331,15 +343,19 @@ export async function migrateLocalToSupabase(
       const existing = backends.tourBackend.getTourState(tourId)
       const alreadyResolved = existing.completed === true || existing.abandoned === true
       if (alreadyResolved) {
-        // Supabase already knows. Drop the local copy without merging.
-        clearTourState(tourId)
+        // Supabase already knows. Drop the local copy without merging. Use the
+        // localStorage-only clear so we never touch the authoritative Supabase
+        // record we're migrating INTO.
+        clearLocalTourState(tourId)
         continue
       }
       // Merge local on top of existing so any field present locally wins —
       // this is the "promote local to Supabase" direction.
       backends.tourBackend.setTourState(tourId, { ...existing, ...local })
       toursMigrated += 1
-      clearTourState(tourId)
+      // localStorage-only clear: dropping the migrated source must NOT clear
+      // the Supabase entry we just wrote via setTourState above.
+      clearLocalTourState(tourId)
     } catch {
       // One bad entry shouldn't abort the sweep.
     }

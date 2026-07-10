@@ -126,8 +126,13 @@ type PostHogLike = {
  * Fire an analytics event through `window.posthog` when present. SSR-safe,
  * never throws — a missing PostHog (SSR, ad-blocker, dev without the key) or a
  * capture error is swallowed so help-system analytics can never crash the host
- * app (spec §13.4). This is the shared implementation every help-system
- * component uses; there is intentionally no other capture path in the package.
+ * app (spec §13.4). This is the shared implementation help-system components
+ * route through — new code MUST use it with a `HELP_EVENTS.*` constant so a
+ * rename or payload change happens once, here, the taxonomy of record. A
+ * handful of Sprint 1–2 ambient/reactive components (Coachmark, EmptyState,
+ * SectionIntro, LearnMore, FieldHelper, SmartDefault, HelpSearch, HelpArticle,
+ * FeatureAnnouncementCoachmark) still carry local posthog helpers with inline
+ * strings that predate this module; they are being consolidated onto it.
  *
  * @param event  A `HELP_EVENTS.*` constant (or any `help.*` string).
  * @param props  snake_case property bag. Optional — a bare event is valid.

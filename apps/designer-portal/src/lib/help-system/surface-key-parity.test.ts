@@ -31,12 +31,28 @@ function flattenKeys(node: unknown): string[] {
 
 describe('surface-key parity (app mirror ⇄ canonical registry)', () => {
   const canonical = new Set(flattenKeys(SurfaceKeys));
+  // The mirror only mirrors the Document block, so parity must be checked
+  // against THAT block — not the whole tree. Checking against the whole tree
+  // would let a mirror value that accidentally equals a client-portal or iOS
+  // key pass the existence check (and miss the drift the mirror exists to
+  // prevent).
+  const documentBlock = new Set(flattenKeys(SurfaceKeys.DesignerPortal.Document));
+  const mirror = new Set(Object.values(DOCUMENT_SURFACE_KEYS));
 
-  it('every DOCUMENT_SURFACE_KEYS value exists in the canonical registry', () => {
+  it('every DOCUMENT_SURFACE_KEYS value exists in the canonical Document block', () => {
     const missing = Object.entries(DOCUMENT_SURFACE_KEYS)
-      .filter(([, value]) => !canonical.has(value))
+      .filter(([, value]) => !documentBlock.has(value))
       .map(([name, value]) => `${name} → ${value}`);
     expect(missing).toEqual([]);
+  });
+
+  // Reverse direction — a key added or renamed on the CANONICAL side without
+  // the app mirror would otherwise ship silently (the pathname resolver +
+  // doorways can't reference a key the mirror doesn't carry). This closes the
+  // "either side fails here first" contract the header promises.
+  it('every canonical Document key is mirrored app-side', () => {
+    const unmirrored = [...documentBlock].filter((value) => !mirror.has(value));
+    expect(unmirrored).toEqual([]);
   });
 
   it('mirrored keys are unique (no two names share a value)', () => {

@@ -66,6 +66,7 @@ interface InMemoryAdapter {
   store: Map<string, TourState>
   getTourState: (k: string) => TourState
   setTourState: (k: string, p: TourState) => void
+  clearTourState: (k: string) => void
 }
 
 function makeInMemoryAdapter(seed: Record<string, TourState> = {}): InMemoryAdapter {
@@ -76,6 +77,12 @@ function makeInMemoryAdapter(seed: Record<string, TourState> = {}): InMemoryAdap
     setTourState: (k, p) => {
       const prev = store.get(k) ?? {}
       store.set(k, { ...prev, ...p })
+    },
+    // Network-style backend clear — mirrors the Supabase adapter's
+    // `clearTourState`, so a test can assert `restart()` drops the record from
+    // the authoritative store, not just the localStorage fallback.
+    clearTourState: (k) => {
+      store.delete(k)
     },
   }
 }
@@ -113,6 +120,7 @@ describe('<TourController />', () => {
     __setTourStateAdapterForTests({
       getTourState: adapter.getTourState,
       setTourState: adapter.setTourState,
+      clearTourState: adapter.clearTourState,
     })
     // Default CMS: every coachmark resolves to the fixture so the popover is
     // free to open. Individual tests override per-call when they need to.
@@ -850,6 +858,62 @@ describe('<TourController />', () => {
       total_steps: 3,
       replay: true,
     })
+
+    // restart() must clear the AUTHORITATIVE backend record — not just the
+    // localStorage fallback. Without a backend-level clear, the {completed:true}
+    // record survives and a mid-replay reload re-resolves the tour, silently
+    // discarding the replay (the major review finding on this branch).
+    expect(adapter.store.has('walkthrough')).toBe(false)
+  })
+
+  // ── 16b. restart() clears the backend so a remount does NOT re-resolve ─────
+
+  it('restart() clears backend state so a remount mid-replay does not re-resolve', async () => {
+    adapter.store.set('walkthrough', {
+      completed: true,
+      completedAt: '2026-07-01T00:00:00Z',
+    })
+
+    const { Wrapper } = makeWrapper()
+    let api: TourControllerAPI | null = null
+    const { unmount } = render(
+      <Wrapper>
+        <TourController tourId="walkthrough" steps={STEPS}>
+          {(a) => {
+            api = a
+            return <div data-testid="active">{a.isActive ? 'on' : 'off'}</div>
+          }}
+        </TourController>
+      </Wrapper>,
+    )
+
+    act(() => api!.restart())
+    await flushQueries()
+    expect(screen.getByTestId('active')).toHaveTextContent('on')
+
+    // Simulate a reload/remount partway through the replay: the fresh mount
+    // reads the backend in its lazy initializer. Because restart() cleared the
+    // record, alreadyResolved is false — so start() can drive the tour again
+    // rather than the mount being wedged "resolved" forever.
+    unmount()
+
+    let api2: TourControllerAPI | null = null
+    render(
+      <Wrapper>
+        <TourController tourId="walkthrough" steps={STEPS}>
+          {(a) => {
+            api2 = a
+            return <div data-testid="active">{a.isActive ? 'on' : 'off'}</div>
+          }}
+        </TourController>
+      </Wrapper>,
+    )
+
+    // A completed tour that was NOT cleared would ignore start() (one-shot
+    // guard). Since restart() cleared it, start() activates.
+    act(() => api2!.start())
+    await flushQueries()
+    expect(screen.getByTestId('active')).toHaveTextContent('on')
   })
 
   // ── 17. persona is threaded into the coachmark content query ──────────────

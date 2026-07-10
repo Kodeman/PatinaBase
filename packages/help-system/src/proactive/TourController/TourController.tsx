@@ -141,6 +141,11 @@ export function __setTourStateAdapterForTests(next: Partial<TourStateBackend>): 
   setTourStateBackend({
     getTourState: next.getTourState ?? getTourState,
     setTourState: next.setTourState ?? setTourState,
+    // Pass a backend-level clear through so a test that installs a
+    // network-style adapter can assert `restart()` actually drops the record
+    // (not just the localStorage fallback). Undefined when the test omits it —
+    // the module-level clearTourState still wipes localStorage regardless.
+    clearTourState: next.clearTourState,
   })
 }
 
