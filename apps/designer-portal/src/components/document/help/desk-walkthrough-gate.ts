@@ -25,14 +25,12 @@ export const DESK_WALKTHROUGH_REPLAY_PARAM = 'tour';
  * users — they get the quiet margin-note offer instead, never an auto-modal
  * (the R97 ship-date rule that keeps the flip from ambushing anyone mid-work).
  *
- * ─────────────────────────────────────────────────────────────────────────────
- *  ⚠  BUMP THIS TO THE ACTUAL PROD DEPLOY DATE (UTC) THE DAY THIS SHIPS.  ⚠
- *  Until then this placeholder greets only brand-new signups and keeps every
- *  real (older) designer on the quiet-offer path. Shipping without bumping it
- *  means anyone who signed up on/after the placeholder date gets the modal.
- * ─────────────────────────────────────────────────────────────────────────────
+ * SHIPPED: set to the prod deploy instant (2026-07-10 ship, R97). Every account
+ * created before this moment is an existing designer (quiet margin-note offer);
+ * accounts created on/after it get the auto-opening WelcomeModal. Do not move
+ * it backward — that would auto-modal designers who were already mid-work.
  */
-export const DESK_WALKTHROUGH_SHIP_DATE = '2026-07-11T00:00:00Z';
+export const DESK_WALKTHROUGH_SHIP_DATE = '2026-07-10T15:10:00Z';
 
 /** The subset of the persisted `tours['desk-walkthrough']` record the gate
  *  reads. Declared locally so this module never imports the help-system barrel
