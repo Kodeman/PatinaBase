@@ -19,33 +19,18 @@ import CaptureKit
 ///
 /// - `-CaptureMockFailUpload` — `MockSiteScanService.upload()` always throws,
 ///   driving F4's upload-failure state (Retry upload / Finish later).
-/// - `-CaptureMockFailProjects` — `MockProjectsService.listProjects()` succeeds
-///   once, then throws, driving P1's inline refresh-error banner (a refresh
-///   that fails while the stale rows stay on screen).
+/// - `-CaptureMockFailProjects` — `MockProjectsService.listProjects()` always
+///   throws, driving P1's load-error affordance (`ProjectsErrorState`, which
+///   shares the same errorMessage plumbing as the inline refresh banner).
+///   Fails deterministically on first load so the state is reachable without a
+///   pull-to-refresh gesture (synthetic gestures don't reliably commit
+///   SwiftUI `.refreshable` on the Simulator; drive the inline-banner variant
+///   with a real pull on device).
 public enum MockFailure {
     private static let args = ProcessInfo.processInfo.arguments
 
     public static var failUpload: Bool { args.contains("-CaptureMockFailUpload") }
-
-    private static let projectRefreshFails = args.contains("-CaptureMockFailProjects")
-    private static let projectLoads = MockCallCounter()
-
-    /// First projects load succeeds; every later one throws — models
-    /// "initial load OK, pull-to-refresh fails".
-    public static func shouldFailProjectsLoad() -> Bool {
-        projectRefreshFails && projectLoads.next() > 0
-    }
-}
-
-/// Thread-safe monotonic counter for the mock test seam above.
-final class MockCallCounter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value = 0
-    func next() -> Int {
-        lock.lock(); defer { lock.unlock() }
-        defer { value += 1 }
-        return value
-    }
+    public static var failProjects: Bool { args.contains("-CaptureMockFailProjects") }
 }
 
 /// A mock-injected failure carrying a field-appropriate message.
@@ -188,7 +173,7 @@ public enum WorkFixtures {
 public struct MockProjectsService: ProjectsService {
     public init() {}
     public func listProjects() async throws -> [FieldProject] {
-        if MockFailure.shouldFailProjectsLoad() {
+        if MockFailure.failProjects {
             throw MockInjectedFailure("Couldn't reach the studio. Check your connection.")
         }
         return WorkFixtures.projects
