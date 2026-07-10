@@ -94,6 +94,17 @@ enum CompanionActionProvider {
                     route: .notifications
                 ),
             ]
+            // C.1 / R29: signed-in clients get a direct door into the
+            // studio hub (Projects is the anchor surface; Messages and
+            // Decisions sit one row away on the home Studio rail). Guests
+            // keep the shorter menu — their studio is behind sign-in.
+            if isAuthenticated {
+                items.insert(CompanionActionItem(
+                    icon: "rectangle.grid.1x2", label: "Your studio",
+                    hint: "Projects · Messages · Decisions",
+                    route: .projectList
+                ), at: 1)
+            }
 
         case .emergence, .roomEmergence:
             items = [

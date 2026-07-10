@@ -157,6 +157,20 @@ struct ProfileView: View {
 
                 // Actions
                 VStack(spacing: 12) {
+                    // C.1 / R29: studio surfaces — secondary entries mirroring
+                    // the home Studio rail. Sign-in gated: guests have no
+                    // projects/threads/decisions behind these routes.
+                    if AuthService.shared.isAuthenticated {
+                        profileActionRow(icon: "folder", label: "Projects") {
+                            coordinator.navigate(to: .projectList)
+                        }
+                        profileActionRow(icon: "bubble.left.and.bubble.right", label: "Messages") {
+                            coordinator.navigate(to: .threadList)
+                        }
+                        profileActionRow(icon: "checkmark.circle", label: "Decisions") {
+                            coordinator.navigate(to: .decisionList)
+                        }
+                    }
                     profileActionRow(icon: "paintpalette", label: "Retake Style Quiz") {
                         coordinator.navigate(to: .styleQuiz)
                     }

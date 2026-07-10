@@ -54,33 +54,14 @@ struct DailyRoomView: View {
             // R07: hide the home surface (and toast) from assistive tech
             // while a detail overlay is up; the overlays themselves carry
             // `.isModal` + an escape action.
+            //
+            // R29/R31: `content` now renders for zero-room users too — the
+            // greeting header and Studio rail are room-independent (a client
+            // can have projects/messages with a designer before ever scanning
+            // a room), and the room-dependent feed swaps to an inviting scan
+            // module when no rooms exist (the fake seeded rooms are gone).
             Group {
-                if viewModel.rooms.isEmpty {
-                    VStack(spacing: 16) {
-                        // PT-4-9: resume card sits above the empty state so a user
-                        // who abandoned a scan mid-walk can pick it back up.
-                        if let resumableScan {
-                            ContinueScanCard(
-                                photosCount: resumableScan.photosCount,
-                                createdAt: resumableScan.createdAt,
-                                onContinue: { continueSavedScan() },
-                                onDismiss: { dismissSavedScan() }
-                            )
-                            .padding(.horizontal, 20)
-                            .padding(.top, 60)
-                        }
-                        DailyRoomEmptyState {
-                            // PT-4-7: a scan started from the empty home counts
-                            // toward the first-session activation funnel — this is
-                            // the quiz-first variant's numerator (no-op after the
-                            // first scan of the launch).
-                            OnboardingFunnel.shared.markFirstSessionScanStarted()
-                            coordinator.navigate(to: .scanFlow(reason: .fresh))
-                        }
-                    }
-                } else {
-                    content
-                }
+                content
 
                 if let toast = viewModel.toastMessage, expandedRecommendation == nil {
                     AddedToRoomToast(message: toast) {
@@ -135,6 +116,11 @@ struct DailyRoomView: View {
         .task {
             await notificationsViewModel.load()
         }
+        // C.1 / R29: hydrate the Studio-rail badges (pending decisions +
+        // unread messages). Polling floor: appear + foreground + push.
+        .task {
+            await BadgeCountService.shared.refresh()
+        }
         // PT-4-9: surface the most recent resumable in-progress scan, if any.
         .task {
             let candidates = await ScanRecoveryService.shared
@@ -145,6 +131,9 @@ struct DailyRoomView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 viewModel.load()
+                // C.1 / R29: re-poll the Studio-rail badges on foreground —
+                // half of the polling floor (the other half is push receipt).
+                Task { await BadgeCountService.shared.refresh() }
             }
         }
         .sheet(item: $viewModel.presentingAddFor) { product in
@@ -195,6 +184,15 @@ struct DailyRoomView: View {
                     .padding(.top, 8)
                 }
 
+                // C.1 / R29: the Studio rail — Projects / Messages /
+                // Decisions / Notifications, the transactional hub the app
+                // was missing. Room-independent, so it renders above the
+                // room-dependent feed for zero-room users too.
+                StudioHubSection(
+                    unreadNotifications: notificationsViewModel.notifications
+                        .filter { !$0.isRead }.count
+                )
+
                 if let story = viewModel.todayStory {
                     Button {
                         withAnimation(reduceMotion ? nil : .patinaHero) {
@@ -210,6 +208,39 @@ struct DailyRoomView: View {
                     .buttonStyle(.plain)
                 }
 
+                // R31: no rooms → no chip rail, no feed. One inviting scan
+                // module instead of three fake seeded rooms — home and
+                // Profile now agree that a new user has 0 rooms.
+                if viewModel.rooms.isEmpty {
+                    PatinaEmptyState(
+                        icon: "camera.viewfinder",
+                        title: "Scan your first room",
+                        message: "Capture a room to see daily picks tailored to your space.",
+                        ctaTitle: "Start a scan",
+                        ctaAction: {
+                            // PT-4-7: a scan started from the empty home counts
+                            // toward the first-session activation funnel — this
+                            // is the quiz-first variant's numerator (no-op after
+                            // the first scan of the launch).
+                            OnboardingFunnel.shared.markFirstSessionScanStarted()
+                            coordinator.navigate(to: .scanFlow(reason: .fresh))
+                        }
+                    )
+                    .padding(.top, 14)
+                } else {
+                    roomFeed
+                }
+
+                Spacer().frame(height: 120)
+            }
+        }
+    }
+
+    /// The room-dependent half of the home surface: chip rail + filtered
+    /// daily recommendations. Only rendered when at least one real room
+    /// exists (R31).
+    @ViewBuilder
+    private var roomFeed: some View {
                 RoomChipRail(
                     rooms: viewModel.rooms,
                     selectedID: viewModel.selectedRoomID,
@@ -275,10 +306,6 @@ struct DailyRoomView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 6)
                 }
-
-                Spacer().frame(height: 120)
-            }
-        }
     }
 
     /// PT-4-9: resume the saved in-progress scan. Routes into the Quiet
