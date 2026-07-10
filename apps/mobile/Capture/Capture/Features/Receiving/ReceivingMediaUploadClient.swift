@@ -46,7 +46,9 @@ enum ReceivingMediaUploadError: LocalizedError {
 struct ReceivingMediaUploadClient {
     let client: SupabaseClient
 
-    private static let baseURL = URL(string: "https://media.patina.cloud")!
+    /// Media service origin — from `AppConfiguration` (launch-arg overridable
+    /// via `-CaptureMediaBaseURL`).
+    private static var baseURL: URL { AppConfiguration.mediaBaseURL }
 
     func upload(_ data: Data) async throws -> String {
         guard let image = UIImage(data: data),

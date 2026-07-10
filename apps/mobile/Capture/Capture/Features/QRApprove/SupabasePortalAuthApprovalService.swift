@@ -31,13 +31,14 @@ import UIKit
 
 // MARK: - Portal endpoint
 
-/// The designer portal's public base URL. Field's `AppConfiguration` is
-/// frozen for this wave (App/Configuration/**), so this lives here as a
-/// local constant — it belongs in `AppConfiguration` once a portal seam is
-/// needed by more than one flow.
+/// The designer portal's public base URL — sourced from `AppConfiguration`
+/// (launch-arg overridable via `-CapturePortalBaseURL`); this stays as a thin
+/// alias so the flow's call sites don't change.
 enum QRApprovePortal {
-    static let baseURL = URL(string: "https://app.patina.cloud")!
-    static let verifyURL = URL(string: "https://app.patina.cloud/api/auth/qr/verify")!
+    static var baseURL: URL { AppConfiguration.portalBaseURL }
+    static var verifyURL: URL {
+        AppConfiguration.portalBaseURL.appendingPathComponent("api/auth/qr/verify")
+    }
 }
 
 // MARK: - Errors
