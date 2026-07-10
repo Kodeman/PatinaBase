@@ -170,6 +170,9 @@ struct ProfileView: View {
                         profileActionRow(icon: "checkmark.circle", label: "Decisions") {
                             coordinator.navigate(to: .decisionList)
                         }
+                        profileActionRow(icon: "chart.pie", label: "Budget") {
+                            coordinator.navigate(to: .budget)
+                        }
                     }
                     profileActionRow(icon: "paintpalette", label: "Retake Style Quiz") {
                         coordinator.navigate(to: .styleQuiz)

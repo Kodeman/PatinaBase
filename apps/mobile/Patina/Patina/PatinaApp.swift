@@ -56,6 +56,13 @@ struct PatinaApp: App {
     }
 
     init() {
+        // B.3 (Wave 3): register PatinaDesignKit's vendored faces
+        // (PlayfairDisplay / Inter / DMMono) process-wide via CTFontManager —
+        // the single source of these fonts now that the app-bundle TTF copies
+        // + UIAppFonts entries are retired. PatinaTypography resolves them by
+        // PostScript name, which works for CTFontManager-registered faces.
+        PatinaFonts.registerAll()
+
         // Reset onboarding state if requested (for UI testing)
         if Self.shouldResetOnboarding {
             AppSettings.shared.hasSeenThreshold = false

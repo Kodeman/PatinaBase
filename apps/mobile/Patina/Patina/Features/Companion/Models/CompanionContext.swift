@@ -163,6 +163,10 @@ public struct CompanionContext: Equatable {
             return "Invoices"
         case .invoiceDetail:
             return "Reviewing an invoice"
+        case .budget:
+            return "Your budget"
+        case .documentList:
+            return "Your documents"
         }
     }
 
@@ -212,6 +216,10 @@ public struct CompanionContext: Equatable {
             return "doc.text"
         case .invoiceList, .invoiceDetail:
             return "creditcard"
+        case .budget:
+            return "chart.pie"
+        case .documentList:
+            return "folder"
         }
     }
 }

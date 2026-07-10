@@ -293,6 +293,14 @@ struct ContentView: View {
         case .invoiceDetail(let invoiceId):
             InvoiceDetailView(invoiceId: invoiceId)
                 .toolbar(.hidden, for: .navigationBar)
+
+        case .budget:
+            BudgetView()
+                .toolbar(.hidden, for: .navigationBar)
+
+        case .documentList:
+            DocumentListView()
+                .toolbar(.hidden, for: .navigationBar)
         }
     }
 }

@@ -212,6 +212,8 @@ public final class CompanionViewModel {
         case .proposalDetail: return "proposal_detail"
         case .invoiceList: return "invoice_list"
         case .invoiceDetail: return "invoice_detail"
+        case .budget: return "budget"
+        case .documentList: return "document_list"
         }
     }
 
