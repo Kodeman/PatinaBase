@@ -11,6 +11,49 @@
 import Foundation
 import CaptureKit
 
+// MARK: - Forced-failure injection (Simulator error-state walk)
+
+/// Launch-arg switches that make specific mock seams throw, so Field's
+/// forced-failure states can be driven and screenshotted on the Simulator
+/// without a live backend. Consulted ONLY by the mock conformers below.
+///
+/// - `-CaptureMockFailUpload` — `MockSiteScanService.upload()` always throws,
+///   driving F4's upload-failure state (Retry upload / Finish later).
+/// - `-CaptureMockFailProjects` — `MockProjectsService.listProjects()` succeeds
+///   once, then throws, driving P1's inline refresh-error banner (a refresh
+///   that fails while the stale rows stay on screen).
+public enum MockFailure {
+    private static let args = ProcessInfo.processInfo.arguments
+
+    public static var failUpload: Bool { args.contains("-CaptureMockFailUpload") }
+
+    private static let projectRefreshFails = args.contains("-CaptureMockFailProjects")
+    private static let projectLoads = MockCallCounter()
+
+    /// First projects load succeeds; every later one throws — models
+    /// "initial load OK, pull-to-refresh fails".
+    public static func shouldFailProjectsLoad() -> Bool {
+        projectRefreshFails && projectLoads.next() > 0
+    }
+}
+
+/// Thread-safe monotonic counter for the mock test seam above.
+final class MockCallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func next() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        defer { value += 1 }
+        return value
+    }
+}
+
+/// A mock-injected failure carrying a field-appropriate message.
+public struct MockInjectedFailure: LocalizedError {
+    public let errorDescription: String?
+    public init(_ message: String) { errorDescription = message }
+}
+
 /// Parse a fixed ISO-8601 string into a stable fixture `Date`.
 private func iso(_ string: String) -> Date {
     ISO8601DateFormatter().date(from: string) ?? Date(timeIntervalSince1970: 1_781_568_000)
@@ -144,7 +187,12 @@ public enum WorkFixtures {
 
 public struct MockProjectsService: ProjectsService {
     public init() {}
-    public func listProjects() async throws -> [FieldProject] { WorkFixtures.projects }
+    public func listProjects() async throws -> [FieldProject] {
+        if MockFailure.shouldFailProjectsLoad() {
+            throw MockInjectedFailure("Couldn't reach the studio. Check your connection.")
+        }
+        return WorkFixtures.projects
+    }
     public func projectDetail(id: String) async throws -> FieldProjectDetail { WorkFixtures.projectDetail }
 }
 
@@ -263,6 +311,9 @@ public final class MockSiteScanService: SiteScanService {
     public func startSession() async throws -> any FieldScanSession { MockScanSession() }
     public func upload(result: FieldScanResult, projectID: String?, projectRoomID: String?,
                        name: String) async throws -> FieldScanUploadReceipt {
-        FieldScanUploadReceipt(remoteScanID: "scan-\(UUID().uuidString.prefix(8))")
+        if MockFailure.failUpload {
+            throw MockInjectedFailure("Upload failed.")
+        }
+        return FieldScanUploadReceipt(remoteScanID: "scan-\(UUID().uuidString.prefix(8))")
     }
 }
