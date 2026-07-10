@@ -177,13 +177,16 @@ public struct CompanionAuthPanel: View {
                         isNewUser: credential.email != nil // New users have email in credential
                     )
 
-                    // Identify user in analytics
+                    // Identify user in analytics. The `login` event itself is
+                    // fired by AuthService's `.signedIn` observer (single
+                    // source of truth), which labels this path "apple" via
+                    // lastAttemptedSignInMethod — capturing here too would
+                    // double-fire.
                     if let userId = AuthService.shared.currentUserId {
                         PostHogService.shared.identify(userId: userId, properties: [
                             "auth_method": "apple",
                             "role": "client"
                         ])
-                        PostHogService.shared.capture("login", properties: ["method": "apple"])
                     }
 
                     onAuthComplete?()
