@@ -36,6 +36,10 @@ export const HELP_SYSTEM_VERSION = '0.1.0';
 export { SurfaceKeys, SURFACE_KEY_REGEX, isSurfaceKey } from './surfaceKeys';
 export type { SurfaceKey } from './surfaceKeys';
 
+// ─── Analytics — the taxonomy of record (HELP_EVENTS) + shared safeCapture ────
+export { HELP_EVENTS, safeCapture } from './analytics';
+export type { HelpEventName } from './analytics';
+
 // ─── Content types ────────────────────────────────────────────────────────────
 export type {
   Persona,

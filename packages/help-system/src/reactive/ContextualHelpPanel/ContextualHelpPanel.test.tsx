@@ -524,4 +524,48 @@ describe('ContextualHelpPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Open help' }))
     expect(screen.getByTestId('help-panel-content')).toBeInTheDocument()
   })
+
+  // ── Intro slot renders above the article list (survives empty state) ───────
+
+  it('renders the intro slot above the article list', async () => {
+    mockFetch.mockResolvedValue([])
+    const user = userEvent.setup()
+
+    render(
+      <ContextualHelpPanel
+        surfaceKey="designer-portal/document/orders"
+        intro={<span>A lens over every document.</span>}
+        trigger={<button type="button">Open help</button>}
+      />,
+      { wrapper: makeWrapper() },
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Open help' }))
+
+    const intro = await screen.findByTestId('help-panel-intro')
+    expect(intro).toBeInTheDocument()
+    expect(intro).toHaveTextContent('A lens over every document.')
+
+    // Intro survives the empty article state (it is a sibling of the list).
+    expect(await screen.findByTestId('help-panel-empty')).toBeInTheDocument()
+  })
+
+  // ── No intro slot rendered when the prop is omitted ────────────────────────
+
+  it('does not render the intro slot when no intro prop is passed', async () => {
+    mockFetch.mockResolvedValue([])
+    const user = userEvent.setup()
+
+    render(
+      <ContextualHelpPanel
+        surfaceKey="designer-portal/document/orders"
+        trigger={<button type="button">Open help</button>}
+      />,
+      { wrapper: makeWrapper() },
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Open help' }))
+    expect(screen.getByTestId('help-panel-content')).toBeInTheDocument()
+    expect(screen.queryByTestId('help-panel-intro')).not.toBeInTheDocument()
+  })
 })

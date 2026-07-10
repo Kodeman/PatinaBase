@@ -210,4 +210,79 @@ describe('SurfaceKeys — spot-check constant values', () => {
   it('IOSApp.Profile.MatchPercentage is the correct literal', () => {
     expect(SurfaceKeys.IOSApp.Profile.MatchPercentage).toBe('ios-app/profile/match-percentage')
   })
+
+  // ── Desk-era Document additions (help-desk Wave 0) ────────────────────────
+  it('DesignerPortal.Document.Orders is the correct literal', () => {
+    expect(SurfaceKeys.DesignerPortal.Document.Orders).toBe('designer-portal/document/orders')
+  })
+
+  it('DesignerPortal.Document.ThePost is the correct literal', () => {
+    expect(SurfaceKeys.DesignerPortal.Document.ThePost).toBe('designer-portal/document/the-post')
+  })
+
+  it('DesignerPortal.Document.OrdersReceiving is the correct literal', () => {
+    expect(SurfaceKeys.DesignerPortal.Document.OrdersReceiving).toBe(
+      'designer-portal/document/orders/receiving',
+    )
+  })
+
+  it('DesignerPortal.Document.CommandBar is the correct literal', () => {
+    expect(SurfaceKeys.DesignerPortal.Document.CommandBar).toBe('designer-portal/document/command-bar')
+  })
+
+  it('DesignerPortal.Document.Welcome is the correct literal', () => {
+    expect(SurfaceKeys.DesignerPortal.Document.Welcome).toBe('designer-portal/document/welcome')
+  })
+
+  it('DesignerPortal.Document.LibraryPiece is the correct literal', () => {
+    expect(SurfaceKeys.DesignerPortal.Document.LibraryPiece).toBe(
+      'designer-portal/document/library/piece',
+    )
+  })
+
+  // ── The Desk Walkthrough tour (R97) ───────────────────────────────────────
+  it('DesignerPortal.Tours.DeskWalkthrough.Root is the correct literal', () => {
+    expect(SurfaceKeys.DesignerPortal.Tours.DeskWalkthrough.Root).toBe(
+      'designer-portal/tours/desk-walkthrough',
+    )
+  })
+
+  it('DesignerPortal.Tours.DeskWalkthrough.Step1TheDesk is the correct literal', () => {
+    expect(SurfaceKeys.DesignerPortal.Tours.DeskWalkthrough.Step1TheDesk).toBe(
+      'designer-portal/tours/desk-walkthrough/step-1-the-desk',
+    )
+  })
+
+  it('DesignerPortal.Tours.DeskWalkthrough.Step6Begin is the correct literal', () => {
+    expect(SurfaceKeys.DesignerPortal.Tours.DeskWalkthrough.Step6Begin).toBe(
+      'designer-portal/tours/desk-walkthrough/step-6-begin',
+    )
+  })
+
+  // ── Light client-portal pass ──────────────────────────────────────────────
+  it('ClientPortal.Proposals.Welcome is the correct literal', () => {
+    expect(SurfaceKeys.ClientPortal.Proposals.Welcome).toBe('client-portal/proposals/welcome')
+  })
+
+  it('ClientPortal.Proposals.Detail.Sign is the correct literal', () => {
+    expect(SurfaceKeys.ClientPortal.Proposals.Detail.Sign).toBe(
+      'client-portal/proposals/detail/sign',
+    )
+  })
+
+  it('ClientPortal.Decisions.Empty.None is the correct literal', () => {
+    expect(SurfaceKeys.ClientPortal.Decisions.Empty.None).toBe('client-portal/decisions/empty/none')
+  })
+
+  it('ClientPortal.Invoices.ListIntro is the correct literal', () => {
+    expect(SurfaceKeys.ClientPortal.Invoices.ListIntro).toBe('client-portal/invoices/list-intro')
+  })
+
+  it('ClientPortal.Pulse.Intro is the correct literal', () => {
+    expect(SurfaceKeys.ClientPortal.Pulse.Intro).toBe('client-portal/pulse/intro')
+  })
+
+  it('ClientPortal.Budget.Intro is the correct literal', () => {
+    expect(SurfaceKeys.ClientPortal.Budget.Intro).toBe('client-portal/budget/intro')
+  })
 })

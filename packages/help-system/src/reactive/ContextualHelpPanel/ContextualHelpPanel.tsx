@@ -42,6 +42,7 @@ import { X } from 'lucide-react'
 import { getSanityClient } from '../../sanityClient'
 import { isPlaceholderContent } from '../../isPlaceholderContent'
 import { useSurfaceKey } from '../../providers/SurfaceKeyProvider'
+import { HELP_EVENTS, safeCapture } from '../../analytics'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -71,6 +72,14 @@ export interface ContextualHelpPanelProps {
    * so it survives loading/empty/article states.
    */
   footer?: React.ReactNode
+  /**
+   * Optional intro content rendered above the article list (below the header),
+   * inside the panel's flex column. The sibling of `footer`: callers pass a
+   * surface-scoped blurb (e.g. the registry `help.blurb` for the current room
+   * or ledger) so the panel always frames what the user is looking at, even
+   * before — or when there is no — Sanity article content.
+   */
+  intro?: React.ReactNode
 }
 
 // ─── Article shape (returned by the GROQ query below) ─────────────────────────
@@ -83,19 +92,8 @@ interface PanelArticle {
   excerpt: string
 }
 
-// ─── PostHog helper — safe capture ────────────────────────────────────────────
-
-type PostHogLike = { capture: (event: string, props?: Record<string, unknown>) => void }
-
-function safeCapture(event: string, props: Record<string, unknown>): void {
-  if (typeof window === 'undefined') return
-  try {
-    const ph = (window as unknown as { posthog?: PostHogLike }).posthog
-    ph?.capture(event, props)
-  } catch {
-    // analytics must never crash the UI
-  }
-}
+// Analytics route through the shared HELP_EVENTS taxonomy + safeCapture (see
+// ../../analytics.ts). No local capture path.
 
 // ─── GROQ query for articles related to a surface key ─────────────────────────
 
@@ -186,6 +184,7 @@ export function ContextualHelpPanel({
   trigger,
   className,
   footer,
+  intro,
 }: ContextualHelpPanelProps) {
   // Resolve surface key: explicit prop wins, otherwise from context.
   const contextSurfaceKey = useSurfaceKey()
@@ -216,13 +215,13 @@ export function ContextualHelpPanel({
 
     if (!wasOpen && isOpen) {
       openedAtRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now()
-      safeCapture('help.panel.opened', { surface_key: resolvedSurfaceKey })
+      safeCapture(HELP_EVENTS.PANEL_OPENED, { surface_key: resolvedSurfaceKey })
     } else if (wasOpen && !isOpen) {
       const openedAt = openedAtRef.current
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
       const durationMs = openedAt != null ? Math.max(0, Math.round(now - openedAt)) : 0
       openedAtRef.current = null
-      safeCapture('help.panel.closed', {
+      safeCapture(HELP_EVENTS.PANEL_CLOSED, {
         surface_key: resolvedSurfaceKey,
         duration_ms: durationMs,
       })
@@ -244,7 +243,7 @@ export function ContextualHelpPanel({
   const handleArticleClick = React.useCallback(
     (article: PanelArticle) => {
       setExpandedId((current) => (current === article._id ? null : article._id))
-      safeCapture('help.article.opened', {
+      safeCapture(HELP_EVENTS.ARTICLE_OPENED, {
         article_id: article._id,
         surface_key: resolvedSurfaceKey,
         source: 'contextual_panel',
@@ -297,6 +296,17 @@ export function ContextualHelpPanel({
               <X aria-hidden="true" className="h-4 w-4" />
             </DialogPrimitive.Close>
           </header>
+
+          {/* Intro slot — sibling of footer; frames the current surface above
+              the article list, surviving loading/empty/article states. */}
+          {intro != null ? (
+            <div
+              data-testid="help-panel-intro"
+              className="border-b border-border px-4 py-3 text-sm text-muted-foreground"
+            >
+              {intro}
+            </div>
+          ) : null}
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto px-4 py-4">
