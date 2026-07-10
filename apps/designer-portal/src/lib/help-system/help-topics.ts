@@ -24,12 +24,13 @@ export interface HelpTopic {
 export const HELP_TOPICS: HelpTopic[] = [
   {
     label: 'Getting started',
-    description: 'Your first day at the Desk — what it is and how work moves through it.',
+    description:
+      'Your first hour with the Desk: what it is, and how a project moves from a lead to a signed proposal.',
     prefixes: ['designer-portal/document/guide'],
   },
   {
     label: 'The Desk & the Studio',
-    description: 'The Desk, the Contents page, and finding anything with the command bar.',
+    description: 'The one screen you start from, and the index of every room, ledger, and way in.',
     prefixes: [
       'designer-portal/document/desk',
       'designer-portal/document/contents',
@@ -38,7 +39,8 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     label: 'Your documents',
-    description: 'Reading a document, working its margin, and keeping coordination moving.',
+    description:
+      "A project is one document, brief through care — sections, stamps, the margin, and the client's copy.",
     prefixes: [
       'designer-portal/document/doc',
       'designer-portal/document/margin',
@@ -47,7 +49,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     label: 'Rooms',
-    description: 'The Library, People, the Drafting Room, and composing an update.',
+    description: 'The places you walk into: the Library, the People room, the Drafting Room, Composing.',
     prefixes: [
       'designer-portal/document/library',
       'designer-portal/document/people',
@@ -57,7 +59,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     label: 'Ledgers & money',
-    description: 'Orders, Accounts, Hours, and The Post — the books the studio keeps.',
+    description: 'The books that slide over your work: Orders, Accounts, Hours, and The Post.',
     prefixes: [
       'designer-portal/document/orders',
       'designer-portal/document/accounts',
@@ -67,17 +69,17 @@ export const HELP_TOPICS: HelpTopic[] = [
   },
   {
     label: 'Ideas & vocabulary',
-    description: 'The words Patina uses and the thinking behind them.',
+    description: 'The words Patina uses on purpose — stamps, courts, the margin, the Engine — and why.',
     prefixes: ['designer-portal/document/concept'],
   },
   {
     label: 'How do I…',
-    description: 'Short, step-by-step answers to the questions that come up mid-task.',
+    description: 'Short answers to the everyday moves: send a proposal, chase an invoice, log a delivery.',
     prefixes: ['designer-portal/document/how-to'],
   },
   {
     label: 'For your clients',
-    description: 'What your clients see in their portal, and how to guide them through it.',
+    description: 'What your client sees in their portal, and how to help them read and respond.',
     prefixes: ['client-portal'],
   },
 ];
