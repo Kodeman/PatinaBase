@@ -43,7 +43,9 @@ struct RecognitionHeader: View {
                 Text(eyebrow)
                     .font(CaptureType.eyebrow)
                     .textCase(.uppercase)
-                    .foregroundStyle(CaptureColor.goldenHour)
+                    // clayDeep(light)/clay(dark): AA on the cream sheet in light
+                    // mode; goldenHour was sub-AA (R28/R33 text classification).
+                    .foregroundStyle(CaptureColor.verdigrisInk)
                 Text(title)
                     .font(CaptureType.title2)
                     .foregroundStyle(CaptureColor.ink)

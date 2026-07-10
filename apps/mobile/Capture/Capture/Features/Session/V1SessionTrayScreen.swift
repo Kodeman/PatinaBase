@@ -9,6 +9,7 @@
 import Foundation
 import SwiftUI
 import CaptureKit
+import PatinaDesignKit
 
 struct V1SessionTrayScreen: View {
     let store: CaptureStore
@@ -123,18 +124,9 @@ struct V1SessionTrayScreen: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "tray")
-                .font(CaptureType.display)
-                .foregroundStyle(CaptureColor.inkSoft)
-            Text("Nothing captured yet")
-                .font(CaptureType.title2)
-                .foregroundStyle(CaptureColor.ink)
-            Text("Captures from this visit gather here.")
-                .font(CaptureType.callout)
-                .foregroundStyle(CaptureColor.inkSoft)
-        }
-        .padding(24)
+        PatinaEmptyState(icon: "tray",
+                         title: "Nothing captured yet",
+                         message: "Captures from this visit gather here.")
     }
 }
 

@@ -14,10 +14,9 @@ struct CaptureApp: App {
     @State private var container = AppContainer()
 
     init() {
-        CaptureFonts.registerIfNeeded()
-        // R27 Wave 0: shared design-kit fonts (PlayfairDisplay/Inter/DMMono)
-        // are registered but UNUSED — CaptureType still renders the Capture
-        // faces. The value flip is Wave 1.
+        // R33 (Wave 2): the legacy Capture faces (Fraunces/Hanken/Plex) are
+        // retired — CaptureType now renders the shared PatinaDesignKit faces
+        // (PlayfairDisplay/Inter/DMMono), registered process-wide here.
         PatinaFonts.registerAll()
     }
 

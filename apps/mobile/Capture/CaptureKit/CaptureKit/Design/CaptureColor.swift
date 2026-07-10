@@ -18,8 +18,6 @@ public enum CaptureColor {
 
     /// Primary actions, links, selection — Patina clay. Reads on both schemes.
     public static let verdigris  = PatinaColors.clay
-    /// Lighter accent uses (reticles, count rings, chrome accents) — clay.
-    public static let verdigris2 = PatinaColors.clay
     /// Deep accent for interactive text/icons — clayDeep in light, clay in dark.
     public static let verdigrisInk = PatinaColors.Text.interactive
 

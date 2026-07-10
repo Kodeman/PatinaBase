@@ -99,7 +99,7 @@ struct WorkDashboardScreen: View {
             .foregroundStyle(CaptureColor.verdigrisInk)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 12).fill(CaptureColor.verdigris2.opacity(0.18)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(CaptureColor.verdigris.opacity(0.18)))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Back to capture")
@@ -343,7 +343,10 @@ struct WorkDashboardScreen: View {
         switch status {
         case "on_hold": return CaptureColor.terracotta
         case "completed", "archived": return CaptureColor.success
-        default: return CaptureColor.goldenHour
+        // Active/in-progress: clayDeep(light)/clay(dark) reads AA on both the
+        // cream card and the dark card — goldenHour is sub-AA on cream (R28/R33
+        // text-chip classification). Dark was already fine; this fixes light.
+        default: return CaptureColor.verdigrisInk
         }
     }
 

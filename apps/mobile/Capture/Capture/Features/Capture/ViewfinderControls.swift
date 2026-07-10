@@ -248,7 +248,7 @@ struct ViewfinderSessionHandle: View {
             .frame(width: 46, height: 46)
             .background(.black.opacity(0.38), in: Circle())
             .overlay(
-                Circle().stroke(count > 0 ? CaptureColor.verdigris2.opacity(0.7) : .clear, lineWidth: 1.5)
+                Circle().stroke(count > 0 ? CaptureColor.verdigris.opacity(0.7) : .clear, lineWidth: 1.5)
             )
         }
         .accessibilityLabel("Session tray, \(count) captured")

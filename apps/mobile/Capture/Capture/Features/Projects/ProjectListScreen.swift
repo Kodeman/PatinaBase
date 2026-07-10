@@ -9,6 +9,7 @@
 
 import SwiftUI
 import CaptureKit
+import PatinaDesignKit
 
 // MARK: - Model
 
@@ -193,19 +194,9 @@ struct ProjectListScreen: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "folder")
-                .font(CaptureType.display)
-                .foregroundStyle(CaptureColor.inkSoft)
-            Text("No projects yet")
-                .font(CaptureType.title2)
-                .foregroundStyle(CaptureColor.ink)
-            Text("They'll appear when you're the lead designer.")
-                .font(CaptureType.callout)
-                .foregroundStyle(CaptureColor.inkSoft)
-                .multilineTextAlignment(.center)
-        }
-        .padding(24)
+        PatinaEmptyState(icon: "folder",
+                         title: "No projects yet",
+                         message: "They'll appear when you're the lead designer.")
     }
 }
 

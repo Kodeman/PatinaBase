@@ -11,6 +11,7 @@
 import Foundation
 import SwiftUI
 import CaptureKit
+import PatinaDesignKit
 
 // MARK: - F3 · Review
 
@@ -69,9 +70,10 @@ struct SiteScanReviewStep: View {
 
     private var actions: some View {
         HStack(spacing: 12) {
-            SiteScanSecondaryButton(title: "Retake", systemImage: "arrow.counterclockwise",
-                                    tint: CaptureColor.error, action: onRetake)
-            SiteScanPrimaryButton(title: "Continue", systemImage: "arrow.right", action: onContinue)
+            PatinaButton("Retake", style: .secondary,
+                         icon: Image(systemName: "arrow.counterclockwise"), action: onRetake)
+            PatinaButton("Continue", style: .clay,
+                         icon: Image(systemName: "arrow.right"), action: onContinue)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -263,7 +265,7 @@ struct SiteScanUploadStep: View {
     @ViewBuilder private var actions: some View {
         switch model.phase {
         case .done:
-            SiteScanPrimaryButton(title: "Done", systemImage: "checkmark") { onDone() }
+            PatinaButton("Done", style: .clay, icon: Image(systemName: "checkmark")) { onDone() }
                 .padding(.horizontal, 20).padding(.vertical, 12)
                 .background(.ultraThinMaterial)
         case .failed:
@@ -271,12 +273,13 @@ struct SiteScanUploadStep: View {
             // bundle is retained, so the designer can park the scan and leave
             // instead of being locked into retrying forever.
             HStack(spacing: 12) {
-                SiteScanSecondaryButton(title: "Finish later", systemImage: "tray.and.arrow.down",
-                                        tint: CaptureColor.inkSoft) {
+                PatinaButton("Finish later", style: .secondary,
+                             icon: Image(systemName: "tray.and.arrow.down")) {
                     container.analytics.event("scan.upload_finish_later")
                     onDone()
                 }
-                SiteScanPrimaryButton(title: "Retry upload", systemImage: "arrow.clockwise") {
+                PatinaButton("Retry upload", style: .clay,
+                             icon: Image(systemName: "arrow.clockwise")) {
                     Task { await model.upload() }
                 }
             }
