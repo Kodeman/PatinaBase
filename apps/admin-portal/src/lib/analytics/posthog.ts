@@ -1,5 +1,11 @@
 import posthog from 'posthog-js';
 
+declare global {
+  interface Window {
+    posthog?: typeof posthog;
+  }
+}
+
 let initialized = false;
 
 export function initPostHog(): void {
@@ -20,6 +26,11 @@ export function initPostHog(): void {
       }
     },
   });
+
+  // @patina/help-system captures its help.* analytics via `window.posthog`
+  // (it has no posthog-js import of its own) — expose the initialized
+  // instance or those captures silently no-op.
+  window.posthog = posthog;
 
   initialized = true;
 }
