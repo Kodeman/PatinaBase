@@ -12,6 +12,7 @@ import CaptureKit
 struct S5InboxTerminalScreen: View {
     let specimen: Specimen?
     let coordinator: CaptureCoordinator
+    let analytics: any CaptureAnalytics
 
     @State private var appeared = false
 
@@ -76,6 +77,10 @@ struct S5InboxTerminalScreen: View {
         .accessibilityIdentifier(CaptureScreenID.s5Inbox.rawValue)
         .sensoryFeedback(.impact(weight: .medium), trigger: appeared)
         .onAppear { appeared = true }
+        .task {
+            analytics.screen(CaptureScreenID.s5Inbox.rawValue)
+            analytics.event("capture.route_completed", ["destination": "inbox"])
+        }
     }
 
     private var leftToFinish: String {
@@ -95,8 +100,11 @@ struct S5InboxTerminalScreen: View {
 }
 
 #if DEBUG
+import CaptureKitMocks
+
 #Preview {
     let demo = RoutePreviewData.make()
-    return S5InboxTerminalScreen(specimen: demo.specimen, coordinator: CaptureCoordinator())
+    return S5InboxTerminalScreen(specimen: demo.specimen, coordinator: CaptureCoordinator(),
+                                 analytics: MockCaptureAnalytics())
 }
 #endif

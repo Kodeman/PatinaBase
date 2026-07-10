@@ -20,6 +20,7 @@ struct OnboardingFlowView: View {
     @Binding var step: Int
     let onComplete: () -> Void
     let authorizer: WorkspaceAuthorizing
+    let analytics: any CaptureAnalytics
     /// Persist the workspace the designer picks in O2 (real mode). No-op for the
     /// stub host / previews.
     let onSelectWorkspace: (String) -> Void
@@ -34,12 +35,14 @@ struct OnboardingFlowView: View {
 
     init(step: Binding<Int>,
          authorizer: WorkspaceAuthorizing,
+         analytics: any CaptureAnalytics,
          onSelectWorkspace: @escaping (String) -> Void = { _ in },
          seedWorkspaces: [OnboardingWorkspace] = OnboardingWorkspace.demo,
          onSignOut: @escaping () -> Void = {},
          onComplete: @escaping () -> Void) {
         self._step = step
         self.authorizer = authorizer
+        self.analytics = analytics
         self.onSelectWorkspace = onSelectWorkspace
         self.seedWorkspaces = seedWorkspaces
         self.onSignOut = onSignOut
@@ -78,12 +81,14 @@ struct OnboardingFlowView: View {
         switch clampedStep {
         case 0:
             WelcomeScreen(
+                analytics: analytics,
                 onGetStarted: { advance(to: 1) },
                 onSignIn: { advance(to: 1) }   // "I already have an account" → sign-in (O2)
             )
         case 1:
             ConnectWorkspaceScreen(
                 authorizer: authorizer,
+                analytics: analytics,
                 workspaces: seedWorkspaces,
                 onConnected: { workspace, _ in
                     onSelectWorkspace(workspace.id)
@@ -92,9 +97,9 @@ struct OnboardingFlowView: View {
                 onSignOut: onSignOut
             )
         case 2:
-            CameraPrimingScreen(onContinue: { advance(to: 3) })
+            CameraPrimingScreen(analytics: analytics, onContinue: { advance(to: 3) })
         default:
-            ReadyScreen(onStart: onComplete)
+            ReadyScreen(analytics: analytics, onStart: onComplete)
         }
     }
 
@@ -105,10 +110,12 @@ struct OnboardingFlowView: View {
 
 private struct OnboardingFlowHost: View {
     let onComplete: () -> Void
+    let analytics: any CaptureAnalytics
     @State private var step = 0
 
     var body: some View {
-        OnboardingFlowView(step: $step, authorizer: StubWorkspaceAuthorizer(), onComplete: onComplete)
+        OnboardingFlowView(step: $step, authorizer: StubWorkspaceAuthorizer(),
+                           analytics: analytics, onComplete: onComplete)
     }
 }
 
@@ -121,23 +128,27 @@ enum OnboardingScreens {
     /// One standalone step for the `-CaptureScreen oN.*` harness.
     /// 0 = O1 Welcome · 1 = O2 Connect · 2 = O3 Camera priming · 3 = O4 Ready.
     @MainActor
-    static func view(forStep step: Int) -> AnyView {
+    static func view(forStep step: Int, analytics: any CaptureAnalytics) -> AnyView {
         switch min(max(step, 0), 3) {
-        case 0:  return AnyView(WelcomeScreen())
-        case 1:  return AnyView(ConnectWorkspaceScreen(authorizer: StubWorkspaceAuthorizer()))
-        case 2:  return AnyView(CameraPrimingScreen())
-        default: return AnyView(ReadyScreen())
+        case 0:  return AnyView(WelcomeScreen(analytics: analytics))
+        case 1:  return AnyView(ConnectWorkspaceScreen(authorizer: StubWorkspaceAuthorizer(), analytics: analytics))
+        case 2:  return AnyView(CameraPrimingScreen(analytics: analytics))
+        default: return AnyView(ReadyScreen(analytics: analytics))
         }
     }
 
     /// The full O1→O4 sequence; `onComplete` fires when "Start capturing" is
     /// tapped (the integrator flips CapturePhase to `.ready`).
     @MainActor
-    static func flow(onComplete: @escaping () -> Void) -> AnyView {
-        AnyView(OnboardingFlowHost(onComplete: onComplete))
+    static func flow(onComplete: @escaping () -> Void, analytics: any CaptureAnalytics) -> AnyView {
+        AnyView(OnboardingFlowHost(onComplete: onComplete, analytics: analytics))
     }
 }
 
+#if DEBUG
+import CaptureKitMocks
+
 #Preview("Flow") {
-    OnboardingScreens.flow(onComplete: {})
+    OnboardingScreens.flow(onComplete: {}, analytics: MockCaptureAnalytics())
 }
+#endif

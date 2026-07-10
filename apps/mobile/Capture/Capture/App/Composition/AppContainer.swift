@@ -58,12 +58,13 @@ public final class AppContainer {
             // One authenticated supabase-swift client, shared by the session, the
             // sync gateway, and inline project creation.
             let client = SupabaseClientProvider.makeClient()
-            let session = SupabaseSessionService(client: client)
-            self.session = session
-            self.authorizer = SupabaseWorkspaceAuthorizer(session: session)
 
             let analytics = PostHogCaptureAnalytics()
             self.analytics = analytics
+
+            let session = SupabaseSessionService(client: client, analytics: analytics)
+            self.session = session
+            self.authorizer = SupabaseWorkspaceAuthorizer(session: session)
 
             let liveActivity = CaptureLiveActivityController()
             let gateway = SupabaseCaptureGateway(client: client,
@@ -97,7 +98,9 @@ public final class AppContainer {
             // fresh sign-in later in the same run is identified on next launch.
             Task { @MainActor in
                 await session.waitForReady()
-                if let uid = session.userID { analytics.identify(uid) }
+                if let uid = session.userID {
+                    analytics.identify(uid, properties: ["role": "designer", "platform": "ios"])
+                }
             }
         } else {
             let analytics = MockCaptureAnalytics()

@@ -27,6 +27,7 @@ struct CaptureWorkspace: Identifiable, Hashable, Sendable {
 final class SupabaseSessionService: SessionProviding {
     @ObservationIgnored private let client: SupabaseClient
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let analytics: any CaptureAnalytics
     @ObservationIgnored private let log = Logger(subsystem: "cloud.patina.field", category: "session")
 
     // MARK: State (observed — drives SessionProviding + the T2 account screen)
@@ -62,8 +63,10 @@ final class SupabaseSessionService: SessionProviding {
     // MARK: Init
 
     init(client: SupabaseClient = SupabaseClientProvider.makeClient(),
+         analytics: any CaptureAnalytics,
          defaults: UserDefaults = UserDefaults(suiteName: AppConfiguration.appGroupID) ?? .standard) {
         self.client = client
+        self.analytics = analytics
         self.defaults = defaults
         // Show the last-known workspace immediately (survives offline / pre-fetch).
         self.activeWorkspaceID = defaults.string(forKey: Keys.activeWorkspaceID)
@@ -114,11 +117,19 @@ final class SupabaseSessionService: SessionProviding {
     /// against the token's `nonce` claim. Awaits hydration so the caller sees
     /// fresh `workspaces`. Throws on auth failure.
     func signInWithApple(idToken: String, rawNonce: String) async throws {
-        let session = try await client.auth.signInWithIdToken(
-            credentials: .init(provider: .apple, idToken: idToken, nonce: rawNonce)
-        )
-        self.session = session
-        await hydrateAfterSignIn(user: session.user)
+        analytics.event("account.sign_in.started", ["method": "apple"])
+        do {
+            let session = try await client.auth.signInWithIdToken(
+                credentials: .init(provider: .apple, idToken: idToken, nonce: rawNonce)
+            )
+            self.session = session
+            await hydrateAfterSignIn(user: session.user)
+            analytics.event("account.sign_in.succeeded", ["method": "apple"])
+        } catch {
+            analytics.event("account.sign_in.failed",
+                            ["method": "apple", "reason": Self.shortErrorLabel(error)])
+            throw error
+        }
     }
 
     /// Email one-time-code, step 1: mail a 6-digit code to `email`.
@@ -131,17 +142,49 @@ final class SupabaseSessionService: SessionProviding {
     /// `sendMagicLink` leaves `shouldCreateUser` at its `true` default.) No
     /// `redirectTo` is passed: the code is entered natively, never a link tap.
     func sendEmailCode(to email: String) async throws {
-        try await client.auth.signInWithOTP(email: email, shouldCreateUser: false)
+        // The email-OTP sign-in spans two methods, so the analytics trio is
+        // split across them: `started` fires here (the user's attempt begins
+        // with the code request), `failed` can fire at either step, and
+        // `succeeded` fires in verifyEmailCode once a session lands. Wrapping
+        // each method in its own full trio would double-count starts and
+        // emit a bogus "succeeded" for merely mailing a code.
+        analytics.event("account.sign_in.started", ["method": "email-otp"])
+        do {
+            try await client.auth.signInWithOTP(email: email, shouldCreateUser: false)
+        } catch {
+            analytics.event("account.sign_in.failed",
+                            ["method": "email-otp", "reason": Self.shortErrorLabel(error)])
+            throw error
+        }
     }
 
     /// Email one-time-code, step 2: verify the 6-digit `code`. `EmailOTPType.email`
     /// matches the code issued by `signInWithOTP(email:)`. Awaits hydration so the
     /// caller sees fresh `workspaces`. Throws on a wrong/expired code.
     func verifyEmailCode(email: String, code: String) async throws {
-        let response = try await client.auth.verifyOTP(email: email, token: code, type: .email)
-        guard let session = response.session else { return }
-        self.session = session
-        await hydrateAfterSignIn(user: session.user)
+        do {
+            let response = try await client.auth.verifyOTP(email: email, token: code, type: .email)
+            guard let session = response.session else {
+                analytics.event("account.sign_in.failed",
+                                ["method": "email-otp", "reason": "NoSessionInResponse"])
+                return
+            }
+            self.session = session
+            await hydrateAfterSignIn(user: session.user)
+            analytics.event("account.sign_in.succeeded", ["method": "email-otp"])
+        } catch {
+            analytics.event("account.sign_in.failed",
+                            ["method": "email-otp", "reason": Self.shortErrorLabel(error)])
+            throw error
+        }
+    }
+
+    /// A short, PII-free label for a sign-in failure — the error's Swift
+    /// type name (e.g. "AuthError", "URLError", "CancellationError"), not
+    /// the localized description, so a dashboard can bucket failure modes
+    /// without risking a leaked token/email in event properties.
+    private static func shortErrorLabel(_ error: any Error) -> String {
+        String(describing: type(of: error))
     }
 
     /// Hydrate right after a *fresh* sign-in, tolerating the token-propagation

@@ -52,6 +52,15 @@ public final class AuthService {
 
     private var authStateTask: Task<Void, Never>?
 
+    /// Transient label for the sign-in method most recently attempted. Set at
+    /// the START of each explicit sign-in entry point (password / apple /
+    /// google / magic-link / otp) and consumed — then cleared — by the
+    /// `.signedIn` observer, so the `login` analytics event fires exactly
+    /// once per fresh sign-in with an accurate per-method label, instead of
+    /// once per capturing call site (which double-fired when a view-layer
+    /// capture and the observer both ran).
+    private var lastAttemptedSignInMethod: String?
+
     /// Continuations for callers awaiting `waitForAuthReady()`. We keep an
     /// array instead of a single optional because multiple call sites
     /// (RoomScanSyncService, feeds) can all await auth readiness concurrently
@@ -107,8 +116,20 @@ public final class AuthService {
                         let emailDomain = user.email.map { $0.components(separatedBy: "@").last ?? "" } ?? ""
                         PostHogService.shared.identify(userId: user.id.uuidString, properties: [
                             "email_domain": emailDomain,
-                            "platform": "ios"
+                            "platform": "ios",
+                            "role": "client"
                         ])
+                        // `.signedIn` is GoTrue's fresh-sign-in event — distinct from
+                        // `.initialSession` (cold-launch session restore) — so this
+                        // fires only on an actual sign-in, never on app relaunch.
+                        // Single source of truth for the `login` event: every
+                        // sign-in entry point on this service stamps
+                        // `lastAttemptedSignInMethod` at its start, so the label
+                        // is accurate per method and fires exactly once.
+                        PostHogService.shared.capture("login", properties: [
+                            "method": lastAttemptedSignInMethod ?? "unknown"
+                        ])
+                        lastAttemptedSignInMethod = nil
                     }
                 case .signedOut:
                     PatinaLog.auth.debug("User signed out")
@@ -139,6 +160,7 @@ public final class AuthService {
     /// Sign in with email and password
     @MainActor
     public func signIn(email: String, password: String) async throws {
+        lastAttemptedSignInMethod = "password"
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -185,6 +207,7 @@ public final class AuthService {
     /// Sign in with Apple
     @MainActor
     public func signInWithApple(credential: ASAuthorizationAppleIDCredential) async throws {
+        lastAttemptedSignInMethod = "apple"
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -212,6 +235,7 @@ public final class AuthService {
     /// Sign in with Google via OAuth (opens ASWebAuthenticationSession)
     @MainActor
     public func signInWithGoogle() async throws {
+        lastAttemptedSignInMethod = "google"
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -315,6 +339,7 @@ public final class AuthService {
     /// Send magic link to email for passwordless login
     @MainActor
     public func sendMagicLink(email: String) async throws {
+        lastAttemptedSignInMethod = "magic-link"
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -343,6 +368,7 @@ public final class AuthService {
     /// method does not need to mutate `session` itself.
     @MainActor
     public func verifyOtp(email: String, token: String) async throws {
+        lastAttemptedSignInMethod = "otp"
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -373,6 +399,9 @@ public final class AuthService {
     /// callback (`?code=…`), fall back to the SDK's parser.
     @MainActor
     public func handleMagicLinkURL(_ url: URL) async throws {
+        // Stamped here as well as in sendMagicLink: the link is often opened
+        // after an app relaunch, which loses the transient send-time stamp.
+        lastAttemptedSignInMethod = "magic-link"
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }

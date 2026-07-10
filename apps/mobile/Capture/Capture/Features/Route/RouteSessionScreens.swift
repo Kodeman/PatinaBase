@@ -18,6 +18,7 @@ enum RouteSessionScreens {
         let sync = container.sync
         let location = container.location
         let projectCreator = container.projectCreator
+        let analytics = container.analytics
 
         // ── Flow 6 routes ──────────────────────────────────────────────
         r.registerRoute(CaptureRoute.session.registryKey) { _ in
@@ -34,27 +35,27 @@ enum RouteSessionScreens {
             guard case let .assignVenue(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(S1AssignVenueScreen(
                 specimen: store.specimen(id: id), store: store,
-                location: location, coordinator: coordinator))
+                location: location, coordinator: coordinator, analytics: analytics))
         }
         r.registerSheet(CaptureSheet.createProject.registryKey) { _ in
             AnyView(S2CreateProjectScreen(store: store, coordinator: coordinator,
-                                          projectCreator: projectCreator))
+                                          analytics: analytics, projectCreator: projectCreator))
         }
         r.registerSheet(CaptureSheet.destination(UUID()).registryKey) { sheet in
             guard case let .destination(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(S3DestinationScreen(
                 specimen: store.specimen(id: id), store: store,
-                sync: sync, coordinator: coordinator))
+                sync: sync, coordinator: coordinator, analytics: analytics))
         }
         r.registerSheet(CaptureSheet.savedTerminal(UUID()).registryKey) { sheet in
             guard case let .savedTerminal(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(S4SavedTerminalScreen(
-                specimen: store.specimen(id: id), coordinator: coordinator))
+                specimen: store.specimen(id: id), coordinator: coordinator, analytics: analytics))
         }
         r.registerSheet(CaptureSheet.inboxTerminal(UUID()).registryKey) { sheet in
             guard case let .inboxTerminal(id) = sheet else { return AnyView(EmptyView()) }
             return AnyView(S5InboxTerminalScreen(
-                specimen: store.specimen(id: id), coordinator: coordinator))
+                specimen: store.specimen(id: id), coordinator: coordinator, analytics: analytics))
         }
 
         // ── Flow 6 sheet (cull deck) ───────────────────────────────────

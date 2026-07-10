@@ -39,7 +39,7 @@ struct RootView: View {
             get: { coord.onboardingStep != nil },
             set: { if !$0 { coord.onboardingStep = nil } }
         )) {
-            OnboardingScreens.view(forStep: coord.onboardingStep ?? 0)
+            OnboardingScreens.view(forStep: coord.onboardingStep ?? 0, analytics: container.analytics)
         }
         .task {
             ScreenRegistry.registerAll(container: container, coordinator: coordinator)
@@ -77,6 +77,7 @@ struct RootView: View {
             OnboardingFlowView(
                 step: $onboardingFlowStep,
                 authorizer: container.authorizer,
+                analytics: container.analytics,
                 onSelectWorkspace: { container.session.selectWorkspace(id: $0) },
                 // Real mode starts O2 empty — the real orgs arrive from
                 // authorize(); demo seeding is mock-only (harness/previews).

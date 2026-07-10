@@ -11,6 +11,7 @@ import CaptureKit
 struct S4SavedTerminalScreen: View {
     let specimen: Specimen?
     let coordinator: CaptureCoordinator
+    let analytics: any CaptureAnalytics
 
     @State private var appeared = false
 
@@ -79,6 +80,10 @@ struct S4SavedTerminalScreen: View {
         .accessibilityIdentifier(CaptureScreenID.s4Saved.rawValue)
         .sensoryFeedback(.success, trigger: appeared)
         .onAppear { appeared = true }
+        .task {
+            analytics.screen(CaptureScreenID.s4Saved.rawValue)
+            analytics.event("capture.route_completed", ["destination": "project"])
+        }
     }
 
     private var landed: String? {
@@ -92,8 +97,11 @@ struct S4SavedTerminalScreen: View {
 }
 
 #if DEBUG
+import CaptureKitMocks
+
 #Preview {
     let demo = RoutePreviewData.make()
-    return S4SavedTerminalScreen(specimen: demo.specimen, coordinator: CaptureCoordinator())
+    return S4SavedTerminalScreen(specimen: demo.specimen, coordinator: CaptureCoordinator(),
+                                 analytics: MockCaptureAnalytics())
 }
 #endif

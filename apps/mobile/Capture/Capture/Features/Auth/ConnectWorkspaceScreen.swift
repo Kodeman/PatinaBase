@@ -91,6 +91,7 @@ struct ConnectWorkspaceScreen: View {
     private enum Stage: Equatable { case methods, email, authorizing, chooseWorkspace, empty, failed }
 
     let authorizer: WorkspaceAuthorizing
+    let analytics: any CaptureAnalytics
     /// Auth succeeded → continue to camera priming (O3) with the chosen
     /// workspace + whether the designer opted into Face ID.
     var onConnected: (_ workspace: OnboardingWorkspace, _ enableFaceID: Bool) -> Void
@@ -108,10 +109,12 @@ struct ConnectWorkspaceScreen: View {
     @FocusState private var fieldFocused: Bool
 
     init(authorizer: WorkspaceAuthorizing,
+         analytics: any CaptureAnalytics,
          workspaces: [OnboardingWorkspace] = OnboardingWorkspace.demo,
          onConnected: @escaping (_ workspace: OnboardingWorkspace, _ enableFaceID: Bool) -> Void = { _, _ in },
          onSignOut: @escaping () -> Void = {}) {
         self.authorizer = authorizer
+        self.analytics = analytics
         self.onConnected = onConnected
         self.onSignOut = onSignOut
         _workspaces = State(initialValue: workspaces)
@@ -130,6 +133,7 @@ struct ConnectWorkspaceScreen: View {
             .padding(.top, 32)
             .padding(.bottom, 24)
         }
+        .task { analytics.screen(CaptureScreenID.o2Connect.rawValue) }
         .accessibilityIdentifier(CaptureScreenID.o2Connect.rawValue)
     }
 
@@ -513,10 +517,14 @@ struct ConnectWorkspaceScreen: View {
     }
 }
 
+#if DEBUG
+import CaptureKitMocks
+
 #Preview("Sign in") {
-    ConnectWorkspaceScreen(authorizer: StubWorkspaceAuthorizer())
+    ConnectWorkspaceScreen(authorizer: StubWorkspaceAuthorizer(), analytics: MockCaptureAnalytics())
 }
 
 #Preview("Auth failure") {
-    ConnectWorkspaceScreen(authorizer: StubWorkspaceAuthorizer(shouldFail: true))
+    ConnectWorkspaceScreen(authorizer: StubWorkspaceAuthorizer(shouldFail: true), analytics: MockCaptureAnalytics())
 }
+#endif
