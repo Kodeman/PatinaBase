@@ -13,7 +13,7 @@
  *  - cautions render quietly, never as alarms;
  *  - never "AI" — it is Designer-Taught Intelligence.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, ShoppingBag } from 'lucide-react';
 import type { StyleQuizProfile } from '@patina/types';
@@ -27,6 +27,7 @@ import { StrataMark } from '@/components/strata-mark';
 import { useAestheteMatches, useClaimQuizSession } from '@/hooks/use-aesthete-matches';
 import type { AestheteMatchRow, MatchProduct } from '@/lib/aesthete/matches';
 import { loadQuizProfile } from '@/lib/aesthete/profile-store';
+import { aestheteQuizEvents } from '@/lib/analytics/events';
 import {
   archetypeLine,
   budgetPosture,
@@ -106,11 +107,13 @@ function MatchCard({
   product,
   isAuthenticated,
   onSignInRequired,
+  sessionKey,
 }: {
   match: AestheteMatchRow;
   product?: MatchProduct;
   isAuthenticated: boolean;
   onSignInRequired: () => void;
+  sessionKey: string | null;
 }) {
   // Exploration rows: pull the server's honest stretch phrase out of the
   // reason list and wear it as the card's marker instead (no duplication).
@@ -173,6 +176,8 @@ function MatchCard({
             productId={product.id}
             isAuthenticated={isAuthenticated}
             onSignInRequired={onSignInRequired}
+            sessionKey={sessionKey}
+            isExploration={match.is_exploration}
           />
         )}
 
@@ -213,10 +218,14 @@ function BuyButton({
   productId,
   isAuthenticated,
   onSignInRequired,
+  sessionKey,
+  isExploration,
 }: {
   productId: string;
   isAuthenticated: boolean;
   onSignInRequired: () => void;
+  sessionKey: string | null;
+  isExploration?: boolean;
 }) {
   const createOrder = useCreateDirectOrder({ errorSurface: 'inline' });
   const startCheckout = useStartDirectOrderCheckout({ errorSurface: 'inline' });
@@ -231,6 +240,10 @@ function BuyButton({
     setError(null);
     try {
       const order = await createOrder.mutateAsync({ productId, quantity: 1 });
+      // A qty-1 direct order is the client's "save" of this match — the
+      // §12.4 funnel's match_saved event, fired the same as the package
+      // README documents ("on a card save").
+      aestheteQuizEvents.matchSaved({ sessionKey, productId, isExploration });
       const { url } = await startCheckout.mutateAsync({ directOrderId: order.id });
       window.location.href = url;
     } catch (err) {
@@ -342,6 +355,17 @@ export function ResultsView() {
   // Signed-in visit → bind the anonymous session to this account (§7.1).
   useClaimQuizSession(sessionKey, () => setForeignSession(true));
 
+  // matches_viewed — fires once, the first time matches resolve.
+  const matchesViewedCaptured = useRef(false);
+  useEffect(() => {
+    if (!matchesQuery.data || matchesViewedCaptured.current) return;
+    matchesViewedCaptured.current = true;
+    aestheteQuizEvents.matchesViewed({
+      sessionKey,
+      resultCount: matchesQuery.data.matches.length,
+    });
+  }, [matchesQuery.data, sessionKey]);
+
   if (!resolved) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
@@ -447,6 +471,7 @@ export function ResultsView() {
                   product={matchesQuery.data.products.get(match.product_id)}
                   isAuthenticated={isAuthenticated}
                   onSignInRequired={() => void signIn('/quiz/results')}
+                  sessionKey={sessionKey}
                 />
               ))}
             </div>
