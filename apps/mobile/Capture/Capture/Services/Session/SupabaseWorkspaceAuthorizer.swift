@@ -1,11 +1,15 @@
 //  SupabaseWorkspaceAuthorizer.swift
 //  Capture
 //
-//  The real `WorkspaceAuthorizing` behind O2's "Continue with Patina" button:
-//  runs Supabase Google OAuth (SDK-managed ASWebAuthenticationSession,
-//  redirectTo `field://auth/callback`) via the shared SupabaseSessionService,
-//  then returns the user's organizations as `[OnboardingWorkspace]`. On failure
-//  it throws, and ConnectWorkspaceScreen falls back to its inline retry (O2).
+//  The real `WorkspaceAuthorizing` behind O2's two sign-in entry points —
+//  Sign in with Apple (native ASAuthorizationController, no redirect) and email
+//  one-time-code (`signInWithOTP` → `verifyOTP`, no redirect). Both run through
+//  the shared SupabaseSessionService, then return the user's organizations as
+//  `[OnboardingWorkspace]`. On failure each throws, and ConnectWorkspaceScreen
+//  falls back to its inline retry / code-error state (O2).
+//
+//  Strata (prod Supabase) has only the `apple` and `email` auth providers
+//  enabled — Google is intentionally not configured.
 
 import Foundation
 
@@ -17,8 +21,17 @@ final class SupabaseWorkspaceAuthorizer: WorkspaceAuthorizing {
         self.session = session
     }
 
-    func authorize() async throws -> [OnboardingWorkspace] {
-        try await session.signInWithGoogle()
+    func authorizeWithApple(idToken: String, rawNonce: String) async throws -> [OnboardingWorkspace] {
+        try await session.signInWithApple(idToken: idToken, rawNonce: rawNonce)
+        return session.workspaces.map { OnboardingWorkspace(id: $0.id, name: $0.name) }
+    }
+
+    func sendEmailCode(to email: String) async throws {
+        try await session.sendEmailCode(to: email)
+    }
+
+    func verifyEmailCode(email: String, code: String) async throws -> [OnboardingWorkspace] {
+        try await session.verifyEmailCode(email: email, code: code)
         return session.workspaces.map { OnboardingWorkspace(id: $0.id, name: $0.name) }
     }
 }

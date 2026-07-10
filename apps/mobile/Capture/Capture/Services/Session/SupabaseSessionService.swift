@@ -47,7 +47,7 @@ final class SupabaseSessionService: SessionProviding {
     @ObservationIgnored private var readyContinuations: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var authStateTask: Task<Void, Never>?
     /// Coalesces concurrent hydration (auth-stream event + explicit sign-in) so
-    /// `signInWithGoogle()` and the listener share one fetch and never race.
+    /// an explicit sign-in and the listener share one fetch and never race.
     @ObservationIgnored private var hydrationTask: Task<Void, Never>?
     /// Monotonic token identifying the current hydration pass. `Task` is a value
     /// type (no `===` identity), so this stands in for it: a finishing pass only
@@ -106,18 +106,59 @@ final class SupabaseSessionService: SessionProviding {
         clearLocalState()
     }
 
-    // MARK: Sign-in (OAuth)
+    // MARK: Sign-in (Apple + email one-time-code)
 
-    /// Runs Supabase Google OAuth via the SDK-managed `ASWebAuthenticationSession`
-    /// flow (`redirectTo: field://auth/callback`) and awaits hydration so the
-    /// caller sees fresh `workspaces`. Throws on cancellation / auth failure.
-    func signInWithGoogle() async throws {
-        let session = try await client.auth.signInWithOAuth(
-            provider: .google,
-            redirectTo: URL(string: AppConfiguration.authCallback)
+    /// Sign in with Apple. `idToken` / `rawNonce` come from a native
+    /// `ASAuthorizationController` credential (no browser redirect). GoTrue
+    /// verifies the Apple ID token via `signInWithIdToken`, re-hashing `rawNonce`
+    /// against the token's `nonce` claim. Awaits hydration so the caller sees
+    /// fresh `workspaces`. Throws on auth failure.
+    func signInWithApple(idToken: String, rawNonce: String) async throws {
+        let session = try await client.auth.signInWithIdToken(
+            credentials: .init(provider: .apple, idToken: idToken, nonce: rawNonce)
         )
         self.session = session
-        await hydrate(user: session.user)
+        await hydrateAfterSignIn(user: session.user)
+    }
+
+    /// Email one-time-code, step 1: mail a 6-digit code to `email`.
+    ///
+    /// `shouldCreateUser: false` is deliberate — Patina Field is invite-only for
+    /// designers/trades, who are provisioned (auth user + organization membership)
+    /// through the portal. The app must never mint a brand-new auth user, so an
+    /// unknown address is rejected by GoTrue rather than silently onboarded.
+    /// (This is the one behavioural difference from the Patina client app, whose
+    /// `sendMagicLink` leaves `shouldCreateUser` at its `true` default.) No
+    /// `redirectTo` is passed: the code is entered natively, never a link tap.
+    func sendEmailCode(to email: String) async throws {
+        try await client.auth.signInWithOTP(email: email, shouldCreateUser: false)
+    }
+
+    /// Email one-time-code, step 2: verify the 6-digit `code`. `EmailOTPType.email`
+    /// matches the code issued by `signInWithOTP(email:)`. Awaits hydration so the
+    /// caller sees fresh `workspaces`. Throws on a wrong/expired code.
+    func verifyEmailCode(email: String, code: String) async throws {
+        let response = try await client.auth.verifyOTP(email: email, token: code, type: .email)
+        guard let session = response.session else { return }
+        self.session = session
+        await hydrateAfterSignIn(user: session.user)
+    }
+
+    /// Hydrate right after a *fresh* sign-in, tolerating the token-propagation
+    /// race. The first PostgREST fetch can outrun the SDK committing the new
+    /// session to its auth context, so RLS sees no `auth.uid()` and the
+    /// profile/workspace queries come back empty (no error, just zero rows). The
+    /// `isHydrated` gate leaves the latch open on such an empty pass, so we retry
+    /// with a short backoff until it resolves — the same recovery the next auth
+    /// event would trigger, done proactively so the caller sees real `workspaces`.
+    /// Bounded: a genuinely org-less account simply exhausts the attempts and
+    /// falls through to O2's "no workspace" state.
+    private func hydrateAfterSignIn(user: User, attempts: Int = 4) async {
+        for attempt in 0..<attempts {
+            await hydrate(user: user)
+            if isHydrated { return }
+            if attempt < attempts - 1 { try? await Task.sleep(for: .milliseconds(250)) }
+        }
     }
 
     // MARK: Auth-state observation

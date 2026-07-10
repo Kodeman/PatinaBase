@@ -19,14 +19,39 @@ enum SupabaseClientProvider {
         SupabaseClient(
             supabaseURL: AppConfiguration.supabaseURL,
             supabaseKey: AppConfiguration.supabaseAnonKey,
-            options: SupabaseClientOptions(
-                auth: SupabaseClientOptions.AuthOptions(
-                    // Emit the locally stored session immediately as
-                    // `.initialSession`, so a cold launch with a restored
-                    // session resolves `waitForReady()` from the auth stream.
-                    emitLocalSessionAsInitialSession: true
-                )
-            )
+            options: SupabaseClientOptions(auth: authOptions)
         )
     }
+
+    private static var authOptions: SupabaseClientOptions.AuthOptions {
+        #if targetEnvironment(simulator)
+        // The Simulator runs the app ad-hoc-signed (no `application-identifier`
+        // entitlement), so supabase-swift's default Keychain storage can't
+        // persist the session: `auth.session` then throws and every PostgREST
+        // request silently falls back to the anon key (RLS sees no `auth.uid()`),
+        // so a `-CaptureForceReal` sign-in authenticates but never hydrates. A
+        // plain `UserDefaults` store keeps the session on the Simulator. Physical
+        // devices are compiled to the branch below and keep the secure Keychain.
+        return .init(
+            storage: SimulatorAuthStorage(),
+            emitLocalSessionAsInitialSession: true
+        )
+        #else
+        // Emit the locally stored session immediately as `.initialSession`, so a
+        // cold launch with a restored session resolves `waitForReady()` from the
+        // auth stream. Uses supabase-swift's default (Keychain) local storage.
+        return .init(emitLocalSessionAsInitialSession: true)
+        #endif
+    }
 }
+
+#if targetEnvironment(simulator)
+/// Simulator-only auth-token storage backed by `UserDefaults` (see the note in
+/// `authOptions`). Never compiled for a device build.
+private struct SimulatorAuthStorage: AuthLocalStorage {
+    private let defaults: UserDefaults = .standard
+    func store(key: String, value: Data) throws { defaults.set(value, forKey: key) }
+    func retrieve(key: String) throws -> Data? { defaults.data(forKey: key) }
+    func remove(key: String) throws { defaults.removeObject(forKey: key) }
+}
+#endif
