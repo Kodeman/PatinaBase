@@ -590,4 +590,51 @@ describe('<FeatureAnnouncementCoachmark />', () => {
     const dismiss = screen.getByRole('button', { name: /dismiss announcement/i })
     await expect(user.click(dismiss)).resolves.not.toThrow()
   })
+
+  // ── 13. Persona threading (spec §7.3) ──────────────────────────────────────
+
+  it('threads the persona prop into the CMS content query', async () => {
+    mockFetch.mockResolvedValue(coachmarkFixture)
+    const { Wrapper } = makeWrapper()
+
+    render(
+      <Wrapper>
+        <FeatureAnnouncementCoachmark
+          featureKey={FEATURE_KEY}
+          surfaceKey={SURFACE_KEY}
+          persona="consumer"
+        >
+          <button>New action</button>
+        </FeatureAnnouncementCoachmark>
+      </Wrapper>,
+    )
+
+    await flushQueries()
+
+    // Step 1 of the fallback chain queries the exact persona first.
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ sk: SURFACE_KEY, ct: 'coachmark', p: 'consumer' }),
+    )
+  })
+
+  it('defaults the CMS content query persona to "all" when no persona is passed', async () => {
+    mockFetch.mockResolvedValue(coachmarkFixture)
+    const { Wrapper } = makeWrapper()
+
+    render(
+      <Wrapper>
+        <FeatureAnnouncementCoachmark featureKey={FEATURE_KEY} surfaceKey={SURFACE_KEY}>
+          <button>New action</button>
+        </FeatureAnnouncementCoachmark>
+      </Wrapper>,
+    )
+
+    await flushQueries()
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ sk: SURFACE_KEY, ct: 'coachmark', p: 'all' }),
+    )
+  })
 })

@@ -67,7 +67,7 @@ import * as Popover from '@radix-ui/react-popover'
 import { X } from 'lucide-react'
 import { useHelpContent } from '../../hooks/useHelpContent'
 import { SURFACE_KEY_REGEX } from '../../surfaceKeys'
-import type { HelpContent } from '../../contentTypes'
+import type { HelpContent, Persona } from '../../contentTypes'
 import {
   getFeatureAnnouncementState,
   setFeatureAnnouncementState,
@@ -104,6 +104,12 @@ export interface FeatureAnnouncementCoachmarkProps {
    * on the dismiss analytics event.
    */
   shippedAt?: string
+  /**
+   * Persona used to resolve persona-specific CMS copy via the §7.3 fallback
+   * chain. Mirrors the TourController prop of the same name. Defaults to
+   * 'all'.
+   */
+  persona?: Persona
   /**
    * Whether to render the pulse ring on the anchor. Defaults to true.
    * `prefers-reduced-motion: reduce` forces this to off regardless of the
@@ -208,6 +214,7 @@ export function FeatureAnnouncementCoachmark({
   children,
   anchorRef,
   shippedAt,
+  persona = 'all',
   pulse = true,
   onDismiss,
   fallbackTitle,
@@ -242,7 +249,7 @@ export function FeatureAnnouncementCoachmark({
   // site that needs to change.
   // TODO: switch to `'featureAnnouncement'` content type when added to
   // contentTypes.ts (heading + body + optional ctaLabel + shippedAt).
-  const { data, isLoading } = useHelpContent(surfaceKey, 'coachmark')
+  const { data, isLoading } = useHelpContent(surfaceKey, 'coachmark', persona)
 
   const cmsContent = useMemo(() => pickAnnouncementContent(data as HelpContent | null), [data])
   const heading = cmsContent?.heading ?? fallbackTitle ?? null
