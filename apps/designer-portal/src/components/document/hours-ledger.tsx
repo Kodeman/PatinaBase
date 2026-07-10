@@ -38,6 +38,7 @@ import { openInvoiceComposer } from './accounts/invoice-overlays';
 import type { OpenLedgerContext } from './command-bar';
 import { DocSheetHead } from './overlays/doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 
 // R96 — the registry is the single source of the surface icon (no drift).
 const HOURS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'hours')!.icon;
@@ -255,7 +256,7 @@ export function HoursLedger({
 
   return (
     <div className="mx-auto max-w-3xl">
-      <DocSheetHead icon={HOURS_ICON} title="Hours" />
+      <DocSheetHead icon={HOURS_ICON} title="Hours" helpKey={DOCUMENT_SURFACE_KEYS.hours} />
       <div className="mb-4 flex items-baseline justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
@@ -365,13 +366,27 @@ export function HoursLedger({
         </p>
       )}
 
-      {days.length === 0 && (
-        <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
-          {weekOffset === 0
-            ? 'Nothing logged this week — pick up a document and the time follows.'
-            : 'Nothing logged that week.'}
-        </p>
-      )}
+      {/* The zero-entries state (help-desk Wave 1, copy §E.3): nothing this
+          week AND no unbilled balance anywhere reads as "never logged" — the
+          teaching state. A designer with history keeps the quiet week lines. */}
+      {days.length === 0 &&
+        (weekOffset === 0 && unbilledMinutes === 0 ? (
+          <div className="py-4">
+            <p className="font-heading text-[15px] italic text-[var(--color-charcoal)]">
+              No hours logged yet
+            </p>
+            <p className="mt-1.5 max-w-[52ch] text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
+              Time logs itself while a document is in your hand; you can also add an entry by
+              hand. What you track here is what you draw onto an invoice later.
+            </p>
+          </div>
+        ) : (
+          <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
+            {weekOffset === 0
+              ? 'Nothing logged this week — pick up a document and the time follows.'
+              : 'Nothing logged that week.'}
+          </p>
+        ))}
 
       {days.map(([day, rows]) => (
         <section key={day} className="mb-4">

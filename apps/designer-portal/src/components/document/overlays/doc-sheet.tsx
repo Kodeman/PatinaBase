@@ -24,6 +24,40 @@
 
 import { useEffect, useRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { openHelp, type HelpOpenSource } from '@/lib/help-system/open-help';
+
+/**
+ * The `?` doorway (help-desk Wave 1) — the reactive-help glyph: a quiet
+ * DM-mono question mark in aged-oak, no circle, no border, hover → charcoal.
+ * Clicking opens the ContextualHelpPanel scoped to `helpKey` via
+ * `openHelp({ source, surfaceKey })`. Exported so the ledger front-matter and
+ * the court bar render the exact same doorway without re-deriving its idiom.
+ */
+export function HelpGlyph({
+  helpKey,
+  source,
+  label = 'About this sheet',
+  className,
+}: {
+  /** The help surface key this doorway scopes the panel to — always a
+   *  DOCUMENT_SURFACE_KEYS constant, never a string literal. */
+  helpKey: string;
+  source: HelpOpenSource;
+  /** Accessible name; defaults to the sheet-head idiom. */
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={() => openHelp({ source, surfaceKey: helpKey })}
+      className={`shrink-0 rounded-[3px] px-1 font-mono text-[11px] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)] ${className ?? ''}`}
+    >
+      ?
+    </button>
+  );
+}
 
 /**
  * The standard sheet head (R96) — a quiet folio strip: the surface's registry
@@ -31,18 +65,23 @@ import type { LucideIcon } from 'lucide-react';
  * hint. Exported so ledgers wrapped by the Studio Drawer (which owns their
  * DocSheet frame and can't reach these props) can render the same head inline,
  * where their live page label lives. Zero shadow (D4); the pearl rule is the
- * only edge.
+ * only edge. An optional `helpKey` renders the {@link HelpGlyph} doorway
+ * beside the put-back hint (help-desk Wave 1).
  */
 export function DocSheetHead({
   icon: Icon,
   title,
   pageLabel,
   onClose,
+  helpKey,
 }: {
   icon: LucideIcon;
   title: string;
   pageLabel?: string;
   onClose?: () => void;
+  /** When set, the head carries the `?` doorway → openHelp({ source:
+   *  'sheet-head', surfaceKey: helpKey }). */
+  helpKey?: string;
 }) {
   return (
     <div className="mb-5 flex items-center justify-between gap-4 border-b border-[var(--color-pearl)] pb-3">
@@ -59,22 +98,25 @@ export function DocSheetHead({
           ) : null}
         </span>
       </span>
-      {onClose ? (
-        <button
-          type="button"
-          onClick={onClose}
-          className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
-        >
-          Put back · Esc
-        </button>
-      ) : (
-        <span
-          aria-hidden
-          className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
-        >
-          Put back · Esc
-        </span>
-      )}
+      <span className="flex shrink-0 items-center gap-2.5">
+        {helpKey ? <HelpGlyph helpKey={helpKey} source="sheet-head" /> : null}
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
+          >
+            Put back · Esc
+          </button>
+        ) : (
+          <span
+            aria-hidden
+            className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]"
+          >
+            Put back · Esc
+          </span>
+        )}
+      </span>
     </div>
   );
 }
@@ -87,6 +129,7 @@ export function DocSheet({
   wide = false,
   icon,
   pageLabel,
+  helpKey,
 }: {
   open: boolean;
   onClose: () => void;
@@ -102,6 +145,8 @@ export function DocSheet({
   icon?: LucideIcon;
   /** The optional " · PAGE" segment for the standard head. */
   pageLabel?: string;
+  /** Forwarded to the standard head's `?` doorway (help-desk Wave 1). */
+  helpKey?: string;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
@@ -155,7 +200,13 @@ export function DocSheet({
         } max-h-[82vh] overflow-y-auto rounded-[5px] border border-[var(--color-rule-strong,#D8CCB8)] bg-[var(--doc-paper,#FAF7F2)] px-6 pb-8 pt-6 outline-none motion-safe:animate-[doc-fade_200ms_ease-out] sm:px-9`}
       >
         {icon ? (
-          <DocSheetHead icon={icon} title={title} pageLabel={pageLabel} onClose={onClose} />
+          <DocSheetHead
+            icon={icon}
+            title={title}
+            pageLabel={pageLabel}
+            onClose={onClose}
+            helpKey={helpKey}
+          />
         ) : null}
         {children}
       </div>

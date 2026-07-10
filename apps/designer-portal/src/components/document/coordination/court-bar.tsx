@@ -21,6 +21,8 @@
 import type { Court, CourtCount } from '@patina/supabase';
 import { isHotCourt } from '@/lib/document/coordination-derivation';
 import { courtToken } from './party';
+import { HelpGlyph } from '../overlays/doc-sheet';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 
 // ── court-bar.tsx — the ball-in-court summary pills + "+ New open item" ──
 export interface CourtBarProps {
@@ -74,10 +76,18 @@ export function CourtBar({ summary, onNewItem, onJumpCourt }: CourtBarProps) {
         );
       })}
 
+      {/* help-desk Wave 1 — the coordination `?` doorway: courts, the
+          dependency web, and what "waiting on" sets in motion. */}
+      <HelpGlyph
+        helpKey={DOCUMENT_SURFACE_KEYS.coordination}
+        source="court-bar"
+        label="About coordination"
+        className="ml-auto"
+      />
       <button
         type="button"
         onClick={onNewItem}
-        className="ml-auto rounded-[6px] border-0 bg-[var(--color-charcoal)] px-3.5 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] transition-opacity hover:opacity-90"
+        className="rounded-[6px] border-0 bg-[var(--color-charcoal)] px-3.5 py-2 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] transition-opacity hover:opacity-90"
       >
         + New open item
       </button>

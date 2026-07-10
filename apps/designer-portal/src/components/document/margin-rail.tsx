@@ -23,6 +23,7 @@ import { partitionMargin, type MarginItemRow } from '@/lib/document/margin-deriv
 import { todayYmd } from '@/lib/document/format';
 import { MarginItem } from './margin-item';
 import { MarginItemBody } from './margin-bodies';
+import { MarginNote } from './margin-note';
 import { DocSheet } from './overlays/doc-sheet';
 import {
   ItemComposer,
@@ -159,6 +160,16 @@ export function MarginRail({
 
   return (
     <>
+      {/* R94 — the document's one first-touch note (help-desk Wave 1, copy
+          §E.2): what the margin is, and the Esc/timer contract. Projects only
+          (the timer claim is only true with a project in hand); the primitive
+          owns once-only + recede. */}
+      {projectId && (
+        <MarginNote noteKey="doc-first-touch" className="mb-5">
+          The margin on the right is where decisions and money gather. Esc puts the document
+          down — and the hours log themselves while it&apos;s in your hand.
+        </MarginNote>
+      )}
       <div className="mb-3 flex items-baseline justify-between">
         <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
           In the margin

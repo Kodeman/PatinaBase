@@ -39,6 +39,8 @@ import {
 } from '@patina/supabase';
 import { DocSheet } from './doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
+import { useSheetSurfaceKey } from '@/lib/help-system/use-sheet-surface-key';
 import {
   inboxRecordItem,
   procurementRecordItem,
@@ -84,6 +86,11 @@ export function PostSheet() {
   const markProcurementRead = useMarkProcurementNotificationRead();
   const { data: messages = [], isLoading: loadingLetters } = useInboxMessages(50);
   const loadingRecord = loadingInbox || loadingProcurement;
+
+  // help-desk Wave 1 — the Post owns its own open state (unlike the drawer's
+  // ledgers), so it declares its help surface key itself while open; closing
+  // restores the surface underneath.
+  useSheetSurfaceKey(open ? 'the-post' : null);
 
   useEffect(() => {
     const onOpen = () => {
@@ -205,6 +212,7 @@ export function PostSheet() {
       title="The Post"
       icon={POST_ICON}
       pageLabel={page === 'record' ? 'The Record' : 'Letters'}
+      helpKey={DOCUMENT_SURFACE_KEYS.thePost}
     >
       <div className="mx-auto max-w-xl">
         {/* Mark all read rides quietly under the head; the page links follow. */}
