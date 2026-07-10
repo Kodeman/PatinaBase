@@ -219,9 +219,7 @@ enum RouteFormat {
     }
 
     static func time(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
+        CaptureDates.time(date)
     }
 
     static func displayPrice(_ cents: Int?) -> String? {

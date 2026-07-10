@@ -129,7 +129,7 @@ struct DecisionListScreen: View {
                             .foregroundStyle(CaptureColor.inkSoft)
                     }
                     if let sentAt = decision.sentAt {
-                        Text("Sent \(Self.dateFormatter.string(from: sentAt))")
+                        Text("Sent \(CaptureDates.shortDate(sentAt))")
                             .font(CaptureType.monoSmall)
                             .foregroundStyle(CaptureColor.inkSoft)
                     }
@@ -226,11 +226,6 @@ struct DecisionListScreen: View {
         .background(CaptureColor.error.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return formatter
-    }()
 }
 
 #if DEBUG

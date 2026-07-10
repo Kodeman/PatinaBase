@@ -76,10 +76,7 @@ final class SiteScanSetupModel {
     }
 
     nonisolated static func defaultName() -> String {
-        let df = DateFormatter()
-        df.dateStyle = .medium
-        df.timeStyle = .none
-        return "Site scan \(df.string(from: Date()))"
+        "Site scan \(CaptureDates.mediumDate(Date()))"
     }
 }
 

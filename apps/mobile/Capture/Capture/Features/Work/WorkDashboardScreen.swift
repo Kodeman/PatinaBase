@@ -121,9 +121,7 @@ struct WorkDashboardScreen: View {
     }
 
     private var todayLabel: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMMM d"
-        return formatter.string(from: Date())
+        CaptureDates.dayHeading(Date())
     }
 
     // MARK: Sections
@@ -438,16 +436,11 @@ struct WorkDashboardScreen: View {
     // MARK: Formatting
 
     private static func relativeAge(_ date: Date?) -> String {
-        guard let date else { return "—" }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        CaptureDates.relativeAge(date)
     }
 
     private static func shortTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = Calendar.current.isDateInToday(date) ? "h:mm a" : "MMM d"
-        return formatter.string(from: date)
+        CaptureDates.timeOrShortDate(date)
     }
 }
 

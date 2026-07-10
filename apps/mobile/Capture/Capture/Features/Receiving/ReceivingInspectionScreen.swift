@@ -120,7 +120,7 @@ struct ReceivingInspectionScreen: View {
                     .foregroundStyle(CaptureColor.inkSoft)
             }
             if let eta = summary.eta {
-                Text("ETA \(eta.formatted(date: .abbreviated, time: .omitted))")
+                Text("ETA \(CaptureDates.mediumDate(eta))")
                     .font(CaptureType.monoSmall)
                     .foregroundStyle(CaptureColor.inkSoft)
             }

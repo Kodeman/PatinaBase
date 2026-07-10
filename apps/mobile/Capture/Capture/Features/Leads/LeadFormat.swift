@@ -66,9 +66,7 @@ enum LeadFormat {
 
     static func receivedDate(_ date: Date?) -> String? {
         guard let date else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, yyyy"
-        return formatter.string(from: date)
+        return CaptureDates.mediumDate(date)
     }
 
     // MARK: - Status chip (L1 source chip uses brass directly; this is the L2

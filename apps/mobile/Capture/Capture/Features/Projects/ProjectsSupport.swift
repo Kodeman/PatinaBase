@@ -76,7 +76,7 @@ enum ProjectsFormat {
 
     static func shortDate(_ date: Date?) -> String {
         guard let date else { return "—" }
-        return date.formatted(date: .abbreviated, time: .omitted)
+        return CaptureDates.mediumDate(date)
     }
 }
 

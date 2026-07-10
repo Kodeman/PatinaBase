@@ -229,12 +229,12 @@ struct DecisionDetailScreen: View {
         VStack(alignment: .leading, spacing: 4) {
             Divider().background(CaptureColor.line).padding(.vertical, 4)
             if let sentAt = decision.sentAt {
-                Text("Sent \(Self.dateFormatter.string(from: sentAt))")
+                Text("Sent \(CaptureDates.shortDate(sentAt))")
                     .font(CaptureType.monoSmall)
                     .foregroundStyle(CaptureColor.inkSoft)
             }
             if let viewedAt = decision.viewedAt {
-                Text("Viewed \(Self.dateFormatter.string(from: viewedAt))")
+                Text("Viewed \(CaptureDates.shortDate(viewedAt))")
                     .font(CaptureType.monoSmall)
                     .foregroundStyle(CaptureColor.success)
             } else {
@@ -283,11 +283,6 @@ struct DecisionDetailScreen: View {
         .background(CaptureColor.error.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return formatter
-    }()
 }
 
 #if DEBUG

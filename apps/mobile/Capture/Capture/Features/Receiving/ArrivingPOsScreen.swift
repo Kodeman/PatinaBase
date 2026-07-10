@@ -120,7 +120,7 @@ struct ArrivingPOsScreen: View {
                         .foregroundStyle(CaptureColor.inkSoft)
                 }
                 if let eta = po.eta {
-                    Text("ETA \(eta.formatted(date: .abbreviated, time: .omitted))")
+                    Text("ETA \(CaptureDates.mediumDate(eta))")
                         .font(CaptureType.monoSmall)
                         .foregroundStyle(CaptureColor.inkSoft)
                 }
