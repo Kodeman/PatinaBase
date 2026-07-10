@@ -132,16 +132,7 @@ final class ThreadListViewModel {
             preview = "No messages yet"
         }
 
-        // Unread: latest message is from someone else and is newer than
-        // my own participant row's last_read_at (mirrors
-        // rpc_unread_summary's predicate).
-        var isUnread = false
-        if let latest, latest.sender_id?.lowercased() != me,
-           let messageDate = CommsDates.parse(latest.created_at) {
-            let myRow = summary.activeParticipants.first { $0.profile_id.lowercased() == me }
-            let lastRead = CommsDates.parse(myRow?.last_read_at) ?? .distantPast
-            isUnread = messageDate > lastRead
-        }
+        let isUnread = Self.isUnread(summary, me: me)
 
         let lastDate = CommsDates.parse(summary.last_message_at)
             ?? CommsDates.parse(latest?.created_at)
@@ -154,6 +145,21 @@ final class ThreadListViewModel {
             isUnread: isUnread,
             accessibilityLabel: axLabel(title: title, preview: preview, date: lastDate, isUnread: isUnread)
         )
+    }
+
+    /// Unread predicate: the latest message is from someone else and is
+    /// newer than my own participant row's `last_read_at` (mirrors
+    /// `rpc_unread_summary`'s predicate). Internal so `BadgeCountService`
+    /// counts unread threads with the exact same rule as this inbox.
+    static func isUnread(_ summary: RemoteCommsThreadSummary, me: String?) -> Bool {
+        guard let latest = summary.latestMessage,
+              latest.sender_id?.lowercased() != me,
+              let messageDate = CommsDates.parse(latest.created_at) else {
+            return false
+        }
+        let myRow = summary.activeParticipants.first { $0.profile_id.lowercased() == me }
+        let lastRead = CommsDates.parse(myRow?.last_read_at) ?? .distantPast
+        return messageDate > lastRead
     }
 
     private static func counterpart(
@@ -181,7 +187,9 @@ final class ThreadListViewModel {
         return parts.joined(separator: ", ")
     }
 
-    private static func currentUserId() -> String? {
+    /// Lowercased profile id of the signed-in user. Internal so
+    /// `BadgeCountService` resolves "me" the same way this inbox does.
+    static func currentUserId() -> String? {
         try? SupabaseClientManager.shared.client.auth.currentUser?.id.uuidString.lowercased()
     }
 }

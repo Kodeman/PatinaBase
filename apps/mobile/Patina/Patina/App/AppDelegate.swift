@@ -112,6 +112,11 @@ extension PatinaAppDelegate: UNUserNotificationCenterDelegate {
     ) {
         let userInfo = response.notification.request.content.userInfo
         handleNotificationPayload(userInfo, source: "tap")
+        // C.1 / R29: a tapped push usually means new studio activity —
+        // re-poll the Studio-rail badge counts.
+        Task { @MainActor in
+            BadgeCountService.shared.refreshSoon()
+        }
         completionHandler()
     }
 
@@ -124,6 +129,11 @@ extension PatinaAppDelegate: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        // C.1 / R29: a foreground push is the other half of the badge
+        // polling floor — refresh the Studio-rail counts on receipt.
+        Task { @MainActor in
+            BadgeCountService.shared.refreshSoon()
+        }
         completionHandler([.banner, .list, .sound, .badge])
     }
 }
