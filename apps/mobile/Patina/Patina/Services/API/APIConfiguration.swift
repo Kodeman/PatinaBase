@@ -21,17 +21,23 @@ public enum DeploymentTarget {
     /// Local development
     case local
 
-    /// Current deployment target
+    /// Current deployment target.
+    ///
+    /// The self-hosted Coolify box is RETIRED, so the default is now
+    /// `.cloud` (Supabase Cloud "Strata"). A UserDefaults / launch-argument
+    /// override repoints at runtime — pass `-DeploymentTarget local` to run
+    /// against the local Supabase CLI stack, or `selfHosted` only for legacy
+    /// diagnostics. An unknown override value falls back to `.cloud` so a
+    /// typo can never silently target the dead box.
     public static var current: DeploymentTarget {
-        // Check for override in UserDefaults for testing
         if let override = UserDefaults.standard.string(forKey: "DeploymentTarget") {
             switch override {
-            case "cloud": return .cloud
             case "local": return .local
-            default: return .selfHosted
+            case "selfHosted": return .selfHosted
+            default: return .cloud
             }
         }
-        return .selfHosted
+        return .cloud
     }
 }
 
@@ -46,11 +52,17 @@ public enum APIConfiguration {
     public static var apiURL: URL {
         switch DeploymentTarget.current {
         case .cloud:
-            return AppConfiguration.supabaseURL
+            // Supabase Cloud "Strata" (project ref bkvcixdmuyejfzcijpdg). A
+            // URL is not a secret — only the anon key (see `anonKey`) is
+            // sourced from the gitignored Secrets.swift. This is the literal
+            // that breaks the old AppConfiguration ↔ APIConfiguration cycle.
+            return URL(string: "https://bkvcixdmuyejfzcijpdg.supabase.co")!
         case .selfHosted:
             return URL(string: "https://api.patina.cloud")!
         case .local:
-            return URL(string: "http://localhost:8000")!
+            // Local Supabase CLI stack (Kong/PostgREST on 54321), NOT the
+            // old self-hosted docker Kong (:8000).
+            return URL(string: "http://127.0.0.1:54321")!
         }
     }
 
@@ -136,7 +148,10 @@ public enum APIConfiguration {
     public static var anonKey: String {
         switch DeploymentTarget.current {
         case .cloud:
-            return AppConfiguration.supabaseAnonKey
+            // Strata anon key from the gitignored Secrets.swift. Read
+            // directly (not via AppConfiguration.supabaseAnonKey) so the
+            // AppConfiguration ↔ APIConfiguration resolution can't cycle.
+            return Secrets.supabaseAnonKey
         case .selfHosted:
             return ProcessInfo.processInfo.environment["SUPABASE_ANON_KEY"] ?? AppConfiguration.supabaseAnonKey
         case .local:

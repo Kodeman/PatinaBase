@@ -22,8 +22,12 @@ struct ProjectDetailView: View {
                     // R23: lead with substance — budget, dates, visibility —
                     // before any section can render as an empty placeholder.
                     overviewCard(project)
+                    if let proposalId = viewModel.linkedProposalId {
+                        ProjectProposalLink(proposalId: proposalId)
+                    }
                     if !viewModel.phases.isEmpty { phasesSection }
                     if !viewModel.milestones.isEmpty { milestonesSection }
+                    if viewModel.hasInvoices { ProjectInvoicesLink() }
                     if !viewModel.ffe.isEmpty { ffeSection }
                     // R23: empty sections collapse into one quiet portal hint
                     // instead of stacked "No X yet" rows.
@@ -331,6 +335,87 @@ struct ProjectDetailView: View {
         parser.locale = Locale(identifier: "en_US_POSIX")
         guard let date = parser.date(from: String(raw.prefix(10))) else { return raw }
         return date.formatted(date: .abbreviated, time: .omitted)
+    }
+}
+
+// MARK: - Proposal link (Wave 2 / D.1)
+
+/// A real push to the signed proposal this project activated from. Extracted
+/// as its own view so ProjectDetailView stays under the type-body ceiling.
+private struct ProjectProposalLink: View {
+    let proposalId: String
+    @Environment(\.appCoordinator) private var coordinator
+
+    var body: some View {
+        Button {
+            coordinator.navigate(to: .proposalDetail(proposalId: proposalId))
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "doc.text")
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(PatinaColors.Text.interactive)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Proposal")
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                    Text("View the signed proposal")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(PatinaColors.Text.muted)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PatinaColors.Background.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 24)
+        .accessibilityIdentifier("projectDetail.proposalLink")
+    }
+}
+
+// MARK: - Invoices link (Wave 2 / D.2)
+
+/// A push to the client's invoices where this project has any. Extracted as
+/// its own view so ProjectDetailView stays under the type-body ceiling.
+private struct ProjectInvoicesLink: View {
+    @Environment(\.appCoordinator) private var coordinator
+
+    var body: some View {
+        Button {
+            coordinator.navigate(to: .invoiceList)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "creditcard")
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(PatinaColors.Text.interactive)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Invoices")
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                    Text("View and pay your invoices")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(PatinaColors.Text.muted)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PatinaColors.Background.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 24)
+        .accessibilityIdentifier("projectDetail.invoicesLink")
     }
 }
 

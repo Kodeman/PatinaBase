@@ -36,6 +36,14 @@ final class BadgeCountService {
     /// Comms threads with an unread counterpart message.
     private(set) var unreadMessageCount: Int = 0
 
+    /// Proposals still awaiting the client's signature (sent/viewed, not
+    /// expired). Wave 2 / D.1 money rail.
+    private(set) var proposalsAwaitingSignatureCount: Int = 0
+
+    /// Invoices the client can pay (sent/partially_paid, positive balance).
+    /// Wave 2 / D.2 money rail.
+    private(set) var payableInvoiceCount: Int = 0
+
     /// True once a refresh has completed for an authenticated session.
     /// Guests never load — the rail renders invitations, not counts.
     private(set) var hasLoaded: Bool = false
@@ -51,13 +59,19 @@ final class BadgeCountService {
         guard AuthService.shared.isAuthenticated else {
             pendingDecisionCount = 0
             unreadMessageCount = 0
+            proposalsAwaitingSignatureCount = 0
+            payableInvoiceCount = 0
             hasLoaded = false
             return
         }
 
         async let decisionsFetch = try? DecisionsAPIClient.shared.listPending()
         async let summariesFetch = try? MessagingAPIClient.shared.listThreadSummaries()
-        let (decisions, summaries) = await (decisionsFetch, summariesFetch)
+        async let proposalsFetch = try? ProposalsAPIClient.shared.listProposals()
+        async let invoicesFetch = try? InvoicesAPIClient.shared.listInvoices()
+        let (decisions, summaries, proposals, invoices) = await (
+            decisionsFetch, summariesFetch, proposalsFetch, invoicesFetch
+        )
 
         if let decisions {
             pendingDecisionCount = decisions.count
@@ -68,7 +82,13 @@ final class BadgeCountService {
                 .filter { ThreadListViewModel.isUnread($0, me: me) }
                 .count
         }
-        if decisions != nil || summaries != nil {
+        if let proposals {
+            proposalsAwaitingSignatureCount = proposals.filter { $0.isSignable }.count
+        }
+        if let invoices {
+            payableInvoiceCount = invoices.filter { $0.isPayable }.count
+        }
+        if decisions != nil || summaries != nil || proposals != nil || invoices != nil {
             hasLoaded = true
         }
     }

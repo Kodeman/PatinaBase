@@ -277,6 +277,22 @@ struct ContentView: View {
         case .threadDetail(let threadId):
             ThreadDetailView(threadId: threadId)
                 .toolbarTitleDisplayMode(.inline)
+
+        case .proposalList:
+            ProposalListView()
+                .toolbar(.hidden, for: .navigationBar)
+
+        case .proposalDetail(let proposalId):
+            ProposalDetailView(proposalId: proposalId)
+                .toolbar(.hidden, for: .navigationBar)
+
+        case .invoiceList:
+            InvoiceListView()
+                .toolbar(.hidden, for: .navigationBar)
+
+        case .invoiceDetail(let invoiceId):
+            InvoiceDetailView(invoiceId: invoiceId)
+                .toolbar(.hidden, for: .navigationBar)
         }
     }
 }

@@ -28,14 +28,19 @@ public enum AppConfiguration {
     // MARK: - API Configuration
 
     public static var supabaseURL: URL {
-        // Self-hosted Supabase on Coolify
-        URL(string: "https://api.patina.cloud")!
+        // Resolved per deployment target by APIConfiguration. The default
+        // target is `.cloud` = Supabase Cloud "Strata"; the retired
+        // self-hosted Coolify box (api.patina.cloud) is no longer the
+        // default and nothing points at it unless a UserDefaults override
+        // forces `.selfHosted`.
+        APIConfiguration.apiURL
     }
 
     public static var supabaseAnonKey: String {
-        // In production, this should come from a secure configuration
-        // For now, using the anon key which is safe to expose
-        Secrets.supabaseAnonKey
+        // Resolved per deployment target by APIConfiguration. The cloud /
+        // self-hosted anon key comes from the gitignored Secrets.swift;
+        // the local CLI-stack key is a well-known constant. Safe to expose.
+        APIConfiguration.anonKey
     }
 
     // MARK: - Feature Flags

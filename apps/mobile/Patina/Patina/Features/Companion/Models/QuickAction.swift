@@ -133,7 +133,9 @@ public enum QuickActionFactory {
             return []
         case .projectList, .projectDetail,
              .decisionList, .decisionDetail,
-             .threadList, .threadDetail:
+             .threadList, .threadDetail,
+             .proposalList, .proposalDetail,
+             .invoiceList, .invoiceDetail:
             // Client project surfaces have their own navigation — keep the Companion quiet.
             return []
         }

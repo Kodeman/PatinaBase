@@ -208,6 +208,10 @@ public final class CompanionViewModel {
         case .decisionDetail: return "decision_detail"
         case .threadList: return "thread_list"
         case .threadDetail: return "thread_detail"
+        case .proposalList: return "proposal_list"
+        case .proposalDetail: return "proposal_detail"
+        case .invoiceList: return "invoice_list"
+        case .invoiceDetail: return "invoice_detail"
         }
     }
 

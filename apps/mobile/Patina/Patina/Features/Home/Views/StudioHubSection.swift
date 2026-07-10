@@ -66,6 +66,28 @@ struct StudioHubSection: View {
                 ))
                 hairline
                 row(StudioRow(
+                    title: "Proposals",
+                    meta: badges.proposalsAwaitingSignatureCount > 0
+                        ? "\(badges.proposalsAwaitingSignatureCount) awaiting your signature"
+                        : "Nothing to review",
+                    guestMeta: "Sign in to review proposals",
+                    badge: badges.proposalsAwaitingSignatureCount,
+                    route: .proposalList,
+                    hint: "Opens your proposals."
+                ))
+                hairline
+                row(StudioRow(
+                    title: "Invoices",
+                    meta: badges.payableInvoiceCount > 0
+                        ? "\(badges.payableInvoiceCount) to pay"
+                        : "Nothing due",
+                    guestMeta: "Sign in to view invoices",
+                    badge: badges.payableInvoiceCount,
+                    route: .invoiceList,
+                    hint: "Opens your invoices."
+                ))
+                hairline
+                row(StudioRow(
                     title: "Messages",
                     meta: badges.unreadMessageCount > 0
                         ? "\(badges.unreadMessageCount) unread"

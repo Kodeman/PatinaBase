@@ -89,6 +89,14 @@ public enum AppRoute: Hashable {
     case threadList                                   // messaging inbox
     case threadDetail(threadId: String)               // messaging conversation
 
+    // Wave 2 — money rail: proposals + e-sign (D.1)
+    case proposalList                                 // client: list of proposals
+    case proposalDetail(proposalId: String)           // client: proposal detail + sign
+
+    // Wave 2 — money rail: invoices + pay (D.2)
+    case invoiceList                                  // client: list of invoices
+    case invoiceDetail(invoiceId: String)             // client: invoice detail + pay
+
     /// Display name for the route. Used for debugging / companion context.
     ///
     /// NOTE (PT-3-5): the PostHog *screen name* for the scan flow is the
@@ -124,6 +132,10 @@ public enum AppRoute: Hashable {
         case .decisionDetail: return "Decision"
         case .threadList: return "Messages"
         case .threadDetail: return "Conversation"
+        case .proposalList: return "Proposals"
+        case .proposalDetail: return "Proposal"
+        case .invoiceList: return "Invoices"
+        case .invoiceDetail: return "Invoice"
         }
     }
 }
