@@ -49,9 +49,17 @@ export function AccountsLedgerPage({
       </div>
 
       {invoices.length === 0 ? (
-        <p className="py-5 font-heading text-[13px] italic text-[var(--color-aged-oak)]">
-          No invoices yet — the book opens when the first one is drawn.
-        </p>
+        /* The zero-invoice state (help-desk Wave 1, copy §E.3) — the old
+           one-liner grown a teaching line; still quiet, no chrome. */
+        <div className="py-5">
+          <p className="font-heading text-[15px] italic text-[var(--color-charcoal)]">
+            No invoices drawn yet
+          </p>
+          <p className="mt-1.5 max-w-[52ch] text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
+            Draw from a milestone, tracked time, FF&amp;E, or an ad-hoc line and it appears
+            here. Your client pays in their portal; paid and overdue both show here.
+          </p>
+        </div>
       ) : (
         <InvoiceRows invoices={invoices} onOpenDocument={onOpenDocument} />
       )}

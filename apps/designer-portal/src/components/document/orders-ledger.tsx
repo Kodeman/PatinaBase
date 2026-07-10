@@ -30,6 +30,7 @@ import { ReceivingBookPage } from './orders-book-receiving';
 import type { OpenLedgerContext } from './command-bar';
 import { DocSheetHead } from './overlays/doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 
 type BookPage = 'ledger' | 'week' | 'receiving' | 'vendors';
 
@@ -42,6 +43,15 @@ const PAGES: { key: BookPage; label: string }[] = [
   { key: 'receiving', label: 'Receiving' },
   { key: 'vendors', label: 'Vendors' },
 ];
+
+// help-desk Wave 1 — the head's `?` doorway scopes to the OPEN page: the
+// sub-keys exist for Week/Receiving/Vendors, the base key covers the Ledger.
+const HELP_KEY_BY_PAGE: Record<BookPage, string> = {
+  ledger: DOCUMENT_SURFACE_KEYS.orders,
+  week: DOCUMENT_SURFACE_KEYS.ordersWeek,
+  receiving: DOCUMENT_SURFACE_KEYS.ordersReceiving,
+  vendors: DOCUMENT_SURFACE_KEYS.ordersVendors,
+};
 
 interface POForThroughput {
   status: string;
@@ -216,6 +226,7 @@ export function OrdersLedger({
         title="Orders"
         pageLabel={PAGES.find((p) => p.key === page)?.label}
         onClose={onClose}
+        helpKey={HELP_KEY_BY_PAGE[page]}
       />
       <div className="mb-3">
         <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
@@ -320,6 +331,19 @@ export function OrdersLedger({
             <p className="py-2 text-[11px] italic text-[var(--color-aged-oak)]">
               Nothing under this lens.
             </p>
+          )}
+          {/* The zero-PO state (help-desk Wave 1, copy §E.3) — the page was
+              blank here before; a quiet heading + teaching line, no chrome. */}
+          {!isLoading && live.length === 0 && (
+            <div className="py-6">
+              <p className="font-heading text-[15px] italic text-[var(--color-charcoal)]">
+                No purchase orders yet
+              </p>
+              <p className="mt-1.5 max-w-[52ch] text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
+                When you order what a proposal specifies, each PO lands here and tracks itself
+                from production to your door. Draw the first from a project&apos;s schedule.
+              </p>
+            </div>
           )}
           {groups.map((g) => (
             <section key={g.vendorId} className="mb-4">

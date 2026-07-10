@@ -34,6 +34,7 @@ import { AccountsReceivablesPage } from './accounts-receivables-page';
 import { AccountsEarningsPage } from './accounts-earnings-page';
 import { DocSheetHead } from '../overlays/doc-sheet';
 import { STUDIO_LEDGERS } from '@/lib/document/registry';
+import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 
 // R96 — the registry is the single source of the surface icon (no drift).
 const ACCOUNTS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'accounts')!.icon;
@@ -107,6 +108,7 @@ export function AccountsBook({
         title="Accounts"
         pageLabel={PAGES.find((p) => p.key === page)?.label}
         onClose={onClose}
+        helpKey={DOCUMENT_SURFACE_KEYS.accounts}
       />
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <div>

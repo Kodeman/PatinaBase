@@ -125,8 +125,14 @@ const wayfinding = {
   roomEntered: (props: { key: string; source: WayfindingSource }) =>
     track('document_wayfinding_room_entered', props),
 
-  /** Help was opened for a surface, and from where. */
-  helpOpened: (props: { surface_key: string; source: string }) => track('document_help_opened', props),
+  /** Help was opened for a surface, and from where — 'palette' (⌘K's Help…
+   *  row) plus the help-desk Wave 1 `?` doorways. Mirrors HelpOpenSource in
+   *  lib/help-system/open-help.ts (kept inline so analytics stays import-free
+   *  of feature modules). */
+  helpOpened: (props: {
+    surface_key: string;
+    source: 'palette' | 'sheet-head' | 'front-matter' | 'court-bar';
+  }) => track('document_help_opened', props),
 
   /** A margin note's lifecycle (R94 — notes recede permanently on use). */
   marginNote: (props: { key: string; action: 'shown' | 'dismissed' | 'acted' }) =>

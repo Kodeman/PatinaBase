@@ -23,6 +23,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import { useUnreadInboxCount, useProcurementUnreadCount } from '@patina/supabase';
 import { ALL_STUDIO_SURFACES } from '@/lib/document/registry';
+import { useSheetSurfaceKey } from '@/lib/help-system/use-sheet-surface-key';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { DocSheet } from './overlays/doc-sheet';
 import { PostSheet, openPost } from './overlays/post-sheet';
@@ -116,6 +117,11 @@ export function StudioDrawer() {
   const breadcrumb = breadcrumbFor(pathname);
   const holding = (pathname ?? '').startsWith('/doc/');
 
+  // help-desk Wave 1 — an open ledger sheet scopes the contextual help panel
+  // to its own surface key (sheets never change the pathname); close restores
+  // the surface underneath. Non-ledger sheets (feedback) restore too.
+  useSheetSurfaceKey(openLedger);
+
   /** Walk into a Room: stash the surface we're leaving, then navigate. The
    *  prior document unmounts and puts itself down (timer chains out). A no-op
    *  when we're already in that Room (no redundant push / remount / refetch).
@@ -164,6 +170,7 @@ export function StudioDrawer() {
       {/* The unified mobile bar (D13) replaces this nav below 980px. */}
       <nav
         aria-label="Studio drawer"
+        data-tour-anchor="studio-drawer"
         className="fixed inset-x-0 bottom-0 z-40 hidden h-[60px] grid-cols-[1fr_auto_1fr] items-center gap-4 border-t border-[var(--border-default)] bg-[var(--bg-surface)] px-[22px] min-[980px]:grid"
       >
         {/* Left — the studio wordmark (home) + a quiet breadcrumb. */}
