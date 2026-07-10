@@ -327,7 +327,7 @@ export function OrdersLedger({
               ))}
             </div>
           )}
-          {!isLoading && groups.length === 0 && (projectLens || paymentLens) && (
+          {!isLoading && live.length > 0 && groups.length === 0 && (projectLens || paymentLens) && (
             <p className="py-2 text-[11px] italic text-[var(--color-aged-oak)]">
               Nothing under this lens.
             </p>
