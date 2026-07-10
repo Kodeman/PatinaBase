@@ -22,7 +22,6 @@ describe('documentPathnameToSurfaceKey', () => {
     expect(documentPathnameToSurfaceKey('/desk')).toBe(DOCUMENT_SURFACE_KEYS.desk);
     expect(documentPathnameToSurfaceKey('/doc/abc-123')).toBe(DOCUMENT_SURFACE_KEYS.doc);
     expect(documentPathnameToSurfaceKey('/library')).toBe(DOCUMENT_SURFACE_KEYS.library);
-    expect(documentPathnameToSurfaceKey('/library/piece-42')).toBe(DOCUMENT_SURFACE_KEYS.library);
     expect(documentPathnameToSurfaceKey('/people')).toBe(DOCUMENT_SURFACE_KEYS.people);
     expect(documentPathnameToSurfaceKey('/drafting/prop-9')).toBe(DOCUMENT_SURFACE_KEYS.drafting);
     expect(documentPathnameToSurfaceKey('/compose')).toBe(DOCUMENT_SURFACE_KEYS.compose);
@@ -34,6 +33,15 @@ describe('documentPathnameToSurfaceKey', () => {
     expect(documentPathnameToSurfaceKey('/desk/')).toBe(DOCUMENT_SURFACE_KEYS.desk);
     expect(documentPathnameToSurfaceKey('/library?q=chair')).toBe(DOCUMENT_SURFACE_KEYS.library);
     expect(documentPathnameToSurfaceKey('/people#thread')).toBe(DOCUMENT_SURFACE_KEYS.people);
+  });
+
+  it('resolves /library/[id] (the Piece) to its own surface — bare /library stays library', () => {
+    expect(documentPathnameToSurfaceKey('/library/abc-123')).toBe(DOCUMENT_SURFACE_KEYS.libraryPiece);
+    // Deeper segments and query/hash still collapse to the Piece surface.
+    expect(documentPathnameToSurfaceKey('/library/abc-123/edit')).toBe(DOCUMENT_SURFACE_KEYS.libraryPiece);
+    expect(documentPathnameToSurfaceKey('/library/abc-123?tab=specs')).toBe(DOCUMENT_SURFACE_KEYS.libraryPiece);
+    // Trailing slash is NOT an id.
+    expect(documentPathnameToSurfaceKey('/library/')).toBe(DOCUMENT_SURFACE_KEYS.library);
   });
 
   it('falls back to the Document root for unknown / empty paths', () => {

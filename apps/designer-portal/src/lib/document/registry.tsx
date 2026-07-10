@@ -55,6 +55,12 @@ export interface StudioSurface {
   /** 'global' — reachable from anywhere; 'document' — only reachable with a
    *  document in hand (the Drafting Room needs a proposal to walk into). */
   scope: 'global' | 'document';
+  /** Help doorway (help-desk Wave 0) — the help surface key this entry scopes
+   *  the panel to, plus a one-line blurb consumers may show beside the label.
+   *  Plain data only (this file's canon holds): keys mirror
+   *  `SurfaceKeys.DesignerPortal.Document.*` in packages/help-system and are
+   *  pinned by lib/help-system/surface-key-parity.test.ts. */
+  help?: { surfaceKey: string; blurb: string };
 }
 
 /**
@@ -76,6 +82,10 @@ export const STUDIO_ROOMS: StudioSurface[] = [
     weight: 'room',
     shortcut: ['g', 'l'],
     scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/library',
+      blurb: 'Three shelves and a librarian — every ask teaches your eye.',
+    },
   },
   {
     key: 'people',
@@ -86,6 +96,10 @@ export const STUDIO_ROOMS: StudioSurface[] = [
     weight: 'room',
     shortcut: ['g', 'p'],
     scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/people',
+      blurb: 'Everyone the studio works with — clients, makers, trades, the field.',
+    },
   },
   {
     key: 'drafting-room',
@@ -96,6 +110,10 @@ export const STUDIO_ROOMS: StudioSurface[] = [
     icon: PenTool,
     weight: 'room',
     scope: 'document',
+    help: {
+      surfaceKey: 'designer-portal/document/drafting',
+      blurb: 'The proposal in hand — facets fill in any order.',
+    },
   },
 ];
 
@@ -125,6 +143,10 @@ export const STUDIO_LEDGERS: StudioSurface[] = [
     weight: 'sheet',
     shortcut: ['g', 'o'],
     scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/orders',
+      blurb: 'Every purchase order, from drawn to delivered.',
+    },
   },
   {
     key: 'accounts',
@@ -145,6 +167,10 @@ export const STUDIO_LEDGERS: StudioSurface[] = [
     weight: 'sheet',
     shortcut: ['g', 'a'],
     scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/accounts',
+      blurb: 'Invoices drawn and paid, receivables, the studio\'s earnings.',
+    },
   },
   {
     key: 'hours',
@@ -155,6 +181,10 @@ export const STUDIO_LEDGERS: StudioSurface[] = [
     weight: 'sheet',
     shortcut: ['g', 'h'],
     scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/hours',
+      blurb: 'Time the studio logged — timer-caught and hand-entered.',
+    },
   },
   {
     key: 'the-post',
@@ -165,6 +195,10 @@ export const STUDIO_LEDGERS: StudioSurface[] = [
     weight: 'sheet',
     shortcut: ['g', 't'],
     scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/the-post',
+      blurb: 'Letters and the record — what arrived, what needs review.',
+    },
   },
 ];
 
@@ -183,6 +217,10 @@ export const STUDIO_VERBS: StudioSurface[] = [
     aliases: ['new lead', 'new client', 'capture', 'prospect', 'intake', 'brief'],
     icon: UserPlus,
     scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/desk',
+      blurb: 'A name and a note — the Desk takes it from there.',
+    },
   },
   {
     key: 'open-project',
@@ -192,6 +230,10 @@ export const STUDIO_VERBS: StudioSurface[] = [
     aliases: ['new project', 'start project', 'create project', 'manual project'],
     icon: FolderPlus,
     scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/desk',
+      blurb: 'Begin a project directly, no proposal needed.',
+    },
   },
   {
     key: 'draft-proposal',
@@ -201,6 +243,10 @@ export const STUDIO_VERBS: StudioSurface[] = [
     aliases: ['proposal', 'quote', 'estimate', 'new proposal', 'propose'],
     icon: PenLine,
     scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/desk',
+      blurb: 'Open the Drafting Room for an existing household.',
+    },
   },
   {
     key: 'draw-invoice',
@@ -210,6 +256,10 @@ export const STUDIO_VERBS: StudioSurface[] = [
     aliases: ['invoice', 'invoicing', 'bill', 'billing', 'new invoice'],
     icon: FileText,
     scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/desk',
+      blurb: 'Milestones, time, pieces, or ad hoc — on one paper.',
+    },
   },
   {
     key: 'add-maker',
@@ -219,6 +269,10 @@ export const STUDIO_VERBS: StudioSurface[] = [
     aliases: ['vendor', 'maker', 'supplier', 'trade', 'new vendor'],
     icon: Hammer,
     scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/desk',
+      blurb: 'A maker on your roster — for quotes, POs, and the field.',
+    },
   },
 ];
 
