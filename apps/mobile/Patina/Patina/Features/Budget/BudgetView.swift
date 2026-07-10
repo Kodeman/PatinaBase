@@ -1,0 +1,181 @@
+//
+//  BudgetView.swift
+//  Patina
+//
+//  Wave 3 / D.3: the cross-project money picture. Composes the Wave 2 money
+//  rail — a billed/paid/outstanding summary up top, then a per-project rollup
+//  (accepted proposals + their signed payment schedule + the project's
+//  invoices). Read-only; taps route into the existing proposal/invoice detail.
+//  Typography-first, tokens only — mirrors the ProposalDetailBlocks idiom.
+//
+
+import SwiftUI
+
+struct BudgetView: View {
+    @Environment(\.appCoordinator) private var coordinator
+    @State private var viewModel = BudgetViewModel()
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 24) {
+                header
+                content
+            }
+            .padding(.bottom, 120)
+        }
+        .background(PatinaColors.Background.primary)
+        .overlay(alignment: .topLeading) {
+            BackChevronButton(style: .light) { coordinator.goBack() }
+                .padding(.top, 8)
+                .padding(.leading, 18)
+        }
+        .task { await viewModel.load() }
+        .refreshable { await viewModel.load() }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            MonoLabel(text: "BUDGET", tracking: 2)
+            Text("Your budget")
+                .font(PatinaTypography.h3)
+                .foregroundStyle(PatinaColors.Text.primary)
+        }
+        .padding(.top, 56)
+        .padding(.horizontal, 24)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if viewModel.isLoading && viewModel.isEmpty {
+            ProgressView()
+                .tint(PatinaColors.Text.interactive)
+                .padding(.top, 60)
+                .frame(maxWidth: .infinity)
+        } else if let error = viewModel.error, viewModel.isEmpty {
+            errorView(error)
+        } else if viewModel.isEmpty {
+            emptyView
+        } else {
+            if viewModel.summary.hasActivity {
+                BudgetSummaryCard(summary: viewModel.summary)
+            }
+            ForEach(viewModel.sections) { section in
+                BudgetProjectSectionView(section: section) { invoiceId in
+                    coordinator.navigate(to: .invoiceDetail(invoiceId: invoiceId))
+                } onOpenProposal: { proposalId in
+                    coordinator.navigate(to: .proposalDetail(proposalId: proposalId))
+                }
+            }
+        }
+    }
+
+    private var emptyView: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "chart.pie")
+                .font(.system(size: 28))
+                .foregroundStyle(PatinaColors.sage)
+            Text("No budget yet")
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+            Text("Once you've signed a proposal or received an invoice, your budget appears here.")
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.muted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+    }
+
+    private func errorView(_ msg: String) -> some View {
+        VStack(spacing: 10) {
+            Text(msg)
+                .font(PatinaTypography.bodySmall)
+                .foregroundStyle(PatinaColors.Text.secondary)
+            Button("Let's try that again") { Task { await viewModel.load() } }
+                .font(PatinaTypography.bodySmallMedium)
+                .foregroundStyle(PatinaColors.Text.interactive)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
+    }
+}
+
+// MARK: - Summary card
+
+/// Cross-project billed / paid / outstanding tiles.
+struct BudgetSummaryCard: View {
+    let summary: BudgetSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            MonoLabel(text: "Across your projects")
+                .padding(.horizontal, 24)
+            HStack(spacing: 0) {
+                tile("Billed", summary.billedCents, color: PatinaColors.Text.primary)
+                divider
+                tile("Paid", summary.paidCents, color: PatinaColors.sage)
+                divider
+                tile("Outstanding", summary.outstandingCents, color: PatinaColors.Text.interactive)
+            }
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
+            .background(PatinaColors.Background.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 24)
+        }
+    }
+
+    private func tile(_ label: String, _ cents: Int, color: Color) -> some View {
+        VStack(spacing: 4) {
+            Text(PatinaCurrency.formatWholeDollars(cents: cents))
+                .font(PatinaTypography.h5)
+                .foregroundStyle(color)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+            MonoLabel(text: label)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 4)
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(PatinaColors.Text.muted.opacity(0.2))
+            .frame(width: 1, height: 34)
+    }
+}
+
+// MARK: - Project section
+
+struct BudgetProjectSectionView: View {
+    let section: BudgetProjectSection
+    let onOpenInvoice: (String) -> Void
+    let onOpenProposal: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(section.name)
+                .font(PatinaTypography.h5)
+                .foregroundStyle(PatinaColors.Text.primary)
+                .padding(.horizontal, 24)
+
+            ForEach(section.proposals) { proposal in
+                BudgetProposalCard(proposal: proposal) {
+                    onOpenProposal(proposal.id)
+                }
+            }
+
+            if !section.invoices.isEmpty {
+                BudgetInvoicesBlock(section: section, onOpenInvoice: onOpenInvoice)
+            }
+        }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        BudgetView()
+            .environment(\.appCoordinator, AppCoordinator())
+    }
+}

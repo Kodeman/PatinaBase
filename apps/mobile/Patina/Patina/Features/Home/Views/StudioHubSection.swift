@@ -88,6 +88,15 @@ struct StudioHubSection: View {
                 ))
                 hairline
                 row(StudioRow(
+                    title: "Budget",
+                    meta: "Across your projects",
+                    guestMeta: "Sign in to see your budget",
+                    badge: 0,
+                    route: .budget,
+                    hint: "Opens your budget."
+                ))
+                hairline
+                row(StudioRow(
                     title: "Messages",
                     meta: badges.unreadMessageCount > 0
                         ? "\(badges.unreadMessageCount) unread"

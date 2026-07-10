@@ -97,6 +97,9 @@ public enum AppRoute: Hashable {
     case invoiceList                                  // client: list of invoices
     case invoiceDetail(invoiceId: String)             // client: invoice detail + pay
 
+    // Wave 3 — cross-project money picture (D.3)
+    case budget                                       // client: budget overview
+
     /// Display name for the route. Used for debugging / companion context.
     ///
     /// NOTE (PT-3-5): the PostHog *screen name* for the scan flow is the
@@ -136,6 +139,7 @@ public enum AppRoute: Hashable {
         case .proposalDetail: return "Proposal"
         case .invoiceList: return "Invoices"
         case .invoiceDetail: return "Invoice"
+        case .budget: return "Budget"
         }
     }
 }
