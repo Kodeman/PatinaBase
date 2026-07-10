@@ -97,8 +97,9 @@ public enum AppRoute: Hashable {
     case invoiceList                                  // client: list of invoices
     case invoiceDetail(invoiceId: String)             // client: invoice detail + pay
 
-    // Wave 3 — cross-project money picture (D.3)
+    // Wave 3 — cross-project money picture (D.3) + shared documents (D.4)
     case budget                                       // client: budget overview
+    case documentList                                 // client: shared documents
 
     /// Display name for the route. Used for debugging / companion context.
     ///
@@ -140,6 +141,7 @@ public enum AppRoute: Hashable {
         case .invoiceList: return "Invoices"
         case .invoiceDetail: return "Invoice"
         case .budget: return "Budget"
+        case .documentList: return "Documents"
         }
     }
 }

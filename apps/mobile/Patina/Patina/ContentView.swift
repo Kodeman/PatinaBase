@@ -297,6 +297,10 @@ struct ContentView: View {
         case .budget:
             BudgetView()
                 .toolbar(.hidden, for: .navigationBar)
+
+        case .documentList:
+            DocumentListView()
+                .toolbar(.hidden, for: .navigationBar)
         }
     }
 }

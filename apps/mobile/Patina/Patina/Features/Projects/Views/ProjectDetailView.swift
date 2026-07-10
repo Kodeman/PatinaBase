@@ -28,6 +28,7 @@ struct ProjectDetailView: View {
                     if !viewModel.phases.isEmpty { phasesSection }
                     if !viewModel.milestones.isEmpty { milestonesSection }
                     if viewModel.hasInvoices { ProjectInvoicesLink() }
+                    if viewModel.hasDocuments { ProjectDocumentsLink() }
                     if !viewModel.ffe.isEmpty { ffeSection }
                     // R23: empty sections collapse into one quiet portal hint
                     // instead of stacked "No X yet" rows.
@@ -416,6 +417,47 @@ private struct ProjectInvoicesLink: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 24)
         .accessibilityIdentifier("projectDetail.invoicesLink")
+    }
+}
+
+// MARK: - Documents link (Wave 3 / D.4)
+
+/// A push to the client's shared documents where this project has any.
+/// Extracted as its own view so ProjectDetailView stays under the type-body
+/// ceiling.
+private struct ProjectDocumentsLink: View {
+    @Environment(\.appCoordinator) private var coordinator
+
+    var body: some View {
+        Button {
+            coordinator.navigate(to: .documentList)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "folder")
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(PatinaColors.Text.interactive)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Documents")
+                        .font(PatinaTypography.bodySmallMedium)
+                        .foregroundStyle(PatinaColors.Text.primary)
+                    Text("Contracts, drawings, and shared files")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(PatinaTypography.uiSmall)
+                    .foregroundStyle(PatinaColors.Text.muted)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(PatinaColors.Background.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 24)
+        .accessibilityIdentifier("projectDetail.documentsLink")
     }
 }
 

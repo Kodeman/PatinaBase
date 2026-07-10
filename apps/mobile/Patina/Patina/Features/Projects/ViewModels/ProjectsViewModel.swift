@@ -47,6 +47,10 @@ final class ProjectDetailViewModel {
     /// powers the payments → invoices affordance.
     var hasInvoices: Bool = false
 
+    /// Whether this project has any client-visible documents (Wave 3 / D.4) —
+    /// powers the documents affordance.
+    var hasDocuments: Bool = false
+
     func load(projectId: String) async {
         isLoading = true
         error = nil
@@ -56,9 +60,10 @@ final class ProjectDetailViewModel {
         async let ffeTask = (try? await ProjectsAPIClient.shared.listFFEItems(projectId: projectId)) ?? []
         async let proposalIdTask = try? await ProposalsAPIClient.shared.proposalId(forProject: projectId)
         async let invoicesTask = (try? await InvoicesAPIClient.shared.hasInvoices(forProject: projectId)) ?? false
+        async let documentsTask = (try? await DocumentsAPIClient.shared.hasDocuments(forProject: projectId)) ?? false
 
-        let (p, ph, mi, ff, prop, hasInv) = await (
-            projectTask, phasesTask, milestonesTask, ffeTask, proposalIdTask, invoicesTask
+        let (p, ph, mi, ff, prop, hasInv, hasDocs) = await (
+            projectTask, phasesTask, milestonesTask, ffeTask, proposalIdTask, invoicesTask, documentsTask
         )
         self.project = p ?? nil
         self.phases = ph
@@ -66,6 +71,7 @@ final class ProjectDetailViewModel {
         self.ffe = ff
         self.linkedProposalId = prop
         self.hasInvoices = hasInv
+        self.hasDocuments = hasDocs
         self.isLoading = false
         if self.project == nil {
             self.error = "Couldn't load this project"

@@ -136,7 +136,7 @@ public enum QuickActionFactory {
              .threadList, .threadDetail,
              .proposalList, .proposalDetail,
              .invoiceList, .invoiceDetail,
-             .budget:
+             .budget, .documentList:
             // Client project surfaces have their own navigation — keep the Companion quiet.
             return []
         }

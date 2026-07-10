@@ -97,6 +97,15 @@ struct StudioHubSection: View {
                 ))
                 hairline
                 row(StudioRow(
+                    title: "Documents",
+                    meta: "Contracts, drawings & files",
+                    guestMeta: "Sign in to see shared documents",
+                    badge: 0,
+                    route: .documentList,
+                    hint: "Opens documents shared with you."
+                ))
+                hairline
+                row(StudioRow(
                     title: "Messages",
                     meta: badges.unreadMessageCount > 0
                         ? "\(badges.unreadMessageCount) unread"

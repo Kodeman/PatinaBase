@@ -298,7 +298,7 @@ public final class AppCoordinator: Coordinator {
              .threadList, .threadDetail,
              .proposalList, .proposalDetail,
              .invoiceList, .invoiceDetail,
-             .budget:
+             .budget, .documentList:
             push(route)
             updateContext(for: route)
         }
@@ -414,7 +414,7 @@ public final class AppCoordinator: Coordinator {
              .threadList, .threadDetail,
              .proposalList, .proposalDetail,
              .invoiceList, .invoiceDetail,
-             .budget:
+             .budget, .documentList:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
         }
