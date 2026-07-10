@@ -12,6 +12,13 @@ export const authEvents = {
   logout: () => track('logout'),
 };
 
+// Patina Field device pairing. NEVER attach a token_hash / QR value here — the
+// handoff token is a secret and must not reach analytics.
+export const fieldEvents = {
+  connectOpen: () => track('field_connect_open'),
+  connectError: () => track('field_connect_error'),
+};
+
 export const productEvents = {
   create: (properties?: Record<string, unknown>) => track('product_create', properties),
   view: (productId: string) => track('product_view', { product_id: productId }),
