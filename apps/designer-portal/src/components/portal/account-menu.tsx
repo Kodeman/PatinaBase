@@ -13,6 +13,7 @@ import {
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { authEvents } from '@/lib/analytics/events';
 
 const STATUS_META: Record<AvailabilityStatus, { label: string; color: string }> = {
   online: { label: 'Online', color: 'var(--color-sage)' },
@@ -59,6 +60,7 @@ export function AccountMenu({ user }: AccountMenuProps) {
 
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
+    authEvents.logout();
     try {
       await signOut();
     } catch (error) {
