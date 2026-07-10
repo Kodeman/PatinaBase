@@ -78,7 +78,7 @@ struct SmartGuessSheet: View {
                     HStack(spacing: 6) {
                         Text(SpecimenCategory(rawValue: categoryRaw)?.rawValue.capitalized ?? "Unknown")
                             .font(CaptureType.bodyEmph)
-                            .foregroundStyle(CaptureColor.brass)
+                            .foregroundStyle(CaptureColor.verdigrisInk)
                         Image(systemName: "chevron.down")
                             .font(CaptureType.footnote)
                             .foregroundStyle(CaptureColor.inkSoft)
@@ -111,7 +111,7 @@ struct SmartGuessSheet: View {
                 Button { editing.insert(key) } label: {
                     Text(value.wrappedValue.isEmpty ? "Tap to add" : value.wrappedValue)
                         .font(CaptureType.bodyEmph)
-                        .foregroundStyle(value.wrappedValue.isEmpty ? CaptureColor.inkSoft : CaptureColor.brass)
+                        .foregroundStyle(value.wrappedValue.isEmpty ? CaptureColor.inkSoft : CaptureColor.verdigrisInk)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                 }
@@ -127,7 +127,7 @@ struct SmartGuessSheet: View {
         if let c = confidence[key], c > 0, c < 0.55 {
             Text("low")
                 .font(CaptureType.eyebrow).textCase(.uppercase)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.terracotta)
         }
     }
 

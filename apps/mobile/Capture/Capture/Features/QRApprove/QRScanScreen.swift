@@ -136,7 +136,7 @@ struct QRScanScreen: View {
             if let errorMessage = model.errorMessage {
                 Text(errorMessage)
                     .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.rust2)
+                    .foregroundStyle(CaptureColor.error)
                     .multilineTextAlignment(.center)
                     .transition(reduceMotion ? .identity : .opacity)
             }
@@ -155,7 +155,7 @@ struct QRScanScreen: View {
             VStack(spacing: 18) {
                 Image(systemName: "qrcode.viewfinder")
                     .font(CaptureType.display)
-                    .foregroundStyle(CaptureColor.brass)
+                    .foregroundStyle(CaptureColor.goldenHour)
                     .accessibilityHidden(true)
 
                 Text("Scanner needs a real device")
@@ -187,7 +187,7 @@ struct QRScanScreen: View {
                 if let errorMessage = model.errorMessage {
                     Text(errorMessage)
                         .font(CaptureType.footnote)
-                        .foregroundStyle(CaptureColor.rust2)
+                        .foregroundStyle(CaptureColor.error)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 28)
                 }

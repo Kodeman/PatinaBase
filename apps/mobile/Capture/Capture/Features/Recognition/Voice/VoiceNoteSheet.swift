@@ -72,13 +72,13 @@ struct VoiceNoteSheet: View {
     private var recordingStatus: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(isRecording ? CaptureColor.rust : CaptureColor.inkSoft.opacity(0.4))
+                .fill(isRecording ? CaptureColor.error : CaptureColor.inkSoft.opacity(0.4))
                 .frame(width: 10, height: 10)
             if isRecording, let startedAt {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text("RECORDING · \(elapsed(from: startedAt, now: context.date))")
                         .font(CaptureType.monoSmall)
-                        .foregroundStyle(CaptureColor.rust)
+                        .foregroundStyle(CaptureColor.error)
                 }
             } else {
                 Text(transcript.isEmpty ? "HOLD TO TALK" : "TAKE READY")
@@ -93,7 +93,7 @@ struct VoiceNoteSheet: View {
         HStack(spacing: 3) {
             ForEach(0..<32, id: \.self) { i in
                 Capsule()
-                    .fill(isRecording ? CaptureColor.brass : CaptureColor.line2)
+                    .fill(isRecording ? CaptureColor.goldenHour : CaptureColor.line2)
                     .frame(width: 3, height: barHeight(i))
             }
         }
@@ -116,7 +116,7 @@ struct VoiceNoteSheet: View {
             .font(CaptureType.title)
             .foregroundStyle(CaptureColor.paper3)
             .frame(width: 76, height: 76)
-            .background(Circle().fill(isRecording ? CaptureColor.rust : CaptureColor.verdigris))
+            .background(Circle().fill(isRecording ? CaptureColor.error : CaptureColor.verdigris))
             .scaleEffect(isRecording ? 1.08 : 1)
             .animation(.spring(duration: 0.2), value: isRecording)
             .gesture(

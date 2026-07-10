@@ -154,10 +154,10 @@ struct LeadListScreen: View {
         Text(source)
             .font(CaptureType.eyebrow)
             .textCase(.uppercase)
-            .foregroundStyle(CaptureColor.brass)
+            .foregroundStyle(CaptureColor.goldenHour)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .overlay(Capsule().stroke(CaptureColor.brass.opacity(0.4), lineWidth: 1))
+            .overlay(Capsule().stroke(CaptureColor.goldenHour.opacity(0.4), lineWidth: 1))
     }
 
     private func trimmed(_ s: String?) -> String? {
@@ -171,7 +171,7 @@ struct LeadListScreen: View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.caption2)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.terracotta)
             Text(message)
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.ink)
@@ -179,8 +179,8 @@ struct LeadListScreen: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(CaptureColor.rust2.opacity(0.16)))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(CaptureColor.rust.opacity(0.4), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 10).fill(CaptureColor.terracotta.opacity(0.16)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(CaptureColor.terracotta.opacity(0.4), lineWidth: 1))
         .padding(.horizontal, 20)
     }
 

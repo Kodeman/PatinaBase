@@ -76,12 +76,12 @@ struct ViewfinderFramingGuides: View {
 
             VStack(spacing: 6) {
                 Rectangle()
-                    .fill(isLevel ? CaptureColor.verdigris2 : CaptureColor.paper.opacity(0.55))
+                    .fill(isLevel ? CaptureColor.success : CaptureColor.paper.opacity(0.55))
                     .frame(width: 96, height: 2)
                 if isLevel {
                     Text("— level —")
                         .font(CaptureType.eyebrow)
-                        .foregroundStyle(CaptureColor.verdigris2)
+                        .foregroundStyle(CaptureColor.success)
                 }
             }
             .rotationEffect(.radians(reduceMotion ? 0 : clampedRoll))

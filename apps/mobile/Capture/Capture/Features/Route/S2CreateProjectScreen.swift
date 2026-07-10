@@ -80,7 +80,7 @@ struct S2CreateProjectScreen: View {
                 if let createError {
                     Label(createError, systemImage: "exclamationmark.triangle")
                         .font(CaptureType.footnote)
-                        .foregroundStyle(CaptureColor.rust)
+                        .foregroundStyle(CaptureColor.error)
                 }
 
                 Text("New projects sync across your devices and the web app.")

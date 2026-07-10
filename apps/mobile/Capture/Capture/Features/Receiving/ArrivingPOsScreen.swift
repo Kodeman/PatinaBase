@@ -133,7 +133,7 @@ struct ArrivingPOsScreen: View {
     }
 
     private func statusChip(_ status: String) -> some View {
-        let color: Color = status == "shipped" ? CaptureColor.verdigris : CaptureColor.brass
+        let color: Color = status == "shipped" ? CaptureColor.success : CaptureColor.warning
         return Text(status.replacingOccurrences(of: "_", with: " ").capitalized)
             .font(CaptureType.eyebrow)
             .foregroundStyle(color)

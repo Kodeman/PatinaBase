@@ -34,11 +34,11 @@ enum ProjectsFormat {
     /// completed, archived, on_hold, draft.
     static func projectStatusTint(_ status: String) -> Color {
         let s = status.lowercased()
-        if s.contains("active") || s.contains("progress") { return CaptureColor.verdigris }
+        if s.contains("active") || s.contains("progress") { return CaptureColor.success }
         if s.contains("clos") || s.contains("complet") || s.contains("archiv") || s.contains("cancel") {
             return CaptureColor.inkSoft
         }
-        return CaptureColor.brass // on_hold, draft, and anything else ("other")
+        return CaptureColor.warning // on_hold, draft, and anything else ("other")
     }
 
     /// Execution lifecycle (phases, FF&E items): not-started reads quiet,
@@ -47,21 +47,21 @@ enum ProjectsFormat {
     static func lifecycleTint(_ status: String) -> Color {
         let s = status.lowercased()
         if s.contains("delay") || s.contains("block") || s.contains("refus") || s.contains("cancel") {
-            return CaptureColor.rust
+            return CaptureColor.error
         }
         if s.contains("complet") || s.contains("delivered") || s.contains("installed") {
-            return CaptureColor.verdigris
+            return CaptureColor.success
         }
         if s.contains("not_started") || s == "pending" { return CaptureColor.inkSoft }
-        return CaptureColor.brass // in_progress, specified, quoted, approved, ordered, production, shipped, …
+        return CaptureColor.goldenHour // in_progress, specified, quoted, approved, ordered, production, shipped, …
     }
 
     /// Milestone money status: paid = verdigris, due/outstanding = brass,
     /// pending/upcoming = ink-soft.
     static func milestoneTint(_ status: String) -> Color {
         let s = status.lowercased()
-        if s.contains("paid") { return CaptureColor.verdigris }
-        if s.contains("due") || s.contains("outstanding") { return CaptureColor.brass }
+        if s.contains("paid") { return CaptureColor.success }
+        if s.contains("due") || s.contains("outstanding") { return CaptureColor.warning }
         return CaptureColor.inkSoft
     }
 
@@ -113,7 +113,7 @@ struct ProjectsErrorState: View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
                 .font(CaptureType.title)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
             Text("Couldn't load this")
                 .font(CaptureType.bodyEmph)
                 .foregroundStyle(CaptureColor.ink)

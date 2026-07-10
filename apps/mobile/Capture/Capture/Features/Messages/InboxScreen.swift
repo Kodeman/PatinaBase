@@ -122,7 +122,7 @@ struct InboxScreen: View {
 
     private func unreadDot(_ unread: Bool) -> some View {
         Circle()
-            .fill(unread ? CaptureColor.brass : Color.clear)
+            .fill(unread ? CaptureColor.goldenHour : Color.clear)
             .frame(width: 8, height: 8)
             .padding(.top, 6)
             .accessibilityHidden(true)

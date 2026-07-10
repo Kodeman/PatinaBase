@@ -112,7 +112,7 @@ struct V2CullDeckScreen: View {
             HStack {
                 Label("cull", systemImage: "arrow.left")
                     .font(CaptureType.eyebrow)
-                    .foregroundStyle(CaptureColor.rust)
+                    .foregroundStyle(CaptureColor.error)
                 Spacer()
                 Text("tap to open")
                     .font(CaptureType.eyebrow)
@@ -145,7 +145,7 @@ struct V2CullDeckScreen: View {
     }
 
     private func swipeTint(isTop: Bool) -> some View {
-        let accent = drag.width >= 0 ? CaptureColor.verdigris : CaptureColor.rust
+        let accent = drag.width >= 0 ? CaptureColor.verdigris : CaptureColor.error
         let intensity = isTop ? min(abs(drag.width) / threshold, 1) * 0.22 : 0
         return RoundedRectangle(cornerRadius: 18).fill(accent.opacity(intensity))
     }

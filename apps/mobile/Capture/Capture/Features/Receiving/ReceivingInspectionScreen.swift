@@ -65,7 +65,7 @@ struct ReceivingInspectionScreen: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Continue") { viewModel.step = .outcome }
                     .font(CaptureType.bodyEmph)
-                    .foregroundStyle(CaptureColor.verdigris)
+                    .foregroundStyle(CaptureColor.success)
             }
         }
     }
@@ -140,7 +140,7 @@ struct ReceivingInspectionScreen: View {
                                 matching: .images) {
                         Label("Add", systemImage: "camera")
                             .font(CaptureType.callout.weight(.semibold))
-                            .foregroundStyle(CaptureColor.verdigris)
+                            .foregroundStyle(CaptureColor.success)
                     }
                 }
             }
@@ -225,7 +225,7 @@ struct ReceivingInspectionScreen: View {
                 viewModel.retryUpload(photoID: photo.id)
             } label: {
                 ZStack {
-                    CaptureColor.rust.opacity(0.85)
+                    CaptureColor.error.opacity(0.85)
                     VStack(spacing: 2) {
                         Image(systemName: "arrow.clockwise").foregroundStyle(.white)
                         Text("Retry").font(CaptureType.eyebrow).foregroundStyle(.white)
@@ -291,11 +291,11 @@ struct ReceivingInspectionScreen: View {
                 .font(CaptureType.eyebrow).textCase(.uppercase)
                 .foregroundStyle(CaptureColor.inkSoft)
             outcomeButton(.clean, title: "Clean", systemImage: "checkmark.circle.fill",
-                         accent: CaptureColor.verdigris)
+                         accent: CaptureColor.success)
             outcomeButton(.damaged, title: "Damaged", systemImage: "exclamationmark.triangle.fill",
-                         accent: CaptureColor.rust)
+                         accent: CaptureColor.error)
             outcomeButton(.partial, title: "Partial delivery", systemImage: "shippingbox.fill",
-                         accent: CaptureColor.brass)
+                         accent: CaptureColor.warning)
         }
     }
 
@@ -345,7 +345,7 @@ struct ReceivingInspectionScreen: View {
     private var submitSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let submitError = viewModel.submitError {
-                Text(submitError).font(CaptureType.footnote).foregroundStyle(CaptureColor.rust)
+                Text(submitError).font(CaptureType.footnote).foregroundStyle(CaptureColor.error)
             }
             Button {
                 analytics.event("receiving.inspection_submit")
@@ -389,7 +389,7 @@ struct ReceivingInspectionScreen: View {
             VStack(spacing: 10) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(CaptureType.display)
-                    .foregroundStyle(CaptureColor.verdigris)
+                    .foregroundStyle(CaptureColor.success)
                 Text("Inspection saved")
                     .font(CaptureType.title2)
                     .foregroundStyle(CaptureColor.ink)

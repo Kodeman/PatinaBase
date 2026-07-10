@@ -43,7 +43,7 @@ struct RecognitionHeader: View {
                 Text(eyebrow)
                     .font(CaptureType.eyebrow)
                     .textCase(.uppercase)
-                    .foregroundStyle(CaptureColor.brass)
+                    .foregroundStyle(CaptureColor.goldenHour)
                 Text(title)
                     .font(CaptureType.title2)
                     .foregroundStyle(CaptureColor.ink)
@@ -68,7 +68,7 @@ struct RecognitionHeader: View {
 /// recognition modes draw over it, plus the simulator placeholder.
 struct RecognitionViewport: View {
     let prompt: String
-    var tint: Color = CaptureColor.brass
+    var tint: Color = CaptureColor.goldenHour
     var isActive: Bool = true
 
     var body: some View {
@@ -131,7 +131,7 @@ struct RecognisedValueRow: View {
                     }
                     Text(value.isEmpty ? "—" : value)
                         .font(CaptureType.bodyEmph)
-                        .foregroundStyle(value.isEmpty ? CaptureColor.inkSoft : CaptureColor.brass)
+                        .foregroundStyle(value.isEmpty ? CaptureColor.inkSoft : CaptureColor.verdigrisInk)
                 }
                 Spacer()
                 Image(systemName: "checkmark")

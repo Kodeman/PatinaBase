@@ -130,13 +130,13 @@ struct ConnectWorkspaceScreen: View {
                     if phase == .failed {
                         Label("Couldn’t connect. Tap to try again.", systemImage: "exclamationmark.triangle.fill")
                             .font(CaptureType.footnote)
-                            .foregroundStyle(CaptureColor.rust)
+                            .foregroundStyle(CaptureColor.error)
                             .multilineTextAlignment(.center)
                     } else if phase == .empty {
                         Label("No workspace found for your account — ask your studio admin.",
                               systemImage: "person.crop.circle.badge.exclamationmark")
                             .font(CaptureType.footnote)
-                            .foregroundStyle(CaptureColor.rust)
+                            .foregroundStyle(CaptureColor.error)
                             .multilineTextAlignment(.center)
                     }
 

@@ -82,7 +82,7 @@ struct DecisionListScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .overlay {
             if model.isLoading && model.items.isEmpty && model.errorMessage == nil {
-                ProgressView().tint(CaptureColor.brass)
+                ProgressView().tint(CaptureColor.goldenHour)
             }
         }
         .task { await model.start() }
@@ -153,10 +153,10 @@ struct DecisionListScreen: View {
             if decision.viewedAt != nil {
                 Image(systemName: "checkmark.circle.fill")
                     .font(CaptureType.footnote)
-                    .foregroundStyle(CaptureColor.verdigris)
+                    .foregroundStyle(CaptureColor.success)
             } else {
                 Circle()
-                    .fill(CaptureColor.brass)
+                    .fill(CaptureColor.goldenHour)
                     .frame(width: 8, height: 8)
             }
         }
@@ -181,7 +181,7 @@ struct DecisionListScreen: View {
         VStack(spacing: 10) {
             Image(systemName: "checkmark.seal")
                 .font(CaptureType.display)
-                .foregroundStyle(CaptureColor.verdigris)
+                .foregroundStyle(CaptureColor.success)
             Text("Nothing waiting on clients.")
                 .font(CaptureType.title2)
                 .foregroundStyle(CaptureColor.ink)
@@ -194,7 +194,7 @@ struct DecisionListScreen: View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
                 .font(CaptureType.title)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
             Text(message)
                 .font(CaptureType.callout)
                 .foregroundStyle(CaptureColor.inkSoft)
@@ -213,17 +213,17 @@ struct DecisionListScreen: View {
     private func inlineErrorBanner(_ message: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
             Text(message)
                 .font(CaptureType.footnote)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
             Spacer()
             Button("Retry") { Task { await model.load() } }
                 .font(CaptureType.footnote.weight(.semibold))
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
         }
         .padding(12)
-        .background(CaptureColor.rust.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .background(CaptureColor.error.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private static let dateFormatter: DateFormatter = {

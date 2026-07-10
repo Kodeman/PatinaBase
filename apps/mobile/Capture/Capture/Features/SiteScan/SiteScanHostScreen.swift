@@ -193,7 +193,7 @@ struct SiteScanScanStep: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
-            SiteScanSecondaryButton(title: "Cancel", systemImage: "xmark", tint: CaptureColor.rust) {
+            SiteScanSecondaryButton(title: "Cancel", systemImage: "xmark", tint: CaptureColor.error) {
                 analytics.event("siteScan.cancel")
                 onCancel()
             }
@@ -215,7 +215,7 @@ struct SiteScanScanStep: View {
             .foregroundStyle(CaptureColor.paper3)
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(CaptureColor.rust, in: RoundedRectangle(cornerRadius: 10))
+            .background(CaptureColor.error, in: RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal, 18)
             .padding(.bottom, 8)
     }

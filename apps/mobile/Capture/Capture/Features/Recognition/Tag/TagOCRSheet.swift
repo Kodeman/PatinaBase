@@ -115,12 +115,12 @@ struct TagOCRSheet: View {
                     } else {
                         RoundedRectangle(cornerRadius: 8).fill(CaptureColor.paper2)
                             .frame(width: 64, height: 64)
-                            .overlay(Image(systemName: "doc.viewfinder").foregroundStyle(CaptureColor.rust))
+                            .overlay(Image(systemName: "doc.viewfinder").foregroundStyle(CaptureColor.terracotta))
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Couldn't read — glare?")
                             .font(CaptureType.bodyEmph)
-                            .foregroundStyle(CaptureColor.rust)
+                            .foregroundStyle(CaptureColor.terracotta)
                         Text("The crop is kept. Type the fields by hand, or line the tag up again.")
                             .font(CaptureType.footnote)
                             .foregroundStyle(CaptureColor.inkSoft)
@@ -164,7 +164,7 @@ struct TagOCRSheet: View {
             .resizable().scaledToFill()
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(CaptureColor.brass.opacity(0.6), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(CaptureColor.verdigrisInk.opacity(0.6), lineWidth: 1))
     }
 
     private func beginEdit() { isEditing = true }

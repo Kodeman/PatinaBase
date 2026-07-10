@@ -309,7 +309,7 @@ struct ProjectDetailScreen: View {
             Text(title)
                 .font(CaptureType.eyebrow)
                 .textCase(.uppercase)
-                .foregroundStyle(CaptureColor.brass)
+                .foregroundStyle(CaptureColor.verdigrisInk)
                 .padding(.leading, 4)
             VStack(alignment: .leading, spacing: 0) { content() }
                 .frame(maxWidth: .infinity, alignment: .leading)

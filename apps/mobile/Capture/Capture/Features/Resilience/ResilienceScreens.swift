@@ -55,7 +55,7 @@ struct PhotoImportSheet: View {
                         .frame(width: 72, height: 72)
                     Image(systemName: context == .shareImport ? "square.and.arrow.down.fill" : "camera.fill")
                         .font(CaptureType.title)
-                        .foregroundStyle(context == .shareImport ? CaptureColor.verdigris : CaptureColor.rust)
+                        .foregroundStyle(context == .shareImport ? CaptureColor.verdigris : CaptureColor.error)
                 }
                 .accessibilityHidden(true)
                 Text(context.title)
@@ -101,7 +101,7 @@ struct PhotoImportSheet: View {
                     Button { openSettings() } label: {
                         Text("Open Settings")
                             .font(CaptureType.bodyEmph)
-                            .foregroundStyle(CaptureColor.brass)
+                            .foregroundStyle(CaptureColor.verdigrisInk)
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .accessibilityIdentifier("photoImport.openSettings")

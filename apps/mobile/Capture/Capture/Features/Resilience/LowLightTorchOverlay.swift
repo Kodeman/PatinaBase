@@ -33,7 +33,7 @@ struct LowLightTorchOverlay: View {
                 HStack(spacing: 8) {
                     Image(systemName: torchOn ? "bolt.fill" : "bolt.slash.fill")
                         .font(CaptureType.callout)
-                        .foregroundStyle(torchOn ? CaptureColor.verdigris2 : CaptureColor.rust2)
+                        .foregroundStyle(torchOn ? CaptureColor.verdigris2 : CaptureColor.terracotta)
                         .symbolEffect(.pulse, isActive: !reduceMotion && !torchOn)
                     Text(torchOn ? "Torch on" : reason)
                         .font(CaptureType.monoBody)
@@ -46,7 +46,7 @@ struct LowLightTorchOverlay: View {
                     Capsule().fill(CaptureColor.ink.opacity(0.72))
                 )
                 .overlay(
-                    Capsule().stroke((torchOn ? CaptureColor.verdigris2 : CaptureColor.rust2).opacity(0.5),
+                    Capsule().stroke((torchOn ? CaptureColor.verdigris2 : CaptureColor.terracotta).opacity(0.5),
                                      lineWidth: 1)
                 )
                 .contentShape(Capsule())
@@ -89,7 +89,7 @@ struct LowLightTorchOverlay: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(
-                Capsule().fill(on ? CaptureColor.brass2 : CaptureColor.ink.opacity(0.55))
+                Capsule().fill(on ? CaptureColor.goldenHour : CaptureColor.ink.opacity(0.55))
             )
             .overlay(Capsule().stroke(CaptureColor.paper3.opacity(0.25), lineWidth: 1))
             .contentShape(Capsule())

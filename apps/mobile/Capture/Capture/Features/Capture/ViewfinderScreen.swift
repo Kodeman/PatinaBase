@@ -178,7 +178,7 @@ private struct CameraAccessDeniedNotice: View {
         VStack(spacing: 12) {
             Image(systemName: "camera.slash")
                 .font(CaptureType.title)
-                .foregroundStyle(CaptureColor.rust2)
+                .foregroundStyle(CaptureColor.error)
 
             Text("Camera access is off for Patina Field")
                 .font(CaptureType.callout)

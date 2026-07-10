@@ -47,7 +47,7 @@ struct CaptureCardOverlay: View {
                 .frame(maxWidth: .infinity)
 
             HStack(spacing: 8) {
-                ProgressView().controlSize(.small).tint(CaptureColor.brass)
+                ProgressView().controlSize(.small).tint(CaptureColor.goldenHour)
                 Text("Identifying…")
                     .font(CaptureType.eyebrow).textCase(.uppercase)
                     .foregroundStyle(CaptureColor.inkSoft)

@@ -185,7 +185,7 @@ struct ThreadScreen: View {
         HStack(spacing: 10) {
             Text(message)
                 .font(CaptureType.footnote)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
             Spacer(minLength: 8)
             Button("Try again") {
                 Task { await viewModel.load() }

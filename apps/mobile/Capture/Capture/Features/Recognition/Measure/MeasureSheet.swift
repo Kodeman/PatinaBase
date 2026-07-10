@@ -89,7 +89,7 @@ struct MeasureSheet: View {
                         .font(CaptureType.monoSmall)
                         .foregroundStyle(active ? CaptureColor.paper3 : CaptureColor.ink2)
                         .padding(.horizontal, 12).padding(.vertical, 7)
-                        .background(Capsule().fill(active ? CaptureColor.brass : CaptureColor.paper2))
+                        .background(Capsule().fill(active ? CaptureColor.goldenHour : CaptureColor.paper2))
                 }
                 .buttonStyle(.plain)
             }
@@ -163,7 +163,7 @@ struct MeasureSheet: View {
                         }
                         Text(MeasureUnit.inchLabel(millimeters: mm))
                             .font(CaptureType.bodyEmph)
-                            .foregroundStyle(CaptureColor.brass)
+                            .foregroundStyle(CaptureColor.verdigrisInk)
                     } else {
                         Text("—").font(CaptureType.body).foregroundStyle(CaptureColor.inkSoft)
                     }

@@ -21,11 +21,11 @@ struct S5InboxTerminalScreen: View {
 
             ZStack {
                 Circle()
-                    .fill(CaptureColor.brass.opacity(0.14))
+                    .fill(CaptureColor.warning.opacity(0.14))
                     .frame(width: 96, height: 96)
                 Image(systemName: "tray.and.arrow.down.fill")
                     .font(CaptureType.title)
-                    .foregroundStyle(CaptureColor.brass)
+                    .foregroundStyle(CaptureColor.warning)
             }
             .scaleEffect(appeared ? 1 : 0.7)
             .opacity(appeared ? 1 : 0)
@@ -45,7 +45,7 @@ struct S5InboxTerminalScreen: View {
                 Text("Next in the inbox")
                     .font(CaptureType.eyebrow)
                     .textCase(.uppercase)
-                    .foregroundStyle(CaptureColor.brass)
+                    .foregroundStyle(CaptureColor.warning)
                 Text("Confirm the material, verify the trade price, then promote it to the library.")
                     .font(CaptureType.callout)
                     .foregroundStyle(CaptureColor.inkSoft)

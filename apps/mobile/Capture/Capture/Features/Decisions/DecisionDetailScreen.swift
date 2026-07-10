@@ -66,7 +66,7 @@ struct DecisionDetailScreen: View {
                         errorState(message)
                     } else {
                         ProgressView()
-                            .tint(CaptureColor.brass)
+                            .tint(CaptureColor.goldenHour)
                             .padding(.top, 80)
                             .frame(maxWidth: .infinity)
                     }
@@ -108,7 +108,7 @@ struct DecisionDetailScreen: View {
             Text("DECISION")
                 .font(CaptureType.eyebrow)
                 .textCase(.uppercase)
-                .foregroundStyle(CaptureColor.brass)
+                .foregroundStyle(CaptureColor.verdigrisInk)
             Text(detail.decision.title)
                 .font(CaptureType.title)
                 .foregroundStyle(CaptureColor.ink)
@@ -181,10 +181,10 @@ struct DecisionDetailScreen: View {
     private var recommendedBadge: some View {
         Text("RECOMMENDED")
             .font(CaptureType.eyebrow)
-            .foregroundStyle(CaptureColor.brass)
+            .foregroundStyle(CaptureColor.verdigrisInk)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .overlay(Capsule().stroke(CaptureColor.brass.opacity(0.5), lineWidth: 1))
+            .overlay(Capsule().stroke(CaptureColor.verdigrisInk.opacity(0.5), lineWidth: 1))
     }
 
     @ViewBuilder
@@ -236,11 +236,11 @@ struct DecisionDetailScreen: View {
             if let viewedAt = decision.viewedAt {
                 Text("Viewed \(Self.dateFormatter.string(from: viewedAt))")
                     .font(CaptureType.monoSmall)
-                    .foregroundStyle(CaptureColor.verdigris)
+                    .foregroundStyle(CaptureColor.success)
             } else {
                 Text("Not yet viewed by client")
                     .font(CaptureType.monoSmall)
-                    .foregroundStyle(CaptureColor.brass)
+                    .foregroundStyle(CaptureColor.warning)
             }
         }
     }
@@ -251,7 +251,7 @@ struct DecisionDetailScreen: View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
                 .font(CaptureType.title)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
             Text(message)
                 .font(CaptureType.callout)
                 .foregroundStyle(CaptureColor.inkSoft)
@@ -270,17 +270,17 @@ struct DecisionDetailScreen: View {
     private func inlineErrorBanner(_ message: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle")
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
             Text(message)
                 .font(CaptureType.footnote)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
             Spacer()
             Button("Retry") { Task { await model.load() } }
                 .font(CaptureType.footnote.weight(.semibold))
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
         }
         .padding(12)
-        .background(CaptureColor.rust.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .background(CaptureColor.error.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private static let dateFormatter: DateFormatter = {

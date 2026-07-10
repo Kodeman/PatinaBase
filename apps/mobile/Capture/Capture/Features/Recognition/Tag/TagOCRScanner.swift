@@ -13,6 +13,6 @@ struct TagOCRScanner: ScannerPresentable {
     var isReading: Bool
 
     @ViewBuilder func makeBody() -> some View {
-        RecognitionViewport(prompt: prompt, tint: CaptureColor.brass, isActive: isReading)
+        RecognitionViewport(prompt: prompt, tint: CaptureColor.goldenHour, isActive: isReading)
     }
 }

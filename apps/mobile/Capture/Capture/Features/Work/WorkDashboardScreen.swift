@@ -298,7 +298,7 @@ struct WorkDashboardScreen: View {
         Button { openSectionItem(.thread(thread.id), section: "messages") } label: {
             HStack(alignment: .top, spacing: 12) {
                 if thread.unread {
-                    Circle().fill(CaptureColor.brass).frame(width: 7, height: 7).padding(.top, 6)
+                    Circle().fill(CaptureColor.goldenHour).frame(width: 7, height: 7).padding(.top, 6)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(thread.title)
@@ -343,9 +343,9 @@ struct WorkDashboardScreen: View {
 
     private func phaseColor(_ status: String) -> Color {
         switch status {
-        case "on_hold": return CaptureColor.rust
-        case "completed", "archived": return CaptureColor.verdigris
-        default: return CaptureColor.brass
+        case "on_hold": return CaptureColor.terracotta
+        case "completed", "archived": return CaptureColor.success
+        default: return CaptureColor.goldenHour
         }
     }
 
@@ -366,7 +366,7 @@ struct WorkDashboardScreen: View {
                               action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: symbol).font(CaptureType.title2).foregroundStyle(CaptureColor.brass)
+                Image(systemName: symbol).font(CaptureType.title2).foregroundStyle(CaptureColor.verdigrisInk)
                 Text(title).font(CaptureType.bodyEmph).foregroundStyle(CaptureColor.ink)
                 Text(subtitle).font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
             }
@@ -544,11 +544,11 @@ private struct WorkErrorRow: View {
         HStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
                 .font(CaptureType.callout)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
                 .accessibilityHidden(true)
             Text(message)
                 .font(CaptureType.callout)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
             Spacer(minLength: 8)
             Button("Retry", action: retry)
                 .font(CaptureType.bodyEmph)

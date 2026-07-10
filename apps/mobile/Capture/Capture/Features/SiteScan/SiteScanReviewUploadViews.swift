@@ -70,7 +70,7 @@ struct SiteScanReviewStep: View {
     private var actions: some View {
         HStack(spacing: 12) {
             SiteScanSecondaryButton(title: "Retake", systemImage: "arrow.counterclockwise",
-                                    tint: CaptureColor.rust, action: onRetake)
+                                    tint: CaptureColor.error, action: onRetake)
             SiteScanPrimaryButton(title: "Continue", systemImage: "arrow.right", action: onContinue)
         }
         .padding(.horizontal, 20)
@@ -228,7 +228,7 @@ struct SiteScanUploadStep: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "checkmark.seal.fill")
                 .font(CaptureType.title2)
-                .foregroundStyle(CaptureColor.verdigris)
+                .foregroundStyle(CaptureColor.success)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Scan uploaded")
@@ -246,7 +246,7 @@ struct SiteScanUploadStep: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(CaptureType.title2)
-                .foregroundStyle(CaptureColor.rust)
+                .foregroundStyle(CaptureColor.error)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Upload didn't finish")

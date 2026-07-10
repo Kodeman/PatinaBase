@@ -83,10 +83,10 @@ enum LeadFormat {
 
     static func statusColor(_ raw: String) -> Color {
         switch raw {
-        case "new":                return CaptureColor.brass
+        case "new":                return CaptureColor.goldenHour
         case "viewed":              return CaptureColor.inkSoft
-        case "contacted", "accepted": return CaptureColor.verdigris
-        case "declined", "expired": return CaptureColor.rust
+        case "contacted", "accepted": return CaptureColor.success
+        case "declined", "expired": return CaptureColor.terracotta
         default:                   return CaptureColor.inkSoft
         }
     }
