@@ -151,13 +151,15 @@ struct LeadListScreen: View {
     }
 
     private func sourceChip(_ source: String) -> some View {
+        // clayDeep(light)/clay(dark), AA on the cream list in light mode;
+        // goldenHour was sub-AA on cream (R28/R33 text-chip classification).
         Text(source)
             .font(CaptureType.eyebrow)
             .textCase(.uppercase)
-            .foregroundStyle(CaptureColor.goldenHour)
+            .foregroundStyle(CaptureColor.verdigrisInk)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .overlay(Capsule().stroke(CaptureColor.goldenHour.opacity(0.4), lineWidth: 1))
+            .overlay(Capsule().stroke(CaptureColor.verdigrisInk.opacity(0.4), lineWidth: 1))
     }
 
     private func trimmed(_ s: String?) -> String? {

@@ -24,7 +24,9 @@ struct SiteScanSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(CaptureType.eyebrow).textCase(.uppercase)
-                .foregroundStyle(CaptureColor.goldenHour)
+                // clayDeep(light)/clay(dark): AA on the cream card in light;
+                // goldenHour was sub-AA (R28/R33 text-chip classification).
+                .foregroundStyle(CaptureColor.verdigrisInk)
                 .padding(.leading, 4)
             VStack(alignment: .leading, spacing: 0) { content() }
                 .padding(14)
