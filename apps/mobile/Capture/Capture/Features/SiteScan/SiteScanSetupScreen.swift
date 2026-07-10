@@ -23,6 +23,7 @@
 import Foundation
 import SwiftUI
 import CaptureKit
+import PatinaDesignKit
 
 @MainActor
 @Observable
@@ -187,18 +188,12 @@ struct SiteScanSetupScreen: View {
     }
 
     private var startBar: some View {
-        Button(action: start) {
-            Text(container.siteScan.isSupported ? "Start scan" : "Start demo scan")
-                .font(CaptureType.bodyEmph)
-                .foregroundStyle(CaptureColor.paper3)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
-                .background(CaptureColor.verdigris, in: RoundedRectangle(cornerRadius: 12))
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial)
-        .accessibilityLabel("Start scan")
+        PatinaButton(container.siteScan.isSupported ? "Start scan" : "Start demo scan",
+                     style: .clay, action: start)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+            .accessibilityLabel("Start scan")
     }
 
     private var selectedRoomName: String {

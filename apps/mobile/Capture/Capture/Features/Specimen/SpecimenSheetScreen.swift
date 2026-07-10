@@ -9,6 +9,7 @@
 
 import SwiftUI
 import CaptureKit
+import PatinaDesignKit
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -78,22 +79,10 @@ struct SpecimenSheetScreen: View {
 
     private var actions: some View {
         HStack(spacing: 12) {
-            Button(action: reshoot) {
-                Label("Re-shoot", systemImage: "camera.rotate")
-                    .font(CaptureType.bodyEmph)
-                    .foregroundStyle(CaptureColor.error)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(CaptureColor.error.opacity(0.5), lineWidth: 1))
-            }
-            Button(action: save) {
-                Label("Save", systemImage: "checkmark")
-                    .font(CaptureType.bodyEmph)
-                    .foregroundStyle(CaptureColor.paper3)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(CaptureColor.verdigris, in: RoundedRectangle(cornerRadius: 12))
-            }
+            PatinaButton("Re-shoot", style: .secondary,
+                         icon: Image(systemName: "camera.rotate"), action: reshoot)
+            PatinaButton("Save", style: .clay,
+                         icon: Image(systemName: "checkmark"), action: save)
         }
         .padding(.top, 6)
     }
