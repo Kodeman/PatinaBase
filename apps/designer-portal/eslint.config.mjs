@@ -2,6 +2,7 @@ import nextPlugin from '@next/eslint-plugin-next';
 import reactHooks from 'eslint-plugin-react-hooks';
 import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
+import jsxA11yPlugin from 'eslint-plugin-jsx-a11y';
 
 // Flat config for ESLint v9. Consumes @next/eslint-plugin-next's native flat
 // config directly (FlatCompat -> eslint-config-next crashes under ESLint 9 +
@@ -12,6 +13,7 @@ export default [
   {
     ignores: [
       '.next/**',
+      '.open-next/**',
       'dist/**',
       'node_modules/**',
       'coverage/**',
@@ -42,6 +44,11 @@ export default [
       // erroring "Definition for rule not found". We deliberately do NOT enable
       // @typescript-eslint/recommended (it would add ~180 no-explicit-any errors).
       '@typescript-eslint': tsPlugin,
+      // Same reasoning: registered so inline `// eslint-disable jsx-a11y/*`
+      // directives (e.g. capture-lead-sheet.tsx's no-autofocus exemption)
+      // resolve instead of erroring "Definition for rule not found". Not
+      // enabling the recommended ruleset.
+      'jsx-a11y': jsxA11yPlugin,
     },
     rules: {
       ...nextPlugin.flatConfig.recommended.rules,
