@@ -49,7 +49,11 @@ struct NotificationFeedView: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.isLoading && viewModel.notifications.isEmpty {
+        if !AuthService.shared.isAuthenticated {
+            // Wave 1 E.1: a guest's first look at this feed used to be an
+            // error screen. Invite, don't apologize.
+            guestInviteView
+        } else if viewModel.isLoading && viewModel.notifications.isEmpty {
             loadingView
         } else if let error = viewModel.error, viewModel.notifications.isEmpty {
             errorView(error)
@@ -99,17 +103,34 @@ struct NotificationFeedView: View {
     }
 
     private var emptyView: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
             Spacer()
-            Image(systemName: "bell.slash")
-                .font(.system(size: 28))
-                .foregroundStyle(PatinaColors.Text.muted)
-            Text("You're all caught up")
-                .font(PatinaTypography.bodySmall)
-                .foregroundStyle(PatinaColors.Text.secondary)
+            PatinaEmptyState(
+                icon: "bell",
+                title: "Nothing yet",
+                message: "Updates from your designer will land here."
+            )
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Guest state: the feed is a signed-in surface, so guests get a quiet
+    /// invitation with a sign-in CTA rather than an error (Wave 1 E.1).
+    private var guestInviteView: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            PatinaEmptyState(
+                icon: "bell",
+                title: "Nothing yet",
+                message: "Updates from your designer will land here. Sign in to stay in the loop.",
+                ctaTitle: "Sign in",
+                ctaAction: { coordinator.presentAuthentication() }
+            )
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("NotificationFeedView.GuestInvite")
     }
 
     private func errorView(_ message: String) -> some View {
