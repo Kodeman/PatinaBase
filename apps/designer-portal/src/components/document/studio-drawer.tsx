@@ -20,8 +20,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { BookOpen, Package, Receipt, Users, Clock, Bell, MessageSquarePlus } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useUnreadInboxCount, useProcurementUnreadCount } from '@patina/supabase';
+import { ALL_STUDIO_SURFACES } from '@/lib/document/registry';
+import { documentEvents } from '@/lib/analytics/document-events';
 import { DocSheet } from './overlays/doc-sheet';
 import { PostSheet, openPost } from './overlays/post-sheet';
 import { OrdersLedger } from './orders-ledger';
@@ -34,17 +36,56 @@ import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { AccountNameplate } from './account/account-nameplate';
 import type { OpenLedgerContext } from './command-bar';
 
-const LEDGERS = [
-  { key: 'library', name: 'Library', icon: BookOpen, weight: 'room', href: '/library' },
-  { key: 'orders', name: 'Orders', icon: Package, weight: 'sheet' },
-  { key: 'accounts', name: 'Accounts', icon: Receipt, weight: 'sheet' },
-  { key: 'people', name: 'People', icon: Users, weight: 'room', href: '/people' },
-  { key: 'hours', name: 'Hours', icon: Clock, weight: 'sheet' },
-  { key: 'feedback', name: 'Feedback', icon: MessageSquarePlus, weight: 'sheet' },
-] as const;
+/** R93 — the five doors, sourced from the Studio Surface Registry: label,
+ *  icon, and weight all come from one place now, so a rename or re-icon
+ *  there changes the drawer (and ⌘K, and Contents) together. Only display
+ *  order and each room's href stay this component's concern — the registry
+ *  is deliberately route-agnostic (see its file doc). */
+function findSurface(key: string) {
+  const surface = ALL_STUDIO_SURFACES.find((s) => s.key === key);
+  if (!surface) throw new Error(`Studio Drawer: the registry is missing "${key}"`);
+  return surface;
+}
 
-type Ledger = (typeof LEDGERS)[number];
-type LedgerKey = Ledger['key'];
+type LedgerKey = 'library' | 'orders' | 'accounts' | 'people' | 'hours';
+
+interface Ledger {
+  key: LedgerKey;
+  name: string;
+  icon: LucideIcon;
+  weight: 'room' | 'sheet';
+  href?: string;
+}
+
+// Room-weight doors need a route; the registry doesn't carry one on purpose.
+const DOOR_HREF: Partial<Record<LedgerKey, string>> = {
+  library: '/library',
+  people: '/people',
+};
+
+const LEDGERS: Ledger[] = (['library', 'orders', 'accounts', 'people', 'hours'] as const).map(
+  (key) => {
+    const surface = findSurface(key);
+    return {
+      key,
+      name: surface.label,
+      icon: surface.icon,
+      weight: surface.weight === 'room' ? 'room' : ('sheet' as const),
+      href: DOOR_HREF[key],
+    };
+  },
+);
+
+// The Post (F6) shares the registry's canonical name + icon even though the
+// bell isn't a door in the row — the two can never drift apart this way.
+const THE_POST = findSurface('the-post');
+
+// Feedback isn't a Studio Surface (R93/R95 — it's a reachable sheet, not a
+// labelled doorway): it keeps its own small meta for the sheet title/variant,
+// exactly as it did before the registry existed.
+const FEEDBACK_SHEET = { key: 'feedback' as const, name: 'Feedback', weight: 'sheet' as const };
+
+type SheetKey = LedgerKey | typeof FEEDBACK_SHEET.key;
 
 /** A quiet breadcrumb for the current surface; the Desk needs none — the
  *  wordmark is the home affordance. */
@@ -60,11 +101,12 @@ function breadcrumbFor(pathname: string | null): string | null {
 export function StudioDrawer() {
   const router = useRouter();
   const pathname = usePathname();
-  const [openLedger, setOpenLedger] = useState<LedgerKey | null>(null);
+  const [openLedger, setOpenLedger] = useState<SheetKey | null>(null);
   // Pre-addressing context for whichever sheet opens (Orders: vendor/page;
   // Accounts: receivables page + invoiceId). Each book reads only its own keys.
   const [sheetContext, setSheetContext] = useState<OpenLedgerContext | null>(null);
-  const open = LEDGERS.find((l) => l.key === openLedger) ?? null;
+  const openDoor = LEDGERS.find((l) => l.key === openLedger) ?? null;
+  const open = openLedger === FEEDBACK_SHEET.key ? FEEDBACK_SHEET : openDoor;
   const { inHandToday } = useDocumentTime();
   // The Post's Record merges the inbox + procurement feeds, so the bell's
   // awareness dot must read both unreads or it would lie about the sheet.
@@ -76,9 +118,14 @@ export function StudioDrawer() {
 
   /** Walk into a Room: stash the surface we're leaving, then navigate. The
    *  prior document unmounts and puts itself down (timer chains out). A no-op
-   *  when we're already in that Room (no redundant push / remount / refetch). */
-  const enterRoom = (href: string) => {
+   *  when we're already in that Room (no redundant push / remount / refetch).
+   *  `source` is only passed by the drawer's own buttons (F6/wayfinding) — the
+   *  generic open-ledger event below is shared with ⌘K and other surfaces that
+   *  don't (yet) carry their own source through the event, so it stays silent
+   *  rather than mislabeling their opens as the drawer's. */
+  const enterRoom = (href: string, key: string, source?: 'drawer') => {
     if (pathname === href) return;
+    if (source) documentEvents.wayfinding.roomEntered({ key, source });
     rememberRoomOrigin(pathname);
     router.push(href);
   };
@@ -92,10 +139,15 @@ export function StudioDrawer() {
         .detail;
       const name = typeof detail === 'string' ? detail : detail.name;
       const context = typeof detail === 'string' ? null : (detail.context ?? null);
+      if (name === FEEDBACK_SHEET.key) {
+        setSheetContext(context);
+        setOpenLedger(FEEDBACK_SHEET.key);
+        return;
+      }
       const match = LEDGERS.find((l) => l.key === name);
       if (!match) return;
       if (match.weight === 'room') {
-        enterRoom(match.href);
+        enterRoom(match.href!, match.key);
         return;
       }
       setSheetContext(context);
@@ -148,11 +200,19 @@ export function StudioDrawer() {
                 key={ledger.key}
                 type="button"
                 aria-current={here ? 'page' : undefined}
-                onClick={() =>
-                  ledger.weight === 'room'
-                    ? enterRoom(ledger.href)
-                    : (setSheetContext(null), setOpenLedger(ledger.key))
-                }
+                onClick={() => {
+                  documentEvents.wayfinding.doorOpened({
+                    key: ledger.key,
+                    weight: ledger.weight,
+                    source: 'drawer',
+                  });
+                  if (ledger.weight === 'room') {
+                    enterRoom(ledger.href!, ledger.key, 'drawer');
+                  } else {
+                    setSheetContext(null);
+                    setOpenLedger(ledger.key);
+                  }
+                }}
                 className={`relative inline-flex items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[0.82rem] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)] ${
                   here
                     ? 'text-[var(--text-primary)]'
@@ -177,6 +237,7 @@ export function StudioDrawer() {
           <button
             type="button"
             onClick={() => {
+              documentEvents.wayfinding.doorOpened({ key: 'hours', weight: 'sheet', source: 'drawer' });
               setSheetContext(null);
               setOpenLedger('hours');
             }}
@@ -199,19 +260,32 @@ export function StudioDrawer() {
             )}
           </button>
 
+          {/* F6 — named, not just aria-labelled: a visible DM-mono uppercase
+              tracked label matching the drawer's other readouts. D8 holds:
+              the unread affordance stays the quiet clay dot, never a count. */}
           <button
             type="button"
-            onClick={openPost}
-            aria-label={unread > 0 ? `The Post, ${unread} unread` : 'The Post'}
-            className="relative inline-flex h-9 w-9 items-center justify-center rounded-[3px] text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
+            onClick={() => {
+              documentEvents.wayfinding.doorOpened({
+                key: THE_POST.key,
+                weight: THE_POST.weight === 'room' ? 'room' : 'sheet',
+                source: 'drawer',
+              });
+              openPost();
+            }}
+            aria-label={unread > 0 ? `${THE_POST.label}, ${unread} unread` : THE_POST.label}
+            className="relative inline-flex items-center gap-1.5 rounded-[3px] px-2.5 py-2 text-[var(--text-body)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-clay)]"
           >
-            <Bell className="h-4 w-4" strokeWidth={1.5} aria-hidden />
-            {unread > 0 && (
-              <span
-                aria-hidden
-                className="absolute right-[7px] top-[7px] h-1.5 w-1.5 rounded-full bg-[var(--color-clay)]"
-              />
-            )}
+            <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+              <THE_POST.icon className="h-4 w-4" strokeWidth={1.5} aria-hidden />
+              {unread > 0 && (
+                <span
+                  aria-hidden
+                  className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--color-clay)]"
+                />
+              )}
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.08em]">{THE_POST.label}</span>
           </button>
 
           <AccountNameplate />
@@ -224,6 +298,7 @@ export function StudioDrawer() {
         onClose={() => setOpenLedger(null)}
         title={open?.name ?? ''}
         variant={open?.key === 'feedback' ? 'center' : 'sheet'}
+        wide={open?.key === 'orders' || open?.key === 'accounts' || open?.key === 'hours'}
       >
         {open?.key === 'orders' && (
           <OrdersLedger onClose={() => setOpenLedger(null)} initialContext={sheetContext} />

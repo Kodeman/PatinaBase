@@ -9,12 +9,23 @@
  */
 
 import { usePathname } from 'next/navigation';
-import { Bell } from 'lucide-react';
 import { useUnreadInboxCount, useProcurementUnreadCount } from '@patina/supabase';
+import { ALL_STUDIO_SURFACES } from '@/lib/document/registry';
 import { useDocumentTime } from '@/hooks/document-time-provider';
 import { fmtElapsedQuiet, fmtMinutes } from '@/lib/document/time-derivation';
 import { openPost } from '../overlays/post-sheet';
 import { useMobileShell } from './mobile-shell';
+
+// R93 — the same registry the Studio Drawer reads: The Post's icon (and
+// name, for the accessible label) come from one place so the desktop bell
+// and this one can never drift apart.
+function findSurface(key: string) {
+  const surface = ALL_STUDIO_SURFACES.find((s) => s.key === key);
+  if (!surface) throw new Error(`Mobile bar: the registry is missing "${key}"`);
+  return surface;
+}
+
+const THE_POST = findSurface('the-post');
 
 const STRATA = (
   <span className="inline-flex flex-col gap-[2px]">
@@ -26,16 +37,26 @@ const STRATA = (
 
 /** The Post bell (R82) — the mobile twin of the Studio Drawer bell. Dispatches
  *  the same `document:open-post` event; the clay dot is awareness, not a count
- *  (D8), reading the same inbox + procurement unreads as the desktop bell. */
+ *  (D8), reading the same inbox + procurement unreads as the desktop bell.
+ *  Icon-only, unlike the desktop drawer's F6 label: this button shares a
+ *  single 56px-tall row with the spine handle + timer + drawer book (all four
+ *  across at ~390px in the in-document state), so there's no room for a
+ *  visible "The Post" without crowding the others — the accessible name
+ *  (sourced from the registry, same as the icon) still carries it for
+ *  assistive tech. */
 function MobileBell({ unread }: { unread: number }) {
   return (
     <button
       type="button"
       onClick={openPost}
-      aria-label={unread > 0 ? `The Post, ${unread} unread` : 'The Post'}
+      aria-label={unread > 0 ? `${THE_POST.label}, ${unread} unread` : THE_POST.label}
       className="relative flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[5px] border border-[rgba(250,247,242,0.14)] bg-[rgba(250,247,242,0.06)]"
     >
-      <Bell className="h-[15px] w-[15px] text-[var(--color-clay)]" strokeWidth={1.5} aria-hidden />
+      <THE_POST.icon
+        className="h-[15px] w-[15px] text-[var(--color-clay)]"
+        strokeWidth={1.5}
+        aria-hidden
+      />
       {unread > 0 && (
         <span
           aria-hidden
