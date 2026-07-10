@@ -6,10 +6,20 @@
  * the mark answers "how far" right in the result row. Ledgers dispatch an
  * `open-ledger` event the Studio Drawer owns (the drawer holds sheet state).
  *
+ * R93 — the Populated Palette: a clean ⌘K opens ALREADY POPULATED, grouped
+ * under DM-mono eyebrows (In hand · Recent · This surface · Begin · Rooms &
+ * ledgers · Studio) rather than a blank prompt. Every room/ledger/verb is read
+ * from the single Studio Surface Registry (registry.tsx) — one icon, one
+ * shortcut, no parallel list — so a surface renamed there changes here at once.
+ *
  * R38 — the Engine speaks here, with no mode. The same box jumps to a
  * destination OR, for the current query, offers "Ask the Engine" as the last
  * row; choosing it answers inline in paper result-lines, each carrying one act:
  * Place → [document]. The ask leaves no thread; only the placement persists.
+ *
+ * F1 telemetry rides through `documentEvents.commandBar.*` /
+ * `documentEvents.wayfinding.*` — opened (hotkey vs affordance), queried
+ * (debounced), selected, zeroResult, and door-opened for room/ledger picks.
  *
  * R3-clean: this is a Document-local paper surface, NOT a design-system
  * Command/Dialog primitive — no shadows, ink border, flat edges.
@@ -17,8 +27,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import type { LucideIcon } from 'lucide-react';
+import { LifeBuoy } from 'lucide-react';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
-import { usePeopleDirectory } from '@patina/supabase';
+import { usePeopleDirectory, type PeopleDirectoryRow } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { openAccount } from './account/account-sheet';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
@@ -26,20 +38,77 @@ import { openPost } from './overlays/post-sheet';
 import { openFeedbackSheet } from './feedback/feedback-sheet';
 import { openHelp } from '@/lib/help-system/open-help';
 import { openDraftProposalPicker } from './rooms/drafting/draft-proposal-opener';
-import { fillStateForDesk } from '@/lib/document/fill-state';
-import { folderTab } from '@/lib/document/desk-derivation';
+import { fillStateForDesk, type FillState } from '@/lib/document/fill-state';
+import { folderTab, type DocumentStateRow } from '@/lib/document/desk-derivation';
+import {
+  STUDIO_ROOMS,
+  STUDIO_LEDGERS,
+  STUDIO_VERBS,
+  matchSurfaces,
+  type StudioSurface,
+} from '@/lib/document/registry';
+import {
+  documentEvents,
+  readRecentDocumentsInHand,
+  type RecentDocumentInHand,
+} from '@/lib/analytics/document-events';
 import { StrataMark } from './strata-mark';
 import { EngineResults, type InDocument } from './engine/engine-results';
 
-type Row =
-  | { kind: 'document'; id: string; label: string; sub: string; fill: [number, number, number] }
-  | { kind: 'ledger'; ledger: string; label: string; sub: string }
-  // `keywords` are extra match terms (aliases) folded into the filter only.
-  | { kind: 'action'; label: string; sub: string; run: () => void; keywords?: string }
-  | { kind: 'person'; label: string; sub: string; run: () => void }
-  | { kind: 'engine'; label: string; sub: string };
+/** One selectable line. `match` is the lowercased filter text (label + aliases
+ *  or keywords); registry surfaces additionally carry their icon + wayfinding
+ *  shortcut. Documents keep the Strata Mark as their glyph. */
+type PaletteRow =
+  | {
+      kind: 'document';
+      key: string;
+      label: string;
+      sub: string;
+      fill?: FillState;
+      hint?: string;
+      run: () => void;
+      match: string;
+    }
+  | {
+      kind: 'room' | 'ledger' | 'verb';
+      key: string;
+      label: string;
+      sub: string;
+      icon: LucideIcon;
+      shortcut?: string[];
+      run: () => void;
+      match: string;
+    }
+  | {
+      kind: 'action';
+      key: string;
+      label: string;
+      sub: string;
+      icon?: LucideIcon;
+      run: () => void;
+      match: string;
+    }
+  | {
+      kind: 'help';
+      key: string;
+      label: string;
+      sub: string;
+      icon: LucideIcon;
+      run: () => void;
+      match: string;
+    }
+  | { kind: 'person'; key: string; label: string; sub: string; run: () => void; match: string }
+  | { kind: 'engine'; key: string; label: string; sub: string; match: string };
 
-const LEDGERS = ['Library', 'Orders', 'Accounts', 'People', 'Hours', 'Feedback'];
+interface PaletteSection {
+  eyebrow: string | null;
+  rows: PaletteRow[];
+}
+
+// The two context-boosted THIS-SURFACE icons, pulled from the registry so they
+// can never drift from the canonical verb/room marks.
+const DRAW_INVOICE_ICON = STUDIO_VERBS.find((v) => v.key === 'draw-invoice')!.icon;
+const DRAFTING_ROOM_ICON = STUDIO_ROOMS.find((r) => r.key === 'drafting-room')!.icon;
 
 /** Set true by {@link openCaptureLead} when the front door is invoked from a
  *  non-Desk surface; the Desk reads + clears it on mount so the sheet opens
@@ -109,6 +178,9 @@ export function CommandBar() {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [asking, setAsking] = useState<string | null>(null);
+  // The recent-documents MRU (localStorage) — re-read on each open so a fresh
+  // "Recent" group reflects where the designer has actually been.
+  const [recent, setRecent] = useState<RecentDocumentInHand[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // ⌘K / Ctrl-K toggles; Esc closes (but yields to a deeper overlay first).
@@ -116,6 +188,7 @@ export function CommandBar() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        if (!open) documentEvents.commandBar.opened({ source: 'hotkey' });
         setOpen((v) => !v);
       } else if (e.key === 'Escape' && open) {
         e.preventDefault();
@@ -124,7 +197,12 @@ export function CommandBar() {
         else setOpen(false);
       }
     };
-    const onAffordance = () => setOpen(true);
+    // The Desk header's "Find anything" button dispatches this — an affordance,
+    // not the hotkey (F1 source attribution).
+    const onAffordance = () => {
+      if (!open) documentEvents.commandBar.opened({ source: 'affordance' });
+      setOpen(true);
+    };
     window.addEventListener('keydown', onKey, { capture: true });
     window.addEventListener('document:open-command-bar', onAffordance);
     return () => {
@@ -138,183 +216,398 @@ export function CommandBar() {
       setQuery('');
       setActive(0);
       setAsking(null);
+      setRecent(readRecentDocumentsInHand());
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
 
-  // The document in hand (if any) — Place → targets it directly (R38).
-  const inDocument = useMemo<InDocument | null>(() => {
+  // The engagement in hand (if the route is /doc/[id]) — the "In hand" row and
+  // the pre-addressing of THIS-SURFACE verbs both read off it. Works for any
+  // engagement kind (a proposal carries no project_id, so `inDocument` below
+  // stays project-scoped for the Engine, but the row still resumes).
+  const inHandRow = useMemo(() => {
     const m = pathname?.match(/^\/doc\/(.+)$/);
     const docId = m?.[1] ?? null;
     if (!docId || !data) return null;
-    const f = [...(data.folders ?? []), ...(data.chips ?? [])].find(
-      (x) => x.row.engagement_id === docId,
+    return (
+      [...(data.folders ?? []), ...(data.chips ?? [])].find(
+        (x) => x.row.engagement_id === docId,
+      ) ?? null
     );
-    const pid = f?.row.project_id;
-    return pid ? { projectId: pid, projectName: folderTab(f!.row) } : null;
   }, [pathname, data]);
 
-  const rows = useMemo<Row[]>(() => {
-    const docs: Row[] = [...(data?.folders ?? []), ...(data?.chips ?? [])].map((f) => ({
-      kind: 'document' as const,
-      id: f.row.engagement_id,
-      label: folderTab(f.row),
-      sub: f.row.title,
-      fill: fillStateForDesk(f.row),
-    }));
-    const ledgers: Row[] = LEDGERS.map((l) => ({
-      kind: 'ledger' as const,
-      ledger: l,
-      label: l,
-      sub: l === 'Library' ? 'room ↗' : 'ledger',
-    }));
-    const actions: Row[] = [
+  // The document in hand for the Engine (R38) — Place → targets it directly.
+  // Project-scoped: a still-drafting proposal has no project to place into.
+  const inDocument = useMemo<InDocument | null>(() => {
+    const pid = inHandRow?.row.project_id;
+    return pid ? { projectId: pid, projectName: folderTab(inHandRow!.row) } : null;
+  }, [inHandRow]);
+
+  const { rendered, flatRows, matchCount } = useMemo(() => {
+    const liveDocs = [...(data?.folders ?? []), ...(data?.chips ?? [])];
+    const liveByEngagement = new Map(liveDocs.map((f) => [f.row.engagement_id, f.row]));
+
+    const documentRow = (r: DocumentStateRow, hint?: string): PaletteRow => ({
+      kind: 'document',
+      key: `doc:${r.engagement_id}`,
+      label: folderTab(r),
+      sub: r.title,
+      fill: fillStateForDesk(r),
+      hint,
+      run: () => router.push(`/doc/${r.engagement_id}`),
+      match: `${folderTab(r)} ${r.title}`.toLowerCase(),
+    });
+
+    // A recent MRU entry: prefer the live Desk row (truthful fill + family tab);
+    // an off-Desk memory falls back to its stored title + a neutral clay mark.
+    const recentRow = (entry: RecentDocumentInHand): PaletteRow => {
+      const live = liveByEngagement.get(entry.id);
+      if (live) return documentRow(live);
+      const label = folderTab({ client_name: entry.subtitle ?? '', title: entry.title });
+      return {
+        kind: 'document',
+        key: `doc:${entry.id}`,
+        label,
+        sub: entry.title,
+        run: () => router.push(`/doc/${entry.id}`),
+        match: `${label} ${entry.title}`.toLowerCase(),
+      };
+    };
+
+    const personRow = (p: PeopleDirectoryRow): PaletteRow => ({
+      kind: 'person',
+      key: `person:${p.role}:${p.person_id}`,
+      // F4 (NAT-23): deep-link onto the exact profile via ?person=, not the bare
+      // People Room. The People Room honors ?person= to select the party.
+      label: p.display_name,
+      sub: `${p.role} · jump to person →`,
+      run: () => router.push(`/people?person=${p.person_id}`),
+      match: `${p.display_name} ${p.role}`.toLowerCase(),
+    });
+
+    // A still-drafting proposal in hand can be walked into the Drafting Room
+    // (R93 THIS-SURFACE). Read cheaply off the row we already have — no fetch.
+    const draftingProposalId =
+      inHandRow &&
+      inHandRow.row.engagement_kind === 'proposal' &&
+      inHandRow.row.proposal_status === 'draft'
+        ? inHandRow.row.proposal_id
+        : null;
+
+    // One handler per registry surface, all wired to the openers the drawer/desk
+    // already use (R93: no parallel action list). Rooms + orders/accounts/hours
+    // route through the drawer's open-ledger event by their registry key; The
+    // Post opens its own sheet; the Drafting Room needs a proposal in hand (else
+    // it falls to the draft-a-proposal picker, the doorway when none is held).
+    const runForSurface = (s: StudioSurface): (() => void) => {
+      switch (s.key) {
+        case 'capture-lead':
+          return () => {
+            if (pathname !== '/desk') router.push('/desk');
+            openCaptureLead();
+          };
+        case 'open-project':
+          return () => {
+            if (pathname !== '/desk') router.push('/desk');
+            openOpenProject();
+          };
+        case 'draft-proposal':
+          return () => openDraftProposalPicker();
+        case 'draw-invoice':
+          return () => openInvoiceComposer();
+        case 'add-maker':
+          return () => router.push('/people?add=maker');
+        case 'the-post':
+          return () => openPost();
+        case 'drafting-room':
+          return () =>
+            draftingProposalId
+              ? router.push(`/drafting/${draftingProposalId}`)
+              : openDraftProposalPicker();
+        default:
+          return () => openLedger(s.key);
+      }
+    };
+
+    const surfaceRow = (s: StudioSurface): PaletteRow => ({
+      kind: s.kind,
+      key: s.key,
+      label: s.label,
+      sub: s.subLabel ?? (s.kind === 'room' ? 'room ↗' : 'ledger'),
+      icon: s.icon,
+      shortcut: s.shortcut,
+      run: runForSurface(s),
+      match: [s.label, ...s.aliases].join(' ').toLowerCase(),
+    });
+
+    // The studio's own controls — F5 adds "Browse the Help Center" (distinct
+    // from the contextual "Help…" panel). Kept filterable so "sign out",
+    // "settings", "feedback" still resolve when typed.
+    const utilityRows: PaletteRow[] = [
       {
-        // G1 capture · R62 — alias-aware so "new lead" / "new client" /
-        // "capture" land here (not only "Ask the Engine"). The sheet lives on
-        // the Desk; route there if we're elsewhere, then open it (the pending
-        // flag carries the intent across the navigation).
-        kind: 'action' as const,
-        label: 'Capture a lead',
-        sub: 'begin a Brief',
-        keywords: 'new lead new client capture prospect intake brief',
-        run: () => {
-          if (pathname !== '/desk') router.push('/desk');
-          openCaptureLead();
-        },
+        kind: 'help',
+        key: 'help-center',
+        icon: LifeBuoy,
+        label: 'Browse the Help Center',
+        sub: 'guides · every surface',
+        run: () => router.push('/help'),
+        match: 'browse help center guides support articles every surface',
       },
       {
-        // R79 — open a project that didn't come through a proposal.
-        kind: 'action' as const,
-        label: 'Open a project',
-        sub: 'no proposal needed',
-        keywords: 'new project open project manual project start project create project',
-        run: () => {
-          if (pathname !== '/desk') router.push('/desk');
-          openOpenProject();
-        },
-      },
-      {
-        // R74b — the anti-wizard composer; context-free it asks which project.
-        kind: 'action' as const,
-        label: 'Draw an invoice',
-        sub: 'milestones · time · FF&E · ad-hoc',
-        keywords: 'invoice bill new invoice draw invoice billing money',
-        run: () => openInvoiceComposer(),
-      },
-      {
-        // R85 · PRO-01 — draft a proposal for an existing household (skips
-        // lead/discovery). The picker cold-starts; templates are retired.
-        kind: 'action' as const,
-        label: 'Draft a proposal',
-        sub: 'for an existing household',
-        keywords: 'new proposal draft proposal quote estimate propose',
-        run: () => openDraftProposalPicker(),
-      },
-      {
-        // R78 — add a maker (the Wave-1 owed doorway): the People Room's
-        // add-a-person sheet in maker mode.
-        kind: 'action' as const,
-        label: 'Add a maker',
-        sub: 'a vendor on your roster',
-        keywords: 'new vendor add vendor add maker supplier manufacturer trade',
-        run: () => router.push('/people?add=maker'),
-      },
-      {
-        // R82 — the Post: Letters (messages) + the Record (system notices).
-        kind: 'action' as const,
-        label: 'The Post',
-        sub: 'letters · the record',
-        keywords: 'inbox notifications messages mail the post letters record bell',
-        run: () => openPost(),
-      },
-      {
-        // R89 — the contextual help panel, scoped to the current surface.
-        kind: 'action' as const,
+        kind: 'action',
+        key: 'help-panel',
         label: 'Help…',
         sub: 'about this surface',
-        keywords: 'help guide docs how to support question learn',
         run: () => openHelp(),
+        match: 'help guide docs how to support question learn about this surface',
       },
       {
-        // The feedback layer (docs/ledger/patina-feedback-layer-prd.md): the ⌘K
-        // keyboard entry to the capture sheet (also ⌘⇧F, also the FAB).
-        kind: 'action' as const,
+        kind: 'action',
+        key: 'leave-note',
         label: 'Leave a note',
         sub: 'feedback on this screen',
-        keywords: 'feedback note comment bug idea working missing change suggestion',
         run: () => openFeedbackSheet(),
+        match: 'feedback note comment bug idea working missing change suggestion leave a note',
       },
-      { kind: 'action' as const, label: 'The Desk', sub: 'go home', run: () => router.push('/desk') },
       {
-        kind: 'action' as const,
+        kind: 'action',
+        key: 'desk',
+        label: 'The Desk',
+        sub: 'go home',
+        run: () => router.push('/desk'),
+        match: 'the desk go home',
+      },
+      {
+        kind: 'action',
+        key: 'interruptions',
         label: 'Interruptions',
         sub: 'break-through settings',
         run: () => window.dispatchEvent(new CustomEvent('document:open-interruptions')),
+        match: 'interruptions break-through settings notifications',
       },
       {
-        kind: 'action' as const,
+        kind: 'action',
+        key: 'settings',
         label: 'Settings',
         sub: 'profile · notifications · security',
-        keywords: 'account profile preferences settings security notifications devices password studio',
         run: openAccount,
+        match: 'account profile preferences settings security notifications devices password studio',
       },
       {
-        kind: 'action' as const,
+        kind: 'action',
+        key: 'signout',
         label: 'Sign out',
         sub: user?.email ?? 'end this session',
-        keywords: 'log out logout sign off leave',
         run: () => {
           void signOut();
         },
+        match: 'log out logout sign off leave sign out',
       },
     ];
-    // Jump to a person (G3) — the unified directory's parties. Only offered for
-    // a non-empty query so a clean ⌘K isn't flooded with the whole roster.
-    const persons: Row[] =
-      query.trim() && people
-        ? people.slice(0, 40).map((p) => ({
-            kind: 'person' as const,
-            label: p.display_name,
-            sub: `${p.role} · jump to person →`,
-            run: () => {
-              // Land in the People Room; the directory holds the roster. A
-              // deep-link onto the exact profile would need a `?person=` param
-              // honored by the People Room (out of this territory — DECISIONS).
-              router.push('/people');
-            },
-          }))
-        : [];
+
     const q = query.trim().toLowerCase();
-    const dest = [...docs, ...ledgers, ...actions, ...persons];
-    const filtered = q
-      ? dest.filter((r) => {
-          const keywords = r.kind === 'action' ? (r.keywords ?? '') : '';
-          return `${r.label} ${r.sub} ${keywords}`.toLowerCase().includes(q);
-        })
-      : dest;
-    // R38: the ask is always offered for a non-empty query — destinations jump,
-    // a question asks. No mode.
-    if (query.trim()) {
-      filtered.push({ kind: 'engine', label: 'Ask the Engine', sub: `“${query.trim()}” · ask & place` });
+    let sections: PaletteSection[];
+    let matches = 0;
+
+    if (!q) {
+      // The populated palette (R93): grouped doorways, no query, always cut
+      // below the fold (the list scrolls).
+      sections = [];
+      if (inHandRow) {
+        sections.push({ eyebrow: 'In hand', rows: [documentRow(inHandRow.row, 'resume')] });
+      }
+      const recentRows = recent
+        .filter((r) => r.id !== inHandRow?.row.engagement_id)
+        .slice(0, 3)
+        .map(recentRow);
+      if (recentRows.length) sections.push({ eyebrow: 'Recent', rows: recentRows });
+
+      const thisSurface: PaletteRow[] = [];
+      if (inHandRow?.row.project_id) {
+        const projectName = folderTab(inHandRow.row);
+        const projectId = inHandRow.row.project_id;
+        thisSurface.push({
+          kind: 'verb',
+          key: 'draw-invoice-here',
+          label: `Draw an invoice for ${projectName}`,
+          sub: 'this household · pre-addressed',
+          icon: DRAW_INVOICE_ICON,
+          run: () => openInvoiceComposer({ projectId }),
+          match: '',
+        });
+      }
+      if (draftingProposalId) {
+        thisSurface.push({
+          kind: 'room',
+          key: 'drafting-room-here',
+          label: 'Open the Drafting Room',
+          sub: 'this proposal · boards & lines',
+          icon: DRAFTING_ROOM_ICON,
+          run: () => router.push(`/drafting/${draftingProposalId}`),
+          match: '',
+        });
+      }
+      if (thisSurface.length) sections.push({ eyebrow: 'This surface', rows: thisSurface });
+
+      sections.push({ eyebrow: 'Begin', rows: STUDIO_VERBS.map(surfaceRow) });
+      sections.push({
+        eyebrow: 'Rooms & ledgers',
+        rows: [...STUDIO_ROOMS.filter((s) => s.scope === 'global'), ...STUDIO_LEDGERS].map(
+          surfaceRow,
+        ),
+      });
+      sections.push({ eyebrow: 'Studio', rows: utilityRows });
+    } else {
+      // Typed: filter across documents + registry surfaces (matchSurfaces folds
+      // in aliases — "invoicing" finds Draw an invoice, "moodboards" the
+      // Drafting Room, "po" Orders) + people + the studio's own actions. The
+      // Engine is always offered; a dry query recovers to the Help Center.
+      const list: PaletteRow[] = [];
+      list.push(...liveDocs.map((f) => documentRow(f.row)).filter((r) => r.match.includes(q)));
+      list.push(...matchSurfaces(query).map(surfaceRow));
+      if (people) {
+        list.push(
+          ...people
+            .filter((p) => `${p.display_name} ${p.role}`.toLowerCase().includes(q))
+            .slice(0, 8)
+            .map(personRow),
+        );
+      }
+      list.push(...utilityRows.filter((r) => r.match.includes(q)));
+      matches = list.length;
+
+      if (matches === 0) {
+        list.push({
+          kind: 'help',
+          key: 'help-center-recovery',
+          icon: LifeBuoy,
+          label: 'No match — Browse the Help Center',
+          sub: 'search the guides →',
+          run: () => router.push('/help'),
+          match: '',
+        });
+      }
+      // R38: the ask is always offered for a non-empty query — destinations
+      // jump, a question asks. No mode.
+      list.push({
+        kind: 'engine',
+        key: 'engine',
+        label: 'Ask the Engine',
+        sub: `“${query.trim()}” · ask & place`,
+        match: '',
+      });
+      sections = [{ eyebrow: null, rows: list }];
     }
-    return filtered;
-  }, [data, people, query, router, user?.email, signOut]);
+
+    let idx = 0;
+    const renderedSections = sections.map((s) => ({
+      eyebrow: s.eyebrow,
+      items: s.rows.map((row) => ({ row, index: idx++ })),
+    }));
+    return {
+      rendered: renderedSections,
+      flatRows: sections.flatMap((s) => s.rows),
+      matchCount: matches,
+    };
+  }, [query, data, people, recent, inHandRow, router, pathname, user?.email, signOut]);
+
+  // F1 — queried (debounced ~300ms, not per-keystroke) + zeroResult.
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) return;
+    const t = window.setTimeout(() => {
+      documentEvents.commandBar.queried({ query_length: q.length, result_count: matchCount });
+      if (matchCount === 0) documentEvents.commandBar.zeroResult({ query_length: q.length });
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [query, matchCount]);
 
   // Keep the active row in range as the list changes.
   useEffect(() => {
-    setActive((a) => Math.min(a, Math.max(0, rows.length - 1)));
-  }, [rows.length]);
+    setActive((a) => Math.min(a, Math.max(0, flatRows.length - 1)));
+  }, [flatRows.length]);
 
-  const choose = (row: Row) => {
+  const choose = (row: PaletteRow, index: number) => {
     if (row.kind === 'engine') {
       setAsking(query.trim()); // answer inline; don't close the bar
       return;
     }
+    documentEvents.commandBar.selected({
+      kind: row.kind,
+      key: row.key,
+      position: index,
+      query_length: query.trim().length,
+    });
+    if (row.kind === 'room' || row.kind === 'ledger') {
+      documentEvents.wayfinding.doorOpened({
+        key: row.key,
+        weight: row.kind === 'room' ? 'room' : 'sheet',
+        source: 'palette',
+      });
+    }
     setOpen(false);
-    if (row.kind === 'document') router.push(`/doc/${row.id}`);
-    else if (row.kind === 'ledger') openLedger(row.ledger);
-    else row.run();
+    row.run();
+  };
+
+  const renderGlyph = (row: PaletteRow) => {
+    if (row.kind === 'document') {
+      return row.fill ? (
+        <StrataMark size="sm" fill={row.fill} />
+      ) : (
+        <StrataMark size="sm" state="active" />
+      );
+    }
+    if (row.kind === 'engine') return <StrataMark size="sm" state="active" />;
+    if (row.kind === 'person') {
+      // A party reads as a quiet terracotta dot — the People spine color
+      // (studio-drawer), so the noun's home is legible.
+      return (
+        <span
+          aria-hidden
+          className="inline-block h-[8px] w-[8px] shrink-0 rounded-full"
+          style={{ background: 'var(--color-terracotta)' }}
+        />
+      );
+    }
+    const Icon = 'icon' in row ? row.icon : undefined;
+    if (!Icon) {
+      // A studio action with no registry icon keeps the flat aged-oak tick.
+      return (
+        <span
+          aria-hidden
+          className="inline-block h-[14px] w-[3px] rounded-[1px]"
+          style={{ background: 'var(--color-aged-oak)' }}
+        />
+      );
+    }
+    return (
+      <Icon
+        className="h-[15px] w-[15px] shrink-0 text-[var(--color-aged-oak)]"
+        strokeWidth={1.5}
+        aria-hidden
+      />
+    );
+  };
+
+  const renderTrailing = (row: PaletteRow) => {
+    if (row.kind === 'document' && row.hint) {
+      return (
+        <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          {row.hint}
+        </span>
+      );
+    }
+    if (
+      (row.kind === 'room' || row.kind === 'ledger' || row.kind === 'verb') &&
+      row.shortcut?.length
+    ) {
+      return (
+        <span className="shrink-0 rounded-[3px] border border-[var(--color-pearl)] px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+          {row.shortcut.join(' ')}
+        </span>
+      );
+    }
+    return null;
   };
 
   if (!open) return null;
@@ -354,13 +647,13 @@ export function CommandBar() {
             }
             if (e.key === 'ArrowDown') {
               e.preventDefault();
-              setActive((a) => Math.min(a + 1, rows.length - 1));
+              setActive((a) => Math.min(a + 1, flatRows.length - 1));
             } else if (e.key === 'ArrowUp') {
               e.preventDefault();
               setActive((a) => Math.max(a - 1, 0));
-            } else if (e.key === 'Enter' && rows[active]) {
+            } else if (e.key === 'Enter' && flatRows[active]) {
               e.preventDefault();
-              choose(rows[active]);
+              choose(flatRows[active], active);
             }
           }}
         />
@@ -382,53 +675,42 @@ export function CommandBar() {
             <EngineResults query={asking} inDocument={inDocument} />
           </div>
         ) : (
-          <ul className="max-h-[52vh] overflow-y-auto py-1">
-            {rows.length === 0 && (
-              <li className="px-4 py-3 text-[12px] italic text-[var(--text-muted)]">
-                Nothing by that name.
-              </li>
-            )}
-            {rows.map((row, i) => (
-              <li key={`${row.kind}-${row.label}-${i}`}>
-                <button
-                  type="button"
-                  onMouseEnter={() => setActive(i)}
-                  onClick={() => choose(row)}
-                  className={`flex w-full items-center gap-3 px-4 py-2 text-left ${
-                    i === active ? 'bg-[rgba(196,165,123,0.12)]' : ''
-                  }`}
-                >
-                  {row.kind === 'document' ? (
-                    <StrataMark size="sm" fill={row.fill} />
-                  ) : row.kind === 'engine' ? (
-                    <StrataMark size="sm" state="active" />
-                  ) : row.kind === 'person' ? (
-                    // A party reads as a quiet terracotta dot — the People spine
-                    // color (studio-drawer), so the noun's home is legible.
-                    <span
-                      aria-hidden
-                      className="inline-block h-[8px] w-[8px] shrink-0 rounded-full"
-                      style={{ background: 'var(--color-terracotta)' }}
-                    />
-                  ) : (
-                    <span
-                      aria-hidden
-                      className="inline-block h-[14px] w-[3px] rounded-[1px]"
-                      style={{ background: row.kind === 'ledger' ? 'var(--color-clay)' : 'var(--color-aged-oak)' }}
-                    />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium text-[var(--color-charcoal)]">
-                      {row.label}
-                    </span>
-                    <span className="block truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                      {row.sub}
-                    </span>
-                  </span>
-                </button>
-              </li>
+          <div className="max-h-[52vh] overflow-y-auto py-1">
+            {rendered.map((section) => (
+              <div key={section.eyebrow ?? 'results'}>
+                {section.eyebrow && (
+                  <div className="px-4 pb-1 pt-3 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                    {section.eyebrow}
+                  </div>
+                )}
+                <ul>
+                  {section.items.map(({ row, index }) => (
+                    <li key={row.key}>
+                      <button
+                        type="button"
+                        onMouseEnter={() => setActive(index)}
+                        onClick={() => choose(row, index)}
+                        className={`flex w-full items-center gap-3 px-4 py-2 text-left ${
+                          index === active ? 'bg-[rgba(196,165,123,0.12)]' : ''
+                        }`}
+                      >
+                        {renderGlyph(row)}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[13px] font-medium text-[var(--color-charcoal)]">
+                            {row.label}
+                          </span>
+                          <span className="block truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                            {row.sub}
+                          </span>
+                        </span>
+                        {renderTrailing(row)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>
