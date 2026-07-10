@@ -10,6 +10,9 @@ public protocol CaptureAnalytics: Sendable {
     func event(_ name: String, _ properties: [String: String])
     /// Associate subsequent events with a stable user id (no-op by default).
     func identify(_ userID: String)
+    /// Associate subsequent events with a stable user id + person properties
+    /// (no-op by default).
+    func identify(_ userID: String, properties: [String: String])
 }
 
 public extension CaptureAnalytics {
@@ -17,4 +20,6 @@ public extension CaptureAnalytics {
     func event(_ name: String) { event(name, [:]) }
     /// Additive (Phase 1b): existing conformers (the mock) keep compiling.
     func identify(_ userID: String) {}
+    /// Additive (Phase 3): existing conformers (the mock) keep compiling.
+    func identify(_ userID: String, properties: [String: String]) {}
 }

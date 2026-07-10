@@ -30,6 +30,7 @@ final class PostHogCaptureAnalytics: CaptureAnalytics {
         config.captureScreenViews = false                // we call `screen` manually
         config.captureApplicationLifecycleEvents = true
         PostHogSDK.shared.setup(config)
+        PostHogSDK.shared.register(["surface": "field-ios"])
         log.info("PostHog initialised (host: \(AppConfiguration.postHogHost, privacy: .public))")
         return true
     }()
@@ -51,5 +52,10 @@ final class PostHogCaptureAnalytics: CaptureAnalytics {
     func identify(_ userID: String) {
         guard enabled else { return }
         PostHogSDK.shared.identify(userID)
+    }
+
+    func identify(_ userID: String, properties: [String: String]) {
+        guard enabled else { return }
+        PostHogSDK.shared.identify(userID, userProperties: properties)
     }
 }
