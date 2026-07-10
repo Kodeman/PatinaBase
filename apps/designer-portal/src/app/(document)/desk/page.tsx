@@ -25,6 +25,8 @@ import { InMotionChip } from '@/components/document/in-motion-chip';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import { DeskReconnect } from '@/components/document/desk-reconnect';
 import { FieldDesk } from '@/components/document/field/field-desk';
+import { DeskContents } from '@/components/document/desk-contents';
+import { MarginNote } from '@/components/document/margin-note';
 import { CaptureLeadSheet } from '@/components/document/overlays/capture-lead-sheet';
 import { OpenProjectSheet } from '@/components/document/overlays/open-project-sheet';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
@@ -108,6 +110,11 @@ export default function DeskPage() {
   const name = profile?.display_name || profile?.full_name || user?.name || null;
   const firstName = firstNameOf(name);
 
+  // A quiet Desk (no folders, no chips) lets the Studio index rise to fill the
+  // space — larger, and earlier in the composition — rather than sitting as
+  // bottom front matter. Only known once the read resolves.
+  const deskEmpty = !!data && data.folders.length === 0 && data.chips.length === 0;
+
   return (
     <main className="mx-auto w-full max-w-[1120px] px-[clamp(1.5rem,5vw,4rem)] pb-28 pt-14">
       <header className="mb-12 flex items-baseline justify-between gap-4">
@@ -151,6 +158,16 @@ export default function DeskPage() {
         </div>
       </header>
 
+      {/* R94 — the one first-touch note: what the Desk is, and the ⌘K move.
+          Recedes forever on the first ⌘K open or the × (never a tour). */}
+      <MarginNote noteKey="desk-first-touch" commandBar className="mb-10">
+        This is your Desk. Folders that need you gather here; the rest stays quiet.{' '}
+        <span className="font-mono text-[12px] not-italic tracking-[0.02em] text-[var(--text-muted)]">
+          ⌘K
+        </span>{' '}
+        finds anything by name — try “invoice”.
+      </MarginNote>
+
       <section aria-labelledby="needs-your-hand">
         <SectionEyebrow count={data?.folders.length}>
           <span id="needs-your-hand">Needs your hand</span>
@@ -188,6 +205,10 @@ export default function DeskPage() {
         )}
       </section>
 
+      {/* R95 — on a quiet Desk the Studio index rises here, at full weight, to
+          fill the space the folders would occupy. */}
+      {deskEmpty && <DeskContents prominent />}
+
       {data && data.chips.length > 0 && (
         <section aria-labelledby="in-motion" className="mt-14">
           <SectionEyebrow count={data.chips.length}>
@@ -208,9 +229,15 @@ export default function DeskPage() {
 
       {/* Field Coordination — "In the field": needs-review text triage + the
           softer field need-lines (opt-ins owed, field tasks overdue). Its own
-          populations over the SMS/field read models; renders nothing when there
-          is no field work. */}
+          populations over the SMS/field read models; when there is no field work
+          it teaches in the pencil idiom rather than vanishing (R94). */}
       <FieldDesk />
+
+      {/* R95 — the Studio Contents page: book-style front matter (Rooms /
+          Ledgers / Begin), labels + doorways only. On a working Desk it sits
+          here as quiet front matter after the field rollup; on a quiet Desk it
+          has already risen above (deskEmpty), so it renders in exactly one place. */}
+      {!deskEmpty && <DeskContents />}
 
       {/* The capture front door (G1 · R62) — an overlay over the Desk, never a
           route; the Desk beneath does not unmount (D1). */}

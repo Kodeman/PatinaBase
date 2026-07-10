@@ -62,7 +62,31 @@ export function FieldDesk() {
     }
   }
 
-  if (cards.length === 0 && lines.length === 0) return null;
+  // R94 — quiet state teaches instead of vanishing. When there is no field work
+  // the section stays, in the pencil idiom, naming what will land here so the
+  // "In the field" surface reads as a place with a purpose rather than an empty
+  // gap. Desk-only by construction (FieldDesk is composed nowhere else), so this
+  // never becomes chrome on another route. No "set up" doorway: field parties are
+  // invited per-project inside a document's coordination (there is no global
+  // field-parties surface, and no palette-visible act, to point at).
+  if (cards.length === 0 && lines.length === 0) {
+    return (
+      <section aria-labelledby="in-the-field" className="mt-14">
+        <SectionEyebrow>
+          <span id="in-the-field">In the field</span>
+        </SectionEyebrow>
+        <p className="max-w-[52ch]">
+          <span className="font-heading text-[15px] italic leading-[1.55] text-[var(--text-body)]">
+            <span aria-hidden className="mr-1 not-italic text-[var(--text-muted)]">
+              –
+            </span>
+            Nothing needs coordinating. When your builders and makers text photos or
+            questions, they land here as cards you can act on.
+          </span>
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section aria-labelledby="in-the-field" className="mt-14">
