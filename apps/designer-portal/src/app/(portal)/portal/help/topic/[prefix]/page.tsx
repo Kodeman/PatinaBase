@@ -1,40 +1,26 @@
-'use client';
-
 /**
- * Designer Portal — Help Center · Topic page (Layer 4 · Reference)
- *
- * Sprint 3 Stream E5 stub. Renders a topic-scoped view of the Help Center
- * driven by a `surfaceKey` prefix path-parameter. The prefix is URL-encoded
- * when linked from the Help Center index and decoded here before passing
- * to `RelatedArticles` / `HelpSearch`.
- *
- * Example URL:
- *   /portal/help/topic/designer-portal%2Faesthete
- *   → prefix = "designer-portal/aesthete"
- *
- * Component dependencies (parallel-built in Sprint 3, see /help index for note).
+ * Legacy Help Center · Topic (Sprint 3 E5) — retired help-desk Wave 1.
+ * Redirects to `/help/topic/[prefix]`, preserving the (URL-encoded) prefix
+ * param. Decode-then-encode keeps the segment single either way Next hands it
+ * to us (`decodeURIComponent` is a no-op on an already-decoded prefix —
+ * surface keys carry no `%`).
  */
 
-import { useParams } from 'next/navigation';
-import { HelpSearch, RelatedArticles } from '@patina/help-system';
+import { redirect } from 'next/navigation';
 
-export default function HelpTopicPage() {
-  const { prefix } = useParams<{ prefix: string }>();
-  const decodedPrefix = decodeURIComponent(prefix);
+function normalizeSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
 
-  return (
-    <div className="container mx-auto py-8 max-w-4xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Topic: {decodedPrefix}</h1>
-      </header>
-
-      <HelpSearch placeholder={`Search within ${decodedPrefix}...`} />
-
-      <RelatedArticles
-        surfaceKeyPrefix={decodedPrefix}
-        max={20}
-        heading="Articles"
-      />
-    </div>
-  );
+export default async function LegacyHelpTopicRedirect({
+  params,
+}: {
+  params: Promise<{ prefix: string }>;
+}) {
+  const { prefix } = await params;
+  redirect(`/help/topic/${encodeURIComponent(normalizeSegment(prefix))}`);
 }
