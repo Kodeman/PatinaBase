@@ -20,6 +20,20 @@
 import SwiftUI
 
 struct StudioHubSection: View {
+
+    /// One rail row: title/meta in the hub language, count badge, and the
+    /// coordinator destination — with the guest-mode invitation meta line.
+    private struct StudioRow {
+        let title: String
+        let meta: String
+        let guestMeta: String
+        /// Named `badge`, not `count` — SwiftLint's `empty_count` rule is
+        /// syntactic and errors on any `.count > 0`, even on an Int.
+        let badge: Int
+        let route: AppRoute
+        let hint: String
+    }
+
     /// Unread notification count — supplied by the parent, which already
     /// owns `NotificationsViewModel` for the greeting-header bell badge.
     let unreadNotifications: Int
@@ -42,47 +56,47 @@ struct StudioHubSection: View {
                 .padding(.bottom, PatinaSpacing.xs)
 
             VStack(spacing: 0) {
-                row(
+                row(StudioRow(
                     title: "Projects",
                     meta: "With your design studio",
                     guestMeta: "Sign in to see your projects",
-                    count: 0,
+                    badge: 0,
                     route: .projectList,
                     hint: "Opens your projects."
-                )
+                ))
                 hairline
-                row(
+                row(StudioRow(
                     title: "Messages",
                     meta: badges.unreadMessageCount > 0
                         ? "\(badges.unreadMessageCount) unread"
                         : "Up to date",
                     guestMeta: "Sign in to message your designer",
-                    count: badges.unreadMessageCount,
+                    badge: badges.unreadMessageCount,
                     route: .threadList,
                     hint: "Opens your conversations."
-                )
+                ))
                 hairline
-                row(
+                row(StudioRow(
                     title: "Decisions",
                     meta: badges.pendingDecisionCount > 0
                         ? "\(badges.pendingDecisionCount) waiting on you"
                         : "Nothing waiting",
                     guestMeta: "Sign in to review decisions",
-                    count: badges.pendingDecisionCount,
+                    badge: badges.pendingDecisionCount,
                     route: .decisionList,
                     hint: "Opens decisions waiting on you."
-                )
+                ))
                 hairline
-                row(
+                row(StudioRow(
                     title: "Notifications",
                     meta: unreadNotifications > 0
                         ? "\(unreadNotifications) new"
                         : "Up to date",
                     guestMeta: "Sign in for updates",
-                    count: unreadNotifications,
+                    badge: unreadNotifications,
                     route: .notifications,
                     hint: "Opens your notifications."
-                )
+                ))
             }
         }
         .padding(.horizontal, PatinaSpacing.mdLarge)
@@ -91,25 +105,18 @@ struct StudioHubSection: View {
 
     // MARK: - Row
 
-    private func row(
-        title: String,
-        meta: String,
-        guestMeta: String,
-        count: Int,
-        route: AppRoute,
-        hint: String
-    ) -> some View {
-        let resolvedMeta = isGuest ? guestMeta : meta
+    private func row(_ model: StudioRow) -> some View {
+        let resolvedMeta = isGuest ? model.guestMeta : model.meta
         return Button {
             if isGuest {
                 coordinator.presentAuthentication()
             } else {
-                coordinator.navigate(to: route)
+                coordinator.navigate(to: model.route)
             }
         } label: {
             HStack(spacing: PatinaSpacing.sm) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
+                    Text(model.title)
                         .font(PatinaTypography.h5)
                         .foregroundStyle(PatinaColors.Text.primary)
                     Text(resolvedMeta)
@@ -121,8 +128,8 @@ struct StudioHubSection: View {
 
                 Spacer(minLength: PatinaSpacing.sm)
 
-                if !isGuest, count > 0 {
-                    Text(count > 9 ? "9+" : "\(count)")
+                if !isGuest, model.badge > 0 {
+                    Text(model.badge > 9 ? "9+" : "\(model.badge)")
                         .font(PatinaTypography.captionMedium)
                         .foregroundStyle(PatinaColors.Text.inverse)
                         .padding(.horizontal, PatinaSpacing.sm)
@@ -142,10 +149,10 @@ struct StudioHubSection: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
+        .accessibilityLabel(model.title)
         .accessibilityValue(resolvedMeta)
-        .accessibilityHint(isGuest ? "Opens sign in." : hint)
-        .accessibilityIdentifier("StudioHubSection.\(title)")
+        .accessibilityHint(isGuest ? "Opens sign in." : model.hint)
+        .accessibilityIdentifier("StudioHubSection.\(model.title)")
     }
 
     private var hairline: some View {

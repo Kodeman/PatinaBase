@@ -67,44 +67,7 @@ enum CompanionActionProvider {
 
         switch screen {
         case .heroFrame:
-            items = [
-                CompanionActionItem(
-                    icon: "viewfinder", label: "Scan a room",
-                    hint: "Suggested next step", isSuggested: true,
-                    route: .scanFlow(reason: .fresh)
-                ),
-                CompanionActionItem(
-                    icon: "sparkles", label: "Your recommendations",
-                    hint: "\(context.roomCount > 0 ? "Based on your rooms" : "Take the quiz first")",
-                    route: .emergence(pieceId: nil)
-                ),
-                CompanionActionItem(
-                    icon: "heart", label: "Collections",
-                    hint: "\(context.tableItemCount) saved pieces",
-                    route: .table
-                ),
-                CompanionActionItem(
-                    icon: "paintpalette", label: "Style quiz",
-                    hint: "Discover your style",
-                    route: .styleQuiz
-                ),
-                CompanionActionItem(
-                    icon: "bell", label: "Notifications",
-                    hint: "Updates from your projects",
-                    route: .notifications
-                ),
-            ]
-            // C.1 / R29: signed-in clients get a direct door into the
-            // studio hub (Projects is the anchor surface; Messages and
-            // Decisions sit one row away on the home Studio rail). Guests
-            // keep the shorter menu — their studio is behind sign-in.
-            if isAuthenticated {
-                items.insert(CompanionActionItem(
-                    icon: "rectangle.grid.1x2", label: "Your studio",
-                    hint: "Projects · Messages · Decisions",
-                    route: .projectList
-                ), at: 1)
-            }
+            items = heroFrameItems(context: context, isAuthenticated: isAuthenticated)
 
         case .emergence, .roomEmergence:
             items = [
@@ -117,7 +80,7 @@ enum CompanionActionProvider {
                     icon: "viewfinder", label: "Scan another room",
                     hint: "Add rooms to your profile",
                     route: .scanFlow(reason: .fresh)
-                ),
+                )
             ]
 
         case .pieceDetail:
@@ -132,7 +95,7 @@ enum CompanionActionProvider {
                     icon: "bubble.left", label: "Ask a designer",
                     hint: "Get expert advice",
                     specialAction: .openDesignServices(roomId: nil)
-                ),
+                )
             ]
 
         case .table:
@@ -146,7 +109,7 @@ enum CompanionActionProvider {
                     icon: "viewfinder", label: "Scan a room",
                     hint: "Add context for your saves",
                     route: .scanFlow(reason: .fresh)
-                ),
+                )
             ]
 
         case .roomList:
@@ -155,7 +118,7 @@ enum CompanionActionProvider {
                     icon: "viewfinder", label: "Scan a new room",
                     hint: "Add another space", isSuggested: true,
                     route: .scanFlow(reason: .fresh)
-                ),
+                )
             ]
 
         case .roomDetail:
@@ -169,7 +132,7 @@ enum CompanionActionProvider {
                     icon: "arrow.counterclockwise", label: "Rescan room",
                     hint: "Capture updates",
                     route: .scanFlow(reason: .rescan)
-                ),
+                )
             ]
 
         case .arPlacement:
@@ -183,7 +146,7 @@ enum CompanionActionProvider {
                     icon: "arrow.triangle.2.circlepath", label: "Try another piece",
                     hint: "Swap in something else",
                     route: .emergence(pieceId: nil)
-                ),
+                )
             ]
 
         default:
@@ -192,10 +155,24 @@ enum CompanionActionProvider {
                     icon: "house", label: "Home",
                     hint: "Back to your space",
                     route: .heroFrame
-                ),
+                )
             ]
         }
 
+        appendUniversalItems(to: &items, screen: screen, isAuthenticated: isAuthenticated)
+
+        return items
+    }
+
+    /// The screen-independent tail of every action list: the portal QR
+    /// connect entry plus sign-in (guests) / profile (signed-in). Split out
+    /// of `actions(for:context:isAuthenticated:)` to keep it under the
+    /// function-body-length lint ceiling.
+    private static func appendUniversalItems(
+        to items: inout [CompanionActionItem],
+        screen: AppRoute,
+        isAuthenticated: Bool
+    ) {
         // Always append "Connect to portal". (Settings / QR are now sheets,
         // not screens, so there's no screen to suppress this on — PT-3-8.)
         items.append(CompanionActionItem(
@@ -217,7 +194,52 @@ enum CompanionActionProvider {
                 route: .profile
             ))
         }
+    }
 
+    /// Home-hub actions. Split out of `actions(for:context:isAuthenticated:)`
+    /// so the switch stays under the complexity/body-length lint ceilings.
+    private static func heroFrameItems(
+        context: CompanionContext,
+        isAuthenticated: Bool
+    ) -> [CompanionActionItem] {
+        var items: [CompanionActionItem] = [
+            CompanionActionItem(
+                icon: "viewfinder", label: "Scan a room",
+                hint: "Suggested next step", isSuggested: true,
+                route: .scanFlow(reason: .fresh)
+            ),
+            CompanionActionItem(
+                icon: "sparkles", label: "Your recommendations",
+                hint: "\(context.roomCount > 0 ? "Based on your rooms" : "Take the quiz first")",
+                route: .emergence(pieceId: nil)
+            ),
+            CompanionActionItem(
+                icon: "heart", label: "Collections",
+                hint: "\(context.tableItemCount) saved pieces",
+                route: .table
+            ),
+            CompanionActionItem(
+                icon: "paintpalette", label: "Style quiz",
+                hint: "Discover your style",
+                route: .styleQuiz
+            ),
+            CompanionActionItem(
+                icon: "bell", label: "Notifications",
+                hint: "Updates from your projects",
+                route: .notifications
+            )
+        ]
+        // C.1 / R29: signed-in clients get a direct door into the
+        // studio hub (Projects is the anchor surface; Messages and
+        // Decisions sit one row away on the home Studio rail). Guests
+        // keep the shorter menu — their studio is behind sign-in.
+        if isAuthenticated {
+            items.insert(CompanionActionItem(
+                icon: "rectangle.grid.1x2", label: "Your studio",
+                hint: "Projects · Messages · Decisions",
+                route: .projectList
+            ), at: 1)
+        }
         return items
     }
 
