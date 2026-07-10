@@ -60,7 +60,7 @@ struct CodeScanSheet: View {
 
     private var simulatorFallback: some View {
         VStack(alignment: .leading, spacing: 14) {
-            RecognitionViewport(prompt: "Scanner needs a device\nEnter a code by hand", tint: CaptureColor.verdigris2, isActive: false)
+            RecognitionViewport(prompt: "Scanner needs a device\nEnter a code by hand", tint: CaptureColor.verdigris, isActive: false)
             RecognitionCard {
                 Text("Enter code")
                     .font(CaptureType.eyebrow).textCase(.uppercase)

@@ -124,7 +124,7 @@ struct QRScanScreen: View {
 
     private var viewfinderFrame: some View {
         RoundedRectangle(cornerRadius: 28)
-            .stroke(CaptureColor.verdigris2, lineWidth: 3)
+            .stroke(CaptureColor.verdigris, lineWidth: 3)
             .frame(width: 240, height: 240)
             .accessibilityHidden(true)
     }

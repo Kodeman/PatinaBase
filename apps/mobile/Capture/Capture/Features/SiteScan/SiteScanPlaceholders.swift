@@ -116,7 +116,7 @@ struct SiteScanCoverageMeter: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(CaptureColor.paper3.opacity(0.25))
-                Capsule().fill(CaptureColor.verdigris2)
+                Capsule().fill(CaptureColor.verdigris)
                     .frame(width: max(0, min(1, coverage)) * geo.size.width)
             }
         }

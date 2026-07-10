@@ -99,7 +99,7 @@ struct WorkDashboardScreen: View {
             .foregroundStyle(CaptureColor.verdigrisInk)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 12).fill(CaptureColor.verdigris2.opacity(0.18)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(CaptureColor.verdigris.opacity(0.18)))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Back to capture")
