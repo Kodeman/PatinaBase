@@ -61,7 +61,7 @@ public struct RemoteProjectDocument: Codable, Sendable, Identifiable {
         guard let type = doc_type, !type.isEmpty else { return "File" }
         let labels: [String: String] = [
             "pdf": "PDF", "img": "IMG", "doc": "DOC",
-            "xls": "XLS", "xlsx": "XLSX", "dwg": "DWG", "png": "PNG",
+            "xls": "XLS", "xlsx": "XLSX", "dwg": "DWG", "png": "PNG"
         ]
         return labels[type] ?? type.uppercased()
     }

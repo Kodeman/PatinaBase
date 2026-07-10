@@ -96,7 +96,7 @@ struct DocumentsAPIClientTests {
         let docs = [
             try document(#"{"id":"d1","project_id":"B","doc_type":"pdf","project":{"id":"B","name":"Studio"}}"#),
             try document(#"{"id":"d2","project_id":"A","doc_type":"pdf","project":{"id":"A","name":"Loft"}}"#),
-            try document(#"{"id":"d3","project_id":"A","doc_type":"img","project":{"id":"A","name":"Loft"}}"#),
+            try document(#"{"id":"d3","project_id":"A","doc_type":"img","project":{"id":"A","name":"Loft"}}"#)
         ]
         let groups = DocumentGrouping.byProject(docs)
         #expect(groups.map(\.id) == ["B", "A"])          // encounter order

@@ -51,7 +51,7 @@ struct BudgetAggregationTests {
             try invoice(#"{"id":"b","status":"partially_paid","total_cents":100000,"amount_paid_cents":40000}"#),
             try invoice(#"{"id":"c","status":"paid","total_cents":50000,"amount_paid_cents":50000}"#),
             try invoice(#"{"id":"d","status":"void","total_cents":99999,"amount_paid_cents":0}"#),
-            try invoice(#"{"id":"e","status":"draft","total_cents":77777,"amount_paid_cents":0}"#),
+            try invoice(#"{"id":"e","status":"draft","total_cents":77777,"amount_paid_cents":0}"#)
         ]
         let rollup = BudgetMath.rollup(invoices)
         #expect(rollup.billedCents == 258_000)      // 108000 + 100000 + 50000
@@ -81,8 +81,8 @@ struct BudgetAggregationTests {
 
     @Test
     func milestoneUsesStoredAmountWhenPositive() throws {
-        let m = try milestone(#"{"id":"m","amount_cents":25000,"percentage":10}"#)
-        #expect(BudgetMath.milestoneAmountCents(m, totalCents: 100_000) == 25_000)
+        let entry = try milestone(#"{"id":"m","amount_cents":25000,"percentage":10}"#)
+        #expect(BudgetMath.milestoneAmountCents(entry, totalCents: 100_000) == 25_000)
     }
 
     @Test
@@ -100,7 +100,7 @@ struct BudgetAggregationTests {
         let projects = [
             try project(#"{"id":"P1","name":"Loft"}"#),
             try project(#"{"id":"P2","name":"Studio"}"#),
-            try project(#"{"id":"P3","name":"Empty"}"#),
+            try project(#"{"id":"P3","name":"Empty"}"#)
         ]
         let accepted = [
             try proposal(#"{"id":"propA","project_id":"P1","status":"accepted","total_amount":100000,"title":"Phase 1"}"#)
@@ -132,7 +132,7 @@ struct BudgetAggregationTests {
         ]
         let milestones = [
             try milestone(#"{"id":"m2","label":"Second","sort_order":2,"amount_cents":50000}"#),
-            try milestone(#"{"id":"m1","label":"First","sort_order":1,"amount_cents":50000}"#),
+            try milestone(#"{"id":"m1","label":"First","sort_order":1,"amount_cents":50000}"#)
         ]
         let sections = BudgetMath.buildSections(
             projects: projects,
