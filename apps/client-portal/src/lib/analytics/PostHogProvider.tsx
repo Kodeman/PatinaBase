@@ -31,6 +31,7 @@ function AuthTracker() {
       identifyUser(session.user.id, {
         emailDomain,
         displayName: session.user.user_metadata?.display_name || session.user.user_metadata?.full_name,
+        role: session.user.user_metadata?.role || 'client',
       });
     } else {
       resetAnalytics();
