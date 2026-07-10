@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { useProjects } from '@patina/supabase';
 import { RoomSheet } from '../room-sheet';
 import { usePlaceInDocument, type PlaceablePiece } from '@/hooks/use-place-in-document';
+import { productEvents } from '@/lib/analytics/events';
 
 export function AddToProjectSheet({
   open,
@@ -37,6 +38,7 @@ export function AddToProjectSheet({
     setErr(null);
     try {
       await place.mutateAsync({ projectId, piece });
+      productEvents.addToProject(piece.id);
       onAdded(projectName);
       onClose();
     } catch (e) {

@@ -15,6 +15,7 @@ import { mockData } from '@/data/mock-designer-data';
 import { projectsApi } from '@/lib/api-client';
 import { withMockData } from '@/lib/mock-data';
 import { queryKeys } from '@/lib/react-query';
+import { projectEvents } from '@/lib/analytics/events';
 import { normalizePhaseSlug } from '@/types/project-ui';
 import { fetchTimeSummary } from '@/hooks/use-time-tracking';
 
@@ -586,8 +587,9 @@ export function useCreateProject() {
       if (error) throw error;
       return { id: data as string };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      projectEvents.create({ project_id: result.id });
     },
   });
 }
