@@ -25,6 +25,10 @@ export function getPostHog() {
     ip: false,
   });
 
+  // `surface` super-property — every event carries it. Primary dashboard key
+  // (designer = designer-web ∪ extension ∪ field-ios).
+  posthogInstance.register({ surface: 'extension' });
+
   return posthogInstance;
 }
 
@@ -40,6 +44,7 @@ export function identifyUser(
   if (!ph) return;
   ph.identify(userId, {
     platform: 'extension',
+    role: 'designer',
     ...(properties?.emailDomain && { email_domain: properties.emailDomain }),
   });
 }

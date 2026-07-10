@@ -29,6 +29,7 @@ import {
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { authEvents } from '@/lib/analytics/events';
 import { DocSheet } from '../overlays/doc-sheet';
 import { monogramOf, activeStudio } from '@/lib/document/account-identity';
 import { AccountProfilePage } from './account-profile-page';
@@ -83,6 +84,7 @@ export function AccountSheet() {
 
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
+    authEvents.logout();
     try {
       await signOut();
     } catch (error) {

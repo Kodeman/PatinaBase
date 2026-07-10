@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { navEvents } from '@/lib/analytics/events';
 
 interface CommandPaletteContextValue {
   isOpen: boolean;
@@ -14,9 +15,18 @@ const CommandPaletteContext = createContext<CommandPaletteContextValue | null>(n
 export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const open = useCallback(() => setIsOpen(true), []);
+  const open = useCallback(() => {
+    setIsOpen(true);
+    navEvents.commandPaletteOpen();
+  }, []);
   const close = useCallback(() => setIsOpen(false), []);
-  const toggle = useCallback(() => setIsOpen((prev) => !prev), []);
+  const toggle = useCallback(() => {
+    setIsOpen((prev) => {
+      const next = !prev;
+      if (next) navEvents.commandPaletteOpen();
+      return next;
+    });
+  }, []);
 
   return (
     <CommandPaletteContext.Provider value={{ isOpen, open, close, toggle }}>

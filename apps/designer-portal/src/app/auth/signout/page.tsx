@@ -3,12 +3,14 @@
 import { createBrowserClient } from '@patina/supabase';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { authEvents } from '@/lib/analytics/events';
 
 export default function SignOutPage() {
   const router = useRouter();
 
   useEffect(() => {
     async function handleSignOut() {
+      authEvents.logout();
       try {
         // First revoke backend tokens
         await fetch('/api/auth/logout', { method: 'POST' });

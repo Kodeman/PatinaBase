@@ -27,6 +27,7 @@ import { clearSessionKey, type AestheteQuizError } from '@patina/aesthete-quiz';
 import { StrataMark } from '@/components/strata-mark';
 import { clearQuizProfile, storeQuizProfile } from '@/lib/aesthete/profile-store';
 import { useAuth } from '@/hooks/use-auth';
+import { aestheteQuizEvents } from '@/lib/analytics/events';
 
 const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign'] as const;
 
@@ -78,6 +79,7 @@ function errorCopy(error: AestheteQuizError): { message: string; canRetry: boole
 function QuizInner() {
   const router = useRouter();
   const quiz = useStyleQuiz({
+    onEvent: (e) => aestheteQuizEvents.fromQuizHook(e),
     onComplete: (profile: StyleQuizProfile) => {
       storeQuizProfile(profile);
       router.push('/quiz/results');

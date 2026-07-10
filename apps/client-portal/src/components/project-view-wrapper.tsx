@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
 import { WebSocketProvider } from '@/lib/websocket';
 import { useAuth } from '@/hooks/use-auth';
+import { clientEvents } from '@/lib/analytics/events';
 import { EnhancedTimeline } from '@/components/timeline/enhanced-timeline';
 import { ProjectOverview } from '@/components/project-overview';
 import { ProjectScopeDetails } from '@/components/project-scope-details';
@@ -37,6 +39,10 @@ export function ProjectViewWrapper({
   const realtimeEnabled = process.env.NEXT_PUBLIC_ENABLE_REAL_TIME_UPDATES !== 'false';
   const effectiveUserId = userId ?? user?.id;
   const effectiveAuthToken = authToken ?? session?.accessToken;
+
+  useEffect(() => {
+    clientEvents.projectView(projectId);
+  }, [projectId]);
 
   return (
     <WebSocketProvider

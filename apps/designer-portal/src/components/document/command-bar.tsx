@@ -52,6 +52,7 @@ import {
   readRecentDocumentsInHand,
   type RecentDocumentInHand,
 } from '@/lib/analytics/document-events';
+import { authEvents } from '@/lib/analytics/events';
 import { StrataMark } from './strata-mark';
 import { EngineResults, type InDocument } from './engine/engine-results';
 
@@ -424,6 +425,7 @@ export function CommandBar() {
         label: 'Sign out',
         sub: user?.email ?? 'end this session',
         run: () => {
+          authEvents.logout();
           void signOut();
         },
         match: 'log out logout sign off leave sign out',

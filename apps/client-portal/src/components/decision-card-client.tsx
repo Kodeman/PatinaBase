@@ -13,6 +13,7 @@ import type {
 import { CheckCircle2 } from 'lucide-react';
 import { DecisionConsentBlock } from '@/components/decisions/DecisionConsentBlock';
 import { CoordinationBanner } from '@/components/decisions/coordination-banner';
+import { clientEvents } from '@/lib/analytics/events';
 
 const CONSENT_REQUIRED_TYPES: DecisionType[] = ['budget', 'approval', 'substitution'];
 
@@ -262,7 +263,16 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
     }
     selectOption.mutate(
       { optionId: selectedOptionId, decisionId: decision.id, clientNote: clientNote.trim() || undefined },
-      { onSuccess: () => setShowConfirm(false) }
+      {
+        onSuccess: () => {
+          clientEvents.decisionApprove({
+            decisionId: decision.id,
+            optionId: selectedOptionId,
+            requiresConsent: false,
+          });
+          setShowConfirm(false);
+        },
+      }
     );
   };
 
@@ -277,6 +287,11 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
       },
       {
         onSuccess: () => {
+          clientEvents.decisionApprove({
+            decisionId: decision.id,
+            optionId: selectedOptionId,
+            requiresConsent: true,
+          });
           setShowConsent(false);
           setShowConfirm(false);
         },

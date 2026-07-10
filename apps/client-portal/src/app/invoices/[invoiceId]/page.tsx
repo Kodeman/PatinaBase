@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, CreditCard, Loader2, Printer, X } from 'lucide-react';
 import { useInvoice, useStartCheckout, type Invoice, type InvoicePayment } from '@patina/supabase';
@@ -12,6 +12,7 @@ import {
   isInvoiceOverdue,
   timeLineHoursLabel,
 } from '@patina/shared';
+import { clientEvents } from '@/lib/analytics/events';
 
 // Client-facing invoice detail. RLS only exposes issued (non-draft) invoices
 // on the client's own projects, with their lines and payments. Online payment
@@ -42,23 +43,53 @@ export default function ClientInvoiceDetailPage({
   const { data: invoice, isLoading, refetch } = useInvoice(invoiceId);
   const startCheckout = useStartCheckout();
 
+  // client_invoice_view — fires once, the first time the invoice resolves.
+  const invoiceViewCaptured = useRef(false);
+  useEffect(() => {
+    if (!invoice || invoiceViewCaptured.current) return;
+    invoiceViewCaptured.current = true;
+    clientEvents.invoiceView({ invoiceId: invoice.id, status: invoice.status });
+  }, [invoice]);
+
   // ── Checkout return handling (?checkout=success|cancelled) ───────────────
   // Read from window.location in an effect (not useSearchParams) so the page
   // needs no Suspense boundary; strip the params so a refresh doesn't replay.
   const [confirmState, setConfirmState] = useState<ConfirmState>(null);
   const [showCancelled, setShowCancelled] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
+  const [checkoutOutcome, setCheckoutOutcome] = useState<'success' | 'cancelled' | null>(null);
 
   useEffect(() => {
     const url = new URL(window.location.href);
     const checkout = url.searchParams.get('checkout');
     if (!checkout) return;
-    if (checkout === 'success') setConfirmState('confirming');
-    if (checkout === 'cancelled') setShowCancelled(true);
+    if (checkout === 'success') {
+      setConfirmState('confirming');
+      setCheckoutOutcome('success');
+    }
+    if (checkout === 'cancelled') {
+      setShowCancelled(true);
+      setCheckoutOutcome('cancelled');
+    }
     url.searchParams.delete('checkout');
     url.searchParams.delete('session_id');
     window.history.replaceState({}, '', url.pathname + url.search);
   }, []);
+
+  // client_payment_completed / client_payment_cancelled — fire once the
+  // checkout return outcome is known, waiting for the invoice fetch to
+  // settle so `amount` is populated when available.
+  const paymentOutcomeCaptured = useRef(false);
+  useEffect(() => {
+    if (!checkoutOutcome || paymentOutcomeCaptured.current || isLoading) return;
+    paymentOutcomeCaptured.current = true;
+    const props = { invoiceId, amountCents: invoice?.total_cents };
+    if (checkoutOutcome === 'success') {
+      clientEvents.paymentCompleted(props);
+    } else {
+      clientEvents.paymentCancelled(props);
+    }
+  }, [checkoutOutcome, isLoading, invoice, invoiceId]);
 
   // A succeeded Stripe payment (or a fully paid invoice) resolves confirmation.
   const stripeSettled =
@@ -89,6 +120,10 @@ export default function ClientInvoiceDetailPage({
     setPayError(null);
     try {
       const { url } = await startCheckout.mutateAsync({ invoiceId: invoice.id });
+      clientEvents.paymentStarted({
+        invoiceId: invoice.id,
+        amountCents: invoiceBalanceCents(invoice),
+      });
       window.location.href = url;
     } catch (err) {
       setPayError(err instanceof Error ? err.message : 'Unable to start payment.');

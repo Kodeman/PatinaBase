@@ -10,6 +10,7 @@ import {
 } from '@/hooks/use-documents-client';
 import { formatDate } from '@/lib/utils/format';
 import { StrataMark } from '@/components/strata-mark';
+import { clientEvents } from '@/lib/analytics/events';
 import { groupDocumentsByProject, documentKindLabel } from './group';
 
 // Documents hub (P2b) — one place for contracts, floor plans, and spec sheets
@@ -88,6 +89,7 @@ function DocumentRow({ document }: { document: ClientDocument }) {
   const [state, setState] = useState<'idle' | 'opening' | 'error'>('idle');
 
   const handleOpen = async () => {
+    clientEvents.documentView({ documentId: document.id, kind: document.doc_type });
     if (!document.storage_path) {
       setState('error');
       return;

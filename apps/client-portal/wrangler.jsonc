@@ -16,6 +16,8 @@
     "NEXT_PUBLIC_APP_URL": "https://client.patina.cloud",
     "NEXT_PUBLIC_QR_AUTH_URL": "https://app.patina.cloud",
     "NEXT_PUBLIC_ENV": "production",
+    "NEXT_PUBLIC_POSTHOG_KEY": "phc_D6Rf7ZYD5L7cTCgP1aBIV6kgANIFGnsbEgoYPXpsaNG",
+    "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com",
     "NEXT_PUBLIC_ENABLE_REAL_TIME_UPDATES": "true",
     "NEXT_PUBLIC_ENABLE_NOTIFICATIONS": "true",
     "NEXT_PUBLIC_ENABLE_MEDIA_GALLERIES": "true",

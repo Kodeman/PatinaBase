@@ -25,6 +25,7 @@ import {
 
 import type { ProjectListItem } from '../../types/project';
 import { useAuth } from '../../hooks/use-auth';
+import { authEvents } from '../../lib/analytics/events';
 import { formatRelativeTime } from '../../lib/utils/format';
 import { pathnameToSurfaceKey } from '../../lib/help-system/pathname-to-surface-key';
 import { ProjectSwitcher } from './project-switcher';
@@ -264,6 +265,7 @@ function UserMenu() {
         <DropdownMenuItem
           onSelect={(e) => {
             e.preventDefault();
+            authEvents.logout();
             void signOut();
           }}
           data-testid="header-user-menu-signout"
