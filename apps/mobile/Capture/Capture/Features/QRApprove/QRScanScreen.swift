@@ -112,6 +112,9 @@ struct QRScanScreen: View {
         }
         .navigationTitle("Scan to sign in")
         .navigationBarTitleDisplayMode(.inline)
+        // Camera scan chrome stays deliberately dark — pin light so the
+        // dynamic tokens keep their designed values under system dark mode.
+        .environment(\.colorScheme, .light)
         .accessibilityIdentifier(CaptureScreenID.q1QRScan.rawValue)
         .task { analytics.screen(CaptureScreenID.q1QRScan.rawValue) }
         .onDisappear { model.stop() }

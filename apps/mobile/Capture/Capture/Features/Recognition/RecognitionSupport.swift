@@ -92,6 +92,9 @@ struct RecognitionViewport: View {
         }
         .frame(height: 220)
         .clipShape(RoundedRectangle(cornerRadius: 18))
+        // The viewport mimics a camera window — deliberately dark; pin light
+        // so ink/paper keep their designed values under system dark mode.
+        .environment(\.colorScheme, .light)
     }
 }
 

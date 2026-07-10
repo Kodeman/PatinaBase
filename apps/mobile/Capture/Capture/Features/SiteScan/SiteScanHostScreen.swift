@@ -176,6 +176,9 @@ struct SiteScanScanStep: View {
             }
         }
         .statusBarHidden(true)
+        // AR scan chrome stays deliberately dark — pin light so the dynamic
+        // tokens keep their designed values under system dark mode.
+        .environment(\.colorScheme, .light)
         .accessibilityIdentifier(CaptureScreenID.f2SiteScan.rawValue)
     }
 

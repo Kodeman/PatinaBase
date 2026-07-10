@@ -61,6 +61,10 @@ struct ViewfinderScreen: View {
             }
         }
         .background(CaptureColor.ink.ignoresSafeArea())
+        // Camera chrome is deliberately dark (same rule as Patina's capture
+        // surfaces): pin light so the dynamic tokens keep their designed
+        // values instead of inverting under system dark mode.
+        .environment(\.colorScheme, .light)
         .animation(cardAnimation, value: model.cardSpecimen?.id)
         .animation(cardAnimation, value: model.isHolding)
         .task { await model.start() }
