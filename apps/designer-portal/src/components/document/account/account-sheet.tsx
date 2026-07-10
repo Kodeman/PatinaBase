@@ -40,7 +40,7 @@ const STATUS_META: Record<AvailabilityStatus, { label: string; color: string }> 
   online: { label: 'Online', color: 'var(--color-sage)' },
   away: { label: 'Away', color: 'var(--color-golden-hour)' },
   busy: { label: 'Busy', color: 'var(--color-terracotta)' },
-  offline: { label: 'Offline', color: 'rgba(250,247,242,0.4)' },
+  offline: { label: 'Offline', color: 'var(--color-aged-oak)' },
 };
 
 type AccountPage = 'profile' | 'notifications' | 'security' | 'devices';
@@ -101,7 +101,7 @@ export function AccountSheet() {
       <div className="mx-auto max-w-xl">
         {/* Identity front-matter — the literal answer to "what account is this". */}
         <div className="flex items-start gap-3.5">
-          <span className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgba(250,247,242,0.08)] font-mono text-[13px] uppercase tracking-wider text-[var(--color-pearl)]">
+          <span className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-pearl)] font-mono text-[13px] uppercase tracking-wider text-[var(--color-mocha)]">
             {profile?.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
@@ -110,21 +110,21 @@ export function AccountSheet() {
             )}
             <span
               aria-hidden
-              className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[var(--color-charcoal)]"
+              className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[var(--doc-paper)]"
               style={{ background: STATUS_META[currentStatus].color }}
             />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="truncate font-heading text-xl text-[var(--color-pearl)]">
+            <h2 className="truncate font-heading text-xl text-[var(--color-charcoal)]">
               {name ?? email}
             </h2>
             {name && (
-              <p className="truncate text-[12px] text-[rgba(250,247,242,0.55)]">{email}</p>
+              <p className="truncate text-[12px] text-[var(--color-aged-oak)]">{email}</p>
             )}
             {studio && (
               <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)]">
                 {studio.name}
-                <span className="text-[rgba(250,247,242,0.4)]"> · {studio.role}</span>
+                <span className="text-[var(--color-aged-oak)]"> · {studio.role}</span>
               </p>
             )}
           </div>
@@ -132,7 +132,7 @@ export function AccountSheet() {
 
         {/* Availability — declared, not live (same model as the old AccountMenu). */}
         <div className="mt-4">
-          <p className="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[rgba(250,247,242,0.4)]">
+          <p className="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
             Status
           </p>
           <div
@@ -151,8 +151,8 @@ export function AccountSheet() {
                   onClick={() => setAvailability.mutate(value)}
                   className={`flex items-center gap-1.5 rounded-[5px] border px-2.5 py-1 text-[11px] transition-colors ${
                     selected
-                      ? 'border-[rgba(196,165,123,0.45)] bg-[rgba(196,165,123,0.12)] text-[var(--color-off-white)]'
-                      : 'border-[rgba(250,247,242,0.12)] text-[rgba(250,247,242,0.7)] hover:border-[rgba(196,165,123,0.4)]'
+                      ? 'border-[rgba(196,165,123,0.45)] bg-[rgba(196,165,123,0.12)] text-[var(--color-charcoal)]'
+                      : 'border-[var(--color-pearl)] text-[var(--color-mocha)] hover:border-[rgba(196,165,123,0.4)]'
                   }`}
                 >
                   <span
@@ -168,7 +168,7 @@ export function AccountSheet() {
         </div>
 
         {/* R28 page links — DM-mono, never tabs. */}
-        <div className="mb-4 mt-5 flex flex-wrap items-baseline gap-x-4 border-b border-[rgba(250,247,242,0.1)] pb-2">
+        <div className="mb-4 mt-5 flex flex-wrap items-baseline gap-x-4 border-b border-[var(--color-pearl)] pb-2">
           {PAGES.map((p) => (
             <button
               key={p.key}
@@ -178,7 +178,7 @@ export function AccountSheet() {
               className={`font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors ${
                 page === p.key
                   ? 'text-[var(--color-clay)]'
-                  : 'text-[rgba(250,247,242,0.45)] hover:text-[rgba(250,247,242,0.8)]'
+                  : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
               }`}
             >
               {p.label}
@@ -192,12 +192,12 @@ export function AccountSheet() {
         {page === 'devices' && <AccountDevicesPage />}
 
         {/* Sign out */}
-        <div className="mt-7 border-t border-[rgba(250,247,242,0.1)] pt-4">
+        <div className="mt-7 border-t border-[var(--color-pearl)] pt-4">
           <button
             type="button"
             onClick={handleSignOut}
             disabled={isSigningOut}
-            className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-terracotta)] transition-colors hover:text-[var(--color-off-white)] disabled:opacity-60"
+            className="font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--color-terracotta)] transition-colors hover:text-[var(--color-charcoal)] disabled:opacity-60"
           >
             {isSigningOut ? 'Signing out…' : '⏻ Sign out'}
           </button>

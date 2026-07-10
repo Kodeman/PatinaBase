@@ -75,15 +75,14 @@ export function ProposalVersionHistory({ proposalId }: { proposalId: string }) {
       {viewing && (
         <DocSheet open onClose={() => setViewing(null)} title="Earlier version">
           <div className="mx-auto max-w-[680px]">
-            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[rgba(250,247,242,0.5)]">
+            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
               {(() => {
                 const v = versions.find((x) => x.id === viewing);
                 return v ? `v${v.version} · ${versionLabel(v)} · read-only` : 'read-only';
               })()}
             </p>
-            {/* The canonical blocks render dark ink, so they ride a paper sheet
-                to stay legible over the charcoal ledger. */}
-            <div className="mt-3 rounded-[4px] bg-[var(--doc-paper)] px-5 py-5">
+            {/* The canonical blocks render dark ink on the laid paper sheet (R96). */}
+            <div className="mt-3 rounded-[4px] px-5 py-5">
               <ProposalBlocksReadOnly proposalId={viewing} />
             </div>
           </div>

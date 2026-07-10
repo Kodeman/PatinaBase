@@ -20,10 +20,10 @@ import { StrataMark } from '../strata-mark';
 import { monogramOf } from '@/lib/document/account-identity';
 
 const FIELD =
-  'w-full max-w-md border-0 border-b border-[rgba(250,247,242,0.18)] bg-transparent py-2 text-[14px] text-[var(--color-off-white)] outline-none transition-colors placeholder:text-[rgba(250,247,242,0.3)] focus:border-[var(--color-clay)]';
+  'w-full max-w-md border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[14px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
 const LABEL =
-  'mb-1 block font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[rgba(250,247,242,0.45)]';
-const HELP = 'mt-1 text-[11px] leading-relaxed text-[rgba(250,247,242,0.4)]';
+  'mb-1 block font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]';
+const HELP = 'mt-1 text-[11px] leading-relaxed text-[var(--color-aged-oak)]';
 const PRIMARY =
   'rounded-[5px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-1.5 text-[12px] font-medium text-[var(--color-charcoal)] transition-colors hover:bg-[var(--color-aged-oak)] hover:border-[var(--color-aged-oak)] disabled:opacity-50';
 
@@ -73,7 +73,7 @@ export function AccountProfilePage() {
     <div className="pt-1">
       {/* Avatar */}
       <div className="mb-6 flex items-center gap-4">
-        <span className="relative inline-flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[rgba(250,247,242,0.08)] font-mono text-[15px] uppercase tracking-wider text-[var(--color-pearl)]">
+        <span className="relative inline-flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-pearl)] font-mono text-[15px] uppercase tracking-wider text-[var(--color-mocha)]">
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -86,7 +86,7 @@ export function AccountProfilePage() {
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={uploadAvatar.isPending}
-            className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)] hover:text-[var(--color-off-white)] disabled:opacity-50"
+            className="font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-clay)] hover:text-[var(--color-charcoal)] disabled:opacity-50"
           >
             {uploadAvatar.isPending ? 'Uploading…' : 'Change photo'}
           </button>
@@ -149,8 +149,8 @@ export function AccountProfilePage() {
 
       {/* Password */}
       <div>
-        <h3 className="mb-1 font-heading text-[15px] text-[var(--color-pearl)]">Password</h3>
-        <p className="mb-3 text-[11.5px] text-[rgba(250,247,242,0.5)]">
+        <h3 className="mb-1 font-heading text-[15px] text-[var(--color-charcoal)]">Password</h3>
+        <p className="mb-3 text-[11.5px] text-[var(--color-aged-oak)]">
           Your sign-in credential. Changing it signs you out of other devices.
         </p>
         <label htmlFor="account-new-password" className={LABEL}>

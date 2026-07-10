@@ -12,7 +12,7 @@ import { PairDeviceQR } from '@/components/auth/PairDeviceQR';
 export function AccountDevicesPage() {
   return (
     <div className="pt-1">
-      <p className="mb-5 text-[12px] leading-relaxed text-[rgba(250,247,242,0.55)]">
+      <p className="mb-5 text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
         Open the Patina iOS app on a fresh device, choose &ldquo;Sign in with QR&rdquo;, and scan the
         code. Your phone is signed in as you — no password. Codes expire after 5 minutes and work
         once.

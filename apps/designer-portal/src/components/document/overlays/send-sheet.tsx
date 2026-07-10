@@ -37,10 +37,10 @@ const EXPIRY_OPTIONS = [
 ];
 
 const labelCls =
-  'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[rgba(250,247,242,0.5)]';
+  'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
 const fieldCls =
-  'w-full rounded-[4px] border border-[rgba(250,247,242,0.18)] bg-[rgba(250,247,242,0.04)] px-3 py-2 text-[13px] text-[var(--color-off-white)] outline-none transition-colors placeholder:italic placeholder:text-[rgba(250,247,242,0.35)] focus:border-[var(--color-clay)]';
+  'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
 
 export function SendSheet({
   proposalId,
@@ -142,15 +142,15 @@ export function SendSheet({
         <p className={labelCls}>
           {proposal?.title ?? 'Proposal'} &middot; v{proposal?.version || 1}.0 &middot; ${total}
         </p>
-        <h2 className="mt-1 font-heading text-xl text-[var(--color-pearl)]">Send proposal</h2>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-[rgba(250,247,242,0.6)]">
+        <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">Send proposal</h2>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
           The client receives a branded email with your note and a link to the full proposal — same
           design, same fonts. They sign at the bottom; you&rsquo;re notified when they open, view,
           and sign.
         </p>
 
         {!proposal ? (
-          <p className="mt-6 text-[12.5px] italic text-[rgba(250,247,242,0.45)]">Loading…</p>
+          <p className="mt-6 text-[12.5px] italic text-[var(--color-aged-oak)]">Loading…</p>
         ) : (
           <div className="mt-5 space-y-5">
             {/* Link-a-client banner */}
@@ -159,7 +159,7 @@ export function SendSheet({
                 <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)]">
                   Link a client to send
                 </p>
-                <p className="mb-3 text-[12.5px] leading-relaxed text-[rgba(250,247,242,0.7)]">
+                <p className="mb-3 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
                   This proposal isn&rsquo;t linked to a client yet. Choose the client it belongs to
                   so they receive the proposal and can sign it.
                 </p>
@@ -204,7 +204,7 @@ export function SendSheet({
                 <p className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--color-clay)]">
                   Another version is already accepted
                 </p>
-                <p className="text-[12.5px] leading-relaxed text-[rgba(250,247,242,0.7)]">
+                <p className="text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
                   Another version of this proposal has already been accepted. Sending this version
                   will not affect the accepted one.
                 </p>
@@ -217,25 +217,25 @@ export function SendSheet({
                 Recipient
               </label>
               {proposal.client_id ? (
-                <div className="rounded-[4px] border border-[rgba(250,247,242,0.14)] bg-[rgba(250,247,242,0.04)] px-3 py-2 text-[13px]">
-                  <span className="text-[var(--color-off-white)]">
+                <div className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px]">
+                  <span className="text-[var(--color-charcoal)]">
                     {proposal.client?.full_name || proposal.client?.email || 'Linked client'}
                   </span>
                   {proposal.client?.email && (
-                    <span className="ml-2 text-[rgba(250,247,242,0.45)]">
+                    <span className="ml-2 text-[var(--color-aged-oak)]">
                       &middot; {proposal.client.email}
                     </span>
                   )}
                 </div>
               ) : (
-                <p className="text-[12px] italic text-[rgba(250,247,242,0.45)]">
+                <p className="text-[12px] italic text-[var(--color-aged-oak)]">
                   Link a client above to set the recipient.
                 </p>
               )}
               <button
                 type="button"
                 onClick={() => setShowAltAddress((s) => !s)}
-                className="mt-0.5 self-start font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.5)] hover:text-[var(--color-clay)]"
+                className="mt-0.5 self-start font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
               >
                 {showAltAddress ? 'Hide alternate address' : 'Send to a different address'}
               </button>
@@ -279,7 +279,11 @@ export function SendSheet({
                   className={fieldCls}
                 >
                   {EXPIRY_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value} className="text-[var(--color-charcoal)]">
+                    <option
+                      key={opt.value}
+                      value={opt.value}
+                      className="bg-[var(--doc-paper)] text-[var(--color-charcoal)]"
+                    >
                       {opt.label}
                     </option>
                   ))}
@@ -314,7 +318,7 @@ export function SendSheet({
             )}
 
             {/* Actions */}
-            <div className="flex items-center gap-4 border-t border-[rgba(250,247,242,0.1)] pt-5">
+            <div className="flex items-center gap-4 border-t border-[var(--color-pearl)] pt-5">
               <button
                 type="button"
                 onClick={handleSend}
@@ -326,7 +330,7 @@ export function SendSheet({
               <button
                 type="button"
                 onClick={onClose}
-                className="font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.5)] hover:text-[var(--color-off-white)]"
+                className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
               >
                 Send later
               </button>

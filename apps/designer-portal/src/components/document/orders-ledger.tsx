@@ -28,8 +28,13 @@ import { VendorsBookPage } from './orders-book-vendors';
 import { WeekBookPage } from './orders-book-week';
 import { ReceivingBookPage } from './orders-book-receiving';
 import type { OpenLedgerContext } from './command-bar';
+import { DocSheetHead } from './overlays/doc-sheet';
+import { STUDIO_LEDGERS } from '@/lib/document/registry';
 
 type BookPage = 'ledger' | 'week' | 'receiving' | 'vendors';
+
+// R96 — the registry is the single source of the surface icon (no drift).
+const ORDERS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'orders')!.icon;
 
 const PAGES: { key: BookPage; label: string }[] = [
   { key: 'ledger', label: 'Ledger' },
@@ -66,7 +71,7 @@ function LensLink({
       className={`font-mono text-[8.5px] uppercase tracking-[0.06em] transition-colors ${
         active
           ? 'text-[var(--color-clay)]'
-          : 'text-[rgba(250,247,242,0.45)] hover:text-[rgba(250,247,242,0.8)]'
+          : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
       }`}
     >
       {children}
@@ -75,7 +80,7 @@ function LensLink({
 }
 
 const PO_STAMP: Record<string, { color: string; ink?: string }> = {
-  draft: { color: 'var(--color-pearl)', ink: 'rgba(250,247,242,0.6)' },
+  draft: { color: 'var(--color-aged-oak)', ink: 'var(--color-aged-oak)' },
   confirmed: { color: 'var(--color-dusty-blue)' },
   in_production: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
   shipped: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
@@ -206,18 +211,24 @@ export function OrdersLedger({
 
   return (
     <div className="mx-auto max-w-3xl">
+      <DocSheetHead
+        icon={ORDERS_ICON}
+        title="Orders"
+        pageLabel={PAGES.find((p) => p.key === page)?.label}
+        onClose={onClose}
+      />
       <div className="mb-3">
-        <h2 className="font-heading text-xl text-[var(--color-pearl)]">
+        <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
           Orders <em className="italic text-[var(--color-clay)]">· the studio book</em>
         </h2>
-        <p className="mt-0.5 text-[11px] text-[rgba(250,247,242,0.45)]">
+        <p className="mt-0.5 text-[11px] text-[var(--color-aged-oak)]">
           A lens over every document — pulled over whatever you&apos;re holding, put back when
           done.
         </p>
       </div>
 
       {/* R28: the book's pages — DM-mono links, never tabs. */}
-      <div className="mb-4 flex flex-wrap items-baseline gap-x-4 border-b border-[rgba(250,247,242,0.1)] pb-2">
+      <div className="mb-4 flex flex-wrap items-baseline gap-x-4 border-b border-[var(--color-pearl)] pb-2">
         {PAGES.map((p) => (
           <button
             key={p.key}
@@ -227,7 +238,7 @@ export function OrdersLedger({
             className={`font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors ${
               page === p.key
                 ? 'text-[var(--color-clay)]'
-                : 'text-[rgba(250,247,242,0.45)] hover:text-[rgba(250,247,242,0.8)]'
+                : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
             }`}
           >
             {p.label}
@@ -259,7 +270,7 @@ export function OrdersLedger({
             />
           )}
           {isLoading && (
-            <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">
+            <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
               Opening the book…
             </p>
           )}
@@ -270,7 +281,7 @@ export function OrdersLedger({
             <div className="mb-4 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
               {projectOptions.length > 1 && (
                 <>
-                  <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.35)]">
+                  <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                     project ·
                   </span>
                   <LensLink active={!projectLens} onClick={() => setProjectLens(null)}>
@@ -288,7 +299,7 @@ export function OrdersLedger({
                   <span className="mx-1.5" aria-hidden />
                 </>
               )}
-              <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.35)]">
+              <span className="font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                 payment ·
               </span>
               <LensLink active={!paymentLens} onClick={() => setPaymentLens(null)}>
@@ -306,7 +317,7 @@ export function OrdersLedger({
             </div>
           )}
           {!isLoading && groups.length === 0 && (projectLens || paymentLens) && (
-            <p className="py-2 text-[11px] italic text-[rgba(250,247,242,0.4)]">
+            <p className="py-2 text-[11px] italic text-[var(--color-aged-oak)]">
               Nothing under this lens.
             </p>
           )}
@@ -329,7 +340,7 @@ export function OrdersLedger({
                   return (
                     <Fragment key={po.id}>
                     <li
-                      className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-3 border-b border-[rgba(250,247,242,0.08)] px-1 py-2.5"
+                      className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2.5"
                     >
                       <input
                         type="checkbox"
@@ -344,10 +355,10 @@ export function OrdersLedger({
                         }
                       />
                       <div>
-                        <p className="text-[12.5px] font-medium text-[var(--color-off-white)]">
+                        <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
                           {po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO drafted'}
                         </p>
-                        <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+                        <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                           {[
                             po.project?.name ?? 'Project',
                             po.total_cents != null ? fmtUsd(po.total_cents) : '—',
@@ -384,7 +395,7 @@ export function OrdersLedger({
                           // R18: unscheduled shipment — a quiet row mark, never a banner.
                           !po.confirmed_eta && po.status === 'shipped'
                             ? { color: '#D8BE56', fontFamily: 'var(--font-mono, monospace)', fontSize: '10px', letterSpacing: '0.05em' }
-                            : { color: 'var(--color-off-white)' }
+                            : { color: 'var(--color-charcoal)' }
                         }
                       >
                         {po.confirmed_eta
@@ -411,7 +422,7 @@ export function OrdersLedger({
                     {/* PRC-07: the unfolded log-acknowledgment band — quiet
                         act under the row, closed by logging or refolding. */}
                     {canAck && ackPoId === po.id && (
-                      <li className="border-b border-[rgba(250,247,242,0.08)] py-2.5 pl-8 pr-1">
+                      <li className="border-b border-[var(--color-pearl)] py-2.5 pl-8 pr-1">
                         <LogAckInline
                           purchaseOrderId={po.id}
                           vendorPoNumber={po.vendor_po_number}
@@ -449,7 +460,7 @@ export function OrdersLedger({
 
       {selected.length >= 2 && (
             <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[5px] border border-[rgba(196,165,123,0.3)] bg-[rgba(196,165,123,0.05)] px-3 py-2.5">
-              <p className="text-[11.5px] text-[var(--color-off-white)]">
+              <p className="text-[11.5px] text-[var(--color-charcoal)]">
                 {selected.length} orders{' '}
                 {selectedVendor ? '— same truck?' : '— pick one vendor to batch'}
               </p>
@@ -458,7 +469,7 @@ export function OrdersLedger({
                   <input
                     type="date"
                     aria-label="Shared ETA"
-                    className="rounded-[4px] border border-[rgba(250,247,242,0.2)] bg-transparent px-2 py-1 text-[11px] text-[var(--color-off-white)]"
+                    className="rounded-[4px] border border-[var(--color-pearl)] bg-transparent px-2 py-1 text-[11px] text-[var(--color-charcoal)]"
                     value={truckEta}
                     onChange={(e) => setTruckEta(e.target.value)}
                   />

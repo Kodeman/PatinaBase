@@ -7,8 +7,8 @@
  * cells rises on the Desk as need lines (collision tier) and in-motion chips
  * (drift tier) through use-desk-engagements.
  *
- * Book material: hairline rules and DM-mono numerals over the charcoal
- * sheet — never cards, never a dashboard.
+ * Book material: hairline rules and DM-mono numerals over the laid paper
+ * sheet (R96) — never cards, never a dashboard.
  */
 
 import { useMemo } from 'react';
@@ -46,7 +46,7 @@ const dayOfMonth = (isoDate: string) => String(Number(isoDate.slice(8, 10)));
 // The .wk-ev pill recipe (HTML §7): 2.5px left border + tinted bg + radius.
 // Three tones — clay (expected), sage (received), terracotta (conflict).
 const WK_EV_BASE =
-  'mb-px inline-block rounded-[3px] border-l-[2.5px] px-1.5 py-px text-[9px] leading-tight text-[var(--color-off-white)]';
+  'mb-px inline-block rounded-[3px] border-l-[2.5px] px-1.5 py-px text-[9px] leading-tight text-[var(--color-charcoal)]';
 const WK_EV_TONE = {
   clay: 'border-l-[var(--color-clay)] bg-[rgba(196,165,123,0.10)]',
   sage: 'border-l-[var(--color-sage)] bg-[rgba(168,181,160,0.12)]',
@@ -126,12 +126,12 @@ export function WeekBookPage() {
   }, [events]);
 
   if (isLoading) {
-    return <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">Opening the week…</p>;
+    return <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">Opening the week…</p>;
   }
 
   if (projects.length === 0) {
     return (
-      <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">
+      <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
         Nothing on the calendar — no dated deliveries or installs in the next{' '}
         {WEEKS_ACROSS} weeks.
       </p>
@@ -147,14 +147,14 @@ export function WeekBookPage() {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="border-b border-[rgba(250,247,242,0.14)] px-1 pb-1 text-left font-mono text-[8px] font-semibold uppercase tracking-[0.08em] text-[rgba(250,247,242,0.35)]">
+              <th className="border-b border-[var(--color-pearl)] px-1 pb-1 text-left font-mono text-[8px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                 Project
               </th>
               {weeks.map((w, i) => (
                 <th
                   key={w}
-                  className={`border-b border-[rgba(250,247,242,0.14)] px-1 pb-1 text-left font-mono text-[8px] font-semibold uppercase tracking-[0.08em] ${
-                    i === 0 ? 'text-[var(--color-clay)]' : 'text-[rgba(250,247,242,0.35)]'
+                  className={`border-b border-[var(--color-pearl)] px-1 pb-1 text-left font-mono text-[8px] font-semibold uppercase tracking-[0.08em] ${
+                    i === 0 ? 'text-[var(--color-clay)]' : 'text-[var(--color-aged-oak)]'
                   }`}
                 >
                   {fmtShort(w)}
@@ -165,7 +165,7 @@ export function WeekBookPage() {
           <tbody>
             {projects.map((p) => (
               <tr key={p.id}>
-                <td className="max-w-[140px] truncate border-b border-[rgba(250,247,242,0.08)] py-1.5 pr-2 text-[11px] text-[var(--color-off-white)]">
+                <td className="max-w-[140px] truncate border-b border-[var(--color-pearl)] py-1.5 pr-2 text-[11px] text-[var(--color-charcoal)]">
                   {p.name}
                 </td>
                 {weeks.map((w) => {
@@ -176,7 +176,7 @@ export function WeekBookPage() {
                   return (
                     <td
                       key={w}
-                      className={`border-b border-[rgba(250,247,242,0.08)] px-1 py-1.5 align-top ${
+                      className={`border-b border-[var(--color-pearl)] px-1 py-1.5 align-top ${
                         conflicted ? 'border-l-2 border-l-[var(--color-terracotta)]' : ''
                       }`}
                     >
@@ -212,7 +212,7 @@ export function WeekBookPage() {
 
       {/* The legend (HTML §7). The actionable conflicts rise on the Desk as
           need lines (R28) — the page marks them; the Desk carries the act. */}
-      <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.4)]">
+      <p className="mt-2 font-mono text-[8px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
         Expected · <span className="text-[var(--color-sage)]">received</span>
         {hasConflicts && (
           <>

@@ -94,10 +94,10 @@ export function OpenProjectSheet({ open, onClose }: { open: boolean; onClose: ()
         <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay)]">
           New project · no proposal needed
         </span>
-        <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-off-white)]">
+        <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-charcoal)]">
           What are you opening?
         </h2>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-[rgba(250,247,242,0.55)]">
+        <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-aged-oak)]">
           Essentials only — the document fills in as you compose. Everything here can change from
           the letterhead later.
         </p>
@@ -126,9 +126,9 @@ export function OpenProjectSheet({ open, onClose }: { open: boolean; onClose: ()
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <Field label="Budget band">
               <div className="flex items-baseline gap-2">
-                <span className="text-[13px] text-[rgba(250,247,242,0.4)]">$</span>
+                <span className="text-[13px] text-[var(--color-aged-oak)]">$</span>
                 <Input value={bandMin} onChange={setBandMin} placeholder="from" inputMode="decimal" />
-                <span className="text-[13px] text-[rgba(250,247,242,0.4)]">–</span>
+                <span className="text-[13px] text-[var(--color-aged-oak)]">–</span>
                 <Input value={bandMax} onChange={setBandMax} placeholder="to" inputMode="decimal" />
               </div>
             </Field>
@@ -137,7 +137,7 @@ export function OpenProjectSheet({ open, onClose }: { open: boolean; onClose: ()
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full border-b border-[rgba(250,247,242,0.18)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-off-white)] focus:border-[var(--color-clay)] focus:outline-none [color-scheme:dark]"
+                className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [color-scheme:light]"
               />
             </Field>
           </div>
@@ -160,11 +160,11 @@ export function OpenProjectSheet({ open, onClose }: { open: boolean; onClose: ()
           <button
             type="button"
             onClick={onClose}
-            className="font-mono text-[11px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.45)] hover:text-[rgba(250,247,242,0.8)]"
+            className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
           >
             Cancel
           </button>
-          <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.3)]">
+          <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
             opens the document
           </span>
         </div>
@@ -176,7 +176,7 @@ export function OpenProjectSheet({ open, onClose }: { open: boolean; onClose: ()
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[rgba(250,247,242,0.4)]">
+      <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         {label}
       </span>
       {children}
@@ -205,7 +205,7 @@ function Input({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full border-b border-[rgba(250,247,242,0.18)] bg-transparent pb-1.5 text-[14px] text-[var(--color-off-white)] placeholder:text-[rgba(250,247,242,0.3)] focus:border-[var(--color-clay)] focus:outline-none"
+      className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
     />
   );
 }

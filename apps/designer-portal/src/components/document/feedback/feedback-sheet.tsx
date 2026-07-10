@@ -150,8 +150,8 @@ export function FeedbackSheet() {
     <DocSheet open={open} onClose={requestClose} title="Leave a note" variant="center">
       <div className="mx-auto max-w-2xl">
         <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h2 className="font-heading text-xl text-[var(--color-pearl)]">Leave a note</h2>
-          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.5)]">
+          <h2 className="font-heading text-xl text-[var(--color-charcoal)]">Leave a note</h2>
+          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             on <span className="text-[var(--color-clay)]">{context.screen_name}</span>
           </span>
         </div>
@@ -170,8 +170,8 @@ export function FeedbackSheet() {
                 onClick={() => setBucket(on ? null : b.key)}
                 className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.06em] transition-colors"
                 style={{
-                  borderColor: on ? b.colorVar : 'rgba(250,247,242,0.18)',
-                  color: on ? 'var(--color-pearl)' : 'rgba(250,247,242,0.65)',
+                  borderColor: on ? b.colorVar : 'var(--color-pearl)',
+                  color: on ? 'var(--color-charcoal)' : 'var(--color-aged-oak)',
                   background: on ? `color-mix(in srgb, ${b.colorVar} 22%, transparent)` : 'transparent',
                 }}
               >
@@ -188,7 +188,7 @@ export function FeedbackSheet() {
           onChange={(e) => setNote(e.target.value)}
           rows={3}
           placeholder={activeBucket?.placeholder ?? 'Anything you want to say…'}
-          className="mt-3 w-full resize-y rounded-lg border border-[rgba(250,247,242,0.16)] bg-[rgba(250,247,242,0.04)] px-3 py-2.5 text-[14px] leading-relaxed text-[var(--color-pearl)] placeholder:text-[rgba(250,247,242,0.35)] focus:border-[var(--color-clay)] focus:outline-none"
+          className="mt-3 w-full resize-y rounded-lg border border-[var(--color-pearl)] bg-white px-3 py-2.5 text-[14px] leading-relaxed text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
         />
 
         {/* Optional dials: screenshot + weight. */}
@@ -198,27 +198,27 @@ export function FeedbackSheet() {
             role="switch"
             aria-checked={includeShot}
             onClick={() => setIncludeShot((v) => !v)}
-            className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.6)]"
+            className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]"
           >
             <span
               aria-hidden
               className="relative h-[18px] w-[30px] rounded-full transition-colors"
-              style={{ background: includeShot ? 'var(--color-sage)' : 'rgba(250,247,242,0.2)' }}
+              style={{ background: includeShot ? 'var(--color-sage)' : 'var(--color-pearl)' }}
             >
               <span
-                className="absolute top-[3px] h-3 w-3 rounded-full bg-[var(--color-pearl)] transition-all"
+                className="absolute top-[3px] h-3 w-3 rounded-full bg-white transition-all"
                 style={{ left: includeShot ? '15px' : '3px' }}
               />
             </span>
             Screenshot
             {shotUrl && includeShot && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={shotUrl} alt="" className="ml-1 h-5 w-8 rounded border border-[rgba(250,247,242,0.2)] object-cover" />
+              <img src={shotUrl} alt="" className="ml-1 h-5 w-8 rounded border border-[var(--color-pearl)] object-cover" />
             )}
-            {capturing && includeShot && <span className="text-[rgba(250,247,242,0.4)]">capturing…</span>}
+            {capturing && includeShot && <span className="text-[var(--color-aged-oak)]">capturing…</span>}
           </button>
 
-          <div role="radiogroup" aria-label="Weight" className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.6)]">
+          <div role="radiogroup" aria-label="Weight" className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
             <span>Weight</span>
             {WEIGHTS.map((w) => {
               const on = weight === w.key;
@@ -231,8 +231,8 @@ export function FeedbackSheet() {
                   onClick={() => setWeight(on ? null : w.key)}
                   className="rounded-md border px-2 py-1 transition-colors"
                   style={{
-                    borderColor: on ? 'var(--color-golden-hour)' : 'rgba(250,247,242,0.16)',
-                    color: on ? 'var(--color-pearl)' : 'rgba(250,247,242,0.55)',
+                    borderColor: on ? 'var(--color-golden-hour)' : 'var(--color-pearl)',
+                    color: on ? 'var(--color-charcoal)' : 'var(--color-aged-oak)',
                     background: on ? 'color-mix(in srgb, var(--color-golden-hour) 20%, transparent)' : 'transparent',
                   }}
                 >
@@ -256,16 +256,16 @@ export function FeedbackSheet() {
             {create.isPending ? 'Leaving…' : 'Leave note'}
           </button>
           {confirmingDiscard ? (
-            <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.6)]">
+            <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
               Discard?
               <button type="button" onClick={close} className="text-[var(--color-terracotta)]">Discard</button>
-              <button type="button" onClick={() => setConfirmingDiscard(false)} className="text-[var(--color-pearl)]">Keep</button>
+              <button type="button" onClick={() => setConfirmingDiscard(false)} className="text-[var(--color-charcoal)]">Keep</button>
             </span>
           ) : (
             <button
               type="button"
               onClick={requestClose}
-              className="rounded-lg border border-[rgba(250,247,242,0.16)] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.6)]"
+              className="rounded-lg border border-[var(--color-pearl)] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
             >
               Cancel
             </button>

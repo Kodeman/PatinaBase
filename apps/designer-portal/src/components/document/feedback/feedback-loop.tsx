@@ -32,11 +32,11 @@ export function ShippedCard({ note }: { note: Feedback }) {
         ✓ Shipped · from your note
       </p>
       {note.note && (
-        <p className="mt-2 border-l-2 border-[rgba(250,247,242,0.2)] pl-3 text-[13px] italic leading-snug text-[rgba(250,247,242,0.6)]">
+        <p className="mt-2 border-l-2 border-[var(--color-pearl)] pl-3 text-[13px] italic leading-snug text-[var(--color-mocha)]">
           “{note.note}”
         </p>
       )}
-      <p className="mt-2 font-heading text-[15px] leading-snug text-[var(--color-pearl)]">
+      <p className="mt-2 font-heading text-[15px] leading-snug text-[var(--color-charcoal)]">
         {note.resolution ?? 'This shipped.'}
       </p>
       <div className="mt-3 flex items-center gap-2">
@@ -60,14 +60,14 @@ export function ShippedCard({ note }: { note: Feedback }) {
               type="button"
               onClick={() => sendReaction('🎉')}
               disabled={!!reacted}
-              className="rounded-full border border-[rgba(250,247,242,0.16)] px-2.5 py-1 font-mono text-[11px] text-[rgba(250,247,242,0.6)] disabled:opacity-50"
+              className="rounded-full border border-[var(--color-pearl)] px-2.5 py-1 font-mono text-[11px] text-[var(--color-mocha)] disabled:opacity-50"
             >
               🎉
             </button>
             <button
               type="button"
               onClick={() => setReopening(true)}
-              className="ml-auto font-mono text-[11px] text-[rgba(250,247,242,0.5)] hover:text-[var(--color-pearl)]"
+              className="ml-auto font-mono text-[11px] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
             >
               Not quite →
             </button>
@@ -94,7 +94,7 @@ function ReopenBox({
         value={comment}
         onChange={(e) => setComment(e.target.value)}
         placeholder="What’s still off?"
-        className="w-full rounded-md border border-[rgba(250,247,242,0.16)] bg-[rgba(250,247,242,0.04)] px-2.5 py-1.5 text-[13px] text-[var(--color-pearl)] placeholder:text-[rgba(250,247,242,0.35)] focus:border-[var(--color-clay)] focus:outline-none"
+        className="w-full rounded-md border border-[var(--color-pearl)] bg-white px-2.5 py-1.5 text-[13px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
       />
       <div className="flex items-center gap-2">
         <button
@@ -108,7 +108,7 @@ function ReopenBox({
         <button
           type="button"
           onClick={onCancel}
-          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.5)]"
+          className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
         >
           Cancel
         </button>

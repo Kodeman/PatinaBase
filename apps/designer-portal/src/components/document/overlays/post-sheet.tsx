@@ -38,6 +38,7 @@ import {
   type InboxMessage,
 } from '@patina/supabase';
 import { DocSheet } from './doc-sheet';
+import { STUDIO_LEDGERS } from '@/lib/document/registry';
 import {
   inboxRecordItem,
   procurementRecordItem,
@@ -49,6 +50,9 @@ import {
 } from '@/lib/document/post-derivation';
 
 type PostPage = 'record' | 'letters';
+
+// R96 — the registry is the single source of the surface icon (no drift).
+const POST_ICON = STUDIO_LEDGERS.find((l) => l.key === 'the-post')!.icon;
 
 const PAGES: { key: PostPage; label: string }[] = [
   // Letters first per R82's naming, but the bell lands on the Record — the
@@ -195,24 +199,29 @@ export function PostSheet() {
   }
 
   return (
-    <DocSheet open={open} onClose={() => setOpen(false)} title="The Post">
+    <DocSheet
+      open={open}
+      onClose={() => setOpen(false)}
+      title="The Post"
+      icon={POST_ICON}
+      pageLabel={page === 'record' ? 'The Record' : 'Letters'}
+    >
       <div className="mx-auto max-w-xl">
-        {/* Front matter — the literal name of the thing. */}
-        <div className="flex items-baseline justify-between gap-4">
-          <h2 className="font-heading text-xl text-[var(--color-pearl)]">The Post</h2>
-          {page === 'record' && unreadCount > 0 && (
+        {/* Mark all read rides quietly under the head; the page links follow. */}
+        {page === 'record' && unreadCount > 0 && (
+          <div className="mb-1 flex justify-end">
             <button
               type="button"
               onClick={markAllRead}
-              className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.5)] transition-colors hover:text-[var(--color-clay)]"
+              className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-clay)]"
             >
               Mark all read
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* R28 page links — DM-mono, never tabs. */}
-        <div className="mb-4 mt-4 flex flex-wrap items-baseline gap-x-4 border-b border-[rgba(250,247,242,0.1)] pb-2">
+        <div className="mb-4 mt-2 flex flex-wrap items-baseline gap-x-4 border-b border-[var(--color-pearl)] pb-2">
           {PAGES.map((p) => (
             <button
               key={p.key}
@@ -225,7 +234,7 @@ export function PostSheet() {
               className={`font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors ${
                 page === p.key
                   ? 'text-[var(--color-clay)]'
-                  : 'text-[rgba(250,247,242,0.45)] hover:text-[rgba(250,247,242,0.8)]'
+                  : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
               }`}
             >
               {p.label}
@@ -274,7 +283,7 @@ function RecordList({
     );
   }
   return (
-    <ul className="divide-y divide-[rgba(250,247,242,0.08)]">
+    <ul className="divide-y divide-[var(--color-pearl)]">
       {items.map((item) => (
         <RecordRow key={item.key} item={item} onOpen={() => onOpen(item)} />
       ))}
@@ -293,7 +302,7 @@ function RecordRow({ item, onOpen }: { item: RecordItem; onOpen: () => void }) {
         onClick={onOpen}
         data-testid="post-record-row"
         data-cross-reference={isCrossRef ? 'true' : undefined}
-        className="block w-full px-1 py-3.5 text-left transition-colors hover:bg-[rgba(250,247,242,0.04)]"
+        className="block w-full px-1 py-3.5 text-left transition-colors hover:bg-[rgba(196,165,123,0.06)]"
       >
         <div className="flex items-start gap-2.5">
           {/* Awareness dot, never a count (D8). */}
@@ -308,22 +317,22 @@ function RecordRow({ item, onOpen }: { item: RecordItem; onOpen: () => void }) {
               <span
                 className={`truncate text-[13px] ${
                   read
-                    ? 'text-[rgba(250,247,242,0.6)]'
-                    : 'font-medium text-[var(--color-pearl)]'
+                    ? 'text-[var(--color-mocha)]'
+                    : 'font-medium text-[var(--color-charcoal)]'
                 }`}
               >
                 {title}
               </span>
-              <span className="flex-shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.4)]">
+              <span className="flex-shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 {relTime(item.createdAt)}
               </span>
             </div>
             {body ? (
-              <p className="mt-1 line-clamp-2 text-[12px] text-[rgba(250,247,242,0.55)]">
+              <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-mocha)]">
                 {body}
               </p>
             ) : null}
-            <div className="mt-1 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.35)]">
+            <div className="mt-1 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
               <span>{item.typeLabel}</span>
               {isCrossRef && (
                 <>
@@ -361,7 +370,7 @@ function LetterList({
     );
   }
   return (
-    <ul className="divide-y divide-[rgba(250,247,242,0.08)]">
+    <ul className="divide-y divide-[var(--color-pearl)]">
       {letters.map((m) => (
         <LetterRow key={m.thread_id} message={m} onOpen={() => onOpen(m)} />
       ))}
@@ -378,7 +387,7 @@ function LetterRow({ message, onOpen }: { message: InboxMessage; onOpen: () => v
         type="button"
         onClick={onOpen}
         data-testid="post-letter-row"
-        className="block w-full px-1 py-3.5 text-left transition-colors hover:bg-[rgba(250,247,242,0.04)]"
+        className="block w-full px-1 py-3.5 text-left transition-colors hover:bg-[rgba(196,165,123,0.06)]"
       >
         <div className="flex items-start gap-2.5">
           <span
@@ -392,20 +401,20 @@ function LetterRow({ message, onOpen }: { message: InboxMessage; onOpen: () => v
               <span
                 className={`truncate text-[13px] ${
                   message.is_unread
-                    ? 'font-medium text-[var(--color-pearl)]'
-                    : 'text-[rgba(250,247,242,0.6)]'
+                    ? 'font-medium text-[var(--color-charcoal)]'
+                    : 'text-[var(--color-mocha)]'
                 }`}
               >
                 {sender}
               </span>
-              <span className="flex-shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.4)]">
+              <span className="flex-shrink-0 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 {relTime(message.created_at)}
               </span>
             </div>
-            <p className="mt-1 line-clamp-2 text-[12px] text-[rgba(250,247,242,0.55)]">
+            <p className="mt-1 line-clamp-2 text-[12px] text-[var(--color-mocha)]">
               {message.deleted_at ? '(message withdrawn)' : message.body || '(no content)'}
             </p>
-            <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.35)]">
+            <div className="mt-1 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
               {title}
             </div>
           </div>
@@ -418,8 +427,8 @@ function LetterRow({ message, onOpen }: { message: InboxMessage; onOpen: () => v
 function QuietLine({ text, hint }: { text: string; hint?: string }) {
   return (
     <div className="flex flex-col items-center gap-1.5 py-14 text-center">
-      <p className="text-[13px] text-[rgba(250,247,242,0.65)]">{text}</p>
-      {hint ? <p className="text-[12px] text-[rgba(250,247,242,0.4)]">{hint}</p> : null}
+      <p className="text-[13px] text-[var(--color-mocha)]">{text}</p>
+      {hint ? <p className="text-[12px] text-[var(--color-aged-oak)]">{hint}</p> : null}
     </div>
   );
 }

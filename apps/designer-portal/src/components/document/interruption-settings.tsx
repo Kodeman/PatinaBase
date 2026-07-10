@@ -40,8 +40,8 @@ export function InterruptionSettings() {
   return (
     <DocSheet open={open} onClose={() => setOpen(false)} title="Interruptions">
       <div className="mx-auto max-w-xl">
-        <h2 className="font-heading text-xl text-[var(--color-pearl)]">Interruptions</h2>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-[rgba(250,247,242,0.6)]">
+        <h2 className="font-heading text-xl text-[var(--color-charcoal)]">Interruptions</h2>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
           The margin is the notification model — nothing breaks through unless you say so. Turn a
           kind on and it will surface louder than the quiet margin; everything stays off until you
           choose.
@@ -53,7 +53,7 @@ export function InterruptionSettings() {
             return (
               <li
                 key={key}
-                className="flex items-center gap-3 border-b border-[rgba(250,247,242,0.08)] py-3"
+                className="flex items-center gap-3 border-b border-[var(--color-pearl)] py-3"
               >
                 <span
                   aria-hidden
@@ -61,10 +61,10 @@ export function InterruptionSettings() {
                   style={{ background: marginAccent(key).border }}
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-medium text-[var(--color-off-white)]">
+                  <span className="block text-[13px] font-medium text-[var(--color-charcoal)]">
                     {label}
                   </span>
-                  <span className="block text-[11px] text-[rgba(250,247,242,0.45)]">{blurb}</span>
+                  <span className="block text-[11px] text-[var(--color-aged-oak)]">{blurb}</span>
                 </span>
                 <button
                   type="button"
@@ -76,11 +76,13 @@ export function InterruptionSettings() {
                   className={`relative h-[20px] w-[36px] shrink-0 rounded-full border transition-colors ${
                     enabled
                       ? 'border-[var(--color-clay)] bg-[var(--color-clay)]'
-                      : 'border-[rgba(250,247,242,0.25)] bg-transparent'
+                      : 'border-[var(--color-aged-oak)] bg-transparent'
                   }`}
                 >
                   <span
-                    className="absolute top-[2px] h-[14px] w-[14px] rounded-full bg-[var(--color-pearl)] transition-all"
+                    className={`absolute top-[2px] h-[14px] w-[14px] rounded-full transition-all ${
+                      enabled ? 'bg-white' : 'bg-[var(--color-aged-oak)]'
+                    }`}
                     style={{ left: enabled ? 18 : 2 }}
                   />
                 </button>

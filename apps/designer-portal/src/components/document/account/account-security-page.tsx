@@ -26,7 +26,7 @@ interface EnrollState {
 const PRIMARY =
   'rounded-[5px] border border-[var(--color-clay)] bg-[var(--color-clay)] px-3.5 py-1.5 text-[12px] font-medium text-[var(--color-charcoal)] transition-colors hover:bg-[var(--color-aged-oak)] hover:border-[var(--color-aged-oak)] disabled:opacity-50';
 const GHOST =
-  'rounded-[5px] border border-[rgba(250,247,242,0.2)] px-3.5 py-1.5 text-[12px] font-medium text-[rgba(250,247,242,0.85)] transition-colors hover:border-[var(--color-clay)] disabled:opacity-50';
+  'rounded-[5px] border border-[var(--color-pearl)] px-3.5 py-1.5 text-[12px] font-medium text-[var(--color-mocha)] transition-colors hover:border-[var(--color-clay)] disabled:opacity-50';
 
 export function AccountSecurityPage() {
   const { factors, isLoading } = useMfaFactors();
@@ -94,13 +94,13 @@ export function AccountSecurityPage() {
 
   if (isLoading) {
     return (
-      <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">Reading your factors…</p>
+      <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">Reading your factors…</p>
     );
   }
 
   return (
     <div className="pt-1">
-      <p className="mb-5 text-[12px] leading-relaxed text-[rgba(250,247,242,0.55)]">
+      <p className="mb-5 text-[12px] leading-relaxed text-[var(--color-aged-oak)]">
         Add a one-time code from an authenticator app (1Password, Google Authenticator, Authy) on
         top of your password.
       </p>
@@ -123,7 +123,7 @@ export function AccountSecurityPage() {
       )}
 
       {/* Enrolled factors */}
-      <h3 className="mb-2 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[rgba(250,247,242,0.45)]">
+      <h3 className="mb-2 font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         Status
       </h3>
       {hasMfa ? (
@@ -131,13 +131,13 @@ export function AccountSecurityPage() {
           {verifiedFactors.map((factor) => (
             <li
               key={factor.id}
-              className="flex items-center justify-between border-b border-[rgba(250,247,242,0.08)] py-3"
+              className="flex items-center justify-between border-b border-[var(--color-pearl)] py-3"
             >
               <span>
-                <span className="block text-[13px] text-[var(--color-off-white)]">
+                <span className="block text-[13px] text-[var(--color-charcoal)]">
                   {factor.friendlyName || 'Authenticator app'}
                 </span>
-                <span className="block font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)]">
+                <span className="block font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                   Enabled
                   {factor.createdAt
                     ? ` · added ${new Date(factor.createdAt).toLocaleDateString()}`
@@ -148,7 +148,7 @@ export function AccountSecurityPage() {
                 type="button"
                 onClick={() => handleUnenroll(factor)}
                 disabled={unenrollMfa.isPending}
-                className="font-mono text-[10px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.5)] hover:text-[var(--color-terracotta)] disabled:opacity-50"
+                className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-terracotta)] disabled:opacity-50"
               >
                 Remove
               </button>
@@ -156,7 +156,7 @@ export function AccountSecurityPage() {
           ))}
         </ul>
       ) : (
-        <p className="mb-5 text-[12px] text-[rgba(250,247,242,0.5)]">
+        <p className="mb-5 text-[12px] text-[var(--color-aged-oak)]">
           Two-factor authentication is not enabled.
         </p>
       )}
@@ -181,10 +181,10 @@ export function AccountSecurityPage() {
         </button>
       ) : (
         <div className="max-w-md">
-          <h3 className="mb-2 font-heading text-[15px] text-[var(--color-pearl)]">
+          <h3 className="mb-2 font-heading text-[15px] text-[var(--color-charcoal)]">
             Scan the QR code
           </h3>
-          <p className="mb-4 text-[12px] text-[rgba(250,247,242,0.55)]">
+          <p className="mb-4 text-[12px] text-[var(--color-aged-oak)]">
             Scan this with your authenticator app, then enter the 6-digit code it shows.
           </p>
 
@@ -199,17 +199,17 @@ export function AccountSecurityPage() {
           )}
 
           <div className="mb-4">
-            <span className="block font-mono text-[9px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.45)]">
+            <span className="block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
               Or enter this secret manually
             </span>
-            <code className="mt-1 block break-all font-mono text-[12px] text-[var(--color-pearl)]">
+            <code className="mt-1 block break-all font-mono text-[12px] text-[var(--color-charcoal)]">
               {enroll.secret}
             </code>
           </div>
 
           <label
             htmlFor="account-mfa-code"
-            className="mb-1 block font-mono text-[9px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.45)]"
+            className="mb-1 block font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]"
           >
             Verification code
           </label>
@@ -225,7 +225,7 @@ export function AccountSecurityPage() {
             }}
             placeholder="000000"
             maxLength={6}
-            className="mb-4 w-40 border-0 border-b border-[rgba(250,247,242,0.18)] bg-transparent py-2 font-mono text-[18px] tracking-[0.4em] text-[var(--color-off-white)] outline-none placeholder:text-[rgba(250,247,242,0.25)] focus:border-[var(--color-clay)]"
+            className="mb-4 w-40 border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 font-mono text-[18px] tracking-[0.4em] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]"
           />
 
           <div className="flex gap-3">

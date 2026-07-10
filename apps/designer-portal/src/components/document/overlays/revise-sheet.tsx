@@ -32,7 +32,7 @@ import { proposalEvents } from '@/lib/analytics';
 import { DocSheet } from './doc-sheet';
 
 const labelCls =
-  'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[rgba(250,247,242,0.5)]';
+  'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 
 export function ReviseSheet({
   proposalId,
@@ -97,14 +97,14 @@ export function ReviseSheet({
         <p className={labelCls}>
           {proposal?.title ?? 'Proposal'} &middot; v{currentVersion}.0 &rarr; v{nextVersion}.0
         </p>
-        <h2 className="mt-1 font-heading text-xl text-[var(--color-pearl)]">Revise proposal</h2>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-[rgba(250,247,242,0.6)]">
+        <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">Revise proposal</h2>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
           Open a new version as a draft. v{currentVersion}.0 stays in the client&rsquo;s hands until
           you send v{nextVersion}.0 — sending the new version is what supersedes the old one.
         </p>
 
         {!proposal ? (
-          <p className="mt-6 text-[12.5px] italic text-[rgba(250,247,242,0.45)]">Loading…</p>
+          <p className="mt-6 text-[12.5px] italic text-[var(--color-aged-oak)]">Loading…</p>
         ) : (
           <div className="mt-5 space-y-5">
             {/* Client feedback on v1 — RevisionFeedback carries its own (dark)
@@ -118,7 +118,7 @@ export function ReviseSheet({
                 />
               </div>
             ) : (
-              <p className="text-[12.5px] italic text-[rgba(250,247,242,0.45)]">
+              <p className="text-[12.5px] italic text-[var(--color-aged-oak)]">
                 No client feedback on this version. You can still open a new version with your own
                 updates.
               </p>
@@ -135,7 +135,7 @@ export function ReviseSheet({
                 value={revisionSummary}
                 onChange={(e) => setRevisionSummary(e.target.value)}
                 placeholder="Describe what changed and why…"
-                className="w-full resize-y rounded-[4px] border border-[rgba(250,247,242,0.18)] bg-[rgba(250,247,242,0.04)] px-3 py-2 text-[13px] text-[var(--color-off-white)] outline-none transition-colors placeholder:italic placeholder:text-[rgba(250,247,242,0.35)] focus:border-[var(--color-clay)]"
+                className="w-full resize-y rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]"
                 style={{ minHeight: 80 }}
               />
             </div>
@@ -150,7 +150,7 @@ export function ReviseSheet({
             )}
 
             {/* Actions */}
-            <div className="flex items-center gap-4 border-t border-[rgba(250,247,242,0.1)] pt-5">
+            <div className="flex items-center gap-4 border-t border-[var(--color-pearl)] pt-5">
               <button
                 type="button"
                 onClick={handleOpenRevision}
@@ -164,7 +164,7 @@ export function ReviseSheet({
               <button
                 type="button"
                 onClick={onClose}
-                className="font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.5)] hover:text-[var(--color-off-white)]"
+                className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
               >
                 Not now
               </button>

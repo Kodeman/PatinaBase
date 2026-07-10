@@ -36,6 +36,11 @@ import { LedgerFrontMatter } from './ledger-front-matter';
 import { hoursUtilization } from '@/lib/document/ledger-summary';
 import { openInvoiceComposer } from './accounts/invoice-overlays';
 import type { OpenLedgerContext } from './command-bar';
+import { DocSheetHead } from './overlays/doc-sheet';
+import { STUDIO_LEDGERS } from '@/lib/document/registry';
+
+// R96 — the registry is the single source of the surface icon (no drift).
+const HOURS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'hours')!.icon;
 
 type AnyRecord = any;
 
@@ -250,12 +255,13 @@ export function HoursLedger({
 
   return (
     <div className="mx-auto max-w-3xl">
+      <DocSheetHead icon={HOURS_ICON} title="Hours" />
       <div className="mb-4 flex items-baseline justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="font-heading text-xl text-[var(--color-pearl)]">
+          <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
             Hours <em className="italic text-[var(--color-clay)]">· {weekLabel}</em>
             {lensName && (
-              <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.55)]">
+              <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 · {lensName}
                 <button
                   type="button"
@@ -267,7 +273,7 @@ export function HoursLedger({
               </span>
             )}
           </h2>
-          <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.07em] text-[rgba(250,247,242,0.45)]">
+          <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)]">
             {weekOffset === 0 && <>Today · {fmtMinutes(todayMin)} &nbsp;·&nbsp; </>}
             Week · {fmtMinutes(weekMin)}
             {/* R77 — week paging: walk the history, quietly. */}
@@ -305,7 +311,7 @@ export function HoursLedger({
               initialTimeEntryIds: weekUnbilled.map((e) => e.id),
             })
           }
-          className="whitespace-nowrap rounded-[3px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:border-[rgba(250,247,242,0.15)] disabled:text-[rgba(250,247,242,0.3)] disabled:hover:bg-transparent"
+          className="whitespace-nowrap rounded-[3px] border border-[rgba(196,165,123,0.4)] px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay)] transition-colors hover:bg-[var(--color-clay)] hover:text-white disabled:border-[var(--color-pearl)] disabled:text-[var(--color-aged-oak)] disabled:hover:bg-transparent"
         >
           Export week → Accounts
         </button>
@@ -327,9 +333,9 @@ export function HoursLedger({
 
       {/* R77 — the all-time unbilled balance, with its one act. */}
       {unbilledMinutes > 0 && (
-        <div className="-mt-2 mb-4 flex flex-wrap items-baseline gap-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)]">
+        <div className="-mt-2 mb-4 flex flex-wrap items-baseline gap-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           <span className="text-[var(--color-clay)]">unbilled · all time</span>
-          <span className="text-[var(--color-off-white)]">
+          <span className="text-[var(--color-charcoal)]">
             {fmtUsd(unbilledCents)} · {fmtMinutes(unbilledMinutes)}
           </span>
           {unbilledProjects.length > 1 && <span>· {unbilledProjects.length} documents</span>}
@@ -360,7 +366,7 @@ export function HoursLedger({
       )}
 
       {days.length === 0 && (
-        <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">
+        <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">
           {weekOffset === 0
             ? 'Nothing logged this week — pick up a document and the time follows.'
             : 'Nothing logged that week.'}
@@ -371,7 +377,7 @@ export function HoursLedger({
         <section key={day} className="mb-4">
           <p className="mb-1 flex items-baseline justify-between font-mono text-[9px] font-semibold uppercase tracking-[0.07em] text-[var(--color-clay)]">
             <span>{day === todayKey ? 'Today' : fmtDay(rows[0].started_at)}</span>
-            <span className="text-[rgba(250,247,242,0.4)]">
+            <span className="text-[var(--color-aged-oak)]">
               {fmtMinutes(rows.reduce((s, e) => s + (e.duration_minutes ?? 0), 0))}
             </span>
           </p>
@@ -396,7 +402,7 @@ export function HoursLedger({
       <div className="mt-4 grid grid-cols-[1.2fr_0.7fr_1fr_auto] items-center gap-2">
         <select
           aria-label="Project"
-          className="rounded-[4px] border border-[rgba(250,247,242,0.18)] bg-[rgba(250,247,242,0.05)] px-2 py-1.5 text-[11px] text-[var(--color-off-white)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--color-charcoal)]"
+          className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--doc-paper)]"
           value={addProject}
           onChange={(e) => setAddProject(e.target.value)}
         >
@@ -412,13 +418,13 @@ export function HoursLedger({
           min={1}
           placeholder="Minutes"
           aria-label="Minutes"
-          className="rounded-[4px] border border-[rgba(250,247,242,0.18)] bg-[rgba(250,247,242,0.05)] px-2 py-1.5 text-[11px] text-[var(--color-off-white)] focus:border-[var(--color-clay)] focus:outline-none"
+          className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none"
           value={addMinutes}
           onChange={(e) => setAddMinutes(e.target.value)}
         />
         <select
           aria-label="Activity"
-          className="rounded-[4px] border border-[rgba(250,247,242,0.18)] bg-[rgba(250,247,242,0.05)] px-2 py-1.5 text-[11px] text-[var(--color-off-white)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--color-charcoal)]"
+          className="rounded-[4px] border border-[var(--color-pearl)] bg-white px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [&_option]:bg-[var(--doc-paper)]"
           value={addActivity}
           onChange={(e) => setAddActivity(e.target.value)}
         >
@@ -471,13 +477,13 @@ function EntryRow({
   };
 
   return (
-    <li className="border-b border-[rgba(250,247,242,0.08)] px-1 py-2">
+    <li className="border-b border-[var(--color-pearl)] px-1 py-2">
       <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[12.5px] font-medium text-[var(--color-off-white)]">
+          <p className="truncate text-[12.5px] font-medium text-[var(--color-charcoal)]">
             {e.project?.name ?? 'Project'}
           </p>
-          <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+          <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
             {[
               e.phase_key,
               SOURCE_LABEL[e.source] ?? e.source,
@@ -491,7 +497,7 @@ function EntryRow({
         <select
           aria-label="Activity"
           disabled={billed}
-          className="rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-1.5 py-1 text-[10.5px] text-[rgba(250,247,242,0.75)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-40 [&_option]:bg-[var(--color-charcoal)]"
+          className="rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-1.5 py-1 text-[10.5px] text-[var(--color-mocha)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-40 [&_option]:bg-[var(--doc-paper)]"
           value={e.activity ?? ''}
           onChange={(ev) => onCommit(e, { activity: ev.target.value || null })}
         >
@@ -507,7 +513,7 @@ function EntryRow({
           min={1}
           aria-label="Duration (minutes)"
           disabled={billed}
-          className="w-[64px] rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-1.5 py-1 text-right text-[11px] text-[var(--color-off-white)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-40"
+          className="w-[64px] rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-1.5 py-1 text-right text-[11px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-40"
           defaultValue={e.duration_minutes}
           onBlur={(ev) => {
             const v = parseInt(ev.target.value, 10);
@@ -521,8 +527,8 @@ function EntryRow({
             billed
               ? { borderColor: 'var(--color-sage)', color: 'var(--color-sage)' }
               : {
-                  borderColor: 'rgba(250,247,242,0.2)',
-                  color: 'rgba(250,247,242,0.45)',
+                  borderColor: 'var(--color-pearl)',
+                  color: 'var(--color-aged-oak)',
                 }
           }
         >
@@ -532,7 +538,7 @@ function EntryRow({
         {!billed ? (
           confirming ? (
             <span className="flex items-baseline gap-1.5 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.05em]">
-              <span className="text-[rgba(250,247,242,0.5)]">delete?</span>
+              <span className="text-[var(--color-aged-oak)]">delete?</span>
               <button
                 type="button"
                 disabled={deleteEntry.isPending}
@@ -545,7 +551,7 @@ function EntryRow({
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                className="text-[rgba(250,247,242,0.5)] hover:text-[rgba(250,247,242,0.8)]"
+                className="text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
               >
                 no
               </button>
@@ -555,7 +561,7 @@ function EntryRow({
               type="button"
               aria-label="Delete entry"
               onClick={() => setConfirming(true)}
-              className="text-[13px] leading-none text-[rgba(250,247,242,0.35)] hover:text-[#C4836F]"
+              className="text-[13px] leading-none text-[var(--color-aged-oak)] hover:text-[#C4836F]"
             >
               ×
             </button>

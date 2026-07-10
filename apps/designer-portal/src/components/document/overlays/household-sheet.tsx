@@ -29,9 +29,9 @@ import { useAttachDocumentClient, type AttachEngagementKind } from '@/hooks/use-
 import { DocSheet } from './doc-sheet';
 
 const labelCls =
-  'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[rgba(250,247,242,0.5)]';
+  'font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 const fieldCls =
-  'w-full rounded-[4px] border border-[rgba(250,247,242,0.18)] bg-[rgba(250,247,242,0.04)] px-3 py-2 text-[13px] text-[var(--color-off-white)] outline-none transition-colors placeholder:italic placeholder:text-[rgba(250,247,242,0.35)] focus:border-[var(--color-clay)]';
+  'w-full rounded-[4px] border border-[var(--color-pearl)] bg-white px-3 py-2 text-[13px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:italic placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
 
 const pretty = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -115,38 +115,38 @@ export function HouseholdSheet({
     <DocSheet open={open} onClose={onClose} title="The household">
       <div className="mx-auto max-w-xl">
         <p className={labelCls}>The household</p>
-        <h2 className="mt-1 font-heading text-xl text-[var(--color-pearl)]">
+        <h2 className="mt-1 font-heading text-xl text-[var(--color-charcoal)]">
           {clientProfileId ? name : 'No client linked'}
         </h2>
 
         {clientProfileId ? (
-          <div className="mt-4 space-y-1.5 border-b border-[rgba(250,247,242,0.1)] pb-4">
+          <div className="mt-4 space-y-1.5 border-b border-[var(--color-pearl)] pb-4">
             {email && (
-              <p className="text-[13px] text-[rgba(250,247,242,0.8)]">
+              <p className="text-[13px] text-[var(--color-charcoal)]">
                 <span className={`${labelCls} mr-2`}>Email</span>
                 {email}
               </p>
             )}
             {phone && (
-              <p className="text-[13px] text-[rgba(250,247,242,0.8)]">
+              <p className="text-[13px] text-[var(--color-charcoal)]">
                 <span className={`${labelCls} mr-2`}>Phone</span>
                 {phone}
               </p>
             )}
             {status && (
-              <p className="text-[13px] text-[rgba(250,247,242,0.8)]">
+              <p className="text-[13px] text-[var(--color-charcoal)]">
                 <span className={`${labelCls} mr-2`}>Relationship</span>
                 {pretty(status)}
               </p>
             )}
             {!email && !phone && (
-              <p className="text-[12.5px] italic text-[rgba(250,247,242,0.45)]">
+              <p className="text-[12.5px] italic text-[var(--color-aged-oak)]">
                 No contact details on file yet.
               </p>
             )}
           </div>
         ) : (
-          <p className="mt-3 text-[12.5px] leading-relaxed text-[rgba(250,247,242,0.6)]">
+          <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--color-mocha)]">
             This document isn&rsquo;t linked to a client yet. Choose who it belongs to so they
             receive the proposal and can sign it.
           </p>
@@ -173,7 +173,7 @@ export function HouseholdSheet({
                 )}
               </div>
             ) : (
-              <p className="text-[12.5px] italic leading-relaxed text-[rgba(250,247,242,0.5)]">
+              <p className="text-[12.5px] italic leading-relaxed text-[var(--color-aged-oak)]">
                 This proposal has already been sent — its client is locked so a signature can&rsquo;t be
                 mis-attributed. Revise the proposal to send a new version to a different client.
               </p>
@@ -184,19 +184,19 @@ export function HouseholdSheet({
         {/* EDIT — the relationship's working details (always notes; name/email
             for captured clients without a Patina account). */}
         {client && (
-          <div className="mt-6 border-t border-[rgba(250,247,242,0.1)] pt-4">
+          <div className="mt-6 border-t border-[var(--color-pearl)] pt-4">
             {!editing ? (
               <button
                 type="button"
                 onClick={() => setEditing(true)}
-                className="font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.5)] hover:text-[var(--color-clay)]"
+                className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
               >
                 Edit details
               </button>
             ) : (
               <div className="space-y-4">
                 {hasProfile ? (
-                  <p className="text-[11.5px] italic leading-relaxed text-[rgba(250,247,242,0.45)]">
+                  <p className="text-[11.5px] italic leading-relaxed text-[var(--color-aged-oak)]">
                     {name}&rsquo;s name, email, and phone are managed in their Patina account. You can
                     keep your own notes here.
                   </p>
@@ -254,7 +254,7 @@ export function HouseholdSheet({
                   <button
                     type="button"
                     onClick={() => setEditing(false)}
-                    className="font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.5)] hover:text-[var(--color-off-white)]"
+                    className="font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
                   >
                     Cancel
                   </button>

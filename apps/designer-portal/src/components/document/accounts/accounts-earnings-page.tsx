@@ -42,16 +42,16 @@ interface EarningsStats {
 
 function EarnLine({ label, value, sub }: { label: string; value: number; sub?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-dashed border-[rgba(250,247,242,0.1)] py-1.5">
-      <span className="text-[12px] text-[var(--color-off-white)]">
+    <div className="flex items-baseline justify-between gap-3 border-b border-dashed border-[var(--color-pearl)] py-1.5">
+      <span className="text-[12px] text-[var(--color-mocha)]">
         {label}
         {sub && (
-          <span className="ml-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+          <span className="ml-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
             {sub}
           </span>
         )}
       </span>
-      <span className="font-mono text-[12px] text-[var(--color-off-white)]">
+      <span className="font-mono text-[12px] text-[var(--color-charcoal)]">
         {fmtUsd(value)}
       </span>
     </div>
@@ -70,7 +70,7 @@ export function AccountsEarningsPage({
 }) {
   if (!stats) {
     return (
-      <p className="py-5 font-heading text-[13px] italic text-[rgba(250,247,242,0.5)]">
+      <p className="py-5 font-heading text-[13px] italic text-[var(--color-aged-oak)]">
         Reading your earnings…
       </p>
     );
@@ -84,10 +84,10 @@ export function AccountsEarningsPage({
     <div>
       {/* ── Band one — What you earn (client-work income) ── */}
       <section>
-        <h3 className="mb-1 font-heading text-[14px] italic text-[var(--color-pearl)]">
+        <h3 className="mb-1 font-heading text-[14px] italic text-[var(--color-charcoal)]">
           What you earn
         </h3>
-        <p className="mb-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.4)]">
+        <p className="mb-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           client-work income
         </p>
         <EarnLine label="Design fees" value={bySource.design_fee} />
@@ -97,29 +97,29 @@ export function AccountsEarningsPage({
           <span className="font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-clay)]">
             client work, all time
           </span>
-          <span className="font-heading text-[16px] text-[var(--color-off-white)]">
+          <span className="font-heading text-[16px] text-[var(--color-charcoal)]">
             {fmtUsd(clientWork)}
           </span>
         </div>
-        <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+        <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
           {fmtUsd(stats.paidEarnings)} paid · {fmtUsd(stats.pendingEarnings)} pending
         </p>
       </section>
 
       {/* ── Band two — What teaching returns (the Aesthete fold, R37) ── */}
-      <section className="mt-6 border-t border-[rgba(250,247,242,0.12)] pt-4">
-        <h3 className="mb-1 font-heading text-[14px] italic text-[var(--color-pearl)]">
+      <section className="mt-6 border-t border-[var(--color-pearl)] pt-4">
+        <h3 className="mb-1 font-heading text-[14px] italic text-[var(--color-charcoal)]">
           What teaching returns
         </h3>
-        <p className="mb-3 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.4)]">
+        <p className="mb-3 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           taught-taste income · the {Math.round(PLEDGE_RATE * 100)}% Pledge
         </p>
 
         {/* The accruing crescendo: the Pledge, returned to you, YTD. */}
-        <div className="mb-3 flex items-baseline justify-between gap-3 border-b border-[rgba(250,247,242,0.1)] pb-2">
-          <span className="font-heading text-[12.5px] italic text-[var(--color-off-white)]">
+        <div className="mb-3 flex items-baseline justify-between gap-3 border-b border-[var(--color-pearl)] pb-2">
+          <span className="font-heading text-[12.5px] italic text-[var(--color-charcoal)]">
             The Pledge, returned to you{' '}
-            <span className="font-mono text-[8.5px] not-italic uppercase tracking-[0.06em] text-[rgba(250,247,242,0.4)]">
+            <span className="font-mono text-[8.5px] not-italic uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
               year to date
             </span>
           </span>
@@ -129,7 +129,7 @@ export function AccountsEarningsPage({
         </div>
 
         {pledgeEvents.length === 0 ? (
-          <p className="py-2 text-[12px] italic text-[rgba(250,247,242,0.5)]">
+          <p className="py-2 text-[12px] italic text-[var(--color-aged-oak)]">
             No Via-Patina orders yet — the Pledge begins with your first.
           </p>
         ) : (
@@ -137,9 +137,9 @@ export function AccountsEarningsPage({
             {pledgeEvents.map((ev, i) => (
               <li
                 key={`${ev.earnedAt}-${i}`}
-                className="border-b border-dashed border-[rgba(250,247,242,0.1)] py-2"
+                className="border-b border-dashed border-[var(--color-pearl)] py-2"
               >
-                <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.45)]">
+                <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                   {ev.label ?? 'Via Patina'}
                   {ev.earnedAt ? ` · ${fmtDay(ev.earnedAt)}` : ''} · {fmtUsd(ev.commission)} commission
                 </p>
@@ -149,7 +149,7 @@ export function AccountsEarningsPage({
                     <span className="font-mono text-[8px] uppercase tracking-[0.05em] text-[var(--color-sage)]">
                       returned to you
                     </span>
-                    <span className="font-mono text-[11px] text-[var(--color-off-white)]">
+                    <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
                       {fmtUsd(ev.returnedToYou)}
                     </span>
                   </span>
@@ -164,7 +164,7 @@ export function AccountsEarningsPage({
                         </span>
                       )}
                     </span>
-                    <span className="font-mono text-[11px] text-[var(--color-off-white)]">
+                    <span className="font-mono text-[11px] text-[var(--color-charcoal)]">
                       {ev.givenToCommons != null ? fmtUsd(ev.givenToCommons) : '—'}
                     </span>
                   </span>
@@ -178,12 +178,12 @@ export function AccountsEarningsPage({
             the FINAL brand/finance number still open (§14.15) — flagged, never
             presented as final, never left as "—". */}
         {COMMONS_MATCH_PROVISIONAL && COMMONS_MATCH_RATE != null && (
-          <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+          <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
             the commons share is provisional ({Math.round(COMMONS_MATCH_RATE * 100)}%) — final rate awaits brand config (§14.15)
           </p>
         )}
         {!commonsRateKnown && (
-          <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+          <p className="mt-2 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
             the commons share awaits brand config (§14.15) — never invented
           </p>
         )}

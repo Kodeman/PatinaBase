@@ -47,14 +47,15 @@ export interface PoPreviewProps {
  * 00186/00190: ack date stamped server-side NOW() idempotently; PO # and ETA
  * coalesce — blank keeps what's on file) with quiet inline confirm (R51) and
  * the R83 inline error band. One form, two homes: the resend preview's paper
- * and the Orders ledger's charcoal rows — `tone` picks the ink.
+ * and the Orders book's rows — both converged onto the same laid-paper ink
+ * (R96), so `tone` is retained for caller compatibility but no longer changes
+ * anything (the DocSheet `variant` precedent).
  */
 export function LogAckInline({
   purchaseOrderId,
   vendorPoNumber,
   confirmedEta,
   sentAt,
-  tone = 'paper',
   onLogged,
 }: {
   purchaseOrderId: string;
@@ -62,6 +63,8 @@ export function LogAckInline({
   confirmedEta?: string | null;
   /** ISO sent_at when known — keeps the days-to-ack metric honest. */
   sentAt?: string | null;
+  /** Retained for backward compatibility — both tones are now the same
+   *  laid-paper ink (R96), so the prop no longer changes anything. */
   tone?: 'paper' | 'book';
   onLogged?: () => void;
 }) {
@@ -72,13 +75,9 @@ export function LogAckInline({
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const dark = tone === 'book';
-  const label = dark
-    ? 'font-mono text-[8px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)]'
-    : 'font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]';
-  const input = dark
-    ? 'rounded-[3px] border border-[rgba(250,247,242,0.2)] bg-transparent px-2 py-1 font-mono text-[10.5px] text-[var(--color-off-white)] outline-none [color-scheme:dark]'
-    : 'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1 font-mono text-[10.5px] text-[var(--color-charcoal)] outline-none';
+  const label = 'font-mono text-[8px] uppercase tracking-[0.06em] text-[var(--text-muted)]';
+  const input =
+    'rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1 font-mono text-[10.5px] text-[var(--color-charcoal)] outline-none';
 
   const confirm = async () => {
     if (logAck.isPending) return;
@@ -108,9 +107,7 @@ export function LogAckInline({
   if (done) {
     // R51: the quiet confirmation — a line of text at the act site.
     return (
-      <p
-        className={`text-[10.5px] ${dark ? 'text-[rgba(250,247,242,0.7)]' : 'text-[var(--color-charcoal)]'}`}
-      >
+      <p className="text-[10.5px] text-[var(--color-charcoal)]">
         Acknowledged — logged {fmtDay(new Date().toISOString())}.
       </p>
     );
@@ -118,7 +115,7 @@ export function LogAckInline({
 
   return (
     <div>
-      <p className={`mb-1.5 text-[10px] ${dark ? 'text-[rgba(250,247,242,0.45)]' : 'text-[var(--text-muted)]'}`}>
+      <p className="mb-1.5 text-[10px] text-[var(--text-muted)]">
         Stamped as of today — PO # and ETA are optional, blank keeps what&rsquo;s on file.
       </p>
       <div className="flex flex-wrap items-end gap-2">

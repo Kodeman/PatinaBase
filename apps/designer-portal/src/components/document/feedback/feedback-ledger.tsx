@@ -10,6 +10,8 @@
  */
 
 import { useEffect, useState } from 'react';
+import { MessageSquarePlus } from 'lucide-react';
+import { DocSheetHead } from '../overlays/doc-sheet';
 import {
   useFeedback,
   useUnseenShipped,
@@ -63,12 +65,13 @@ export function FeedbackLedger() {
 
   return (
     <div className="mx-auto max-w-2xl">
+      <DocSheetHead icon={MessageSquarePlus} title="Feedback" />
       <div className="flex items-baseline justify-between">
-        <h2 className="font-heading text-xl text-[var(--color-pearl)]">Feedback</h2>
+        <h2 className="font-heading text-xl text-[var(--color-charcoal)]">Feedback</h2>
         <button
           type="button"
           onClick={() => setSort((s) => (s === 'date' ? 'weight' : 'date'))}
-          className="font-mono text-[10px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.5)] hover:text-[var(--color-pearl)]"
+          className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
         >
           Sort · {sort === 'date' ? 'Newest' : 'Weight'} ▾
         </button>
@@ -100,11 +103,11 @@ export function FeedbackLedger() {
 
       <div className="mt-3">
         {isLoading ? (
-          <p className="py-8 text-center text-[13px] text-[rgba(250,247,242,0.5)]">Loading…</p>
+          <p className="py-8 text-center text-[13px] text-[var(--color-aged-oak)]">Loading…</p>
         ) : !notes || notes.length === 0 ? (
           <EmptyState filtered={isFiltered} />
         ) : (
-          <ul className="divide-y divide-[rgba(250,247,242,0.1)]">
+          <ul className="divide-y divide-[var(--color-pearl)]">
             {notes.map((n) => (
               <li key={n.id}>
                 <button
@@ -113,12 +116,12 @@ export function FeedbackLedger() {
                   className="flex w-full items-center gap-3 py-3 text-left"
                 >
                   <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: bucketMeta(n.bucket).colorVar }} />
-                  <span className="flex-1 truncate text-[14px] text-[var(--color-pearl)]">
-                    {n.note || <span className="text-[rgba(250,247,242,0.45)]">{bucketMeta(n.bucket).label}</span>}
+                  <span className="flex-1 truncate text-[14px] text-[var(--color-charcoal)]">
+                    {n.note || <span className="text-[var(--color-aged-oak)]">{bucketMeta(n.bucket).label}</span>}
                   </span>
                   <WeightDots weight={weightDots(n.weight)} />
                   <StatusPill status={n.status} />
-                  <span className="w-7 shrink-0 text-right font-mono text-[10px] text-[rgba(250,247,242,0.4)]">{age(n.created_at)}</span>
+                  <span className="w-7 shrink-0 text-right font-mono text-[10px] text-[var(--color-aged-oak)]">{age(n.created_at)}</span>
                 </button>
               </li>
             ))}
@@ -136,8 +139,8 @@ function FilterChip({ label, color, on, onClick }: { label: string; color?: stri
       onClick={onClick}
       className="rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.05em] transition-colors"
       style={{
-        borderColor: on ? color ?? 'var(--color-clay)' : 'rgba(250,247,242,0.14)',
-        color: on ? 'var(--color-pearl)' : 'rgba(250,247,242,0.5)',
+        borderColor: on ? color ?? 'var(--color-clay)' : 'var(--color-pearl)',
+        color: on ? 'var(--color-charcoal)' : 'var(--color-aged-oak)',
         background: on ? `color-mix(in srgb, ${color ?? 'var(--color-clay)'} 14%, transparent)` : 'transparent',
       }}
     >
@@ -151,7 +154,7 @@ function WeightDots({ weight }: { weight: number }) {
   return (
     <span className="flex w-[26px] shrink-0 items-center gap-0.5" aria-label={`weight ${weight}/3`}>
       {[0, 1, 2].map((i) => (
-        <span key={i} className="h-1 w-1 rounded-full" style={{ background: i < weight ? 'var(--color-golden-hour)' : 'rgba(250,247,242,0.2)' }} />
+        <span key={i} className="h-1 w-1 rounded-full" style={{ background: i < weight ? 'var(--color-golden-hour)' : 'var(--color-pearl)' }} />
       ))}
     </span>
   );
@@ -162,7 +165,7 @@ function StatusPill({ status }: { status: FeedbackStatus }) {
   return (
     <span
       className="shrink-0 rounded-full border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.06em]"
-      style={{ borderColor: `color-mix(in srgb, ${sm.colorVar} 45%, rgba(250,247,242,0.14))`, color: sm.colorVar }}
+      style={{ borderColor: `color-mix(in srgb, ${sm.colorVar} 45%, var(--color-pearl))`, color: sm.colorVar }}
     >
       {sm.label}
     </span>
@@ -172,15 +175,15 @@ function StatusPill({ status }: { status: FeedbackStatus }) {
 function EmptyState({ filtered }: { filtered: boolean }) {
   if (filtered) {
     return (
-      <p className="py-10 text-center text-[13px] text-[rgba(250,247,242,0.5)]">
+      <p className="py-10 text-center text-[13px] text-[var(--color-aged-oak)]">
         No notes match that filter yet.
       </p>
     );
   }
   return (
     <div className="py-10 text-center">
-      <p className="font-heading text-[15px] text-[var(--color-pearl)]">No notes yet</p>
-      <p className="mx-auto mt-1 max-w-[26ch] text-[13px] leading-snug text-[rgba(250,247,242,0.55)]">
+      <p className="font-heading text-[15px] text-[var(--color-charcoal)]">No notes yet</p>
+      <p className="mx-auto mt-1 max-w-[26ch] text-[13px] leading-snug text-[var(--color-aged-oak)]">
         The button’s bottom-right whenever something strikes you — good or bad. Two taps and it’s here.
       </p>
       <button

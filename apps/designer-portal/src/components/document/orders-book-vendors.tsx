@@ -39,7 +39,7 @@ type AnyRecord = any;
 const getSupabase = () => createBrowserClient() as AnyRecord;
 
 const MONO_LABEL =
-  'font-mono text-[8.5px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.4)]';
+  'font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]';
 const ROW_LINK = 'text-[10.5px] text-[var(--color-clay)] hover:underline';
 // The vendor message accent — dusty-blue (the message margin kind); MItem
 // repaints it clay for the studio's own voice.
@@ -48,7 +48,7 @@ const MSG_ACCENT = { border: 'var(--color-dusty-blue)', label: 'var(--color-dust
 type VendorPage = 'terms' | 'thread' | 'orders';
 
 const PO_STAMP: Record<string, { color: string; ink?: string }> = {
-  draft: { color: 'var(--color-pearl)', ink: 'rgba(250,247,242,0.6)' },
+  draft: { color: 'var(--color-aged-oak)', ink: 'var(--color-aged-oak)' },
   confirmed: { color: 'var(--color-dusty-blue)' },
   in_production: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
   shipped: { color: 'var(--color-golden-hour)', ink: '#D8BE56' },
@@ -244,7 +244,7 @@ function VendorThread({
           return (
             <MItem
               key={m.id}
-              tone="dark"
+              tone="paper"
               accent={MSG_ACCENT}
               ownVoice={own}
               kindLine={`${sender} · ${fmtDay(m.created_at)}`}
@@ -253,7 +253,7 @@ function VendorThread({
           );
         })}
         {messages.length === 0 && (
-          <li className="text-[11px] italic text-[rgba(250,247,242,0.4)]">Opening the thread…</li>
+          <li className="text-[11px] italic text-[var(--color-aged-oak)]">Opening the thread…</li>
         )}
       </ul>
       <div className="flex items-end gap-2">
@@ -261,7 +261,7 @@ function VendorThread({
           rows={2}
           placeholder="Reply…"
           aria-label="Reply to vendor"
-          className="flex-1 resize-none rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-off-white)] outline-none placeholder:text-[rgba(250,247,242,0.3)]"
+          className="flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)]"
           value={body}
           onChange={(e) => setBody(e.target.value)}
         />
@@ -307,14 +307,14 @@ function BriefComposer({
 
   if (!vendor.contact_profile_id) {
     return (
-      <p className="mt-2 text-[11px] italic text-[rgba(250,247,242,0.4)]">
+      <p className="mt-2 text-[11px] italic text-[var(--color-aged-oak)]">
         No comms profile on file for {vendor.name} — link one to open a thread.
       </p>
     );
   }
 
   return (
-    <div className="mt-3 border-t border-[rgba(250,247,242,0.08)] pt-2">
+    <div className="mt-3 border-t border-[var(--color-pearl)] pt-2">
       <p className={MONO_LABEL}>
         + Brief vendor{briefProjectName ? ` · about ${briefProjectName}` : ''}
       </p>
@@ -323,7 +323,7 @@ function BriefComposer({
           rows={2}
           placeholder={`Brief ${vendor.name}…`}
           aria-label="Opening brief"
-          className="flex-1 resize-none rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-off-white)] outline-none placeholder:text-[rgba(250,247,242,0.3)]"
+          className="flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)]"
           value={body}
           onChange={(e) => setBody(e.target.value)}
         />
@@ -376,8 +376,8 @@ function VendorBookbar({
     { key: 'orders', label: `Orders · ${openCount}` },
   ];
   return (
-    <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-[rgba(250,247,242,0.12)] pb-2">
-      <span className="font-heading text-[15px] font-medium text-[var(--color-off-white)]">
+    <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-[var(--color-pearl)] pb-2">
+      <span className="font-heading text-[15px] font-medium text-[var(--color-charcoal)]">
         {vendor.name} <em className="not-italic text-[var(--color-clay)]">· vendor</em>
       </span>
       <span className="ml-auto flex flex-wrap items-baseline gap-x-3">
@@ -390,7 +390,7 @@ function VendorBookbar({
             className={`font-mono text-[9px] uppercase tracking-[0.1em] transition-colors ${
               page === p.key
                 ? 'text-[var(--color-clay)]'
-                : 'text-[rgba(250,247,242,0.45)] hover:text-[rgba(250,247,242,0.8)]'
+                : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
             }`}
           >
             {p.label}
@@ -445,17 +445,17 @@ export function VendorsBookPage({
         {vendors.map((v) => (
           <li
             key={v.id}
-            className="grid grid-cols-[1fr_auto] items-baseline gap-3 border-b border-[rgba(250,247,242,0.08)] px-1 py-2.5"
+            className="grid grid-cols-[1fr_auto] items-baseline gap-3 border-b border-[var(--color-pearl)] px-1 py-2.5"
           >
             <div>
               <button
                 type="button"
                 onClick={() => setSelectedId(v.id)}
-                className="text-left text-[13px] font-medium text-[var(--color-off-white)] hover:text-[var(--color-clay)]"
+                className="text-left text-[13px] font-medium text-[var(--color-charcoal)] hover:text-[var(--color-clay)]"
               >
                 {v.name}
               </button>
-              <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+              <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                 {[v.default_payment_terms?.replace(/_/g, ' '), v.trade_account_email]
                   .filter(Boolean)
                   .join(' · ') || 'No terms on file'}
@@ -475,7 +475,7 @@ export function VendorsBookPage({
       <button
         type="button"
         onClick={() => setSelectedId(null)}
-        className="mb-2 font-mono text-[9px] uppercase tracking-[0.07em] text-[rgba(250,247,242,0.45)] hover:text-[var(--color-clay)]"
+        className="mb-2 font-mono text-[9px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
       >
         ← all vendors
       </button>
@@ -485,7 +485,7 @@ export function VendorsBookPage({
       {/* ── Terms page: the trade account + the brief opener ── */}
       {page === 'terms' && (
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.65)]">
+          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-mocha)]">
             {[vendor.default_payment_terms?.replace(/_/g, ' '), vendor.trade_account_email]
               .filter(Boolean)
               .join(' · ') || 'No terms on file'}
@@ -517,20 +517,20 @@ export function VendorsBookPage({
             return (
               <li
                 key={po.id}
-                className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-[rgba(250,247,242,0.08)] px-1 py-2"
+                className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2"
               >
                 <div>
-                  <p className="text-[12px] font-medium text-[var(--color-off-white)]">
+                  <p className="text-[12px] font-medium text-[var(--color-charcoal)]">
                     {po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO drafted'}
                   </p>
-                  <p className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+                  <p className="font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                     {[po.project?.name ?? 'Project', po.total_cents != null ? fmtUsd(po.total_cents) : '—']
                       .filter(Boolean)
                       .join(' · ')}
                   </p>
                 </div>
                 <Stamp label={po.status.replace(/_/g, ' ')} color={stamp.color} ink={stamp.ink} />
-                <span className="whitespace-nowrap font-mono text-[9.5px] text-[rgba(250,247,242,0.6)]">
+                <span className="whitespace-nowrap font-mono text-[9.5px] text-[var(--color-mocha)]">
                   {po.confirmed_eta ? `~${fmtDay(po.confirmed_eta)}` : '—'}
                 </span>
                 <button
@@ -544,7 +544,7 @@ export function VendorsBookPage({
             );
           })}
           {openPos.length === 0 && (
-            <li className="py-1.5 text-[11px] italic text-[rgba(250,247,242,0.4)]">
+            <li className="py-1.5 text-[11px] italic text-[var(--color-aged-oak)]">
               Nothing open with {vendor.name}.
             </li>
           )}
@@ -556,13 +556,13 @@ export function VendorsBookPage({
       {page === 'thread' && (
         <>
           {!vendor.contact_profile_id ? (
-            <p className="text-[11px] italic text-[rgba(250,247,242,0.4)]">
+            <p className="text-[11px] italic text-[var(--color-aged-oak)]">
               No comms profile on file for {vendor.name} — link one to open a thread.
             </p>
           ) : (threads ?? []).length > 0 && thread ? (
             <>
               {(threads ?? []).length > 1 && (
-                <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.35)]">
+                <p className="mb-1 font-mono text-[8.5px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                   {(threads ?? []).map((t, i) => (
                     <button
                       key={t.id}
@@ -571,7 +571,7 @@ export function VendorsBookPage({
                       className={
                         t.id === thread.id
                           ? 'text-[var(--color-clay)]'
-                          : 'text-[rgba(250,247,242,0.45)] hover:text-[var(--color-clay)]'
+                          : 'text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]'
                       }
                     >
                       {i > 0 ? ' · ' : ''}
@@ -583,7 +583,7 @@ export function VendorsBookPage({
               <VendorThread thread={thread} onOpenDocument={onOpenDocument} />
             </>
           ) : (
-            <p className="text-[11px] italic text-[rgba(250,247,242,0.4)]">
+            <p className="text-[11px] italic text-[var(--color-aged-oak)]">
               No thread with {vendor.name} yet.
             </p>
           )}

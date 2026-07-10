@@ -33,19 +33,19 @@ const isoOffsetDays = (days: number) =>
 /**
  * PRC-10 (R84): one figure of the receiving KPI strip — the proposal-watch
  * figures-strip grammar (divided columns, mono label over heading numeral),
- * inked for the charcoal book.
+ * inked for the laid paper sheet (R96).
  */
 function Figure({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="flex-1 px-4 first:pl-0">
-      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[rgba(250,247,242,0.45)]">
+      <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         {label}
       </p>
-      <p className="mt-1 truncate font-heading text-[1.05rem] leading-none text-[var(--color-off-white)]">
+      <p className="mt-1 truncate font-heading text-[1.05rem] leading-none text-[var(--color-charcoal)]">
         {value}
       </p>
       {sub && (
-        <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.4)]">
+        <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           {sub}
         </p>
       )}
@@ -108,13 +108,13 @@ function OpenClaimRow({
   };
 
   return (
-    <li className="border-b border-[rgba(250,247,242,0.08)] px-1 py-2.5">
+    <li className="border-b border-[var(--color-pearl)] px-1 py-2.5">
       <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3">
         <div>
-          <p className="text-[12.5px] font-medium text-[var(--color-off-white)]">
+          <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
             {vendorName} · {projectName}
           </p>
-          <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+          <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
             {[
               `drafted ${fmtDay(claim.created_at)}`,
               claim.vendor_notified_at ? `vendor notified ${fmtDay(claim.vendor_notified_at)}` : null,
@@ -154,7 +154,7 @@ function OpenClaimRow({
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Describe the damage or shortage before notifying the vendor."
             aria-label="Claim description"
-            className="flex-1 resize-none rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-off-white)] outline-none placeholder:text-[rgba(250,247,242,0.3)]"
+            className="flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)]"
           />
           <button
             type="button"
@@ -175,7 +175,7 @@ function OpenClaimRow({
             onChange={(e) => setNote(e.target.value)}
             placeholder="How was it resolved? (replacement shipped, credit issued…)"
             aria-label="Resolution notes"
-            className="flex-1 resize-none rounded-[3px] border border-[rgba(250,247,242,0.15)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-off-white)] outline-none placeholder:text-[rgba(250,247,242,0.3)]"
+            className="flex-1 resize-none rounded-[3px] border border-[var(--color-pearl)] bg-transparent px-2 py-1.5 text-[11px] text-[var(--color-charcoal)] outline-none placeholder:text-[var(--text-faint)]"
           />
           <button
             type="button"
@@ -190,7 +190,7 @@ function OpenClaimRow({
 
       {done && !error && (
         // R51: the quiet confirmation (the row leaves the open set on refetch).
-        <p className="mt-1.5 text-[10.5px] text-[rgba(250,247,242,0.7)]">{done}</p>
+        <p className="mt-1.5 text-[10.5px] text-[var(--color-charcoal)]">{done}</p>
       )}
       {error && (
         // R83: inline at the act — the reason and a retry.
@@ -266,7 +266,7 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
   return (
     <div className="mx-auto max-w-3xl">
       <div className="mb-4">
-        <h2 className="font-heading text-xl text-[var(--color-pearl)]">
+        <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
           Receiving <em className="italic text-[var(--color-clay)]">· the warehouse day</em>
         </h2>
       </div>
@@ -276,7 +276,7 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
           grammar. Counts derive from the queries the page already holds
           (receivingFrontMatter, R5-pure). */}
       {!isLoading && (
-        <div className="mb-4 flex items-stretch divide-x divide-[rgba(250,247,242,0.12)] border-y border-[rgba(250,247,242,0.12)] py-3">
+        <div className="mb-4 flex items-stretch divide-x divide-[var(--color-pearl)] border-y border-[var(--color-pearl)] py-3">
           <Figure
             label="Arriving"
             value={stats.find((s) => s.label === 'Arriving')?.value ?? '0'}
@@ -300,25 +300,25 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
       )}
 
       {isLoading ? (
-        <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">Opening the book…</p>
+        <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">Opening the book…</p>
       ) : (
         <>
           {/* The warehouse-day queue — delivered, awaiting the log. */}
-          <p className="mb-1 font-mono text-[8.5px] font-semibold uppercase tracking-[0.08em] text-[rgba(250,247,242,0.4)]">
+          <p className="mb-1 font-mono text-[8.5px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
             Awaiting inspection · {queue.length}
           </p>
           <ul className="mb-5">
             {queue.map((po) => (
               <li
                 key={po.id}
-                className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[rgba(250,247,242,0.08)] px-1 py-2.5"
+                className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2.5"
               >
                 <div>
-                  <p className="text-[12.5px] font-medium text-[var(--color-off-white)]">
+                  <p className="text-[12.5px] font-medium text-[var(--color-charcoal)]">
                     {po.po_number ?? po.vendor_po_number ?? po.sidemark ?? 'PO'} ·{' '}
                     {po.vendor?.name ?? 'Vendor'}
                   </p>
-                  <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                     {[
                       po.project?.name ?? 'Project',
                       po.delivered_date
@@ -348,7 +348,7 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
               </li>
             ))}
             {queue.length === 0 && (
-              <li className="py-2 text-[11px] italic text-[rgba(250,247,242,0.4)]">
+              <li className="py-2 text-[11px] italic text-[var(--color-aged-oak)]">
                 Nothing waiting on the warehouse floor.
               </li>
             )}
@@ -358,7 +358,7 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
               already counts them. */}
           {openClaims.length > 0 && (
             <>
-              <p className="mb-1 font-mono text-[8.5px] font-semibold uppercase tracking-[0.08em] text-[rgba(250,247,242,0.4)]">
+              <p className="mb-1 font-mono text-[8.5px] font-semibold uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
                 Open claims · {openClaims.length}
               </p>
               <ul className="mb-5">
@@ -371,12 +371,12 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
 
           {/* The Settled fold — cleared inspections, collapsed (R12 pattern). */}
           {cleared.length > 0 && (
-            <div className="border-t border-[rgba(250,247,242,0.1)] pt-2">
+            <div className="border-t border-[var(--color-pearl)] pt-2">
               <button
                 type="button"
                 onClick={() => setShowCleared((v) => !v)}
                 aria-expanded={showCleared}
-                className="font-mono text-[8.5px] uppercase tracking-[0.07em] text-[rgba(250,247,242,0.4)] hover:text-[var(--color-clay)]"
+                className="font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
               >
                 Settled · {cleared.length} cleared · 30 days {showCleared ? '↑' : '↓'}
               </button>
@@ -385,9 +385,9 @@ export function ReceivingBookPage({ onOpenDocument }: { onOpenDocument: (project
                   {cleared.map((i) => (
                     <li
                       key={i.id}
-                      className="grid grid-cols-[1fr_auto] items-baseline gap-3 border-b border-dashed border-[rgba(250,247,242,0.08)] px-1 py-1.5"
+                      className="grid grid-cols-[1fr_auto] items-baseline gap-3 border-b border-dashed border-[var(--color-pearl)] px-1 py-1.5"
                     >
-                      <span className="text-[11px] text-[rgba(250,247,242,0.7)]">
+                      <span className="text-[11px] text-[var(--color-charcoal)]">
                         {i.purchase_order?.vendor?.name ?? 'Vendor'} ·{' '}
                         {i.purchase_order?.project?.name ?? 'Project'}
                       </span>

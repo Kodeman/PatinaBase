@@ -39,7 +39,7 @@ export function AccountsReceivablesPage({
 
   if (openInvoices.length === 0) {
     return (
-      <p className="py-5 font-heading text-[13px] italic text-[rgba(250,247,242,0.5)]">
+      <p className="py-5 font-heading text-[13px] italic text-[var(--color-aged-oak)]">
         Nothing outstanding — every sent invoice is settled.
       </p>
     );
@@ -48,7 +48,7 @@ export function AccountsReceivablesPage({
   return (
     <div>
       {/* Aging buckets — quiet mono pairs, never a chart. */}
-      <div className="mb-4 flex flex-wrap items-baseline gap-x-5 gap-y-1 border-b border-[rgba(250,247,242,0.1)] pb-2.5">
+      <div className="mb-4 flex flex-wrap items-baseline gap-x-5 gap-y-1 border-b border-[var(--color-pearl)] pb-2.5">
         <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--color-clay)]">
           {fmtUsd(totalBalanceCents)} owed
         </span>
@@ -56,10 +56,10 @@ export function AccountsReceivablesPage({
           .filter((b) => b.balanceCents > 0)
           .map((b) => (
             <span key={b.key} className="flex items-baseline gap-1.5">
-              <span className="font-heading text-[14px] text-[var(--color-off-white)]">
+              <span className="font-heading text-[14px] text-[var(--color-charcoal)]">
                 {fmtUsd(b.balanceCents)}
               </span>
-              <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)]">
+              <span className="font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
                 {b.label}
               </span>
             </span>
@@ -134,7 +134,7 @@ function ReceivableRow({
   return (
     <li
       ref={ref}
-      className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[rgba(250,247,242,0.08)] px-1.5 py-2.5 ${
+      className={`grid grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1.5 py-2.5 ${
         highlight ? 'rounded-[4px] bg-[rgba(196,165,123,0.1)]' : ''
       }`}
     >
@@ -144,17 +144,17 @@ function ReceivableRow({
         <button
           type="button"
           onClick={() => openInvoiceFolio(invoice.id)}
-          className="block w-full truncate rounded-[3px] text-left text-[12.5px] font-medium text-[var(--color-off-white)] hover:bg-[rgba(250,247,242,0.04)]"
+          className="block w-full truncate rounded-[3px] text-left text-[12.5px] font-medium text-[var(--color-charcoal)] hover:bg-[rgba(196,165,123,0.06)]"
         >
           {invoice.invoice_number ? `Invoice ${invoice.invoice_number}` : 'Draft invoice'}
-          <span className="ml-2 font-mono text-[10px] font-medium text-[var(--color-off-white)]">
+          <span className="ml-2 font-mono text-[10px] font-medium text-[var(--color-charcoal)]">
             {fmtUsd(balance)}
           </span>
           <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
             folio →
           </span>
         </button>
-        <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+        <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
           {[
             invoice.project?.name ?? 'Project',
             invoice.due_date ? `due ${fmtDay(invoice.due_date)}` : null,
@@ -186,7 +186,7 @@ function ReceivableRow({
           {busy ? 'sending…' : chasedAt ? 'chase again →' : 'send reminder →'}
         </button>
       ) : (
-        <span className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.35)]">
+        <span className="whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
           in motion
         </span>
       )}

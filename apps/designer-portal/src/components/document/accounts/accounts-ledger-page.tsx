@@ -17,12 +17,14 @@ import { fmtDay, fmtUsd } from '@/lib/document/format';
 import { invoiceBalanceCents } from '@/lib/document/account-summary';
 import { openInvoiceComposer, openInvoiceFolio } from './invoice-overlays';
 
-// Dark-sheet palette (the book renders on charcoal, like the Orders book).
+// Laid-paper palette (R96) — matches the Invoice folio's re-inked stamps
+// (accounts/invoice-folio.tsx FOLIO_STAMP), so the same invoice reads the
+// same ink whichever surface shows it.
 const INVOICE_STAMP: Record<string, { label: string; color: string; ink?: string }> = {
-  draft: { label: 'draft', color: 'var(--color-pearl)', ink: 'rgba(250,247,242,0.6)' },
-  sent: { label: 'sent', color: 'var(--color-dusty-blue)' },
-  partially_paid: { label: 'part paid', color: 'var(--color-golden-hour)', ink: '#D8BE56' },
-  paid: { label: 'paid', color: 'var(--color-sage)' },
+  draft: { label: 'draft', color: '#C9C2B6', ink: 'var(--text-muted)' },
+  sent: { label: 'sent', color: 'var(--color-dusty-blue)', ink: '#7E8FA6' },
+  partially_paid: { label: 'part paid', color: 'var(--color-golden-hour)', ink: '#B89A2E' },
+  paid: { label: 'paid', color: 'var(--color-sage)', ink: '#85947C' },
   void: { label: 'void', color: 'var(--color-terracotta)', ink: '#C4836F' },
 };
 
@@ -47,7 +49,7 @@ export function AccountsLedgerPage({
       </div>
 
       {invoices.length === 0 ? (
-        <p className="py-5 font-heading text-[13px] italic text-[rgba(250,247,242,0.5)]">
+        <p className="py-5 font-heading text-[13px] italic text-[var(--color-aged-oak)]">
           No invoices yet — the book opens when the first one is drawn.
         </p>
       ) : (
@@ -85,22 +87,22 @@ function InvoiceRows({
         return (
           <li
             key={inv.id}
-            className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-[rgba(250,247,242,0.08)] px-1 py-2.5"
+            className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2.5"
           >
             {/* Folio-first (R74): the row opens the Invoice folio — the acts
                 live there. The document doorway stays on the tail. */}
             <button
               type="button"
               onClick={() => openInvoiceFolio(inv.id)}
-              className="min-w-0 rounded-[3px] text-left hover:bg-[rgba(250,247,242,0.04)]"
+              className="min-w-0 rounded-[3px] text-left hover:bg-[rgba(196,165,123,0.06)]"
             >
-              <p className="truncate text-[12.5px] font-medium text-[var(--color-off-white)]">
+              <p className="truncate text-[12.5px] font-medium text-[var(--color-charcoal)]">
                 {inv.invoice_number ? `Invoice ${inv.invoice_number}` : 'Draft invoice'}
                 <span className="ml-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-clay)]">
                   folio →
                 </span>
               </p>
-              <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[rgba(250,247,242,0.4)]">
+              <p className="truncate font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--color-aged-oak)]">
                 {[
                   inv.project?.name ?? 'Project',
                   fmtUsd(inv.total_cents),
@@ -110,7 +112,7 @@ function InvoiceRows({
                   .join(' · ')}
               </p>
             </button>
-            <span className="whitespace-nowrap font-mono text-[10px] text-[rgba(250,247,242,0.55)]">
+            <span className="whitespace-nowrap font-mono text-[10px] text-[var(--color-mocha)]">
               {tail}
             </span>
             <Stamp label={stamp.label} color={stamp.color} ink={stamp.ink} />

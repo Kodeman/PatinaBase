@@ -76,10 +76,10 @@ export function MarkSignedSheet({
         <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay)]">
           Signed offline · on paper
         </span>
-        <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-off-white)]">
+        <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-charcoal)]">
           Who signed, and when?
         </h2>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-[rgba(250,247,242,0.55)]">
+        <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-mocha)]">
           Records the paper signature against this proposal and opens the project — the same as if
           they had signed here.
         </p>
@@ -98,7 +98,7 @@ export function MarkSignedSheet({
               type="date"
               value={signedDate}
               onChange={(e) => setSignedDate(e.target.value)}
-              className="w-full border-b border-[rgba(250,247,242,0.18)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-off-white)] focus:border-[var(--color-clay)] focus:outline-none [color-scheme:dark]"
+              className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 font-mono text-[12px] text-[var(--color-charcoal)] focus:border-[var(--color-clay)] focus:outline-none [color-scheme:light]"
             />
           </Field>
         </div>
@@ -120,11 +120,11 @@ export function MarkSignedSheet({
           <button
             type="button"
             onClick={onClose}
-            className="font-mono text-[11px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.45)] hover:text-[rgba(250,247,242,0.8)]"
+            className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
           >
             Cancel
           </button>
-          <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.3)]">
+          <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
             opens the project
           </span>
         </div>
@@ -136,7 +136,7 @@ export function MarkSignedSheet({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[rgba(250,247,242,0.4)]">
+      <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         {label}
       </span>
       {children}
@@ -162,7 +162,7 @@ function Input({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full border-b border-[rgba(250,247,242,0.18)] bg-transparent pb-1.5 text-[14px] text-[var(--color-off-white)] placeholder:text-[rgba(250,247,242,0.3)] focus:border-[var(--color-clay)] focus:outline-none"
+      className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
     />
   );
 }

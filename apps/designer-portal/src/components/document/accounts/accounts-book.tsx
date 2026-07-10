@@ -32,6 +32,11 @@ import { openLedger, type OpenLedgerContext } from '../command-bar';
 import { AccountsLedgerPage } from './accounts-ledger-page';
 import { AccountsReceivablesPage } from './accounts-receivables-page';
 import { AccountsEarningsPage } from './accounts-earnings-page';
+import { DocSheetHead } from '../overlays/doc-sheet';
+import { STUDIO_LEDGERS } from '@/lib/document/registry';
+
+// R96 — the registry is the single source of the surface icon (no drift).
+const ACCOUNTS_ICON = STUDIO_LEDGERS.find((l) => l.key === 'accounts')!.icon;
 
 type BookPage = 'ledger' | 'receivables' | 'earnings';
 
@@ -97,22 +102,28 @@ export function AccountsBook({
 
   return (
     <div className="mx-auto max-w-3xl">
+      <DocSheetHead
+        icon={ACCOUNTS_ICON}
+        title="Accounts"
+        pageLabel={PAGES.find((p) => p.key === page)?.label}
+        onClose={onClose}
+      />
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <div>
-          <h2 className="font-heading text-xl text-[var(--color-pearl)]">
+          <h2 className="font-heading text-xl text-[var(--color-charcoal)]">
             Accounts <em className="italic text-[var(--color-clay)]">· the studio&apos;s book</em>
           </h2>
-          <p className="mt-0.5 text-[11px] text-[rgba(250,247,242,0.45)]">
+          <p className="mt-0.5 text-[11px] text-[var(--color-aged-oak)]">
             Revenue, what&apos;s owed, what you earn — the sum of every engagement&apos;s account.
           </p>
         </div>
-        <span className="whitespace-nowrap font-mono text-[7.5px] uppercase tracking-[0.1em] text-[rgba(250,247,242,0.35)]">
+        <span className="whitespace-nowrap font-mono text-[7.5px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
           Studio eyes only
         </span>
       </div>
 
       {/* R28: the book's pages — DM-mono links, never tabs. */}
-      <div className="mb-4 flex flex-wrap items-baseline gap-x-4 border-b border-[rgba(250,247,242,0.1)] pb-2">
+      <div className="mb-4 flex flex-wrap items-baseline gap-x-4 border-b border-[var(--color-pearl)] pb-2">
         {PAGES.map((p) => (
           <button
             key={p.key}
@@ -122,7 +133,7 @@ export function AccountsBook({
             className={`font-mono text-[9.5px] uppercase tracking-[0.08em] transition-colors ${
               page === p.key
                 ? 'text-[var(--color-clay)]'
-                : 'text-[rgba(250,247,242,0.45)] hover:text-[rgba(250,247,242,0.8)]'
+                : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
             }`}
           >
             {p.label}
@@ -132,7 +143,7 @@ export function AccountsBook({
 
       {/* Front-matter (I23): Revenue · A/R · margin — the studio's opening lens. */}
       {isLoading ? (
-        <p className="py-3 text-[12px] italic text-[rgba(250,247,242,0.5)]">Opening the book…</p>
+        <p className="py-3 text-[12px] italic text-[var(--color-aged-oak)]">Opening the book…</p>
       ) : (
         <>
           <LedgerFrontMatter caption="the studio" stats={stats} />
@@ -141,12 +152,12 @@ export function AccountsBook({
           <button
             type="button"
             onClick={() => openLedger('Library')}
-            className="-mt-2 mb-4 flex items-baseline gap-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.45)] hover:text-[var(--color-clay)]"
+            className="-mt-2 mb-4 flex items-baseline gap-2 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)] hover:text-[var(--color-clay)]"
           >
             <span className="text-[var(--color-clay)]">teaching</span>
-            <span className="text-[var(--color-off-white)]">{taughtCount} taught</span>
+            <span className="text-[var(--color-charcoal)]">{taughtCount} taught</span>
             <span>·</span>
-            <span className="text-[var(--color-off-white)]">{fmtUsd(pledgeYtd)} returned</span>
+            <span className="text-[var(--color-charcoal)]">{fmtUsd(pledgeYtd)} returned</span>
             <span className="text-[var(--color-clay)] opacity-70">→ Library ↗</span>
           </button>
         </>

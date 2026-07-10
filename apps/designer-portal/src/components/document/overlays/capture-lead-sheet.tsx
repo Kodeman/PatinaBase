@@ -113,10 +113,10 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
         <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--color-clay)]">
           New lead · begin a Brief
         </span>
-        <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-off-white)]">
+        <h2 className="mt-2 font-heading text-[1.5rem] italic text-[var(--color-charcoal)]">
           Who just came in?
         </h2>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-[rgba(250,247,242,0.55)]">
+        <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--color-mocha)]">
           Just enough to begin. The Brief fills in as you go — nothing else is required.
         </p>
 
@@ -160,8 +160,8 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
                     onClick={() => setSource(s)}
                     className={`rounded-[4px] border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] transition-colors ${
                       on
-                        ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.18)] text-[var(--color-off-white)]'
-                        : 'border-[rgba(250,247,242,0.16)] text-[rgba(250,247,242,0.6)] hover:border-[var(--color-clay)]'
+                        ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.18)] text-[var(--color-charcoal)]'
+                        : 'border-[var(--color-pearl)] text-[var(--color-aged-oak)] hover:border-[var(--color-clay)]'
                     }`}
                   >
                     {s}
@@ -189,11 +189,11 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
           <button
             type="button"
             onClick={onClose}
-            className="font-mono text-[11px] uppercase tracking-[0.08em] text-[rgba(250,247,242,0.45)] hover:text-[rgba(250,247,242,0.8)]"
+            className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
           >
             Cancel
           </button>
-          <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[rgba(250,247,242,0.3)]">
+          <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--color-aged-oak)]">
             opens the Brief
           </span>
         </div>
@@ -205,7 +205,7 @@ export function CaptureLeadSheet({ open, onClose }: { open: boolean; onClose: ()
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[rgba(250,247,242,0.4)]">
+      <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--color-aged-oak)]">
         {label}
       </span>
       {children}
@@ -232,7 +232,7 @@ function Input({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full border-b border-[rgba(250,247,242,0.18)] bg-transparent pb-1.5 text-[14px] text-[var(--color-off-white)] placeholder:text-[rgba(250,247,242,0.3)] focus:border-[var(--color-clay)] focus:outline-none"
+      className="w-full border-b border-[var(--color-pearl)] bg-transparent pb-1.5 text-[14px] text-[var(--color-charcoal)] placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)] focus:outline-none"
     />
   );
 }
