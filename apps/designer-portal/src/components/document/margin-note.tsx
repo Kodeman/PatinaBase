@@ -23,7 +23,7 @@
  * one canonical "find anything by name" move the Desk note teaches.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { documentEvents } from '@/lib/analytics/document-events';
 
@@ -45,7 +45,11 @@ function hasSeen(noteKey: string): boolean {
   }
 }
 
-function markSeen(noteKey: string): void {
+/** Retire a note permanently — writes the once-only marker so it never renders
+ *  again on any surface. Exported so the Desk Walkthrough can mark the
+ *  `desk-first-touch` note seen on tour completion (the tour taught ⌘K, so the
+ *  note has nothing left to teach). Best-effort; never throws. */
+export function markMarginNoteSeen(noteKey: string): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(storageKeyFor(noteKey), String(Date.now()));
@@ -68,6 +72,10 @@ export interface MarginNoteProps {
   /** When true, opening the ⌘K command bar (the hotkey OR the "Find anything"
    *  affordance) is the named action. */
   commandBar?: boolean;
+  /** When true the note renders nothing and does NOT mark itself seen — a
+   *  transient hold (e.g. while the Desk Walkthrough modal or tour is on
+   *  screen). Lifting it re-reveals the note unless it has since been seen. */
+  suppressed?: boolean;
   className?: string;
 }
 
@@ -77,24 +85,36 @@ export function MarginNote({
   caption = 'Appears once · Recedes on use',
   actionEvents,
   commandBar = false,
+  suppressed = false,
   className,
 }: MarginNoteProps) {
   const [visible, setVisible] = useState(false);
+  // 'shown' fires at most once per mount even as `suppressed` toggles.
+  const shownRef = useRef(false);
 
-  // Reveal after mount so SSR and the first client paint agree (nothing → nothing).
+  // Authoritative visibility: while suppressed OR already seen the note stays
+  // down (and marks nothing); otherwise it reveals. Re-runs when `suppressed`
+  // flips so a lifted hold re-reveals an unseen note. SSR and the first client
+  // paint agree (nothing → nothing) because the effect runs after mount.
   useEffect(() => {
-    if (hasSeen(noteKey)) return;
+    if (suppressed || hasSeen(noteKey)) {
+      setVisible(false);
+      return;
+    }
     setVisible(true);
-    documentEvents.wayfinding.marginNote({ key: noteKey, action: 'shown' });
-  }, [noteKey]);
+    if (!shownRef.current) {
+      shownRef.current = true;
+      documentEvents.wayfinding.marginNote({ key: noteKey, action: 'shown' });
+    }
+  }, [noteKey, suppressed]);
 
   // Once shown, the first named action recedes the note forever. Listeners are
-  // only bound while the note is on screen, so a note that was never shown (or
-  // already dismissed) can never fire a spurious 'acted'.
+  // only bound while the note is on screen (and not suppressed), so a note that
+  // was never shown (or already dismissed) can never fire a spurious 'acted'.
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || suppressed) return;
     const recede = () => {
-      markSeen(noteKey);
+      markMarginNoteSeen(noteKey);
       setVisible(false);
       documentEvents.wayfinding.marginNote({ key: noteKey, action: 'acted' });
     };
@@ -117,12 +137,12 @@ export function MarginNote({
       });
     }
     return () => cleanups.forEach((fn) => fn());
-  }, [visible, noteKey, commandBar, actionEvents]);
+  }, [visible, suppressed, noteKey, commandBar, actionEvents]);
 
-  if (!visible) return null;
+  if (suppressed || !visible) return null;
 
   const dismiss = () => {
-    markSeen(noteKey);
+    markMarginNoteSeen(noteKey);
     setVisible(false);
     documentEvents.wayfinding.marginNote({ key: noteKey, action: 'dismissed' });
   };

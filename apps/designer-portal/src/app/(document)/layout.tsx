@@ -8,6 +8,11 @@ import { AccountSheet } from '@/components/document/account/account-sheet';
 import { InvoiceOverlays } from '@/components/document/accounts/invoice-overlays';
 import { DraftProposalOverlay } from '@/components/document/rooms/drafting/draft-proposal-opener';
 import { DocumentHelpProvider } from '@/components/document/help/document-help';
+import { HelpStateProvider } from '@/components/document/help/help-state-provider';
+import {
+  DeskWalkthrough,
+  DeskWalkthroughProvider,
+} from '@/components/document/help/desk-walkthrough';
 import { FeedbackLayer } from '@/components/document/feedback/feedback-layer';
 import { MobileShellProvider } from '@/components/document/mobile/mobile-shell';
 import { MobileBar } from '@/components/document/mobile/mobile-bar';
@@ -36,37 +41,49 @@ export default function DocumentLayout({ children }: { children: React.ReactNode
         <DocumentTimeProvider>
           {/* D13: the phone's physics live in the shell (below 980px). */}
           <MobileShellProvider>
-            {/* R89 — the help affordance's only home (no utility bar): a
-                SurfaceKeyProvider seeded from the pathname wraps the shell, and
-                the ContextualHelpPanel mounts once inside it. Additive provider
-                wrap; children/siblings keep their order. */}
-            <DocumentHelpProvider>
-              {children}
-              <LogStrip />
-              <StudioDrawer />
-              {/* Global "g then l/p/o/a/h/t" doorway shortcuts (R93) — reads
-                  the same registry the Studio Drawer does; renders nothing. */}
-              <RegistryShortcuts />
-              {/* ⌘K from anywhere in the document model (spec §3). */}
-              <CommandBar />
-              {/* D2 break-through rules — opened from ⌘K, ships all-off. */}
-              <InterruptionSettings />
-              {/* R5 — the Account sheet: identity, status, settings, sign out.
-                  Opened from the Studio Drawer nameplate, the mobile drawer, ⌘K. */}
-              <AccountSheet />
-              {/* R74 — the Invoice folio + composer, openable from any surface
-                  (Accounts rows, Account band, margin, Hours, FF&E, ⌘K). */}
-              <InvoiceOverlays />
-              {/* R85 — the ⌘K "draft a proposal" household-picker cold start. */}
-              <DraftProposalOverlay />
-              <MobileBar />
-              <MobileSheets />
-              {/* The feedback layer (docs/ledger/patina-feedback-layer-prd.md):
-                  a persistent capture button + sheet on its own layer, on every
-                  Desk screen. Mounted last so it sits above the rest of the
-                  chrome. */}
-              <FeedbackLayer />
-            </DocumentHelpProvider>
+            {/* R97 — the Supabase help-state backend (tour/announcement records,
+                cross-device via profiles.help_state) is re-homed to the desk
+                world here, wrapping the help region. Renders only its children. */}
+            <HelpStateProvider>
+              {/* R89 — the help affordance's only home (no utility bar): a
+                  SurfaceKeyProvider seeded from the pathname wraps the shell, and
+                  the ContextualHelpPanel mounts once inside it. Additive provider
+                  wrap; children/siblings keep their order. */}
+              <DocumentHelpProvider>
+                {/* R97 — the Desk Walkthrough publishes first-touch suppression +
+                    offer eligibility to desk/page through this provider. */}
+                <DeskWalkthroughProvider>
+                  {children}
+                  <LogStrip />
+                  <StudioDrawer />
+                  {/* Global "g then l/p/o/a/h/t" doorway shortcuts (R93) — reads
+                      the same registry the Studio Drawer does; renders nothing. */}
+                  <RegistryShortcuts />
+                  {/* ⌘K from anywhere in the document model (spec §3). */}
+                  <CommandBar />
+                  {/* D2 break-through rules — opened from ⌘K, ships all-off. */}
+                  <InterruptionSettings />
+                  {/* R5 — the Account sheet: identity, status, settings, sign out.
+                      Opened from the Studio Drawer nameplate, the mobile drawer, ⌘K. */}
+                  <AccountSheet />
+                  {/* R74 — the Invoice folio + composer, openable from any surface
+                      (Accounts rows, Account band, margin, Hours, FF&E, ⌘K). */}
+                  <InvoiceOverlays />
+                  {/* R85 — the ⌘K "draft a proposal" household-picker cold start. */}
+                  <DraftProposalOverlay />
+                  <MobileBar />
+                  <MobileSheets />
+                  {/* The feedback layer (docs/ledger/patina-feedback-layer-prd.md):
+                      a persistent capture button + sheet on its own layer, on every
+                      Desk screen. Mounted last so it sits above the rest of the
+                      chrome. */}
+                  <FeedbackLayer />
+                  {/* R97 — the desk-first intro tour (WelcomeModal + six coachmarks).
+                      Self-guards to /desk; renders nothing elsewhere. */}
+                  <DeskWalkthrough />
+                </DeskWalkthroughProvider>
+              </DocumentHelpProvider>
+            </HelpStateProvider>
           </MobileShellProvider>
         </DocumentTimeProvider>
       </DocumentGate>

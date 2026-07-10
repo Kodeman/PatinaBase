@@ -182,6 +182,8 @@ export function CommandBar() {
   // "Recent" group reflects where the designer has actually been.
   const [recent, setRecent] = useState<RecentDocumentInHand[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  // R97 — skip the mount emission so we only announce real open/close transitions.
+  const didMountRef = useRef(false);
 
   // ⌘K / Ctrl-K toggles; Esc closes (but yields to a deeper overlay first).
   useEffect(() => {
@@ -219,6 +221,19 @@ export function CommandBar() {
       setRecent(readRecentDocumentsInHand());
       requestAnimationFrame(() => inputRef.current?.focus());
     }
+  }, [open]);
+
+  // R97 — announce the palette's open state so the Desk Walkthrough can pause
+  // (its document-level Enter/Esc handler would otherwise advance/skip the tour
+  // while the user is typing here). Skip the mount emission (open starts false).
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent(open ? 'document:command-bar-opened' : 'document:command-bar-closed'),
+    );
   }, [open]);
 
   // The engagement in hand (if the route is /doc/[id]) — the "In hand" row and
@@ -360,6 +375,16 @@ export function CommandBar() {
         sub: 'about this surface',
         run: () => openHelp(),
         match: 'help guide docs how to support question learn about this surface',
+      },
+      {
+        // R97 — replay the Desk Walkthrough. Routes to /desk with the replay
+        // param; the walkthrough reads it, restart()s, and strips the param.
+        kind: 'action',
+        key: 'take-walkthrough',
+        label: 'Take the walkthrough',
+        sub: 'the Desk, in a minute',
+        run: () => router.push('/desk?tour=desk-walkthrough'),
+        match: 'walkthrough tour show me around orientation intro take the walkthrough',
       },
       {
         kind: 'action',
