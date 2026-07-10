@@ -12,7 +12,7 @@
  * to the filtered roster. Tracks B–D fill their view slots (see ./views, ./types).
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeopleDirectory, isFieldRosterRole, type PartyRole } from '@patina/supabase';
 import { deriveNurtureQueue, humanizeSince } from '@/lib/document/people-derivation';
@@ -73,21 +73,31 @@ export function PeopleRoom() {
   // R78 — the Makers filter's lens (roster | marketplace), lifted so walking
   // into a profile and back doesn't drop the designer out of the marketplace.
   const [makerLens, setMakerLens] = useState<MakerLens>('roster');
+  // F4 — a person to scroll into view + quietly highlight in the Directory
+  // once their row is on screen (set by the ?person= deep-link, or by a
+  // return from that person's profile). Self-clears on a short timer.
+  const [highlightPersonId, setHighlightPersonId] = useState<string | null>(null);
 
   const { data: all } = usePeopleDirectory({ role: 'all' });
   const now = useMemo(() => new Date(), []);
 
-  // Deep-link entry (R78/R60): /people?person=<id>&role=<role> opens straight
-  // onto a profile — the Orders book's "relationship & profile →" cross-link
-  // lands here. R82: /people?thread=<id> lands on the Threads view with that
-  // conversation open — the Post's Letters carry the designer here (never a
-  // copy; the same shared thread the margin renders). Read once on mount from
-  // the location itself (the Room is client-only; no Suspense-bound
-  // useSearchParams needed).
+  // Deep-link entry (R78/R60/F4): /people?person=<id>&role=<role> opens
+  // straight onto a profile — the Orders book's "relationship & profile →"
+  // cross-link lands here, and so does ⌘K's person row (F4's receiving end:
+  // ⌘K doesn't always know the role, so a bare `?person=<id>` resolves the
+  // role from the roster itself once it loads). R82: /people?thread=<id>
+  // lands on the Threads view with that conversation open — the Post's
+  // Letters carry the designer here (never a copy; the same shared thread
+  // the margin renders). Read once on mount from the location itself (the
+  // Room is client-only; no Suspense-bound useSearchParams needed) —
+  // `deepLinkHandledRef` keeps this from re-firing (and re-opening a profile
+  // the designer already closed) once `all` finishes loading or refetches.
+  const deepLinkHandledRef = useRef(false);
   useEffect(() => {
+    if (deepLinkHandledRef.current) return;
     const params = new URLSearchParams(window.location.search);
     const person = params.get('person');
-    const role = params.get('role');
+    const roleParam = params.get('role');
     const thread = params.get('thread');
     const add = params.get('add');
     const roles: PartyRole[] = [
@@ -100,22 +110,47 @@ export function PeopleRoom() {
       'installer',
       'receiver',
     ];
-    if (person && role && (roles as string[]).includes(role)) {
-      if (isFieldRosterRole(role)) {
-        setOpenParty({ id: person, role: role as PartyRole });
+
+    if (person) {
+      const urlRole =
+        roleParam && (roles as string[]).includes(roleParam) ? (roleParam as PartyRole) : null;
+      const resolved = urlRole ?? all?.find((p) => p.person_id === person)?.role ?? null;
+      if (!resolved) {
+        // No role in the URL, and the roster hasn't resolved this person yet
+        // — wait for `all` rather than dropping the deep-link. Once it has
+        // loaded and there's still no match, give up quietly.
+        if (all) deepLinkHandledRef.current = true;
+        return;
+      }
+      deepLinkHandledRef.current = true;
+      setView('directory');
+      if (isFieldRosterRole(resolved)) {
+        setOpenParty({ id: person, role: resolved });
       } else {
-        setOpenPerson({ id: person, role: role as PartyRole });
-        if (role === 'maker') setRoleFilter('maker');
+        // Land the tab a click from that row would have left active, so
+        // backing out of the profile shows it in context, not under "All".
+        if (resolved === 'maker' || resolved === 'client' || resolved === 'lead' || resolved === 'team') {
+          setRoleFilter(resolved);
+        }
+        setHighlightPersonId(person);
+        window.setTimeout(() => {
+          setHighlightPersonId((h) => (h === person ? null : h));
+        }, 2200);
+        setOpenPerson({ id: person, role: resolved });
       }
     } else if (thread) {
+      deepLinkHandledRef.current = true;
       setPendingThreadId(thread);
       setView('threads');
     } else if (add === 'maker' || add === 'client') {
       // R78 — ⌘K "Add a maker" lands here and cold-starts the add sheet.
+      deepLinkHandledRef.current = true;
       setAddKind(add);
       setAddOpen(true);
+    } else {
+      deepLinkHandledRef.current = true;
     }
-  }, []);
+  }, [all]);
 
   // The live Engine nudge: the strongest dormant tie from the nurture queue.
   const nudge = useMemo(() => {
@@ -137,6 +172,8 @@ export function PeopleRoom() {
 
   const nav: PeopleViewProps = {
     openPerson: (id, role) => {
+      // A manual open supersedes any stray deep-link highlight (F4).
+      setHighlightPersonId(null);
       // A field party opens the field sheet; everyone else the relationship profile.
       if (isFieldRosterRole(role)) setOpenParty({ id, role });
       else setOpenPerson({ id, role });
@@ -150,6 +187,7 @@ export function PeopleRoom() {
       setOpenPerson(null);
       setPendingThreadId(null);
       setNotice(null);
+      setHighlightPersonId(null);
       setView(v);
     },
     notify,
@@ -183,9 +221,9 @@ export function PeopleRoom() {
         break;
       }
       case 'search':
-        notify(
-          `The Engine searches people, threads, and history for “${route.query}” — and recommends who to reconnect with.`,
-        );
+        // F3 — a real filter now, not a toast: the Directory already reads
+        // `ask` live as its search prop, so switching to it is the whole act.
+        nav.goView('directory');
         break;
     }
   };
@@ -208,6 +246,12 @@ export function PeopleRoom() {
       notice={notice}
       makerLens={makerLens}
       onMakerLens={setMakerLens}
+      search={ask}
+      highlightPersonId={highlightPersonId}
+      onAddPerson={(kind) => {
+        setAddKind(kind);
+        setAddOpen(true);
+      }}
     />
   ) : view === 'threads' ? (
     <ThreadsView {...nav} pendingThreadId={pendingThreadId} />

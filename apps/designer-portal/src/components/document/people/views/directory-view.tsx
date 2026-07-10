@@ -11,9 +11,10 @@
  * the ask bar can route "makers" straight to the filtered roster.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { usePeopleDirectory, isFieldRosterRole, type PartyRole } from '@patina/supabase';
-import { ViewHeader } from '../view-shell';
+import { roleLabel } from '@/lib/document/people-derivation';
+import { ViewHeader, EmptyTeach } from '../view-shell';
 import { PersonRow } from '../directory/person-row';
 import { MakersMarketplace } from '../directory/makers-marketplace';
 import type { PeopleViewProps } from '../types';
@@ -69,6 +70,9 @@ export function DirectoryView({
   notice,
   makerLens,
   onMakerLens,
+  search,
+  highlightPersonId,
+  onAddPerson,
 }: PeopleViewProps & {
   /** Controlled role filter (lifted to the Room so the ask bar can set it). */
   role: DirectoryRole;
@@ -78,6 +82,16 @@ export function DirectoryView({
   /** Controlled Makers lens (lifted so it survives a profile walk-in/back). */
   makerLens: MakerLens;
   onMakerLens: (lens: MakerLens) => void;
+  /** F3 — the ask bar's live query, fed straight through (no submit gate) and
+   *  applied as a case-insensitive filter over this role's roster (name /
+   *  role / company / email). */
+  search: string;
+  /** F4 — a person to scroll into view + quietly highlight once their row is
+   *  on screen (a ?person= deep-link landing, or a return from their profile). */
+  highlightPersonId?: string | null;
+  /** R94 — the zero-result teach's "add them" affordance, wired to the
+   *  room's existing add flow. */
+  onAddPerson: (kind: 'client' | 'maker') => void;
 }) {
   // 'field' groups four kinds — read 'all' and narrow in memory (below).
   const queryRole = role === 'field' ? 'all' : role;
@@ -95,6 +109,29 @@ export function DirectoryView({
     );
     return scoped;
   }, [data, role]);
+
+  // F3 — the live filter, over name / role / company / email. Case-
+  // insensitive, in memory (the same "roster is small, per-designer" premise
+  // usePeopleDirectory's own search rests on).
+  const query = search.trim().toLowerCase();
+  const filteredRows = useMemo(() => {
+    if (!query) return rows;
+    return rows.filter((p) => {
+      const company =
+        typeof p.meta['company_name'] === 'string' ? (p.meta['company_name'] as string) : '';
+      const haystack = `${p.display_name} ${roleLabel(p.role)} ${company} ${p.email ?? ''}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [rows, query]);
+
+  // F4 — scroll a deep-linked (or returning-from-profile) person's row into
+  // view once it's actually rendered; the Room clears highlightPersonId on
+  // its own timer, so this effect only ever fires the scroll, never the fade.
+  const highlightRef = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    if (!highlightPersonId) return;
+    highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlightPersonId, filteredRows]);
 
   return (
     <>
@@ -170,36 +207,50 @@ export function DirectoryView({
           Reading the roster…
         </p>
       ) : rows.length === 0 ? (
-        <div className="rounded-[10px] border border-dashed border-[var(--doc-ink-border)] bg-white/40 px-5 py-8 text-center">
-          <p className="text-[0.76rem] leading-relaxed text-[var(--color-aged-oak)]">
-            {EMPTY_COPY[role] ?? EMPTY_COPY.all}
-            {role === 'maker' && (
-              <>
-                {' '}
-                <button
-                  type="button"
-                  onClick={() => onMakerLens('marketplace')}
-                  className="font-medium text-[var(--color-clay)] underline-offset-2 hover:underline"
-                >
-                  Browse the marketplace
-                </button>
-                .
-              </>
-            )}
-          </p>
-        </div>
+        <EmptyTeach
+          action={
+            role === 'maker'
+              ? { label: 'Browse the marketplace', onClick: () => onMakerLens('marketplace') }
+              : undefined
+          }
+        >
+          {EMPTY_COPY[role] ?? EMPTY_COPY.all}
+        </EmptyTeach>
+      ) : query && filteredRows.length === 0 ? (
+        // F3 — a real, empty search result: the R94 what/why/next teach, not
+        // a dead end. "Add a maker" is the literal next move when the search
+        // was for a vendor; other roles get the room's generic add flow.
+        <EmptyTeach
+          action={{
+            label: role === 'maker' ? 'Add a maker' : role === 'client' ? 'Add a client' : 'Add someone',
+            onClick: () => onAddPerson(role === 'maker' ? 'maker' : 'client'),
+          }}
+        >
+          No one by that name here. Check the spelling, or
+        </EmptyTeach>
       ) : (
-        <ul className="space-y-1.5">
-          {rows.map((p) => (
-            <li key={`${p.role}:${p.person_id}`}>
-              <PersonRow
-                person={p}
-                now={now}
-                onOpen={() => openPerson(p.person_id, p.role)}
-              />
-            </li>
-          ))}
-        </ul>
+        <>
+          {query && (
+            <p className="mb-3 font-mono text-[0.5rem] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+              {filteredRows.length} {filteredRows.length === 1 ? 'match' : 'matches'} for “{search.trim()}”
+            </p>
+          )}
+          <ul className="space-y-1.5">
+            {filteredRows.map((p) => (
+              <li
+                key={`${p.role}:${p.person_id}`}
+                ref={p.person_id === highlightPersonId ? highlightRef : undefined}
+              >
+                <PersonRow
+                  person={p}
+                  now={now}
+                  onOpen={() => openPerson(p.person_id, p.role)}
+                  highlighted={p.person_id === highlightPersonId}
+                />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </>
   );

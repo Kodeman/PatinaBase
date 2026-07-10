@@ -10,7 +10,9 @@
  * Routing (routePeopleAsk, pure + exported so it stays testable here in Track A):
  *  · reconnect / quiet / touch / drift / nurture → the Nurture view
  *  · maker / vendor / supplier → the Directory, filtered to makers
- *  · anything else → a quiet Engine-search toast
+ *  · anything else → 'search': the Directory (F3) — it already reads the ask
+ *    bar's value live as a name/role/company/email filter, so a query that
+ *    doesn't match a keyword shortcut lands there filtered, not on a toast.
  */
 
 import type { PartyRole } from '@patina/supabase';

@@ -7,6 +7,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { EmptyTeach } from '../view-shell';
 
 /** The `.subnav` underline tabs (D1: sub-tabs underline, not nav chrome). */
 export function SubNav<T extends string>({
@@ -159,11 +160,9 @@ export function ListHeader({ label, action }: { label: string; action: ReactNode
   );
 }
 
-/** The quiet dashed empty/placeholder block (matches view-shell's idiom). */
+/** The R94 pencil-idiom empty note (view-shell's `EmptyTeach`) — each of the
+ *  three tabs already carries its own "+ New …" affordance right above, so
+ *  no second next-move link is added here. */
 export function QuietNote({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-[10px] border border-dashed border-[var(--doc-ink-border)] bg-white/40 px-5 py-7 text-center">
-      <p className="text-[0.74rem] leading-relaxed text-[var(--color-aged-oak)]">{children}</p>
-    </div>
-  );
+  return <EmptyTeach>{children}</EmptyTeach>;
 }

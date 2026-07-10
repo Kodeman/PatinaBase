@@ -35,10 +35,15 @@ export function PersonRow({
   person,
   now,
   onOpen,
+  highlighted = false,
 }: {
   person: PeopleDirectoryRow;
   now: Date;
   onOpen: () => void;
+  /** F4 — a quiet, temporary highlight for a deep-linked/returning-from-
+   *  profile row (the Room clears it on a timer). Border + tint only — no
+   *  ring/shadow (D4). */
+  highlighted?: boolean;
 }) {
   const line = useMemo(() => deriveRelationshipLine(person, now), [person, now]);
   const dot = useMemo(() => deriveStatusDot(person, now), [person, now]);
@@ -47,7 +52,11 @@ export function PersonRow({
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-3.5 rounded-[10px] border border-[var(--color-pearl)] bg-white px-3.5 py-3 text-left transition-[border-color,transform] duration-200 hover:-translate-y-[2px] hover:border-[var(--color-clay)]"
+      className={`flex w-full items-center gap-3.5 rounded-[10px] border px-3.5 py-3 text-left transition-[border-color,background-color,transform] duration-300 hover:-translate-y-[2px] hover:border-[var(--color-clay)] ${
+        highlighted
+          ? 'border-[var(--color-clay)] bg-[rgba(196,165,123,0.09)]'
+          : 'border-[var(--color-pearl)] bg-white'
+      }`}
     >
       <Avatar name={person.display_name} role={person.role} />
       <span className="min-w-0 flex-1">

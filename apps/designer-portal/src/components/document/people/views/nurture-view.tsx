@@ -12,7 +12,7 @@
 import { useMemo, useState } from 'react';
 import { usePeopleDirectory } from '@patina/supabase';
 import { deriveNurtureQueue, type NurtureEntry } from '@/lib/document/people-derivation';
-import { ViewHeader } from '../view-shell';
+import { ViewHeader, EmptyTeach } from '../view-shell';
 import { NurtureQueueRow } from '../ops/nurture-queue';
 import { TouchpointSheet } from '../ops/touchpoint-sheet';
 import type { PeopleViewProps } from '../types';
@@ -44,11 +44,10 @@ export function NurtureView({ openPerson, notify }: PeopleViewProps) {
           Reading who needs tending…
         </p>
       ) : empty ? (
-        <div className="rounded-[10px] border border-dashed border-[var(--doc-ink-border)] bg-white/40 px-5 py-8 text-center">
-          <p className="text-[0.76rem] leading-relaxed text-[var(--color-aged-oak)]">
-            Every relationship is current. The Engine surfaces people here as they begin to drift.
-          </p>
-        </div>
+        <EmptyTeach>
+          Every relationship is current — nothing to tend. The Engine surfaces someone here the
+          moment a tie begins to drift.
+        </EmptyTeach>
       ) : (
         <>
           {due.length > 0 && (

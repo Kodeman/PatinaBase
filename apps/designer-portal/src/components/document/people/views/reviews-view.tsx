@@ -18,7 +18,7 @@ import {
   type ClientReview,
   type CompletedProject,
 } from '@patina/supabase';
-import { ViewHeader } from '../view-shell';
+import { ViewHeader, EmptyTeach } from '../view-shell';
 import { Avatar } from '../person-bits';
 import { ReviewRequestSheet } from '../ops/review-request-sheet';
 import type { PeopleViewProps } from '../types';
@@ -312,9 +312,5 @@ function RequestButton({ onClick }: { onClick: () => void }) {
 }
 
 function EmptyBlock({ text }: { text: string }) {
-  return (
-    <div className="rounded-[10px] border border-dashed border-[var(--doc-ink-border)] bg-white/40 px-5 py-8 text-center">
-      <p className="text-[0.76rem] leading-relaxed text-[var(--color-aged-oak)]">{text}</p>
-    </div>
-  );
+  return <EmptyTeach>{text}</EmptyTeach>;
 }
