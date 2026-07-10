@@ -242,11 +242,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   );
 
   // R21 flight telemetry: remember the last document in hand so a later
-  // old-zone visit can name where the designer left from.
+  // old-zone visit can name where the designer left from. Title + client
+  // name ride along so the command bar's recent-documents MRU can name it too.
   const heldEngagementId = row?.engagement_id ?? null;
+  const heldTitle = row?.title ?? null;
+  const heldSubtitle = row?.client_name ?? null;
   useEffect(() => {
-    rememberDocumentInHand(heldEngagementId);
-  }, [heldEngagementId]);
+    rememberDocumentInHand(heldEngagementId, { title: heldTitle, subtitle: heldSubtitle });
+  }, [heldEngagementId, heldTitle, heldSubtitle]);
 
   if (isLoading || resolution?.kind === 'redirect') {
     return (
