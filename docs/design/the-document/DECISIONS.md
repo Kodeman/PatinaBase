@@ -2935,3 +2935,31 @@ Program source: the Programa parity-or-beyond plan (Kody's ruling round 2026-07-
 **Owed at program close.** Twilio Brand+Campaign registration (1–4 wks — runbook `docs/field/sms-10dlc-runbook.md`, START NOW) + 5 secrets + Messaging-Service webhook pointing · **prod deploy** (migrations 00281–00284 + edge fns sms-dispatch/field-daily/sms-inbound + config.toml verify_jwt entry + pg_cron — and validate the Kong `?apikey=` question against Strata for the signed webhook URL) · client-portal server-side PostHog (field_link_opened/field_action_applied noted in code, no server client exists in that app) · receiver SMS → `receiving_inspections` auto-create (deliberate v1 lighter path) · notFound() 200-status pattern on guest links (pre-existing, affects /share too — DeadLink is the house workaround) · winter cron/FIELD_TZ check at cutover · Wave P (Programa-parity PM) unscoped by ruling.
 
 *Entries add: I53 · migrations 00281–00284 · last id = I53*
+
+## The Document — the discoverability review (R93–R96) — 2026-07-09
+
+**Rulings (Kody, 2026-07-09, via the discoverability review deck v2 — `docs/design/the-document/discoverability-review-2026-07.html`):** four rulings on ⌘K, empty states, the Desk's front matter, and sheet presentation, plus the registry consolidation and the Foundation fixes that shipped alongside them without needing a ruling.
+
+### R93 · The Populated Palette
+
+⌘K stops opening empty. It opens **populated** — in-hand first, then recent, then surface-scoped verbs, then begin verbs, with rooms & ledgers grouped under DM-mono group eyebrows. Every row carries its registry icon, a visible shortcut hint, and generous aliases (a designer types what she calls the thing, not what we called it). A zero-result query never dead-ends — it recovers into help. This is within canon, not a new grammar: it is the sanctioned unfreezing of the ⌘K registry that stayed deliberately frozen through the Schedule & Boards and Field Coordination parallel builds (command-bar left frozen; ⌘K wired only in integration passes) — the registry was a seam boundary, not a design ban. Grounded in NN/g recognition-over-recall and the review's hidden-nav evidence.
+
+### R94 · The Marginalia
+
+Empty states teach — what, why, and next — in the studio's editorial voice, not a wizard: the FieldDesk quiet state, the empty Desk, and the People room's empty room all gain the fold. A first-touch **margin-note primitive** may appear once per surface and **recedes permanently on use** — R89's ambient half, finally built. **No tours.** No coachmark sequences, no step-through, no re-arming.
+
+### R95 · The Contents Page
+
+AMENDS R5: R5's four destinies (document section / ledger / margin / quiet exile) gain a fifth — **the index**. The Desk gains standing front matter, "The Studio": a typographic contents of rooms, ledgers, and begin-verbs — labels, doorway glyphs, and icons, constrained to **never** carry counts, tiles, or metrics (that would be the dashboard R5 already forbids). Home is not a document, so D1's strict-focus law does not reach it. The empty Desk — previously the thinnest surface in the product — gives the index its full typographic weight.
+
+### R96 · The Laid Sheet
+
+AMENDS D14's presentation only — the weights and physics D14 set stand untouched. Ledger sheets (Orders, Hours, Accounts, People) stop arriving as the charcoal bottom slide-up (`doc-sheet.tsx`) and converge on the centered paper-folio treatment the product already uses elsewhere (`paper-folio-sheet.tsx`): a warm veil, a `--doc-paper` panel, a registry icon + DM-mono running head, and a visible "Put back · Esc." The document stays mounted beneath exactly as D14 already required. Guardrail carried forward unchanged: **a sheet stays one page.**
+
+### I54 · The registry becomes the single source; Foundation ships without a ruling
+
+`src/lib/document/registry.tsx` becomes the studio-surface registry: one definition of every surface's name, icon, alias set, and shortcut, consumed everywhere a surface is named or opened — ⌘K, the drawer, the new Contents page, sheet chrome. One name, one icon, everywhere; no more per-surface copies drifting apart.
+
+**Foundation (F1–F6) ships with no ruling required** — none of it touches a locked decision, so none of it needed Kody's round: palette/door/help instrumentation, a flight-ledger read on PostHog OAuth (**owed** — the instrumentation writes events; nothing reads them back into a ledger yet, blocked on the OAuth connection), the People search repair, the ⌘K person deep-link, the `/help` door, and the Bell label.
+
+*Entries add: R93–R96 · I54 · last id = I54*
