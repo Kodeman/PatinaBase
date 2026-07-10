@@ -34,4 +34,9 @@ final class SupabaseWorkspaceAuthorizer: WorkspaceAuthorizing {
         try await session.verifyEmailCode(email: email, code: code)
         return session.workspaces.map { OnboardingWorkspace(id: $0.id, name: $0.name) }
     }
+
+    func authorizeWithPortalToken(tokenHash: String) async throws -> [OnboardingWorkspace] {
+        try await session.signInWithPortalToken(tokenHash: tokenHash)
+        return session.workspaces.map { OnboardingWorkspace(id: $0.id, name: $0.name) }
+    }
 }

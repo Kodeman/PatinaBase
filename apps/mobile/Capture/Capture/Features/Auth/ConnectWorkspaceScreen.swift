@@ -45,6 +45,10 @@ protocol WorkspaceAuthorizing: AnyObject {
     func sendEmailCode(to email: String) async throws
     /// Email one-time-code, step 2: verify the code; returns workspaces on success.
     func verifyEmailCode(email: String, code: String) async throws -> [OnboardingWorkspace]
+    /// Portal QR sign-in: exchange a GoTrue magic-link hashed token (`th`, scanned
+    /// from a signed-in portal's QR / arrived via `field://login`) for a session.
+    /// Returns the workspaces the user can save into, exactly like the other two.
+    func authorizeWithPortalToken(tokenHash: String) async throws -> [OnboardingWorkspace]
 }
 
 /// Deferred-backend stand-in: sleeps briefly, then returns its workspace list
@@ -81,6 +85,12 @@ final class StubWorkspaceAuthorizer: WorkspaceAuthorizing {
         if shouldFail { throw OnboardingAuthError.failed }
         return workspaces
     }
+
+    func authorizeWithPortalToken(tokenHash: String) async throws -> [OnboardingWorkspace] {
+        try? await Task.sleep(for: delay)
+        if shouldFail { throw OnboardingAuthError.failed }
+        return workspaces
+    }
 }
 
 // MARK: - Screen
@@ -104,6 +114,8 @@ struct ConnectWorkspaceScreen: View {
     @State private var workspaces: [OnboardingWorkspace]
     @State private var selected: OnboardingWorkspace?
     @State private var enableFaceID = true
+    /// Presents the "Scan from the portal" camera sheet (the third method).
+    @State private var showingPortalScan = false
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var fieldFocused: Bool
 
@@ -131,6 +143,15 @@ struct ConnectWorkspaceScreen: View {
             .padding(.bottom, 24)
         }
         .accessibilityIdentifier(CaptureScreenID.o2Connect.rawValue)
+        .sheet(isPresented: $showingPortalScan) {
+            PortalLoginScanSheet(
+                onToken: { token in
+                    showingPortalScan = false
+                    Task { await authorizePortalToken(token) }
+                },
+                onCancel: { showingPortalScan = false }
+            )
+        }
     }
 
     // MARK: Header
@@ -204,6 +225,14 @@ struct ConnectWorkspaceScreen: View {
             }
             .buttonStyle(OnboardingGhostButtonStyle())
             .accessibilityIdentifier("o2.emailButton")
+
+            Button {
+                showingPortalScan = true
+            } label: {
+                Label("Scan from the portal", systemImage: "qrcode.viewfinder")
+            }
+            .buttonStyle(OnboardingGhostButtonStyle())
+            .accessibilityIdentifier("o2.portalScanButton")
         }
     }
 
@@ -447,6 +476,21 @@ struct ConnectWorkspaceScreen: View {
         stage = .authorizing
         do {
             let result = try await authorizer.authorizeWithApple(idToken: idToken, rawNonce: rawNonce)
+            handleAuthorized(result)
+        } catch {
+            stage = .failed
+        }
+    }
+
+    // MARK: Actions — portal QR token
+
+    /// A code scanned from the signed-in portal parsed as a `PortalLoginToken`;
+    /// exchange it for a session through the same seam as Apple / email, then
+    /// branch on the returned workspaces.
+    private func authorizePortalToken(_ token: PortalLoginToken) async {
+        stage = .authorizing
+        do {
+            let result = try await authorizer.authorizeWithPortalToken(tokenHash: token.tokenHash)
             handleAuthorized(result)
         } catch {
             stage = .failed

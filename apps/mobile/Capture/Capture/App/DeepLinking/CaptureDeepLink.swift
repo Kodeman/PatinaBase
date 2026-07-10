@@ -10,10 +10,23 @@ import CaptureKit
 import CaptureKitMocks   // WorkFixtures — stable ids the detail screens resolve to
 
 enum CaptureDeepLink {
-    /// Resolve a `field://…` URL into a navigation intent.
+    /// Resolve a `field://…` URL into a navigation intent. A `field://login`
+    /// URL is the web→app QR sign-in handoff and is routed to `login` (the
+    /// controller that runs the exchange + confirm/toast UI); everything else is
+    /// screen/entry-point navigation.
     @MainActor
-    static func handle(_ url: URL, coordinator: CaptureCoordinator, store: CaptureStore) {
+    static func handle(_ url: URL,
+                       coordinator: CaptureCoordinator,
+                       store: CaptureStore,
+                       login: PortalLoginController? = nil) {
         guard url.scheme == AppConfiguration.urlScheme else { return }
+
+        // field://login?v=1&th=<token_hash> — portal QR sign-in (works from a
+        // signed-out cold start; confirms before switching a live session).
+        if url.host == PortalLoginToken.host {
+            login?.receive(url: url)
+            return
+        }
 
         // field://screen/<id>  — drive a specific screen (debug/verification).
         if url.host == "screen", let raw = url.pathComponents.dropFirst().first,

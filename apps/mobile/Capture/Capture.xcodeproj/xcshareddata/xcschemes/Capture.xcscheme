@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "BE1BA42724E722FE7D26D4D5704C2599"
+               BlueprintIdentifier = "6476F85DA2DFBF332E00058ABD18F8F1"
                BuildableName = "Capture.app"
                BlueprintName = "Capture"
                ReferencedContainer = "container:Capture.xcodeproj">
@@ -30,7 +30,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "BE1BA42724E722FE7D26D4D5704C2599"
+            BlueprintIdentifier = "6476F85DA2DFBF332E00058ABD18F8F1"
             BuildableName = "Capture.app"
             BlueprintName = "Capture"
             ReferencedContainer = "container:Capture.xcodeproj">
@@ -41,7 +41,7 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "6D127EF8C23AA2B893CAE2A586683085"
+               BlueprintIdentifier = "C556220C906382957632EF831FE67AD9"
                BuildableName = "CaptureTests.xctest"
                BlueprintName = "CaptureTests"
                ReferencedContainer = "container:Capture.xcodeproj">
@@ -63,7 +63,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "BE1BA42724E722FE7D26D4D5704C2599"
+            BlueprintIdentifier = "6476F85DA2DFBF332E00058ABD18F8F1"
             BuildableName = "Capture.app"
             BlueprintName = "Capture"
             ReferencedContainer = "container:Capture.xcodeproj">
@@ -80,7 +80,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "BE1BA42724E722FE7D26D4D5704C2599"
+            BlueprintIdentifier = "6476F85DA2DFBF332E00058ABD18F8F1"
             BuildableName = "Capture.app"
             BlueprintName = "Capture"
             ReferencedContainer = "container:Capture.xcodeproj">

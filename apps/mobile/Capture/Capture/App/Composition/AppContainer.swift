@@ -48,6 +48,11 @@ public final class AppContainer {
     /// O2 "Continue with Patina" seam (real OAuth vs. stub). App-internal — the
     /// existential lives app-side; feature teams never touch it.
     let authorizer: any WorkspaceAuthorizing
+    /// Portal-QR sign-in (`field://login`) driver, shared by the deep-link
+    /// handler, RootView's confirm/toast UI, and Q1's defensive forwarding.
+    /// `RootView` injects its dependencies via `configure(...)` once it can bind
+    /// the coordinator; unconfigured it simply buffers an incoming link.
+    let portalLogin = PortalLoginController()
 
     public init() {
         let real = AppConfiguration.runsRealServices
