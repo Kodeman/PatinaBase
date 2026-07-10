@@ -48,6 +48,19 @@ function markHelpStateReady(): void {
   listeners.forEach((listener) => listener());
 }
 
+// Reset readiness on sign-out / user switch so the NEXT session re-gates on its
+// own hydration rather than inheriting the prior user's ready=true. Mirrors the
+// designer-portal HelpStateProvider, which resets its readiness state on user
+// change. Without it, a same-tab User A → User B switch (no full reload) leaves
+// the flag true, so B's proposal-welcome coachmark reads its one-shot state
+// before B's cross-device dismissals hydrate — re-showing a welcome B already
+// dismissed elsewhere, the exact case the readiness gate exists to prevent.
+function resetHelpStateReady(): void {
+  if (!helpStateReady) return;
+  helpStateReady = false;
+  listeners.forEach((listener) => listener());
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -80,6 +93,7 @@ export function HelpStateSetup() {
     setTourStateBackend(backends.tourBackend);
     setFeatureAnnouncementStateBackend(backends.featureBackend);
 
+    let cancelled = false;
     const setup = async () => {
       try {
         await backends.hydrate();
@@ -94,16 +108,21 @@ export function HelpStateSetup() {
           );
         }
       }
-      markHelpStateReady();
+      // Don't mark ready if this effect was torn down mid-hydration (sign-out or
+      // user switch) — otherwise a stale in-flight hydration from the prior user
+      // would flip readiness back to true after the reset below.
+      if (!cancelled) markHelpStateReady();
     };
     void setup();
 
     return () => {
+      cancelled = true;
       // On sign-out (unmount or user id change), restore the localStorage
       // default so anon sessions get isolated one-shot semantics. Any queued
       // Supabase writes fire-and-forget through the closed-over client.
       setTourStateBackend(null);
       setFeatureAnnouncementStateBackend(null);
+      resetHelpStateReady();
     };
   }, [userId]);
 
