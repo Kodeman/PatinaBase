@@ -1,9 +1,20 @@
 import posthog from 'posthog-js';
 import { isAnalyticsEnabled } from './posthog';
 
-function track(event: string, properties?: Record<string, unknown>): void {
+function track(
+  event: string,
+  properties?: Record<string, unknown>,
+  options?: { transport?: 'XHR' | 'sendBeacon' }
+): void {
   if (!isAnalyticsEnabled()) return;
-  posthog.capture(event, properties);
+  // Only pass a 3rd arg when actually provided — existing tests assert
+  // captureMock.toHaveBeenCalledWith(event, properties) with exactly 2 args,
+  // and an explicit `undefined` 3rd arg breaks that equality check.
+  if (options) {
+    posthog.capture(event, properties, options);
+  } else {
+    posthog.capture(event, properties);
+  }
 }
 
 export const authEvents = {
@@ -14,8 +25,15 @@ export const authEvents = {
 
 export const clientEvents = {
   projectView: (projectId: string) => track('client_project_view', { project_id: projectId }),
-  decisionApprove: (decisionId: string) =>
-    track('client_decision_approve', { decision_id: decisionId }),
+  // requiresConsent/optionId are new — decisionApprove had zero call sites
+  // before this wave, so the signature was free to extend (design plan §1.4).
+  decisionApprove: (p: { decisionId: string; optionId: string; requiresConsent: boolean }) =>
+    track('client_decision_approve', {
+      decision_id: p.decisionId,
+      option_id: p.optionId,
+      requires_consent: p.requiresConsent,
+    }),
+  // Intentionally unwired — no reject UI exists on the client decision card.
   decisionReject: (decisionId: string) =>
     track('client_decision_reject', { decision_id: decisionId }),
   messageView: (threadId: string) => track('client_message_view', { thread_id: threadId }),
@@ -23,6 +41,24 @@ export const clientEvents = {
   productView: (productId: string) => track('client_product_view', { product_id: productId }),
   demoStart: (demoType: string) => track('client_demo_start', { demo_type: demoType }),
   demoComplete: (demoType: string) => track('client_demo_complete', { demo_type: demoType }),
+  documentView: (p: { documentId: string; kind: string }) =>
+    track('client_document_view', { document_id: p.documentId, kind: p.kind }),
+  invoiceView: (p: { invoiceId: string; status: string }) =>
+    track('client_invoice_view', { invoice_id: p.invoiceId, status: p.status }),
+  // Names are LOCKED — dashboards reference client_payment_started/completed/cancelled
+  // verbatim (design plan §1.4). `paymentStarted` fires immediately before the
+  // Stripe Checkout redirect, so it uses sendBeacon transport to survive
+  // navigation away from the page.
+  paymentStarted: (p: { invoiceId: string; amountCents?: number }) =>
+    track(
+      'client_payment_started',
+      { invoice_id: p.invoiceId, amount: p.amountCents },
+      { transport: 'sendBeacon' }
+    ),
+  paymentCompleted: (p: { invoiceId: string; amountCents?: number }) =>
+    track('client_payment_completed', { invoice_id: p.invoiceId, amount: p.amountCents }),
+  paymentCancelled: (p: { invoiceId: string; amountCents?: number }) =>
+    track('client_payment_cancelled', { invoice_id: p.invoiceId, amount: p.amountCents }),
 };
 
 export const navEvents = {

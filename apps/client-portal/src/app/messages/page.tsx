@@ -27,6 +27,7 @@ import {
 // Consumer voice: "your designer", "your design team" — never "users" /
 // "counterparts" / "DM". Empty-state copy is reassuring, not technical.
 import { SectionIntro, SurfaceKeys } from '@patina/help-system';
+import { clientEvents } from '@/lib/analytics/events';
 import { formatRelativeTime, getInitials } from '@/lib/utils/format';
 import { ReadReceipt } from '@/components/messages/ReadReceipt';
 import { ThreadSettingsMenu } from '@/components/messages/ThreadSettingsMenu';
@@ -108,6 +109,7 @@ export default function MessagesPage() {
   useEffect(() => {
     if (activeThreadId) {
       markRead.mutate(activeThreadId);
+      clientEvents.messageView(activeThreadId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeThreadId, messagesPages?.pages[0]?.[0]?.id]);
@@ -185,6 +187,7 @@ export default function MessagesPage() {
         body,
         attachments: pendingAttachments.length > 0 ? pendingAttachments : undefined,
       });
+      clientEvents.messageSend(activeThreadId);
       setPendingAttachments([]);
       setSendError(null);
     } catch (err) {
