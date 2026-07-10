@@ -281,9 +281,12 @@ enum CompanionActionProvider {
     static func nudge(for screen: AppRoute, context: CompanionContext) -> CompanionNudge? {
         switch screen {
         case .heroFrame:
-            return context.roomCount == 0
-                ? CompanionNudge(label: "Scan a room →", route: .scanFlow(reason: .fresh))
-                : nil
+            // C.2: the Daily Room's zero-rooms empty module already renders a
+            // single "Start a scan" CTA under the exact same `roomCount == 0`
+            // condition this pill used. Showing both stacked two scan
+            // affordances on one screen — suppress the redundant persistent
+            // pill so the in-content empty-module CTA is the only one.
+            return nil
         case .emergence, .roomEmergence:
             // AR try-in-room needs a concrete product, so only nudge when
             // the browsing surface has reported one. (Previously the pill
