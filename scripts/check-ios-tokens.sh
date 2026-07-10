@@ -37,10 +37,11 @@ set -u
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FEATURES_DIR="$REPO_ROOT/apps/mobile/Patina/Patina/Features"
 
-# ── Baselines (recorded 2026-06-10 after the Wave 3 R22/R24 sweep) ──────────
-BASELINE_SYSTEM_FONT=148      # category A — lines
+# ── Baselines (re-baselined 2026-07-09 for the iOS alignment Wave 3 B.3
+#    ratchet; pins current reality, was A=148 / B=8 / C=146) ───────────────────
+BASELINE_SYSTEM_FONT=137      # category A — lines
 BASELINE_CUSTOM_NO_RELATIVE=8 # category B — lines
-BASELINE_LEGACY_COLOR=146     # category C — occurrences
+BASELINE_LEGACY_COLOR=143     # category C — occurrences
 
 if [ ! -d "$FEATURES_DIR" ]; then
   echo "check-ios-tokens: features dir not found: $FEATURES_DIR" >&2
