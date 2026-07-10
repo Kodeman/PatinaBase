@@ -97,19 +97,17 @@ final class DailyRoomViewModel {
             hasStyleProfile = ((try? ctx.fetchCount(FetchDescriptor<StylePreferenceModel>())) ?? 0) > 0
             let store = RoomStore(context: ctx)
             let realRooms = store.allRooms()
-            if realRooms.isEmpty {
-                rooms = RoomSummary.mockAll
-                remoteIdByLocal = [:]
-            } else {
-                rooms = realRooms.map { RoomSummary(from: $0) }
-                remoteIdByLocal = Dictionary(
-                    uniqueKeysWithValues: realRooms.compactMap { r in
-                        r.remoteId.map { (r.id, $0) }
-                    }
-                )
-            }
+            // R31: never seed mock rooms — a brand-new user has 0 rooms and
+            // home must agree with Profile about that. The empty state is an
+            // invitation to scan, not a fake life.
+            rooms = realRooms.map { RoomSummary(from: $0) }
+            remoteIdByLocal = Dictionary(
+                uniqueKeysWithValues: realRooms.compactMap { r in
+                    r.remoteId.map { (r.id, $0) }
+                }
+            )
         } else {
-            rooms = RoomSummary.mockAll
+            rooms = []
             remoteIdByLocal = [:]
         }
         // Prefer a room that RoomSelectionStore already has selected (e.g.

@@ -21,6 +21,15 @@ final class NotificationsViewModel {
     // MARK: - Loading
 
     func load() async {
+        // Wave 1 E.1: a guest has no notification_log rows — the request
+        // would only 401 into an error screen. Resolve to empty without a
+        // round trip; the feed view renders a sign-in invitation instead.
+        guard AuthService.shared.isAuthenticated else {
+            notifications = []
+            error = nil
+            isLoading = false
+            return
+        }
         isLoading = true
         error = nil
         do {

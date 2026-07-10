@@ -202,7 +202,11 @@ struct ScanFallbackEntryView: View {
     // MARK: - Feature counts
 
     private var featureCounts: some View {
-        HStack(spacing: 12) {
+        // Wave 1 E.1: full-width rows, not side-by-side columns. At half
+        // the screen width the row's title got squeezed by the −/count/+
+        // cluster and wrapped mid-word ("Win dow s"). Stacking gives each
+        // stepper the full line — a layout fix, not a font shrink.
+        VStack(spacing: 12) {
             stepper(title: "Windows", value: $windowCount)
             stepper(title: "Doors", value: $doorCount)
         }
@@ -213,6 +217,10 @@ struct ScanFallbackEntryView: View {
             Text(title)
                 .font(PatinaTypography.uiSmall)
                 .foregroundStyle(PatinaColors.Text.primary)
+                // Belt-and-braces: even under extreme Dynamic Type the title
+                // truncates as a word instead of breaking mid-word.
+                .lineLimit(1)
+                .layoutPriority(1)
             Spacer()
             Button(action: { if value.wrappedValue > 0 { value.wrappedValue -= 1 } }) {
                 Image(systemName: "minus")

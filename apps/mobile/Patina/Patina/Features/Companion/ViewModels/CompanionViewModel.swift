@@ -53,6 +53,10 @@ public final class CompanionViewModel {
     /// Error message to display
     public var errorMessage: String?
 
+    /// The text of the last send that failed with a network/API error —
+    /// fuel for `retryLastMessage()` (Wave 1 E.1 honest-error contract).
+    public private(set) var lastFailedMessageText: String?
+
     /// Whether currently loading history
     public var isLoadingHistory: Bool = false
 
@@ -418,9 +422,24 @@ public final class CompanionViewModel {
                 updateSuggestionsFromResponse(suggestions)
             }
 
+        } catch CompanionServiceError.signInRequired {
+            // Wave 1 E.1: guests don't get fake AI — one gentle, honest
+            // invitation in Patina's voice, no error styling.
+            isThinking = false
+            let invite = Message(
+                content: "I can chat once you're signed in. Until then, feel free to browse — sign in any time and we'll pick this up.",
+                sender: .patina
+            )
+            conversationMessages.append(invite)
         } catch {
             isThinking = false
+            // Wave 1 E.1: honest inline error + retry. The old path
+            // appended `generateFallbackResponse` here — a canned reply
+            // pretending the API answered. That mock now lives strictly
+            // behind `--companionmock` inside CompanionService; by the time
+            // this catch runs there is nothing left to fake.
             errorMessage = "Couldn't reach Patina. Please try again."
+            lastFailedMessageText = text
             PatinaLog.companion.error("Failed to send message: \(error)")
 
             // Track API error
@@ -430,16 +449,18 @@ public final class CompanionViewModel {
                 errorCode: String(describing: type(of: error)),
                 errorMessage: error.localizedDescription
             )
+        }
+    }
 
-            // Fallback to local response generation
-            let fallbackResponse = generateFallbackResponse(to: text)
-            let patinaMessage = Message(content: fallbackResponse, sender: .patina)
-            conversationMessages.append(patinaMessage)
-
-            // Cache fallback response locally
-            if let userId = AuthService.shared.currentUserId {
-                storageService.addMessage(patinaMessage, userId: userId, isSynced: false)
-            }
+    /// Retry the most recent failed send, if any. Clears the error state
+    /// first so the UI's retry affordance is single-shot.
+    public func retryLastMessage() {
+        guard let text = lastFailedMessageText else { return }
+        lastFailedMessageText = nil
+        errorMessage = nil
+        isThinking = true
+        Task {
+            await sendMessageAsync(text)
         }
     }
 
@@ -448,23 +469,6 @@ public final class CompanionViewModel {
         // Convert string suggestions to quick action chips
         self.suggestions = suggestions.map { suggestion in
             CompanionSuggestion(icon: "text.bubble", title: suggestion)
-        }
-    }
-
-    /// Generate a fallback response when API is unavailable
-    private func generateFallbackResponse(to userInput: String) -> String {
-        let input = userInput.lowercased()
-
-        if input.contains("table") || input.contains("collection") {
-            return "Your table is gathering nicely. Would you like to see what's there?"
-        } else if input.contains("walk") || input.contains("room") || input.contains("scan") {
-            return "I'd love to walk your space together. Which room shall we explore?"
-        } else if input.contains("new") || input.contains("surface") || input.contains("emerge") {
-            return "Something has surfaced that might speak to your space. Shall I show you?"
-        } else if input.contains("help") {
-            return "I can help you discover furniture that belongs in your space. Try asking about your table, walking a room, or seeing what's emerged."
-        } else {
-            return "Tell me more about what you're looking for. I'm here to help you discover pieces that resonate with your space."
         }
     }
 

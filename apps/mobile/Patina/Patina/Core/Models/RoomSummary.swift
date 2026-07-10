@@ -69,6 +69,13 @@ extension RoomSummary {
         )
     }
 
+    // MARK: - Preview fixtures (R31)
+    //
+    // ⚠ Previews ONLY. These were once seeded into the live Daily Room for
+    // new/guest users; R31 ruled the fake rooms out — `DailyRoomViewModel`
+    // must never surface them. Kept behind DEBUG so a release build
+    // physically cannot ship them.
+    #if DEBUG
     static let mockLiving = RoomSummary(
         name: "Living Room",
         itemCount: 12,
@@ -97,4 +104,5 @@ extension RoomSummary {
     )
 
     static let mockAll: [RoomSummary] = [.mockLiving, .mockBedroom, .mockOffice]
+    #endif
 }

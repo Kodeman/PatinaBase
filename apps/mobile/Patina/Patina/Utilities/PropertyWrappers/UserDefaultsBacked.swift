@@ -63,36 +63,82 @@ public enum StorageKey {
 
 // MARK: - App Settings
 
-/// Observable settings object for app-wide preferences
+/// Observable settings object for app-wide preferences.
+///
+/// ⚠ Every property here is COMPUTED (UserDefaults-backed), and the
+/// `@Observable` macro only instruments *stored* properties — a bare
+/// computed property is invisible to `withObservationTracking`. That
+/// exact gap made `AppCoordinator`'s phase observer deaf to
+/// `hasCompletedOnboarding = true`, stranding users on the style reveal
+/// until relaunch (Wave 1 P0). Each accessor therefore reports to the
+/// synthesized observation registrar by hand: `access(keyPath:)` in the
+/// getter, `withMutation(keyPath:)` around the setter — the documented
+/// Observation pattern for computed properties backed by external storage.
 @Observable
 public final class AppSettings {
     public static let shared = AppSettings()
 
+    @ObservationIgnored
     private let defaults = UserDefaults.standard
 
     public var hasCompletedOnboarding: Bool {
-        get { defaults.bool(forKey: StorageKey.hasCompletedOnboarding) }
-        set { defaults.set(newValue, forKey: StorageKey.hasCompletedOnboarding) }
+        get {
+            access(keyPath: \.hasCompletedOnboarding)
+            return defaults.bool(forKey: StorageKey.hasCompletedOnboarding)
+        }
+        set {
+            withMutation(keyPath: \.hasCompletedOnboarding) {
+                defaults.set(newValue, forKey: StorageKey.hasCompletedOnboarding)
+            }
+        }
     }
 
     public var hasSeenThreshold: Bool {
-        get { defaults.bool(forKey: StorageKey.hasSeenThreshold) }
-        set { defaults.set(newValue, forKey: StorageKey.hasSeenThreshold) }
+        get {
+            access(keyPath: \.hasSeenThreshold)
+            return defaults.bool(forKey: StorageKey.hasSeenThreshold)
+        }
+        set {
+            withMutation(keyPath: \.hasSeenThreshold) {
+                defaults.set(newValue, forKey: StorageKey.hasSeenThreshold)
+            }
+        }
     }
 
     public var companionHasUnreadMessage: Bool {
-        get { defaults.bool(forKey: StorageKey.companionHasUnreadMessage) }
-        set { defaults.set(newValue, forKey: StorageKey.companionHasUnreadMessage) }
+        get {
+            access(keyPath: \.companionHasUnreadMessage)
+            return defaults.bool(forKey: StorageKey.companionHasUnreadMessage)
+        }
+        set {
+            withMutation(keyPath: \.companionHasUnreadMessage) {
+                defaults.set(newValue, forKey: StorageKey.companionHasUnreadMessage)
+            }
+        }
     }
 
     public var roomCount: Int {
-        get { defaults.integer(forKey: StorageKey.roomCount) }
-        set { defaults.set(newValue, forKey: StorageKey.roomCount) }
+        get {
+            access(keyPath: \.roomCount)
+            return defaults.integer(forKey: StorageKey.roomCount)
+        }
+        set {
+            withMutation(keyPath: \.roomCount) {
+                defaults.set(newValue, forKey: StorageKey.roomCount)
+            }
+        }
     }
 
     public var tableItemCount: Int {
-        get { defaults.integer(forKey: StorageKey.tableItemCount) }
-        set { defaults.set(newValue, forKey: StorageKey.tableItemCount) }
+        get {
+            access(keyPath: \.tableItemCount)
+            return defaults.integer(forKey: StorageKey.tableItemCount)
+        }
+        set {
+            withMutation(keyPath: \.tableItemCount) {
+                defaults.set(newValue, forKey: StorageKey.tableItemCount)
+            }
+        }
     }
 
     private init() {}

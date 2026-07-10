@@ -8,6 +8,13 @@
 
 import Foundation
 
+/// Errors the companion conversation surface can act on.
+public enum CompanionServiceError: Error {
+    /// The caller is not signed in — chat needs a session. UI should show
+    /// a gentle sign-in invitation, never a fake reply.
+    case signInRequired
+}
+
 /// Service for managing AI-powered conversations with Patina
 @MainActor
 public final class CompanionService: CompanionServiceProtocol {
@@ -21,8 +28,16 @@ public final class CompanionService: CompanionServiceProtocol {
     /// API client for Edge Functions
     private let apiClient = CompanionAPIClient.shared
 
-    /// Whether to use real API (vs fallback to local mock)
-    private let useRealAPI: Bool
+    /// Wave 1 E.1: explicit opt-in for the local mock conversation engine.
+    /// The mock used to be a silent fallback for API failures AND the
+    /// default for unauthenticated users — fake AI answers masquerading as
+    /// the real companion. It now only runs under `--companionmock` (or UI
+    /// testing). Default behavior: API failures throw so the UI can show an
+    /// honest error/retry; guests get `CompanionServiceError.signInRequired`.
+    static var isMockFallbackEnabled: Bool {
+        PatinaApp.isUITesting
+            || ProcessInfo.processInfo.arguments.contains("--companionmock")
+    }
 
     // MARK: - Singleton
 
@@ -30,10 +45,7 @@ public final class CompanionService: CompanionServiceProtocol {
 
     // MARK: - Initialization
 
-    private init() {
-        // Use real API if user is authenticated, otherwise use mock
-        self.useRealAPI = AuthService.shared.isAuthenticated
-    }
+    private init() {}
 
     // MARK: - Public Methods
 
@@ -43,18 +55,28 @@ public final class CompanionService: CompanionServiceProtocol {
         let userMessage = Message(content: content, sender: .user)
         addToHistory(userMessage)
 
-        // Try real API if authenticated
-        if useRealAPI && AuthService.shared.isAuthenticated {
+        // Real API for signed-in users. Auth state is read per-call — the
+        // old init-time snapshot could lock a pre-auth launch into mock
+        // mode for the whole session.
+        if AuthService.shared.isAuthenticated {
             do {
                 let response = try await sendMessageViaAPI(content, context: context)
                 return response
             } catch {
-                PatinaLog.companion.error("API call failed, falling back to mock: \(error)")
-                // Fall through to mock implementation
+                guard Self.isMockFallbackEnabled else {
+                    PatinaLog.companion.error("Companion API call failed: \(error)")
+                    throw error
+                }
+                PatinaLog.companion.error("API call failed, --companionmock fallback engaged: \(error)")
+                // Fall through to the flag-gated mock implementation.
             }
+        } else if !Self.isMockFallbackEnabled {
+            // Guests don't get fake AI responses — the UI turns this into
+            // a gentle sign-in invitation.
+            throw CompanionServiceError.signInRequired
         }
 
-        // Fallback to mock implementation
+        // Mock implementation — reachable only under the explicit flag.
         let request = ConversationRequest(
             message: content,
             conversationHistory: Array(conversationHistory.suffix(20)),

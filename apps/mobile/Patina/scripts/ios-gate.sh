@@ -90,9 +90,18 @@ cmd_lint_delta() {
   # aborts the whole gate with "tmp: unbound variable" even when every tier
   # passed (first tripped by R27 Wave 0, which touched Patina Swift files).
   local tmp; tmp="$(mktemp -d)"; trap "rm -rf '$tmp'" RETURN
-  # HEAD counts
-  ( cd "$PROJECT_DIR" && swiftlint lint --quiet --config "$CONFIG" --reporter json $touched ) \
-    > "$tmp/head.json" 2>/dev/null || true
+  # HEAD counts — only files that still exist at HEAD. Passing a deleted
+  # file's path makes swiftlint silently fall back to linting the ENTIRE
+  # project, which poisons the delta with hundreds of unrelated files
+  # (first tripped by Wave 1, which deleted DailyRoomEmptyState.swift).
+  local head_files=""; local hf
+  while IFS= read -r hf; do [[ -f "$PROJECT_DIR/$hf" ]] && head_files+="$hf "; done <<< "$touched"
+  if [[ -n "${head_files// }" ]]; then
+    ( cd "$PROJECT_DIR" && swiftlint lint --quiet --config "$CONFIG" --reporter json $head_files ) \
+      > "$tmp/head.json" 2>/dev/null || true
+  else
+    echo "[]" > "$tmp/head.json"
+  fi
 
   # BASE counts via detached worktree
   local wt="$tmp/base"

@@ -200,7 +200,11 @@ public struct CompanionOverlay: View {
     /// gradient bleeds to the screen edge via `.ignoresSafeArea`, which is
     /// what we want for the fade, so no inset measurement is needed.
     private var companionDockGradient: some View {
-        PatinaGradients.companionDock()
+        // Wave 1 E.1: the gradient's default tint is static softCream, which
+        // rendered a near-white band on every dark screen. Tint with the
+        // dynamic canvas color instead — the scrim's whole job is to fade
+        // content into the background, so it must track light/dark with it.
+        PatinaGradients.companionDock(warmTint: PatinaColors.Background.primary)
             .frame(height: 140)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .allowsHitTesting(false)
