@@ -22,6 +22,12 @@ final class QRScanModel {
     private let portalAuth: any PortalAuthApprovalService
     private let analytics: any CaptureAnalytics
     private let coordinator: CaptureCoordinator
+    /// Defensive nicety: a login QR (`field://login`) scanned here — the reverse
+    /// of Q1's portal-approval flow — is handed to the sign-in handler instead of
+    /// being rejected as an unrecognised code. (A signed-out user can't reach Q1,
+    /// which lives behind Work, so in practice this fires for a signed-in user
+    /// scanning a login code; the handler confirms before switching.)
+    private let onPortalLogin: (PortalLoginToken) -> Void
 
     var manualPayload: String = ""
     var errorMessage: String?
@@ -29,10 +35,14 @@ final class QRScanModel {
     private var lastPayload: String?
     private var clearErrorTask: Task<Void, Never>?
 
-    init(portalAuth: any PortalAuthApprovalService, analytics: any CaptureAnalytics, coordinator: CaptureCoordinator) {
+    init(portalAuth: any PortalAuthApprovalService,
+         analytics: any CaptureAnalytics,
+         coordinator: CaptureCoordinator,
+         onPortalLogin: @escaping (PortalLoginToken) -> Void = { _ in }) {
         self.portalAuth = portalAuth
         self.analytics = analytics
         self.coordinator = coordinator
+        self.onPortalLogin = onPortalLogin
     }
 
     /// Called by the live `DataScannerView` for every newly-recognised code.
@@ -52,6 +62,16 @@ final class QRScanModel {
     private func submit(_ payload: String) {
         guard payload != lastPayload else { return }
         lastPayload = payload
+
+        // A login QR (the web→app sign-in handoff) takes precedence over the
+        // portal-approval parse — hand it to the sign-in handler.
+        if let token = try? PortalLoginToken.parse(payload: payload) {
+            errorMessage = nil
+            CaptureHaptics.selection()
+            analytics.event("Q1.login-detected")
+            onPortalLogin(token)
+            return
+        }
 
         do {
             _ = try portalAuth.parse(qrPayload: payload)
@@ -86,9 +106,15 @@ struct QRScanScreen: View {
     @State private var model: QRScanModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(portalAuth: any PortalAuthApprovalService, analytics: any CaptureAnalytics, coordinator: CaptureCoordinator) {
+    init(portalAuth: any PortalAuthApprovalService,
+         analytics: any CaptureAnalytics,
+         coordinator: CaptureCoordinator,
+         onPortalLogin: @escaping (PortalLoginToken) -> Void = { _ in }) {
         self.analytics = analytics
-        _model = State(wrappedValue: QRScanModel(portalAuth: portalAuth, analytics: analytics, coordinator: coordinator))
+        _model = State(wrappedValue: QRScanModel(portalAuth: portalAuth,
+                                                 analytics: analytics,
+                                                 coordinator: coordinator,
+                                                 onPortalLogin: onPortalLogin))
     }
 
     var body: some View {

@@ -22,6 +22,13 @@ struct CaptureWorkspace: Identifiable, Hashable, Sendable {
     let name: String
 }
 
+/// Failure modes unique to the portal-token exchange.
+enum PortalTokenError: Error {
+    /// `verifyOTP(tokenHash:)` returned no session (should not happen for a
+    /// valid, unconsumed magic-link hash — treated as a sign-in failure).
+    case noSession
+}
+
 @Observable
 @MainActor
 final class SupabaseSessionService: SessionProviding {
@@ -54,6 +61,11 @@ final class SupabaseSessionService: SessionProviding {
     /// type (no `===` identity), so this stands in for it: a finishing pass only
     /// clears the latch if it still owns this generation.
     @ObservationIgnored private var hydrationGeneration = 0
+    /// The user id the last *good* hydration pass landed. Makes `isHydrated`
+    /// identity-aware so an account switch within a live app run (a portal-QR
+    /// sign-in over an existing session) re-hydrates instead of keeping the
+    /// previous account's profile/workspaces latched.
+    @ObservationIgnored private var hydratedUserID: String?
 
     private enum Keys {
         static let activeWorkspaceID = "session.activeWorkspaceID"
@@ -187,6 +199,22 @@ final class SupabaseSessionService: SessionProviding {
         String(describing: type(of: error))
     }
 
+    /// Portal QR sign-in: exchange a GoTrue magic-link **hashed** token for a
+    /// session. The signed-in portal shows `field://login?v=1&th=<token_hash>`;
+    /// Field verifies the hash here — no email round-trip, no code entry, the
+    /// hash *is* the proof. `EmailOTPType.magiclink` matches the
+    /// `generate_link(type:"magiclink")` the portal calls to mint `th`
+    /// (empirically the local GoTrue also accepts `.email` for the same hash, so
+    /// `.magiclink` is the explicit, contract-aligned choice). Awaits hydration
+    /// so the caller sees fresh `workspaces`. Throws on a wrong/expired/consumed
+    /// token (magic-link tokens are single-use).
+    func signInWithPortalToken(tokenHash: String) async throws {
+        let response = try await client.auth.verifyOTP(tokenHash: tokenHash, type: .magiclink)
+        guard let session = response.session else { throw PortalTokenError.noSession }
+        self.session = session
+        await hydrateAfterSignIn(user: session.user)
+    }
+
     /// Hydrate right after a *fresh* sign-in, tolerating the token-propagation
     /// race. The first PostgREST fetch can outrun the SDK committing the new
     /// session to its auth context, so RLS sees no `auth.uid()` and the
@@ -270,11 +298,13 @@ final class SupabaseSessionService: SessionProviding {
     /// out. Used to bail an in-flight hydration whose session changed mid-fetch.
     private var currentSessionUserID: String? { session?.user.id.uuidString }
 
-    /// A hydration pass is "good" once it has both a profile and at least one
-    /// workspace. Mirrors the reference app re-gating on emptiness so failed
-    /// fetches retry instead of latching an empty session for the whole run.
+    /// A hydration pass is "good" once it has a profile and at least one
+    /// workspace *for the currently-authenticated user*. Mirrors the reference
+    /// app re-gating on emptiness so failed fetches retry instead of latching an
+    /// empty session for the whole run; the `hydratedUserID` clause additionally
+    /// forces a re-fetch when the account changes mid-run (portal-QR switch).
     private var isHydrated: Bool {
-        profileDisplayName != nil && !workspaces.isEmpty
+        profileDisplayName != nil && !workspaces.isEmpty && hydratedUserID == currentSessionUserID
     }
 
     private func performHydration(userID: String) async {
@@ -297,6 +327,10 @@ final class SupabaseSessionService: SessionProviding {
         workspaces = fetchedWorkspaces
 
         resolveActiveWorkspace()
+        // Mark this user as the hydrated identity. On an empty pass `isHydrated`
+        // still reads false (no name / no workspaces), so the retry continues;
+        // on a good pass it now also proves *this* account is the one loaded.
+        hydratedUserID = userID
     }
 
     private func fetchDisplayName(userID: String) async -> String? {
@@ -386,6 +420,7 @@ final class SupabaseSessionService: SessionProviding {
         activeWorkspaceName = nil
         profileDisplayName = nil
         hydrationTask = nil
+        hydratedUserID = nil
         defaults.removeObject(forKey: Keys.activeWorkspaceID)
         defaults.removeObject(forKey: Keys.activeWorkspaceName)
     }

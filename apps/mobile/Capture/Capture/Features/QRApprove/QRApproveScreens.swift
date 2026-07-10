@@ -16,7 +16,10 @@ enum QRApproveScreens {
             AnyView(QRScanScreen(
                 portalAuth: container.portalAuth,
                 analytics: container.analytics,
-                coordinator: coordinator
+                coordinator: coordinator,
+                // Defensive: a login QR scanned in Q1 routes to the same sign-in
+                // handler as the deep link / O2 scanner.
+                onPortalLogin: { token in container.portalLogin.receive(token: token) }
             ))
         }
 

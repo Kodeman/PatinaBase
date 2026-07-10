@@ -22,6 +22,10 @@ struct RootView: View {
     @State private var registered = false
     /// Step for the phase-based onboarding flow (real mode with no session).
     @State private var onboardingFlowStep = 0
+    /// Runs `field://login` deep-link sign-in (portal QR handoff). Owned by the
+    /// composition root so the deep-link handler, this shell, and Q1 share one
+    /// instance; configured in `.task` once `coordinator` can be bound.
+    private var portalLogin: PortalLoginController { container.portalLogin }
 
     var body: some View {
         @Bindable var coord = coordinator
@@ -44,6 +48,13 @@ struct RootView: View {
         .task {
             ScreenRegistry.registerAll(container: container, coordinator: coordinator)
             registered = true
+            // Wire the portal-QR sign-in controller; a signed-in exchange leaves
+            // onboarding for the app surface. Replays any cold-start login link.
+            portalLogin.configure(
+                session: container.session,
+                authorizer: container.authorizer,
+                onSignedIn: { if coordinator.phase != .ready { coordinator.phase = .ready } }
+            )
             // Resolve the opening phase honestly from the session: a restored
             // session goes straight to the viewfinder; no session lands on
             // O1/O2 onboarding. Mock mode is authenticated immediately, so this
@@ -58,12 +69,57 @@ struct RootView: View {
             }
         }
         .onOpenURL { url in
-            CaptureDeepLink.handle(url, coordinator: coordinator, store: container.store)
+            CaptureDeepLink.handle(url, coordinator: coordinator, store: container.store, login: portalLogin)
         }
         .onChange(of: coordinator.phase) {
             // Entering onboarding (cold start with no session, or after sign-out)
             // always restarts the flow at O1.
             if coordinator.phase == .auth { onboardingFlowStep = 0 }
+        }
+        // Portal-QR sign-in over a live session: confirm before switching.
+        .alert(
+            "Sign in with this code?",
+            isPresented: Binding(
+                get: { portalLogin.confirmPrompt != nil },
+                set: { if !$0 { portalLogin.cancelSwitch() } }
+            ),
+            presenting: portalLogin.confirmPrompt
+        ) { _ in
+            Button("Sign in") { portalLogin.confirmSwitch() }
+            Button("Cancel", role: .cancel) { portalLogin.cancelSwitch() }
+        } message: { prompt in
+            Text(prompt.currentEmail.map {
+                "You’re signed in as \($0). Continue to sign in with this code?"
+            } ?? "You’re already signed in. Continue to sign in with this code?")
+        }
+        .overlay(alignment: .top) { portalLoginToast }
+    }
+
+    /// Transient banner for portal-QR deep-link sign-in outcomes.
+    @ViewBuilder private var portalLoginToast: some View {
+        if let toast = portalLogin.toast {
+            Text(toast.message)
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.paper)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule().fill(toastTint(toast.kind))
+                )
+                .padding(.horizontal, 24)
+                .padding(.top, 12)
+                .frame(maxWidth: .infinity)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .accessibilityIdentifier("portalLogin.toast")
+        }
+    }
+
+    private func toastTint(_ kind: PortalLoginToast.Kind) -> Color {
+        switch kind {
+        case .success: return CaptureColor.verdigris
+        case .info:    return CaptureColor.ink2
+        case .error:   return CaptureColor.error
         }
     }
 
