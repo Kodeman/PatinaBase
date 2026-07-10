@@ -56,18 +56,31 @@ struct VisualResonanceView: View {
                     .fill(gradient)
                     .aspectRatio(1, contentMode: .fit)
 
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(PatinaColors.Interactive.active, lineWidth: 3)
-
-                    VStack {
-                        Spacer()
+                // Wave 1 E.1: until real room photography lands these tiles
+                // are gradients — without a permanent label they read as
+                // meaningless color blocks. Scrim + name always visible
+                // (StyleSwatchCell's idiom), selection adds the stroke.
+                VStack {
+                    Spacer()
+                    LinearGradient(
+                        colors: [Color.black.opacity(0), Color.black.opacity(0.45)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 64)
+                    .overlay(alignment: .bottomLeading) {
                         Text(choice.displayName)
                             .font(.custom("Inter-SemiBold", size: 11, relativeTo: .caption2))
                             .foregroundStyle(.white)
                             .shadow(color: Color.black.opacity(0.6), radius: 2)
                             .padding(14)
                     }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(PatinaColors.Interactive.active, lineWidth: 3)
                 }
             }
             .opacity(anySelected && !isSelected ? 0.6 : 1)
