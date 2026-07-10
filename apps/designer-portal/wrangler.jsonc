@@ -6,6 +6,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "minify": true,
+  // esbuild keepNames wraps every function in __name() purely to preserve names that
+  // webpack's server minification already mangled — pure size overhead. Disabling it
+  // keeps the worker under Cloudflare's 62 MiB traversal limit (hit 2026-07-10).
+  "keep_names": false,
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
