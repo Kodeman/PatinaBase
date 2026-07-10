@@ -285,7 +285,14 @@ function DeskWalkthroughInner() {
     if (autoDecidedRef.current) return;
     const open = shouldAutoOpenDeskWalkthrough({
       helpStateReady,
-      tourState: tourRecord,
+      // Read the persisted record synchronously — the `tourRecord` mirror lags
+      // one commit behind `helpStateReady` (its seeding setState at line 246
+      // hasn't flushed in the very commit where helpStateReady first flips true),
+      // so trusting the mirror here would latch an auto-open decision on a stale
+      // empty record and re-ambush a designer who already completed/abandoned the
+      // tour on another device. `tourRecord` stays in the deps below as the
+      // re-evaluation trigger for the lifecycle handlers.
+      tourState: helpStateReady ? getTourState(DESK_WALKTHROUGH_TOUR_ID) : tourRecord,
       profileCreatedAt: profile?.created_at,
       pathname: '/desk',
       engagementsResolved: !engagementsLoading,
@@ -303,7 +310,10 @@ function DeskWalkthroughInner() {
     setOfferEligible(
       shouldOfferDeskWalkthrough({
         helpStateReady,
-        tourState: tourRecord,
+        // Same stale-mirror hazard as the auto-modal effect: read the record
+        // synchronously once hydrated so the offer note never flashes before the
+        // seeding setState commits.
+        tourState: helpStateReady ? getTourState(DESK_WALKTHROUGH_TOUR_ID) : tourRecord,
         profileCreatedAt: profile?.created_at,
         pathname: '/desk',
         engagementsResolved: !engagementsLoading,
