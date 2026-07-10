@@ -9,16 +9,23 @@
 import Foundation
 import SwiftUI
 import CaptureKit
+import PatinaDesignKit
 
 // MARK: - Buttons
 
 enum RouteButtonKind {
-    case primary    // verdigris fill (the keep/commit move)
-    case secondary  // paper outline
+    case primary    // clay fill (the keep/commit move)
+    case secondary  // outline
     case ghost      // text-only
-    case danger     // rust fill (a cull / inbox-deferral)
+    case danger     // error fill (a cull / inbox-deferral)
 }
 
+/// The shared Route/Session action button. B.2: it now delegates to
+/// PatinaDesignKit's `PatinaButton` — every S1–S5 / V1–V3 call site adopts the
+/// design-system button (canonical capsule, offWhite label on the clay/error
+/// fills, so it stays legible in dark mode where the old paper3 label went
+/// dark-on-clay) without touching a single call site. The kind→style map:
+/// primary→clay, secondary→secondary, ghost→ghost, danger→destructive.
 struct RouteActionButton: View {
     let title: String
     var systemImage: String?
@@ -36,43 +43,17 @@ struct RouteActionButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                if isLoading {
-                    ProgressView().tint(foreground)
-                } else if let systemImage {
-                    Image(systemName: systemImage)
-                }
-                Text(title).font(CaptureType.bodyEmph)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .foregroundStyle(foreground)
-            .background(background)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(border, lineWidth: 1))
-        }
-        .disabled(isLoading)
+        PatinaButton(title, style: style,
+                     icon: systemImage.map { Image(systemName: $0) },
+                     isLoading: isLoading, action: action)
     }
 
-    private var foreground: Color {
+    private var style: PatinaButtonStyle {
         switch kind {
-        case .primary, .danger: return CaptureColor.paper3
-        case .secondary: return CaptureColor.ink
-        case .ghost: return CaptureColor.verdigrisInk
-        }
-    }
-    private var background: Color {
-        switch kind {
-        case .primary: return CaptureColor.verdigris
-        case .danger: return CaptureColor.error
-        case .secondary, .ghost: return Color.clear
-        }
-    }
-    private var border: Color {
-        switch kind {
-        case .primary, .danger, .ghost: return Color.clear
-        case .secondary: return CaptureColor.line2
+        case .primary: return .clay
+        case .secondary: return .secondary
+        case .ghost: return .ghost
+        case .danger: return .destructive
         }
     }
 }
