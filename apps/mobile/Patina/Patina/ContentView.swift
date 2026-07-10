@@ -277,6 +277,14 @@ struct ContentView: View {
         case .threadDetail(let threadId):
             ThreadDetailView(threadId: threadId)
                 .toolbarTitleDisplayMode(.inline)
+
+        case .proposalList:
+            ProposalListView()
+                .toolbar(.hidden, for: .navigationBar)
+
+        case .proposalDetail(let proposalId):
+            ProposalDetailView(proposalId: proposalId)
+                .toolbar(.hidden, for: .navigationBar)
         }
     }
 }

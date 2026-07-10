@@ -421,9 +421,9 @@ public actor ProposalsAPIClient {
 /// fractional seconds — used for proposal expiry checks.
 enum ISO8601DateParsing {
     private static let withFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
     }()
     private static let plain = ISO8601DateFormatter()
 

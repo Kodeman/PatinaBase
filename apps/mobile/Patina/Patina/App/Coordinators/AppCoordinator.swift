@@ -295,7 +295,8 @@ public final class AppCoordinator: Coordinator {
              .profile, .notifications, .designerConsultation,
              .projectList, .projectDetail,
              .decisionList, .decisionDetail,
-             .threadList, .threadDetail:
+             .threadList, .threadDetail,
+             .proposalList, .proposalDetail:
             push(route)
             updateContext(for: route)
         }
@@ -408,7 +409,8 @@ public final class AppCoordinator: Coordinator {
         // MVP v1 expanded routes — clear viewing context.
         case .projectList, .projectDetail,
              .decisionList, .decisionDetail,
-             .threadList, .threadDetail:
+             .threadList, .threadDetail,
+             .proposalList, .proposalDetail:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
         }

@@ -36,6 +36,10 @@ final class BadgeCountService {
     /// Comms threads with an unread counterpart message.
     private(set) var unreadMessageCount: Int = 0
 
+    /// Proposals still awaiting the client's signature (sent/viewed, not
+    /// expired). Wave 2 / D.1 money rail.
+    private(set) var proposalsAwaitingSignatureCount: Int = 0
+
     /// True once a refresh has completed for an authenticated session.
     /// Guests never load — the rail renders invitations, not counts.
     private(set) var hasLoaded: Bool = false
@@ -51,13 +55,15 @@ final class BadgeCountService {
         guard AuthService.shared.isAuthenticated else {
             pendingDecisionCount = 0
             unreadMessageCount = 0
+            proposalsAwaitingSignatureCount = 0
             hasLoaded = false
             return
         }
 
         async let decisionsFetch = try? DecisionsAPIClient.shared.listPending()
         async let summariesFetch = try? MessagingAPIClient.shared.listThreadSummaries()
-        let (decisions, summaries) = await (decisionsFetch, summariesFetch)
+        async let proposalsFetch = try? ProposalsAPIClient.shared.listProposals()
+        let (decisions, summaries, proposals) = await (decisionsFetch, summariesFetch, proposalsFetch)
 
         if let decisions {
             pendingDecisionCount = decisions.count
@@ -68,7 +74,10 @@ final class BadgeCountService {
                 .filter { ThreadListViewModel.isUnread($0, me: me) }
                 .count
         }
-        if decisions != nil || summaries != nil {
+        if let proposals {
+            proposalsAwaitingSignatureCount = proposals.filter { $0.isSignable }.count
+        }
+        if decisions != nil || summaries != nil || proposals != nil {
             hasLoaded = true
         }
     }

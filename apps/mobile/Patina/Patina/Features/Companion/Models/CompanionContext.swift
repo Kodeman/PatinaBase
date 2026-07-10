@@ -155,6 +155,10 @@ public struct CompanionContext: Equatable {
             return "Conversations"
         case .threadDetail:
             return "In conversation"
+        case .proposalList:
+            return "Proposals"
+        case .proposalDetail:
+            return "Reviewing a proposal"
         }
     }
 
@@ -200,6 +204,8 @@ public struct CompanionContext: Equatable {
             return "checkmark.seal"
         case .threadList, .threadDetail:
             return "bubble.left.and.bubble.right"
+        case .proposalList, .proposalDetail:
+            return "doc.text"
         }
     }
 }
