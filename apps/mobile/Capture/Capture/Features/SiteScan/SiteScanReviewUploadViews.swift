@@ -252,7 +252,7 @@ struct SiteScanUploadStep: View {
                 Text("Upload didn't finish")
                     .font(CaptureType.bodyEmph)
                     .foregroundStyle(CaptureColor.ink)
-                Text(message + " Your scan is saved on this device — try again.")
+                Text(message + " Your scan is kept on this device — retry now, or finish later without losing it.")
                     .font(CaptureType.footnote)
                     .foregroundStyle(CaptureColor.inkSoft)
             }
@@ -267,8 +267,18 @@ struct SiteScanUploadStep: View {
                 .padding(.horizontal, 20).padding(.vertical, 12)
                 .background(.ultraThinMaterial)
         case .failed:
-            SiteScanPrimaryButton(title: "Retry upload", systemImage: "arrow.clockwise") {
-                Task { await model.upload() }
+            // A persistent failure must not dead-end the flow: the local
+            // bundle is retained, so the designer can park the scan and leave
+            // instead of being locked into retrying forever.
+            HStack(spacing: 12) {
+                SiteScanSecondaryButton(title: "Finish later", systemImage: "tray.and.arrow.down",
+                                        tint: CaptureColor.inkSoft) {
+                    container.analytics.event("scan.upload_finish_later")
+                    onDone()
+                }
+                SiteScanPrimaryButton(title: "Retry upload", systemImage: "arrow.clockwise") {
+                    Task { await model.upload() }
+                }
             }
             .padding(.horizontal, 20).padding(.vertical, 12)
             .background(.ultraThinMaterial)
