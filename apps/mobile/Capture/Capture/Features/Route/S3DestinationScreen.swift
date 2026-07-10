@@ -17,6 +17,7 @@ struct S3DestinationScreen: View {
     let store: CaptureStore
     let sync: any CaptureSyncService
     let coordinator: CaptureCoordinator
+    let analytics: any CaptureAnalytics
 
     var body: some View {
         Group {
@@ -29,6 +30,7 @@ struct S3DestinationScreen: View {
         .background(CaptureColor.paper3)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .task { analytics.screen(CaptureScreenID.s3Destination.rawValue) }
         .accessibilityIdentifier(CaptureScreenID.s3Destination.rawValue)
     }
 }
@@ -158,7 +160,8 @@ private struct S3Content: View {
         specimen: demo.specimen,
         store: demo.store,
         sync: InMemoryCaptureSyncService(),
-        coordinator: CaptureCoordinator()
+        coordinator: CaptureCoordinator(),
+        analytics: MockCaptureAnalytics()
     )
 }
 #endif

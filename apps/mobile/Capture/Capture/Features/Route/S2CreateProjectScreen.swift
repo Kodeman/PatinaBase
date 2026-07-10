@@ -15,6 +15,7 @@ import CaptureKit
 struct S2CreateProjectScreen: View {
     let store: CaptureStore
     let coordinator: CaptureCoordinator
+    let analytics: any CaptureAnalytics
     /// Real mode: inserts into public.projects before caching locally. nil in mock
     /// mode → the local-only path (unchanged harness behavior).
     let projectCreator: (any CaptureProjectCreating)?
@@ -93,6 +94,7 @@ struct S2CreateProjectScreen: View {
         .background(CaptureColor.paper3)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .task { analytics.screen(CaptureScreenID.s2CreateProject.rawValue) }
         .accessibilityIdentifier(CaptureScreenID.s2CreateProject.rawValue)
     }
 
@@ -147,9 +149,14 @@ struct S2CreateProjectScreen: View {
     }
 }
 
+#if DEBUG
+import CaptureKitMocks
+
 #Preview {
     // swiftlint:disable:next force_try
     let store = try! CaptureStore.inMemory()
-    return S2CreateProjectScreen(store: store, coordinator: CaptureCoordinator(), projectCreator: nil)
+    return S2CreateProjectScreen(store: store, coordinator: CaptureCoordinator(),
+                                 analytics: MockCaptureAnalytics(), projectCreator: nil)
         .modelContainer(store.container)
 }
+#endif

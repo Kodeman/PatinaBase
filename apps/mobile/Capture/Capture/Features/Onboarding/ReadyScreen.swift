@@ -13,6 +13,7 @@ import CaptureKit
 struct ReadyScreen: View {
     enum HardwareEntry { case actionButton, controlCenter }
 
+    let analytics: any CaptureAnalytics
     /// Pro devices teach the Action Button; others fall back to Control Center.
     var hardwareEntry: HardwareEntry = .actionButton
     /// "Start capturing" → opens the live viewfinder (C1). This is the flow's
@@ -63,6 +64,7 @@ struct ReadyScreen: View {
             .padding(.top, 32)
             .padding(.bottom, 24)
         }
+        .task { analytics.screen(CaptureScreenID.o4Ready.rawValue) }
         .accessibilityIdentifier(CaptureScreenID.o4Ready.rawValue)
     }
 
@@ -106,10 +108,14 @@ struct ReadyScreen: View {
     }
 }
 
+#if DEBUG
+import CaptureKitMocks
+
 #Preview("Action Button") {
-    ReadyScreen()
+    ReadyScreen(analytics: MockCaptureAnalytics())
 }
 
 #Preview("Control Center") {
-    ReadyScreen(hardwareEntry: .controlCenter)
+    ReadyScreen(analytics: MockCaptureAnalytics(), hardwareEntry: .controlCenter)
 }
+#endif

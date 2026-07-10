@@ -13,6 +13,7 @@ import SwiftUI
 import CaptureKit
 
 struct CameraPrimingScreen: View {
+    let analytics: any CaptureAnalytics
     /// "Allow" (or "Continue" after a decline) → proceed to O4 / live viewfinder.
     var onContinue: () -> Void = {}
     /// "Open Settings" deep-link, surfaced only after a decline.
@@ -28,6 +29,7 @@ struct CameraPrimingScreen: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 20)
         }
+        .task { analytics.screen(CaptureScreenID.o3CameraPriming.rawValue) }
         .accessibilityIdentifier(CaptureScreenID.o3CameraPriming.rawValue)
     }
 
@@ -144,6 +146,10 @@ struct CameraPrimingScreen: View {
     }
 }
 
+#if DEBUG
+import CaptureKitMocks
+
 #Preview("Primer") {
-    CameraPrimingScreen()
+    CameraPrimingScreen(analytics: MockCaptureAnalytics())
 }
+#endif

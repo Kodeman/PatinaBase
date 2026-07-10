@@ -9,6 +9,7 @@ import SwiftUI
 import CaptureKit
 
 struct WelcomeScreen: View {
+    let analytics: any CaptureAnalytics
     /// "Get started" → begins connect (O2).
     var onGetStarted: () -> Void = {}
     /// "I already have an account" → jumps to sign-in (O2).
@@ -50,10 +51,15 @@ struct WelcomeScreen: View {
             .padding(.top, 32)
             .padding(.bottom, 24)
         }
+        .task { analytics.screen(CaptureScreenID.o1Welcome.rawValue) }
         .accessibilityIdentifier(CaptureScreenID.o1Welcome.rawValue)
     }
 }
 
+#if DEBUG
+import CaptureKitMocks
+
 #Preview {
-    WelcomeScreen()
+    WelcomeScreen(analytics: MockCaptureAnalytics())
 }
+#endif

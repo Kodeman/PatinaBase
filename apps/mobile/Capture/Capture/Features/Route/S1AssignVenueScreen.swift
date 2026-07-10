@@ -19,6 +19,7 @@ struct S1AssignVenueScreen: View {
     let store: CaptureStore
     let location: any LocationService
     let coordinator: CaptureCoordinator
+    let analytics: any CaptureAnalytics
 
     var body: some View {
         Group {
@@ -31,6 +32,7 @@ struct S1AssignVenueScreen: View {
         .background(CaptureColor.paper3)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .task { analytics.screen(CaptureScreenID.s1Assign.rawValue) }
         .accessibilityIdentifier(CaptureScreenID.s1Assign.rawValue)
     }
 }
@@ -222,7 +224,8 @@ private struct S1Content: View {
         specimen: demo.specimen,
         store: demo.store,
         location: MockLocationService(),
-        coordinator: CaptureCoordinator()
+        coordinator: CaptureCoordinator(),
+        analytics: MockCaptureAnalytics()
     )
     .modelContainer(demo.store.container)
 }
