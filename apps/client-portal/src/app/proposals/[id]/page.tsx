@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, Clock, Download, Loader2 } from 'lucide-react';
 import {
@@ -11,7 +11,9 @@ import {
   useProposalScopeRooms,
   useBoards,
 } from '@patina/supabase';
+import { FeatureAnnouncementCoachmark, SurfaceKeys } from '@patina/help-system';
 import { useClientProposal } from '@/hooks/use-proposals-client';
+import { useHelpStateReady } from '@/components/help/help-state-setup';
 import { ProposalDocument } from '@/components/proposal-document';
 import { ProposalDeclineDialog } from '@/components/proposals/ProposalDeclineDialog';
 import { ProposalRequestChangeDialog } from '@/components/proposals/ProposalRequestChangeDialog';
@@ -41,6 +43,15 @@ export default function ClientProposalDetailPage({
   const { data: boards } = useBoards(id);
   const [declineOpen, setDeclineOpen] = useState(false);
   const [requestChangeOpen, setRequestChangeOpen] = useState(false);
+
+  // Proposal-view welcome (help-desk Wave 1, T1d). Anchored to the page
+  // header row because it is the only element that renders on every proposal
+  // state — the sign / request-change action block only exists while the
+  // proposal is actionable (not on signed / declined / expired renders).
+  // Gated on help-state hydration so a dismissal made on another device is
+  // respected before the one-shot coachmark decides to show.
+  const helpStateReady = useHelpStateReady();
+  const welcomeAnchorRef = useRef<HTMLDivElement>(null);
 
   if (proposalLoading || sectionsLoading) {
     return (
@@ -98,7 +109,22 @@ export default function ClientProposalDetailPage({
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
-      <div className="proposal-print-hide mb-6 flex items-center justify-between">
+      {helpStateReady && (
+        <FeatureAnnouncementCoachmark
+          featureKey="client-portal/proposals/welcome"
+          surfaceKey={SurfaceKeys.ClientPortal.Proposals.Welcome}
+          anchorRef={welcomeAnchorRef as RefObject<HTMLElement>}
+          persona="consumer"
+          side="bottom"
+          fallbackTitle="Your proposal"
+          fallbackBody="Read at your pace. Anything your designer needs from you sits highlighted — nothing commits until you sign."
+        />
+      )}
+
+      <div
+        ref={welcomeAnchorRef}
+        className="proposal-print-hide mb-6 flex items-center justify-between"
+      >
         <Link
           href="/proposals"
           className="inline-flex items-center gap-1.5 type-meta no-underline transition hover:text-[var(--text-primary)]"
