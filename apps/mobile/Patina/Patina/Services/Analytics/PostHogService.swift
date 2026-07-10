@@ -62,6 +62,7 @@ public final class PostHogService {
         config.debug = AppConfiguration.isDebug
 
         PostHogSDK.shared.setup(config)
+        PostHogSDK.shared.register(["surface": "patina-ios"])
         isInitialized = true
         PatinaLog.ui.debug("[PostHog] Initialized successfully with host: \(hostURL)")
 

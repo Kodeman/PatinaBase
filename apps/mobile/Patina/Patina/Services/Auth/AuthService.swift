@@ -107,8 +107,19 @@ public final class AuthService {
                         let emailDomain = user.email.map { $0.components(separatedBy: "@").last ?? "" } ?? ""
                         PostHogService.shared.identify(userId: user.id.uuidString, properties: [
                             "email_domain": emailDomain,
-                            "platform": "ios"
+                            "platform": "ios",
+                            "role": "client"
                         ])
+                        // `.signedIn` is GoTrue's fresh-sign-in event — distinct from
+                        // `.initialSession` (cold-launch session restore) — so this
+                        // fires only on an actual sign-in, never on app relaunch.
+                        // NOTE: this one observer covers every AuthService-routed
+                        // method (password, magic link, OTP verify, and Apple sign-in
+                        // when it doesn't go through CompanionAuthPanel's own path),
+                        // so "magic-link" is a best-effort default label, not a
+                        // precise per-method breakdown — see CompanionAuthPanel for
+                        // the one path that CAN label itself accurately ("apple").
+                        PostHogService.shared.capture("login", properties: ["method": "magic-link"])
                     }
                 case .signedOut:
                     PatinaLog.auth.debug("User signed out")

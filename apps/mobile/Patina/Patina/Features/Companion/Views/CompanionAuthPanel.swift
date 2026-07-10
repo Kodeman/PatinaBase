@@ -180,8 +180,10 @@ public struct CompanionAuthPanel: View {
                     // Identify user in analytics
                     if let userId = AuthService.shared.currentUserId {
                         PostHogService.shared.identify(userId: userId, properties: [
-                            "auth_method": "apple"
+                            "auth_method": "apple",
+                            "role": "client"
                         ])
+                        PostHogService.shared.capture("login", properties: ["method": "apple"])
                     }
 
                     onAuthComplete?()
