@@ -37,8 +37,10 @@ public enum AppConfiguration {
     }
 
     public static let appGroupID = "group.cloud.patina.field"
+    /// `field://` scheme — still used for `field://screen/<id>` / `field://capture`
+    /// deep links (CaptureDeepLink). Auth no longer redirects here: Sign in with
+    /// Apple and email one-time-code are native, with no browser callback.
     public static let urlScheme = "field"
-    public static let authCallback = "field://auth/callback"
     public static let captureMediaBucket = "capture-media"
     public static let productImagesBucket = "product-images"
 

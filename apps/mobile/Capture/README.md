@@ -75,10 +75,15 @@ default on a physical device (`AppConfiguration.runsRealServices`).
 `-CaptureForceReal` flips a Simulator run to real services without a device;
 `-CaptureUseMocks` / `--uitesting` / `-CaptureUITest` force mocks anywhere.
 
-- **Auth** — O2's "Sign in with Patina" runs Supabase Google OAuth
-  (SDK-managed `ASWebAuthenticationSession`, redirect `field://auth/callback`)
-  via `SupabaseSessionService.signInWithGoogle()`, then lists the caller's
-  `organizations` as workspaces — a workspace **is** an organization.
+- **Auth** — O2 offers two native sign-in paths (no browser redirect), matching
+  the providers Strata enables (`apple` + `email` only): **Sign in with Apple**
+  (native `ASAuthorizationController` + nonce → `signInWithIdToken`) and an
+  **email one-time-code** (`signInWithOTP(shouldCreateUser:false)` →
+  `verifyOTP`). Both run through the `WorkspaceAuthorizing` seam into
+  `SupabaseSessionService`, then list the caller's `organizations` as
+  workspaces — a workspace **is** an organization. Email uses
+  `shouldCreateUser: false`: Field is invite-only, so the app never mints a new
+  auth user (designers are provisioned through the portal).
 - **Secrets** — `Secrets.swift` (gitignored; copy from `Secrets.example.swift`)
   holds `supabaseAnonKey` (the `api.patina.cloud` anon/publishable key) and
   `postHogAPIKey` (optional — `nil` keeps analytics a no-op and falls back to
