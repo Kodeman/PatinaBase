@@ -79,16 +79,30 @@ export const START_DESK_WALKTHROUGH_EVENT = 'document:start-desk-walkthrough';
 const COACHMARK_CLASSNAME =
   'rounded-[6px] border border-[var(--doc-ink-border)] bg-[var(--doc-paper)] text-[var(--text-body)] shadow-none';
 
-// ─── Step 3 scroll (reduced-motion aware) ─────────────────────────────────────
-async function scrollContentsIntoView(): Promise<void> {
-  if (typeof document === 'undefined') return;
-  const el = document.querySelector('[data-tour-anchor="desk-contents"]');
-  if (!(el instanceof HTMLElement)) return;
-  const reduce =
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+// ─── Per-step anchor scroll (reduced-motion aware) ────────────────────────────
+//
+// Each step scrolls its own anchor to the viewport center before its coachmark
+// shows. On a POPULATED desk the page scrolls (folders + field + Studio index),
+// so a step whose anchor sits far above or below the current scroll position
+// (the header verbs after the drawer, say) would otherwise render its coachmark
+// off-screen against an anchor Radix can't reach — the tour flying off the page.
+// Fresh-signup desks are short and never scroll, so this is a no-op there; it is
+// the existing-designer replay path (tall desks) this keeps legible. Radix
+// repositions the popover as the smooth scroll settles.
+function scrollAnchorIntoView(
+  selector: string,
+  block: ScrollLogicalPosition = 'nearest',
+): () => void {
+  return () => {
+    if (typeof document === 'undefined') return;
+    const el = document.querySelector(selector);
+    if (!(el instanceof HTMLElement)) return;
+    const reduce =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block });
+  };
 }
 
 // ─── The six steps ────────────────────────────────────────────────────────────
@@ -104,6 +118,9 @@ const STEPS: CoachmarkStep[] = [
     surfaceKey: TOUR.Step1TheDesk,
     anchorSelector: '[data-tour-anchor="desk-needs-your-hand"]',
     side: 'bottom',
+    // No scroll: the Desk opens at the top and the coachmark reads against the
+    // needs-your-hand region in place. (Scrolling this tall region would push a
+    // bottom-placed coachmark below the fold.)
     fallbackHeading: 'The Desk',
     fallbackBody:
       'Only what needs your hand lands here — a folder, one need line. Quiet means the work is in motion.',
@@ -120,7 +137,7 @@ const STEPS: CoachmarkStep[] = [
     surfaceKey: TOUR.Step3TheStudio,
     anchorSelector: '[data-tour-anchor="desk-contents"]',
     side: 'top',
-    beforeShow: scrollContentsIntoView,
+    beforeShow: scrollAnchorIntoView('[data-tour-anchor="desk-contents"]', 'center'),
     fallbackHeading: 'Rooms and ledgers',
     fallbackBody:
       'The Library and People are rooms you walk into. Orders, Accounts, Hours slide over as sheets — Esc puts them back.',
@@ -129,6 +146,7 @@ const STEPS: CoachmarkStep[] = [
     surfaceKey: TOUR.Step4TheDrawer,
     anchorSelector: '[data-tour-anchor="studio-drawer"]',
     side: 'top',
+    // The drawer is fixed to the viewport bottom — always in view, no scroll.
     fallbackHeading: 'The studio drawer',
     fallbackBody:
       'The studio’s doors, always at the bottom. Hours log themselves while a document is in hand. The bell opens The Post.',
@@ -137,6 +155,7 @@ const STEPS: CoachmarkStep[] = [
     surfaceKey: TOUR.Step5FindAnything,
     anchorSelector: '[data-tour-anchor="desk-find-anything"]',
     side: 'bottom',
+    beforeShow: scrollAnchorIntoView('[data-tour-anchor="desk-find-anything"]'),
     fallbackHeading: 'Find anything',
     fallbackBody:
       '⌘K reaches any folder, person, or book by name — try “invoice”. It can also ask the Engine.',
@@ -145,6 +164,7 @@ const STEPS: CoachmarkStep[] = [
     surfaceKey: TOUR.Step6Begin,
     anchorSelector: '[data-tour-anchor="desk-capture-lead"]',
     side: 'bottom',
+    beforeShow: scrollAnchorIntoView('[data-tour-anchor="desk-capture-lead"]'),
     fallbackHeading: 'Begin with a lead',
     fallbackBody:
       'Every project begins as a captured lead — a name and a note, under a minute. The Desk takes it from there.',

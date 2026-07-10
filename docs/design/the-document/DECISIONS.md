@@ -2963,3 +2963,22 @@ AMENDS D14's presentation only — the weights and physics D14 set stand untouch
 **Foundation (F1–F6) ships with no ruling required** — none of it touches a locked decision, so none of it needed Kody's round: palette/door/help instrumentation, a flight-ledger read on PostHog OAuth (**owed** — the instrumentation writes events; nothing reads them back into a ledger yet, blocked on the OAuth connection), the People search repair, the ⌘K person deep-link, the `/help` door, and the Bell label.
 
 *Entries add: R93–R96 · I54 · last id = I54*
+
+## R97 · The Walkthrough — help, taught at the Desk (2026-07-10)
+
+**Amends R94, narrowly.** R94's "no tours" holds as the default physics of the document world. One exception is ratified: a **first-signin coachmark walkthrough of the Desk** (tour id `desk-walkthrough`, six steps, about a minute), plus explicit-replay entries (⌘K "Take the walkthrough", the /help pinned row, `/desk?tour=desk-walkthrough`). No other tour, coachmark sequence, or re-arming is licensed by this ruling.
+
+Terms:
+1. **The tour never leaves /desk** and never picks a document up — R4's timer must never lie. No step may route into `/doc/`.
+2. **Gate:** the auto-offer (WelcomeModal) fires only for accounts created on/after `DESK_WALKTHROUGH_SHIP_DATE` (constant in `desk-walkthrough.tsx` — bump to the prod deploy date at ship), on a ≥980px viewport, after help-state hydration and the desk read resolving. **Existing designers are never auto-modaled** — they receive a one-time R94 margin note (`desk-walkthrough-offer`) whose named act starts the tour.
+3. **Dismissal semantics:** declining the welcome ("Explore on my own", Esc) records `tours['desk-walkthrough'] = { abandoned, atStep: 0 }` — the durable, cross-device welcome-shown marker. Replay entries stay live regardless (restart clears persisted state through the backend).
+4. **Copy is canon:** the six step texts and the welcome text ship as hard-coded fallbacks in the component AND as Sanity coachmark docs (`designer-portal/tours/desk-walkthrough/*`). The fallbacks make the tour Sanity-independent; Sanity edits may refine wording, but meaning changes return to a ruling.
+5. **Suppression:** the `desk-first-touch` margin note is suppressed while the welcome or tour is active, and marked seen on completion — the tour taught ⌘K.
+
+Adjacent rulings folded in:
+- **The I54 registry** gains an optional `help: { surfaceKey, blurb }` per surface — pure data, consumed by the contextual help panel's intro line. R95's "labels + doorways only" is respected: blurbs do not render on the Contents page in this wave.
+- **/portal/help is retired to redirects** → `/help`. The re-homed Help Center is the single center; the old routes survive as doorways, not pages.
+- **The ? doorway:** sheet heads, ledger front-matter, and the court bar may carry a quiet DM-mono `?` that opens the contextual help panel scoped to their surface — reactive, user-invoked, no floating chrome. Term-level hover tooltips (stamps et al.) remain unlicensed.
+- **Content pipeline:** desk help content lives in Sanity (`kv3qrinl`, keys under `designer-portal/document/*` + the tour prefix), authored as drafts, published only at Kody's gate; repo microcopy (registry blurbs, margin notes, empty states) travels through PRs.
+
+*Entries add: R97 · last id = R97*
