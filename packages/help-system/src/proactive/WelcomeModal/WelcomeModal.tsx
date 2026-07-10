@@ -48,6 +48,7 @@ import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { useHelpContent } from '../../hooks/useHelpContent'
 import type { Persona, WelcomeModalContent } from '../../contentTypes'
+import { HELP_EVENTS, safeCapture } from '../../analytics'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -79,19 +80,8 @@ export interface WelcomeModalProps {
   className?: string
 }
 
-// ─── PostHog helper — safe capture ────────────────────────────────────────────
-
-type PostHogLike = { capture: (event: string, props?: Record<string, unknown>) => void }
-
-function safeCapture(event: string, props: Record<string, unknown>): void {
-  if (typeof window === 'undefined') return
-  try {
-    const ph = (window as unknown as { posthog?: PostHogLike }).posthog
-    ph?.capture(event, props)
-  } catch {
-    // analytics must never crash the UI
-  }
-}
+// Analytics route through the shared HELP_EVENTS taxonomy + safeCapture (see
+// ../../analytics.ts). No local capture path.
 
 // ─── Defaults for fallback rendering ──────────────────────────────────────────
 
@@ -144,7 +134,7 @@ export function WelcomeModal({
     prevOpenRef.current = open
 
     if (!wasOpen && open) {
-      safeCapture('help.welcome_modal.shown', {
+      safeCapture(HELP_EVENTS.WELCOME_MODAL_SHOWN, {
         surface_key: surfaceKey,
         persona,
         first_signin: true,
@@ -164,7 +154,7 @@ export function WelcomeModal({
     (next: boolean) => {
       if (!next) {
         if (lastActionRef.current == null) {
-          safeCapture('help.welcome_modal.action', {
+          safeCapture(HELP_EVENTS.WELCOME_MODAL_ACTION, {
             surface_key: surfaceKey,
             persona,
             action: 'dismiss',
@@ -180,7 +170,7 @@ export function WelcomeModal({
 
   const handleStartTour = React.useCallback(() => {
     lastActionRef.current = 'start_tour'
-    safeCapture('help.welcome_modal.action', {
+    safeCapture(HELP_EVENTS.WELCOME_MODAL_ACTION, {
       surface_key: surfaceKey,
       persona,
       action: 'start_tour',
@@ -196,7 +186,7 @@ export function WelcomeModal({
 
   const handleSkip = React.useCallback(() => {
     lastActionRef.current = 'skip'
-    safeCapture('help.welcome_modal.action', {
+    safeCapture(HELP_EVENTS.WELCOME_MODAL_ACTION, {
       surface_key: surfaceKey,
       persona,
       action: 'skip',

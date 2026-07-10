@@ -434,6 +434,93 @@ describe('RelatedArticles', () => {
     await waitFor(() => expect(container.firstChild).toBeNull())
   })
 
+  // ── Exact-keys mode queries `surfaceKey in $keys` ──────────────────────────
+
+  it('queries Sanity by exact surface keys when surfaceKeys is provided', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
+
+    render(
+      <RelatedArticles
+        surfaceKeys={[
+          'designer-portal/pipeline/project-list',
+          'designer-portal/pipeline',
+        ]}
+      />,
+      { wrapper: makeWrapper() },
+    )
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    const [query, params] = mockFetch.mock.calls[0] as [string, Record<string, unknown>]
+
+    expect(query).toMatch(/surfaceKey\s+in\s+\$keys/)
+    expect(query).toMatch(/contentType\s*==\s*"helpArticle"/)
+    expect(query).not.toMatch(/\$prefix/)
+    expect(params.keys).toEqual([
+      'designer-portal/pipeline/project-list',
+      'designer-portal/pipeline',
+    ])
+  })
+
+  // ── Exact-keys mode preserves the caller-supplied order client-side ────────
+
+  it('renders exact-keys results in the caller-supplied order (not Sanity order)', async () => {
+    // Sanity returns article-1, article-2, article-3 (arbitrary order).
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES)
+
+    render(
+      <RelatedArticles
+        // Requested order: article-3, article-1, article-2.
+        surfaceKeys={[
+          'designer-portal',
+          'designer-portal/pipeline/project-list',
+          'designer-portal/pipeline',
+        ]}
+      />,
+      { wrapper: makeWrapper() },
+    )
+
+    const list = await screen.findByRole('list')
+    const links = within(list).getAllByRole('link')
+    expect(links.map((el) => el.textContent)).toEqual([
+      expect.stringContaining('Welcome to Patina'),
+      expect.stringContaining('How the Pipeline works'),
+      expect.stringContaining('Pipeline stages explained'),
+    ])
+  })
+
+  // ── Precedence: articleIds > surfaceKeys > surfaceKeyPrefix ────────────────
+
+  it('prefers surfaceKeys over surfaceKeyPrefix, and articleIds over surfaceKeys', async () => {
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1))
+
+    // surfaceKeys beats surfaceKeyPrefix.
+    const { rerender } = render(
+      <RelatedArticles
+        surfaceKeys={['designer-portal/pipeline/project-list']}
+        surfaceKeyPrefix="designer-portal/pipeline"
+      />,
+      { wrapper: makeWrapper() },
+    )
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    expect((mockFetch.mock.calls[0] as [string])[0]).toMatch(/surfaceKey\s+in\s+\$keys/)
+    expect((mockFetch.mock.calls[0] as [string])[0]).not.toMatch(/\$prefix/)
+
+    vi.clearAllMocks()
+    mockFetch.mockResolvedValue(SAMPLE_ARTICLES.slice(0, 1))
+
+    // articleIds beats surfaceKeys.
+    rerender(
+      <RelatedArticles
+        articleIds={['article-1']}
+        surfaceKeys={['designer-portal/pipeline/project-list']}
+      />,
+    )
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled())
+    const [query] = mockFetch.mock.calls[0] as [string]
+    expect(query).toMatch(/\$ids/)
+    expect(query).not.toMatch(/surfaceKey\s+in\s+\$keys/)
+  })
+
   // ── Does not crash when window.posthog is missing ──────────────────────────
 
   it('does not crash when window.posthog is missing on click', async () => {

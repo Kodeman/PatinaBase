@@ -27,6 +27,7 @@ import { useQuery } from '@tanstack/react-query'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { getSanityClient } from '../../sanityClient'
+import { HELP_EVENTS, safeCapture } from '../../analytics'
 
 // Local cn — same convention as sibling components, keeps the package
 // self-contained for test runs without depending on @patina/design-system.
@@ -35,10 +36,26 @@ const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs))
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface RelatedArticlesProps {
-  /** Article IDs to query directly. Wins over `surfaceKeyPrefix`. */
+  /** Article IDs to query directly. Highest precedence. */
   articleIds?: string[]
+  /**
+   * Exact surface keys to query (`surfaceKey in $keys`), rendered in the order
+   * given (preserved client-side, since GROQ's `in` does not guarantee order).
+   * The FEATURED variant — a curated list — as opposed to `surfaceKeyPrefix`'s
+   * "everything under a parent" mode. Wins over `surfaceKeyPrefix`; loses to
+   * `articleIds`.
+   */
+  surfaceKeys?: string[]
   /** Surface-key prefix to query siblings under the same parent surface. */
   surfaceKeyPrefix?: string
+  /**
+   * The surface the user is clicking FROM, for the `from_surface_key` on the
+   * `help.related_article.clicked` event. Prefix mode derives this from
+   * `surfaceKeyPrefix`, but FEATURED (`surfaceKeys`) + `articleIds` modes have
+   * no prefix — pass this so the click-through funnel isn't logged as
+   * 'unknown' (e.g. the Help Center front page passing its own surface key).
+   */
+  fromSurfaceKey?: string
   /** Maximum number of articles to render. Defaults to 5. */
   max?: number
   /** Optional click handler — fires alongside the analytics event. */
@@ -58,19 +75,8 @@ interface RelatedArticleRow {
   excerpt: string
 }
 
-// ─── PostHog helper — safe capture ────────────────────────────────────────────
-
-type PostHogLike = { capture: (event: string, props?: Record<string, unknown>) => void }
-
-function safeCapture(event: string, props: Record<string, unknown>): void {
-  if (typeof window === 'undefined') return
-  try {
-    const ph = (window as unknown as { posthog?: PostHogLike }).posthog
-    ph?.capture(event, props)
-  } catch {
-    // analytics must never crash the UI
-  }
-}
+// Analytics route through the shared `safeCapture` + `HELP_EVENTS` taxonomy of
+// record (../../analytics) — no local capture path (matches TourController).
 
 // ─── GROQ queries (parameterized — never interpolate caller input) ────────────
 
@@ -95,6 +101,28 @@ const QUERY_BY_IDS = groq`
     && _type == "helpContent"
     && contentType == "helpArticle"
   ] [0...$max] {
+    "_id": _id,
+    surfaceKey,
+    helpArticleContent {
+      title,
+      oneSentenceAnswer
+    },
+    title,
+    oneSentenceAnswer
+  }
+`
+
+/**
+ * Exact-keys mode — fetch articles whose `surfaceKey` is one of $keys. GROQ's
+ * `in` does not guarantee result order, so the caller-supplied order is
+ * re-applied client-side (see `fetchByKeys`). No slice here: FEATURED lists are
+ * small and curated; the component caps to `max` after ordering.
+ */
+const QUERY_BY_KEYS = groq`
+  *[_type == "helpContent"
+    && contentType == "helpArticle"
+    && surfaceKey in $keys
+  ] {
     "_id": _id,
     surfaceKey,
     helpArticleContent {
@@ -181,6 +209,32 @@ async function fetchByIds(ids: string[], max: number): Promise<RelatedArticleRow
   }
 }
 
+async function fetchByKeys(keys: string[], max: number): Promise<RelatedArticleRow[]> {
+  if (keys.length === 0) return []
+  try {
+    const client = getSanityClient()
+    const result = (await client.fetch(QUERY_BY_KEYS, { keys, max })) as unknown
+    if (!Array.isArray(result)) return []
+    const rows = result
+      .map(normaliseRow)
+      .filter((row): row is RelatedArticleRow => row !== null)
+    // Preserve the caller-supplied order; drop keys that returned no doc.
+    const orderOf = new Map(keys.map((key, index) => [key, index]))
+    return rows
+      .slice()
+      .sort(
+        (a, b) =>
+          (orderOf.get(a.surfaceKey) ?? Number.POSITIVE_INFINITY) -
+          (orderOf.get(b.surfaceKey) ?? Number.POSITIVE_INFINITY),
+      )
+  } catch (err) {
+    if (typeof console !== 'undefined') {
+      console.warn('[help-system] RelatedArticles fetchByKeys failed', err)
+    }
+    return []
+  }
+}
+
 async function fetchByPrefix(prefix: string, max: number): Promise<RelatedArticleRow[]> {
   if (!prefix) return []
   try {
@@ -204,27 +258,46 @@ const DEFAULT_MAX = 5
 
 export function RelatedArticles({
   articleIds,
+  surfaceKeys,
   surfaceKeyPrefix,
+  fromSurfaceKey: fromSurfaceKeyProp,
   max = DEFAULT_MAX,
   onArticleClick,
   heading = 'Related articles',
   className,
 }: RelatedArticlesProps) {
-  // Resolve mode: IDs wins over prefix when both are provided.
+  // Resolve mode by precedence: IDs > exact keys > prefix.
   const idsMode = Array.isArray(articleIds) && articleIds.length > 0
-  const prefixMode = !idsMode && typeof surfaceKeyPrefix === 'string' && surfaceKeyPrefix.length > 0
-  const enabled = idsMode || prefixMode
+  const keysMode = !idsMode && Array.isArray(surfaceKeys) && surfaceKeys.length > 0
+  const prefixMode =
+    !idsMode && !keysMode && typeof surfaceKeyPrefix === 'string' && surfaceKeyPrefix.length > 0
+  const enabled = idsMode || keysMode || prefixMode
+  const mode = idsMode ? 'ids' : keysMode ? 'keys' : 'prefix'
 
   // Stable query keys so React Query can cache across renders.
   const idsKey = React.useMemo(
     () => (idsMode ? [...(articleIds ?? [])].sort().join(',') : ''),
     [idsMode, articleIds],
   )
+  // Exact-keys identity — order-sensitive (order is part of the output), so we
+  // do NOT sort it into the cache key.
+  const keysKey = React.useMemo(
+    () => (keysMode ? (surfaceKeys ?? []).join(',') : ''),
+    [keysMode, surfaceKeys],
+  )
 
   const query = useQuery({
-    queryKey: ['help-related-articles', idsMode ? 'ids' : 'prefix', idsKey, surfaceKeyPrefix ?? '', max],
+    queryKey: [
+      'help-related-articles',
+      mode,
+      idsKey,
+      keysKey,
+      surfaceKeyPrefix ?? '',
+      max,
+    ],
     queryFn: () => {
       if (idsMode) return fetchByIds(articleIds!, max)
+      if (keysMode) return fetchByKeys(surfaceKeys!, max)
       if (prefixMode) return fetchByPrefix(surfaceKeyPrefix!, max)
       return Promise.resolve<RelatedArticleRow[]>([])
     },
@@ -267,12 +340,17 @@ export function RelatedArticles({
   // Empty state → render NOTHING (spec §4 / task contract).
   if (articles.length === 0) return null
 
-  const fromSurfaceKey = surfaceKeyPrefix && surfaceKeyPrefix.length > 0
-    ? surfaceKeyPrefix
-    : 'unknown'
+  // from_surface_key precedence: explicit prop (the only signal FEATURED /
+  // articleIds modes have) > prefix mode's own key > 'unknown'.
+  const fromSurfaceKey =
+    fromSurfaceKeyProp && fromSurfaceKeyProp.length > 0
+      ? fromSurfaceKeyProp
+      : surfaceKeyPrefix && surfaceKeyPrefix.length > 0
+        ? surfaceKeyPrefix
+        : 'unknown'
 
   const handleClick = (article: RelatedArticleRow) => {
-    safeCapture('help.related_article.clicked', {
+    safeCapture(HELP_EVENTS.RELATED_ARTICLE_CLICKED, {
       from_surface_key: fromSurfaceKey,
       to_surface_key: article.surfaceKey,
       to_article_id: article._id,

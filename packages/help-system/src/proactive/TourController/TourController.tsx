@@ -14,7 +14,8 @@ import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
 import { useHelpContent } from '../../hooks/useHelpContent'
-import type { CoachmarkContent } from '../../contentTypes'
+import type { CoachmarkContent, Persona } from '../../contentTypes'
+import { HELP_EVENTS, safeCapture } from '../../analytics'
 
 // Local cn() — mirrors the Tooltip pattern; @patina/help-system does not
 // depend on @patina/design-system's built dist for vitest/tsup.
@@ -39,6 +40,14 @@ export interface CoachmarkStep {
   beforeShow?: () => Promise<void> | void
   /** Radix popover side; defaults to 'bottom'. */
   side?: 'top' | 'right' | 'bottom' | 'left'
+  /**
+   * Hard-coded fallback heading for when the Sanity coachmark query resolves
+   * null/empty. Guarantees the tour is NEVER invisible-but-active during CMS
+   * downtime or before content publishes (spec §13.4 + the silent-tour risk).
+   */
+  fallbackHeading?: string
+  /** Hard-coded fallback body — see `fallbackHeading`. */
+  fallbackBody?: string
 }
 
 /**
@@ -55,6 +64,14 @@ export interface TourControllerAPI {
   prev: () => void
   skip: () => void
   complete: () => void
+  /**
+   * Replay a tour the user has already completed or abandoned. Clears the
+   * persisted tour state, bypasses the one-shot idempotency guard for the rest
+   * of this mount, restarts at step 0, and fires `help.tour.replayed` +
+   * `help.tour.started` (with `replay: true`). Wired to the ⌘K "Take the
+   * walkthrough" row and the pinned `/help` replay entry.
+   */
+  restart: () => void
   /** Pre-bound coachmark for the current step. Mounts the inline Popover. */
   CoachmarkSlot: ComponentType
 }
@@ -72,6 +89,24 @@ export interface TourControllerProps {
   onAbandon?: (atStep: number) => void
   /** Resume scenarios — jump to this step on first mount. Defaults to 0. */
   startAt?: number
+  /**
+   * Persona threaded into the per-step coachmark content query so Sanity can
+   * resolve persona-specific copy (spec §7.3 fallback chain). Defaults to 'all'.
+   */
+  persona?: Persona
+  /**
+   * While true, the document-level key handlers (Esc/Enter/arrows) do nothing
+   * and the coachmark popover hides — the tour state is KEPT, not reset. Used
+   * to yield to a foreground surface such as the ⌘K palette (which otherwise
+   * leaks Enter through the tour's document-level handler).
+   */
+  paused?: boolean
+  /**
+   * Extra classes merged onto the inline coachmark popover. `twMerge` means a
+   * later class wins, so a consumer can pass e.g. `shadow-none bg-paper …` to
+   * override the default `shadow-lg bg-primary` paper-vs-chrome styling.
+   */
+  coachmarkClassName?: string
   /** Render-prop child receives the controller API. */
   children: (api: TourControllerAPI) => ReactNode
 }
@@ -91,6 +126,7 @@ export interface TourControllerProps {
 import {
   getTourState,
   setTourState,
+  clearTourState,
   setTourStateBackend,
   _resetTourStateBackendForTests,
   type TourState,
@@ -105,6 +141,11 @@ export function __setTourStateAdapterForTests(next: Partial<TourStateBackend>): 
   setTourStateBackend({
     getTourState: next.getTourState ?? getTourState,
     setTourState: next.setTourState ?? setTourState,
+    // Pass a backend-level clear through so a test that installs a
+    // network-style adapter can assert `restart()` actually drops the record
+    // (not just the localStorage fallback). Undefined when the test omits it —
+    // the module-level clearTourState still wipes localStorage regardless.
+    clearTourState: next.clearTourState,
   })
 }
 
@@ -113,17 +154,8 @@ export function __resetTourStateAdapterForTests(): void {
   _resetTourStateBackendForTests()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Analytics helper — portal-agnostic capture path matching Tooltip / C-stream.
-// ─────────────────────────────────────────────────────────────────────────────
-
-function captureEvent(event: string, props: Record<string, unknown>) {
-  if (typeof window === 'undefined') return
-  const ph = (window as unknown as {
-    posthog?: { capture?: (event: string, props?: Record<string, unknown>) => void }
-  }).posthog
-  ph?.capture?.(event, props)
-}
+// Analytics route through the shared `safeCapture` + `HELP_EVENTS` taxonomy of
+// record (see ../../analytics.ts) — no local capture path.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Reduced-motion detection. Matches the convention used elsewhere in the
@@ -172,8 +204,11 @@ function prefersReducedMotion(): boolean {
  *   //   Sprint 2: the parallel-built primitive will take over the popover
  *   //   surface and we lose the duplicated heading/body/CTA markup here.
  *
- * Analytics (snake_case per Sprint 2 R11 + A7 taxonomy):
+ * Analytics (via the shared HELP_EVENTS taxonomy of record — ../../analytics.ts):
  *   • help.tour.started        on start()       — { tour_key, total_steps }
+ *   • help.tour.started        on restart()     — { tour_key, total_steps, replay: true }
+ *   • help.tour.replayed       on restart()     — { tour_key }
+ *   • help.tour.step_viewed    per step         — { tour_key, step_number, step_surface_key } (covers step 0)
  *   • help.tour.step_advanced  on next()        — { tour_key, step_number, step_surface_key }
  *   • help.tour.completed      on complete()    — { tour_key, duration_ms, steps_viewed }
  *   • help.tour.abandoned      on skip()        — { tour_key, at_step, total_steps }
@@ -191,6 +226,9 @@ export function TourController({
   onComplete,
   onAbandon,
   startAt = 0,
+  persona = 'all',
+  paused = false,
+  coachmarkClassName,
   children,
 }: TourControllerProps) {
   if (steps.length === 0) {
@@ -209,6 +247,10 @@ export function TourController({
     persistedState.completed === true || persistedState.abandoned === true,
   )
 
+  // Replay override — once `restart()` runs, the one-shot idempotency guard is
+  // bypassed for the rest of this mount (spec §4.7 rule 5 / R97 replay entries).
+  const [forceStarted, setForceStarted] = useState<boolean>(false)
+
   // Active state — controlled prop wins. When controlled is undefined we fall
   // back to internal state, which defaults to false (the consumer must call
   // `start()` to kick the tour off) unless the tour was already resolved, in
@@ -216,8 +258,10 @@ export function TourController({
   const [internalActive, setInternalActive] = useState<boolean>(false)
   const isActive = controlledActive ?? internalActive
 
-  // Effective active flag — collapses both signals + idempotency guard.
-  const effectiveActive = isActive && !alreadyResolved
+  // Effective active flag — collapses both signals + idempotency guard. A
+  // replay (`forceStarted`) lifts the resolved guard so completed/abandoned
+  // tours can run again.
+  const effectiveActive = isActive && (!alreadyResolved || forceStarted)
 
   // Step pointer.
   const [currentStep, setCurrentStep] = useState<number>(() =>
@@ -231,12 +275,34 @@ export function TourController({
   // steps_viewed in the completed event).
   const viewedStepsRef = useRef<Set<number>>(new Set())
 
-  // Mark the current step viewed whenever it becomes active.
+  // Highest step index we've fired `step_viewed` for this activation. Reset to
+  // null whenever the tour goes inactive so a replay re-fires from step 0.
+  const lastViewedFiredRef = useRef<number | null>(null)
+
+  // Mark the current step viewed whenever it becomes active, and fire
+  // `help.tour.step_viewed` — which, unlike `step_advanced`, covers step 0.
+  // Forward-only: `prev()` moving back to an earlier step stays analytics-silent
+  // (the tour contract: only advancement is instrumented).
   useEffect(() => {
-    if (effectiveActive) {
-      viewedStepsRef.current.add(currentStep)
+    if (!effectiveActive) {
+      lastViewedFiredRef.current = null
+      return
     }
-  }, [effectiveActive, currentStep])
+    const idx = clampStep(currentStep, steps.length)
+    viewedStepsRef.current.add(idx)
+    const last = lastViewedFiredRef.current
+    if (last === null || idx > last) {
+      lastViewedFiredRef.current = idx
+      const viewedStep = steps[idx]
+      if (viewedStep) {
+        safeCapture(HELP_EVENTS.TOUR_STEP_VIEWED, {
+          tour_key: tourId,
+          step_number: idx,
+          step_surface_key: viewedStep.surfaceKey,
+        })
+      }
+    }
+  }, [effectiveActive, currentStep, steps, tourId])
 
   // Resolve current step config — guard against out-of-range writes.
   const safeIndex = clampStep(currentStep, steps.length)
@@ -286,11 +352,31 @@ export function TourController({
     viewedStepsRef.current = new Set([clampStep(startAt, steps.length)])
     setCurrentStep(clampStep(startAt, steps.length))
     setInternalActive(true)
-    captureEvent('help.tour.started', {
+    safeCapture(HELP_EVENTS.TOUR_STARTED, {
       tour_key: tourId,
       total_steps: steps.length,
     })
   }, [alreadyResolved, startAt, steps.length, tourId])
+
+  const restart = useCallback(() => {
+    // Replay path — clear the persisted result, lift the one-shot guard, and
+    // start over from step 0 (spec §4.7 rule 5). Distinct from `start()`, which
+    // refuses once a tour has resolved.
+    clearTourState(tourId)
+    setForceStarted(true)
+    startedAtRef.current =
+      typeof performance !== 'undefined' ? performance.now() : Date.now()
+    viewedStepsRef.current = new Set([0])
+    lastViewedFiredRef.current = null
+    setCurrentStep(0)
+    setInternalActive(true)
+    safeCapture(HELP_EVENTS.TOUR_REPLAYED, { tour_key: tourId })
+    safeCapture(HELP_EVENTS.TOUR_STARTED, {
+      tour_key: tourId,
+      total_steps: steps.length,
+      replay: true,
+    })
+  }, [steps.length, tourId])
 
   const next = useCallback(() => {
     setCurrentStep((prev) => {
@@ -299,7 +385,7 @@ export function TourController({
       // step is a no-op (spec doesn't require an event for it).
       if (nextIndex !== prev) {
         const advancedStep = steps[nextIndex]!
-        captureEvent('help.tour.step_advanced', {
+        safeCapture(HELP_EVENTS.TOUR_STEP_ADVANCED, {
           tour_key: tourId,
           step_number: nextIndex,
           step_surface_key: advancedStep.surfaceKey,
@@ -316,7 +402,7 @@ export function TourController({
 
   const skip = useCallback(() => {
     const atStep = currentStep
-    captureEvent('help.tour.abandoned', {
+    safeCapture(HELP_EVENTS.TOUR_ABANDONED, {
       tour_key: tourId,
       at_step: atStep,
       total_steps: steps.length,
@@ -337,7 +423,7 @@ export function TourController({
       startedAtRef.current !== null
         ? Math.max(0, Math.round(now - startedAtRef.current))
         : 0
-    captureEvent('help.tour.completed', {
+    safeCapture(HELP_EVENTS.TOUR_COMPLETED, {
       tour_key: tourId,
       duration_ms: durationMs,
       steps_viewed: viewedStepsRef.current.size,
@@ -378,7 +464,10 @@ export function TourController({
           step={step}
           stepIndex={safeIndex}
           totalSteps={steps.length}
-          isOpen={effectiveActive && readyForStep === safeIndex}
+          // `paused` hides the popover while keeping tour state (spec §4.7).
+          isOpen={effectiveActive && !paused && readyForStep === safeIndex}
+          persona={persona}
+          coachmarkClassName={coachmarkClassName}
           onNext={next}
           onSkip={skip}
           onComplete={complete}
@@ -391,6 +480,9 @@ export function TourController({
     safeIndex,
     steps.length,
     effectiveActive,
+    paused,
+    persona,
+    coachmarkClassName,
     readyForStep,
     next,
     skip,
@@ -402,7 +494,9 @@ export function TourController({
   // depend on which element has focus — the popover may grab focus, but the
   // page chrome behind it should also be responsive.
   useEffect(() => {
-    if (!effectiveActive) return
+    // While paused (e.g. ⌘K palette open), the tour yields keyboard control so
+    // Enter/Escape don't leak through to advance or dismiss it.
+    if (!effectiveActive || paused) return
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
@@ -419,7 +513,7 @@ export function TourController({
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [effectiveActive, safeIndex, steps.length, complete, next, skip])
+  }, [effectiveActive, paused, safeIndex, steps.length, complete, next, skip])
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -432,6 +526,7 @@ export function TourController({
     prev,
     skip,
     complete,
+    restart,
     CoachmarkSlot,
   }
 
@@ -458,6 +553,7 @@ function makeEmptyAPI(): TourControllerAPI {
     prev: noop,
     skip: noop,
     complete: noop,
+    restart: noop,
     CoachmarkSlot: () => null,
   }
 }
@@ -474,6 +570,8 @@ interface CoachmarkSlotInnerProps {
   stepIndex: number
   totalSteps: number
   isOpen: boolean
+  persona?: Persona
+  coachmarkClassName?: string
   onNext: () => void
   onSkip: () => void
   onComplete: () => void
@@ -485,12 +583,14 @@ function CoachmarkSlotInner({
   stepIndex,
   totalSteps,
   isOpen,
+  persona = 'all',
+  coachmarkClassName,
   onNext,
   onSkip,
   onComplete,
 }: CoachmarkSlotInnerProps) {
-  // Pull CMS content for this step's surfaceKey.
-  const { data } = useHelpContent(step.surfaceKey, 'coachmark')
+  // Pull CMS content for this step's surfaceKey, resolving persona-specific copy.
+  const { data } = useHelpContent(step.surfaceKey, 'coachmark', persona)
 
   // Anchor resolution: prefer the explicit ref, else querySelector. The
   // Radix Popover needs a Trigger element — we render an invisible
@@ -500,17 +600,19 @@ function CoachmarkSlotInner({
   const anchorEl = useResolvedAnchor(step)
   const reducedMotion = useReducedMotionFlag()
 
-  // No CMS content yet → render nothing. Spec §13.4 graceful degradation:
-  // proactive guidance with no copy is silently skipped, not a crash.
-  // We still render the anchor wrapper so subsequent steps that DO have
-  // content work — the popover just stays closed.
+  // Resolve copy: CMS wins; per-step hard-coded fallbacks cover Sanity downtime
+  // and pre-publish so the tour can NEVER be invisible-but-active (spec §13.4 +
+  // the silent-tour risk). An empty-string CMS field is treated as a miss.
   const cm = data as CoachmarkContent | null
-  const heading = cm?.heading ?? null
-  const body = cm?.body ?? null
+  const cmHeading =
+    typeof cm?.heading === 'string' && cm.heading.length > 0 ? cm.heading : null
+  const cmBody = typeof cm?.body === 'string' && cm.body.length > 0 ? cm.body : null
+  const heading = cmHeading ?? step.fallbackHeading ?? null
+  const body = cmBody ?? step.fallbackBody ?? null
   const ctaLabel = cm?.ctaLabel ?? null
 
-  // The popover opens iff: tour says we're ready AND we have either a CMS
-  // hit OR were given an anchor (popover content is a no-op without one).
+  // The popover opens iff: tour says we're ready AND we have copy to show
+  // (from the CMS or the step fallbacks).
   const shouldShow = isOpen && Boolean(heading || body)
 
   const isLastStep = stepIndex === totalSteps - 1
@@ -536,6 +638,8 @@ function CoachmarkSlotInner({
               'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95',
             !reducedMotion &&
               'motion-safe:data-[state=closed]:animate-out motion-safe:data-[state=closed]:fade-out-0 motion-safe:data-[state=closed]:zoom-out-95',
+            // Consumer override — twMerge means these win (e.g. shadow-none, paper bg).
+            coachmarkClassName,
           )}
           role="dialog"
           aria-labelledby={`tour-${tourId}-step-${stepIndex}-heading`}
@@ -589,18 +693,78 @@ function CoachmarkSlotInner({
 
 function useResolvedAnchor(step: CoachmarkStep): HTMLElement | null {
   const [el, setEl] = useState<HTMLElement | null>(null)
+  const anchorRef = step.anchorRef
+  const anchorSelector = step.anchorSelector
   useEffect(() => {
-    if (step.anchorRef?.current) {
-      setEl(step.anchorRef.current)
+    // Immediate ref path — wins over the selector.
+    if (anchorRef?.current) {
+      setEl(anchorRef.current)
       return
     }
-    if (step.anchorSelector && typeof document !== 'undefined') {
-      const found = document.querySelector(step.anchorSelector)
-      setEl(found instanceof HTMLElement ? found : null)
+    if (!anchorSelector || typeof document === 'undefined') {
+      setEl(null)
       return
     }
+
+    let settled = false
+    const attempt = (): boolean => {
+      if (settled) return true
+      // A late-arriving ref still wins if it appeared since mount.
+      if (anchorRef?.current) {
+        settled = true
+        setEl(anchorRef.current)
+        return true
+      }
+      const found = document.querySelector(anchorSelector)
+      if (found instanceof HTMLElement) {
+        settled = true
+        setEl(found)
+        return true
+      }
+      return false
+    }
+
+    // Until it resolves, leave the anchor null → the popover falls back to
+    // viewport-centered rather than positioning against a stale/absent node.
     setEl(null)
-  }, [step.anchorRef, step.anchorSelector])
+    if (attempt()) return
+
+    // Re-query hardening: the desk populates asynchronously, so a step's anchor
+    // may not exist on first paint. Watch the DOM (MutationObserver) and poll on
+    // a 250ms interval, both capped at ~5s, then give up (viewport fallback
+    // holds, and a step change re-runs this effect anyway).
+    let observer: MutationObserver | null = null
+    let intervalId: ReturnType<typeof setInterval> | null = null
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+    const teardown = () => {
+      if (observer) {
+        observer.disconnect()
+        observer = null
+      }
+      if (intervalId !== null) {
+        clearInterval(intervalId)
+        intervalId = null
+      }
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+    }
+
+    const onChange = () => {
+      if (attempt()) teardown()
+    }
+
+    if (typeof MutationObserver !== 'undefined' && document.body) {
+      observer = new MutationObserver(onChange)
+      observer.observe(document.body, { childList: true, subtree: true })
+    }
+    intervalId = setInterval(onChange, 250)
+    timeoutId = setTimeout(teardown, 5000)
+
+    return teardown
+  }, [anchorRef, anchorSelector])
   return el
 }
 

@@ -67,6 +67,18 @@ export const TOUR_STATE_STORAGE_PREFIX = 'help-system.tour.'
 export interface TourStateBackend {
   getTourState: (tourKey: string) => TourState
   setTourState: (tourKey: string, patch: TourState) => void
+  /**
+   * Hard-clear this backend's record for `tourKey`. OPTIONAL — the default
+   * localStorage backend needs no implementation (the module-level
+   * `clearTourState` wipes the localStorage key directly), so only
+   * network-backed backends (Supabase) supply it. When present, the
+   * module-level `clearTourState` dispatches here so a replay actually drops
+   * the completed/abandoned record from the AUTHORITATIVE store — not just the
+   * localStorage fallback. Without it, a signed-in user's persisted result
+   * survives `restart()` and the replay silently re-resolves on the next
+   * reload/remount.
+   */
+  clearTourState?: (tourKey: string) => void
 }
 
 /** Build the full storage key for a given tour. */
@@ -156,19 +168,43 @@ export function setTourState(tourKey: string, patch: TourState): void {
 }
 
 /**
- * Hard-clear persisted state for a tour. Intended for the "Show me around
- * again" Profile affordance (spec §4.7 rule 5), for tests, and for the
- * localStorage → Supabase migration sweep that runs on first authenticated
- * mount. The local key is always cleared (the migration sweep wants to drop
- * its source even when the active backend is Supabase). Never throws.
+ * Clear ONLY the localStorage record for a tour. This is the localStorage-only
+ * clear used by the localStorage → Supabase migration sweep, which wants to
+ * drop its source key WITHOUT touching the (already-written) Supabase record.
+ * Never throws.
  */
-export function clearTourState(tourKey: string): void {
+export function clearLocalTourState(tourKey: string): void {
   if (hasLocalStorage()) {
     try {
       window.localStorage.removeItem(storageKey(tourKey))
     } catch {
       // Ignore — see setTourState.
     }
+  }
+}
+
+/**
+ * Hard-clear persisted state for a tour across BOTH the localStorage fallback
+ * AND the active backend. Intended for the "Show me around again" replay
+ * affordance (spec §4.7 rule 5) and for tests. After this runs, `getTourState`
+ * returns `{}` under any installed backend, so a replay is not silently
+ * re-resolved on the next mount/reload.
+ *
+ * The localStorage key is always cleared. When a network-backed backend
+ * (Supabase — installed for signed-in users via `setTourStateBackend`)
+ * supplies a `clearTourState`, the record is also dropped there and a
+ * write-through scheduled. Without this dispatch a signed-in designer's
+ * completed/abandoned record survived `restart()`, so a mid-replay reload
+ * re-read `{completed:true}` from Supabase and the replay vanished. Never
+ * throws.
+ */
+export function clearTourState(tourKey: string): void {
+  clearLocalTourState(tourKey)
+  try {
+    activeBackend.clearTourState?.(tourKey)
+  } catch {
+    // A backend clear failure must not crash the host — same posture as
+    // setTourState. The localStorage key is already gone.
   }
 }
 

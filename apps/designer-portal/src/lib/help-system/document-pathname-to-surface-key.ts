@@ -10,10 +10,14 @@
  * DOCUMENT_SURFACE_KEYS), so a leaf's declaration never fights the fallback.
  *
  * Mapping (first path segment of the (document) group — dynamic + deeper
- * segments collapse to the section, matching the panel's parent-prefix match):
+ * segments collapse to the section, matching the panel's parent-prefix match;
+ * /library/[id] is the one deliberate exception — the Piece is its own
+ * surface, and its key is still under the library prefix so the panel's
+ * ancestor-or-equal match keeps showing Library copy there too):
  *   /desk                  → …/document/desk
  *   /doc/[id]              → …/document/doc
- *   /library, /library/[id]→ …/document/library
+ *   /library               → …/document/library
+ *   /library/[id]          → …/document/library/piece
  *   /people                → …/document/people
  *   /drafting/[id]         → …/document/drafting
  *   /compose               → …/document/compose
@@ -24,7 +28,8 @@ import { DOCUMENT_SURFACE_KEYS } from './document-surface-keys';
 export function documentPathnameToSurfaceKey(pathname: string): string {
   // Drop any query/hash, trailing slashes, then take the first path segment.
   const clean = (pathname || '/').replace(/[?#].*$/, '').replace(/\/+$/, '') || '/';
-  const first = clean.replace(/^\/+/, '').split('/')[0];
+  const segments = clean.replace(/^\/+/, '').split('/');
+  const first = segments[0];
 
   switch (first) {
     case 'desk':
@@ -32,7 +37,10 @@ export function documentPathnameToSurfaceKey(pathname: string): string {
     case 'doc':
       return DOCUMENT_SURFACE_KEYS.doc;
     case 'library':
-      return DOCUMENT_SURFACE_KEYS.library;
+      // /library/[id] is the Piece — its own surface (still library-prefixed).
+      return segments[1]
+        ? DOCUMENT_SURFACE_KEYS.libraryPiece
+        : DOCUMENT_SURFACE_KEYS.library;
     case 'people':
       return DOCUMENT_SURFACE_KEYS.people;
     case 'drafting':

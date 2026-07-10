@@ -66,6 +66,7 @@ interface InMemoryAdapter {
   store: Map<string, TourState>
   getTourState: (k: string) => TourState
   setTourState: (k: string, p: TourState) => void
+  clearTourState: (k: string) => void
 }
 
 function makeInMemoryAdapter(seed: Record<string, TourState> = {}): InMemoryAdapter {
@@ -76,6 +77,12 @@ function makeInMemoryAdapter(seed: Record<string, TourState> = {}): InMemoryAdap
     setTourState: (k, p) => {
       const prev = store.get(k) ?? {}
       store.set(k, { ...prev, ...p })
+    },
+    // Network-style backend clear — mirrors the Supabase adapter's
+    // `clearTourState`, so a test can assert `restart()` drops the record from
+    // the authoritative store, not just the localStorage fallback.
+    clearTourState: (k) => {
+      store.delete(k)
     },
   }
 }
@@ -113,6 +120,7 @@ describe('<TourController />', () => {
     __setTourStateAdapterForTests({
       getTourState: adapter.getTourState,
       setTourState: adapter.setTourState,
+      clearTourState: adapter.clearTourState,
     })
     // Default CMS: every coachmark resolves to the fixture so the popover is
     // free to open. Individual tests override per-call when they need to.
@@ -806,6 +814,280 @@ describe('<TourController />', () => {
     expect(() => act(() => api!.start())).not.toThrow()
     expect(() => act(() => api!.next())).not.toThrow()
     expect(() => act(() => api!.skip())).not.toThrow()
+  })
+
+  // ── 16. restart() bypasses the one-shot guard (replay) ───────────────────
+
+  it('restart() replays a completed tour, bypassing the resolved guard', async () => {
+    adapter.store.set('walkthrough', {
+      completed: true,
+      completedAt: '2026-07-01T00:00:00Z',
+    })
+
+    const { Wrapper } = makeWrapper()
+    let api: TourControllerAPI | null = null
+    render(
+      <Wrapper>
+        <TourController tourId="walkthrough" steps={STEPS}>
+          {(a) => {
+            api = a
+            return <div data-testid="active">{a.isActive ? 'on' : 'off'}</div>
+          }}
+        </TourController>
+      </Wrapper>,
+    )
+
+    // Resolved tour does not auto-start and start() is a no-op.
+    expect(screen.getByTestId('active')).toHaveTextContent('off')
+    act(() => api!.start())
+    await flushQueries()
+    expect(screen.getByTestId('active')).toHaveTextContent('off')
+
+    captureSpy.mockClear()
+    act(() => api!.restart())
+    await flushQueries()
+
+    // Replay activates despite the persisted completion.
+    expect(screen.getByTestId('active')).toHaveTextContent('on')
+    expect(api!.currentStep).toBe(0)
+    expect(captureSpy).toHaveBeenCalledWith('help.tour.replayed', {
+      tour_key: 'walkthrough',
+    })
+    expect(captureSpy).toHaveBeenCalledWith('help.tour.started', {
+      tour_key: 'walkthrough',
+      total_steps: 3,
+      replay: true,
+    })
+
+    // restart() must clear the AUTHORITATIVE backend record — not just the
+    // localStorage fallback. Without a backend-level clear, the {completed:true}
+    // record survives and a mid-replay reload re-resolves the tour, silently
+    // discarding the replay (the major review finding on this branch).
+    expect(adapter.store.has('walkthrough')).toBe(false)
+  })
+
+  // ── 16b. restart() clears the backend so a remount does NOT re-resolve ─────
+
+  it('restart() clears backend state so a remount mid-replay does not re-resolve', async () => {
+    adapter.store.set('walkthrough', {
+      completed: true,
+      completedAt: '2026-07-01T00:00:00Z',
+    })
+
+    const { Wrapper } = makeWrapper()
+    let api: TourControllerAPI | null = null
+    const { unmount } = render(
+      <Wrapper>
+        <TourController tourId="walkthrough" steps={STEPS}>
+          {(a) => {
+            api = a
+            return <div data-testid="active">{a.isActive ? 'on' : 'off'}</div>
+          }}
+        </TourController>
+      </Wrapper>,
+    )
+
+    act(() => api!.restart())
+    await flushQueries()
+    expect(screen.getByTestId('active')).toHaveTextContent('on')
+
+    // Simulate a reload/remount partway through the replay: the fresh mount
+    // reads the backend in its lazy initializer. Because restart() cleared the
+    // record, alreadyResolved is false — so start() can drive the tour again
+    // rather than the mount being wedged "resolved" forever.
+    unmount()
+
+    let api2: TourControllerAPI | null = null
+    render(
+      <Wrapper>
+        <TourController tourId="walkthrough" steps={STEPS}>
+          {(a) => {
+            api2 = a
+            return <div data-testid="active">{a.isActive ? 'on' : 'off'}</div>
+          }}
+        </TourController>
+      </Wrapper>,
+    )
+
+    // A completed tour that was NOT cleared would ignore start() (one-shot
+    // guard). Since restart() cleared it, start() activates.
+    act(() => api2!.start())
+    await flushQueries()
+    expect(screen.getByTestId('active')).toHaveTextContent('on')
+  })
+
+  // ── 17. persona is threaded into the coachmark content query ──────────────
+
+  it('threads the persona prop into the coachmark content query', async () => {
+    const { Wrapper } = makeWrapper()
+    let api: TourControllerAPI | null = null
+    render(
+      <Wrapper>
+        <TourController tourId="walkthrough" steps={STEPS} persona="designer">
+          {(a) => {
+            api = a
+            return <a.CoachmarkSlot />
+          }}
+        </TourController>
+      </Wrapper>,
+    )
+
+    act(() => api!.start())
+    await flushQueries()
+
+    // useHelpContent issues the exact-match query with p = the persona first.
+    const personaCall = mockFetch.mock.calls.find(
+      ([, params]) => (params as Record<string, unknown>)?.p === 'designer',
+    )
+    expect(personaCall).toBeDefined()
+    const [, params] = personaCall as [string, Record<string, unknown>]
+    expect(params.ct).toBe('coachmark')
+    expect(params.p).toBe('designer')
+  })
+
+  // ── 18. paused suspends key handlers + hides the popover (keeps state) ─────
+
+  it('paused suspends Enter/Escape and hides the popover without losing state', async () => {
+    const user = userEvent.setup()
+    const { Wrapper } = makeWrapper()
+    let api: TourControllerAPI | null = null
+    render(
+      <Wrapper>
+        <TourController tourId="walkthrough" steps={STEPS} paused>
+          {(a) => {
+            api = a
+            return <a.CoachmarkSlot />
+          }}
+        </TourController>
+      </Wrapper>,
+    )
+
+    act(() => api!.start())
+    await flushQueries()
+    captureSpy.mockClear()
+
+    // Popover is hidden while paused, but the tour is still active on step 0.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(api!.isActive).toBe(true)
+    expect(api!.currentStep).toBe(0)
+
+    // Enter/Escape are inert while paused.
+    await user.keyboard('{Enter}')
+    await flushQueries()
+    expect(api!.currentStep).toBe(0)
+    expect(
+      captureSpy.mock.calls.some(([e]) => e === 'help.tour.step_advanced'),
+    ).toBe(false)
+
+    await user.keyboard('{Escape}')
+    await flushQueries()
+    expect(api!.isActive).toBe(true)
+    expect(adapter.store.get('walkthrough')?.abandoned).toBeUndefined()
+  })
+
+  // ── 19. per-step fallback copy renders when the CMS resolves null ─────────
+
+  it('renders the per-step fallback heading/body when Sanity returns null', async () => {
+    // Every fallback query in the chain misses.
+    mockFetch.mockResolvedValue(null)
+
+    const stepsWithFallback: CoachmarkStep[] = [
+      {
+        surfaceKey: 'desk-walkthrough/step-1',
+        fallbackHeading: 'This is your Desk',
+        fallbackBody: 'Only what needs your hand lands here.',
+      },
+    ]
+
+    const { Wrapper } = makeWrapper()
+    let api: TourControllerAPI | null = null
+    render(
+      <Wrapper>
+        <TourController tourId="fallback-tour" steps={stepsWithFallback}>
+          {(a) => {
+            api = a
+            return <a.CoachmarkSlot />
+          }}
+        </TourController>
+      </Wrapper>,
+    )
+
+    act(() => api!.start())
+    await flushQueries()
+
+    // The tour is never invisible-but-active: the popover renders the fallbacks.
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('This is your Desk')).toBeInTheDocument()
+    expect(
+      screen.getByText('Only what needs your hand lands here.'),
+    ).toBeInTheDocument()
+  })
+
+  // ── 20. step_viewed fires per step, including step 0 ──────────────────────
+
+  it('fires help.tour.step_viewed for step 0 and on forward advance', async () => {
+    const { Wrapper } = makeWrapper()
+    let api: TourControllerAPI | null = null
+    render(
+      <Wrapper>
+        <TourController tourId="walkthrough" steps={STEPS}>
+          {(a) => {
+            api = a
+            return <div data-testid="cur">{a.currentStep}</div>
+          }}
+        </TourController>
+      </Wrapper>,
+    )
+
+    act(() => api!.start())
+    await flushQueries()
+
+    // step 0 view is covered (step_advanced would miss it).
+    expect(captureSpy).toHaveBeenCalledWith('help.tour.step_viewed', {
+      tour_key: 'walkthrough',
+      step_number: 0,
+      step_surface_key: STEPS[0]!.surfaceKey,
+    })
+
+    captureSpy.mockClear()
+    act(() => api!.next())
+    await flushQueries()
+
+    expect(captureSpy).toHaveBeenCalledWith('help.tour.step_viewed', {
+      tour_key: 'walkthrough',
+      step_number: 1,
+      step_surface_key: STEPS[1]!.surfaceKey,
+    })
+  })
+
+  // ── 21. coachmarkClassName merges onto the popover (override wins) ─────────
+
+  it('merges coachmarkClassName onto the popover so overrides win', async () => {
+    const { Wrapper } = makeWrapper()
+    let api: TourControllerAPI | null = null
+    render(
+      <Wrapper>
+        <TourController
+          tourId="walkthrough"
+          steps={STEPS}
+          coachmarkClassName="shadow-none bg-paper"
+        >
+          {(a) => {
+            api = a
+            return <a.CoachmarkSlot />
+          }}
+        </TourController>
+      </Wrapper>,
+    )
+
+    act(() => api!.start())
+    await flushQueries()
+
+    const dialog = await screen.findByRole('dialog')
+    // twMerge resolves the conflict in favor of the override.
+    expect(dialog.className).toMatch(/shadow-none/)
+    expect(dialog.className).toMatch(/bg-paper/)
+    expect(dialog.className).not.toMatch(/shadow-lg/)
   })
 })
 

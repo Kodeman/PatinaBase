@@ -171,6 +171,37 @@ describe('createSupabaseHelpStateBackends', () => {
     expect(backends.tourBackend.getTourState('x').completed).toBe(true)
     expect(backends.tourBackend.getTourState('y').abandoned).toBe(true)
   })
+
+  it('clearTourState drops the record + writes the cleared blob through, leaving siblings', async () => {
+    const { client, lastWrite } = makeStubClient({
+      tours: { walk: { completed: true }, keep: { abandoned: true } },
+    })
+    const backends = createSupabaseHelpStateBackends(client, 'user-1')
+    await backends.hydrate()
+    expect(backends.tourBackend.getTourState('walk')).toEqual({ completed: true })
+
+    // This is what TourController.restart() dispatches through for a signed-in
+    // user — the record must leave BOTH the in-memory cache and Supabase.
+    backends.tourBackend.clearTourState?.('walk')
+    await backends.flush()
+
+    expect(backends.tourBackend.getTourState('walk')).toEqual({})
+    expect(lastWrite.current?.tours?.walk).toBeUndefined()
+    // Sibling tour is untouched.
+    expect(lastWrite.current?.tours?.keep).toEqual({ abandoned: true })
+    expect(backends.tourBackend.getTourState('keep')).toEqual({ abandoned: true })
+  })
+
+  it('clearTourState on an absent record schedules no write', async () => {
+    const { client, lastWrite } = makeStubClient({})
+    const backends = createSupabaseHelpStateBackends(client, 'user-1')
+    await backends.hydrate()
+    // hydrate only reads — no write yet.
+    expect(lastWrite.current).toBeNull()
+    backends.tourBackend.clearTourState?.('nope')
+    await backends.flush()
+    expect(lastWrite.current).toBeNull()
+  })
 })
 
 describe('migrateLocalToSupabase', () => {

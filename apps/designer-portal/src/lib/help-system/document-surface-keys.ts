@@ -19,6 +19,31 @@ export const DOCUMENT_SURFACE_KEYS = {
   people:   'designer-portal/document/people',
   drafting: 'designer-portal/document/drafting',
   compose:  'designer-portal/document/compose',
+  // ─── Desk-era additions (help-desk Wave 0) — mirror of the canonical
+  // `Document.*` desk-era block in packages/help-system/src/surfaceKeys.ts.
+  // The ledger keys are set by the sheet-open hook (use-sheet-surface-key.ts,
+  // sheets don't change the pathname); the authoring/doorway keys (margin,
+  // commandBar, coordination, contents) are passed explicitly by their `?`
+  // doorways. surface-key-parity.test.ts pins every value against the
+  // canonical registry.
+  orders:          'designer-portal/document/orders',
+  accounts:        'designer-portal/document/accounts',
+  hours:           'designer-portal/document/hours',
+  thePost:         'designer-portal/document/the-post',
+  ordersWeek:      'designer-portal/document/orders/week',
+  ordersReceiving: 'designer-portal/document/orders/receiving',
+  ordersVendors:   'designer-portal/document/orders/vendors',
+  margin:          'designer-portal/document/margin',
+  commandBar:      'designer-portal/document/command-bar',
+  coordination:    'designer-portal/document/coordination',
+  contents:        'designer-portal/document/contents',
+  // The (document)-era welcome modal — distinct from the legacy
+  // `designer-portal/welcome`.
+  welcome:         'designer-portal/document/welcome',
+  // /library/[id] (the Piece), a person party open, the Desk field rollup.
+  libraryPiece:    'designer-portal/document/library/piece',
+  peoplePerson:    'designer-portal/document/people/person',
+  deskField:       'designer-portal/document/desk/field',
 } as const;
 
 export type DocumentSurfaceKey =

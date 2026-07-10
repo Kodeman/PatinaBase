@@ -294,6 +294,22 @@ export const SurfaceKeys = {
         Step4ProductsCapture:'designer-portal/tours/first-project-walkthrough/step-4-products-capture',
         Step5Profile:        'designer-portal/tours/first-project-walkthrough/step-5-profile',
       },
+      /**
+       * The Desk Walkthrough — the desk-first intro tour (R97, an R94 canon
+       * amendment). Six coachmark steps that never leave `/desk` (a step routing
+       * into `/doc/` would auto-start the R4 timer, which must never lie). The
+       * `first-project-walkthrough` keys above are ORPHANED post-flip — never
+       * reuse them. Step slugs are the canonical walkthrough script's.
+       */
+      DeskWalkthrough: {
+        Root:             'designer-portal/tours/desk-walkthrough',
+        Step1TheDesk:     'designer-portal/tours/desk-walkthrough/step-1-the-desk',
+        Step2TheFolder:   'designer-portal/tours/desk-walkthrough/step-2-the-folder',
+        Step3TheStudio:   'designer-portal/tours/desk-walkthrough/step-3-the-studio',
+        Step4TheDrawer:   'designer-portal/tours/desk-walkthrough/step-4-the-drawer',
+        Step5FindAnything:'designer-portal/tours/desk-walkthrough/step-5-find-anything',
+        Step6Begin:       'designer-portal/tours/desk-walkthrough/step-6-begin',
+      },
     },
     // ─── Clients (F1.6 — Stream F.1.6 in Sprint 2) ────────────────────────────
     //
@@ -583,6 +599,36 @@ export const SurfaceKeys = {
       People:   'designer-portal/document/people',
       Drafting: 'designer-portal/document/drafting',
       Compose:  'designer-portal/document/compose',
+      // ─── Desk-era additions (help-desk Wave 0 · R97 The Walkthrough) ─────────
+      //
+      // Live-context keys set as the user moves through the Document world. The
+      // ledger surfaces (orders/accounts/hours/the-post) are opened via DocSheet
+      // overlays that don't change the pathname, so a dedicated sheet-open hook
+      // sets these keys (T0b/T1b). The authoring/doorway keys (margin, command-bar,
+      // coordination, contents) are passed explicitly by their `?` doorways.
+      //
+      // Panel-visibility rule (verified in the ContextualHelpPanel GROQ): the
+      // panel shows docs whose key is an ancestor-or-equal of the current key —
+      // so the granular keys below are purely additive and safe to author copy at.
+      Orders:          'designer-portal/document/orders',
+      Accounts:        'designer-portal/document/accounts',
+      Hours:           'designer-portal/document/hours',
+      ThePost:         'designer-portal/document/the-post',
+      OrdersWeek:      'designer-portal/document/orders/week',
+      OrdersReceiving: 'designer-portal/document/orders/receiving',
+      OrdersVendors:   'designer-portal/document/orders/vendors',
+      Margin:          'designer-portal/document/margin',
+      CommandBar:      'designer-portal/document/command-bar',
+      Coordination:    'designer-portal/document/coordination',
+      Contents:        'designer-portal/document/contents',
+      // Welcome modal for the Desk Walkthrough (persona designer). Note this is
+      // the (document)-era welcome, distinct from the legacy `designer-portal/welcome`.
+      Welcome:         'designer-portal/document/welcome',
+      // /library/[id] resolver (the Piece) + ?person= open (a person party) +
+      // the field rollup on the Desk.
+      LibraryPiece:    'designer-portal/document/library/piece',
+      PeoplePerson:    'designer-portal/document/people/person',
+      DeskField:       'designer-portal/document/desk/field',
     },
   },
   /**
@@ -838,6 +884,42 @@ export const SurfaceKeys = {
         // A thread is open but has no messages yet.
         NoMessages:      'client-portal/messages/empty/no-messages',
       },
+    },
+    // ─── Light client-portal pass (help-desk Wave 0) ───────────────────────────
+    //
+    // The money + coordination surfaces a homeowner actually reads: the proposal
+    // they read and sign, the decisions they weigh in on, the invoices they pay,
+    // the Pulse of their project, the documents shelf, and the budget view.
+    // Consumer persona — the CMS-side variants carry the hospitality voice; the
+    // keys themselves are voice-agnostic. Registered here BEFORE any authoring so
+    // the accuracy reviewer's key-existence check passes.
+    Proposals: {
+      // Single-step FeatureAnnouncementCoachmark on the proposal view (built but
+      // never wired — exactly this use). Persona consumer.
+      Welcome: 'client-portal/proposals/welcome',
+      Detail: {
+        Intro: 'client-portal/proposals/detail/intro',
+        Sign:  'client-portal/proposals/detail/sign',
+      },
+    },
+    Decisions: {
+      ListIntro: 'client-portal/decisions/list-intro',
+      Empty: {
+        // Nothing awaiting the homeowner's input.
+        None: 'client-portal/decisions/empty/none',
+      },
+    },
+    Invoices: {
+      ListIntro: 'client-portal/invoices/list-intro',
+    },
+    Pulse: {
+      Intro: 'client-portal/pulse/intro',
+    },
+    Documents: {
+      ListIntro: 'client-portal/documents/list-intro',
+    },
+    Budget: {
+      Intro: 'client-portal/budget/intro',
     },
   },
   /**
