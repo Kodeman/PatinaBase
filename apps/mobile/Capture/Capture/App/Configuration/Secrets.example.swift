@@ -8,7 +8,7 @@
 import Foundation
 
 enum Secrets {
-    /// Supabase anon (publishable) key for https://api.patina.cloud
+    /// Supabase anon (publishable) key for Supabase Cloud "Strata"
     static let supabaseAnonKey = "REPLACE_WITH_SUPABASE_ANON_KEY"
 
     /// PostHog project API key (Phase 1b analytics). Leave `nil` to keep analytics

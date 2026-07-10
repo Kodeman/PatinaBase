@@ -7,11 +7,12 @@
 import Foundation
 
 public enum AppConfiguration {
-    /// Shared backend. Defaults to production; overridable for local-stack
-    /// testing via `-CaptureSupabaseURL <url>`.
+    /// Shared backend. Defaults to Supabase Cloud "Strata" (project ref
+    /// bkvcixdmuyejfzcijpdg); overridable for local-stack testing via
+    /// `-CaptureSupabaseURL <url>`.
     public static var supabaseURL: URL {
         if let raw = launchArgValue("-CaptureSupabaseURL"), let url = URL(string: raw) { return url }
-        return URL(string: "https://api.patina.cloud")!
+        return URL(string: "https://bkvcixdmuyejfzcijpdg.supabase.co")!
     }
 
     /// Anon (publishable) key. From `Secrets.swift` (gitignored) by default;
