@@ -285,6 +285,14 @@ struct ContentView: View {
         case .proposalDetail(let proposalId):
             ProposalDetailView(proposalId: proposalId)
                 .toolbar(.hidden, for: .navigationBar)
+
+        case .invoiceList:
+            InvoiceListView()
+                .toolbar(.hidden, for: .navigationBar)
+
+        case .invoiceDetail(let invoiceId):
+            InvoiceDetailView(invoiceId: invoiceId)
+                .toolbar(.hidden, for: .navigationBar)
         }
     }
 }

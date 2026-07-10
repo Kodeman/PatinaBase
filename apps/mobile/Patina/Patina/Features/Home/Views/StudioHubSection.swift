@@ -77,6 +77,17 @@ struct StudioHubSection: View {
                 ))
                 hairline
                 row(StudioRow(
+                    title: "Invoices",
+                    meta: badges.payableInvoiceCount > 0
+                        ? "\(badges.payableInvoiceCount) to pay"
+                        : "Nothing due",
+                    guestMeta: "Sign in to view invoices",
+                    badge: badges.payableInvoiceCount,
+                    route: .invoiceList,
+                    hint: "Opens your invoices."
+                ))
+                hairline
+                row(StudioRow(
                     title: "Messages",
                     meta: badges.unreadMessageCount > 0
                         ? "\(badges.unreadMessageCount) unread"

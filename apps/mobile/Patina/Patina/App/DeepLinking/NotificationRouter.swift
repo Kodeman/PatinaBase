@@ -68,6 +68,10 @@ enum NotificationRouter {
             return .proposalDetail(proposalId: entityId)
         case "decision":
             return .decisionDetail(decisionId: entityId)
+        case "invoice":
+            // Forward-compatible: no edge function emits entity_type "invoice"
+            // yet, but the money-rail push envelopes may soon.
+            return .invoiceDetail(invoiceId: entityId)
         case "thread", "message_thread":
             return .threadDetail(threadId: entityId)
         case "room":

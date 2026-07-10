@@ -353,6 +353,8 @@ extension CompanionAPIClient {
         case .threadDetail: return "thread_detail"
         case .proposalList: return "proposal_list"
         case .proposalDetail: return "proposal_detail"
+        case .invoiceList: return "invoice_list"
+        case .invoiceDetail: return "invoice_detail"
         }
     }
 }

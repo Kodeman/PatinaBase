@@ -296,7 +296,8 @@ public final class AppCoordinator: Coordinator {
              .projectList, .projectDetail,
              .decisionList, .decisionDetail,
              .threadList, .threadDetail,
-             .proposalList, .proposalDetail:
+             .proposalList, .proposalDetail,
+             .invoiceList, .invoiceDetail:
             push(route)
             updateContext(for: route)
         }
@@ -410,7 +411,8 @@ public final class AppCoordinator: Coordinator {
         case .projectList, .projectDetail,
              .decisionList, .decisionDetail,
              .threadList, .threadDetail,
-             .proposalList, .proposalDetail:
+             .proposalList, .proposalDetail,
+             .invoiceList, .invoiceDetail:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
         }

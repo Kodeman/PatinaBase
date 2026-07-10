@@ -43,6 +43,10 @@ final class ProjectDetailViewModel {
     /// powers the "view proposal" push.
     var linkedProposalId: String?
 
+    /// Whether this project has any client-visible invoices (Wave 2 / D.2) —
+    /// powers the payments → invoices affordance.
+    var hasInvoices: Bool = false
+
     func load(projectId: String) async {
         isLoading = true
         error = nil
@@ -51,13 +55,17 @@ final class ProjectDetailViewModel {
         async let milestonesTask = (try? await ProjectsAPIClient.shared.listMilestones(projectId: projectId)) ?? []
         async let ffeTask = (try? await ProjectsAPIClient.shared.listFFEItems(projectId: projectId)) ?? []
         async let proposalIdTask = try? await ProposalsAPIClient.shared.proposalId(forProject: projectId)
+        async let invoicesTask = (try? await InvoicesAPIClient.shared.hasInvoices(forProject: projectId)) ?? false
 
-        let (p, ph, mi, ff, prop) = await (projectTask, phasesTask, milestonesTask, ffeTask, proposalIdTask)
+        let (p, ph, mi, ff, prop, hasInv) = await (
+            projectTask, phasesTask, milestonesTask, ffeTask, proposalIdTask, invoicesTask
+        )
         self.project = p ?? nil
         self.phases = ph
         self.milestones = mi
         self.ffe = ff
         self.linkedProposalId = prop
+        self.hasInvoices = hasInv
         self.isLoading = false
         if self.project == nil {
             self.error = "Couldn't load this project"

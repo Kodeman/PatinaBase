@@ -159,6 +159,10 @@ public struct CompanionContext: Equatable {
             return "Proposals"
         case .proposalDetail:
             return "Reviewing a proposal"
+        case .invoiceList:
+            return "Invoices"
+        case .invoiceDetail:
+            return "Reviewing an invoice"
         }
     }
 
@@ -206,6 +210,8 @@ public struct CompanionContext: Equatable {
             return "bubble.left.and.bubble.right"
         case .proposalList, .proposalDetail:
             return "doc.text"
+        case .invoiceList, .invoiceDetail:
+            return "creditcard"
         }
     }
 }
