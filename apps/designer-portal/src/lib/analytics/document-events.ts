@@ -135,6 +135,13 @@ const wayfinding = {
   /** An act taken from the Desk's Contents index (R95 — labels + doorways
    *  only; this event is the metric, not a badge on the index itself). */
   contentsActed: (props: { key: string; kind: string }) => track('document_desk_contents_acted', props),
+
+  /** R97 — the Desk Walkthrough started, and from where. The package's
+   *  help.tour.started carries no source, so this parallel event holds the
+   *  attribution ('first_signin' auto-modal, 'command_bar' replay, or the
+   *  existing-designer 'margin_note' offer) for the activation funnel. */
+  walkthroughStarted: (props: { source: 'first_signin' | 'command_bar' | 'margin_note' }) =>
+    track('document_walkthrough_started', props),
 };
 
 export const documentEvents = {

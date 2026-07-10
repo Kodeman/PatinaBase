@@ -13,7 +13,6 @@ import { useProfile } from '@patina/supabase';
 import { useDeskEngagements } from '@/hooks/use-desk-engagements';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
-import { firstNameOf } from '@/lib/document/account-identity';
 import {
   openCommandBar,
   captureLeadPending,
@@ -27,6 +26,11 @@ import { DeskReconnect } from '@/components/document/desk-reconnect';
 import { FieldDesk } from '@/components/document/field/field-desk';
 import { DeskContents } from '@/components/document/desk-contents';
 import { MarginNote } from '@/components/document/margin-note';
+import {
+  START_DESK_WALKTHROUGH_EVENT,
+  useDeskWalkthroughOffer,
+  useSuppressDeskFirstTouch,
+} from '@/components/document/help/desk-walkthrough';
 import { CaptureLeadSheet } from '@/components/document/overlays/capture-lead-sheet';
 import { OpenProjectSheet } from '@/components/document/overlays/open-project-sheet';
 import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
@@ -38,6 +42,8 @@ export default function DeskPage() {
   const { user } = useAuth();
   const { data: profile } = useProfile();
   const hydrated = useHydrated();
+  const suppressFirstTouch = useSuppressDeskFirstTouch(); // R97 — hold the note during modal/tour
+  const showWalkthroughOffer = useDeskWalkthroughOffer(); // R97 — existing-designer tour offer
   const [captureOpen, setCaptureOpen] = useState(false);
   const [openProjectOpen, setOpenProjectOpen] = useState(false);
 
@@ -108,7 +114,9 @@ export default function DeskPage() {
       ).format(now)}`.toUpperCase()
     : '';
   const name = profile?.display_name || profile?.full_name || user?.name || null;
-  const firstName = firstNameOf(name);
+  // The Desk greeting uses the real first name; with none resolved we greet
+  // plainly ("Good morning.") rather than the old "Good morning, there".
+  const firstName = name?.trim().split(/\s+/)[0] || null;
 
   // A quiet Desk (no folders, no chips) lets the Studio index rise to fill the
   // space — larger, and earlier in the composition — rather than sitting as
@@ -122,7 +130,14 @@ export default function DeskPage() {
           {/* The signature move: greeting in Playfair, the first name in
               Playfair italic, Aged Oak. Kept modest so the folios lead. */}
           <h1 className="font-heading text-[1.7rem] font-normal text-[var(--text-primary)]">
-            {greetingWord}, <span className="italic text-[var(--text-muted)]">{firstName}</span>
+            {firstName ? (
+              <>
+                {greetingWord},{' '}
+                <span className="italic text-[var(--text-muted)]">{firstName}</span>
+              </>
+            ) : (
+              <>{greetingWord}.</>
+            )}
           </h1>
           <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.09em] text-[var(--text-muted)]">
             {dateLabel || ' '}
@@ -131,6 +146,7 @@ export default function DeskPage() {
         <div className="flex items-baseline gap-5">
           <button
             type="button"
+            data-tour-anchor="desk-capture-lead"
             onClick={() => setCaptureOpen(true)}
             className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
           >
@@ -147,6 +163,7 @@ export default function DeskPage() {
           </button>
           <button
             type="button"
+            data-tour-anchor="desk-find-anything"
             onClick={openCommandBar}
             className="font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
           >
@@ -159,8 +176,15 @@ export default function DeskPage() {
       </header>
 
       {/* R94 — the one first-touch note: what the Desk is, and the ⌘K move.
-          Recedes forever on the first ⌘K open or the × (never a tour). */}
-      <MarginNote noteKey="desk-first-touch" commandBar className="mb-10">
+          Recedes forever on the first ⌘K open or the × (never a tour). R97 —
+          held while the walkthrough modal/tour is on screen, and retired on tour
+          completion (the tour teaches ⌘K itself). */}
+      <MarginNote
+        noteKey="desk-first-touch"
+        commandBar
+        suppressed={suppressFirstTouch}
+        className="mb-10"
+      >
         This is your Desk. Folders that need you gather here; the rest stays quiet.{' '}
         <span className="font-mono text-[12px] not-italic tracking-[0.02em] text-[var(--text-muted)]">
           ⌘K
@@ -168,7 +192,29 @@ export default function DeskPage() {
         finds anything by name — try “invoice”.
       </MarginNote>
 
-      <section aria-labelledby="needs-your-hand">
+      {/* R97 — existing designers (created before the ship date) get a quiet
+          one-time offer instead of the auto-modal. The inline link starts the
+          walkthrough; the note recedes on that same event (actionEvents) or the
+          ×. The Desk Walkthrough gates eligibility; the primitive gates once-only. */}
+      {showWalkthroughOffer && (
+        <MarginNote
+          noteKey="desk-walkthrough-offer"
+          actionEvents={[START_DESK_WALKTHROUGH_EVENT]}
+          className="mb-10"
+        >
+          New desk, same studio — your projects are all here as documents now.{' '}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent(START_DESK_WALKTHROUGH_EVENT))}
+            className="font-heading text-[15px] italic text-[var(--color-aged-oak)] underline decoration-[var(--color-aged-oak)] decoration-1 underline-offset-2 transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+          >
+            The walkthrough is six quick stops
+          </button>{' '}
+          if you&apos;d like the lay of it.
+        </MarginNote>
+      )}
+
+      <section aria-labelledby="needs-your-hand" data-tour-anchor="desk-needs-your-hand">
         <SectionEyebrow count={data?.folders.length}>
           <span id="needs-your-hand">Needs your hand</span>
         </SectionEyebrow>
@@ -191,16 +237,29 @@ export default function DeskPage() {
         )}
 
         {data && data.folders.length === 0 && (
-          <p className="font-heading text-[15px] italic text-[var(--text-muted)]">
+          // R97 desk-folio anchor (empty-state placement) — exactly one of this
+          // element and the first FolderCard exists post-load.
+          <p
+            data-tour-anchor="desk-folio"
+            className="font-heading text-[15px] italic text-[var(--text-muted)]"
+          >
             Nothing needs your hand. The work is in motion.
           </p>
         )}
 
         {data && data.folders.length > 0 && (
           <div className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2">
-            {data.folders.map((folder) => (
-              <FolderCard key={folder.row.engagement_id} folder={folder} />
-            ))}
+            {data.folders.map((folder, index) =>
+              index === 0 ? (
+                // R97 desk-folio anchor (first-folder placement) — a transparent
+                // wrapper so the coachmark can point at the first real folder.
+                <div key={folder.row.engagement_id} data-tour-anchor="desk-folio">
+                  <FolderCard folder={folder} />
+                </div>
+              ) : (
+                <FolderCard key={folder.row.engagement_id} folder={folder} />
+              ),
+            )}
           </div>
         )}
       </section>

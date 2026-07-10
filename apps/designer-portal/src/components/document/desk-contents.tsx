@@ -153,6 +153,7 @@ export function DeskContents({ prominent = false }: { prominent?: boolean }) {
   return (
     <section
       aria-labelledby="the-studio"
+      data-tour-anchor="desk-contents"
       className={
         prominent
           ? 'mt-10'
