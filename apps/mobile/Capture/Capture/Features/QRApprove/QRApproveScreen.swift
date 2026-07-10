@@ -14,6 +14,7 @@
 
 import SwiftUI
 import CaptureKit
+import PatinaDesignKit
 #if DEBUG
 import CaptureKitMocks
 #endif
@@ -358,28 +359,17 @@ struct QRApproveScreen: View {
     }
 
     private var approveButton: some View {
-        Group {
-            if model.phase == .approving {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: CaptureColor.verdigris))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .accessibilityLabel("Approving")
-            } else {
-                Button {
-                    Task { await model.approve() }
-                } label: {
-                    Label("Approve sign-in", systemImage: "faceid")
-                        .font(CaptureType.bodyEmph)
-                        .foregroundStyle(CaptureColor.paper3)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(CaptureColor.verdigris, in: RoundedRectangle(cornerRadius: 12))
-                }
-                .disabled(model.request == nil)
-                .accessibilityHint("Confirms with Face ID, then signs in the browser session.")
-            }
+        // PatinaButton carries the loading spinner (isLoading) and the
+        // disabled/dim state (isEnabled), so the .approving branch collapses
+        // into one control (PT-5-6). Clay style keeps a legible label on the
+        // clay fill in both schemes.
+        PatinaButton("Approve sign-in", style: .clay,
+                     icon: Image(systemName: "faceid"),
+                     isLoading: model.phase == .approving,
+                     isEnabled: model.request != nil) {
+            Task { await model.approve() }
         }
+        .accessibilityHint("Confirms with Face ID, then signs in the browser session.")
     }
 
     private var rejectButton: some View {
@@ -394,14 +384,7 @@ struct QRApproveScreen: View {
     }
 
     private func primaryButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(CaptureType.bodyEmph)
-                .foregroundStyle(CaptureColor.paper3)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(CaptureColor.verdigris, in: RoundedRectangle(cornerRadius: 12))
-        }
+        PatinaButton(title, style: .clay, icon: Image(systemName: systemImage), action: action)
     }
 
     private func secondaryFillButton(_ title: String, action: @escaping () -> Void) -> some View {
