@@ -64,6 +64,13 @@ export interface ContextualHelpPanelProps {
   trigger?: React.ReactNode
   /** Forwarded to the panel content root. */
   className?: string
+  /**
+   * Optional footer content rendered as a fixed-height row below the
+   * scrollable article list, inside the panel's flex column. Callers that
+   * expose a browsable help center render their "Browse all help" link here
+   * so it survives loading/empty/article states.
+   */
+  footer?: React.ReactNode
 }
 
 // ─── Article shape (returned by the GROQ query below) ─────────────────────────
@@ -178,6 +185,7 @@ export function ContextualHelpPanel({
   onOpenChange,
   trigger,
   className,
+  footer,
 }: ContextualHelpPanelProps) {
   // Resolve surface key: explicit prop wins, otherwise from context.
   const contextSurfaceKey = useSurfaceKey()
@@ -341,6 +349,8 @@ export function ContextualHelpPanel({
               </ul>
             )}
           </div>
+
+          {footer != null ? footer : null}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

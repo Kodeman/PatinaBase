@@ -9,11 +9,23 @@
  * No module flag is needed; the listener never unmounts inside the document.
  *
  * Kept in this tiny React-free module so the ⌘K integration can import the
- * opener without pulling the panel's component graph.
+ * opener without pulling the panel's component graph. That also means this
+ * module can't know the current surface key (it lives with whatever context
+ * DocumentHelpPanel is scoped to) — so the F1 `wayfinding.helpOpened` event
+ * fires from document-help.tsx, where the surface key is already in hand, not
+ * here. `source` rides along on the event detail so that firing site can say
+ * where the door was opened from; today the ⌘K "Help…" row is the only
+ * caller, hence the 'palette' default.
  */
 export const DOCUMENT_HELP_EVENT = 'document:open-help';
 
-export function openHelp(): void {
+export interface OpenHelpEventDetail {
+  source: string;
+}
+
+export function openHelp(source = 'palette'): void {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(DOCUMENT_HELP_EVENT));
+  window.dispatchEvent(
+    new CustomEvent<OpenHelpEventDetail>(DOCUMENT_HELP_EVENT, { detail: { source } }),
+  );
 }
