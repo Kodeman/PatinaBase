@@ -102,6 +102,15 @@ struct PatinaApp: App {
                     // termination. Both run silently on the main actor's
                     // SwiftData context.
                     let context = PersistenceController.shared.container.mainContext
+
+                    // Strict-local hold migration: flip pre-hold `.pending`
+                    // bundles (no bytes server-side) into `.heldLocal`, and
+                    // un-strand cellular-parked rows. Runs BEFORE
+                    // resumePendingUploads so we never resume a bundle we just
+                    // decided to hold. Version-guarded — no-ops after the
+                    // first run.
+                    ScanHoldMigrator.shared.migrateIfNeeded(in: context)
+
                     await ScanDiskBudget.shared.evictIfNeeded(in: context)
                     let candidates = await ScanRecoveryService.shared.scanForRecoverableSessions(in: context)
                     // PT-6-16: publish onto the typed channel instead of
@@ -110,11 +119,24 @@ struct PatinaApp: App {
                     // `scanEventChannel.pendingRecoveryCandidateCount`.
                     scanEvents.setRecoveryCandidateCount(candidates.count)
 
+                    // Design-request draft resume: if a request was left
+                    // mid-upload / awaiting-submit when the app was killed,
+                    // surface it for a "resume your request" banner. The flow
+                    // is never auto-reopened or auto-submitted.
+                    if let draft = try? context.fetch(DesignRequestDraft.activeDraftDescriptor).first,
+                       draft.phase.needsResumePrompt {
+                        scanEvents.setPendingDesignRequestDraft(draft.id)
+                    } else {
+                        scanEvents.setPendingDesignRequestDraft(nil)
+                    }
+
                     // Resume any advanced scan bundles left in syncing/failed
                     // state from a prior session. `uploadAdvancedScanBundle`
                     // is idempotent (uploaded artifacts are skipped), so
                     // re-entering is safe. Runs after the housekeeping pass
                     // above so we don't retry bundles we're about to evict.
+                    // Held bundles are excluded by construction (the resume
+                    // predicate fetches syncing/failed only).
                     await RoomScanSyncService.shared.resumePendingUploads(in: context)
                 }
                 .onChange(of: scenePhase) { _, newPhase in

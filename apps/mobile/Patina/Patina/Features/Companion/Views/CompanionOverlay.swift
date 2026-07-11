@@ -351,7 +351,7 @@ public struct CompanionOverlay: View {
                                     case .openAuth:
                                         coordinator.presentAuthentication()
                                     case .openDesignServices(let roomId):
-                                        coordinator.presentedSheet = .designServices(roomId: roomId)
+                                        coordinator.presentedSheet = .designServices(roomId: roomId, preselectedScanIds: [])
                                     }
                                 }
                             }

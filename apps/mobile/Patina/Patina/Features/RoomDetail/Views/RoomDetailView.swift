@@ -229,8 +229,11 @@ struct RoomDetailView: View {
 
     private var actionsSection: some View {
         VStack(spacing: PatinaSpacing.md) {
-            // Share with designer button (only show if scanned)
-            if room?.hasBeenScanned == true {
+            // Share with designer button. Only show once the scan has actually
+            // been uploaded (`remoteScanId != nil`) — a held-local scan has no
+            // server-side row to share, so ScanSharingService would fail. Held
+            // scans reach a designer only through the design-request flow.
+            if room?.hasBeenScanned == true && room?.remoteScanId != nil {
                 Button {
                     HapticManager.shared.impact(.medium)
                     showShareSheet = true

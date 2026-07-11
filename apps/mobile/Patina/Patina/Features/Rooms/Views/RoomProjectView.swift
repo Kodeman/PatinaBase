@@ -21,11 +21,6 @@ struct RoomProjectView: View {
     private let budgetMaxCents: Int = 500_000   // $5K
 
     @State private var actionItem: SavedItem?
-    @State private var designerLeadState: DesignerLeadState = .idle
-
-    private enum DesignerLeadState: Equatable {
-        case idle, sending, sent, failed(String)
-    }
 
     init(roomId: UUID) {
         self.roomId = roomId
@@ -75,7 +70,10 @@ struct RoomProjectView: View {
                                     .padding(.top, 12)
                             }
                             cta(primary: "Work with a Designer on This Room") {
-                                coordinator.presentedSheet = .designServices(roomId: room.id)
+                                coordinator.presentedSheet = .designServices(
+                                    roomId: room.id,
+                                    preselectedScanIds: []
+                                )
                             }
                             sendToDesignersButton(for: room)
                         }
@@ -98,60 +96,31 @@ struct RoomProjectView: View {
 
     // MARK: - Designer Lead CTA
 
+    /// Door into the design-request flow, preselecting this room's scan. The
+    /// old direct DesignerLeadService POST (legacy `/api/rooms/:id/
+    /// designer-lead` route) is retired in favour of the atomic RPC submit;
+    /// there's no `hasRemote` gate anymore — held scans upload inside the flow.
     @ViewBuilder
     private func sendToDesignersButton(for room: RoomModel) -> some View {
-        let hasRemote = room.remoteId != nil
-        VStack(spacing: 8) {
-            Button {
-                guard let remoteId = room.remoteId else { return }
-                designerLeadState = .sending
-                Task {
-                    do {
-                        _ = try await DesignerLeadService.shared.send(roomRemoteId: remoteId)
-                        await MainActor.run { designerLeadState = .sent }
-                    } catch {
-                        await MainActor.run {
-                            designerLeadState = .failed(error.localizedDescription)
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    if case .sending = designerLeadState {
-                        ProgressView().tint(PatinaColors.offWhite)
-                    }
-                    Text(buttonLabel)
-                        .font(PatinaTypography.bodySmallMedium)
-                }
+        Button {
+            coordinator.presentedSheet = .designServices(
+                roomId: room.id,
+                preselectedScanIds: []
+            )
+        } label: {
+            Text("Send to a designer")
+                .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.offWhite)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(hasRemote ? PatinaColors.clay : PatinaColors.pearl)
+                        .fill(PatinaColors.clay)
                 )
-            }
-            .buttonStyle(.plain)
-            .disabled(!hasRemote || designerLeadState == .sending)
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-
-            if case .failed(let msg) = designerLeadState {
-                Text(msg)
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.interactive)
-                    .padding(.horizontal, 20)
-            }
         }
-    }
-
-    private var buttonLabel: String {
-        switch designerLeadState {
-        case .idle:    return "Send to designers"
-        case .sending: return "Sending…"
-        case .sent:    return "Sent ✓"
-        case .failed:  return "Once more"
-        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
     }
 
     // MARK: - Sections

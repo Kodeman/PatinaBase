@@ -494,7 +494,7 @@ public final class AppCoordinator: Coordinator {
             return false
 
         case .requestDesignServices(let roomId):
-            presentedSheet = .designServices(roomId: roomId)
+            presentedSheet = .designServices(roomId: roomId, preselectedScanIds: [])
             return true
 
         case .viewRecommendations(let roomId):
@@ -605,8 +605,9 @@ extension AppCoordinator {
         case settings
         /// QR code scanner for web sign-in.
         case qr
-        /// "Request design help" form, optionally scoped to a room.
-        case designServices(roomId: UUID?)
+        /// "Request design help" flow, optionally scoped to a room and/or
+        /// preselecting specific held/synced scans (`RoomScanPackage.scanId`).
+        case designServices(roomId: UUID?, preselectedScanIds: [UUID])
         /// "Add a room" bottom sheet (Room System).
         case newRoom
         /// Move / copy a saved item between rooms (Room System).
@@ -616,7 +617,9 @@ extension AppCoordinator {
             switch self {
             case .settings: return "settings"
             case .qr: return "qr"
-            case .designServices(let roomId): return "designServices-\(roomId?.uuidString ?? "none")"
+            case .designServices(let roomId, let scanIds):
+                let scans = scanIds.map { $0.uuidString }.joined(separator: ",")
+                return "designServices-\(roomId?.uuidString ?? "none")-\(scans)"
             case .newRoom: return "newRoom"
             case .moveItem(let itemId): return "moveItem-\(itemId.uuidString)"
             }
