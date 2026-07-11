@@ -1,8 +1,14 @@
+/* Shared typography MUST be imported before the @tailwind directives: the CSS
+ * spec (enforced by Turbopack's parser; webpack/postcss-import was lenient)
+ * requires every @import to precede all other rules, and @tailwind expands to
+ * rules. This also realigns the cascade with typography.css's documented intent
+ * ("Tailwind utilities still override these") — with the import above, Tailwind
+ * utilities win same-specificity ties. See worker-size/turbopack-prep. */
+@import '../../../../packages/patina-design-system/src/styles/typography.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import '../../../../packages/patina-design-system/src/styles/typography.css';
 
 /* ===== Portal Design Tokens ===== */
 :root {

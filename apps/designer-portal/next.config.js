@@ -6,6 +6,17 @@ const nextConfig = {
   transpilePackages: ['@patina/design-system', '@patina/types', '@patina/utils', '@patina/api-client', '@patina/catalog-ui', '@patina/help-system', '@patina/email'],
   outputFileTracingRoot: path.join(__dirname, '../../'),
 
+  // Turbopack is the production build path (`next build --turbopack`, see package.json).
+  // It kills the ~347KB-per-route client-reference-manifest bloat that webpack builds
+  // emit (vercel/next.js#88316), so the build-time dedupe workaround self-retires.
+  // We keep an EMPTY turbopack key here purely to silence Next's "Webpack is configured
+  // while Turbopack is not" warning; the `@/` alias is already covered by tsconfig paths,
+  // and we intentionally do NOT port the webpack `fs: false` client fallback — Turbopack
+  // fails loudly on client-side node builtins (safer; a past prod incident came from that
+  // silent shim). The webpack() block below is still used by `pnpm analyze` and by any
+  // plain `next build` (no --turbopack flag).
+  turbopack: {},
+
   // Security and CORS headers
   async headers() {
     const isDevelopment = process.env.NODE_ENV === 'development';
