@@ -298,6 +298,47 @@ public final class DesignRequestCoordinator {
         }
     }
 
+    // MARK: - Live phase derivation
+
+    /// The effective phase of a scan: the coordinator's snapshot merged with
+    /// the LIVE `RoomScanPackage.status`. The snapshot alone can go stale — a
+    /// resumed draft is snapshotted once in `rebuildScanPhases`, but a
+    /// background `resumePendingUploads` can finish (or fail) that upload
+    /// afterwards; the package row is the source of truth for terminal
+    /// states. Reading `package.statusRaw` here also registers SwiftUI
+    /// observation on the model, so views gating on these values re-render
+    /// when the package flips behind the scenes (the same mechanism that
+    /// keeps the per-row `ScanUploadProgressView` live).
+    public func livePhase(for scanId: UUID) -> ScanUploadPhase {
+        let pkg = package(for: scanId)
+        if pkg?.status == .synced { return .uploaded }
+        let snapshot = scanPhases[scanId] ?? .waiting
+        // An upload actively owned by this coordinator stays .uploading.
+        if case .uploading = snapshot { return snapshot }
+        if pkg?.status == .failed {
+            return .failed(pkg?.lastError ?? "Upload didn't finish")
+        }
+        return snapshot
+    }
+
+    /// True when every selected scan is synced server-side (live, not
+    /// snapshot). Drives the "Send request" affordance.
+    public var allScansUploaded: Bool {
+        guard let draft, !draft.scanIds.isEmpty else { return false }
+        return draft.scanIds.allSatisfy {
+            if case .uploaded = livePhase(for: $0) { return true } else { return false }
+        }
+    }
+
+    /// True when any selected scan is in a failed state (live). Drives the
+    /// "Try again" affordance.
+    public var anyScanFailed: Bool {
+        guard let draft else { return false }
+        return draft.scanIds.contains {
+            if case .failed = livePhase(for: $0) { return true } else { return false }
+        }
+    }
+
     // MARK: - Helpers
 
     private func package(for scanId: UUID) -> RoomScanPackage? {
@@ -313,7 +354,7 @@ public final class DesignRequestCoordinator {
     }
 
     private func isFailed(_ scanId: UUID) -> Bool {
-        if case .failed = scanPhases[scanId] { return true }
+        if case .failed = livePhase(for: scanId) { return true }
         return false
     }
 

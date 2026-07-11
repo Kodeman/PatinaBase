@@ -234,16 +234,17 @@ struct DesignRequestFlowView: View {
         return ids.compactMap { byId[$0] }
     }
 
+    // Both flags read the coordinator's LIVE derivation (snapshot merged with
+    // RoomScanPackage.status) — a background resumePendingUploads that
+    // finishes an upload after the resume snapshot flips these without a
+    // close/reopen, so `sendingActions` can never sit on the spinner branch
+    // while the per-row progress views already show "Uploaded".
     var hasFailedUpload: Bool {
-        guard let phases = coordinator?.scanPhases else { return false }
-        return phases.values.contains { if case .failed = $0 { return true } else { return false } }
+        coordinator?.anyScanFailed ?? false
     }
 
     var allUploaded: Bool {
-        guard let coordinator, let draft = coordinator.draft, !draft.scanIds.isEmpty else { return false }
-        return draft.scanIds.allSatisfy {
-            if case .uploaded = coordinator.scanPhases[$0] { return true } else { return false }
-        }
+        coordinator?.allScansUploaded ?? false
     }
 
     var sendingHeadline: String {
