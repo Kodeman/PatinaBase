@@ -17,6 +17,15 @@ public enum RoomScanPackageStatus: String, Codable, Sendable {
     case syncing     // at least one artifact has started uploading
     case synced      // all artifacts + photos uploaded, scan status = ready
     case failed      // one or more artifacts failed after max retries
+    /// Strict-local hold: bundle is sealed on disk and intentionally NOT
+    /// uploaded. This is the only pre-upload resting state for the
+    /// local-until-request pipeline — no scan bytes leave the phone until
+    /// the user explicitly requests design services. Transitions out of
+    /// `heldLocal` only on an explicit user request action; it is never
+    /// picked up by `resumePendingUploads` (which fetches syncing/failed
+    /// only) and never evicted by `ScanDiskBudget` (which evicts synced
+    /// only).
+    case heldLocal   // sealed on disk, held for an explicit request
 }
 
 @Model
@@ -145,6 +154,18 @@ public final class RoomScanPackage {
         lastError = nil
     }
 
+    /// Transition into the strict-local hold state. Clears any prior upload
+    /// error (e.g. a stale "Waiting for Wi-Fi" breadcrumb from the retired
+    /// passive cellular gate) since a held bundle is not an upload failure —
+    /// it's an intentional, sealed resting state waiting for an explicit
+    /// request. `syncedAt` stays nil; the bundle is not evictable.
+    public func markHeldLocal() {
+        status = .heldLocal
+        syncedAt = nil
+        lastError = nil
+        updatedAt = Date()
+    }
+
     public func markFailed(_ message: String) {
         status = .failed
         lastError = message
@@ -189,6 +210,21 @@ extension RoomScanPackage {
                 pkg.statusRaw == "synced"
             },
             sortBy: [SortDescriptor(\.syncedAt, order: .reverse)]
+        )
+    }
+
+    /// Bundles the user can attach to a design request: those sealed and
+    /// held locally, plus those already uploaded (synced). Excludes the
+    /// transient pending/syncing/failed states — a scan is either resting on
+    /// the phone (`heldLocal`) or fully on the server (`synced`) before it's
+    /// pickable. Newest first by `createdAt`. This is the source of truth for
+    /// `ScanPickerView`.
+    public static var heldOrSyncedItems: FetchDescriptor<RoomScanPackage> {
+        FetchDescriptor<RoomScanPackage>(
+            predicate: #Predicate { pkg in
+                pkg.statusRaw == "heldLocal" || pkg.statusRaw == "synced"
+            },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
     }
 }

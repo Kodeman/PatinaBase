@@ -90,11 +90,11 @@ struct ContentView: View {
             SettingsView()
         case .qr:
             QRScannerView()
-        case .designServices(let roomId):
-            RequestDesignServicesSheet(
-                roomId: roomId,
-                roomName: nil,
-                onDismiss: { coordinator.presentedSheet = nil }
+        case .designServices(let roomId, let preselectedScanIds):
+            DesignRequestFlowView(
+                preselectedScanIds: preselectedScanIds,
+                preselectedRoomId: roomId,
+                onClose: { coordinator.presentedSheet = nil }
             )
         case .newRoom:
             NewRoomSheet()

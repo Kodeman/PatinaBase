@@ -3,9 +3,11 @@
 //  Patina
 //
 //  Screen 09a: shown after the user submits the post-scan review. Confirms
-//  the scan was saved locally and exposes the background upload progress.
-//  Replaces the implicit "Soft Landing → Style Conversation" handoff for
-//  the save-first flow — the style conversation is now opt-in.
+//  the scan was saved locally and — critically — that it STAYS on the phone
+//  until the user chooses to send it to a designer. Strict local-until-
+//  request: no upload happens here or in the background. The primary door
+//  onward is "Get design help", which opens the design-request flow with
+//  this scan preselected.
 //
 
 import SwiftUI
@@ -18,6 +20,7 @@ struct ScanSavedConfirmationView: View {
     let onSetStyle: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.appCoordinator) private var coordinator
     @Query private var packages: [RoomScanPackage]
 
     init(
@@ -56,7 +59,7 @@ struct ScanSavedConfirmationView: View {
                             .foregroundStyle(PatinaColors.Text.muted)
                     }
 
-                    Text("Your scan is on this phone. We'll finish uploading it quietly in the background — you can close this anytime.")
+                    Text("Your scan stays on this phone until you send it to a designer.")
                         .font(.custom("Inter-Regular", size: 13, relativeTo: .footnote))
                         .foregroundStyle(PatinaColors.Text.muted)
                         .multilineTextAlignment(.center)
@@ -64,17 +67,26 @@ struct ScanSavedConfirmationView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                uploadProgressCard
+                heldCard
                     .padding(.horizontal, 24)
 
                 Spacer()
 
                 VStack(spacing: 12) {
                     StyleContinueButton(
-                        title: "Done",
+                        title: "Get design help",
                         isEnabled: true,
-                        action: onDone
+                        action: getDesignHelp
                     )
+
+                    Button(action: onDone) {
+                        Text("Done")
+                            .font(PatinaTypography.bodySmallMedium)
+                            .foregroundStyle(PatinaColors.Text.primary.opacity(0.9))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                    }
+                    .buttonStyle(.plain)
 
                     Button(action: onSetStyle) {
                         Text("Set my style")
@@ -92,40 +104,24 @@ struct ScanSavedConfirmationView: View {
         }
     }
 
-    // MARK: - Upload progress
+    // MARK: - Held card
 
-    private var uploadProgressCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Uploading")
-                    .font(PatinaTypography.mono)
-                    .tracking(0.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(PatinaColors.Text.interactive)
-                Spacer()
-                Text(progressLabel)
-                    .font(.custom("DMMono-Regular", size: 11, relativeTo: .caption2))
-                    .foregroundStyle(PatinaColors.Text.muted)
-            }
+    private var heldCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "internaldrive")
+                .font(.system(size: 18, weight: .regular))
+                .foregroundStyle(PatinaColors.Text.interactive)
 
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(PatinaColors.pearl.opacity(0.5))
-                    Capsule()
-                        .fill(PatinaColors.Interactive.active.opacity(0.75))
-                        .frame(width: max(4, proxy.size.width * CGFloat(progressFraction)))
-                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: progressFraction)
-                }
-            }
-            .frame(height: 6)
-
-            if let hint = progressHint {
-                Text(hint)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Saved on this phone")
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.primary.opacity(0.9))
+                Text("Only you can see it. Nothing is uploaded until you send it to a designer.")
                     .font(.custom("Inter-Regular", size: 12, relativeTo: .caption))
-                    .foregroundStyle(PatinaColors.Text.muted.opacity(0.85))
+                    .foregroundStyle(PatinaColors.Text.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 0)
         }
         .padding(16)
         .background(
@@ -137,8 +133,17 @@ struct ScanSavedConfirmationView: View {
                 .stroke(PatinaColors.pearl, lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Upload progress"))
-        .accessibilityValue(Text("\(Int((progressFraction * 100).rounded())) percent"))
+        .accessibilityLabel(Text("Saved on this phone. Nothing is uploaded until you send it to a designer."))
+    }
+
+    // MARK: - Actions
+
+    private func getDesignHelp() {
+        HapticManager.shared.impact(.light)
+        coordinator.presentedSheet = .designServices(
+            roomId: nil,
+            preselectedScanIds: [scanId]
+        )
     }
 
     // MARK: - Derived state
@@ -150,64 +155,5 @@ struct ScanSavedConfirmationView: View {
             return provided
         }
         return nil
-    }
-
-    private var progressFraction: Double {
-        guard let pkg = package else { return 0 }
-        let state = pkg.artifactState
-
-        let artifactTotal = max(state.artifacts.count, 1)
-        let artifactDone = state.artifacts.filter {
-            $0.status == .uploaded || $0.status == .skipped
-        }.count
-
-        let photoTotal = state.photosTotal
-        let photoDone = state.photosUploaded
-
-        // Weight artifacts and photos equally — if one side is absent we fall
-        // back to the other rather than showing a misleading 50%.
-        let hasArtifacts = state.artifacts.isEmpty == false
-        let hasPhotos = photoTotal > 0
-
-        if hasArtifacts && hasPhotos {
-            let a = Double(artifactDone) / Double(artifactTotal)
-            let p = Double(photoDone) / Double(photoTotal)
-            return min(1, max(0, (a + p) / 2))
-        } else if hasArtifacts {
-            return min(1, max(0, Double(artifactDone) / Double(artifactTotal)))
-        } else if hasPhotos {
-            return min(1, max(0, Double(photoDone) / Double(photoTotal)))
-        } else {
-            return pkg.status == .synced ? 1 : 0
-        }
-    }
-
-    private var progressLabel: String {
-        guard let pkg = package else { return "Pending" }
-        switch pkg.status {
-        case .pending:   return "Pending"
-        case .syncing:   return "\(Int((progressFraction * 100).rounded()))%"
-        case .synced:    return "Done"
-        case .failed:    return "Paused"
-        }
-    }
-
-    private var progressHint: String? {
-        guard let pkg = package else {
-            return "Starting upload…"
-        }
-        switch pkg.status {
-        case .pending:
-            return "Waiting to start — we'll pick it up on the next connection."
-        case .syncing:
-            return nil
-        case .synced:
-            return "All files are on our servers."
-        case .failed:
-            if let err = pkg.lastError, !err.isEmpty {
-                return "Paused: \(err). We'll retry in the background."
-            }
-            return "Paused. We'll retry in the background."
-        }
     }
 }

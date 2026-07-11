@@ -2,15 +2,20 @@
 //  RoomUploadService.swift
 //  Patina
 //
-//  Thin facade over RoomScanSyncService so the Quiet Conversation flow has a
-//  clean, forward-only API for kicking off the background upload during the
-//  Soft Landing transition. Uploads must NOT block UI state transitions
-//  (per PRD §4.5).
+//  Strict-local hold for finalized scan bundles. In the local-until-request
+//  pipeline NO scan bytes leave the phone at scan time — the review-complete
+//  handoff seals the bundle and parks it in `.heldLocal`. The bundle only
+//  uploads later, inside the explicit design-request flow
+//  (`DesignRequestCoordinator`), never here.
+//
+//  This file used to detach a background upload from the Soft Landing
+//  transition; that auto-upload path (performUpload / loadPackage / the
+//  legacy no-op overload) was deleted when the hold became the only
+//  pre-upload resting state.
 //
 
 import Foundation
 import SwiftData
-import UIKit
 
 @MainActor
 public final class RoomUploadService {
@@ -19,186 +24,117 @@ public final class RoomUploadService {
 
     private init() {}
 
-    /// Legacy entry point used by the Soft Landing transition. Logs the
-    /// intent and returns immediately — the real upload is driven by the
-    /// richer `uploadInBackground(session:roomData:...)` overload called
-    /// from the scan completion path, which has `roomData` + `styleSignals`
-    /// in scope. The two overloads coexist so the UI flow never blocks and
-    /// the full data pipeline only runs once, where it has everything.
-    public func uploadInBackground(
-        session: RoomScanSession,
-        usdzData: Data? = nil,
-        heroImageData: Data? = nil
-    ) {
-        PostHogService.shared.capture("scan_upload_hinted", properties: [
-            "scan_session_id": session.sessionId.uuidString,
-            "scan_method": session.scanMethod.rawValue,
-            "has_usdz": usdzData != nil,
-            "has_hero": heroImageData != nil,
-            "window_count": session.features.windowCount,
-            "door_count": session.features.doorCount,
-            "room_type": session.features.roomType
-        ])
-        // The real upload is enqueued by ScanViewModel /
-        // QuietConversationFlowHost via the full-data overload below.
-    }
-
-    /// Kick off a background upload for a completed LiDAR scan.
+    /// Seal a finalized scan bundle on the phone WITHOUT uploading it.
     ///
-    /// Writes a `RoomScanPackage` row pointing at the on-disk bundle and
-    /// enqueues a `SyncQueueItem` so `RoomScanSyncService` picks it up
-    /// on its next tick (or immediately, if online).
+    /// Writes (or updates) a `RoomScanPackage` in `.heldLocal`, stamping the
+    /// review-step metadata read off the sealed manifest (room name, review
+    /// timestamp, hero photo, byte size — fields that exist on the row but
+    /// were never populated by the old auto-upload path), and persists a
+    /// local `RoomModel` via `RoomStore.saveScan` so the room shows up in
+    /// "Your Spaces" immediately. The room is marked `.local` (only exists on
+    /// this phone) — held scans are never "waiting to sync".
     ///
-    /// All errors are swallowed and logged — the UI flow must always
-    /// continue to the Conversation.
-    public func uploadInBackground(
+    /// All failures are swallowed and logged; sealing must never block the
+    /// UI flow onward to the saved-confirmation screen.
+    public func holdLocally(
         session: RoomScanSession,
         roomData: FirstWalkRoomData,
-        styleSignals: FirstWalkStyleSignals,
         bundlePath: String?,
-        remoteRoomId: UUID? = nil,
         modelContext: ModelContext
     ) {
-        // Observe the outcome via PostHog's existing infra.
-        PostHogService.shared.capture("scan_upload_started", properties: [
+        guard let bundlePath, !bundlePath.isEmpty else {
+            PatinaLog.scan.error("[RoomUploadService] holdLocally called with no bundlePath — cannot hold")
+            return
+        }
+
+        // 1. Upsert the package row in the held state.
+        let package = upsertHeldPackage(
+            scanId: roomData.roomId,
+            roomLocalId: roomData.roomId,
+            bundlePath: bundlePath,
+            modelContext: modelContext
+        )
+
+        // 2. Stamp review-step metadata from the sealed manifest.
+        if let bundleURL = package.absoluteBundleURL,
+           let manifest = try? ScanBundleWriter.readManifest(at: bundleURL) {
+            package.userProvidedRoomName = manifest.annotations.userProvidedRoomName
+                ?? package.userProvidedRoomName
+            package.reviewCompletedAt = manifest.annotations.reviewCompletedAt ?? Date()
+            package.heroPhotoId = Self.heroPhotoId(in: manifest)
+            package.userRoomNotes = manifest.annotations.roomNotes
+            let size = manifest.artifacts.reduce(0) { $0 + $1.sizeBytes }
+                + manifest.photos.reduce(0) { $0 + $1.sizeBytes }
+            if size > 0 { package.sizeBytes = size }
+            package.updatedAt = Date()
+        } else {
+            // No manifest yet (defensive) — still record the review time.
+            package.reviewCompletedAt = Date()
+        }
+        try? modelContext.save()
+
+        // 3. Persist the local RoomModel so "Your Spaces" reflects the scan.
+        //    saveScan defaults to `.pending`; a held scan only exists locally,
+        //    so re-mark it `.local` (no false "waiting to sync").
+        let store = RoomStore(context: modelContext)
+        let room = store.saveScan(
+            roomData: roomData,
+            name: package.userProvidedRoomName
+        )
+        room.syncStatus = .local
+        store.touch(room)
+
+        // 4. Observe the hold via PostHog. Replaces `scan_upload_started` —
+        //    nothing uploads here anymore.
+        PostHogService.shared.capture("scan_held_locally", properties: [
             "scan_session_id": session.sessionId.uuidString,
+            "scan_id": roomData.roomId.uuidString,
             "scan_method": session.scanMethod.rawValue,
-            "has_bundle": bundlePath != nil,
             "window_count": session.features.windowCount,
             "door_count": session.features.doorCount,
-            "room_type": session.features.roomType
+            "room_type": session.features.roomType,
+            "size_bytes": package.sizeBytes
         ])
-
-        // Record (or update) the RoomScanPackage row so the bundle survives
-        // app restarts and can be resumed by RoomScanSyncService.
-        //
-        // We key the package on `roomData.roomId` (not session.sessionId) so
-        // the package, the bundle directory, and `room_scans.id` server-side
-        // are all one id. `RoomCaptureService.processRoom()` reuses
-        // `currentScanId` for `FirstWalkRoomData.roomId` to guarantee that.
-        if let bundlePath = bundlePath {
-            upsertPackage(
-                scanId: roomData.roomId,
-                roomLocalId: roomData.roomId,
-                bundlePath: bundlePath,
-                remoteRoomId: remoteRoomId,
-                modelContext: modelContext
-            )
-        }
-
-        // Detached task so the Soft Landing UI doesn't wait on us.
-        let capturedSession = session
-        let capturedRoomData = roomData
-        let capturedStyleSignals = styleSignals
-        let capturedBundlePath = bundlePath
-
-        Task.detached(priority: .utility) {
-            await Self.performUpload(
-                session: capturedSession,
-                roomData: capturedRoomData,
-                styleSignals: capturedStyleSignals,
-                bundlePath: capturedBundlePath
-            )
-        }
     }
 
     // MARK: - Persistence
 
-    private func upsertPackage(
+    /// Insert or update the `RoomScanPackage` row, forcing it into
+    /// `.heldLocal`. Keyed on `scanId` (== `room_scans.id` / bundle dir id).
+    @discardableResult
+    private func upsertHeldPackage(
         scanId: UUID,
         roomLocalId: UUID,
         bundlePath: String,
-        remoteRoomId: UUID?,
         modelContext: ModelContext
-    ) {
+    ) -> RoomScanPackage {
         let descriptor = FetchDescriptor<RoomScanPackage>(
             predicate: #Predicate { $0.scanId == scanId }
         )
         if let existing = (try? modelContext.fetch(descriptor))?.first {
             existing.bundlePath = bundlePath
-            if existing.remoteRoomId == nil { existing.remoteRoomId = remoteRoomId }
-            existing.updatedAt = Date()
-        } else {
-            let pkg = RoomScanPackage(
-                scanId: scanId,
-                roomLocalId: roomLocalId,
-                bundlePath: bundlePath,
-                remoteRoomId: remoteRoomId
-            )
-            modelContext.insert(pkg)
+            existing.markHeldLocal()
+            return existing
         }
-        try? modelContext.save()
-    }
-
-    // MARK: - Upload
-
-    private static func performUpload(
-        session: RoomScanSession,
-        roomData: FirstWalkRoomData,
-        styleSignals: FirstWalkStyleSignals,
-        bundlePath: String?
-    ) async {
-        guard let bundlePath = bundlePath else {
-            // Legacy v1 — fall back to existing path.
-            do {
-                _ = try await RoomScanSyncService.shared.uploadRoomScan(
-                    roomData: roomData,
-                    styleSignals: styleSignals,
-                    thumbnail: nil,
-                    projectId: nil,
-                    existingRoomRemoteId: nil,
-                    usdzData: nil
-                )
-            } catch {
-                await reportFailure(session: session, error: error)
-            }
-            return
-        }
-
-        // v2 advanced bundle upload. The RoomScanPackage row was written
-        // from the main actor before this task started; refetch it here.
-        let package = await loadPackage(scanId: roomData.roomId, bundlePath: bundlePath)
-        guard let package = package else {
-            await reportFailure(
-                session: session,
-                error: NSError(domain: "RoomUploadService", code: -1,
-                               userInfo: [NSLocalizedDescriptionKey: "RoomScanPackage missing"])
-            )
-            return
-        }
-
-        do {
-            _ = try await RoomScanSyncService.shared.uploadAdvancedScanBundle(
-                package: package,
-                roomData: roomData,
-                styleSignals: styleSignals
-            )
-            await MainActor.run {
-                PostHogService.shared.capture("scan_upload_succeeded", properties: [
-                    "scan_session_id": session.sessionId.uuidString,
-                    "room_id": roomData.roomId.uuidString
-                ])
-            }
-        } catch {
-            await reportFailure(session: session, error: error)
-        }
-    }
-
-    @MainActor
-    private static func loadPackage(scanId: UUID, bundlePath: String) -> RoomScanPackage? {
-        let container = PersistenceController.shared.container
-        let ctx = container.mainContext
-        let descriptor = FetchDescriptor<RoomScanPackage>(
-            predicate: #Predicate { $0.scanId == scanId }
+        let pkg = RoomScanPackage(
+            scanId: scanId,
+            roomLocalId: roomLocalId,
+            bundlePath: bundlePath,
+            status: .heldLocal
         )
-        return (try? ctx.fetch(descriptor))?.first
+        modelContext.insert(pkg)
+        return pkg
     }
 
-    @MainActor
-    private static func reportFailure(session: RoomScanSession, error: Error) {
-        PostHogService.shared.capture("scan_upload_failed", properties: [
-            "scan_session_id": session.sessionId.uuidString,
-            "error": error.localizedDescription
-        ])
+    /// Resolve the hero photo id the user picked in the review step (or the
+    /// auto-scored hero) so the picker/room card can show the right frame.
+    private static func heroPhotoId(in manifest: ScanManifest) -> UUID? {
+        if let userHero = manifest.photos.first(where: { $0.isUserSelectedHero }) {
+            return userHero.id
+        }
+        if let scoredHero = manifest.photos.first(where: { $0.kind == .hero }) {
+            return scoredHero.id
+        }
+        return nil
     }
 }

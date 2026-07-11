@@ -74,6 +74,21 @@ public final class ScanEventChannel {
         pendingRecoveryCandidateCount = count
     }
 
+    // MARK: - Design-request draft resume
+
+    /// The id of an in-flight `DesignRequestDraft` found at launch (a request
+    /// the user started uploading/submitting but didn't finish), or nil when
+    /// there is none. Views observe this to offer a "resume your request"
+    /// banner — the same launch-time-signal shape as recovery candidates. The
+    /// flow is never auto-reopened and never auto-submitted; the user chooses.
+    public private(set) var pendingDesignRequestDraftId: UUID?
+
+    /// Record (or clear) the launch-time resumable draft. Called by
+    /// `PatinaApp`'s housekeeping task.
+    public func setPendingDesignRequestDraft(_ id: UUID?) {
+        pendingDesignRequestDraftId = id
+    }
+
     public init() {}
 }
 

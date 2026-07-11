@@ -29,7 +29,8 @@ public final class PersistenceController {
             SavedItem.self,
             StylePreferenceModel.self,
             SyncQueueItem.self,
-            RoomScanPackage.self
+            RoomScanPackage.self,
+            DesignRequestDraft.self
         ])
 
         let configuration = ModelConfiguration(
@@ -54,7 +55,8 @@ public final class PersistenceController {
             SavedItem.self,
             StylePreferenceModel.self,
             SyncQueueItem.self,
-            RoomScanPackage.self
+            RoomScanPackage.self,
+            DesignRequestDraft.self
         ])
 
         let configuration = ModelConfiguration(

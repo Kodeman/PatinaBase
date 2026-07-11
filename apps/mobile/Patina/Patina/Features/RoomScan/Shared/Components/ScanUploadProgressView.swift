@@ -74,28 +74,31 @@ public struct ScanUploadProgressView: View {
 
     private var headerIcon: String {
         switch package.status {
-        case .pending: return "clock"
-        case .syncing: return "arrow.up.circle"
-        case .synced:  return "checkmark.circle.fill"
-        case .failed:  return "exclamationmark.triangle.fill"
+        case .pending:   return "clock"
+        case .syncing:   return "arrow.up.circle"
+        case .synced:    return "checkmark.circle.fill"
+        case .failed:    return "exclamationmark.triangle.fill"
+        case .heldLocal: return "internaldrive"
         }
     }
 
     private var headerColor: Color {
         switch package.status {
-        case .pending: return .secondary
-        case .syncing: return .accentColor
-        case .synced:  return .green
-        case .failed:  return .orange
+        case .pending:   return .secondary
+        case .syncing:   return .accentColor
+        case .synced:    return .green
+        case .failed:    return .orange
+        case .heldLocal: return .secondary
         }
     }
 
     private var headerText: String {
         switch package.status {
-        case .pending: return package.lastError ?? "Waiting to upload"
-        case .syncing: return "Uploading scan…"
-        case .synced:  return "Uploaded"
-        case .failed:  return "Upload failed — will retry"
+        case .pending:   return package.lastError ?? "Waiting to upload"
+        case .syncing:   return "Uploading scan…"
+        case .synced:    return "Uploaded"
+        case .failed:    return "Upload failed — will retry"
+        case .heldLocal: return "Saved on this phone"
         }
     }
 

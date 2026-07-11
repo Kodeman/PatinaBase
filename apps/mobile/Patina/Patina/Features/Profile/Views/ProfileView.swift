@@ -178,7 +178,7 @@ struct ProfileView: View {
                         coordinator.navigate(to: .styleQuiz)
                     }
                     profileActionRow(icon: "bubble.left", label: "Work with a Designer") {
-                        coordinator.presentedSheet = .designServices(roomId: nil)
+                        coordinator.presentedSheet = .designServices(roomId: nil, preselectedScanIds: [])
                     }
                     profileActionRow(icon: "gearshape", label: "Settings") {
                         coordinator.presentedSheet = .settings
