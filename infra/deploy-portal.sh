@@ -68,6 +68,23 @@ cd "$APP_DIR"
 OPEN_NEXT=true NODE_ENV=production npx opennextjs-cloudflare build
 
 # ---------------------------------------------------------------------------
+# Phase 2.5 — bundle size gate (fail-closed backstop for the manifest dedupe;
+# Cloudflare rejects workers >64MB uncompressed with error 10027).
+# ---------------------------------------------------------------------------
+HANDLER="$APP_DIR/.open-next/server-functions/default/apps/${PORTAL}-portal/handler.mjs"
+if [ ! -f "$HANDLER" ]; then
+  echo "ERROR: expected bundle not found: $HANDLER" >&2
+  exit 1
+fi
+HANDLER_BYTES=$(wc -c < "$HANDLER" | tr -d ' ')
+echo "==> [2.5/3] handler.mjs size: ${HANDLER_BYTES} bytes"
+if [ "$HANDLER_BYTES" -gt $((55 * 1024 * 1024)) ]; then
+  echo "ERROR: handler.mjs exceeds 55MiB — manifest dedupe likely regressed" >&2
+  echo "       (see scripts/dedupe-client-reference-manifests.mjs)" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
 # Phase 3 — deploy the worker.
 # ---------------------------------------------------------------------------
 echo
