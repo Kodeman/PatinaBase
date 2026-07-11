@@ -3181,6 +3181,13 @@ export type Database = {
             referencedRelation: "leads"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "designer_clients_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "open_design_requests"
+            referencedColumns: ["id"]
+          },
         ]
       }
       designer_earnings: {
@@ -5404,10 +5411,67 @@ export type Database = {
           },
         ]
       }
+      lead_room_scans: {
+        Row: {
+          created_at: string
+          id: string
+          is_primary: boolean
+          lead_id: string
+          position: number
+          scan_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          lead_id: string
+          position?: number
+          scan_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          lead_id?: string
+          position?: number
+          scan_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_room_scans_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_room_scans_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "open_design_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_room_scans_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_room_scans_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           accepted_at: string | null
           budget_range: string | null
+          client_request_id: string | null
           contact_email: string | null
           contact_name: string | null
           contacted_at: string | null
@@ -5433,6 +5497,7 @@ export type Database = {
         Insert: {
           accepted_at?: string | null
           budget_range?: string | null
+          client_request_id?: string | null
           contact_email?: string | null
           contact_name?: string | null
           contacted_at?: string | null
@@ -5458,6 +5523,7 @@ export type Database = {
         Update: {
           accepted_at?: string | null
           budget_range?: string | null
+          client_request_id?: string | null
           contact_email?: string | null
           contact_name?: string | null
           contacted_at?: string | null
@@ -11729,6 +11795,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "room_scan_associations_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "open_design_requests"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "room_scan_associations_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -15247,6 +15320,23 @@ export type Database = {
         }
         Relationships: []
       }
+      open_design_requests: {
+        Row: {
+          budget_range: string | null
+          created_at: string | null
+          floor_area: number | null
+          id: string | null
+          location_city: string | null
+          location_state: string | null
+          project_description: string | null
+          project_type: string | null
+          room_type: string | null
+          scan_count: number | null
+          thumbnail_url: string | null
+          timeline: string | null
+        }
+        Relationships: []
+      }
       people_directory: {
         Row: {
           designer_id: string | null
@@ -16132,6 +16222,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_design_request: { Args: { p_lead_id: string }; Returns: Json }
       claim_quiz_session: { Args: { p_session_key: string }; Returns: Json }
       clone_proposal: {
         Args: {
@@ -17404,6 +17495,20 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      submit_design_request: {
+        Args: {
+          p_budget_range?: string
+          p_client_request_id?: string
+          p_description?: string
+          p_designer_id?: string
+          p_primary_scan_id?: string
+          p_project_type: string
+          p_scan_ids: string[]
+          p_source?: string
+          p_timeline?: string
+        }
+        Returns: Json
       }
       submit_style_quiz: {
         Args: {

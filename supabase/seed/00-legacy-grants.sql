@@ -1829,3 +1829,45 @@ DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.fc_dispatch_optin_invite() FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00285_design_request_submit.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.lead_room_scans TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00285_design_request_submit.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.lead_room_scans TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00285_design_request_submit.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.submit_design_request(uuid[], text, uuid, text, text, text, uuid, text, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00285_design_request_submit.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.submit_design_request(uuid[], text, uuid, text, text, text, uuid, text, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00286_design_request_pool_claim.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.open_design_requests TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00286_design_request_pool_claim.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.claim_design_request(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00286_design_request_pool_claim.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_design_request(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
