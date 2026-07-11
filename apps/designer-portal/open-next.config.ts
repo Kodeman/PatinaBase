@@ -20,6 +20,18 @@
 // wrangler.jsonc — see
 // node_modules/@opennextjs/cloudflare/templates/{open-next.config.ts,wrangler.jsonc}
 // for the fuller template this was trimmed from.
-import { defineCloudflareConfig } from '@opennextjs/cloudflare';
+import { defineCloudflareConfig, type OpenNextConfig } from '@opennextjs/cloudflare';
 
-export default defineCloudflareConfig();
+// Explicit annotation (not `satisfies`) so the default export's type is the
+// named, importable `OpenNextConfig` — spreading + `satisfies` leaves an
+// inferred literal type that references non-portable pnpm-internal paths (TS2742).
+const config: OpenNextConfig = {
+  ...defineCloudflareConfig(),
+  // next build, then dedupe the byte-identical API-route client-reference
+  // manifests in .next/standalone before OpenNext copies + bundles them.
+  // See scripts/dedupe-client-reference-manifests.mjs (works around
+  // vercel/next.js#88316).
+  buildCommand: 'pnpm build && node ../../scripts/dedupe-client-reference-manifests.mjs',
+};
+
+export default config;
