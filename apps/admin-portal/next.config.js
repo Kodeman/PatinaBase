@@ -33,12 +33,6 @@ const nextConfig = {
         : false,
   },
 
-  // Skip ESLint during build due to ESLint 8 incompatibility with flat config
-  // ESLint will still run with 'pnpm lint' using the root eslint.config.js
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
   // Allow specific origins for development
   allowedDevOrigins: [
     'http://192.168.1.16:3001',
@@ -68,6 +62,7 @@ const nextConfig = {
       },
     ],
     formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 60,
   },
 
   // Security and CORS headers
