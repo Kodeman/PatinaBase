@@ -1871,3 +1871,21 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.claim_design_request(uuid) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00289_design_request_client_status_notifications.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.claim_design_request(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00289_design_request_client_status_notifications.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_design_request(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00289_design_request_client_status_notifications.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.notify_design_request_status_change() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

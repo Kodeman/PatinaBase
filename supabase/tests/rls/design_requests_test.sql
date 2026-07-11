@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Design request pipeline tests (migrations 00285–00288)
+-- Design request pipeline tests (migrations 00285–00289)
 --
 -- Covers:
 --   1. Assigned submit → lead 'new' + junction (one primary) + active/full
@@ -17,6 +17,12 @@
 --   8. document_state: pool lead absent pre-claim; Shape C for A post-claim.
 --   9. Auto-resolve (ruling #2): a client with EXACTLY ONE active
 --      designer_clients relationship submits with NULL designer → assigned.
+--  10. Homeowner lead RLS (00014): homeowner reads own lead, another does not.
+--  11. Client status notification (00289): a designer flipping an app-originated
+--      lead (client_request_id set) to 'accepted' inserts exactly one homeowner
+--      in-app row carrying entity_type='design_request'.
+--  12. Legacy lead flip (00289): a status flip on a lead with client_request_id
+--      NULL inserts no homeowner notification (keeps 00288 reconciles silent).
 --
 -- How to run:
 --   docker exec -i supabase_db_supabase psql -U postgres -d postgres \
@@ -510,6 +516,105 @@ BEGIN
                                           'FAIL 9c: auto-resolved request mints the association';
 
   RAISE NOTICE 'design_requests: case 9 (auto-resolve) passed.';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Case 10 — homeowner lead RLS (00014): own lead visible, others' not
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  v_lead  uuid;
+  v_count integer;
+BEGIN
+  SELECT v INTO v_lead FROM pg_temp_state WHERE k = 'lead1';  -- homeowner 000001's lead
+
+  -- Owner homeowner reads its own lead.
+  PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000001');
+  SELECT count(*) INTO v_count FROM leads WHERE id = v_lead;
+  ASSERT v_count = 1, 'FAIL 10a: homeowner must read own lead, got ' || v_count;
+  PERFORM pg_temp.reset_role();
+
+  -- A different homeowner (non-designer, not the owner) sees zero rows.
+  PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000004');
+  SELECT count(*) INTO v_count FROM leads WHERE id = v_lead;
+  ASSERT v_count = 0, 'FAIL 10b: another homeowner must not read the lead, got ' || v_count;
+  PERFORM pg_temp.reset_role();
+
+  RAISE NOTICE 'design_requests: case 10 (homeowner lead RLS) passed.';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Case 11 — client status notification (00289): app-originated 'accepted' flip
+--
+-- The UPDATE is performed by the AUTHENTICATED designer (auth.uid() = designer_id
+-- passes the leads UPDATE policy). That user could NOT insert into notification_log
+-- directly (00041 policy: WITH CHECK auth.uid() IS NULL) — so a single homeowner
+-- row appearing proves the SECURITY DEFINER trigger escalation worked.
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  v_lead  uuid := 'de000000-0000-4000-8000-0000000000b1';
+  v_key   uuid := 'de000000-0000-4000-8000-0000000000c2';
+  v_count integer;
+BEGIN
+  -- App-originated lead: client_request_id set, designer assigned so the designer
+  -- can flip status through RLS. Inserted as superuser (fixtures bypass RLS).
+  INSERT INTO leads (id, homeowner_id, designer_id, project_type, status, client_request_id)
+  VALUES (v_lead,
+          'de000000-0000-4000-8000-000000000001',
+          'de000000-0000-4000-8000-000000000002',
+          'full_room', 'new', v_key);
+
+  -- Designer A accepts via a direct UPDATE (as the portal PostgREST path does).
+  PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000002');
+  UPDATE leads SET status = 'accepted' WHERE id = v_lead;
+  PERFORM pg_temp.reset_role();
+
+  -- Exactly one homeowner in-app row, typed + tagged for client tap-through.
+  SELECT count(*) INTO v_count
+  FROM notification_log
+  WHERE user_id = 'de000000-0000-4000-8000-000000000001'
+    AND type = 'design_request_accepted'
+    AND channel = 'in_app'
+    AND (metadata->>'lead_id') = v_lead::text;
+  ASSERT v_count = 1, 'FAIL 11a: expected exactly one homeowner accepted-notification, got ' || v_count;
+
+  ASSERT (SELECT metadata->>'entity_type' = 'design_request'
+            AND metadata->>'entity_id' = v_lead::text
+          FROM notification_log
+          WHERE user_id = 'de000000-0000-4000-8000-000000000001'
+            AND type = 'design_request_accepted'
+            AND (metadata->>'lead_id') = v_lead::text),
+    'FAIL 11b: notification metadata must carry entity_type/entity_id for routing';
+
+  RAISE NOTICE 'design_requests: case 11 (client status notification) passed.';
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Case 12 — legacy lead flip (00289): client_request_id NULL → no notification
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  v_lead  uuid := 'de000000-0000-4000-8000-0000000000b2';
+  v_count integer;
+BEGIN
+  -- Legacy/portal lead: no client_request_id. Designer assigned so we can flip.
+  INSERT INTO leads (id, homeowner_id, designer_id, project_type, status, client_request_id)
+  VALUES (v_lead,
+          'de000000-0000-4000-8000-000000000001',
+          'de000000-0000-4000-8000-000000000002',
+          'full_room', 'new', NULL);
+
+  PERFORM pg_temp.assume_user('de000000-0000-4000-8000-000000000002');
+  UPDATE leads SET status = 'accepted' WHERE id = v_lead;
+  PERFORM pg_temp.reset_role();
+
+  SELECT count(*) INTO v_count
+  FROM notification_log
+  WHERE (metadata->>'lead_id') = v_lead::text;
+  ASSERT v_count = 0, 'FAIL 12a: legacy-lead flip must insert no notification, got ' || v_count;
+
+  RAISE NOTICE 'design_requests: case 12 (legacy flip silent) passed.';
   RAISE NOTICE 'All design_requests assertions passed.';
 END $$;
 
