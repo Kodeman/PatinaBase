@@ -97,12 +97,15 @@ public enum DesignBudget: String, CaseIterable, Codable, Sendable {
 
 // MARK: - RPC contract
 
+// PostgREST maps these property names 1:1 to the RPC's argument names, so the
+// `p_*` snake_case is load-bearing — matches the RoomScanRPCParams pattern.
+// swiftlint:disable identifier_name
 /// Encodable parameters for `submit_design_request`. Keys map 1:1 to the
 /// function's argument names. `p_designer_id` is intentionally OMITTED — the
 /// SECURITY DEFINER function auto-resolves the caller's connected designer
 /// (exactly-one active `designer_clients`) or pools the request; iOS never
 /// resolves it. UUIDs are lowercased strings for a deterministic wire shape.
-public nonisolated struct SubmitDesignRequestParams: Encodable, Sendable, Equatable {
+nonisolated public struct SubmitDesignRequestParams: Encodable, Sendable, Equatable {
     public let p_scan_ids: [String]
     public let p_project_type: String
     public let p_primary_scan_id: String
@@ -135,10 +138,11 @@ public nonisolated struct SubmitDesignRequestParams: Encodable, Sendable, Equata
         self.p_client_request_id = clientRequestId.uuidString.lowercased()
     }
 }
+// swiftlint:enable identifier_name
 
 /// Decoded return of `submit_design_request`:
 /// `{lead_id, designer_id, status, pooled, idempotent_replay}`.
-public nonisolated struct DesignRequestResult: Decodable, Sendable, Equatable {
+nonisolated public struct DesignRequestResult: Decodable, Sendable, Equatable {
     public let leadId: UUID
     public let designerId: UUID?
     public let status: String
@@ -156,7 +160,7 @@ public nonisolated struct DesignRequestResult: Decodable, Sendable, Equatable {
 
 // MARK: - Errors
 
-public nonisolated enum DesignServicesError: Error, LocalizedError, Equatable, Sendable {
+nonisolated public enum DesignServicesError: Error, LocalizedError, Equatable, Sendable {
     case notAuthenticated
     case noScans
     case primaryNotInSet
@@ -221,14 +225,14 @@ public nonisolated enum DesignServicesError: Error, LocalizedError, Equatable, S
             .flatMap { UUID(uuidString: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
             .map { [$0] } ?? []
 
-        if lower.contains("not_authenticated")            { return .notAuthenticated }
-        if lower.contains("no_scans")                     { return .noScans }
-        if lower.contains("primary_not_in_set")           { return .primaryNotInSet }
-        if lower.contains("invalid_project_type")         { return .invalidProjectType }
-        if lower.contains("scan_not_found_or_not_owned")  { return .scanNotFound(scanIds: scanIds) }
-        if lower.contains("scan_not_ready")               { return .scanNotReady(scanIds: scanIds) }
-        if lower.contains("designer_not_found")           { return .designerNotFound }
-        if lower.contains("request_not_found")            { return .requestNotFound }
+        if lower.contains("not_authenticated") { return .notAuthenticated }
+        if lower.contains("no_scans") { return .noScans }
+        if lower.contains("primary_not_in_set") { return .primaryNotInSet }
+        if lower.contains("invalid_project_type") { return .invalidProjectType }
+        if lower.contains("scan_not_found_or_not_owned") { return .scanNotFound(scanIds: scanIds) }
+        if lower.contains("scan_not_ready") { return .scanNotReady(scanIds: scanIds) }
+        if lower.contains("designer_not_found") { return .designerNotFound }
+        if lower.contains("request_not_found") { return .requestNotFound }
         return .submissionFailed
     }
 }
@@ -248,7 +252,7 @@ public protocol DesignRequestSubmitting: Sendable {
 
 /// Real `DesignRequestSubmitting` — calls the `submit_design_request` RPC and
 /// maps errors. Stateless (no mutable storage) so it's freely `Sendable`.
-public nonisolated struct DesignServicesService: DesignRequestSubmitting {
+nonisolated public struct DesignServicesService: DesignRequestSubmitting {
 
     public static let shared = DesignServicesService()
 

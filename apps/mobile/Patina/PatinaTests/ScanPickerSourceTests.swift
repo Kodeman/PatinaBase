@@ -42,40 +42,40 @@ struct ScanPickerSourceTests {
 
     @Test
     func preselectionByScanIdKeepsCallerOrder() {
-        let a = makePackage(status: .heldLocal, createdOffset: -1)
-        let b = makePackage(status: .synced, createdOffset: -2)
+        let pkgA = makePackage(status: .heldLocal, createdOffset: -1)
+        let pkgB = makePackage(status: .synced, createdOffset: -2)
         let resolved = ScanPickerSource.resolvePreselection(
-            packages: [a, b],
-            preselectedScanIds: [b.scanId, a.scanId],
+            packages: [pkgA, pkgB],
+            preselectedScanIds: [pkgB.scanId, pkgA.scanId],
             preselectedRoomId: nil
         )
-        #expect(resolved == [b.scanId, a.scanId])
+        #expect(resolved == [pkgB.scanId, pkgA.scanId])
     }
 
     @Test
     func preselectionByRoomIdMatchesHeldScans() {
         let room = UUID()
-        let a = makePackage(status: .heldLocal, roomLocalId: room, createdOffset: -1)
-        let b = makePackage(status: .synced, roomLocalId: UUID(), createdOffset: -2)
+        let pkgA = makePackage(status: .heldLocal, roomLocalId: room, createdOffset: -1)
+        let pkgB = makePackage(status: .synced, roomLocalId: UUID(), createdOffset: -2)
         let resolved = ScanPickerSource.resolvePreselection(
-            packages: [a, b],
+            packages: [pkgA, pkgB],
             preselectedScanIds: [],
             preselectedRoomId: room
         )
-        #expect(resolved == [a.scanId])
+        #expect(resolved == [pkgA.scanId])
     }
 
     @Test
     func preselectionDedupesScanIdAndRoomId() {
         let room = UUID()
-        let a = makePackage(status: .heldLocal, roomLocalId: room, createdOffset: -1)
+        let pkgA = makePackage(status: .heldLocal, roomLocalId: room, createdOffset: -1)
         // Same scan matched by both its id AND its room → appears once.
         let resolved = ScanPickerSource.resolvePreselection(
-            packages: [a],
-            preselectedScanIds: [a.scanId],
+            packages: [pkgA],
+            preselectedScanIds: [pkgA.scanId],
             preselectedRoomId: room
         )
-        #expect(resolved == [a.scanId])
+        #expect(resolved == [pkgA.scanId])
     }
 
     @Test

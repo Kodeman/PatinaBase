@@ -118,15 +118,15 @@ struct ScanHoldMigratorTests {
         ctx.insert(makePackage(status: .pending))
         try ctx.save()
 
-        let m = migrator()
-        let first = m.migrateIfNeeded(in: ctx)
+        let mig = migrator()
+        let first = mig.migrateIfNeeded(in: ctx)
         #expect(first == 1)
 
         // A second pending row after the version has been recorded is NOT
         // migrated — the pass is one-shot per install generation.
         ctx.insert(makePackage(status: .pending))
         try ctx.save()
-        let second = m.migrateIfNeeded(in: ctx)
+        let second = mig.migrateIfNeeded(in: ctx)
         #expect(second == 0)
     }
 }

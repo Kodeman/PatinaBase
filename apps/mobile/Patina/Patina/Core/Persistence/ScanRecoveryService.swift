@@ -70,9 +70,17 @@ public final class ScanRecoveryService {
     public func scanForRecoverableSessions(
         in context: ModelContext
     ) async -> [RecoveryCandidate] {
+        // `heldLocal` bundles are INTENTIONALLY kept: they're sealed on the
+        // phone awaiting an explicit design request, not orphaned or
+        // interrupted uploads. Excluding them from the fetch means they're
+        // never discarded and never surfaced as recovery candidates — they're
+        // the resting state, not "recoverable". (Pinned by
+        // ScanRecoveryServiceHeldTests.)
         let descriptor = FetchDescriptor<RoomScanPackage>(
             predicate: #Predicate<RoomScanPackage> { pkg in
-                pkg.syncedAt == nil && pkg.statusRaw != "synced"
+                pkg.syncedAt == nil
+                    && pkg.statusRaw != "synced"
+                    && pkg.statusRaw != "heldLocal"
             },
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
@@ -86,13 +94,6 @@ public final class ScanRecoveryService {
         var rowsToDelete: [RoomScanPackage] = []
 
         for package in packages {
-            // `heldLocal` bundles are INTENTIONALLY kept: they're sealed on
-            // the phone awaiting an explicit design request, not orphaned or
-            // interrupted uploads. Never discard them and never surface them
-            // as recovery candidates — they're not "recoverable", they're the
-            // resting state. (Pinned by ScanRecoveryServiceHeldTests.)
-            if package.status == .heldLocal { continue }
-
             guard let bundleURL = package.absoluteBundleURL else {
                 logger.debug("No bundle URL for scan \(package.scanId.uuidString, privacy: .public); discarding row")
                 rowsToDelete.append(package)

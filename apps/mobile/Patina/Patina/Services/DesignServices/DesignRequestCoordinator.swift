@@ -19,6 +19,26 @@ import Foundation
 import Observation
 import SwiftData
 
+/// The request's detail fields, bundled so the draft-creation API stays small.
+public struct DesignRequestDetails: Sendable {
+    public var projectType: DesignServiceType?
+    public var budget: DesignBudget?
+    public var timeline: DesignTimeline?
+    public var description: String
+
+    public init(
+        projectType: DesignServiceType? = nil,
+        budget: DesignBudget? = nil,
+        timeline: DesignTimeline? = nil,
+        description: String = ""
+    ) {
+        self.projectType = projectType
+        self.budget = budget
+        self.timeline = timeline
+        self.description = description
+    }
+}
+
 @MainActor
 @Observable
 public final class DesignRequestCoordinator {
@@ -85,18 +105,15 @@ public final class DesignRequestCoordinator {
     public func createDraft(
         scanIds: [UUID],
         primaryScanId: UUID?,
-        projectType: DesignServiceType? = nil,
-        budget: DesignBudget? = nil,
-        timeline: DesignTimeline? = nil,
-        description: String = ""
+        details: DesignRequestDetails = DesignRequestDetails()
     ) -> DesignRequestDraft {
         discardActiveDraft()
         let newDraft = DesignRequestDraft(
             phase: .composing,
-            projectTypeRaw: projectType?.rawValue,
-            budgetRaw: budget?.rawValue,
-            timelineRaw: timeline?.rawValue,
-            requestDescription: description,
+            projectTypeRaw: details.projectType?.rawValue,
+            budgetRaw: details.budget?.rawValue,
+            timelineRaw: details.timeline?.rawValue,
+            requestDescription: details.description,
             scanIds: scanIds,
             primaryScanId: primaryScanId ?? scanIds.first
         )
@@ -107,33 +124,11 @@ public final class DesignRequestCoordinator {
         return newDraft
     }
 
-    /// Update the composing draft's selection + details from the flow. No-op
-    /// once the draft has left `composing`.
-    public func updateComposing(
-        scanIds: [UUID],
-        primaryScanId: UUID?,
-        projectType: DesignServiceType?,
-        budget: DesignBudget?,
-        timeline: DesignTimeline?,
-        description: String
-    ) {
-        guard let draft, draft.phase == .composing else { return }
-        draft.scanIds = scanIds
-        draft.primaryScanId = primaryScanId ?? scanIds.first
-        draft.projectTypeRaw = projectType?.rawValue
-        draft.budgetRaw = budget?.rawValue
-        draft.timelineRaw = timeline?.rawValue
-        draft.requestDescription = description
-        draft.touch()
-        try? modelContext.save()
-        rebuildScanPhases(for: draft)
-    }
-
     /// Permanently drop the active draft (user chose "discard"). The held
     /// scans themselves are untouched — a draft is only the *request*.
     public func discardActiveDraft() {
         let existing = (try? modelContext.fetch(DesignRequestDraft.activeDraftDescriptor)) ?? []
-        for d in existing { modelContext.delete(d) }
+        for draftRow in existing { modelContext.delete(draftRow) }
         if !existing.isEmpty { try? modelContext.save() }
         draft = nil
         scanPhases = [:]

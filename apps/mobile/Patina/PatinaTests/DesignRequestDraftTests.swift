@@ -23,19 +23,19 @@ struct DesignRequestDraftTests {
 
     @Test
     func scanIdsRoundTripPreservesOrder() {
-        let a = UUID(); let b = UUID(); let c = UUID()
-        let draft = DesignRequestDraft(scanIds: [a, b, c])
-        #expect(draft.scanIds == [a, b, c])
+        let s1 = UUID(); let s2 = UUID(); let s3 = UUID()
+        let draft = DesignRequestDraft(scanIds: [s1, s2, s3])
+        #expect(draft.scanIds == [s1, s2, s3])
 
-        draft.scanIds = [c, a]
-        #expect(draft.scanIds == [c, a])
+        draft.scanIds = [s3, s1]
+        #expect(draft.scanIds == [s3, s1])
     }
 
     @Test
     func primaryDefaultsToFirstScan() {
-        let a = UUID(); let b = UUID()
-        let draft = DesignRequestDraft(scanIds: [a, b])
-        #expect(draft.primaryScanId == a)
+        let s1 = UUID(); let s2 = UUID()
+        let draft = DesignRequestDraft(scanIds: [s1, s2])
+        #expect(draft.primaryScanId == s1)
     }
 
     @Test
