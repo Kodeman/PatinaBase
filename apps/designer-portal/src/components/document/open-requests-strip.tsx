@@ -179,7 +179,7 @@ export function OpenRequestsStrip() {
   // non-pilot designer (matches procurement-workspace-pilot's gate). All
   // hooks stay above the render branch below (hook-order stability).
   const { value: enabled, isLoading: flagLoading } = useFeatureFlag('design-request-pool');
-  const { data: requests } = useOpenDesignRequests();
+  const { data: requests } = useOpenDesignRequests({ enabled: !flagLoading && enabled });
 
   if (flagLoading || !enabled) return null;
 

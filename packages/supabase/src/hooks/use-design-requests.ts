@@ -66,9 +66,11 @@ export interface LeadRoomScan {
 /**
  * The open design-request pool (Desk strip, `design-request-pool` flag).
  * Polls every 30s — mirrors the inbox bell's cadence (no realtime publication
- * changes for this feature per the backend contract).
+ * changes for this feature per the backend contract). `opts.enabled` lets the
+ * caller gate the query (and its poll) on the feature flag having resolved,
+ * so non-pilot designers never issue the request.
  */
-export function useOpenDesignRequests() {
+export function useOpenDesignRequests(opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['open-design-requests'],
     queryFn: async () => {
@@ -83,7 +85,8 @@ export function useOpenDesignRequests() {
       if (error) throw error;
       return (data ?? []) as OpenDesignRequest[];
     },
-    refetchInterval: 30_000,
+    enabled: opts?.enabled ?? true,
+    refetchInterval: opts?.enabled ?? true ? 30_000 : false,
   });
 }
 
