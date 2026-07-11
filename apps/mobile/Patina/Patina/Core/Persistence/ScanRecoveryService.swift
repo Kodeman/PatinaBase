@@ -86,6 +86,13 @@ public final class ScanRecoveryService {
         var rowsToDelete: [RoomScanPackage] = []
 
         for package in packages {
+            // `heldLocal` bundles are INTENTIONALLY kept: they're sealed on
+            // the phone awaiting an explicit design request, not orphaned or
+            // interrupted uploads. Never discard them and never surface them
+            // as recovery candidates — they're not "recoverable", they're the
+            // resting state. (Pinned by ScanRecoveryServiceHeldTests.)
+            if package.status == .heldLocal { continue }
+
             guard let bundleURL = package.absoluteBundleURL else {
                 logger.debug("No bundle URL for scan \(package.scanId.uuidString, privacy: .public); discarding row")
                 rowsToDelete.append(package)

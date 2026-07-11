@@ -56,6 +56,22 @@ public final class ScanDiskBudget {
         case advise
         /// Below hard-stop threshold — refuse to start the scan.
         case blocked(reason: String)
+
+        /// User-facing advisory copy for the `.advise` / `.blocked` cases.
+        /// Mentions held scans because those are eviction-exempt — sending a
+        /// held scan to a designer (which uploads it) is what actually frees
+        /// space, so the copy points there rather than implying the app will
+        /// clean up on its own.
+        public var advisoryCopy: String? {
+            switch self {
+            case .ok:
+                return nil
+            case .advise:
+                return "Storage is getting tight. Scans you've saved on this phone stay here until you send them to a designer — send one to free up space."
+            case .blocked(let reason):
+                return "\(reason). Scans saved on this phone are kept until you send them to a designer — send one to free up space."
+            }
+        }
     }
 
     // MARK: - Singleton / state

@@ -17,6 +17,20 @@ import Foundation
 import Supabase
 import SwiftData
 
+/// Why an advanced-bundle upload is running. Drives whether the passive
+/// cellular gate applies.
+public enum UploadIntent: Sendable {
+    /// Background/launch resume of a previously-committed upload. Honours the
+    /// passive cellular gate (parks in `.pending` on a metered network when
+    /// the user hasn't opted in). This is the default for `resumePendingUploads`.
+    case backgroundSync
+    /// The user explicitly tapped "Send" in the design-request flow. The
+    /// request UI has already shown an inline metered-connection consent
+    /// prompt, so the passive gate is bypassed — parking here would strand the
+    /// user's in-flight request behind a Wi-Fi wait they didn't ask for.
+    case userRequested
+}
+
 extension RoomScanSyncService {
 
     /// Upload an advanced-scan bundle end-to-end.
@@ -35,7 +49,8 @@ extension RoomScanSyncService {
         package: RoomScanPackage,
         roomData: FirstWalkRoomData,
         styleSignals: FirstWalkStyleSignals,
-        projectId: UUID? = nil
+        projectId: UUID? = nil,
+        intent: UploadIntent = .backgroundSync
     ) async throws -> UploadResult {
         // Cellular gate: when on a metered network and the user hasn't
         // opted in, park the package in .pending with a "Waiting for Wi-Fi"
@@ -43,7 +58,12 @@ extension RoomScanSyncService {
         // `resumePendingUploads` on the next expensive→cheap transition. We
         // deliberately do NOT throw — the UI treats this as a benign
         // deferred state, not a failure.
-        if cachedIsExpensive,
+        //
+        // A `.userRequested` upload bypasses the passive gate entirely: the
+        // design-request flow shows its own inline metered-data consent before
+        // it ever calls in here, so parking would strand the user's request.
+        if intent == .backgroundSync,
+           cachedIsExpensive,
            !UserDefaults.standard.bool(forKey: Self.cellularOptInKey) {
             package.status = .pending
             package.lastError = "Waiting for Wi-Fi"
@@ -382,7 +402,7 @@ extension RoomScanSyncService {
     /// name/id correct and accept stubbed dimensions as the tradeoff for
     /// not needing to re-parse the parametric captured_room.json.
     @MainActor
-    private static func deriveRoomData(
+    static func deriveRoomData(
         from manifest: ScanManifest,
         package: RoomScanPackage,
         context: ModelContext
