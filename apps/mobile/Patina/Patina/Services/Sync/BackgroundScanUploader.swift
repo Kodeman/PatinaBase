@@ -16,15 +16,20 @@ import Supabase
 /// not in-memory `Data`. The class:
 ///
 ///   1. Refreshes the Supabase auth session so the uploaded token has ~1h TTL.
-///   2. Builds a PUT to `<supabaseUrl>/storage/v1/object/room-scans/<path>`
-///      with Authorization/apikey/Content-Type and `x-amz-meta-*` metadata.
+///   2. Builds a POST to `<supabaseUrl>/storage/v1/object/room-scans/<path>`
+///      with Authorization/apikey/Content-Type and the custom object metadata
+///      carried in the base64(JSON) `x-metadata` request header — the channel
+///      Storage actually persists into `user_metadata` for a raw-body upload.
+///      Raw `x-amz-meta-*` headers are dropped (land in `user_metadata = {}`),
+///      which silently broke every >=5 MB artifact's integrity check.
 ///   3. Delegates to `URLSessionConfiguration.background` for resume-safe
 ///      transfer.
 ///   4. Throttles `didSendBodyData` progress updates to ~2 Hz per artifact.
 ///   5. Maps HTTP 408/429/5xx → exponential backoff retry (max 3 attempts).
-///   6. Verifies round-tripped `x-amz-meta-sha256` after completion via a
-///      HEAD on `storage/v1/object/info/authenticated/room-scans/<path>`.
-///      Mismatch → retry (max 3).
+///   6. Verifies the round-tripped sha256 after completion by GETting
+///      `storage/v1/object/info/authenticated/room-scans/<path>` and reading
+///      `metadata.sha256` out of its JSON body. Present-and-differing → retry
+///      (max 3); absent/unverifiable → accept (the bytes landed with a 2xx).
 ///
 /// Wave 5.2 does not call this yet. Wave 6 will wire `RoomScanSyncService`
 /// and the `AppDelegate` background-completion handler.
@@ -195,10 +200,26 @@ public final class BackgroundScanUploader: NSObject {
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
         request.setValue(descriptor.mimeType, forHTTPHeaderField: "Content-Type")
         request.setValue("true", forHTTPHeaderField: "x-upsert")
-        request.setValue(descriptor.scanId.uuidString, forHTTPHeaderField: "x-amz-meta-scan-id")
-        request.setValue(descriptor.artifactKind, forHTTPHeaderField: "x-amz-meta-artifact-kind")
-        if let sha = descriptor.sha256 {
-            request.setValue(sha, forHTTPHeaderField: "x-amz-meta-sha256")
+
+        // Custom object metadata. Supabase Storage does NOT persist raw
+        // `x-amz-meta-*` request headers on a plain-body upload (proven: they
+        // land in `user_metadata = {}`), so the previous scan-id / kind / sha256
+        // headers were silently discarded and the integrity check below could
+        // never round-trip — every >=5 MB artifact deterministically failed
+        // with `.shaMismatch` despite a clean 200. The base64(JSON) `x-metadata`
+        // header is the wire format the server actually stores into
+        // `user_metadata` (same value the inline <5 MB supabase-swift
+        // `FileOptions(metadata:)` path lands via its multipart `metadata`
+        // field). See `encodeMetadataHeader`.
+        var meta: [String: String] = [
+            "scanId": descriptor.scanId.uuidString,
+            "artifactKind": descriptor.artifactKind
+        ]
+        if let sha = descriptor.sha256, !sha.isEmpty {
+            meta["sha256"] = sha
+        }
+        if let encoded = Self.encodeMetadataHeader(meta) {
+            request.setValue(encoded, forHTTPHeaderField: "x-metadata")
         }
         return request
     }
@@ -300,32 +321,64 @@ extension BackgroundScanUploader: URLSessionDelegate, URLSessionTaskDelegate, UR
                 return
             }
 
-            // Integrity check via HEAD.
-            if let expectedSha = descriptor.sha256 {
-                do {
-                    let actual = try await fetchStoredSha(for: descriptor)
-                    if actual != expectedSha {
-                        logger.error(
-                            "sha mismatch artifact=\(descriptor.artifactKind, privacy: .public) expected=\(expectedSha.prefix(10), privacy: .public) actual=\(actual ?? "<none>", privacy: .public)"
-                        )
-                        await retryOrFail(
-                            tracker: tracker,
-                            with: .shaMismatch(expected: expectedSha, actual: actual)
-                        )
-                        return
-                    }
-                } catch {
-                    // HEAD failure isn't fatal — treat as success since body
-                    // landed.
-                    logger.debug("HEAD check skipped: \(error.localizedDescription, privacy: .public)")
-                }
-            }
-
-            logger.info(
-                "uploaded artifact=\(descriptor.artifactKind, privacy: .public) sha=\(descriptor.sha256?.prefix(10) ?? "<none>", privacy: .public)"
-            )
-            onCompletion?(descriptor.scanId, descriptor.artifactKind, .success(()))
+            // Body landed with a 2xx — run the post-upload integrity check and
+            // report terminal completion. Extracted so this delegate method
+            // stays within complexity limits.
+            await verifyAndComplete(tracker: tracker)
         }
+    }
+
+    /// Post-2xx sha256 integrity check + terminal completion.
+    ///
+    /// Only a *present and differing* stored sha is a real failure. A
+    /// nil/absent stored sha means Storage surfaced none (unverifiable) —
+    /// accept, since the body already landed with a 2xx. This mirrors the
+    /// inline (<5 MB) path, which never verifies at all, and keeps this path
+    /// robust if Storage changes its metadata behaviour again.
+    private func verifyAndComplete(tracker: Tracker) async {
+        let descriptor = tracker.descriptor
+        if let expectedSha = descriptor.sha256 {
+            do {
+                let stored = try await fetchStoredSha(for: descriptor)
+                switch Self.verificationOutcome(expected: expectedSha, stored: stored) {
+                case .fail:
+                    logger.error(
+                        "sha mismatch artifact=\(descriptor.artifactKind, privacy: .public) expected=\(expectedSha.prefix(10), privacy: .public) actual=\(stored ?? "<none>", privacy: .public)"
+                    )
+                    UploadDiagnosticsLog.shared.log(
+                        event: "bg.sha_mismatch",
+                        scanId: descriptor.scanId,
+                        artifactKind: descriptor.artifactKind,
+                        extra: ["expected": String(expectedSha.prefix(12))]
+                    )
+                    await retryOrFail(
+                        tracker: tracker,
+                        with: .shaMismatch(expected: expectedSha, actual: stored)
+                    )
+                    return
+                case .accept:
+                    if stored == nil {
+                        logger.info(
+                            "sha unverifiable (storage surfaced no metadata) — accepting artifact=\(descriptor.artifactKind, privacy: .public)"
+                        )
+                        UploadDiagnosticsLog.shared.log(
+                            event: "bg.sha_unverifiable",
+                            scanId: descriptor.scanId,
+                            artifactKind: descriptor.artifactKind
+                        )
+                    }
+                }
+            } catch {
+                // Info fetch failed (transport/parse) — not fatal, the body
+                // already landed with a 2xx.
+                logger.debug("integrity check skipped: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
+        logger.info(
+            "uploaded artifact=\(descriptor.artifactKind, privacy: .public) sha=\(descriptor.sha256?.prefix(10) ?? "<none>", privacy: .public)"
+        )
+        onCompletion?(descriptor.scanId, descriptor.artifactKind, .success(()))
     }
 
     public nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
@@ -412,6 +465,11 @@ extension BackgroundScanUploader: URLSessionDelegate, URLSessionTaskDelegate, UR
 
     // MARK: - Integrity
 
+    /// Fetch the stored sha256 by GETting the object-info endpoint and reading
+    /// `metadata.sha256` from its JSON body. The metadata is NOT surfaced as an
+    /// `x-amz-meta-*` response header (the previous HEAD read always returned
+    /// nil), so we must parse the body — GET, not HEAD, since HEAD has none.
+    /// Returns nil when Storage surfaced no sha (treated as unverifiable).
     private func fetchStoredSha(for descriptor: UploadDescriptor) async throws -> String? {
         let base = AppConfiguration.supabaseURL
         guard let url = URL(
@@ -422,13 +480,16 @@ extension BackgroundScanUploader: URLSessionDelegate, URLSessionTaskDelegate, UR
         }
         let accessToken = SupabaseClientManager.shared.client.auth.currentSession?.accessToken ?? ""
         var request = URLRequest(url: url)
-        request.httpMethod = "HEAD"
+        request.httpMethod = "GET"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue(AppConfiguration.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        let (_, response) = try await URLSession.shared.data(for: request)
-        if let http = response as? HTTPURLResponse {
-            return http.value(forHTTPHeaderField: "x-amz-meta-sha256")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard
+            let http = response as? HTTPURLResponse,
+            (200..<300).contains(http.statusCode)
+        else {
+            return nil
         }
-        return nil
+        return Self.parseStoredSha(from: data)
     }
 }
