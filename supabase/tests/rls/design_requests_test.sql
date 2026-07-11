@@ -294,6 +294,13 @@ END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Case 4 — idempotent replay
+--
+-- Covers the sequential replay-probe path. The CONCURRENT double-submit window
+-- (two in-flight calls both missing the probe, loser hitting 23505 on
+-- uq_leads_homeowner_client_request) is handled by the unique_violation →
+-- replay conversion inside submit_design_request, but a single-session psql
+-- script cannot simulate two concurrent transactions — that branch is covered
+-- by construction (see the EXCEPTION block in 00285), not by this suite.
 -- ═══════════════════════════════════════════════════════════════════════════
 DO $$
 DECLARE

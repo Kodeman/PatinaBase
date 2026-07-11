@@ -198,17 +198,51 @@ BEGIN
   FROM profiles p WHERE p.id = v_uid;
 
   -- ── insert lead ───────────────────────────────────────────────────────────
-  INSERT INTO leads (
-    homeowner_id, designer_id, project_type, project_description,
-    budget_range, timeline, status, source, room_scan_id, client_request_id,
-    location_city, location_state, location_zip
-  ) VALUES (
-    v_uid, v_designer_id, p_project_type, p_description,
-    p_budget_range, p_timeline, 'new', COALESCE(p_source, 'Patina app'),
-    v_primary, p_client_request_id,
-    v_city, v_state, v_zip
-  )
-  RETURNING id INTO v_lead_id;
+  -- Concurrent double-submit race: two in-flight calls with the same
+  -- p_client_request_id can BOTH miss the replay probe above (neither is
+  -- committed yet), then collide on uq_leads_homeowner_client_request. Convert
+  -- the loser's 23505 into the friendly idempotent-replay return instead of a
+  -- raw unique_violation — but only when an idempotency key was supplied; any
+  -- other unique violation rethrows. (The in-transaction race itself can't be
+  -- simulated in a single psql session; the sequential same-key test covers the
+  -- replay probe, this guard covers the true concurrent window.)
+  BEGIN
+    INSERT INTO leads (
+      homeowner_id, designer_id, project_type, project_description,
+      budget_range, timeline, status, source, room_scan_id, client_request_id,
+      location_city, location_state, location_zip
+    ) VALUES (
+      v_uid, v_designer_id, p_project_type, p_description,
+      p_budget_range, p_timeline, 'new', COALESCE(p_source, 'Patina app'),
+      v_primary, p_client_request_id,
+      v_city, v_state, v_zip
+    )
+    RETURNING id INTO v_lead_id;
+  EXCEPTION WHEN unique_violation THEN
+    IF p_client_request_id IS NULL THEN
+      RAISE;  -- no idempotency key in play — not our race, rethrow
+    END IF;
+
+    -- concurrent duplicate with the same idempotency key: replay the winner
+    SELECT l.id, l.designer_id, l.status
+      INTO v_replay_id, v_replay_designer, v_replay_status
+    FROM leads l
+    WHERE l.homeowner_id = v_uid
+      AND l.client_request_id = p_client_request_id
+    LIMIT 1;
+
+    IF v_replay_id IS NULL THEN
+      RAISE;  -- some other unique constraint fired — rethrow
+    END IF;
+
+    RETURN jsonb_build_object(
+      'lead_id',           v_replay_id,
+      'designer_id',       v_replay_designer,
+      'status',            v_replay_status,
+      'pooled',            (v_replay_designer IS NULL),
+      'idempotent_replay', true
+    );
+  END;
 
   -- ── junction rows (ordered; exactly one primary) ─────────────────────────
   v_pos := 0;
