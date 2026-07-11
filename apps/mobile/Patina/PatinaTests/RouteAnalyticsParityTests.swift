@@ -86,6 +86,7 @@ struct RouteAnalyticsParityTests {
             (.profile, "Profile"),
             (.notifications, "Notifications"),
             (.designerConsultation, "Designer"),
+            (.designRequests(focusLeadId: nil), "Design Request"),
             (.projectList, "Projects"),
             (.decisionList, "Decisions"),
             (.threadList, "Messages")

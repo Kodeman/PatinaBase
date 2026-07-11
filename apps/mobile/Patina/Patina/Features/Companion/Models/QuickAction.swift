@@ -126,7 +126,7 @@ public enum QuickActionFactory {
             return [] // AR has its own controls
         case .preScanChecklist:
             return [] // Scan flow has its own UI
-        case .profile, .notifications, .designerConsultation:
+        case .profile, .notifications, .designerConsultation, .designRequests:
             return [] // These screens have their own navigation
         case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
              .manualRoomEntry:

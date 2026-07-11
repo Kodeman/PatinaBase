@@ -31,6 +31,10 @@ struct DailyRoomView: View {
     @State private var resumableScan: ScanRecoveryService.RecoveryCandidate?
     @Namespace private var cardNamespace
 
+    /// Tracked `@Observable` read — the promoted design-request status card
+    /// re-renders when a status refresh lands.
+    private var requestStatus: DesignRequestStatusService { DesignRequestStatusService.shared }
+
     var body: some View {
         // First-launch tour wraps the entire screen so the three coachmark
         // anchors (greeting header / saved heart / profile monogram) all
@@ -124,6 +128,11 @@ struct DailyRoomView: View {
         .task {
             await BadgeCountService.shared.refresh()
         }
+        // Hydrate the promoted design-request status card + hub-row state.
+        // Same polling floor as the badges: appear + foreground + push.
+        .task {
+            await DesignRequestStatusService.shared.refresh()
+        }
         // PT-4-9: surface the most recent resumable in-progress scan, if any.
         .task {
             let candidates = await ScanRecoveryService.shared
@@ -137,6 +146,8 @@ struct DailyRoomView: View {
                 // C.1 / R29: re-poll the Studio-rail badges on foreground —
                 // half of the polling floor (the other half is push receipt).
                 Task { await BadgeCountService.shared.refresh() }
+                // Same floor for the design-request status surfaces.
+                Task { await DesignRequestStatusService.shared.refresh() }
             }
         }
         .sheet(item: $viewModel.presentingAddFor) { product in
@@ -212,13 +223,27 @@ struct DailyRoomView: View {
                     .padding(.top, 8)
                 }
 
-                // Request-status surface (owned separately) mounts here
+                // Promoted status card for a SUBMITTED design request. The
+                // service decides which request (if any) is promoted; the card
+                // reappears when the stage advances after a dismissal.
+                if let promoted = requestStatus.promotedRequest {
+                    DesignRequestStatusCard(
+                        request: promoted,
+                        onOpen: {
+                            coordinator.navigate(
+                                to: .designRequests(focusLeadId: promoted.leadId.uuidString)
+                            )
+                        },
+                        onDismiss: { requestStatus.dismiss(promoted) }
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                }
 
                 // C.1 / R29: the Studio rail — Projects / Messages /
                 // Decisions / Notifications, the transactional hub the app
                 // was missing. Room-independent, so it renders above the
                 // room-dependent feed for zero-room users too.
-                // Request-status surface (owned separately) mounts here
                 StudioHubSection(
                     unreadNotifications: notificationsViewModel.notifications
                         .filter { !$0.isRead }.count,

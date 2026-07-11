@@ -340,6 +340,7 @@ extension CompanionAPIClient {
         case .profile: return "profile"
         case .notifications: return "notifications"
         case .designerConsultation: return "designer_consultation"
+        case .designRequests: return "design_requests"
         case .yourSpaces: return "your_spaces"
         case .roomProject: return "room_project"
         case .roomSettings: return "room_settings"

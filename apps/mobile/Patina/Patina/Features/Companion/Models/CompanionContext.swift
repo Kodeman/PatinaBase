@@ -132,6 +132,8 @@ public struct CompanionContext: Equatable {
             return "Notifications"
         case .designerConsultation:
             return "Working with a designer"
+        case .designRequests:
+            return "Your design request"
         case .yourSpaces:
             return "Your Spaces: \(roomCount) rooms"
         case .roomProject:
@@ -203,6 +205,8 @@ public struct CompanionContext: Equatable {
             return "bell"
         case .designerConsultation:
             return "bubble.left.and.bubble.right"
+        case .designRequests:
+            return "paperplane"
         case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
              .manualRoomEntry:
             return "house"

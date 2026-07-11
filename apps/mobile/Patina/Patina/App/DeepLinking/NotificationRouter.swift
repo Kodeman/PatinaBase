@@ -72,13 +72,14 @@ enum NotificationRouter {
             // Forward-compatible: no edge function emits entity_type "invoice"
             // yet, but the money-rail push envelopes may soon.
             return .invoiceDetail(invoiceId: entityId)
+        case "design_request", "lead":
+            return .designRequests(focusLeadId: entityId)
         case "thread", "message_thread":
             return .threadDetail(threadId: entityId)
         case "room":
             // Rooms route off a UUID — fall back gracefully if the
             // payload is malformed rather than crashing.
-            guard let roomUUID = UUID(uuidString: entityId) else { return nil }
-            return .roomDetail(roomId: roomUUID)
+            return UUID(uuidString: entityId).map { .roomDetail(roomId: $0) }
         case "product", "piece":
             return .pieceDetail(pieceId: entityId)
         default:

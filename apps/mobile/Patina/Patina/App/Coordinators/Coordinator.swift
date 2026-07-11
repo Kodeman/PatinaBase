@@ -80,6 +80,9 @@ public enum AppRoute: Hashable {
     case profile
     case notifications
     case designerConsultation
+    /// Submitted design-request status + detail. `focusLeadId` selects which
+    /// request to open (nil → the promoted / newest one).
+    case designRequests(focusLeadId: String?)
 
     // MVP v1 expanded — client surfaces
     case projectList                                  // client: list of projects
@@ -130,6 +133,7 @@ public enum AppRoute: Hashable {
         case .profile: return "Profile"
         case .notifications: return "Notifications"
         case .designerConsultation: return "Designer"
+        case .designRequests: return "Design Request"
         case .projectList: return "Projects"
         case .projectDetail: return "Project"
         case .decisionList: return "Decisions"
