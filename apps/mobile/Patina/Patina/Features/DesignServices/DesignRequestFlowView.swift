@@ -22,6 +22,10 @@ struct DesignRequestFlowView: View {
     let onClose: () -> Void
 
     @Environment(\.modelContext) var modelContext
+    /// Launch-time signal channel; the home resume banner reads
+    /// `pendingDesignRequestDraftId` from it, and this flow retires the
+    /// signal on open (the flow now owns the resume-or-discard interaction).
+    @Environment(\.scanEventChannel) private var scanEvents
 
     // Observe auth so the in-flow auth sheet can continue on the flip.
     @State var authService = AuthService.shared
@@ -93,6 +97,11 @@ struct DesignRequestFlowView: View {
     private func bootstrap() {
         guard !didBootstrap else { return }
         didBootstrap = true
+
+        // Entering the flow consumes the launch-time resume signal — the
+        // persisted draft (below) is the source of truth from here on, so the
+        // home banner must not outlive it.
+        scanEvents.setPendingDesignRequestDraft(nil)
 
         let coord = DesignRequestCoordinator(modelContext: modelContext)
         coordinator = coord

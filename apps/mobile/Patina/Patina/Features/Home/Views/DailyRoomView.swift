@@ -11,6 +11,9 @@ struct DailyRoomView: View {
     @Environment(\.appCoordinator) private var coordinator
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    /// Launch-time signals (scan recovery, design-request resume) published
+    /// by PatinaApp's housekeeping task.
+    @Environment(\.scanEventChannel) private var scanEvents
     /// Reduce Motion: nil animation = instant state change, so card→detail
     /// morphs and the toast appear without movement.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -179,6 +182,31 @@ struct DailyRoomView: View {
                         createdAt: resumableScan.createdAt,
                         onContinue: { continueSavedScan() },
                         onDismiss: { dismissSavedScan() }
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                }
+
+                // Design-request resume banner: PatinaApp's launch
+                // housekeeping found an in-flight DesignRequestDraft
+                // (uploading / awaiting submit). Tapping reopens the
+                // `.designServices` flow, whose bootstrap re-derives the
+                // resume-or-discard prompt from the persisted draft. The
+                // signal is consumed on tap or dismiss (one-shot per launch);
+                // the flow itself also clears it on open so any other door
+                // into the flow retires the banner too.
+                if scanEvents.pendingDesignRequestDraftId != nil {
+                    DesignRequestResumeBanner(
+                        onReview: {
+                            scanEvents.setPendingDesignRequestDraft(nil)
+                            coordinator.presentedSheet = .designServices(
+                                roomId: nil,
+                                preselectedScanIds: []
+                            )
+                        },
+                        onDismiss: {
+                            scanEvents.setPendingDesignRequestDraft(nil)
+                        }
                     )
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
