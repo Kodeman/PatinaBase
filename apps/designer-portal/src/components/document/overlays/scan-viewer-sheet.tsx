@@ -17,11 +17,20 @@
  * one place that fetch lives, and it retires the /portal/rooms/[id] page's
  * useRoom+useRoomScans mount. Do NOT fold this into doc-file-viewer.tsx (the
  * Folio consumes that as the paper file viewer); this is its sibling.
+ *
+ * Designer Handoff (Wave 1B): the client iOS app writes PUBLIC-style URLs into
+ * `model_url`/`model_url_gltf` even though `room-scans` is a PRIVATE bucket —
+ * those 400 for everyone. `useSignedScanModelUrl` derives the real storage
+ * path and mints a signed URL; this sheet is the one place that swap happens,
+ * so every caller (Discovery, Folio, Letterhead) gets a working model for
+ * free. The sheet holds the interactive viewer until the signing query
+ * settles, so the network tab only ever sees the signed request, never the
+ * raw 400.
  */
 
 import { useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { useRoomScan, type RoomScan } from '@patina/supabase';
+import { useRoomScan, useSignedScanModelUrl, type RoomScan } from '@patina/supabase';
 import { ErrorBoundary } from '@patina/design-system';
 
 // The 3D viewer pulls @react-three/fiber (a WebGL/three stack). Load it ONLY
@@ -44,6 +53,9 @@ export function ScanViewerSheet({
   onClose: () => void;
 }) {
   const { data: scan, isError } = useRoomScan(scanId);
+  // Signed model URL — enabled only once the scan itself is loaded (null-safe
+  // when disabled/no model). See the file header for why this swap happens here.
+  const { data: signedModelUrl, isLoading: signingModel } = useSignedScanModelUrl(scan);
   const restoreRef = useRef<HTMLElement | null>(null);
 
   // Esc / focus-restore — the doc-file-viewer sheet grammar. Capture-phase so
@@ -72,11 +84,43 @@ export function ScanViewerSheet({
       className="fixed inset-0 z-[60] flex flex-col bg-[var(--doc-paper)] motion-safe:animate-[doc-fade_200ms_ease-out]"
     >
       {scan ? (
-        // The viewer brings its own full-height charcoal chrome + close ✕. If
-        // it can't run (fiber@8 under React 19), degrade to the still (R90 fix).
-        <ErrorBoundary fallback={<ScanStill scan={scan} onClose={onClose} />}>
-          <RoomScanViewer scan={scan} onClose={onClose} />
-        </ErrorBoundary>
+        signingModel ? (
+          // Hold the interactive viewer until the signed URL resolves — the
+          // raw row's model_url/model_url_gltf are public-style URLs into a
+          // private bucket and would 400 if handed to the viewer directly.
+          <>
+            <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-7 py-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-charcoal)]">
+                {scan.name ?? 'Room scan'}
+              </p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-clay)] hover:opacity-80"
+              >
+                ← Back to the document
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+              <p className="text-[12px] italic text-[var(--text-muted)]">
+                Preparing the 3D file…
+              </p>
+            </div>
+          </>
+        ) : (
+          // The viewer brings its own full-height charcoal chrome + close ✕. If
+          // it can't run (fiber@8 under React 19), degrade to the still (R90 fix).
+          <ErrorBoundary fallback={<ScanStill scan={scan} onClose={onClose} />}>
+            <RoomScanViewer
+              scan={{
+                ...scan,
+                model_url: signedModelUrl ?? null,
+                model_url_gltf: signedModelUrl ?? null,
+              }}
+              onClose={onClose}
+            />
+          </ErrorBoundary>
+        )
       ) : (
         <>
           <div className="flex items-baseline justify-between border-b border-[var(--color-pearl)] px-7 py-3">

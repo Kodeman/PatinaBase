@@ -169,6 +169,16 @@ export const documentEvents = {
   logStripActed: (props: { action: 'log' | 'discard'; adjusted: boolean; had_idle: boolean }) =>
     track('document_log_strip_acted', props),
 
+  /** Designer Handoff (Wave 1B) — a pool request claimed from the Desk's
+   *  Open requests strip. Unprefixed (not `document_*`) per the task-level
+   *  naming call — a new `design_request_*` family, not a Document-internal
+   *  telemetry event. */
+  designRequestClaimed: (props: {
+    lead_id: string;
+    project_type: string | null;
+    scan_count: number;
+  }) => track('design_request_claimed', props),
+
   commandBar,
   wayfinding,
 };
