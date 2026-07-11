@@ -2982,3 +2982,17 @@ Adjacent rulings folded in:
 - **Content pipeline:** desk help content lives in Sanity (`kv3qrinl`, keys under `designer-portal/document/*` + the tour prefix), authored as drafts, published only at Kody's gate; repo microcopy (registry blurbs, margin notes, empty states) travels through PRs.
 
 *Entries add: R97 · last id = R97*
+
+## The Designer Handoff — scan→request pipeline, Wave 1B portal (2026-07-11)
+
+### R98 · The Desk gains an Open requests strip — pool + claim
+
+**Ruling (Kody, this session, via the design-request pipeline plan).** The client iOS app holds a room scan locally until the homeowner explicitly requests design services; unassigned requests route through an open pool rather than a designer pick at submit time. The Desk gains its own population to surface that pool: **Open requests**, placed **below "Needs your hand" and above "In motion"** — its own strip, not a Shape C need line. `desk-derivation.ts` is untouched by design (the backend contract's `open_design_requests` view already excludes assigned leads; Shape C's `designer_id is not null` filter keeps a pool request out of the folder grid until it is someone's).
+
+One act: **Accept** claims the request atomically (`claim_design_request` RPC, 00286 — first-wins `UPDATE … WHERE designer_id IS NULL`) and opens it directly at `/doc/{lead_id}` as a normal Brief. A losing Accept (another designer won first) shows a quiet inline "Taken by another designer" instead of a toast (R83) and the pool refetches. An empty pool renders nothing — a transient population, not standing front matter, so R94's taught-quiet-state treatment does not apply here.
+
+The open Brief also gains a **scan strip** (`BriefScanStrip`, between the facts block and the TriageBar) — a thumbnail grid over the request's full scan set (`lead_room_scans`, 00285), each tile opening the existing `ScanViewerSheet` (R90's door, unchanged). Renders nothing for scan-less leads. The viewer's own model-URL fetch was fixed alongside it: the client app writes public-style URLs into the private `room-scans` bucket, which 400 — `ScanViewerSheet` now signs the path before handing the scan to `RoomScanViewer`, which incidentally fixes the same class of URL for every existing caller (Discovery, Folio, Letterhead).
+
+**Gate:** behind the PostHog flag `design-request-pool`, fail-closed while loading (mirrors `procurement-workspace-pilot`'s gate). **Pending a Leah walk before flag-enable** — this is a new Leah-facing surface on the Desk, and per the program's own risk log it needs her eyeball before it goes live for real designers, same bar as any other Desk-population change.
+
+*Entries add: R98 · last id = R98*
