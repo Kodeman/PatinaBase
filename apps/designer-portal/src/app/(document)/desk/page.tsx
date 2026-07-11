@@ -20,6 +20,7 @@ import {
 } from '@/components/document/command-bar';
 import { documentEvents } from '@/lib/analytics/document-events';
 import { FolderCard } from '@/components/document/folder-card';
+import { OpenRequestsStrip } from '@/components/document/open-requests-strip';
 import { InMotionChip } from '@/components/document/in-motion-chip';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
 import { DeskReconnect } from '@/components/document/desk-reconnect';
@@ -263,6 +264,11 @@ export default function DeskPage() {
           </div>
         )}
       </section>
+
+      {/* Designer Handoff (Wave 1B) — the open request pool, between the
+          needs-hand stack and in-motion. Its own population; renders nothing
+          off-flag or when the pool is empty. */}
+      <OpenRequestsStrip />
 
       {/* R95 — on a quiet Desk the Studio index rises here, at full weight, to
           fill the space the folders would occupy. */}

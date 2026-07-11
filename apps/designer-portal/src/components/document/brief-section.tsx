@@ -12,6 +12,7 @@
 import { useLead } from '@patina/supabase';
 import { fmtDay } from '@/lib/document/format';
 import { TriageBar } from './triage-bar';
+import { BriefScanStrip } from './brief-scan-strip';
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -125,6 +126,10 @@ export function BriefSection({ leadId }: { leadId: string }) {
             .join(' · ')}
         </p>
       )}
+
+      {/* Designer Handoff (Wave 1B) — the request's scan set, between the
+          facts and the triage act. Renders nothing for scan-less leads. */}
+      <BriefScanStrip leadId={leadId} />
 
       {/* R61: the triage act, in the document. Accept → Discovery, Nurture →
           People, Pass → declined. Re-derives the Desk in one act (no reload). */}
