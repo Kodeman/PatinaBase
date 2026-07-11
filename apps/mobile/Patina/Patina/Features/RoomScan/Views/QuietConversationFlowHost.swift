@@ -97,7 +97,7 @@ struct QuietConversationFlowHost: View {
                         #if DEBUG
                         PatinaLog.scan.debug("[QuietConversationFlowHost] review onComplete scanId=\(review.id)")
                         #endif
-                        kickOffReviewUpload(scanId: review.id)
+                        holdScanLocally(scanId: review.id)
                         savedScanId = review.id
                         reviewScan = nil
                         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) {
@@ -322,28 +322,21 @@ struct QuietConversationFlowHost: View {
         step = .initial
     }
 
-    /// Kick off the background upload for a review-finalized scan bundle.
-    /// The review view has already called `finalizeBundleAfterReview(...)` on
-    /// the capture service, so the manifest is sealed and the bundle is safe
-    /// to enqueue for upload. We hand the heavy lifting to
-    /// `RoomUploadService` which writes a `RoomScanPackage` row and detaches
-    /// the real upload task.
-    private func kickOffReviewUpload(scanId: UUID) {
+    /// Seal a review-finalized scan bundle on the phone — strictly local, no
+    /// upload. The review view has already called `finalizeBundleAfterReview`
+    /// on the capture service, so the manifest is sealed. `RoomUploadService`
+    /// writes a `.heldLocal` `RoomScanPackage` row and persists the local
+    /// `RoomModel` so the room appears in "Your Spaces"; nothing leaves the
+    /// device until the user explicitly requests design services.
+    private func holdScanLocally(scanId: UUID) {
         guard let vm = scanViewModel, let session else { return }
         guard let roomData = vm.captureService.processRoom() else { return }
 
-        // The v2 flow doesn't build a FirstWalkStyleSignals up front; an empty
-        // one is fine — the Conversation step will populate style signals via
-        // its own pipeline (Wave 5/6 will plumb them into the upload payload).
-        let emptySignals = FirstWalkStyleSignals()
-
         let bundlePath = vm.captureService.bundleWriter?.relativePath
-        RoomUploadService.shared.uploadInBackground(
+        RoomUploadService.shared.holdLocally(
             session: session,
             roomData: roomData,
-            styleSignals: emptySignals,
             bundlePath: bundlePath,
-            remoteRoomId: nil,
             modelContext: modelContext
         )
     }
