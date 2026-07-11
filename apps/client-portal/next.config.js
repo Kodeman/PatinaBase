@@ -43,11 +43,6 @@ const nextConfig = {
   // CRITICAL: Enable standalone output for Docker deployment
   output: 'standalone',
 
-  // Temporarily disable ESLint during build
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
   // Skip type checking during build (pre-existing type issues to fix in Phase 4)
   typescript: {
     ignoreBuildErrors: true,
@@ -218,10 +213,6 @@ const nextConfig = {
       };
     }
     return config;
-  },
-
-  experimental: {
-    scrollRestoration: true,
   },
 
   // F3 — `@patina/help-system` joins the transpilePackages list so Next can
