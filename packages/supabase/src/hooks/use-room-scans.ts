@@ -346,6 +346,68 @@ export function useAssociateRoomScanWithProject() {
 }
 
 /**
+ * Signed model URL for a room scan's 3D file (Designer Handoff, Wave 1B).
+ *
+ * The client iOS app writes PUBLIC-style URLs
+ * (`.../storage/v1/object/public/room-scans/...`) into `model_url`/
+ * `model_url_gltf` even though `room-scans` is a PRIVATE bucket — those 400 for
+ * everyone. This hook derives the storage path from whatever shape the row
+ * carries and mints a real signed URL, gltf preferred over usdz (mirrors
+ * `ViewerCanvas`'s own `model_url_gltf || model_url` precedence):
+ *   - a public-style URL containing the bucket marker → strip to the bucket
+ *     path, then sign
+ *   - a bare storage path (no scheme) → sign directly
+ *   - anything else (already a real URL, e.g. a previously-signed one) →
+ *     pass through unchanged
+ * Null-safe throughout: no scan, or a scan with neither model field set,
+ * resolves to `null` without hitting storage.
+ */
+const PUBLIC_ROOM_SCANS_MARKER = '/storage/v1/object/public/room-scans/';
+
+export function useSignedScanModelUrl(
+  scan: Pick<RoomScan, 'id' | 'model_url' | 'model_url_gltf'> | null | undefined,
+) {
+  const rawUrl = scan ? (scan.model_url_gltf ?? scan.model_url) : null;
+
+  return useQuery({
+    queryKey: ['scan-signed-model', scan?.id ?? null],
+    queryFn: async () => {
+      if (!rawUrl) return null;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      let path: string | null = null;
+      if (rawUrl.includes(PUBLIC_ROOM_SCANS_MARKER)) {
+        path = rawUrl.split(PUBLIC_ROOM_SCANS_MARKER)[1] ?? null;
+      } else if (!/^https?:\/\//i.test(rawUrl)) {
+        // No scheme — a bare storage path. Sign it directly.
+        path = rawUrl;
+      }
+
+      // Not a recognized public-bucket URL or bare path — already a usable
+      // URL (e.g. a real signed URL). Pass it through untouched.
+      if (!path) return rawUrl;
+
+      const { data, error } = await supabase.storage
+        .from('room-scans')
+        .createSignedUrl(path, 3600);
+
+      if (error) {
+        // The artifact genuinely doesn't exist (e.g. seeded/fake data) — a
+        // null model is a valid, handled state for the viewer, not a throw.
+        if (error.message?.includes('not found')) return null;
+        throw error;
+      }
+
+      return data?.signedUrl ?? null;
+    },
+    enabled: !!rawUrl,
+    staleTime: 1000 * 60 * 30, // 30 minutes
+  });
+}
+
+/**
  * Get room scans for a specific project
  */
 export function useProjectRoomScans(projectId: string) {

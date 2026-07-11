@@ -426,6 +426,7 @@ export {
   useDeleteRoomScan,
   useAssociateRoomScanWithProject,
   useProjectRoomScans,
+  useSignedScanModelUrl,
 } from './use-room-scans';
 export type {
   RoomScan,
@@ -434,6 +435,16 @@ export type {
   RoomScanStyleSignals,
   RoomScanFilters,
 } from './use-room-scans';
+export {
+  useOpenDesignRequests,
+  useClaimDesignRequest,
+  useLeadScans,
+} from './use-design-requests';
+export type {
+  OpenDesignRequest,
+  ClaimDesignRequestResult,
+  LeadRoomScan,
+} from './use-design-requests';
 export {
   useRooms,
   useRoom,
