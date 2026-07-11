@@ -58,7 +58,31 @@ struct StudioHubSection: View {
     /// Tracked `@Observable` reads — the section re-renders when a badge
     /// refresh lands or the auth state flips.
     private var badges: BadgeCountService { BadgeCountService.shared }
+    private var requestStatus: DesignRequestStatusService { DesignRequestStatusService.shared }
     private var isGuest: Bool { !AuthService.shared.isAuthenticated }
+
+    /// The "Your Designer" row goes dynamic once a request exists: it points
+    /// at the status detail and carries the current stage as its meta line.
+    /// Guests always see the static "Get design help" landing entry (the
+    /// service holds no requests for guests).
+    private var hasDesignRequests: Bool { !isGuest && !requestStatus.requests.isEmpty }
+
+    /// Stage label for the "Your Designer" meta — rendered uppercase by the
+    /// row's `textCase`, so "Finding your designer" reads "FINDING YOUR
+    /// DESIGNER". Falls back to the newest request when none is promoted.
+    private var designerMeta: String {
+        guard hasDesignRequests else { return "Get design help" }
+        let stage = requestStatus.promotedRequest?.stage ?? requestStatus.requests.first?.stage
+        return stage?.badgeTitle ?? "Get design help"
+    }
+
+    private var designerRoute: AppRoute {
+        hasDesignRequests ? .designRequests(focusLeadId: nil) : .designerConsultation
+    }
+
+    private var designerBadge: Int {
+        hasDesignRequests ? requestStatus.attentionCount : 0
+    }
 
     /// "Your Spaces" row meta — "captured", not "scanned": manual-entry
     /// rooms exist alongside scanned ones.
@@ -96,11 +120,13 @@ struct StudioHubSection: View {
                 hairline
                 row(StudioRow(
                     title: "Your Designer",
-                    meta: "Get design help",
+                    meta: designerMeta,
                     guestMeta: "Get design help",
-                    badge: 0,
-                    route: .designerConsultation,
-                    hint: "Opens designer services.",
+                    badge: designerBadge,
+                    route: designerRoute,
+                    hint: hasDesignRequests
+                        ? "Opens your design request."
+                        : "Opens designer services.",
                     requiresAuth: false,
                     analyticsKey: "your_designer"
                 ))
