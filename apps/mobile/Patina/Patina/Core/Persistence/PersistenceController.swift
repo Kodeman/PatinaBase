@@ -30,7 +30,8 @@ public final class PersistenceController {
             StylePreferenceModel.self,
             SyncQueueItem.self,
             RoomScanPackage.self,
-            DesignRequestDraft.self
+            DesignRequestDraft.self,
+            SubmittedDesignRequest.self
         ])
 
         let configuration = ModelConfiguration(
@@ -56,7 +57,8 @@ public final class PersistenceController {
             StylePreferenceModel.self,
             SyncQueueItem.self,
             RoomScanPackage.self,
-            DesignRequestDraft.self
+            DesignRequestDraft.self,
+            SubmittedDesignRequest.self
         ])
 
         let configuration = ModelConfiguration(

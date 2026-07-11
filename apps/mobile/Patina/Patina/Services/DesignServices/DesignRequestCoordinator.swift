@@ -220,6 +220,9 @@ public final class DesignRequestCoordinator {
             let submitResult = try await submitter.submitDesignRequest(params)
             result = submitResult
             draft.leadId = submitResult.leadId
+            // Durable receipt (home status card + hub row + reconciliation),
+            // written BEFORE the draft is deleted; idempotent-replay safe.
+            recordSubmittedRequest(submitResult, draft: draft)
             try? modelContext.save()
 
             PostHogService.shared.capture("design_request_submitted", properties: [
@@ -241,6 +244,18 @@ public final class DesignRequestCoordinator {
             draft.setPhase(.readyToSubmit)
             try? modelContext.save()
         }
+    }
+
+    /// Persist the durable `SubmittedDesignRequest` receipt for a successful
+    /// submit (fetch-or-insert by leadId — idempotent-replay safe).
+    private func recordSubmittedRequest(_ result: DesignRequestResult, draft: DesignRequestDraft) {
+        SubmittedDesignRequest.record(
+            homeownerId: AuthService.shared.currentUserId.flatMap(UUID.init(uuidString:)),
+            result: result,
+            projectTypeRaw: draft.projectTypeRaw,
+            scanCount: draft.scanIds.count,
+            in: modelContext
+        )
     }
 
     // MARK: - Upload internals
