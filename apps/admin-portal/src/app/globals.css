@@ -1,9 +1,9 @@
+@import '../../../../packages/patina-design-system/src/styles/typography.css';
+@import '../styles/accessibility.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import '../../../../packages/patina-design-system/src/styles/typography.css';
-@import '../styles/accessibility.css';
 
 /* ===== Portal Design Tokens ===== */
 :root {
