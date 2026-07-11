@@ -212,13 +212,17 @@ struct DailyRoomView: View {
                     .padding(.top, 8)
                 }
 
+                // Request-status surface (owned separately) mounts here
+
                 // C.1 / R29: the Studio rail — Projects / Messages /
                 // Decisions / Notifications, the transactional hub the app
                 // was missing. Room-independent, so it renders above the
                 // room-dependent feed for zero-room users too.
+                // Request-status surface (owned separately) mounts here
                 StudioHubSection(
                     unreadNotifications: notificationsViewModel.notifications
-                        .filter { !$0.isRead }.count
+                        .filter { !$0.isRead }.count,
+                    roomCount: viewModel.rooms.count
                 )
 
                 if let story = viewModel.todayStory {
@@ -299,7 +303,14 @@ struct DailyRoomView: View {
                         room: viewModel.selectedRoom,
                         filters: viewModel.categoryFilters,
                         activeFilterID: viewModel.activeFilterID,
-                        onSelectFilter: { viewModel.selectFilter($0) }
+                        onSelectFilter: { viewModel.selectFilter($0) },
+                        onOpenRoom: {
+                            guard let room = viewModel.selectedRoom else { return }
+                            PostHogService.shared.capture("room_open_tapped", properties: [
+                                "source": "room_context_bar"
+                            ])
+                            coordinator.navigate(to: .roomProject(roomId: room.id))
+                        }
                     )
 
                     LazyVStack(spacing: 0) {

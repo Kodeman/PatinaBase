@@ -74,6 +74,13 @@ struct YourSpacesView: View {
                 }
             }
         }
+        // R04: nav bar is hidden for this destination (ContentView) — pin a
+        // back affordance over the content (matches ProjectListView).
+        .overlay(alignment: .topLeading) {
+            BackChevronButton(style: .light) { coordinator.goBack() }
+                .padding(.top, 8)
+                .padding(.leading, 18)
+        }
         // Contextual help panel — surfaces every Sanity article whose
         // surfaceKey is `ios-app/rooms` or a child of it.
         .helpPanel(

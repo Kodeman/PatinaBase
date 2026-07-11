@@ -28,7 +28,7 @@ struct DesignerConsultationView: View {
                         .lineSpacing(4)
                 }
                 .padding(24)
-                .padding(.top, 40)
+                .padding(.top, 56)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(PatinaColors.Background.dark)
 
@@ -48,6 +48,14 @@ struct DesignerConsultationView: View {
         }
         .background(PatinaColors.Background.primary)
         .toolbarTitleDisplayMode(.inline)
+        // R04: nav bar is hidden for this destination (ContentView) — pin a
+        // back affordance over the dark hero band. `.dark` style: light
+        // chevron on a translucent dark pill, matching the hero background.
+        .overlay(alignment: .topLeading) {
+            BackChevronButton(style: .dark) { coordinator.goBack() }
+                .padding(.top, 8)
+                .padding(.leading, 18)
+        }
     }
 
     private var designerCard: some View {
