@@ -5,7 +5,7 @@
   "description": "Manufacturer onboarding + catalog management portal (scaffold; full onboarding flow ships post-Sprint-3 pilot)",
   "scripts": {
     "dev": "next dev -p 3003",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start -p 3003",
     "lint": "next lint",
     "type-check": "tsc --noEmit"

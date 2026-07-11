@@ -4,10 +4,10 @@
   "private": true,
   "description": "Patina Designer Portal - Designer onboarding, catalog management, and project collaboration",
   "scripts": {
-    "dev": "next dev -p 3000",
-    "dev:network": "HOST=0.0.0.0 next dev",
+    "dev": "next dev --webpack -p 3000",
+    "dev:network": "HOST=0.0.0.0 next dev --webpack",
     "dev:network-setup": "../../scripts/setup-network-dev.sh && npm run dev:network",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -17,7 +17,7 @@
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
     "clean": "rm -rf .next",
-    "analyze": "ANALYZE=true next build"
+    "analyze": "ANALYZE=true next build --webpack"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
