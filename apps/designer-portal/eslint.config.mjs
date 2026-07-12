@@ -51,8 +51,12 @@ export default [
       'jsx-a11y': jsxA11yPlugin,
     },
     rules: {
-      ...nextPlugin.flatConfig.recommended.rules,
-      ...nextPlugin.flatConfig.coreWebVitals.rules,
+      // @next/eslint-plugin-next 16.x renamed its flat-config export from
+      // `flatConfig.{recommended,coreWebVitals}` to
+      // `configs.{recommended,'core-web-vitals'}` (verified against the
+      // installed 16.2.10 — `flatConfig` is now undefined).
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs['core-web-vitals'].rules,
       ...reactHooks.configs.recommended.rules,
       // Repo conventions (match apps/client-portal/.eslintrc.json):
       '@next/next/no-img-element': 'off',

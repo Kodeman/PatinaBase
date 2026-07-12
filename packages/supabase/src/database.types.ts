@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.1"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -16217,6 +16212,43 @@ export type Database = {
       }
       _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
       _compute_quiz_profile: { Args: { p_answers: Json }; Returns: Json }
+      _provision_studio: {
+        Args: { p_name: string; p_user_id: string }
+        Returns: {
+          address: Json | null
+          business_verified: boolean
+          business_verified_at: string | null
+          created_at: string
+          description: string | null
+          email: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          phone: string | null
+          settings: Json
+          slug: string
+          status: Database["public"]["Enums"]["organization_status"]
+          subscription_expires_at: string | null
+          subscription_tier: Database["public"]["Enums"]["subscription_tier"]
+          tax_id: string | null
+          type: Database["public"]["Enums"]["organization_type"]
+          updated_at: string
+          website: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      accept_workspace_invitation: {
+        Args: { p_token: string }
+        Returns: {
+          organization_id: string
+          organization_name: string
+        }[]
+      }
       activate_house_taste: { Args: { p_version: number }; Returns: undefined }
       activate_project_v2: { Args: { input: Json }; Returns: string }
       activate_proposal_as_project: {
@@ -16635,6 +16667,40 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_studio_workspace: {
+        Args: { p_name: string }
+        Returns: {
+          address: Json | null
+          business_verified: boolean
+          business_verified_at: string | null
+          created_at: string
+          description: string | null
+          email: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          phone: string | null
+          settings: Json
+          slug: string
+          status: Database["public"]["Enums"]["organization_status"]
+          subscription_expires_at: string | null
+          subscription_tier: Database["public"]["Enums"]["subscription_tier"]
+          tax_id: string | null
+          type: Database["public"]["Enums"]["organization_type"]
+          updated_at: string
+          website: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      decline_workspace_invitation: {
+        Args: { p_token: string }
+        Returns: undefined
+      }
       decrement_room_saved_items: {
         Args: { p_count?: number; p_room_id: string }
         Returns: undefined
@@ -16802,6 +16868,7 @@ export type Database = {
         Args: { p_milestone_id: string }
         Returns: string
       }
+      generate_unique_org_slug: { Args: { p_name: string }; Returns: string }
       get_ab_variant_stats: {
         Args: { p_campaign_id: string }
         Returns: {

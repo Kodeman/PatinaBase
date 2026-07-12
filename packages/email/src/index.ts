@@ -23,6 +23,8 @@ export { LeadExpiring } from './templates/lead-expiring';
 export type { LeadExpiringProps } from './templates/lead-expiring';
 export { ClientConfirmation } from './templates/client-confirmation';
 export type { ClientConfirmationProps } from './templates/client-confirmation';
+export { WorkspaceInvite } from './templates/workspace-invite';
+export type { WorkspaceInviteProps } from './templates/workspace-invite';
 export { OrderConfirmation } from './templates/order-confirmation';
 export type { OrderConfirmationProps, OrderItem } from './templates/order-confirmation';
 export { PaymentReceipt } from './templates/payment-receipt';

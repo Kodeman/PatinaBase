@@ -366,13 +366,17 @@ final class SupabaseSessionService: SessionProviding {
 
     private func fetchWorkspaces(userID: String) async -> [CaptureWorkspace] {
         do {
+            // Active-only: org SELECT RLS only exposes orgs for active memberships, so an
+            // invited row embeds null `organizations` — decode tolerates that (compactMap)
+            // instead of throwing and dead-ending sign-in with an empty workspace list.
             let joins: [OrgJoin] = try await client
                 .from("organization_members")
                 .select("organizations(id, name)")
                 .eq("user_id", value: userID)
+                .eq("status", value: "active")
                 .execute()
                 .value
-            return joins.map { CaptureWorkspace(id: $0.organizations.id, name: $0.organizations.name) }
+            return joins.compactMap { $0.organizations }.map { CaptureWorkspace(id: $0.id, name: $0.name) }
         } catch {
             log.error("workspaces fetch failed: \(error.localizedDescription, privacy: .public)")
             return []
@@ -449,7 +453,7 @@ private struct RoleRow: Decodable {
 
 /// `organization_members` → `organizations(id, name)` join.
 private struct OrgJoin: Decodable {
-    let organizations: OrgRow
+    let organizations: OrgRow?
 }
 private struct OrgRow: Decodable {
     let id: String
