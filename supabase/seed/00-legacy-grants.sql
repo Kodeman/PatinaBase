@@ -2123,3 +2123,51 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.agent_queue_stats() TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00299_agent_roles.sql
+DO $g$ BEGIN
+  GRANT USAGE ON SCHEMA public TO agent_writer;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00299_agent_roles.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT ON public.agent_tasks TO agent_writer;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00299_agent_roles.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.enqueue_agent_task(text, jsonb, text, int, text, text, uuid, text, timestamptz, int, text, text, text, uuid, numeric, jsonb, text) TO agent_writer;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00299_agent_roles.sql
+DO $g$ BEGIN
+  GRANT agent_reader TO postgres;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00299_agent_roles.sql
+DO $g$ BEGIN
+  GRANT agent_writer TO postgres;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00300_queue_groom.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.job_runs TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00300_queue_groom.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.groom_agent_tasks(interval, interval, interval) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00300_queue_groom.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.groom_agent_tasks(interval, interval, interval) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

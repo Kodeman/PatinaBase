@@ -5537,6 +5537,39 @@ export type Database = {
           },
         ]
       }
+      job_runs: {
+        Row: {
+          cost_usd: number | null
+          detail: Json
+          error: string | null
+          finished_at: string | null
+          id: number
+          job_name: string
+          started_at: string
+          status: string
+        }
+        Insert: {
+          cost_usd?: number | null
+          detail?: Json
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          job_name: string
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          cost_usd?: number | null
+          detail?: Json
+          error?: string | null
+          finished_at?: string | null
+          id?: never
+          job_name?: string
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       lead_room_scans: {
         Row: {
           created_at: string
@@ -17066,6 +17099,14 @@ export type Database = {
       grant_role_to_user: {
         Args: { p_granted_by?: string; p_role_name: string; p_user_id: string }
         Returns: boolean
+      }
+      groom_agent_tasks: {
+        Args: {
+          p_failed_cooldown?: string
+          p_stale_review?: string
+          p_stale_running?: string
+        }
+        Returns: Json
       }
       immutable_array_to_string: {
         Args: { arr: string[]; sep: string }
