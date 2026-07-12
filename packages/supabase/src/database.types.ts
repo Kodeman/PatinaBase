@@ -6028,6 +6028,7 @@ export type Database = {
           type_lead_response: boolean
           type_new_lead: boolean
           type_new_products: boolean
+          type_onboarding: boolean
           type_order_confirmation: boolean
           type_payment_receipt: boolean
           type_price_drop: boolean
@@ -6065,6 +6066,7 @@ export type Database = {
           type_lead_response?: boolean
           type_new_lead?: boolean
           type_new_products?: boolean
+          type_onboarding?: boolean
           type_order_confirmation?: boolean
           type_payment_receipt?: boolean
           type_price_drop?: boolean
@@ -6102,6 +6104,7 @@ export type Database = {
           type_lead_response?: boolean
           type_new_lead?: boolean
           type_new_products?: boolean
+          type_onboarding?: boolean
           type_order_confirmation?: boolean
           type_payment_receipt?: boolean
           type_price_drop?: boolean
@@ -16414,6 +16417,10 @@ export type Database = {
         Args: { p_milestone_id: string }
         Returns: string
       }
+      enroll_designer_onboarding: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       escalate_item_feedback_to_decision: {
         Args: { p_decision_id: string; p_feedback_id: string }
         Returns: {
@@ -16965,6 +16972,10 @@ export type Database = {
       recompute_portfolio_centroid: {
         Args: { p_designer_id: string }
         Returns: Json
+      }
+      record_activation_event: {
+        Args: { p_event_name: string; p_properties?: Json; p_user_id: string }
+        Returns: undefined
       }
       record_invoice_payment: {
         Args: {
