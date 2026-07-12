@@ -74,19 +74,21 @@ export interface OrganizationMemberWithProfile extends OrganizationMember {
 }
 
 export interface CreateOrganizationInput {
-  type: OrganizationType;
   name: string;
-  slug?: string;
-  website?: string;
-  description?: string;
-  email?: string;
-  phone?: string;
 }
 
 export interface InviteMemberInput {
   organizationId: string;
   email: string;
   role: MemberRole;
+  teammateType?: 'designer' | 'trades' | 'member';
+  name?: string;
+}
+
+/** Row shape returned by `accept_workspace_invitation` (00295). */
+export interface AcceptedInvitation {
+  organization_id: string;
+  organization_name: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -208,7 +210,11 @@ export function usePendingInvitations() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Create a new organization (user becomes owner)
+ * Create a new studio workspace (user becomes owner) via the
+ * `create_studio_workspace` RPC (00295, SECURITY DEFINER — the RLS
+ * chicken-and-egg means a client-side insert can never SELECT its own
+ * `.select()` return before the owner membership exists). The RPC handles
+ * `auth.uid()`, name validation, and unique-slug generation server-side.
  */
 export function useCreateOrganization() {
   const queryClient = useQueryClient();
@@ -216,45 +222,12 @@ export function useCreateOrganization() {
   return useMutation({
     mutationFn: async (input: CreateOrganizationInput) => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const { data, error } = await supabase.rpc('create_studio_workspace', {
+        p_name: input.name,
+      });
 
-      // Generate slug if not provided
-      const slug = input.slug || input.name.toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
-
-      // Create organization
-      const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .insert({
-          type: input.type,
-          name: input.name,
-          slug,
-          website: input.website,
-          description: input.description,
-          email: input.email,
-          phone: input.phone,
-        })
-        .select()
-        .single();
-
-      if (orgError) throw orgError;
-
-      // Add creator as owner
-      const { error: memberError } = await supabase
-        .from('organization_members')
-        .insert({
-          user_id: user.id,
-          organization_id: org.id,
-          role: 'owner',
-          status: 'active',
-          joined_at: new Date().toISOString(),
-        });
-
-      if (memberError) throw memberError;
-
-      return org as Organization;
+      if (error) throw error;
+      return data as Organization;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
@@ -294,80 +267,44 @@ export function useUpdateOrganization() {
 }
 
 /**
- * Invite a member to an organization
+ * Invite a teammate (designer or collaborator) to an organization via the
+ * `workspace-member-invite` edge function (00296). The function authorizes
+ * the caller (owner/admin, active membership), mints or resolves the invitee's
+ * auth user, upserts the `invited` membership, optionally grants
+ * `studio_designer`, and sends the branded invite email — all server-side
+ * because minting auth users needs the service role.
  */
 export function useInviteMember() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ organizationId, email, role }: InviteMemberInput) => {
+    mutationFn: async (input: InviteMemberInput) => {
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const { data, error } = await supabase.functions.invoke('workspace-member-invite', {
+        body: {
+          organization_id: input.organizationId,
+          email: input.email,
+          member_role: input.role,
+          teammate_type: input.teammateType,
+          name: input.name,
+        },
+      });
 
-      // Find user by email
-      const { data: targetUser, error: userError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', email)
-        .single();
-
-      if (userError || !targetUser) {
-        throw new Error('User not found with that email');
+      if (error) {
+        // functions.invoke wraps a non-2xx in a FunctionsHttpError whose .context
+        // is the raw Response — surface the edge fn's { error } (e.g. already_member)
+        // instead of a generic message.
+        let detail: string | undefined;
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          detail = body?.detail ?? body?.error;
+        } catch {
+          /* fall through to the generic message */
+        }
+        throw new Error(detail ?? error.message ?? 'Failed to invite member');
       }
-
-      // Check if already a member
-      const { data: existing } = await supabase
-        .from('organization_members')
-        .select('id, status')
-        .eq('user_id', targetUser.id)
-        .eq('organization_id', organizationId)
-        .single();
-
-      if (existing && existing.status === 'active') {
-        throw new Error('User is already a member');
-      }
-
-      // Generate invitation token
-      const invitationToken = crypto.randomUUID();
-      const invitationExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-      if (existing) {
-        // Update existing record
-        const { data, error } = await supabase
-          .from('organization_members')
-          .update({
-            role,
-            status: 'invited',
-            invited_by: user.id,
-            invitation_token: invitationToken,
-            invitation_expires_at: invitationExpiresAt.toISOString(),
-          })
-          .eq('id', existing.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        return data;
-      } else {
-        // Create new record
-        const { data, error } = await supabase
-          .from('organization_members')
-          .insert({
-            user_id: targetUser.id,
-            organization_id: organizationId,
-            role,
-            status: 'invited',
-            invited_by: user.id,
-            invitation_token: invitationToken,
-            invitation_expires_at: invitationExpiresAt.toISOString(),
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        return data;
-      }
+      if (data?.error) throw new Error(data.detail ?? data.error);
+      return data;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
@@ -378,29 +315,26 @@ export function useInviteMember() {
 }
 
 /**
- * Accept an invitation to join an organization
+ * Accept an invitation to join an organization, by invitation token (not
+ * membership id — there is no self-UPDATE RLS policy for an invited user, so
+ * this goes through the `accept_workspace_invitation` RPC, 00295, SECURITY
+ * DEFINER). Validates the token exists, is unexpired, and belongs to
+ * `auth.uid()`; flips the membership active and returns the joined org.
  */
 export function useAcceptInvitation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (membershipId: string) => {
+    mutationFn: async (token: string): Promise<AcceptedInvitation> => {
       const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from('organization_members')
-        .update({
-          status: 'active',
-          joined_at: new Date().toISOString(),
-          invitation_token: null,
-          invitation_expires_at: null,
-        })
-        .eq('id', membershipId)
-        .eq('status', 'invited')
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('accept_workspace_invitation', {
+        p_token: token,
+      });
 
       if (error) throw error;
-      return data;
+      const row = data?.[0];
+      if (!row) throw new Error('Invitation not found or already used');
+      return row;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
@@ -410,19 +344,19 @@ export function useAcceptInvitation() {
 }
 
 /**
- * Decline an invitation
+ * Decline an invitation, by invitation token (see useAcceptInvitation — same
+ * no-self-UPDATE-policy reasoning) via the `decline_workspace_invitation` RPC
+ * (00295, SECURITY DEFINER). Validates the token then deletes the invited row.
  */
 export function useDeclineInvitation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (membershipId: string) => {
+    mutationFn: async (token: string) => {
       const supabase = getSupabase();
-      const { error } = await supabase
-        .from('organization_members')
-        .delete()
-        .eq('id', membershipId)
-        .eq('status', 'invited');
+      const { error } = await supabase.rpc('decline_workspace_invitation', {
+        p_token: token,
+      });
 
       if (error) throw error;
     },
