@@ -22,6 +22,31 @@ Standing policies encoded throughout (from Kody, 2026-07-08): prod mutations nee
 
 Deliberately NOT covered (use existing tools): App Store Connect / TestFlight → the 25 `asc-*` skills in `apps/mobile/Patina/.claude/skills/`; xcodebuild mechanics → `building-with-xcode`; generic debugging/TDD process → superpowers plugin skills; repo architecture basics → root `CLAUDE.md` (drift-corrected 2026-07-09).
 
+## Cowork operational skills
+
+Four additional skill folders (added 2026-07-11) serve Claude **Cowork**
+workflows — vendor sourcing, brand copy, order coordination, trade paperwork
+— not repo-engineering procedures like the eleven above. Source: the
+canonical copies live in `docs/agent-os/patina-agent-os-cowork-handoff.md`
+§B ("Section B — Skills"); keep this repo copy in sync if that doc changes.
+All fifteen skill folders (the eleven above plus these four) are gated by
+the same `pnpm lint:skills` check (`scripts/lint-skills.mjs`,
+`.github/workflows/skills-lint.yml`, advisory — no branch protection exists).
+
+| Skill | One-line scope |
+|---|---|
+| `vendor-qualification-rubric` | Research and score a candidate maker/manufacturer against the 500-point rubric — Kody's operational half pre-scored, Leah's brand half packaged as a review card |
+| `patina-brand-voice` | Patina's voice, lexicon, and copy rules for any designer/maker/homeowner-facing text |
+| `concierge-order-playbook` | Coordinate a Rail A concierge furniture order end-to-end — PO/invoice drafts, freight research, damage-claim prep |
+| `trade-paperwork-prep` | Prepare (never submit) trade program applications and account paperwork for makers/brands |
+
+Two of the four ship with a `references/` file this session filled in:
+`vendor-qualification-rubric/references/rubric.md` (the full 8-dimension
+table + scoring anchors, generated from `packages/types/src/vendor-pipeline.ts`)
+and `trade-paperwork-prep/references/patina-facts.md` (a committed template
+with every real value redacted to `«KODY: fill»` — see that file's own
+top note before touching it).
+
 ## Maintaining
 
 - When a skill turns out wrong or the repo moves under it, fix the skill in the same change as the code and refresh its `Last verified:` stamp — a stale skill is worse than none.

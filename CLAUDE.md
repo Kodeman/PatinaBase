@@ -19,6 +19,15 @@ Patina is a custom home furnishing platform connecting interior designers with m
 
 Eleven `patina-*` skills in `.claude/skills/` carry the verified procedures and footguns this file only summarizes — load the matching skill before working on: DB migrations, edge functions, portal features, local dev, verification, testing, deploys, prod ops, Stripe payments, parallel/multi-agent work, or iOS. Index: `.claude/skills/README.md`.
 
+## Agent OS rules
+- Task queue = `agent_tasks` via `@patina/agent-queue` and its Postgres RPCs (docs/agent-os/). Never create parallel queues; `cowork_tasks` is frozen (00296).
+- service_role stays server-side. Agent DB access = `agent_reader` / `agent_writer` (NOLOGIN privilege roles; see docs/agent-os/agent-roles-runbook.md). Agents read broadly, write only via `enqueue_agent_task`.
+- No automated external sends; drafts land `awaiting_review`. No direct agent writes to business tables.
+- Internal payable-state tables are the source of truth. Reconcile Stripe toward them, never the reverse.
+- Every queue transition is audited (`agent_task_audit`, actor from `app.actor`).
+- Scheduled jobs = pg_cron (SQL RPC or `public.invoke_edge_function`); run history = `job_runs`. No homelab/Coolify hosts exist.
+- Skills live in `.claude/skills/` and must pass `pnpm lint:skills`.
+
 ## Essential Commands
 
 ```bash
