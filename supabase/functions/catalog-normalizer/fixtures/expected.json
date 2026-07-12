@@ -1,0 +1,105 @@
+{
+  "itemsProcessed": 12,
+  "autoCount": 10,
+  "reviewCount": 1,
+  "errorCount": 1,
+  "rows": [
+    {
+      "rowIndex": 0,
+      "name": "Chesterfield Sofa",
+      "status": "normalized",
+      "action": "create",
+      "priceRetailCents": 129900,
+      "lowConfidenceFields": []
+    },
+    {
+      "rowIndex": 1,
+      "name": "Windsor Dining Chair",
+      "status": "normalized",
+      "action": "create",
+      "priceRetailCents": 34900,
+      "lowConfidenceFields": []
+    },
+    {
+      "rowIndex": 2,
+      "name": "Oslo Coffee Table",
+      "status": "normalized",
+      "action": "create",
+      "priceRetailCents": 59900,
+      "lowConfidenceFields": []
+    },
+    {
+      "rowIndex": 3,
+      "name": "Marlowe Pendant Light",
+      "status": "normalized",
+      "action": "create",
+      "priceRetailCents": 24900,
+      "lowConfidenceFields": []
+    },
+    {
+      "rowIndex": 4,
+      "name": "Harlow Sideboard",
+      "status": "normalized",
+      "action": "create",
+      "priceRetailCents": 189900,
+      "lowConfidenceFields": []
+    },
+    {
+      "rowIndex": 5,
+      "name": "Sutton Area Rug",
+      "status": "normalized",
+      "action": "create",
+      "priceRetailCents": 79900,
+      "lowConfidenceFields": []
+    },
+    {
+      "rowIndex": 6,
+      "name": "Bergen Accent Chair",
+      "status": "normalized",
+      "action": "create",
+      "priceRetailCents": 42900,
+      "lowConfidenceFields": ["dimensions"],
+      "dimensionsNull": false
+    },
+    {
+      "rowIndex": 7,
+      "name": "Prairie Console Table",
+      "status": "normalized",
+      "action": "create",
+      "priceRetailCents": 54900,
+      "lowConfidenceFields": ["dimensions"],
+      "dimensionsNull": true
+    },
+    {
+      "rowIndex": 8,
+      "name": "Denver Floor Lamp",
+      "status": "review_queued",
+      "action": "create",
+      "priceRetailCents": 18999,
+      "lowConfidenceFields": ["price"]
+    },
+    {
+      "rowIndex": 9,
+      "name": "Chesterfield Sofa II",
+      "status": "normalized",
+      "action": "update",
+      "priceRetailCents": 134900,
+      "matchKind": "sku",
+      "diffFields": ["price_retail", "price_trade"]
+    },
+    {
+      "rowIndex": 10,
+      "name": "Oslo Coffee Table Mk2",
+      "status": "normalized",
+      "action": "update",
+      "priceRetailCents": 64900,
+      "matchKind": "embedding",
+      "diffFields": ["name", "price_retail"]
+    },
+    {
+      "rowIndex": 11,
+      "name": "",
+      "status": "error"
+    }
+  ]
+}

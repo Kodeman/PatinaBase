@@ -2225,3 +2225,15 @@ DO $g$ BEGIN
   GRANT SELECT ON public.bridge_state TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00306_catalog_normalizer_staging.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.catalog_feed_batches TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00306_catalog_normalizer_staging.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.catalog_feed_items TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

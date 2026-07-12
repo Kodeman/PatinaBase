@@ -1,0 +1,13 @@
+name,description,sku,price,price_trade,dimensions,materials,finish,weight_lbs,lead_time,url,image
+Chesterfield Sofa,Deep-seat leather sofa with rolled arms,ACME-SOFA-001,"$1,299.00","$999.00","84""W x 34""H x 38""D",Leather,,180,8 weeks,https://acme.example.com/chesterfield-sofa,https://acme.example.com/img/sofa-001.jpg
+Windsor Dining Chair,Turned-leg dining chair,ACME-CHAIR-002,$349.00,,"20""W x 34""H x 22""D",Oak,,18,4 weeks,https://acme.example.com/windsor-chair,https://acme.example.com/img/chair-002.jpg
+Oslo Coffee Table,Live-edge walnut coffee table,ACME-TABLE-003,$599.00,$449.00,"48""W x 16""H x 24""D",Walnut,,60,6 weeks,https://acme.example.com/oslo-coffee-table,https://acme.example.com/img/table-003.jpg
+Marlowe Pendant Light,Brass dome pendant,ACME-LIGHT-004,$249.00,,"12""W x 18""H x 12""D",Brass,,5,3 weeks,https://acme.example.com/marlowe-pendant,https://acme.example.com/img/light-004.jpg
+Harlow Sideboard,Oak sideboard with brass pulls,ACME-CAB-005,"$1,899.00","$1,499.00","72""W x 34""H x 18""D",Oak,Brushed Brass,220,10 weeks,https://acme.example.com/harlow-sideboard,https://acme.example.com/img/cab-005.jpg
+Sutton Area Rug,Hand-knotted wool rug,ACME-RUG-006,$799.00,,"96""W x 1""H x 120""D",Wool,,40,2 weeks,https://acme.example.com/sutton-rug,https://acme.example.com/img/rug-006.jpg
+Bergen Accent Chair,Upholstered swivel chair,ACME-CHAIR-007,$429.00,,30 x 34 x 32,Linen,,,,https://acme.example.com/bergen-chair,https://acme.example.com/img/chair-007.jpg
+Prairie Console Table,Narrow entry console,ACME-TABLE-008,$549.00,,Approximately four feet wide and two feet deep,Ash,,,,https://acme.example.com/prairie-console,https://acme.example.com/img/table-008.jpg
+Denver Floor Lamp,Adjustable arc floor lamp,ACME-LAMP-009,$189.99 - $219.99,,"14""W x 62""H x 14""D",Steel,Matte Black,12,3 weeks,https://acme.example.com/denver-lamp,https://acme.example.com/img/lamp-009.jpg
+Chesterfield Sofa II,Restock of the classic chesterfield,ACME-SOFA-010,"$1,349.00","$1,049.00","84""W x 34""H x 38""D",Leather,,185,8 weeks,https://acme.example.com/chesterfield-sofa-ii,https://acme.example.com/img/sofa-010.jpg
+Oslo Coffee Table Mk2,Second edition of the Oslo coffee table,,$649.00,,"48""W x 16""H x 24""D",Walnut,,62,6 weeks,https://acme.example.com/oslo-coffee-table-mk2,https://acme.example.com/img/table-011.jpg
+,Missing a name entirely,ACME-UNKNOWN-012,$99.00,,,,,,,,

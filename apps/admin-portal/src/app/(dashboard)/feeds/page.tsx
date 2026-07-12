@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useVendors, useCoworkTasks, useCreateCoworkTask } from '@/hooks/use-pipeline';
 import { useToast } from '@/components/ui/use-toast';
+import { FeedUploadDialog } from '@/components/pipeline/feed-upload-dialog';
 import {
   PageHeader,
   Section,
@@ -31,6 +32,7 @@ export default function FeedMonitorPage() {
   const { data: feedTasks } = useCoworkTasks({ task_type: 'feed_sync', limit: 200 });
   const createTask = useCreateCoworkTask();
   const { toast } = useToast();
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const lastSyncByVendor = useMemo(() => {
     type FeedTask = NonNullable<typeof feedTasks>[number];
@@ -145,6 +147,7 @@ export default function FeedMonitorPage() {
         title="Feed"
         accent="Monitor"
         description="Live partner feeds synced into Patina by Cowork."
+        actions={<Button onClick={() => setUploadOpen(true)}>Upload feed</Button>}
       />
 
       <Section className="mt-10">
@@ -156,6 +159,8 @@ export default function FeedMonitorPage() {
           <DataTable columns={columns} rows={vendors ?? []} getKey={(v) => v.id} />
         )}
       </Section>
+
+      <FeedUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
     </div>
   );
 }
