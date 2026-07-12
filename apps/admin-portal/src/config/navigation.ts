@@ -28,7 +28,7 @@ export const ZONES: ZoneConfig[] = [
     key: 'overview',
     label: 'Overview',
     href: '/dashboard',
-    paths: ['/dashboard', '/analytics'],
+    paths: ['/mission-control', '/dashboard', '/analytics'],
     icon: LayoutDashboard,
   },
   {
@@ -97,6 +97,7 @@ export interface SubNavItem {
 
 export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
   overview: [
+    { label: 'Mission Control', href: '/mission-control' },
     { label: 'Dashboard', href: '/dashboard', exact: true },
     { label: 'Analytics', href: '/analytics' },
   ],
