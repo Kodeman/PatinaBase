@@ -22,6 +22,7 @@ import {
   UserCheck,
   Flag,
   Activity,
+  Inbox,
 } from 'lucide-react';
 import { useCommandPalette } from '@/contexts/command-palette-context';
 
@@ -75,6 +76,9 @@ export function CommandPalette() {
         <CommandSeparator />
 
         <CommandGroup heading="Quick Actions">
+          <CommandItem onSelect={() => navigate('/mission-control')}>
+            <Inbox className="mr-2 h-4 w-4" /> Mission Control
+          </CommandItem>
           <CommandItem onSelect={() => navigate('/verification')}>
             <UserCheck className="mr-2 h-4 w-4" /> Verification Queue
           </CommandItem>
