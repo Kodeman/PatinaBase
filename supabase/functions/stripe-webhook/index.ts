@@ -68,6 +68,15 @@ import {
   buildPaymentRefundedEmail,
   formatInvoiceCurrency,
 } from '../_shared/invoice-emails.ts';
+// Agent OS (WP-2.1) — reconciliation emission onto the agent_tasks queue.
+// Additive: the constants + enqueue helper live in ./reconcile-emit.ts (kept out
+// of this Deno.serve module so they unit-test offline, per the repo's core/index
+// split); used only from ONE new call site after the money-path switch below.
+import {
+  RECONCILE_EVENT_TYPES,
+  MONEY_PATH_TYPES,
+  enqueueStripeEventTask,
+} from './reconcile-emit.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -1709,6 +1718,32 @@ Deno.serve(async (req: Request) => {
       default:
         // Unsubscribed/uninteresting event — acknowledged, ledgered, ignored.
         break;
+    }
+
+    // ── Agent OS reconciliation emission (WP-2.1) — ADDITIVE call site ──────
+    // Fan reconcile-worthy events onto the agent_tasks queue AFTER the money
+    // path settled. FAILURE SEMANTICS SPLIT on whether this event also drove a
+    // payable flip in the switch above:
+    //   • money-path type → the flip (and maybe a receipt) already committed;
+    //     a reconcile-enqueue failure must NOT release the idempotency claim
+    //     and replay the event, so wrap it and log-and-swallow — the reconcile
+    //     task is best-effort here.
+    //   • reconcile-ONLY type → the queue task is the event's entire purpose,
+    //     so let an enqueue failure THROW: the outer catch releases the claim
+    //     and returns 500, and Stripe redelivers (idempotent on the event id).
+    if (RECONCILE_EVENT_TYPES.has(event.type)) {
+      if (MONEY_PATH_TYPES.has(event.type)) {
+        try {
+          await enqueueStripeEventTask(admin, event);
+        } catch (emitErr) {
+          console.error(
+            `stripe-webhook: reconcile emit for money-path ${event.type} failed (swallowed)`,
+            emitErr,
+          );
+        }
+      } else {
+        await enqueueStripeEventTask(admin, event);
+      }
     }
   } catch (err) {
     // Release the idempotency claim so Stripe's retry re-processes the event;
