@@ -308,6 +308,13 @@ verify_jwt = true
 [functions.morning-brief]
 verify_jwt = true
 
+# Cron-invoked every 30 min via public.invoke_edge_function (00303), which POSTs
+# an apikey + service-role Bearer — so the platform JWT check passes. No browser
+# calls it. verify_jwt = true is the platform default; explicit here for intent,
+# matching the other cron-invoked functions.
+[functions.cowork-intake-bridge]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
