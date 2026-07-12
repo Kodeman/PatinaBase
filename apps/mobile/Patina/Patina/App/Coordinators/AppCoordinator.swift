@@ -292,7 +292,7 @@ public final class AppCoordinator: Coordinator {
              .table, .scanFlow, .emergence, .roomEmergence, .pieceDetail,
              .styleQuiz, .styleResult,
              .arPlacement, .preScanChecklist,
-             .profile, .notifications, .designerConsultation,
+             .profile, .notifications, .designerConsultation, .designRequests,
              .projectList, .projectDetail,
              .decisionList, .decisionDetail,
              .threadList, .threadDetail,
@@ -398,7 +398,7 @@ public final class AppCoordinator: Coordinator {
             companionContext.walkProgress = nil
         case .preScanChecklist:
             companionContext.viewingPiece = nil
-        case .profile, .notifications, .designerConsultation:
+        case .profile, .notifications, .designerConsultation, .designRequests:
             companionContext.viewingPiece = nil
             companionContext.walkProgress = nil
 

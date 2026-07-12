@@ -33,6 +33,10 @@ public struct CompanionOverlay: View {
     @State private var showingAuthPanel = false
     @State private var isAuthenticated = AuthService.shared.isAuthenticated
     @State private var panelOpenTime: Date?
+    /// Number of action-row taps within the current panel session. Reset on
+    /// expand, incremented per tap, reported on close (replacing the old
+    /// hardcoded `interactionCount: 0`).
+    @State private var panelInteractionCount: Int = 0
     /// Drives the contextual help-panel sheet attached to the Companion
     /// surface. Toggled by the `?` button in the expanded panel header.
     @State private var isHelpPanelPresented: Bool = false
@@ -84,6 +88,22 @@ public struct CompanionOverlay: View {
         }
 
         return .resting
+    }
+
+    /// The coordinator's companion context, enriched with the promoted design
+    /// request (if any). Read inside `body`, so SwiftUI tracks the `@Observable`
+    /// `DesignRequestStatusService` and re-renders the panel when a refresh
+    /// lands — keeping `CompanionActionProvider` a pure function of its inputs
+    /// (no polling, no coordinator-write side channel).
+    private var enrichedContext: CompanionContext {
+        var context = coordinator.companionContext
+        if let promoted = DesignRequestStatusService.shared.promotedRequest {
+            context.activeDesignRequest = ActiveDesignRequestContext(
+                leadId: promoted.leadId.uuidString,
+                statusLabel: promoted.stage.badgeTitle
+            )
+        }
+        return context
     }
 
     public init() {}
@@ -224,6 +244,10 @@ public struct CompanionOverlay: View {
             // The pill is a real affordance, not décor (R01/R02): tapping it
             // performs the suggested action; the mark below opens the panel.
             Button {
+                CompanionAnalytics.shared.trackNudgeTapped(
+                    screen: coordinator.currentScreen.displayName,
+                    label: nudge.label
+                )
                 handleNavigate(to: nudge.route)
             } label: {
                 Text(nudge.label)
@@ -327,7 +351,7 @@ public struct CompanionOverlay: View {
                 VStack(spacing: 6) {
                     let actions = CompanionActionProvider.actions(
                         for: coordinator.currentScreen,
-                        context: coordinator.companionContext,
+                        context: enrichedContext,
                         isAuthenticated: AuthService.shared.isAuthenticated
                     )
                     ForEach(actions) { item in
@@ -337,6 +361,12 @@ public struct CompanionOverlay: View {
                             hint: item.hint,
                             isSuggested: item.isSuggested
                         ) {
+                            panelInteractionCount += 1
+                            CompanionAnalytics.shared.trackQuickActionTapped(
+                                actionId: item.analyticsId,
+                                actionTitle: item.label,
+                                screen: coordinator.currentScreen.displayName
+                            )
                             if let route = item.route {
                                 handleNavigate(to: route)
                             } else if let special = item.specialAction {
@@ -593,6 +623,7 @@ public struct CompanionOverlay: View {
         }
         coordinator.isCompanionExpanded = true
         panelOpenTime = Date()
+        panelInteractionCount = 0
 
         // PT-6-9: first time the Companion is expanded, surface a one-shot
         // coachmark explaining what it is.
@@ -616,7 +647,7 @@ public struct CompanionOverlay: View {
         let dwellTime = panelOpenTime.map { Date().timeIntervalSince($0) } ?? 0
         CompanionAnalytics.shared.trackPanelClosed(
             screen: coordinator.currentScreen.displayName,
-            interactionCount: 0,
+            interactionCount: panelInteractionCount,
             dwellTime: dwellTime
         )
         panelOpenTime = nil

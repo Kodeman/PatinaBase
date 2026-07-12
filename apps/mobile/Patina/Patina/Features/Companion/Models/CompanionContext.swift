@@ -48,6 +48,15 @@ public struct CompanionContext: Equatable {
     /// Number of rooms scanned
     public var roomCount: Int
 
+    // MARK: - Design Request
+
+    /// The homeowner's promoted (visible) design request, if any. Session-scoped
+    /// and derived fresh from `DesignRequestStatusService.promotedRequest` where
+    /// the Companion actions are computed — the provider stays a pure function of
+    /// `(route, context, isAuthenticated)`. When present, every "Ask a designer"
+    /// row renders instead as "Your design request".
+    public var activeDesignRequest: ActiveDesignRequestContext?
+
     // MARK: - Initialization
 
     public init(
@@ -58,7 +67,8 @@ public struct CompanionContext: Equatable {
         pendingNotification: CompanionNotification? = nil,
         recentMessages: [CompanionContextMessage] = [],
         tableItemCount: Int = 0,
-        roomCount: Int = 0
+        roomCount: Int = 0,
+        activeDesignRequest: ActiveDesignRequestContext? = nil
     ) {
         self.currentScreen = currentScreen
         self.viewingPiece = viewingPiece
@@ -68,6 +78,7 @@ public struct CompanionContext: Equatable {
         self.recentMessages = recentMessages
         self.tableItemCount = tableItemCount
         self.roomCount = roomCount
+        self.activeDesignRequest = activeDesignRequest
     }
 
     // MARK: - Context Summary
@@ -132,6 +143,8 @@ public struct CompanionContext: Equatable {
             return "Notifications"
         case .designerConsultation:
             return "Working with a designer"
+        case .designRequests:
+            return "Your design request"
         case .yourSpaces:
             return "Your Spaces: \(roomCount) rooms"
         case .roomProject:
@@ -203,6 +216,8 @@ public struct CompanionContext: Equatable {
             return "bell"
         case .designerConsultation:
             return "bubble.left.and.bubble.right"
+        case .designRequests:
+            return "paperplane"
         case .yourSpaces, .roomProject, .roomSettings, .crossRoom,
              .manualRoomEntry:
             return "house"
@@ -255,6 +270,21 @@ public struct ActiveRoomContext: Equatable {
         self.name = name
         self.hasBeenScanned = hasBeenScanned
         self.hasEmergence = hasEmergence
+    }
+}
+
+// MARK: - Active Design Request Context
+
+/// Lightweight promoted-design-request context for the Companion. Carries just
+/// what the action rows need: the lead id to route into `.designRequests` and a
+/// short human-readable stage label (e.g. "In review") for the row hint.
+public struct ActiveDesignRequestContext: Equatable {
+    public let leadId: String
+    public let statusLabel: String
+
+    public init(leadId: String, statusLabel: String) {
+        self.leadId = leadId
+        self.statusLabel = statusLabel
     }
 }
 

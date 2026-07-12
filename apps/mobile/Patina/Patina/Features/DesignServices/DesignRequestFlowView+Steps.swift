@@ -213,18 +213,27 @@ extension DesignRequestFlowView {
                 .padding(.horizontal, 32)
             Spacer()
             footer {
-                PatinaButton("Done", style: .primary, action: onClose)
+                VStack(spacing: 12) {
+                    PatinaButton("Track your request", style: .primary) {
+                        let leadId = coordinator?.result?.leadId.uuidString
+                        onClose()
+                        if let leadId { onTrack(leadId) }
+                    }
+                    PatinaButton("Done", style: .ghost, action: onClose)
+                }
             }
         }
     }
 
     private var successMessage: String {
+        let followUp = " You can follow its progress from your home screen."
         guard let result = coordinator?.result else {
-            return "A designer will reach out soon."
+            return "A designer will reach out soon." + followUp
         }
-        return result.pooled
+        let lead = result.pooled
             ? "We're matching you with a designer. You'll hear back soon."
             : "Your designer has your request and will reach out soon."
+        return lead + followUp
     }
 
     // MARK: - Reusable bits

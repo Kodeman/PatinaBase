@@ -20,6 +20,10 @@ struct DesignRequestFlowView: View {
     let preselectedScanIds: [UUID]
     let preselectedRoomId: UUID?
     let onClose: () -> Void
+    /// Called from the success screen's "Track your request" — the sheet is
+    /// closed first (`onClose`), then this navigates to the request's status
+    /// detail. Carries the new `leads.id` as a string for the route.
+    var onTrack: (String) -> Void = { _ in }
 
     @Environment(\.modelContext) var modelContext
     /// Launch-time signal channel; the home resume banner reads

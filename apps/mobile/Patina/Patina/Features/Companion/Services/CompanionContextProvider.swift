@@ -2,8 +2,18 @@
 //  CompanionActionProvider.swift
 //  Patina
 //
-//  Provides context-aware actions for The Companion's expanded panel
-//  Based on current screen, replaces hardcoded actions with dynamic per-screen arrays
+//  Provides context-aware actions for The Companion's expanded panel based on
+//  the current screen. Structure (split across files to stay under the type /
+//  file length ceilings):
+//    - This file: the item/nudge types, the public entry points
+//      (`actions`, `panelTitle`, `nudge`), the exhaustive screen dispatch, and
+//      the universal tail.
+//    - `CompanionAreaBuilders.swift`: the per-area menu builders.
+//    - `CompanionActionRows.swift`: the shared row factories.
+//
+//  `screenItems` is an EXHAUSTIVE switch over `AppRoute` (no `default:`) so a
+//  newly-added route fails compilation instead of silently getting an empty
+//  menu — the exact bug this replaced.
 //
 
 import SwiftUI
@@ -16,6 +26,9 @@ struct CompanionActionItem: Identifiable {
     let label: String
     let hint: String
     let isSuggested: Bool
+    /// Stable snake_case analytics identifier (e.g. "your_spaces",
+    /// "ask_designer"). Reported as `action_id` on `companion_quick_action_tapped`.
+    let analyticsId: String
     let route: AppRoute?      // Navigation target (nil for special actions)
     let specialAction: SpecialAction?
 
@@ -28,20 +41,36 @@ struct CompanionActionItem: Identifiable {
         case openDesignServices(roomId: UUID?)
     }
 
-    init(icon: String, label: String, hint: String, isSuggested: Bool = false, route: AppRoute) {
+    init(
+        icon: String,
+        label: String,
+        hint: String,
+        isSuggested: Bool = false,
+        analyticsId: String,
+        route: AppRoute
+    ) {
         self.icon = icon
         self.label = label
         self.hint = hint
         self.isSuggested = isSuggested
+        self.analyticsId = analyticsId
         self.route = route
         self.specialAction = nil
     }
 
-    init(icon: String, label: String, hint: String, isSuggested: Bool = false, specialAction: SpecialAction) {
+    init(
+        icon: String,
+        label: String,
+        hint: String,
+        isSuggested: Bool = false,
+        analyticsId: String,
+        specialAction: SpecialAction
+    ) {
         self.icon = icon
         self.label = label
         self.hint = hint
         self.isSuggested = isSuggested
+        self.analyticsId = analyticsId
         self.route = nil
         self.specialAction = specialAction
     }
@@ -61,248 +90,198 @@ struct CompanionNudge: Equatable {
 
 enum CompanionActionProvider {
 
-    /// Get context-aware actions for the current screen
-    static func actions(for screen: AppRoute, context: CompanionContext, isAuthenticated: Bool = true) -> [CompanionActionItem] {
-        var items: [CompanionActionItem] = []
+    /// Context-aware actions for the current screen: the screen-specific rows
+    /// followed by the universal tail (HOME + identity). Enforced invariants
+    /// (DEBUG): at most 6 rows total (the panel has no ScrollView) and at most
+    /// one suggested row.
+    static func actions(
+        for screen: AppRoute,
+        context: CompanionContext,
+        isAuthenticated: Bool = true
+    ) -> [CompanionActionItem] {
+        var items = screenItems(for: screen, context: context, isAuthenticated: isAuthenticated)
+        appendTail(to: &items, screen: screen, isAuthenticated: isAuthenticated)
 
-        switch screen {
-        case .heroFrame:
-            items = heroFrameItems(context: context, isAuthenticated: isAuthenticated)
-
-        case .emergence, .roomEmergence:
-            items = [
-                CompanionActionItem(
-                    icon: "heart", label: "Save to collection",
-                    hint: "Create or add to board", isSuggested: true,
-                    route: .table
-                ),
-                CompanionActionItem(
-                    icon: "viewfinder", label: "Scan another room",
-                    hint: "Add rooms to your profile",
-                    route: .scanFlow(reason: .fresh)
-                )
-            ]
-
-        case .pieceDetail:
-            items = [
-                // AR placement will be added in Phase 5
-                CompanionActionItem(
-                    icon: "heart", label: "Save",
-                    hint: "Add to collection", isSuggested: true,
-                    route: .table
-                ),
-                CompanionActionItem(
-                    icon: "bubble.left", label: "Ask a designer",
-                    hint: "Get expert advice",
-                    specialAction: .openDesignServices(roomId: nil)
-                )
-            ]
-
-        case .table:
-            items = [
-                CompanionActionItem(
-                    icon: "sparkles", label: "Start a project",
-                    hint: "From your saved items", isSuggested: true,
-                    specialAction: .openDesignServices(roomId: nil)
-                ),
-                CompanionActionItem(
-                    icon: "viewfinder", label: "Scan a room",
-                    hint: "Add context for your saves",
-                    route: .scanFlow(reason: .fresh)
-                )
-            ]
-
-        case .roomList:
-            items = [
-                CompanionActionItem(
-                    icon: "viewfinder", label: "Scan a new room",
-                    hint: "Add another space", isSuggested: true,
-                    route: .scanFlow(reason: .fresh)
-                )
-            ]
-
-        case .roomDetail:
-            items = [
-                CompanionActionItem(
-                    icon: "sparkles", label: "See recommendations",
-                    hint: "Pieces for this room", isSuggested: true,
-                    route: .emergence(pieceId: nil)
-                ),
-                CompanionActionItem(
-                    icon: "arrow.counterclockwise", label: "Rescan room",
-                    hint: "Capture updates",
-                    route: .scanFlow(reason: .rescan)
-                )
-            ]
-
-        case .arPlacement:
-            items = [
-                CompanionActionItem(
-                    icon: "camera", label: "Save photo",
-                    hint: "Capture this view", isSuggested: true,
-                    route: .heroFrame
-                ),
-                CompanionActionItem(
-                    icon: "arrow.triangle.2.circlepath", label: "Try another piece",
-                    hint: "Swap in something else",
-                    route: .emergence(pieceId: nil)
-                )
-            ]
-
-        default:
-            items = [
-                CompanionActionItem(
-                    icon: "house", label: "Home",
-                    hint: "Back to your space",
-                    route: .heroFrame
-                )
-            ]
-        }
-
-        appendUniversalItems(to: &items, screen: screen, isAuthenticated: isAuthenticated)
+        #if DEBUG
+        assert(items.count <= 6, "Companion menu for \(screen) exceeds 6 rows (\(items.count))")
+        assert(items.filter(\.isSuggested).count <= 1, "Companion menu for \(screen) has >1 suggested row")
+        #endif
 
         return items
     }
 
-    /// The screen-independent tail of every action list: the portal QR
-    /// connect entry plus sign-in (guests) / profile (signed-in). Split out
-    /// of `actions(for:context:isAuthenticated:)` to keep it under the
-    /// function-body-length lint ceiling.
-    private static func appendUniversalItems(
+    // MARK: - Screen dispatch (exhaustive — NO default arm)
+
+    /// Exhaustive dispatch to per-area builders. There is deliberately no
+    /// `default:` — a newly-added `AppRoute` case must fail compilation here so
+    /// it can never silently fall through to an empty menu.
+    private static func screenItems(
+        for screen: AppRoute,
+        context: CompanionContext,
+        isAuthenticated: Bool
+    ) -> [CompanionActionItem] {
+        switch screen {
+        case .heroFrame:
+            return homeItems(context: context, isAuthenticated: isAuthenticated)
+        case .emergence, .roomEmergence, .pieceDetail, .arPlacement:
+            return discoveryItems(screen, context: context)
+        case .table, .roomSavedItems, .crossRoom:
+            return collectionsItems(screen, context: context)
+        case .roomList, .yourSpaces, .roomDetail, .roomProject,
+             .roomSettings, .manualRoomEntry:
+            return roomsItems(screen, context: context)
+        case .scanFlow, .preScanChecklist:
+            return scanItems(screen, context: context)
+        case .styleQuiz, .styleResult:
+            return styleItems(screen, context: context)
+        case .projectList, .projectDetail, .decisionList, .decisionDetail,
+             .threadList, .threadDetail, .documentList, .notifications,
+             .designerConsultation, .designRequests:
+            return studioItems(screen, context: context)
+        case .proposalList, .proposalDetail, .invoiceList, .invoiceDetail, .budget:
+            return moneyRailItems(screen, context: context)
+        case .profile:
+            return accountItems(context: context, isAuthenticated: isAuthenticated)
+        }
+    }
+
+    // MARK: - Universal tail
+
+    /// HOME on every non-`.heroFrame` screen, then the identity row: guests get
+    /// SIGN-IN (suggested only if no screen row already is — fixes the historical
+    /// double-suggestion), signed-in users get PROFILE (except on `.profile`).
+    /// "Connect to portal" is NOT here — it lives in the `.profile` menu,
+    /// signed-in only.
+    private static func appendTail(
         to items: inout [CompanionActionItem],
         screen: AppRoute,
         isAuthenticated: Bool
     ) {
-        // Always append "Connect to portal". (Settings / QR are now sheets,
-        // not screens, so there's no screen to suppress this on — PT-3-8.)
-        items.append(CompanionActionItem(
-            icon: "qrcode.viewfinder", label: "Connect to portal",
-            hint: "Scan QR · patina.cloud",
-            specialAction: .openQRScanner
-        ))
-
+        if screen != .heroFrame {
+            items.append(homeRow())
+        }
         if !isAuthenticated {
-            items.append(CompanionActionItem(
-                icon: "person.crop.circle.badge.plus", label: "Sign in",
-                hint: "Save rooms · Sync across devices", isSuggested: true,
-                specialAction: .openAuth
-            ))
+            let hasSuggested = items.contains(where: \.isSuggested)
+            items.append(signInRow(suggested: !hasSuggested))
         } else if screen != .profile {
-            items.append(CompanionActionItem(
-                icon: "person.circle", label: "Your profile",
-                hint: "Style · Rooms · Settings",
-                route: .profile
-            ))
+            items.append(profileRow())
         }
     }
 
-    /// Home-hub actions. Split out of `actions(for:context:isAuthenticated:)`
-    /// so the switch stays under the complexity/body-length lint ceilings.
-    private static func heroFrameItems(
-        context: CompanionContext,
-        isAuthenticated: Bool
-    ) -> [CompanionActionItem] {
-        var items: [CompanionActionItem] = [
-            CompanionActionItem(
-                icon: "viewfinder", label: "Scan a room",
-                hint: "Suggested next step", isSuggested: true,
-                route: .scanFlow(reason: .fresh)
-            ),
-            CompanionActionItem(
-                icon: "sparkles", label: "Your recommendations",
-                hint: "\(context.roomCount > 0 ? "Based on your rooms" : "Take the quiz first")",
-                route: .emergence(pieceId: nil)
-            ),
-            CompanionActionItem(
-                icon: "heart", label: "Collections",
-                hint: "\(context.tableItemCount) saved pieces",
-                route: .table
-            ),
-            CompanionActionItem(
-                icon: "paintpalette", label: "Style quiz",
-                hint: "Discover your style",
-                route: .styleQuiz
-            ),
-            CompanionActionItem(
-                icon: "bell", label: "Notifications",
-                hint: "Updates from your projects",
-                route: .notifications
-            )
-        ]
-        // C.1 / R29: signed-in clients get a direct door into the
-        // studio hub (Projects is the anchor surface; Messages and
-        // Decisions sit one row away on the home Studio rail). Guests
-        // keep the shorter menu — their studio is behind sign-in.
-        if isAuthenticated {
-            items.insert(CompanionActionItem(
-                icon: "rectangle.grid.1x2", label: "Your studio",
-                hint: "Projects · Messages · Decisions",
-                route: .projectList
-            ), at: 1)
-        }
-        return items
-    }
+    // MARK: - Panel Title
 
-    /// The header title shown atop the expanded Companion panel. Varies by
-    /// route so the prompt feels contextual rather than a generic "What next?".
-    /// PT-6-10.
+    /// The header title atop the expanded Companion panel. Varies by route so
+    /// the prompt feels contextual. Split into helpers to stay under the
+    /// cyclomatic-complexity ceiling. PT-6-10.
     static func panelTitle(for screen: AppRoute, context: CompanionContext) -> String {
         switch screen {
         case .heroFrame:
             return context.roomCount == 0 ? "Where to begin?" : "Where to next?"
-        case .scanFlow:
-            return "Keep scanning?"
         case .emergence, .roomEmergence:
-            // After a save the user lands back here with a fuller table.
             return context.tableItemCount > 0 ? "Want another recommendation?" : "Want a recommendation?"
         case .pieceDetail:
             return "Save this one?"
         case .table:
             return "Ready to bring it together?"
+        case .roomSavedItems:
+            return "Working with these pieces?"
+        case .crossRoom:
+            return "Everything, all at once"
+        case .arPlacement:
+            return "How does it look?"
         case .roomList, .yourSpaces:
             return "Which room next?"
+        default:
+            return panelTitleDetail(for: screen)
+        }
+    }
+
+    private static func panelTitleDetail(for screen: AppRoute) -> String {
+        switch screen {
         case .roomDetail, .roomProject:
             return "What's next for this room?"
+        case .roomSettings:
+            return "All set here?"
+        case .manualRoomEntry:
+            return "Prefer to scan?"
+        case .scanFlow:
+            return "Keep scanning?"
+        case .preScanChecklist:
+            return "Ready to walk?"
+        case .styleQuiz:
+            return "Pause the quiz?"
         case .styleResult:
             return "Where to from here?"
-        case .projectList, .decisionList:
-            return "What's on your plate?"
-        case .threadList, .threadDetail:
-            return "Anything else?"
         case .profile:
             return "What would you like to do?"
+        default:
+            return studioPanelTitle(for: screen)
+        }
+    }
+
+    private static func studioPanelTitle(for screen: AppRoute) -> String {
+        switch screen {
+        case .projectList:
+            return "What's on your plate?"
+        case .projectDetail:
+            return "Anything for this project?"
+        case .decisionList:
+            return "Ready to decide?"
+        case .decisionDetail:
+            return "Need a second opinion?"
+        case .threadList:
+            return "Anything else?"
+        case .threadDetail:
+            return "While you're here"
+        case .designerConsultation:
+            return "Working with your designer"
+        case .designRequests:
+            return "While you wait…"
+        default:
+            return moneyPanelTitle(for: screen)
+        }
+    }
+
+    private static func moneyPanelTitle(for screen: AppRoute) -> String {
+        switch screen {
+        case .proposalList:
+            return "Reviewing proposals?"
+        case .proposalDetail:
+            return "Ready to sign?"
+        case .invoiceList:
+            return "Settling up?"
+        case .invoiceDetail:
+            return "About this invoice?"
+        case .budget:
+            return "The whole picture"
+        case .documentList:
+            return "Looking for something?"
+        case .notifications:
+            return "All caught up?"
         default:
             return "What next?"
         }
     }
 
-    /// Get the nudge for a screen — the tappable pill shown above the
-    /// Companion mark. Routes mirror the equivalent expanded-panel actions.
+    // MARK: - Nudge
+
+    /// The tappable pill shown above the resting Companion mark. Routes mirror
+    /// the equivalent expanded-panel actions.
     static func nudge(for screen: AppRoute, context: CompanionContext) -> CompanionNudge? {
         switch screen {
         case .heroFrame:
-            // C.2: the Daily Room's zero-rooms empty module already renders a
-            // single "Start a scan" CTA under the exact same `roomCount == 0`
-            // condition this pill used. Showing both stacked two scan
-            // affordances on one screen — suppress the redundant persistent
-            // pill so the in-content empty-module CTA is the only one.
+            // The Daily Room's zero-rooms empty module already renders a single
+            // "Start a scan" CTA — suppress the redundant persistent pill (C.2).
             return nil
         case .emergence, .roomEmergence:
-            // AR try-in-room needs a concrete product, so only nudge when
-            // the browsing surface has reported one. (Previously the pill
-            // showed unconditionally but was dead — R01.)
+            // AR try-in-room needs a concrete product, so only nudge when the
+            // browsing surface has reported one (R01).
             guard let piece = context.viewingPiece else { return nil }
-            return CompanionNudge(
-                label: "Try in your room →",
-                route: .arPlacement(productId: piece.id)
-            )
+            return CompanionNudge(label: "Try in your room →", route: .arPlacement(productId: piece.id))
         case .table:
             return CompanionNudge(label: "Find more pieces →", route: .emergence(pieceId: nil))
-        case .roomDetail(let roomId):
-            return CompanionNudge(
-                label: "See recommendations →",
-                route: .roomEmergence(roomId: roomId)
-            )
+        case .roomDetail(let roomId), .roomProject(let roomId):
+            return CompanionNudge(label: "See recommendations →", route: .roomEmergence(roomId: roomId))
         case .styleResult:
             return CompanionNudge(label: "View recommendations →", route: .emergence(pieceId: nil))
         default:

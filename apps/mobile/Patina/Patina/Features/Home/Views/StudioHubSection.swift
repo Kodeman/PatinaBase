@@ -3,18 +3,24 @@
 //  Patina
 //
 //  C.1 / R29: the Studio rail — a typography-first hub section on the
-//  Daily Room home. Four rows (Projects / Messages / Decisions /
+//  Daily Room home. Ten rows (Your Spaces / Your Designer / Projects /
+//  Proposals / Invoices / Budget / Documents / Messages / Decisions /
 //  Notifications) in The Document's hub language: Playfair row title,
 //  DM Mono meta line, trailing count badge, chevron. Ruled a home-hub
 //  rail, NOT a tab bar (the tab bar is re-asked post-Track-D).
+//
+//  Your Spaces and Your Designer sit at the top of the rail
+//  (`requiresAuth: false`): rooms are browsable pre-auth, and the
+//  design-request flow self-gates auth at send.
 //
 //  Counts come from `BadgeCountService` (pending decisions + unread
 //  messages, polling floor only this wave) plus the parent-owned unread
 //  notification count that already drives the greeting-header bell.
 //
-//  Guest mode: counts hidden; each row renders a quiet sign-in
-//  invitation meta line and routes to authentication — an invitation,
-//  not an error.
+//  Guest mode: counts hidden; rows with `requiresAuth: true` render a
+//  quiet sign-in invitation meta line and route to authentication — an
+//  invitation, not an error. Rows with `requiresAuth: false` behave the
+//  same for guests as for signed-in users.
 //
 
 import SwiftUI
@@ -32,18 +38,63 @@ struct StudioHubSection: View {
         let badge: Int
         let route: AppRoute
         let hint: String
+        /// False for rows a guest can open without hitting the sign-in
+        /// gate — "Your Spaces" and "Your Designer" are browsable
+        /// pre-auth; the design-request flow self-gates auth at send.
+        var requiresAuth: Bool = true
+        /// PostHog `row` property captured on `studio_hub_row_tapped`.
+        let analyticsKey: String
     }
 
     /// Unread notification count — supplied by the parent, which already
     /// owns `NotificationsViewModel` for the greeting-header bell badge.
     let unreadNotifications: Int
 
+    /// Captured rooms — drives the "Your Spaces" row's meta line.
+    let roomCount: Int
+
     @Environment(\.appCoordinator) private var coordinator
 
     /// Tracked `@Observable` reads — the section re-renders when a badge
     /// refresh lands or the auth state flips.
     private var badges: BadgeCountService { BadgeCountService.shared }
+    private var requestStatus: DesignRequestStatusService { DesignRequestStatusService.shared }
     private var isGuest: Bool { !AuthService.shared.isAuthenticated }
+
+    /// The "Your Designer" row goes dynamic once a request exists: it points
+    /// at the status detail and carries the current stage as its meta line.
+    /// Guests always see the static "Get design help" landing entry (the
+    /// service holds no requests for guests).
+    private var hasDesignRequests: Bool { !isGuest && !requestStatus.requests.isEmpty }
+
+    /// Stage label for the "Your Designer" meta — rendered uppercase by the
+    /// row's `textCase`, so "Finding your designer" reads "FINDING YOUR
+    /// DESIGNER". Falls back to the newest request when none is promoted.
+    private var designerMeta: String {
+        guard hasDesignRequests else { return "Get design help" }
+        let stage = requestStatus.promotedRequest?.stage ?? requestStatus.requests.first?.stage
+        return stage?.badgeTitle ?? "Get design help"
+    }
+
+    private var designerRoute: AppRoute {
+        hasDesignRequests ? .designRequests(focusLeadId: nil) : .designerConsultation
+    }
+
+    private var designerBadge: Int {
+        hasDesignRequests ? requestStatus.attentionCount : 0
+    }
+
+    /// "Your Spaces" row meta — "captured", not "scanned": manual-entry
+    /// rooms exist alongside scanned ones.
+    private var yourSpacesMeta: String {
+        if roomCount == 0 {
+            return "Scan your first room"
+        } else if roomCount == 1 {
+            return "1 room captured"
+        } else {
+            return "\(roomCount) rooms captured"
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -57,12 +108,37 @@ struct StudioHubSection: View {
 
             VStack(spacing: 0) {
                 row(StudioRow(
+                    title: "Your Spaces",
+                    meta: yourSpacesMeta,
+                    guestMeta: yourSpacesMeta,
+                    badge: 0,
+                    route: .yourSpaces,
+                    hint: "Opens your rooms.",
+                    requiresAuth: false,
+                    analyticsKey: "your_spaces"
+                ))
+                hairline
+                row(StudioRow(
+                    title: "Your Designer",
+                    meta: designerMeta,
+                    guestMeta: "Get design help",
+                    badge: designerBadge,
+                    route: designerRoute,
+                    hint: hasDesignRequests
+                        ? "Opens your design request."
+                        : "Opens designer services.",
+                    requiresAuth: false,
+                    analyticsKey: "your_designer"
+                ))
+                hairline
+                row(StudioRow(
                     title: "Projects",
                     meta: "With your design studio",
                     guestMeta: "Sign in to see your projects",
                     badge: 0,
                     route: .projectList,
-                    hint: "Opens your projects."
+                    hint: "Opens your projects.",
+                    analyticsKey: "projects"
                 ))
                 hairline
                 row(StudioRow(
@@ -73,7 +149,8 @@ struct StudioHubSection: View {
                     guestMeta: "Sign in to review proposals",
                     badge: badges.proposalsAwaitingSignatureCount,
                     route: .proposalList,
-                    hint: "Opens your proposals."
+                    hint: "Opens your proposals.",
+                    analyticsKey: "proposals"
                 ))
                 hairline
                 row(StudioRow(
@@ -84,7 +161,8 @@ struct StudioHubSection: View {
                     guestMeta: "Sign in to view invoices",
                     badge: badges.payableInvoiceCount,
                     route: .invoiceList,
-                    hint: "Opens your invoices."
+                    hint: "Opens your invoices.",
+                    analyticsKey: "invoices"
                 ))
                 hairline
                 row(StudioRow(
@@ -93,7 +171,8 @@ struct StudioHubSection: View {
                     guestMeta: "Sign in to see your budget",
                     badge: 0,
                     route: .budget,
-                    hint: "Opens your budget."
+                    hint: "Opens your budget.",
+                    analyticsKey: "budget"
                 ))
                 hairline
                 row(StudioRow(
@@ -102,7 +181,8 @@ struct StudioHubSection: View {
                     guestMeta: "Sign in to see shared documents",
                     badge: 0,
                     route: .documentList,
-                    hint: "Opens documents shared with you."
+                    hint: "Opens documents shared with you.",
+                    analyticsKey: "documents"
                 ))
                 hairline
                 row(StudioRow(
@@ -113,7 +193,8 @@ struct StudioHubSection: View {
                     guestMeta: "Sign in to message your designer",
                     badge: badges.unreadMessageCount,
                     route: .threadList,
-                    hint: "Opens your conversations."
+                    hint: "Opens your conversations.",
+                    analyticsKey: "messages"
                 ))
                 hairline
                 row(StudioRow(
@@ -124,7 +205,8 @@ struct StudioHubSection: View {
                     guestMeta: "Sign in to review decisions",
                     badge: badges.pendingDecisionCount,
                     route: .decisionList,
-                    hint: "Opens decisions waiting on you."
+                    hint: "Opens decisions waiting on you.",
+                    analyticsKey: "decisions"
                 ))
                 hairline
                 row(StudioRow(
@@ -135,7 +217,8 @@ struct StudioHubSection: View {
                     guestMeta: "Sign in for updates",
                     badge: unreadNotifications,
                     route: .notifications,
-                    hint: "Opens your notifications."
+                    hint: "Opens your notifications.",
+                    analyticsKey: "notifications"
                 ))
             }
         }
@@ -146,11 +229,15 @@ struct StudioHubSection: View {
     // MARK: - Row
 
     private func row(_ model: StudioRow) -> some View {
-        let resolvedMeta = isGuest ? model.guestMeta : model.meta
+        let inviteGuest = isGuest && model.requiresAuth
+        let resolvedMeta = inviteGuest ? model.guestMeta : model.meta
         return Button {
-            if isGuest {
+            if inviteGuest {
                 coordinator.presentAuthentication()
             } else {
+                PostHogService.shared.capture("studio_hub_row_tapped", properties: [
+                    "row": model.analyticsKey
+                ])
                 coordinator.navigate(to: model.route)
             }
         } label: {
@@ -191,7 +278,7 @@ struct StudioHubSection: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(model.title)
         .accessibilityValue(resolvedMeta)
-        .accessibilityHint(isGuest ? "Opens sign in." : model.hint)
+        .accessibilityHint(inviteGuest ? "Opens sign in." : model.hint)
         .accessibilityIdentifier("StudioHubSection.\(model.title)")
     }
 
@@ -204,7 +291,7 @@ struct StudioHubSection: View {
 
 #Preview {
     ScrollView {
-        StudioHubSection(unreadNotifications: 3)
+        StudioHubSection(unreadNotifications: 3, roomCount: 3)
             .environment(\.appCoordinator, AppCoordinator())
     }
     .background(PatinaColors.Background.primary)

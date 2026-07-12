@@ -94,7 +94,10 @@ struct ContentView: View {
             DesignRequestFlowView(
                 preselectedScanIds: preselectedScanIds,
                 preselectedRoomId: roomId,
-                onClose: { coordinator.presentedSheet = nil }
+                onClose: { coordinator.presentedSheet = nil },
+                onTrack: { leadId in
+                    coordinator.navigate(to: .designRequests(focusLeadId: leadId))
+                }
             )
         case .newRoom:
             NewRoomSheet()
@@ -252,6 +255,10 @@ struct ContentView: View {
 
         case .designerConsultation:
             DesignerConsultationView()
+                .toolbar(.hidden, for: .navigationBar)
+
+        case .designRequests(let focusLeadId):
+            DesignRequestStatusView(focusLeadId: focusLeadId)
                 .toolbar(.hidden, for: .navigationBar)
 
         case .projectList:
