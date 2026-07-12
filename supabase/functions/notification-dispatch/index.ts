@@ -5,6 +5,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
+import { sendCompliantEmail, type SendCategory } from "../_shared/send-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,8 +22,37 @@ interface NotificationJob {
   priority?: "critical" | "high" | "normal" | "low";
 }
 
-const MAX_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 1000;
+// Transactional notification types bypass unsubscribe headers + the per-user
+// rate cap. Mirror of TRANSACTIONAL_TYPES in
+// packages/shared/src/types/notifications.ts — edge functions (Deno) can't
+// import the node package, so the list is duplicated here. Keep in sync.
+const TRANSACTIONAL_TYPES = new Set<string>([
+  "account_verification",
+  "password_reset",
+  "security_alert",
+  "order_confirmation",
+  "payment_receipt",
+]);
+
+/**
+ * Derive the compliance send category for a job:
+ *   - a sequence/drip send (data.sequence_id present) → engagement (gets
+ *     unsubscribe headers + is rate-capped)
+ *   - a transactional type → transactional (no unsubscribe, never rate-capped)
+ *   - everything else → operational (relationship email; gets unsubscribe)
+ */
+function deriveCategory(job: NotificationJob): SendCategory {
+  if (job.data?.sequence_id != null) return "engagement";
+  if (TRANSACTIONAL_TYPES.has(job.type)) return "transactional";
+  return "operational";
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -31,7 +61,6 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const resendApiKey = Deno.env.get("RESEND_API_KEY");
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
@@ -39,13 +68,13 @@ serve(async (req) => {
 
     // Validate required fields
     if (!job.user_id || !job.type || !job.channel || !job.template_id) {
-      return new Response(
-        JSON.stringify({ error: "Missing required fields: user_id, type, channel, template_id" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return json(
+        { error: "Missing required fields: user_id, type, channel, template_id" },
+        400,
       );
     }
 
-    // Check if user email is suppressed
+    // Look up the recipient profile (email + display name for personalization).
     const { data: profile } = await supabase
       .from("profiles")
       .select("email, email_suppressed, display_name")
@@ -53,209 +82,122 @@ serve(async (req) => {
       .single();
 
     if (!profile) {
-      return new Response(
-        JSON.stringify({ error: "User not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return json({ error: "User not found" }, 404);
     }
 
-    if (profile.email_suppressed && job.channel === "email") {
-      // Log as suppressed
-      await supabase.from("notification_log").insert({
-        user_id: job.user_id,
-        type: job.type,
-        channel: job.channel,
-        status: "suppressed",
-        template_id: job.template_id,
-        metadata: { reason: "email_suppressed", ...job.data },
+    // ─── Email: route through the compliance chokepoint ───────────────────
+    // sendCompliantEmail owns suppression, the per-user rate cap, unsubscribe
+    // headers, EMAIL_DEV_MODE, AND the notification_log row — so we do NOT
+    // pre-insert a log row here (that was the double-write bug).
+    if (job.channel === "email") {
+      const enrichedData = {
+        ...job.data,
+        displayName: profile.display_name,
+        displayNameComma: profile.display_name
+          ? `, ${profile.display_name}`
+          : "",
+      };
+
+      // DB-backed rendering first (migration 00078 + admin overrides).
+      const rendered = await renderTemplateFromDb(
+        supabase,
+        job.template_id,
+        enrichedData,
+      );
+
+      // Fail loud for sequence drips: a founding designer must NEVER receive
+      // the generic "you have a new notification" fallback. Non-sequence sends
+      // keep the inline-builder fallback below.
+      const isSequence = job.data?.sequence_id != null;
+      if (!rendered && isSequence) {
+        // One authoritative failed-log row for observability, then 500 so the
+        // sequence processor treats it as an error (retries / surfaces it)
+        // rather than silently advancing.
+        await supabase.from("notification_log").insert({
+          user_id: job.user_id,
+          type: job.type,
+          channel: "email",
+          status: "failed",
+          template_id: job.template_id,
+          error: `template_missing:${job.template_id}`,
+          metadata: job.data,
+        });
+        return new Response(`template_missing:${job.template_id}`, {
+          status: 500,
+          headers: corsHeaders,
+        });
+      }
+
+      const result = await sendCompliantEmail(supabase, {
+        to: profile.email,
+        subject: rendered?.subject || buildSubject(job.type, job.data),
+        html: rendered?.html || buildEmailHtml(job.template_id, enrichedData),
+        userId: job.user_id,
+        notificationType: job.type,
+        category: deriveCategory(job),
+        templateId: job.template_id,
+        metadata: job.data,
       });
 
-      return new Response(
-        JSON.stringify({ success: false, reason: "email_suppressed" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Create log entry in 'queued' status
-    const { data: logEntry, error: logError } = await supabase
-      .from("notification_log")
-      .insert({
-        user_id: job.user_id,
-        type: job.type,
-        channel: job.channel,
-        status: "queued",
-        template_id: job.template_id,
-        metadata: job.data,
-      })
-      .select("id")
-      .single();
-
-    if (logError) {
-      console.error("Failed to create notification log:", logError);
-    }
-
-    const logId = logEntry?.id;
-
-    // Dispatch based on channel
-    if (job.channel === "email") {
-      if (!resendApiKey) {
-        await updateLog(supabase, logId, "failed", "RESEND_API_KEY not configured");
-        return new Response(
-          JSON.stringify({ error: "Email sending not configured" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      // Suppressed / rate-capped: return 200 skipped so the sequence processor
+      // advances (records the skip) instead of retrying forever.
+      if (result.suppressed) {
+        const reason = result.error?.startsWith("global_rate_cap")
+          ? "rate_capped"
+          : "suppressed";
+        return json({ success: true, skipped: true, reason }, 200);
       }
 
-      // Send with retry
-      let lastError = "";
-      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        try {
-          await updateLog(supabase, logId, "sending");
-
-          const enrichedData = {
-            ...job.data,
-            displayName: profile.display_name,
-            displayNameComma: profile.display_name
-              ? `, ${profile.display_name}`
-              : "",
-          };
-
-          // Try DB-backed rendering first (migration 00078 + admin overrides),
-          // fall back to inline HTML builder for safety.
-          const rendered = await renderTemplateFromDb(
-            supabase,
-            job.template_id,
-            enrichedData
-          );
-
-          const result = await sendEmailViaResend(resendApiKey, {
-            to: profile.email,
-            subject: rendered?.subject || buildSubject(job.type, job.data),
-            html: rendered?.html || buildEmailHtml(job.template_id, enrichedData),
-          });
-
-          if (result.success) {
-            await updateLog(supabase, logId, "delivered", undefined, result.id);
-            return new Response(
-              JSON.stringify({
-                success: true,
-                notification_id: logId,
-                provider_id: result.id,
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-
-          lastError = result.error || "Unknown error";
-        } catch (err) {
-          lastError = err instanceof Error ? err.message : "Send failed";
-        }
-
-        // Exponential backoff before retry
-        if (attempt < MAX_RETRIES - 1) {
-          const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-
-        // Update retry count
-        if (logId) {
-          await supabase
-            .from("notification_log")
-            .update({ retry_count: attempt + 1 })
-            .eq("id", logId);
-        }
+      // Genuine send failure → non-200 so the caller retries.
+      if (!result.success) {
+        return json({ success: false, error: result.error }, 500);
       }
 
-      // All retries exhausted
-      await updateLog(supabase, logId, "failed", lastError);
-      return new Response(
-        JSON.stringify({ success: false, error: lastError }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return json({
+        success: true,
+        notification_id: result.logId,
+        provider_id: result.id,
+      });
     }
 
+    // ─── In-app / push: write a delivered notification_log row directly ────
+    // (sendCompliantEmail is email-only; actual push integration is future
+    // work — in-app rows are the feed source of truth.)
     if (job.channel === "push" || job.channel === "in_app") {
-      // Push and in-app: store as delivered (actual push integration is future work)
-      await updateLog(supabase, logId, "delivered");
-      return new Response(
-        JSON.stringify({ success: true, notification_id: logId, channel: job.channel }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      const { data: logEntry, error: logError } = await supabase
+        .from("notification_log")
+        .insert({
+          user_id: job.user_id,
+          type: job.type,
+          channel: job.channel,
+          status: "delivered",
+          template_id: job.template_id,
+          metadata: job.data,
+          sent_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (logError) {
+        console.error("Failed to create notification log:", logError);
+      }
+
+      return json({
+        success: true,
+        notification_id: logEntry?.id,
+        channel: job.channel,
+      });
     }
 
     // Unknown channel
-    await updateLog(supabase, logId, "failed", `Unsupported channel: ${job.channel}`);
-    return new Response(
-      JSON.stringify({ error: `Unsupported channel: ${job.channel}` }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ error: `Unsupported channel: ${job.channel}` }, 400);
   } catch (error) {
     console.error("Error in notification-dispatch:", error);
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ error: "Internal server error" }, 500);
   }
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
-
-async function updateLog(
-  supabase: ReturnType<typeof createClient>,
-  logId: string | undefined,
-  status: string,
-  error?: string,
-  providerId?: string
-) {
-  if (!logId) return;
-
-  const update: Record<string, unknown> = { status };
-  if (error) update.error = error;
-  if (providerId) update.provider_id = providerId;
-  if (status === "delivered") update.sent_at = new Date().toISOString();
-
-  await supabase.from("notification_log").update(update).eq("id", logId);
-}
-
-interface SendResult {
-  success: boolean;
-  id?: string;
-  error?: string;
-}
-
-async function sendEmailViaResend(
-  apiKey: string,
-  params: {
-    to: string;
-    subject: string;
-    html: string;
-  }
-): Promise<SendResult> {
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      from:
-        Deno.env.get("RESEND_FROM_TRANSACTIONAL") ||
-        Deno.env.get("RESEND_FROM") ||
-        "Patina <hello@patina.cloud>",
-      to: [params.to],
-      subject: params.subject,
-      html: params.html,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    return { success: false, error: `Resend API error (${response.status}): ${errorText}` };
-  }
-
-  const data = await response.json();
-  return { success: true, id: data.id };
-}
 
 function buildSubject(type: string, data: Record<string, unknown>): string {
   const subjects: Record<string, string> = {

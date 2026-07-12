@@ -127,6 +127,13 @@ export interface NotificationPreferences {
   type_seasonal_campaign: boolean;
   type_reengagement: boolean;
 
+  // Onboarding lifecycle (00290) — gates the designer-onboarding drip.
+  // Optional: the column ships in migration 00290 (NOT NULL DEFAULT true) and
+  // may be absent in not-yet-migrated contexts, so consumers treat missing as
+  // allow. Keeping it optional also avoids forcing every preferences
+  // constructor to set it.
+  type_onboarding?: boolean;
+
   // Digest
   digest_frequency: DigestFrequency;
 
@@ -538,6 +545,9 @@ export const NOTIFICATION_TYPE_TO_PREFERENCE: Partial<Record<NotificationType, k
   product_launch: 'type_product_launch',
   seasonal_campaign: 'type_seasonal_campaign',
   reengagement: 'type_reengagement',
+  // Onboarding drip — one-click unsubscribe stops only the onboarding series,
+  // not every email (defect: welcome_series fell through to killing all email).
+  welcome_series: 'type_onboarding',
 };
 
 /** Transactional types that bypass preference checks and quiet hours. */
