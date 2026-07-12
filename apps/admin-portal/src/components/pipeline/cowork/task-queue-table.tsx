@@ -8,17 +8,23 @@ import { cn } from '@/lib/utils';
 import { useCancelCoworkTask } from '@/hooks/use-pipeline';
 import { useToast } from '@/components/ui/use-toast';
 import type { VendorPipeline } from '@patina/types';
+import type { AgentTaskStatus } from '@patina/agent-queue';
 
 type CoworkTask = VendorPipeline.CoworkTask;
 
-const STATUS_STYLES: Record<VendorPipeline.CoworkTaskStatus, string> = {
-  pending: 'text-muted-foreground',
-  picked_up: 'text-patina-info',
+const STATUS_STYLES: Record<AgentTaskStatus, string> = {
+  queued: 'text-muted-foreground',
   running: 'text-patina-info',
-  completed: 'text-patina-success',
+  awaiting_review: 'text-patina-info',
+  approved: 'text-patina-success',
+  done: 'text-patina-success',
+  rejected: 'text-patina-error',
   failed: 'text-patina-error',
   cancelled: 'text-muted-foreground',
 };
+
+/** Cancellable per cancel_agent_task (00297): queued/running/awaiting_review. */
+const CANCELLABLE_STATUSES: readonly AgentTaskStatus[] = ['queued', 'running', 'awaiting_review'];
 
 type VendorLookup = Record<string, { slug: string; name: string }>;
 
@@ -67,7 +73,8 @@ export function TaskQueueTable({
       </TableHeader>
       <TableBody>
         {tasks.map((t) => {
-          const vendor = t.vendor_id ? vendorLookup[t.vendor_id] : null;
+          const vendor =
+            t.entity_type === 'pipeline_vendor' && t.entity_id ? vendorLookup[t.entity_id] : null;
           const duration = t.completed_at
             ? Math.round(
                 (new Date(t.completed_at).getTime() - new Date(t.created_at).getTime()) / 1000,
@@ -79,8 +86,8 @@ export function TaskQueueTable({
             <TableRow key={t.id} className={cn(isFailed && 'border-l-2 border-patina-error')}>
               <TableCell>
                 <div className="font-medium">{t.task_type.replace('_', ' ')}</div>
-                {isFailed && t.error_message && (
-                  <div className="mt-1 text-xs text-patina-error">{t.error_message}</div>
+                {isFailed && t.last_error && (
+                  <div className="mt-1 text-xs text-patina-error">{t.last_error}</div>
                 )}
               </TableCell>
               <TableCell>
@@ -116,7 +123,7 @@ export function TaskQueueTable({
                 </span>
               </TableCell>
               <TableCell className="text-right">
-                {t.status === 'pending' && (
+                {CANCELLABLE_STATUSES.includes(t.status) && (
                   <Button
                     variant="ghost"
                     size="sm"

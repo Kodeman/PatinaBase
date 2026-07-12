@@ -1,14 +1,17 @@
 import { formatDistanceToNow } from 'date-fns';
 import type { VendorPipeline } from '@patina/types';
+import type { AgentTaskStatus } from '@patina/agent-queue';
 import { cn } from '@/lib/utils';
 
 type CoworkTask = VendorPipeline.CoworkTask;
 
-const STATUS_COLORS: Record<VendorPipeline.CoworkTaskStatus, string> = {
-  pending: 'border-muted-foreground/40',
-  picked_up: 'border-patina-info',
+const STATUS_COLORS: Record<AgentTaskStatus, string> = {
+  queued: 'border-muted-foreground/40',
   running: 'border-patina-info',
-  completed: 'border-patina-success',
+  awaiting_review: 'border-patina-info',
+  approved: 'border-patina-success',
+  done: 'border-patina-success',
+  rejected: 'border-patina-error',
   failed: 'border-patina-error',
   cancelled: 'border-muted-foreground/40',
 };
@@ -72,8 +75,8 @@ export function CoworkActivityLog({ tasks }: { tasks: CoworkTask[] }) {
               </>
             )}
           </div>
-          {t.error_message && (
-            <p className="mt-1 text-xs text-patina-error">{t.error_message}</p>
+          {t.last_error && (
+            <p className="mt-1 text-xs text-patina-error">{t.last_error}</p>
           )}
         </li>
       ))}

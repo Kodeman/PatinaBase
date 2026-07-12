@@ -10,13 +10,18 @@ export async function GET(request: NextRequest) {
   const db = auth.adminClient;
 
   try {
+    // active_cowork_tasks scopes to the vendor-pipeline task_type set (see
+    // VendorPipeline.PIPELINE_TASK_TYPES) — agent_tasks (00297) is now a
+    // system-wide queue shared with other Agent OS surfaces, so an unscoped
+    // count would pull in unrelated work.
     const [{ data: vendors, error: vErr }, { count: activeTasks, error: tErr }] =
       await Promise.all([
         db.from('pipeline_vendors').select('stage, triage_level, awaiting_leah_review'),
         db
-          .from('cowork_tasks')
+          .from('agent_tasks')
           .select('*', { count: 'exact', head: true })
-          .in('status', ['pending', 'picked_up', 'running']),
+          .in('task_type', VendorPipeline.PIPELINE_TASK_TYPES as unknown as string[])
+          .in('status', ['queued', 'running']),
       ]);
     if (vErr) throw vErr;
     if (tErr) throw tErr;

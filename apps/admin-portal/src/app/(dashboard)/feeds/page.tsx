@@ -20,9 +20,9 @@ import {
 type Vendor = NonNullable<ReturnType<typeof useVendors>['data']>[number];
 
 function statusVariant(status: string): StatusVariant {
-  if (status === 'completed') return 'success';
+  if (status === 'done') return 'success';
   if (status === 'failed') return 'error';
-  if (status === 'running' || status === 'pending' || status === 'picked_up') return 'warning';
+  if (status === 'running' || status === 'queued' || status === 'awaiting_review') return 'warning';
   return 'neutral';
 }
 
@@ -36,10 +36,10 @@ export default function FeedMonitorPage() {
     type FeedTask = NonNullable<typeof feedTasks>[number];
     const map: Record<string, FeedTask | undefined> = {};
     for (const t of feedTasks ?? []) {
-      if (!t.vendor_id) continue;
-      const existing = map[t.vendor_id];
+      if (t.entity_type !== 'pipeline_vendor' || !t.entity_id) continue;
+      const existing = map[t.entity_id];
       if (!existing || new Date(t.created_at) > new Date(existing.created_at)) {
-        map[t.vendor_id] = t;
+        map[t.entity_id] = t;
       }
     }
     return map;
@@ -106,9 +106,8 @@ export default function FeedMonitorPage() {
       className: 'font-mono tabular-nums',
       render: (v) => {
         const last = lastSyncByVendor[v.id];
-        const products = last?.output_payload
-          ? (last.output_payload as Record<string, unknown>).products_imported
-          : null;
+        const output = last?.artifacts?.output as Record<string, unknown> | undefined;
+        const products = output ? output.products_imported : null;
         return <>{typeof products === 'number' ? products : '—'}</>;
       },
     },

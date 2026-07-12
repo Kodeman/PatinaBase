@@ -61,9 +61,10 @@ export async function GET(
     if (!vendor) return notFound(`Vendor "${slug}" not found`);
 
     const { data: coworkTasks } = await db
-      .from('cowork_tasks')
+      .from('agent_tasks')
       .select('*')
-      .eq('vendor_id', vendor.id)
+      .eq('entity_type', 'pipeline_vendor')
+      .eq('entity_id', vendor.id)
       .order('created_at', { ascending: false })
       .limit(50);
 
