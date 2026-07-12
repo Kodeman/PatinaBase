@@ -1889,3 +1889,57 @@ DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.notify_design_request_status_change() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00295_studio_workspace_provisioning.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.generate_unique_org_slug(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00295_studio_workspace_provisioning.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public._provision_studio(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00295_studio_workspace_provisioning.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.create_studio_workspace(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00295_studio_workspace_provisioning.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.create_studio_workspace(text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00295_studio_workspace_provisioning.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.accept_workspace_invitation(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00295_studio_workspace_provisioning.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.accept_workspace_invitation(text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00295_studio_workspace_provisioning.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.decline_workspace_invitation(text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00295_studio_workspace_provisioning.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.decline_workspace_invitation(text) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00295_studio_workspace_provisioning.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.fc_provision_studio_on_designer() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
