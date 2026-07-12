@@ -315,6 +315,15 @@ verify_jwt = true
 [functions.cowork-intake-bridge]
 verify_jwt = true
 
+# Agent OS Stripe event processor (WP-2.1, 00304). Cron-invoked every 5 min via
+# public.invoke_edge_function (00304), which POSTs an apikey + service-role
+# Bearer — so the platform JWT check passes. No browser calls it; it re-fetches
+# each Stripe object with STRIPE_SECRET_KEY and reconciles it against internal
+# state. verify_jwt = true is the platform default; explicit here for intent,
+# matching the other cron-invoked functions.
+[functions.stripe-event-processor]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
