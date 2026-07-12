@@ -7,6 +7,7 @@ import { ApprovalInbox } from '@/components/mission-control/approval-inbox';
 import { LeahReviewDeck } from '@/components/mission-control/leah-review-deck';
 import { MissionControlTabs } from '@/components/mission-control/mission-control-tabs';
 import { VitalsStrip } from '@/components/mission-control/vitals-strip';
+import { MorningBriefPanel } from '@/components/mission-control/morning-brief-panel';
 
 // WP-1.1 · Approval Inbox — Mission Control's primary screen.
 // Exception-first: only awaiting_review tasks surface by default. ?assignee=leah
@@ -28,6 +29,7 @@ function MissionControlContent() {
         accent="Control"
         description="Clear agent work here. Only tasks awaiting review surface — approve, reject with a note, or edit then approve."
       />
+      <MorningBriefPanel />
       <VitalsStrip />
       <MissionControlTabs />
       <ApprovalInbox />

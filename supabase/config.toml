@@ -297,6 +297,17 @@ verify_jwt = true
 [functions.workspace-member-invite]
 verify_jwt = true
 
+# Agent OS Morning Brief (WP-1.3, 00302). Invoked nightly via
+# pg_cron -> invoke_edge_function (service-role bearer, same cron->edge
+# bridge as decision-reminders/field-daily) and on-demand from the admin
+# portal's Regenerate button via the caller's own session client. Neither
+# caller path can skip Supabase's JWT check, and the function itself does not
+# need to resolve caller identity — same shape as decision-reminders/
+# field-daily, which also rely on the verify_jwt = true platform default and
+# so carry no explicit stanza; this one is explicit for intent/discoverability.
+[functions.morning-brief]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
