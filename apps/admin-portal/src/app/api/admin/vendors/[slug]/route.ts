@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   getAuthenticatedAdmin,
   badRequest,
+  createAuditLog,
   notFound,
   serverError,
 } from '@/lib/supabase-admin';
@@ -97,48 +99,90 @@ export async function PATCH(
     return badRequest('Invalid JSON body');
   }
 
+  // stage moves through move_pipeline_stage (00305) — the single audited
+  // write path shared with the Mission Control pipeline boards (WP-2.2) —
+  // never a bare column UPDATE, so every stage change gets a
+  // pipeline_stage_events row regardless of which surface (this legacy
+  // route or the new board) triggered it. Every other field still updates
+  // directly, same as before this refactor.
+  const requestedStage = typeof body.stage === 'string' ? (body.stage as VendorStage) : undefined;
+
   const updates: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
-    if (ALLOWED_UPDATE_FIELDS.has(key as keyof Vendor)) {
+    if (key !== 'stage' && ALLOWED_UPDATE_FIELDS.has(key as keyof Vendor)) {
       updates[key] = value;
     }
   }
 
-  if (typeof updates.stage === 'string') {
-    const stage = updates.stage as VendorStage;
-    if (
-      ![
-        'discovery',
-        'qualification',
-        'outreach',
-        'negotiation',
-        'onboarding',
-        'live',
-        'paused',
-        'rejected',
-      ].includes(stage)
-    ) {
-      return badRequest(`Invalid stage: ${stage}`);
-    }
-    updates.stage_changed_at = new Date().toISOString();
-  }
-
-  if (Object.keys(updates).length === 0) {
+  if (Object.keys(updates).length === 0 && requestedStage === undefined) {
     return badRequest('No valid fields to update');
   }
 
   try {
-    const { data, error } = await db
-      .from('pipeline_vendors')
-      .update(updates)
-      .eq('slug', slug)
-      .select('*')
-      .maybeSingle();
+    let vendorRow: Vendor | null = null;
 
-    if (error) throw error;
-    if (!data) return notFound(`Vendor "${slug}" not found`);
+    if (Object.keys(updates).length > 0) {
+      const { data, error } = await db
+        .from('pipeline_vendors')
+        .update(updates)
+        .eq('slug', slug)
+        .select('*')
+        .maybeSingle();
 
-    return NextResponse.json({ data: data as Vendor });
+      if (error) throw error;
+      if (!data) return notFound(`Vendor "${slug}" not found`);
+      vendorRow = data as Vendor;
+    }
+
+    if (requestedStage !== undefined) {
+      if (!vendorRow) {
+        const { data, error } = await db
+          .from('pipeline_vendors')
+          .select('*')
+          .eq('slug', slug)
+          .maybeSingle();
+        if (error) throw error;
+        if (!data) return notFound(`Vendor "${slug}" not found`);
+        vendorRow = data as Vendor;
+      }
+
+      const client: SupabaseClient = auth.adminClient;
+      const { data: moveResult, error: moveError } = await client.rpc('move_pipeline_stage', {
+        p_entity_type: 'pipeline_vendor',
+        p_entity_id: vendorRow.id,
+        p_to_stage: requestedStage,
+        p_actor: auth.user.email ?? auth.user.id,
+      });
+
+      if (moveError) {
+        // move_pipeline_stage RAISEs on an invalid stage — a caller mistake.
+        return badRequest(moveError.message);
+      }
+
+      const result = moveResult as { from_stage: string | null; to_stage: string; unchanged: boolean };
+
+      await createAuditLog(auth.adminClient, {
+        userId: auth.user.id,
+        action: 'pipeline.stage_move',
+        resourceType: 'pipeline_vendor',
+        resourceId: vendorRow.id,
+        oldValues: { stage: result.from_stage },
+        newValues: { stage: result.to_stage },
+        metadata: { unchanged: result.unchanged, via: 'vendors_patch_legacy' },
+      });
+
+      // Re-fetch so the response carries the fresh stage + stage_changed_at
+      // (move_pipeline_stage doesn't return the full row, only the move summary).
+      const { data: refreshed, error: refetchError } = await db
+        .from('pipeline_vendors')
+        .select('*')
+        .eq('slug', slug)
+        .maybeSingle();
+      if (refetchError) throw refetchError;
+      vendorRow = refreshed as Vendor;
+    }
+
+    return NextResponse.json({ data: vendorRow as Vendor });
   } catch (err) {
     return serverError((err as Error).message ?? 'Failed to update vendor');
   }

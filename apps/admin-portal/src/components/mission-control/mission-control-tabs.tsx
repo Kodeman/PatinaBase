@@ -3,14 +3,17 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-// Local tab strip for Mission Control (Inbox | Runs). Styled to match the
-// portal FilterTabs (hairline underline, DM-Mono-ish meta) but these are real
-// route links, not filter toggles. The Runs page ships in W1.D — the link may
-// 404 locally until then, which is expected.
+// Local tab strip for Mission Control (Inbox | Runs | Pipelines). Styled to
+// match the portal FilterTabs (hairline underline, DM-Mono-ish meta) but
+// these are real route links, not filter toggles.
+//
+// WP-2.3 (Transaction Tracker, /mission-control/orders) adds an "Orders" tab
+// after Pipelines — leave room here, don't add it from this WP.
 
 const TABS: { label: string; href: string; exact: boolean }[] = [
   { label: 'Inbox', href: '/mission-control', exact: true },
   { label: 'Runs', href: '/mission-control/runs', exact: false },
+  { label: 'Pipelines', href: '/mission-control/pipelines', exact: false },
 ];
 
 export function MissionControlTabs() {
