@@ -1,0 +1,200 @@
+//
+//  CompanionActionRows.swift
+//  Patina
+//
+//  Shared row factories for The Companion menu. Centralising them here keeps
+//  identical intents looking identical on every screen (same icon, copy, and
+//  analytics id) and keeps the provider enum under the type-body-length ceiling.
+//
+
+import Foundation
+
+extension CompanionActionProvider {
+
+    /// Generic navigation row builder — the common case (icon, label, hint,
+    /// route, stable analytics id).
+    static func item(
+        _ icon: String,
+        _ label: String,
+        _ hint: String,
+        route: AppRoute,
+        id: String,
+        suggested: Bool = false
+    ) -> CompanionActionItem {
+        CompanionActionItem(
+            icon: icon, label: label, hint: hint,
+            isSuggested: suggested, analyticsId: id, route: route
+        )
+    }
+
+    // MARK: - Tail / identity
+
+    static func homeRow() -> CompanionActionItem {
+        item("house", "Home", "Back to your space", route: .heroFrame, id: "home")
+    }
+
+    static func profileRow() -> CompanionActionItem {
+        item("person.circle", "Your profile", "Style · Settings · Portal",
+             route: .profile, id: "profile")
+    }
+
+    static func signInRow(suggested: Bool) -> CompanionActionItem {
+        CompanionActionItem(
+            icon: "person.crop.circle.badge.plus", label: "Sign in",
+            hint: "Save rooms · Sync across devices", isSuggested: suggested,
+            analyticsId: "sign_in", specialAction: .openAuth
+        )
+    }
+
+    // MARK: - Studio links
+
+    static func studioRow() -> CompanionActionItem {
+        item("rectangle.grid.1x2", "Your studio", "Projects · Messages · Decisions",
+             route: .projectList, id: "your_studio")
+    }
+
+    static func projectsRow(suggested: Bool = false) -> CompanionActionItem {
+        item("folder", "Your projects", "Everything in one place",
+             route: .projectList, id: "projects", suggested: suggested)
+    }
+
+    static func decisionsRow(suggested: Bool = false) -> CompanionActionItem {
+        item("checkmark.seal", "Decisions waiting", "Options need your call",
+             route: .decisionList, id: "decisions", suggested: suggested)
+    }
+
+    static func budgetRow(label: String, suggested: Bool = false) -> CompanionActionItem {
+        item("chart.pie", label, "Your spend", route: .budget, id: "budget", suggested: suggested)
+    }
+
+    static func proposalsRow(suggested: Bool = false) -> CompanionActionItem {
+        item("doc.text", "Proposals", "Review & sign",
+             route: .proposalList, id: "proposals", suggested: suggested)
+    }
+
+    static func invoicesRow(label: String, suggested: Bool = false) -> CompanionActionItem {
+        item("creditcard", label, "What's due", route: .invoiceList, id: "invoices", suggested: suggested)
+    }
+
+    // MARK: - Discovery
+
+    static func saveRow(label: String) -> CompanionActionItem {
+        item("heart", label, "Add to a collection", route: .table, id: "save_collection", suggested: true)
+    }
+
+    static func tryInRoomRow(productId: String) -> CompanionActionItem {
+        CompanionActionItem(
+            icon: "arkit", label: "Try in your room", hint: "See it in AR",
+            analyticsId: "try_in_room", route: .arPlacement(productId: productId)
+        )
+    }
+
+    static func recommendationsRow(
+        context: CompanionContext,
+        suggested: Bool = false
+    ) -> CompanionActionItem {
+        CompanionActionItem(
+            icon: "sparkles", label: "Your recommendations",
+            hint: context.roomCount > 0 ? "Based on your rooms" : "Take the quiz first",
+            isSuggested: suggested, analyticsId: "recommendations",
+            route: .emergence(pieceId: nil)
+        )
+    }
+
+    // MARK: - Rooms
+
+    /// SPACES → the rooms gallery ("N rooms"), but for a homeowner with no rooms
+    /// yet it renders as a SCAN row ("Add your first space") — the useful next
+    /// step when there's nothing to browse.
+    static func spacesOrScanRow(
+        context: CompanionContext,
+        suggested: Bool = false
+    ) -> CompanionActionItem {
+        if context.roomCount == 0 {
+            return CompanionActionItem(
+                icon: "viewfinder", label: "Add your first space",
+                hint: "Capture your first room", isSuggested: suggested,
+                analyticsId: "scan", route: .scanFlow(reason: .fresh)
+            )
+        }
+        let plural = context.roomCount == 1 ? "" : "s"
+        return CompanionActionItem(
+            icon: "square.grid.2x2", label: "Your spaces",
+            hint: "\(context.roomCount) room\(plural)", isSuggested: suggested,
+            analyticsId: "your_spaces", route: .yourSpaces
+        )
+    }
+
+    static func scanRow(
+        label: String,
+        hint: String,
+        reason: ScanReason,
+        suggested: Bool = false
+    ) -> CompanionActionItem {
+        CompanionActionItem(
+            icon: "viewfinder", label: label, hint: hint,
+            isSuggested: suggested, analyticsId: "scan", route: .scanFlow(reason: reason)
+        )
+    }
+
+    /// The `roomId` for a designer row on an emergence surface: the specific
+    /// room for `.roomEmergence`, else the active room in context.
+    static func emergenceRoomId(_ screen: AppRoute, context: CompanionContext) -> UUID? {
+        if case let .roomEmergence(roomId) = screen { return roomId }
+        return context.activeRoom?.id
+    }
+
+    // MARK: - Designer / design request
+
+    /// The designer-contact row. When the homeowner has an active promoted
+    /// request it renders as REQUEST ("Your design request") instead — the live
+    /// request is the more useful door than a fresh-request sheet.
+    static func designerRow(
+        roomId: UUID?,
+        context: CompanionContext,
+        label: String = "Ask a designer",
+        suggested: Bool = false
+    ) -> CompanionActionItem {
+        if context.activeDesignRequest != nil {
+            return requestRow(context: context, suggested: suggested)
+        }
+        return CompanionActionItem(
+            icon: "bubble.left", label: label, hint: "Get expert advice",
+            isSuggested: suggested, analyticsId: "ask_designer",
+            specialAction: .openDesignServices(roomId: roomId)
+        )
+    }
+
+    static func requestRow(
+        context: CompanionContext,
+        suggested: Bool = false
+    ) -> CompanionActionItem {
+        CompanionActionItem(
+            icon: "clock.badge.checkmark", label: "Your design request",
+            hint: context.activeDesignRequest?.statusLabel ?? "In progress",
+            isSuggested: suggested, analyticsId: "design_request",
+            route: .designRequests(focusLeadId: nil)
+        )
+    }
+
+    static func messageDesignerRow(
+        label: String,
+        hint: String = "Chat with your designer",
+        suggested: Bool = false
+    ) -> CompanionActionItem {
+        CompanionActionItem(
+            icon: "bubble.left.and.bubble.right", label: label, hint: hint,
+            isSuggested: suggested, analyticsId: "message_designer", route: .threadList
+        )
+    }
+
+    // MARK: - Collections count row
+
+    static func collectionsRow(context: CompanionContext) -> CompanionActionItem? {
+        // `== 0 ? nil` inversion avoids SwiftLint empty_count on a `> 0` form.
+        guard context.tableItemCount != 0 else { return nil }
+        let plural = context.tableItemCount == 1 ? "" : "s"
+        return item("heart", "Collections", "\(context.tableItemCount) saved piece\(plural)",
+                    route: .table, id: "collections")
+    }
+}

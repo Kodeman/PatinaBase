@@ -86,6 +86,21 @@ public final class CompanionAnalytics {
         )
     }
 
+    // MARK: - Nudge Events
+
+    /// Track a tap on the resting-companion nudge pill (the suggested-action
+    /// affordance shown above the mark). Distinct from a panel quick-action tap.
+    public func trackNudgeTapped(screen: String, label: String) {
+        postHog.capture(
+            CompanionEvent.nudgeTapped.rawValue,
+            properties: [
+                "screen": screen,
+                "label": label,
+                "session_id": sessionMetrics.sessionId
+            ]
+        )
+    }
+
     // MARK: - Conversation Events
 
     /// Track message sent by user
@@ -326,6 +341,9 @@ public enum CompanionEvent: String {
 
     // Quick action events
     case quickActionTapped = "companion_quick_action_tapped"
+
+    // Nudge events
+    case nudgeTapped = "companion_nudge_tapped"
 
     // Conversation events
     case messageSent = "companion_message_sent"
