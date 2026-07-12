@@ -5,6 +5,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { capturePosthogEvent } from "../_shared/posthog.ts";
 
 
 const corsHeaders = {
@@ -130,6 +131,11 @@ serve(async (req) => {
     const campaignId = fullLog?.metadata?.campaign_id as string | undefined;
     const notificationType = fullLog?.type as string;
     const templateId = fullLog?.template_id as string | undefined;
+    // Present on notification_log rows written by a sequence send
+    // (automation-processor) — surfaced on every PostHog emit below so
+    // sequence performance is queryable without re-joining notification_log.
+    const sequenceId = fullLog?.metadata?.sequence_id as string | undefined;
+    const stepIndex = fullLog?.metadata?.step_index as number | undefined;
 
     // Process based on event type
     switch (event.type) {
@@ -161,6 +167,8 @@ serve(async (req) => {
           campaign_id: campaignId,
           template_id: templateId,
           notification_type: notificationType,
+          sequence_id: sequenceId,
+          step_index: stepIndex,
         });
         break;
       }
@@ -185,6 +193,8 @@ serve(async (req) => {
           campaign_id: campaignId,
           template_id: templateId,
           notification_type: notificationType,
+          sequence_id: sequenceId,
+          step_index: stepIndex,
         });
 
         // Update PostHog user property
@@ -214,6 +224,8 @@ serve(async (req) => {
           campaign_id: campaignId,
           template_id: templateId,
           notification_type: notificationType,
+          sequence_id: sequenceId,
+          step_index: stepIndex,
         });
         break;
       }
@@ -238,6 +250,8 @@ serve(async (req) => {
           campaign_id: campaignId,
           template_id: templateId,
           bounce_type: event.data.bounce_type,
+          sequence_id: sequenceId,
+          step_index: stepIndex,
         });
 
         // Increment bounce count and check suppression threshold
@@ -275,6 +289,8 @@ serve(async (req) => {
           campaign_id: campaignId,
           template_id: templateId,
           reason: "spam_complaint",
+          sequence_id: sequenceId,
+          step_index: stepIndex,
         });
 
         console.warn(`Email suppressed for user ${logEntry.user_id} due to spam complaint`);
@@ -310,39 +326,16 @@ serve(async (req) => {
  * Soft bounces: suppress after 3 in 30 days.
  */
 /**
- * Emit a PostHog event via the capture API.
+ * Emit a PostHog event via the shared capture helper (_shared/posthog.ts).
+ * Kept as a thin wrapper so every call site above stays unchanged; only
+ * adds the resend-webhook-specific $lib tag.
  */
 async function emitPostHogEvent(
   userId: string,
   eventName: string,
   properties: Record<string, unknown> = {}
 ): Promise<void> {
-  const posthogKey = Deno.env.get("POSTHOG_API_KEY");
-  const posthogHost = Deno.env.get("POSTHOG_HOST") || "https://us.i.posthog.com";
-
-  if (!posthogKey) {
-    console.warn("POSTHOG_API_KEY not set, skipping event emission");
-    return;
-  }
-
-  try {
-    await fetch(`${posthogHost}/capture/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key: posthogKey,
-        event: eventName,
-        distinct_id: userId,
-        properties: {
-          ...properties,
-          $lib: "resend-webhook",
-        },
-        timestamp: new Date().toISOString(),
-      }),
-    });
-  } catch (err) {
-    console.error(`PostHog event emission failed for ${eventName}:`, err);
-  }
+  await capturePosthogEvent(userId, eventName, { ...properties, $lib: "resend-webhook" });
 }
 
 /**

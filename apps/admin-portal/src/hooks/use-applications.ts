@@ -65,11 +65,13 @@ export function useOnboardApplication(type: ApplicationType) {
       displayName?: string;
       roleName?: string;
       additionalRoleIds?: string[];
+      personalObservation?: string;
     }) =>
       applicationsService.onboard(type, input.id, {
         displayName: input.displayName,
         roleName: input.roleName,
         additionalRoleIds: input.additionalRoleIds,
+        personalObservation: input.personalObservation,
       }),
     onSuccess: (_data, input) => {
       qc.invalidateQueries({ queryKey: applicationKeys.all });

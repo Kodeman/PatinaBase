@@ -49,6 +49,7 @@ import { BanUserDialog } from '@/components/users/BanUserDialog';
 import { ActivateUserDialog } from '@/components/users/ActivateUserDialog';
 import { VerifyEmailDialog } from '@/components/users/VerifyEmailDialog';
 import { CreateUserDialog } from '@/components/users/CreateUserDialog';
+import { InviteDesignerDialog } from '@/components/users/InviteDesignerDialog';
 import type { User } from '@/types';
 // F2 admin-portal help-system migration — Sprint 3.
 // `EmptyState` from `@/components/portal` is the legacy local primitive
@@ -128,6 +129,7 @@ function UsersPageContent() {
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [inviteDesignerDialogOpen, setInviteDesignerDialogOpen] = useState(false);
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
   const [banDialogOpen, setBanDialogOpen] = useState(false);
   const [activateDialogOpen, setActivateDialogOpen] = useState(false);
@@ -190,10 +192,16 @@ function UsersPageContent() {
         title="Users"
         description="Manage user accounts, roles, and permissions."
         actions={
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create User
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setInviteDesignerDialogOpen(true)}>
+              <Mail className="mr-2 h-4 w-4" />
+              Invite Designer
+            </Button>
+            <Button onClick={() => setCreateDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create User
+            </Button>
+          </div>
         }
       />
 
@@ -390,6 +398,10 @@ function UsersPageContent() {
       </Section>
 
       <CreateUserDialog open={createDialogOpen} onOpenChange={setCreateDialogOpen} />
+      <InviteDesignerDialog
+        open={inviteDesignerDialogOpen}
+        onOpenChange={setInviteDesignerDialogOpen}
+      />
 
       {selectedUser && (
         <>
