@@ -183,7 +183,7 @@ Cloud-permission-dependent and unverified until the migration actually lands on 
 `supabase db push`. Fill in the boxes when that happens — this file, not memory, is the
 record.
 
-- [ ] **(1) `GRANT pg_read_all_data TO agent_reader WITH INHERIT TRUE` — did it succeed on
+- [x] **(1) `GRANT pg_read_all_data TO agent_reader WITH INHERIT TRUE` — did it succeed on
       the `db push`, or did the `EXCEPTION WHEN insufficient_privilege` fallback WARNING
       fire?** Locally it succeeds (`postgres` is effectively superuser-equivalent
       locally). Strata's `postgres` role is not a true superuser, so this is a real
@@ -193,9 +193,16 @@ record.
       `SELECT has_table_privilege('agent_reader', 'public.products', 'SELECT');` should
       return `true` either way (via `pg_read_all_data` membership or the fallback
       per-table grants + `ALTER DEFAULT PRIVILEGES`).
-      Result: _____________________________________________
+      Result: **SUCCEEDED — primary path, fallback NOT taken (Wave 0 deploy, `supabase db push`
+      2026-07-12, migration 00299 on Strata).** The push emitted **no** `insufficient_privilege`
+      WARNING for either wrapped block. Confirmed live on Strata (`bkvcixdmuyejfzcijpdg`):
+      `SELECT roleid::regrole::text, inherit_option FROM pg_auth_members WHERE member='agent_reader'::regrole`
+      → `pg_read_all_data`, **`inherit_option = true`** (so membership is auto-activated under
+      `SET ROLE` despite `agent_reader` being NOINHERIT). `has_table_privilege('agent_reader',
+      'public.products','SELECT')` = `true`. `SET ROLE agent_reader; SELECT count(*) FROM products`
+      ran without error and returned **0 rows** — RLS filters as designed (§1.1), not a failure.
 
-- [ ] **(2) Did `ALTER ROLE agent_reader SET default_transaction_read_only = on` stick?**
+- [x] **(2) Did `ALTER ROLE agent_reader SET default_transaction_read_only = on` stick?**
       Verify directly rather than trusting the absence of a WARNING:
       ```sql
       SELECT rolconfig FROM pg_roles WHERE rolname = 'agent_reader';
@@ -204,14 +211,20 @@ record.
       This is advisory only — per §1, the real enforcement is that `agent_reader` holds
       zero write grants regardless of this GUC's outcome — but record what actually
       happened for anyone debugging a later "why did this write succeed/fail" question.
-      Result: _____________________________________________
+      Result: **STUCK — succeeded, no WARNING (Wave 0 deploy, 2026-07-12).** Verified live on
+      Strata: `SELECT rolconfig FROM pg_roles WHERE rolname='agent_reader'` →
+      `{default_transaction_read_only=on}`. (`agent_writer` rolconfig is `NULL`, as intended.)
 
 - [ ] **(3) Does the Strata session pooler accept a custom-role login at all?** This only
       matters if/when §5's out-of-band LOGIN enablement is actually exercised. Confirm
       with a real connection attempt as `agent_reader.<project-ref>` through the session
       pooler host/port (not the direct connection string) after step 5.1–5.3, and record
       whether it connects, and if not, the exact error.
-      Result: _____________________________________________
+      Result: **NOT YET TESTED / N/A as of Wave 0 deploy (2026-07-12) — box left unchecked
+      deliberately.** No out-of-band LOGIN enablement (§5) has been performed; both roles remain
+      `NOLOGIN`, so the session-pooler custom-role path (`agent_reader.bkvcixdmuyejfzcijpdg`) has
+      no login to exercise. Re-verify and check this box only if/when a direct `agent_reader`
+      login is ever enabled per §5.
 
 ## 7. Files
 
