@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- Agent OS agent_tasks queue tests (migrations 00295 + 00296)
+-- Agent OS agent_tasks queue tests (migrations 00297 + 00298)
 --
 -- Exercises the queue contract:
 --   1. idempotency: 'ignore' double-enqueue = 1 row; 'resurrect' revives a
@@ -225,7 +225,7 @@ END
 $$;
 
 -- ─── Case 9: cowork bridge — mapping, id preservation, counts, freeze ───────
--- The 00296 data copy ran at reset over an empty cowork_tasks. To exercise the
+-- The 00298 data copy ran at reset over an empty cowork_tasks. To exercise the
 -- mapping we insert a synthetic legacy row (disabling the freeze trigger),
 -- re-run the migration's idempotent copy verbatim, then assert the result.
 ALTER TABLE public.cowork_tasks DISABLE TRIGGER trg_cowork_tasks_frozen;
@@ -246,7 +246,7 @@ INSERT INTO public.cowork_tasks (
   '2026-01-01T00:00:00Z', '2026-01-01T00:05:00Z', '2026-01-01T00:10:00Z'
 );
 
--- Verbatim copy from 00296_agent_tasks_cowork_bridge.sql
+-- Verbatim copy from 00298_agent_tasks_cowork_bridge.sql
 INSERT INTO public.agent_tasks (
   id, task_type, status, source,
   entity_type, entity_id,

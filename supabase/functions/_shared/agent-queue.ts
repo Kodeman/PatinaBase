@@ -1,11 +1,11 @@
 // _shared/agent-queue.ts — Deno twin of packages/agent-queue.
 //
-// Thin RPC wrappers over the Agent OS queue RPCs (00295) for edge functions
+// Thin RPC wrappers over the Agent OS queue RPCs (00297) for edge functions
 // using their service-role client. ALL logic (state machine, backoff,
 // idempotency, audit) lives in Postgres — keep these signatures in sync with
 // packages/agent-queue/src/index.ts. No state machine here.
 
-// ─── Types (public.agent_tasks, 00295) ───────────────────────────────────────
+// ─── Types (public.agent_tasks, 00297) ───────────────────────────────────────
 
 export type AgentTaskStatus =
   | 'queued'

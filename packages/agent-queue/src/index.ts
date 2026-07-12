@@ -2,7 +2,7 @@
 // @patina/agent-queue — the Agent OS task-queue data layer.
 //
 // Thin wrappers over the SECURITY DEFINER RPCs + agent_tasks table defined in
-// supabase/migrations/00295_agent_tasks_queue.sql. ALL queue logic (state
+// supabase/migrations/00297_agent_tasks_queue.sql. ALL queue logic (state
 // machine, backoff, idempotency, audit) lives in Postgres — these functions
 // only shape arguments and unwrap { data, error }. Requires a service-role
 // Supabase client (the RPCs are granted to service_role only).

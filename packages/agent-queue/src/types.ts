@@ -2,7 +2,7 @@
 // @patina/agent-queue — domain types.
 //
 // AgentTask mirrors the public.agent_tasks row shape as returned by
-// supabase-js (snake_case columns straight from Postgres, 00295). The *Input
+// supabase-js (snake_case columns straight from Postgres, 00297). The *Input
 // types are the camelCase shapes the data-layer wrappers accept; they map 1:1
 // onto the RPC p_* arguments.
 // ─────────────────────────────────────────────────────────────────────────────

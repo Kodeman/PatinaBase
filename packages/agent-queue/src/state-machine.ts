@@ -2,7 +2,7 @@
 // agent_tasks state machine — TypeScript mirror.
 //
 // ⚠ The SQL trigger enforce_agent_task_transition() in
-//   supabase/migrations/00295_agent_tasks_queue.sql is AUTHORITATIVE.
+//   supabase/migrations/00297_agent_tasks_queue.sql is AUTHORITATIVE.
 //   This file is a convenience mirror for the data/UI layer — keep it in sync
 //   with that migration whenever the transition rules change.
 //
