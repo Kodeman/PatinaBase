@@ -2171,3 +2171,57 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.groom_agent_tasks(interval, interval, interval) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00301_marketplace_vitals.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.metric_thresholds TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00301_marketplace_vitals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.marketplace_vitals FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00301_marketplace_vitals.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.marketplace_vitals TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00301_marketplace_vitals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.refresh_marketplace_vitals() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00301_marketplace_vitals.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.refresh_marketplace_vitals() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00301_marketplace_vitals.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.get_marketplace_vitals() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00301_marketplace_vitals.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.get_marketplace_vitals() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00302_daily_briefs.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.daily_briefs TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00303_cowork_intake_bridge.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.bridge_state TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

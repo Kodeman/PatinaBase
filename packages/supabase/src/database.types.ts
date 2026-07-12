@@ -828,6 +828,36 @@ export type Database = {
         }
         Relationships: []
       }
+      bridge_state: {
+        Row: {
+          bridge: string
+          delta_link: string | null
+          items_processed: number
+          last_error: string | null
+          last_run_at: string | null
+          last_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          bridge: string
+          delta_link?: string | null
+          items_processed?: number
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bridge?: string
+          delta_link?: string | null
+          items_processed?: number
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       campaign_analytics: {
         Row: {
           bounced: number
@@ -2743,6 +2773,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      daily_briefs: {
+        Row: {
+          brief_date: string
+          content: Json
+          email_sent_at: string | null
+          generated_at: string
+        }
+        Insert: {
+          brief_date: string
+          content?: Json
+          email_sent_at?: string | null
+          generated_at?: string
+        }
+        Update: {
+          brief_date?: string
+          content?: Json
+          email_sent_at?: string | null
+          generated_at?: string
+        }
+        Relationships: []
       }
       daily_stories: {
         Row: {
@@ -6030,6 +6081,45 @@ export type Database = {
           material_a?: string
           material_b?: string
           notes?: string | null
+        }
+        Relationships: []
+      }
+      metric_thresholds: {
+        Row: {
+          active: boolean
+          display_order: number
+          green_max: number | null
+          green_min: number | null
+          label: string
+          metric_key: string
+          unit: string
+          updated_at: string
+          yellow_max: number | null
+          yellow_min: number | null
+        }
+        Insert: {
+          active?: boolean
+          display_order?: number
+          green_max?: number | null
+          green_min?: number | null
+          label: string
+          metric_key: string
+          unit: string
+          updated_at?: string
+          yellow_max?: number | null
+          yellow_min?: number | null
+        }
+        Update: {
+          active?: boolean
+          display_order?: number
+          green_max?: number | null
+          green_min?: number | null
+          label?: string
+          metric_key?: string
+          unit?: string
+          updated_at?: string
+          yellow_max?: number | null
+          yellow_min?: number | null
         }
         Relationships: []
       }
@@ -15482,6 +15572,15 @@ export type Database = {
         }
         Relationships: []
       }
+      marketplace_vitals: {
+        Row: {
+          computed_at: string | null
+          metric_key: string | null
+          prev_value: number | null
+          value: number | null
+        }
+        Relationships: []
+      }
       open_design_requests: {
         Row: {
           budget_range: string | null
@@ -17012,6 +17111,20 @@ export type Database = {
           invoice_status: string
         }[]
       }
+      get_marketplace_vitals: {
+        Args: never
+        Returns: {
+          active: boolean
+          band: string
+          computed_at: string
+          display_order: number
+          label: string
+          metric_key: string
+          prev_value: number
+          unit: string
+          value: number
+        }[]
+      }
       get_or_create_conversation: {
         Args: { p_context?: Json; p_screen?: string; p_user_id: string }
         Returns: string
@@ -17415,6 +17528,7 @@ export type Database = {
         Returns: string
       }
       refresh_designer_teaching_stats: { Args: never; Returns: number }
+      refresh_marketplace_vitals: { Args: never; Returns: Json }
       refresh_product_behavior_stats: { Args: never; Returns: undefined }
       refresh_style_centroids: { Args: never; Returns: number }
       reopen_item_feedback: {
