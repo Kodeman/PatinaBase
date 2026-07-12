@@ -57,13 +57,27 @@ export interface LeahReviewInput {
   leah_notes?: string;
 }
 
+/**
+ * Legacy cowork_tasks status values still accepted by GET /api/admin/cowork-tasks
+ * during the transition (server-side maps them to the new agent_tasks vocab —
+ * see LEGACY_STATUS_MAP in the route). 'running'/'failed'/'cancelled' are
+ * shared with the new vocab so aren't repeated here.
+ */
+export type LegacyCoworkTaskStatus = 'pending' | 'picked_up' | 'completed';
+
 export interface CoworkTaskFilters {
-  status?: string;
+  status?: VendorPipeline.CoworkTaskStatus | LegacyCoworkTaskStatus;
   vendor_id?: string;
   task_type?: CoworkTaskType;
   limit?: number;
 }
 
+/**
+ * Wire shape into POST /api/admin/cowork-tasks. The route maps this onto
+ * enqueue_agent_task: vendor_id -> entity_type='pipeline_vendor'/entity_id,
+ * input_payload -> payload, and is_recurring/cron_expression (when set) fold
+ * into payload.recurrence (see 00298's migration convention).
+ */
 export interface CreateCoworkTaskInput {
   task_type: CoworkTaskType;
   vendor_id?: string | null;

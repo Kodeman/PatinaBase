@@ -5,6 +5,7 @@ import {
   serverError,
 } from '@/lib/supabase-admin';
 import { VendorPipeline } from '@patina/types';
+import { createAgentQueue } from '@patina/agent-queue';
 
 type Vendor = VendorPipeline.Vendor;
 
@@ -104,11 +105,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.auto_score) {
-      await db.from('cowork_tasks').insert({
-        task_type: 'auto_score',
-        vendor_id: data.id,
-        status: 'pending',
-        input_payload: { trigger: 'vendor_created', vendor_slug: data.slug },
+      const queue = createAgentQueue(auth.adminClient);
+      await queue.enqueue({
+        taskType: 'auto_score',
+        entityType: 'pipeline_vendor',
+        entityId: data.id,
+        payload: { trigger: 'vendor_created', vendor_slug: data.slug },
+        source: 'admin:portal',
+        actor: auth.user.email ?? auth.user.id,
       });
     }
 

@@ -5,9 +5,7 @@ import {
   notFound,
   serverError,
 } from '@/lib/supabase-admin';
-import { VendorPipeline } from '@patina/types';
-
-type CoworkTask = VendorPipeline.CoworkTask;
+import { createAgentQueue, type AgentTask } from '@patina/agent-queue';
 
 export async function GET(
   request: NextRequest,
@@ -21,14 +19,14 @@ export async function GET(
 
   try {
     const { data, error } = await db
-      .from('cowork_tasks')
+      .from('agent_tasks')
       .select('*')
       .eq('id', id)
       .maybeSingle();
 
     if (error) throw error;
     if (!data) return notFound(`Task ${id} not found`);
-    return NextResponse.json({ data: data as CoworkTask });
+    return NextResponse.json({ data: data as AgentTask });
   } catch (err) {
     return serverError((err as Error).message ?? 'Failed to load task');
   }
@@ -40,7 +38,7 @@ export async function PATCH(
 ) {
   const auth = await getAuthenticatedAdmin(request);
   if ('error' in auth) return auth.error;
-  const db = auth.adminClient;
+  const queue = createAgentQueue(auth.adminClient);
 
   const { id } = await params;
 
@@ -56,20 +54,16 @@ export async function PATCH(
   }
 
   try {
-    const { data, error } = await db
-      .from('cowork_tasks')
-      .update({ status: 'cancelled' })
-      .eq('id', id)
-      .eq('status', 'pending')
-      .select('*')
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data) {
-      return badRequest('Task can only be cancelled while pending');
-    }
-    return NextResponse.json({ data: data as CoworkTask });
+    const task = await queue.cancel({
+      id,
+      actor: auth.user.email ?? auth.user.id,
+      reason: (body.reason as string | undefined) ?? 'Cancelled from admin portal',
+    });
+    return NextResponse.json({ data: task });
   } catch (err) {
-    return serverError((err as Error).message ?? 'Failed to cancel task');
+    const message = (err as Error).message ?? 'Failed to cancel task';
+    if (message.includes('not found')) return notFound(message);
+    // cancel_agent_task raises when the task isn't in a cancellable state
+    return badRequest(message);
   }
 }

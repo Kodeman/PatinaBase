@@ -8,9 +8,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const { count, error } = await db
-      .from('cowork_tasks')
+      .from('agent_tasks')
       .select('*', { count: 'exact', head: true })
-      .in('status', ['pending', 'picked_up', 'running']);
+      .in('status', ['queued', 'running']);
 
     if (error) throw error;
     return NextResponse.json({ data: { count: count ?? 0 } });

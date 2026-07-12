@@ -1,9 +1,11 @@
 // ============================================================================
 // Vendor Pipeline Types
-// Shared between admin-portal and Claude Cowork integration.
+// Shared between admin-portal and the Agent OS task queue (@patina/agent-queue).
 // Exported under `VendorPipeline` namespace from the package index because
 // `Vendor` already exists in `./catalog`.
 // ============================================================================
+
+import type { AgentTask, AgentTaskStatus } from '@patina/agent-queue';
 
 export type VendorStage =
   | 'discovery'
@@ -28,13 +30,49 @@ export type CoworkTaskType =
   | 'feed_sync'
   | 'rescore';
 
-export type CoworkTaskStatus =
-  | 'pending'
-  | 'picked_up'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+/**
+ * Soft allowlist for admin-portal UI pickers (e.g. a "new task" dropdown).
+ * task_type is an OPEN SET on public.agent_tasks (00297) — nothing here is
+ * enforced server-side; this exists purely so the UI has a known set of
+ * vendor-pipeline task types to offer.
+ */
+export const PIPELINE_TASK_TYPES: readonly CoworkTaskType[] = [
+  'prospect_scan',
+  'auto_score',
+  'generate_brief',
+  'draft_email',
+  'ingest_feed',
+  'normalize_data',
+  'image_audit',
+  'feed_sync',
+  'rescore',
+] as const;
+
+/**
+ * @deprecated CoworkTask is now an alias for AgentTask (public.agent_tasks,
+ * 00297). The vendor-pipeline "Cowork" surfaces were cut over to the unified
+ * Agent OS queue in WP-0 W0.2; public.cowork_tasks (00076) is frozen (00298)
+ * and only readable as an archive. Field mapping from the old shape:
+ *   - vendor_id                        -> entity_id (entity_type='pipeline_vendor')
+ *   - input_payload                    -> payload
+ *   - output_payload                   -> artifacts.output
+ *   - output_files                     -> artifacts.files
+ *   - error_message                    -> last_error
+ *   - retry_count                      -> attempts
+ *   - max_retries                      -> max_attempts
+ *   - picked_up_at                     -> started_at
+ *   - is_recurring/cron_expression/
+ *     last_run_at/next_run_at          -> payload.recurrence.*
+ */
+export type CoworkTask = AgentTask;
+
+/**
+ * @deprecated CoworkTaskStatus is now an alias for AgentTaskStatus. The old
+ * vocab (pending/picked_up/completed) no longer exists on the row — migrated
+ * legacy rows were remapped pending->queued, picked_up->running,
+ * completed->done at data-migration time (00298).
+ */
+export type CoworkTaskStatus = AgentTaskStatus;
 
 export type ScoreDimension = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
@@ -102,26 +140,6 @@ export interface VendorScore {
   scored_at: string;
   evidence: string | null;
   data_sources: string[] | null;
-}
-
-export interface CoworkTask {
-  id: string;
-  task_type: CoworkTaskType;
-  vendor_id: string | null;
-  status: CoworkTaskStatus;
-  input_payload: Record<string, unknown>;
-  output_payload: Record<string, unknown>;
-  output_files: string[] | null;
-  error_message: string | null;
-  retry_count: number;
-  max_retries: number;
-  created_at: string;
-  picked_up_at: string | null;
-  completed_at: string | null;
-  is_recurring: boolean;
-  cron_expression: string | null;
-  last_run_at: string | null;
-  next_run_at: string | null;
 }
 
 export interface VendorWithScores extends Vendor {

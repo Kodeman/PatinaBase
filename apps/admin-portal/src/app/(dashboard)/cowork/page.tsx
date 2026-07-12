@@ -12,13 +12,14 @@ import {
   LoadingStrata,
 } from '@/components/portal';
 
-type Tab = 'all' | 'pending' | 'running' | 'completed' | 'failed';
+type Tab = 'all' | 'queued' | 'running' | 'awaiting_review' | 'done' | 'failed';
 
 const TABS = [
   { value: 'all' as const, label: 'All' },
-  { value: 'pending' as const, label: 'Pending' },
+  { value: 'queued' as const, label: 'Queued' },
   { value: 'running' as const, label: 'Running' },
-  { value: 'completed' as const, label: 'Completed' },
+  { value: 'awaiting_review' as const, label: 'Awaiting Review' },
+  { value: 'done' as const, label: 'Done' },
   { value: 'failed' as const, label: 'Failed' },
 ];
 
@@ -39,9 +40,9 @@ export default function CoworkPage() {
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
     const last24 = list.filter((t) => new Date(t.created_at).getTime() >= oneDayAgo);
     return {
-      running: list.filter((t) => ['pending', 'picked_up', 'running'].includes(t.status)),
-      scheduled: list.filter((t) => t.is_recurring),
-      completed24: last24.filter((t) => t.status === 'completed').length,
+      running: list.filter((t) => ['queued', 'running'].includes(t.status)),
+      scheduled: list.filter((t) => Boolean(t.payload?.recurrence)),
+      completed24: last24.filter((t) => t.status === 'done').length,
       failed24: last24.filter((t) => t.status === 'failed').length,
     };
   }, [tasks]);
@@ -49,9 +50,6 @@ export default function CoworkPage() {
   const filteredTasks = useMemo(() => {
     const list = tasks ?? [];
     if (tab === 'all') return list;
-    if (tab === 'running') {
-      return list.filter((t) => ['pending', 'picked_up', 'running'].includes(t.status));
-    }
     return list.filter((t) => t.status === tab);
   }, [tasks, tab]);
 
