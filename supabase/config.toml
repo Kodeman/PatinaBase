@@ -290,6 +290,13 @@ verify_jwt = true
 [functions.designer-invite]
 verify_jwt = true
 
+# Studio owner/admin invites a teammate by email. The platform MUST verify the
+# caller's JWT; the function then requires an active owner/admin membership in
+# the target organization before minting/inviting. Explicit for intent, though
+# verify_jwt = true is the platform default.
+[functions.workspace-member-invite]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
