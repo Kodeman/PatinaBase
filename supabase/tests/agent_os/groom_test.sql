@@ -40,6 +40,16 @@
 
 BEGIN;
 
+-- ── Defensive isolation ─────────────────────────────────────────────────────
+-- groom_agent_tasks() returns GLOBAL counts, so the exact-count assertions
+-- below must not depend on whatever dev seeds happen to be loaded (now or in
+-- the future — e.g. the 5eed0000-… Mission Control rows from
+-- supabase/seed/agent-tasks-dev.sql). Clear them inside this transaction; the
+-- ROLLBACK at the end means these deletes never persist. The audit trigger
+-- records the deletes in agent_task_audit, but those audit rows roll back too.
+DELETE FROM public.agent_tasks WHERE id::text LIKE '5eed0000-%';
+DELETE FROM public.job_runs;
+
 DO $$
 DECLARE
   v_task       public.agent_tasks;

@@ -165,10 +165,15 @@ INSERT INTO public.agent_tasks (
  now() - interval '12 hours', NULL, NULL, now() - interval '11 hours',
  NULL, NULL, NULL, now() - interval '12 hours', NULL, 1, 5),
 
--- 13 · job:* FAILED with last_error (Run Log, W1.D)
+-- 13 · job:* FAILED with last_error (Run Log, W1.D) — exhausted-retries job WITH
+--      prior groom lineage: payload.groom_requeued_at shows queue-groom already
+--      requeued it once (~1 day ago) and it parked failed again, so groom will
+--      NOT touch it again (keeps this row out of groom's eligible set and keeps
+--      groom_test.sql's global-count assertions honest on a seeded dev DB).
 ('5eed0000-0000-0000-0000-000000000013','job:catalog_normalize','failed',3,'job:catalog',NULL,
  'Catalog normalize — Meridian feed',
- jsonb_build_object('feed_id','meridian-2026-07','rows', 214),
+ jsonb_build_object('feed_id','meridian-2026-07','rows', 214,
+                    'groom_requeued_at', (now() - interval '1 day')::text),
  jsonb_build_object('rows_committed', 0),
  NULL, NULL,
  now() - interval '8 hours', NULL, NULL, now() - interval '7 hours',
