@@ -14,6 +14,13 @@ interface MetricBlockProps {
    * Added in Sprint 3 F2 admin-portal help-system migration.
    */
   labelExtra?: ReactNode;
+  /**
+   * Optional extra classes appended to the change/delta span — e.g.
+   * 'tabular-nums' for a strip of metrics whose deltas should stay
+   * column-aligned as they update (Marketplace Vitals, WP-1.2). Omitted by
+   * every existing caller, so this is purely additive.
+   */
+  changeClassName?: string;
 }
 
 function formatValue(value: string | number): string {
@@ -26,7 +33,7 @@ function formatValue(value: string | number): string {
   return value;
 }
 
-export function MetricBlock({ label, value, change, trend, labelExtra }: MetricBlockProps) {
+export function MetricBlock({ label, value, change, trend, labelExtra, changeClassName }: MetricBlockProps) {
   const trendColor =
     trend === 'up'
       ? 'text-[var(--color-sage)]'
@@ -41,7 +48,9 @@ export function MetricBlock({ label, value, change, trend, labelExtra }: MetricB
         {labelExtra}
       </span>
       <span className="type-data-large mb-1">{formatValue(value)}</span>
-      {change && <span className={`type-body-small ${trendColor}`}>{change}</span>}
+      {change && (
+        <span className={`type-body-small ${trendColor} ${changeClassName ?? ''}`}>{change}</span>
+      )}
     </div>
   );
 }
