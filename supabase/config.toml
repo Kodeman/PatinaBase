@@ -324,6 +324,15 @@ verify_jwt = true
 [functions.stripe-event-processor]
 verify_jwt = true
 
+# Agent OS Catalog Normalizer (WP-2.4, 00307). Invoked nightly via
+# pg_cron -> invoke_edge_function (service-role bearer, same cron->edge
+# bridge as cowork-intake-bridge/morning-brief) and claims queued
+# normalize_feed agent_tasks the admin portal's feed-upload route enqueues.
+# No browser calls it. verify_jwt = true is the platform default; explicit
+# here for intent, matching the other cron-invoked functions.
+[functions.catalog-normalizer]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
