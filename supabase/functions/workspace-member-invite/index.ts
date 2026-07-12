@@ -20,11 +20,13 @@
 // spurious personal studio from being minted for the invitee. Violating this
 // order would give every invited designer their own throwaway studio.
 //
-// Because the 00290 is_designer-sync trigger is NOT on this branch, a
-// studio_designer user_roles insert does not by itself flip is_designer here —
-// so for designer invites we BOTH insert the role AND directly upsert
-// profiles.is_designer=true. This stays forward-compatible when 00290 lands
-// (its trigger would set the same value; idempotent).
+// 00290's fc_sync_is_designer_from_role trigger (AFTER INSERT ON user_roles)
+// is on this branch and would flip is_designer on its own — but the role
+// grant above uses ignoreDuplicates, so no INSERT (and thus no trigger fire)
+// happens when the role row already exists. For designer invites we
+// therefore BOTH insert the role AND directly upsert profiles.is_designer =
+// true: the direct upsert is intentional, not a pre-00290 workaround, and is
+// idempotent alongside 00290's trigger (same value, either order).
 //
 // verify_jwt = true (config.toml). The platform verifies the caller's JWT; we
 // then resolve the caller and require an active owner/admin membership in the
@@ -266,8 +268,10 @@ async function handleInvite(req: Request): Promise<Response> {
       console.error('workspace-member-invite: role grant failed', grantError);
       return json({ error: 'role_grant_failed' }, 500);
     }
-    // Direct is_designer flip (00290 sync trigger is not on this branch). The
-    // membership row already exists, so 00295's trigger no-ops on this update.
+    // Direct is_designer flip — intentional and idempotent alongside 00290's
+    // sync trigger (belt-and-suspenders for the ignoreDuplicates no-insert
+    // case above). The membership row already exists, so 00295's trigger
+    // no-ops on this update.
     const { error: designerFlagError } = await admin
       .from('profiles')
       .upsert({ id: userId, is_designer: true });

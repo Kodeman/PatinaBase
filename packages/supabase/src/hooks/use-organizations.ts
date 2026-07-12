@@ -166,7 +166,7 @@ export function useOrganizationMembers(organizationId: string) {
         .from('organization_members')
         .select(`
           *,
-          profiles (id, email, display_name, avatar_url)
+          profiles!organization_members_user_id_fkey (id, email, display_name, avatar_url)
         `)
         .eq('organization_id', organizationId)
         .in('status', ['active', 'invited']);
