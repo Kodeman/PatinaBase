@@ -282,6 +282,137 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_task_audit: {
+        Row: {
+          actor: string
+          at: string
+          id: number
+          new_row: Json | null
+          old_row: Json | null
+          op: string
+          task_id: string
+          txid: number
+        }
+        Insert: {
+          actor: string
+          at?: string
+          id?: never
+          new_row?: Json | null
+          old_row?: Json | null
+          op: string
+          task_id: string
+          txid?: number
+        }
+        Update: {
+          actor?: string
+          at?: string
+          id?: never
+          new_row?: Json | null
+          old_row?: Json | null
+          op?: string
+          task_id?: string
+          txid?: number
+        }
+        Relationships: []
+      }
+      agent_tasks: {
+        Row: {
+          artifacts: Json
+          assignee: string | null
+          attempts: number
+          awaiting_review_at: string | null
+          completed_at: string | null
+          confidence: number | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          flagged_stale_at: string | null
+          id: string
+          idempotency_key: string | null
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          parent_task_id: string | null
+          payload: Json
+          priority: number
+          review_state: Json | null
+          run_after: string
+          source: string
+          started_at: string | null
+          status: string
+          summary: string
+          task_type: string
+          updated_at: string
+        }
+        Insert: {
+          artifacts?: Json
+          assignee?: string | null
+          attempts?: number
+          awaiting_review_at?: string | null
+          completed_at?: string | null
+          confidence?: number | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          flagged_stale_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          parent_task_id?: string | null
+          payload?: Json
+          priority?: number
+          review_state?: Json | null
+          run_after?: string
+          source?: string
+          started_at?: string | null
+          status?: string
+          summary?: string
+          task_type: string
+          updated_at?: string
+        }
+        Update: {
+          artifacts?: Json
+          assignee?: string | null
+          attempts?: number
+          awaiting_review_at?: string | null
+          completed_at?: string | null
+          confidence?: number | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          flagged_stale_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          last_error?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          parent_task_id?: string | null
+          payload?: Json
+          priority?: number
+          review_state?: Json | null
+          run_after?: string
+          source?: string
+          started_at?: string | null
+          status?: string
+          summary?: string
+          task_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
           created_at: string
@@ -16112,6 +16243,14 @@ export type Database = {
           rank: number
         }[]
       }
+      agent_queue_stats: {
+        Args: never
+        Returns: {
+          oldest_created_at: string
+          status: string
+          task_count: number
+        }[]
+      }
       aggregate_user_style_signals: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -16201,6 +16340,44 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      cancel_agent_task: {
+        Args: { p_actor: string; p_id: string; p_reason?: string }
+        Returns: {
+          artifacts: Json
+          assignee: string | null
+          attempts: number
+          awaiting_review_at: string | null
+          completed_at: string | null
+          confidence: number | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          flagged_stale_at: string | null
+          id: string
+          idempotency_key: string | null
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          parent_task_id: string | null
+          payload: Json
+          priority: number
+          review_state: Json | null
+          run_after: string
+          source: string
+          started_at: string | null
+          status: string
+          summary: string
+          task_type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       chase_invoice: { Args: { p_invoice_id: string }; Returns: string }
       claim_aesthete_jobs: {
         Args: { p_batch: number; p_kind: string }
@@ -16221,6 +16398,49 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "aesthete_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_agent_tasks: {
+        Args: {
+          p_batch: number
+          p_task_types: string[]
+          p_visibility_timeout?: string
+          p_worker: string
+        }
+        Returns: {
+          artifacts: Json
+          assignee: string | null
+          attempts: number
+          awaiting_review_at: string | null
+          completed_at: string | null
+          confidence: number | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          flagged_stale_at: string | null
+          id: string
+          idempotency_key: string | null
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          parent_task_id: string | null
+          payload: Json
+          priority: number
+          review_state: Json | null
+          run_after: string
+          source: string
+          started_at: string | null
+          status: string
+          summary: string
+          task_type: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "agent_tasks"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -16298,6 +16518,18 @@ export type Database = {
       comms_resolve_role: { Args: { p_user_id: string }; Returns: string }
       complete_aesthete_job: {
         Args: { p_error?: string; p_id: number; p_status: string }
+        Returns: undefined
+      }
+      complete_agent_task: {
+        Args: {
+          p_actor?: string
+          p_artifacts?: Json
+          p_confidence?: number
+          p_error?: string
+          p_fatal?: boolean
+          p_id: string
+          p_outcome: string
+        }
         Returns: undefined
       }
       compute_house_taste_draft: { Args: never; Returns: string }
@@ -16416,6 +16648,62 @@ export type Database = {
       draft_invoice_from_milestone: {
         Args: { p_milestone_id: string }
         Returns: string
+      }
+      enqueue_agent_task: {
+        Args: {
+          p_actor?: string
+          p_artifacts?: Json
+          p_assignee?: string
+          p_confidence?: number
+          p_entity_id?: string
+          p_entity_type?: string
+          p_idempotency_key?: string
+          p_max_attempts?: number
+          p_on_conflict?: string
+          p_parent_task_id?: string
+          p_payload?: Json
+          p_priority?: number
+          p_run_after?: string
+          p_source?: string
+          p_status?: string
+          p_summary?: string
+          p_task_type: string
+        }
+        Returns: {
+          artifacts: Json
+          assignee: string | null
+          attempts: number
+          awaiting_review_at: string | null
+          completed_at: string | null
+          confidence: number | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          flagged_stale_at: string | null
+          id: string
+          idempotency_key: string | null
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          parent_task_id: string | null
+          payload: Json
+          priority: number
+          review_state: Json | null
+          run_after: string
+          source: string
+          started_at: string | null
+          status: string
+          summary: string
+          task_type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       enroll_designer_onboarding: {
         Args: { p_user_id: string }
@@ -17090,6 +17378,44 @@ export type Database = {
         Args: { p_feedback: string; p_proposal_id: string }
         Returns: undefined
       }
+      requeue_agent_task: {
+        Args: { p_actor: string; p_feedback?: string; p_id: string }
+        Returns: {
+          artifacts: Json
+          assignee: string | null
+          attempts: number
+          awaiting_review_at: string | null
+          completed_at: string | null
+          confidence: number | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          flagged_stale_at: string | null
+          id: string
+          idempotency_key: string | null
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          parent_task_id: string | null
+          payload: Json
+          priority: number
+          review_state: Json | null
+          run_after: string
+          source: string
+          started_at: string | null
+          status: string
+          summary: string
+          task_type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       resolve_coordination_item: {
         Args: {
           p_answer?: string
@@ -17178,6 +17504,51 @@ export type Database = {
       retire_designer_taste: {
         Args: { p_designer_id: string }
         Returns: undefined
+      }
+      review_agent_task: {
+        Args: {
+          p_decision: string
+          p_id: string
+          p_note?: string
+          p_payload_patch?: Json
+          p_review_meta?: Json
+          p_reviewer: string
+        }
+        Returns: {
+          artifacts: Json
+          assignee: string | null
+          attempts: number
+          awaiting_review_at: string | null
+          completed_at: string | null
+          confidence: number | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          flagged_stale_at: string | null
+          id: string
+          idempotency_key: string | null
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          parent_task_id: string | null
+          payload: Json
+          priority: number
+          review_state: Json | null
+          run_after: string
+          source: string
+          started_at: string | null
+          status: string
+          summary: string
+          task_type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       review_sms_message: {
         Args: { p_action: string; p_effect?: Json; p_message_id: string }
