@@ -2226,6 +2226,30 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00305_pipeline_boards.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.designer_prospects TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00305_pipeline_boards.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.pipeline_stage_events TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00305_pipeline_boards.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.move_pipeline_stage(text, uuid, text, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00305_pipeline_boards.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.move_pipeline_stage(text, uuid, text, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00306_catalog_normalizer_staging.sql
 DO $g$ BEGIN
   GRANT SELECT ON public.catalog_feed_batches TO authenticated;

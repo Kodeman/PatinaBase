@@ -1021,6 +1021,211 @@ export type Database = {
           },
         ]
       }
+      catalog_feed_batches: {
+        Row: {
+          auto_count: number | null
+          commit_task_id: string | null
+          content_hash: string
+          created_at: string
+          error: string | null
+          id: string
+          pipeline_vendor_id: string | null
+          review_count: number | null
+          row_count: number | null
+          source: string
+          status: string
+          storage_path: string
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          auto_count?: number | null
+          commit_task_id?: string | null
+          content_hash: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          pipeline_vendor_id?: string | null
+          review_count?: number | null
+          row_count?: number | null
+          source: string
+          status?: string
+          storage_path: string
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          auto_count?: number | null
+          commit_task_id?: string | null
+          content_hash?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          pipeline_vendor_id?: string | null
+          review_count?: number | null
+          row_count?: number | null
+          source?: string
+          status?: string
+          storage_path?: string
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_feed_batches_commit_task_id_fkey"
+            columns: ["commit_task_id"]
+            isOneToOne: false
+            referencedRelation: "agent_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_batches_pipeline_vendor_id_fkey"
+            columns: ["pipeline_vendor_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_vendors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_batches_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_feed_items: {
+        Row: {
+          action: string | null
+          batch_id: string
+          committed_product_id: string | null
+          confidence: number | null
+          created_at: string
+          diff: Json | null
+          error: string | null
+          field_confidence: Json | null
+          id: string
+          match_product_id: string | null
+          normalized: Json | null
+          raw: Json
+          row_index: number
+          source_row_hash: string
+          status: string
+        }
+        Insert: {
+          action?: string | null
+          batch_id: string
+          committed_product_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          diff?: Json | null
+          error?: string | null
+          field_confidence?: Json | null
+          id?: string
+          match_product_id?: string | null
+          normalized?: Json | null
+          raw: Json
+          row_index: number
+          source_row_hash: string
+          status?: string
+        }
+        Update: {
+          action?: string | null
+          batch_id?: string
+          committed_product_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          diff?: Json | null
+          error?: string | null
+          field_confidence?: Json | null
+          id?: string
+          match_product_id?: string | null
+          normalized?: Json | null
+          raw?: Json
+          row_index?: number
+          source_row_hash?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_feed_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_feed_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_items_committed_product_id_fkey"
+            columns: ["committed_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_items_committed_product_id_fkey"
+            columns: ["committed_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_items_committed_product_id_fkey"
+            columns: ["committed_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_items_committed_product_id_fkey"
+            columns: ["committed_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_items_committed_product_id_fkey"
+            columns: ["committed_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_items_match_product_id_fkey"
+            columns: ["match_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_items_match_product_id_fkey"
+            columns: ["match_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_catalog_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_items_match_product_id_fkey"
+            columns: ["match_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_personal_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_items_match_product_id_fkey"
+            columns: ["match_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_aesthete_studio_input"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "catalog_feed_items_match_product_id_fkey"
+            columns: ["match_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_promotion_candidates"
+            referencedColumns: ["product_id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           created_at: string | null
@@ -3634,6 +3839,94 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      designer_prospects: {
+        Row: {
+          application_id: string | null
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+          instagram: string | null
+          market_city: string | null
+          market_state: string | null
+          next_action: string | null
+          next_action_due: string | null
+          notes: string | null
+          owner: string
+          portfolio_url: string | null
+          profile_id: string | null
+          source: string | null
+          stage: string
+          stage_entered_at: string
+          studio_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          application_id?: string | null
+          created_at?: string
+          email?: string | null
+          full_name: string
+          id?: string
+          instagram?: string | null
+          market_city?: string | null
+          market_state?: string | null
+          next_action?: string | null
+          next_action_due?: string | null
+          notes?: string | null
+          owner?: string
+          portfolio_url?: string | null
+          profile_id?: string | null
+          source?: string | null
+          stage?: string
+          stage_entered_at?: string
+          studio_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          application_id?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          instagram?: string | null
+          market_city?: string | null
+          market_state?: string | null
+          next_action?: string | null
+          next_action_due?: string | null
+          notes?: string | null
+          owner?: string
+          portfolio_url?: string | null
+          profile_id?: string | null
+          source?: string | null
+          stage?: string
+          stage_entered_at?: string
+          studio_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "designer_prospects_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "founding_designer_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_prospects_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designer_prospects_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       designer_style_confidence: {
         Row: {
@@ -6769,6 +7062,39 @@ export type Database = {
           },
         ]
       }
+      pipeline_stage_events: {
+        Row: {
+          actor: string
+          created_at: string
+          entity_id: string
+          entity_type: string
+          from_stage: string | null
+          id: string
+          note: string | null
+          to_stage: string
+        }
+        Insert: {
+          actor: string
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          from_stage?: string | null
+          id?: string
+          note?: string | null
+          to_stage: string
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          from_stage?: string | null
+          id?: string
+          note?: string | null
+          to_stage?: string
+        }
+        Relationships: []
+      }
       pipeline_vendor_scores: {
         Row: {
           data_sources: string[] | null
@@ -8054,6 +8380,8 @@ export type Database = {
           embedding_updated_at: string | null
           field_capture_id: string | null
           finish: string | null
+          finishes: string[] | null
+          freight_class: string | null
           id: string
           images: string[] | null
           layer: string
@@ -8069,6 +8397,7 @@ export type Database = {
             | null
           price_retail: number | null
           price_trade: number | null
+          pricing_tiers: Json | null
           promoted_at: string | null
           promoted_by: string | null
           promoted_from_id: string | null
@@ -8092,6 +8421,7 @@ export type Database = {
           usage_notes: string | null
           vendor_contact: Json | null
           vendor_id: string | null
+          vendor_sku: string | null
         }
         Insert: {
           aesthete_model_version?: string | null
@@ -8115,6 +8445,8 @@ export type Database = {
           embedding_updated_at?: string | null
           field_capture_id?: string | null
           finish?: string | null
+          finishes?: string[] | null
+          freight_class?: string | null
           id?: string
           images?: string[] | null
           layer: string
@@ -8130,6 +8462,7 @@ export type Database = {
             | null
           price_retail?: number | null
           price_trade?: number | null
+          pricing_tiers?: Json | null
           promoted_at?: string | null
           promoted_by?: string | null
           promoted_from_id?: string | null
@@ -8153,6 +8486,7 @@ export type Database = {
           usage_notes?: string | null
           vendor_contact?: Json | null
           vendor_id?: string | null
+          vendor_sku?: string | null
         }
         Update: {
           aesthete_model_version?: string | null
@@ -8176,6 +8510,8 @@ export type Database = {
           embedding_updated_at?: string | null
           field_capture_id?: string | null
           finish?: string | null
+          finishes?: string[] | null
+          freight_class?: string | null
           id?: string
           images?: string[] | null
           layer?: string
@@ -8191,6 +8527,7 @@ export type Database = {
             | null
           price_retail?: number | null
           price_trade?: number | null
+          pricing_tiers?: Json | null
           promoted_at?: string | null
           promoted_by?: string | null
           promoted_from_id?: string | null
@@ -8214,6 +8551,7 @@ export type Database = {
           usage_notes?: string | null
           vendor_contact?: Json | null
           vendor_id?: string | null
+          vendor_sku?: string | null
         }
         Relationships: [
           {
@@ -17401,6 +17739,16 @@ export type Database = {
         Returns: undefined
       }
       migrate_legacy_ffe_notes: { Args: never; Returns: number }
+      move_pipeline_stage: {
+        Args: {
+          p_actor: string
+          p_entity_id: string
+          p_entity_type: string
+          p_note?: string
+          p_to_stage: string
+        }
+        Returns: Json
+      }
       next_co_number: { Args: { p_project_id: string }; Returns: string }
       next_court_for: {
         Args: { item: Database["public"]["Tables"]["client_decisions"]["Row"] }
