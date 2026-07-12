@@ -29,6 +29,7 @@ import {
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { useHydrated } from '@/hooks/use-hydrated';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { authEvents } from '@/lib/analytics/events';
 import { DocSheet } from '../overlays/doc-sheet';
 import { monogramOf, activeStudio } from '@/lib/document/account-identity';
@@ -36,6 +37,7 @@ import { AccountProfilePage } from './account-profile-page';
 import { AccountNotificationsPage } from './account-notifications-page';
 import { AccountSecurityPage } from './account-security-page';
 import { AccountDevicesPage } from './account-devices-page';
+import { AccountStudioPage } from './account-studio-page';
 
 const STATUS_META: Record<AvailabilityStatus, { label: string; color: string }> = {
   online: { label: 'Online', color: 'var(--color-sage)' },
@@ -44,7 +46,7 @@ const STATUS_META: Record<AvailabilityStatus, { label: string; color: string }> 
   offline: { label: 'Offline', color: 'var(--color-aged-oak)' },
 };
 
-type AccountPage = 'profile' | 'notifications' | 'security' | 'devices';
+type AccountPage = 'profile' | 'notifications' | 'security' | 'devices' | 'studio';
 
 const PAGES: { key: AccountPage; label: string }[] = [
   { key: 'profile', label: 'Profile' },
@@ -61,6 +63,11 @@ export function openAccount() {
 export function AccountSheet() {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState<AccountPage>('profile');
+
+  // Flag hook stays above every early return / conditional branch below
+  // (hook-order stability) even though this component has no early return
+  // today — matches the fail-closed convention in open-requests-strip.tsx.
+  const { value: studioEnabled } = useFeatureFlag('studio-workspaces');
 
   const { user, signOut } = useAuth();
   const { data: profile } = useProfile();
@@ -97,6 +104,7 @@ export function AccountSheet() {
   const email = user?.email ?? profile?.email ?? '';
   const studio = activeStudio(orgs);
   const currentStatus: AvailabilityStatus = hydrated ? (status ?? 'online') : 'offline';
+  const pages = studioEnabled ? [...PAGES, { key: 'studio' as const, label: 'Studio' }] : PAGES;
 
   return (
     <DocSheet open={open} onClose={() => setOpen(false)} title="Account">
@@ -171,7 +179,7 @@ export function AccountSheet() {
 
         {/* R28 page links — DM-mono, never tabs. */}
         <div className="mb-4 mt-5 flex flex-wrap items-baseline gap-x-4 border-b border-[var(--color-pearl)] pb-2">
-          {PAGES.map((p) => (
+          {pages.map((p) => (
             <button
               key={p.key}
               type="button"
@@ -192,6 +200,7 @@ export function AccountSheet() {
         {page === 'notifications' && <AccountNotificationsPage />}
         {page === 'security' && <AccountSecurityPage />}
         {page === 'devices' && <AccountDevicesPage />}
+        {page === 'studio' && studioEnabled && <AccountStudioPage />}
 
         {/* Sign out */}
         <div className="mt-7 border-t border-[var(--color-pearl)] pt-4">

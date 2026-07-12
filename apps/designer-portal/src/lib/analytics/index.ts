@@ -11,3 +11,4 @@ export {
   proposalEvents,
 } from './events';
 export { procurementEvents } from './procurement-events';
+export { studioEvents } from './studio-events';
