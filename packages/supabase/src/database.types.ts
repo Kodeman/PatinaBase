@@ -2779,6 +2779,109 @@ export type Database = {
         }
         Relationships: []
       }
+      concierge_orders: {
+        Row: {
+          checklists: Json
+          client_invoice_id: string | null
+          created_at: string
+          damage: Json | null
+          direct_order_id: string | null
+          freight: Json | null
+          id: string
+          linked_task_ids: string[]
+          payment_flag: string
+          payment_flag_detail: Json | null
+          project_id: string | null
+          purchase_order_id: string | null
+          stage: string
+          stage_entered_at: string
+          title: string
+          updated_at: string
+          vendor_id: string | null
+        }
+        Insert: {
+          checklists?: Json
+          client_invoice_id?: string | null
+          created_at?: string
+          damage?: Json | null
+          direct_order_id?: string | null
+          freight?: Json | null
+          id?: string
+          linked_task_ids?: string[]
+          payment_flag?: string
+          payment_flag_detail?: Json | null
+          project_id?: string | null
+          purchase_order_id?: string | null
+          stage?: string
+          stage_entered_at?: string
+          title: string
+          updated_at?: string
+          vendor_id?: string | null
+        }
+        Update: {
+          checklists?: Json
+          client_invoice_id?: string | null
+          created_at?: string
+          damage?: Json | null
+          direct_order_id?: string | null
+          freight?: Json | null
+          id?: string
+          linked_task_ids?: string[]
+          payment_flag?: string
+          payment_flag_detail?: Json | null
+          project_id?: string | null
+          purchase_order_id?: string | null
+          stage?: string
+          stage_entered_at?: string
+          title?: string
+          updated_at?: string
+          vendor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concierge_orders_client_invoice_id_fkey"
+            columns: ["client_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concierge_orders_direct_order_id_fkey"
+            columns: ["direct_order_id"]
+            isOneToOne: false
+            referencedRelation: "direct_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concierge_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "concierge_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concierge_orders_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: true
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concierge_orders_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consent_audit_log: {
         Row: {
           action: string
@@ -16725,6 +16828,16 @@ export type Database = {
         Args: { p_proposal_id: string; p_start_date?: string }
         Returns: string
       }
+      advance_concierge_order: {
+        Args: {
+          p_actor: string
+          p_force?: boolean
+          p_id: string
+          p_note?: string
+          p_to_stage: string
+        }
+        Returns: Json
+      }
       aesthete_ask_knn: {
         Args: { p_embedding: string; p_filters?: Json }
         Returns: {
@@ -16881,6 +16994,7 @@ export type Database = {
         }
       }
       chase_invoice: { Args: { p_invoice_id: string }; Returns: string }
+      check_concierge_payment_discrepancies: { Args: never; Returns: Json }
       claim_aesthete_jobs: {
         Args: { p_batch: number; p_kind: string }
         Returns: {
@@ -17035,6 +17149,8 @@ export type Database = {
         Returns: undefined
       }
       compute_house_taste_draft: { Args: never; Returns: string }
+      concierge_checklist_template: { Args: { p_stage: string }; Returns: Json }
+      concierge_damage_photo_checklist: { Args: never; Returns: Json }
       consume_capture: {
         Args: {
           p_capture_id: string
@@ -17244,6 +17360,16 @@ export type Database = {
       enroll_designer_onboarding: {
         Args: { p_user_id: string }
         Returns: undefined
+      }
+      enter_concierge_damage_mode: {
+        Args: {
+          p_actor: string
+          p_carrier_deadline?: string
+          p_damage_claim_id?: string
+          p_id: string
+          p_note?: string
+        }
+        Returns: Json
       }
       escalate_item_feedback_to_decision: {
         Args: { p_decision_id: string; p_feedback_id: string }
@@ -18537,6 +18663,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      toggle_concierge_checklist_item: {
+        Args: {
+          p_actor: string
+          p_done: boolean
+          p_id: string
+          p_key: string
+          p_stage: string
+        }
+        Returns: Json
       }
       update_my_biases: { Args: { p_overrides: Json }; Returns: Json }
       user_has_role: {
