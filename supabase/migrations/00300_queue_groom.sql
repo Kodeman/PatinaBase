@@ -142,6 +142,20 @@ BEGIN
     GET DIAGNOSTICS v_orphans_reset = ROW_COUNT;
 
   EXCEPTION WHEN OTHERS THEN
+    -- Deliberately NO re-RAISE here: a re-raise would propagate out of the
+    -- function and abort the top-level transaction, rolling back BOTH the
+    -- 'running' INSERT above and this 'failed' UPDATE — a groom failure
+    -- would then leave no job_runs row at all, which is exactly the silent
+    -- failure job_runs exists to prevent (the Run Log UI reads job_runs as
+    -- its authoritative failure surface). Returning instead lets the
+    -- transaction commit so the failed row persists. Tradeoff, by design:
+    -- cron.job_run_details will record this invocation as 'succeeded' (the
+    -- SQL statement completed) — job_runs, not cron's ledger, is the
+    -- authoritative failure record. Note on the counts: PL/pgSQL rolls the
+    -- guarded block's DB changes back to its implicit savepoint when the
+    -- exception is caught, so the counts in detail describe work ATTEMPTED
+    -- in the failed pass (variables survive; row changes did not) — nothing
+    -- partial persists, and all three passes are idempotent regardless.
     UPDATE public.job_runs
        SET status = 'failed', finished_at = now(), error = SQLERRM,
            detail = jsonb_build_object(
@@ -150,7 +164,12 @@ BEGIN
              'orphans_reset',   v_orphans_reset
            )
      WHERE id = v_run_id;
-    RAISE;
+    RETURN jsonb_build_object(
+      'error',           SQLERRM,
+      'stale_flagged',   v_stale_flagged,
+      'failed_requeued', v_failed_requeued,
+      'orphans_reset',   v_orphans_reset
+    );
   END;
 
   v_detail := jsonb_build_object(

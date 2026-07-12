@@ -75,8 +75,24 @@ policies scoped `TO agent_writer` specifically (never `authenticated`/`anon`/`PU
 CREATE POLICY agent_tasks_select_agent_writer ON public.agent_tasks
   FOR SELECT TO agent_writer USING (true);
 CREATE POLICY agent_tasks_insert_agent_writer ON public.agent_tasks
-  FOR INSERT TO agent_writer WITH CHECK (true);
+  FOR INSERT TO agent_writer
+  WITH CHECK (
+    status IN ('queued','awaiting_review')
+    AND review_state IS NULL
+    AND completed_at IS NULL
+  );
 ```
+
+The `INSERT` policy's `WITH CHECK` is not permissive by design — it mirrors
+`enqueue_agent_task`'s `p_status` gate (`queued | awaiting_review`; `awaiting_review`
+stays allowed because it is the intake-bridge landing status) and pins
+`review_state`/`completed_at` to `NULL`. This is the forgery guard: 00297's state-machine
+trigger is `BEFORE UPDATE OF status` **only** — it does not constrain INSERTs — so a
+permissive policy would let an `agent_writer` session INSERT a row born
+`status='approved'` (or `'done'`, or carrying a fabricated `review_state`), minting a
+self-approved task that downstream executors would treat as having passed human review.
+`roles_test.sql` asserts all three edges: born-`approved` fails, forged `review_state`
+fails, born-`awaiting_review` succeeds.
 
 The `SELECT` policy isn't just for symmetry — without it, `INSERT ... RETURNING` on a raw
 `agent_writer` insert silently returns **zero rows** instead of the new row (Postgres

@@ -12,6 +12,13 @@
 --      an agent_task_audit row stamped with the actor passed via
 --      set_config('app.actor', ...); UPDATE agent_tasks fails; INSERT into
 --      products fails.
+--   3. agent_writer forgery guard (the 00299 INSERT policy's WITH CHECK,
+--      which mirrors enqueue_agent_task's p_status gate — the state-machine
+--      trigger is UPDATE-only and does not constrain INSERTs): INSERT born
+--      status='approved' FAILS; INSERT carrying a review_state FAILS (both
+--      raise the new-row-violates-row-level-security error, SQLSTATE 42501);
+--      INSERT born status='awaiting_review' SUCCEEDS (it is the
+--      intake-bridge landing status and stays allowed).
 --
 -- Why two SQLSTATEs are acceptable for agent_reader's write denials: 00299
 -- grants agent_reader ZERO write privileges (the real enforcement) AND sets
@@ -93,8 +100,9 @@ RESET ROLE;
 -- ─── agent_writer: enqueue-only write surface ───────────────────────────────
 DO $$
 DECLARE
-  v_new_id uuid;
-  v_count  int;
+  v_new_id    uuid;
+  v_review_id uuid;
+  v_count     int;
 BEGIN
   EXECUTE 'SET LOCAL ROLE agent_writer';
   PERFORM set_config('app.actor', 'test:agent-writer', true);
@@ -121,6 +129,40 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     RAISE NOTICE 'agent_writer INSERT into products correctly denied (insufficient_privilege)';
   END;
+
+  -- ── Forgery guard (3): the INSERT policy's WITH CHECK blocks pre-approved
+  -- rows. RLS WITH CHECK violations surface as SQLSTATE 42501
+  -- (insufficient_privilege) with a 'row-level security' message — assert
+  -- both, so a plain grant failure can't masquerade as the policy working.
+
+  -- (3a) INSERT born status='approved' fails — would mint a self-approved task.
+  BEGIN
+    INSERT INTO public.agent_tasks (task_type, summary, status)
+    VALUES ('roles_test.forge_approved', 'forged pre-approved task', 'approved');
+    RAISE EXCEPTION 'FAIL roles_test: agent_writer INSERT with status=approved should have failed';
+  EXCEPTION WHEN insufficient_privilege THEN
+    ASSERT SQLERRM LIKE '%row-level security%',
+      'FAIL roles_test: expected an RLS violation for status=approved, got: ' || SQLERRM;
+    RAISE NOTICE 'agent_writer INSERT born status=approved correctly denied (42501, row-level security)';
+  END;
+
+  -- (3b) INSERT carrying a forged review_state fails.
+  BEGIN
+    INSERT INTO public.agent_tasks (task_type, summary, review_state)
+    VALUES ('roles_test.forge_review', 'forged review_state', '{"forged":true}'::jsonb);
+    RAISE EXCEPTION 'FAIL roles_test: agent_writer INSERT with a review_state should have failed';
+  EXCEPTION WHEN insufficient_privilege THEN
+    ASSERT SQLERRM LIKE '%row-level security%',
+      'FAIL roles_test: expected an RLS violation for forged review_state, got: ' || SQLERRM;
+    RAISE NOTICE 'agent_writer INSERT carrying a review_state correctly denied (42501, row-level security)';
+  END;
+
+  -- (3c) INSERT born status='awaiting_review' succeeds — intake-bridge landing
+  -- status, deliberately allowed by the policy.
+  INSERT INTO public.agent_tasks (task_type, summary, status, awaiting_review_at)
+  VALUES ('roles_test.intake_landing', 'intake-bridge landing row', 'awaiting_review', now())
+  RETURNING id INTO v_review_id;
+  RAISE NOTICE 'agent_writer INSERT born status=awaiting_review succeeded, id=%', v_review_id;
 
   EXECUTE 'RESET ROLE';
 

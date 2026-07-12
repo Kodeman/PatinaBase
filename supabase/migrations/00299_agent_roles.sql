@@ -97,6 +97,18 @@ GRANT EXECUTE ON FUNCTION public.enqueue_agent_task(text, jsonb, text, int, text
 -- makes `INSERT ... RETURNING` work: Postgres filters RETURNING through the
 -- table's SELECT policy, so without this an insert would silently succeed
 -- but return zero rows.
+--
+-- The INSERT policy's WITH CHECK deliberately mirrors enqueue_agent_task's
+-- p_status gate (queued | awaiting_review — awaiting_review must stay
+-- allowed, it is the intake-bridge landing status) and additionally pins
+-- review_state and completed_at to NULL. This is load-bearing, not
+-- decorative: 00297's state-machine trigger is BEFORE UPDATE OF status ONLY
+-- — it does not constrain INSERTs at all — so a permissive WITH CHECK (true)
+-- would let an agent_writer session INSERT a row born status='approved' (or
+-- 'done', or carrying a forged review_state), minting a self-approved task
+-- that downstream executors would treat as having passed human review. This
+-- policy is what closes that hole for the raw-INSERT path; the RPC path was
+-- already gated by its own p_status validation.
 DROP POLICY IF EXISTS agent_tasks_select_agent_writer ON public.agent_tasks;
 CREATE POLICY agent_tasks_select_agent_writer
   ON public.agent_tasks FOR SELECT TO agent_writer
@@ -105,7 +117,11 @@ CREATE POLICY agent_tasks_select_agent_writer
 DROP POLICY IF EXISTS agent_tasks_insert_agent_writer ON public.agent_tasks;
 CREATE POLICY agent_tasks_insert_agent_writer
   ON public.agent_tasks FOR INSERT TO agent_writer
-  WITH CHECK (true);
+  WITH CHECK (
+    status IN ('queued','awaiting_review')
+    AND review_state IS NULL
+    AND completed_at IS NULL
+  );
 
 -- ─── 4. SET ROLE enablement ──────────────────────────────────────────────────
 -- Lets a `postgres`-connected session (or, on Strata, service_role — see
