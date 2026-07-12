@@ -10,16 +10,18 @@ import {
   type ReviewTaskInput,
 } from '@/services/agent-tasks';
 import type { AgentTask } from '@patina/agent-queue';
+import type { RunView } from '@/lib/run-rows';
 
 // ─── Query keys ──────────────────────────────────────────────────────────────
 // One canonical factory. lists() is the invalidation root for every filtered
-// inbox list; detail(id) and stats() are separate.
+// inbox list; detail(id), stats() and runs(view) are separate.
 export const agentTaskKeys = {
   all: ['agent-tasks'] as const,
   lists: () => [...agentTaskKeys.all, 'list'] as const,
   list: (filters?: AgentTaskFilters) => [...agentTaskKeys.lists(), filters ?? {}] as const,
   detail: (id: string) => [...agentTaskKeys.all, 'detail', id] as const,
   stats: () => [...agentTaskKeys.all, 'stats'] as const,
+  runs: (view: RunView) => [...agentTaskKeys.all, 'runs', view] as const,
 };
 
 const DEFAULT_FILTERS: AgentTaskFilters = { status: 'awaiting_review' };
@@ -52,6 +54,19 @@ export function useAgentQueueStats() {
     queryKey: agentTaskKeys.stats(),
     queryFn: () => agentTasksService.stats(),
     refetchInterval: POLL_INTERVAL_MS,
+  });
+}
+
+/**
+ * The Run Log. Polls on the same cadence as the inbox so a job/agent run that
+ * errors surfaces here without a manual refresh (the anti-silent-failure goal).
+ */
+export function useAgentRuns(view: RunView = 'all') {
+  return useQuery({
+    queryKey: agentTaskKeys.runs(view),
+    queryFn: () => agentTasksService.runs(view),
+    refetchInterval: POLL_INTERVAL_MS,
+    staleTime: 10_000,
   });
 }
 

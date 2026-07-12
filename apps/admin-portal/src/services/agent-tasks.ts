@@ -14,6 +14,7 @@ import type {
   QueueStat,
   ReviewDecision,
 } from '@patina/agent-queue';
+import type { RunRow, RunView } from '@/lib/run-rows';
 
 export interface AgentTaskFilters {
   /** Defaults to 'awaiting_review' at the route when omitted. Pass 'all' to skip. */
@@ -87,6 +88,13 @@ export const agentTasksService = {
 
   async stats(): Promise<QueueStat[]> {
     const json = await apiFetch<{ data: QueueStat[] }>('/api/admin/agent-tasks/stats');
+    return json.data;
+  },
+
+  /** The Run Log — unified job + agent runs, filtered by view (default 'all'). */
+  async runs(view: RunView = 'all'): Promise<RunRow[]> {
+    const qs = view && view !== 'all' ? `?view=${encodeURIComponent(view)}` : '';
+    const json = await apiFetch<{ data: RunRow[] }>(`/api/admin/agent-tasks/runs${qs}`);
     return json.data;
   },
 };
