@@ -44,6 +44,14 @@ export async function middleware(req: NextRequest) {
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   const isUnauthorizedPage = req.nextUrl.pathname === '/unauthorized';
   const isAuthenticated = !!user;
+  // /auth/accept-invite must stay reachable for ANY authenticated user,
+  // including one with no designer/admin role (e.g. a freshly-invited
+  // collaborator) — the page's useAcceptInvitation hook calls the
+  // accept_workspace_invitation RPC, which does its own token/identity
+  // validation. Without this exemption the authenticated-user branches below
+  // treat it like any other /auth page and bounce the user to /portal or
+  // /unauthorized before the RPC ever runs.
+  const isAcceptInvitePage = req.nextUrl.pathname.startsWith('/auth/accept-invite');
 
   // Get the actual host from headers (handles proxy scenarios)
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'localhost:3000';
@@ -91,7 +99,7 @@ export async function middleware(req: NextRequest) {
   // with no designer/admin role would be redirected to `/`, then bounced back
   // to `/unauthorized` from a deeper protected route — the round trip causes
   // the QR signin page to re-render mid-flight and looks like a reload loop.
-  if (isAuthenticated && isAuthPage) {
+  if (isAuthenticated && isAuthPage && !isAcceptInvitePage) {
     if (!(await userHasDesignerPortalRole(user!.id))) {
       return redirectWithCookies(new URL('/unauthorized', baseUrl));
     }
