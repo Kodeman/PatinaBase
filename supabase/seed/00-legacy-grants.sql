@@ -2027,3 +2027,99 @@ DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.fc_provision_studio_on_designer() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.agent_tasks TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.agent_task_audit TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.enqueue_agent_task(text, jsonb, text, int, text, text, uuid, text, timestamptz, int, text, text, text, uuid, numeric, jsonb, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.claim_agent_tasks(text[], int, text, interval) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.complete_agent_task(uuid, text, jsonb, numeric, text, boolean, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.review_agent_task(uuid, text, text, text, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.requeue_agent_task(uuid, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.cancel_agent_task(uuid, text, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.agent_queue_stats() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.enqueue_agent_task(text, jsonb, text, int, text, text, uuid, text, timestamptz, int, text, text, text, uuid, numeric, jsonb, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.claim_agent_tasks(text[], int, text, interval) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.complete_agent_task(uuid, text, jsonb, numeric, text, boolean, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.review_agent_task(uuid, text, text, text, jsonb, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.requeue_agent_task(uuid, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.cancel_agent_task(uuid, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00297_agent_tasks_queue.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.agent_queue_stats() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
