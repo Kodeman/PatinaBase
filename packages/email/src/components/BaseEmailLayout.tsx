@@ -17,6 +17,14 @@ export interface BaseEmailLayoutProps {
   children: React.ReactNode;
   unsubscribeUrl?: string;
   showFooter?: boolean;
+  /**
+   * Hides the gold-gradient "Patina" header block. Used by templates that
+   * must read as a plain personal note rather than a branded email — e.g.
+   * the designer-invite-nudge-2 letter (see copy-deck.md conventions:
+   * "N2 renders plain-text style — no gold header block, no button").
+   * Defaults to true (existing behavior unchanged).
+   */
+  showHeader?: boolean;
 }
 
 // Brand constants
@@ -34,6 +42,7 @@ export const BaseEmailLayout: React.FC<BaseEmailLayoutProps> = ({
   children,
   unsubscribeUrl,
   showFooter = true,
+  showHeader = true,
 }) => {
   return (
     <Html>
@@ -52,10 +61,12 @@ export const BaseEmailLayout: React.FC<BaseEmailLayoutProps> = ({
       {preview && <Preview>{preview}</Preview>}
       <Body style={styles.body}>
         <Container style={styles.container}>
-          {/* Header with warm gradient */}
-          <Section style={styles.header}>
-            <Text style={styles.logo}>Patina</Text>
-          </Section>
+          {/* Header with warm gradient — omitted for plain-note templates */}
+          {showHeader && (
+            <Section style={styles.header}>
+              <Text style={styles.logo}>Patina</Text>
+            </Section>
+          )}
 
           {/* Content */}
           <Section style={styles.content}>

@@ -727,6 +727,13 @@ export {
   useActivateAutomation,
   usePauseAutomation,
   useSequenceEnrollments,
+  useAutomationEnrollments,
+  useEnrollInAutomation,
+  useUnenrollFromAutomation,
+} from './use-automations';
+export type {
+  AutomationEnrollment,
+  AutomationEnrollmentsPage,
 } from './use-automations';
 export {
   // Scope Builder

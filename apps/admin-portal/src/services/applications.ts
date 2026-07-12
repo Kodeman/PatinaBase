@@ -138,7 +138,12 @@ export const applicationsService = {
   async onboard(
     type: ApplicationType,
     id: string,
-    payload?: { displayName?: string; roleName?: string; additionalRoleIds?: string[] },
+    payload?: {
+      displayName?: string;
+      roleName?: string;
+      additionalRoleIds?: string[];
+      personalObservation?: string;
+    },
   ): Promise<{ userId: string; email: string; roleAssigned: string }> {
     return request(`/api/admin/applications/${typePath(type)}/${id}/onboard`, {
       method: 'POST',

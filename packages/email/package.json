@@ -16,17 +16,20 @@
     "test:watch": "vitest",
     "type-check": "tsc --noEmit",
     "lint": "eslint src/",
-    "dev": "email dev --dir src/templates"
+    "dev": "email dev --dir src/templates",
+    "render:onboarding-templates": "tsx scripts/render-db-templates.ts"
   },
   "dependencies": {
-    "@react-email/components": "^0.0.31",
     "@patina/shared": "workspace:*",
+    "@react-email/components": "^0.0.31",
     "jose": "^5.10.0",
     "resend": "^4.0.0"
   },
   "devDependencies": {
+    "@react-email/render": "1.1.2",
     "@types/react": "^19.0.0",
     "react": "^19.0.0",
+    "tsx": "^4.23.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
   },

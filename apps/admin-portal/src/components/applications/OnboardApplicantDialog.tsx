@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useOnboardApplication } from '@/hooks/use-applications';
 import type {
@@ -30,6 +31,10 @@ interface Props {
 
 export function OnboardApplicantDialog({ open, onOpenChange, type, application }: Props) {
   const [displayName, setDisplayName] = useState('');
+  const [personalObservation, setPersonalObservation] = useState('');
+  const [observationError, setObservationError] = useState<string | undefined>();
+
+  const isDesigner = type === 'designer';
 
   useEffect(() => {
     if (!open) return;
@@ -40,15 +45,23 @@ export function OnboardApplicantDialog({ open, onOpenChange, type, application }
       const m = application as MakerApplication;
       setDisplayName(m.contact_name ?? m.brand_name ?? '');
     }
+    setPersonalObservation('');
+    setObservationError(undefined);
   }, [open, type, application]);
 
   const onboard = useOnboardApplication(type);
 
   const handleConfirm = () => {
+    if (isDesigner && !personalObservation.trim()) {
+      setObservationError("Required — one specific, personal note about the designer's work");
+      return;
+    }
+
     onboard.mutate(
       {
         id: application.id,
         displayName: displayName.trim() || undefined,
+        personalObservation: isDesigner ? personalObservation.trim() : undefined,
       },
       {
         onSuccess: (result) => {
@@ -84,6 +97,32 @@ export function OnboardApplicantDialog({ open, onOpenChange, type, application }
             />
           </div>
 
+          {isDesigner && (
+            <div>
+              <Label htmlFor="personal-observation">
+                Personal observation <span className="text-destructive">*</span>
+              </Label>
+              <Textarea
+                id="personal-observation"
+                rows={4}
+                value={personalObservation}
+                onChange={(e) => {
+                  setPersonalObservation(e.target.value);
+                  if (observationError) setObservationError(undefined);
+                }}
+                placeholder="e.g. The restraint in how you paired reclaimed oak with brass hardware — that's exactly what we're building Patina for."
+                className={observationError ? 'border-destructive' : ''}
+              />
+              <p className="mt-1 text-sm text-muted-foreground">
+                One specific, personal note about their work — this renders inside the invite
+                letter.
+              </p>
+              {observationError && (
+                <p className="mt-1 text-sm text-destructive">{observationError}</p>
+              )}
+            </div>
+          )}
+
           <Alert>
             <AlertDescription className="text-sm">
               The applicant will receive a magic-link email inviting them to activate their
@@ -100,7 +139,10 @@ export function OnboardApplicantDialog({ open, onOpenChange, type, application }
           >
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={onboard.isPending}>
+          <Button
+            onClick={handleConfirm}
+            disabled={onboard.isPending || (isDesigner && !personalObservation.trim())}
+          >
             {onboard.isPending ? 'Inviting…' : 'Create & invite'}
           </Button>
         </DialogFooter>

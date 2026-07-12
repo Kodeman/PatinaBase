@@ -28,6 +28,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { EnrollmentsPanel } from '@/components/automations/EnrollmentsPanel';
 import type {
   SequenceTriggerType,
   SequenceStep,
@@ -473,6 +474,11 @@ export default function EditAutomationPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Enrollments */}
+        <div className="mt-6">
+          <EnrollmentsPanel sequenceId={id} />
         </div>
 
         {/* Bottom bar */}

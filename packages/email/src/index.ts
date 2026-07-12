@@ -58,6 +58,28 @@ export type { InAppMessageProps } from './templates/in-app-message';
 export { InAppMessageMention } from './templates/in-app-message-mention';
 export type { InAppMessageMentionProps } from './templates/in-app-message-mention';
 
+// Designer onboarding templates (Founding Onboarding — Wave 3a)
+// Invite track (T0/N1/N2)
+export { DesignerInvite } from './templates/designer-invite';
+export { DesignerInviteNudge1 } from './templates/designer-invite-nudge-1';
+export { DesignerInviteNudge2 } from './templates/designer-invite-nudge-2';
+// Spine (W0, E2-E10)
+export { DesignerWelcome } from './templates/designer-welcome';
+export { OnboardingDocumentModel } from './templates/onboarding-document-model';
+export { OnboardingCapture } from './templates/onboarding-capture';
+export { OnboardingLibrary } from './templates/onboarding-library';
+export { OnboardingDraftingRoom } from './templates/onboarding-drafting-room';
+export { OnboardingOpenRequests } from './templates/onboarding-open-requests';
+export { OnboardingHours } from './templates/onboarding-hours';
+export { OnboardingBooks } from './templates/onboarding-books';
+export { OnboardingAesthete } from './templates/onboarding-aesthete';
+export { OnboardingSixWeeks } from './templates/onboarding-six-weeks';
+// Milestones (M1-M4)
+export { MilestoneProposalSent } from './templates/milestone-proposal-sent';
+export { MilestoneProposalSigned } from './templates/milestone-proposal-signed';
+export { MilestoneRequestClaimed } from './templates/milestone-request-claimed';
+export { MilestoneFirstPayment } from './templates/milestone-first-payment';
+
 // Block renderer (pure string functions — no React dependency)
 export { renderTemplate, renderBlock, renderBlocks, interpolate } from './block-renderer';
 export type { RenderContext } from './block-renderer';

@@ -99,7 +99,7 @@ enabled = true
 # in emails.
 site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000", "field://auth/callback"]
+additional_redirect_urls = ["https://127.0.0.1:3000", "http://localhost:3000/auth/callback", "field://auth/callback"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # If disabled, the refresh token will never expire.
@@ -281,6 +281,13 @@ verify_jwt = false
 # the caller's own verified identity (never an arbitrary email). Explicit here
 # for intent, though verify_jwt = true is the platform default.
 [functions.field-login-token]
+verify_jwt = true
+
+# Admin-only branded designer invite. The gateway verifies the caller's JWT;
+# the function then requires an admin-domain role in-code before minting an
+# invite for an arbitrary email. Explicit here for intent, though
+# verify_jwt = true is the platform default.
+[functions.designer-invite]
 verify_jwt = true
 
 [analytics]

@@ -1890,6 +1890,90 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
+-- 00290_designer_invite_foundation.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fc_sync_is_designer_from_role() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00291_activation_event_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_activation_event(uuid, text, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00291_activation_event_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_project_created() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00291_activation_event_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_proposal_created() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00291_activation_event_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_proposal_sent() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00291_activation_event_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_proposal_signed() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00291_activation_event_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_design_request_claimed() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00291_activation_event_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_client_added() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00291_activation_event_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_first_capture() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00291_activation_event_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_invoice_sent() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00291_activation_event_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_payment_received() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00291_activation_event_bridge.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_hours_logged() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00292_designer_onboarding_enrollment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.enroll_designer_onboarding(uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00292_designer_onboarding_enrollment.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ae_dispatch_milestone_notification() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
 -- 00295_studio_workspace_provisioning.sql
 DO $g$ BEGIN
   REVOKE EXECUTE ON FUNCTION public.generate_unique_org_slug(text) FROM PUBLIC, anon, authenticated;
