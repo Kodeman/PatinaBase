@@ -11,21 +11,20 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  renderBrandedShell,
+  paragraph,
+  muted,
+  ctaButton,
+  spacer,
+  escapeHtml,
+} from '../_shared/branded-email.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM_ADDRESS = Deno.env.get('RESEND_FROM') ?? 'hello@patina.cloud';
 const CLIENT_PORTAL_URL = Deno.env.get('CLIENT_PORTAL_URL') ?? 'https://client.patina.cloud';
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 interface Project {
   id: string;
@@ -62,15 +61,22 @@ async function sendReviewEmail(opts: {
   const reviewUrl = `${CLIENT_PORTAL_URL}/review/${opts.projectId}`;
   const subject = `Share your experience with ${senderDisplay}`;
 
-  const html = `
-    <p>${greeting}</p>
-    <p>Your <strong>${escapeHtml(opts.projectName)}</strong> project is complete and we&apos;d love to hear what you thought.</p>
-    <p>Sharing a few words helps ${escapeHtml(senderDisplay)} understand what worked and helps future clients make informed decisions.</p>
-    <p>It only takes a minute &mdash; click below to leave your feedback.</p>
-    <p><a href="${reviewUrl}" style="background:#2C2926;color:#FFF;padding:12px 24px;border-radius:4px;text-decoration:none;display:inline-block;">Share Your Experience</a></p>
-    <p style="color:#7A736C;font-size:13px;">Can&apos;t click the button? Copy this link into your browser: ${reviewUrl}</p>
-    <p>&mdash; Patina</p>
-  `;
+  const html = renderBrandedShell({
+    title: subject,
+    preview: `Your ${opts.projectName} project is complete — we'd love to hear what you thought.`,
+    eyebrow: 'Review request',
+    body: [
+      paragraph(greeting),
+      paragraph(`Your <strong style="color:#1F1B16; font-weight:600;">${escapeHtml(opts.projectName)}</strong> project is complete and we&apos;d love to hear what you thought.`),
+      paragraph(`Sharing a few words helps ${escapeHtml(senderDisplay)} understand what worked and helps future clients make informed decisions.`),
+      paragraph('It only takes a minute &mdash; click below to leave your feedback.'),
+      spacer(6),
+      ctaButton(reviewUrl, 'Share Your Experience', 'ink'),
+      spacer(10),
+      muted(`Can&apos;t click the button? Copy this link into your browser:<br><a href="${reviewUrl}" style="color:#4E7A66; text-decoration:underline; word-break:break-all;">${reviewUrl}</a>`),
+      paragraph('&mdash; Patina'),
+    ].join(''),
+  });
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',

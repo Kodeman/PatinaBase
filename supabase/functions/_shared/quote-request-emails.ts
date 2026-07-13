@@ -1,17 +1,25 @@
 // Shared vendor quote-request (RFQ) email template for Supabase Edge Functions.
 //
 // Wave 0B (quote-request-send). HTML builder only — delivery goes through the
-// sendCompliantEmail chokepoint (./send-email.ts). Visual style mirrors
-// _shared/po-emails.ts: inline styles, Inter stack, Patina ink (#2c2926) on
-// white, muted #766a5c metadata, no portal CTA button (vendors have no Patina
-// login; the designer's reply-to is the channel back).
+// sendCompliantEmail chokepoint (./send-email.ts). Visual style is the shared
+// Patina branded email shell (./branded-email.ts): color-bar header,
+// Fraunces/Hanken type, mono eyebrow, and the standard footer. There is no
+// portal CTA button (vendors have no Patina login; the designer's reply-to is
+// the channel back) and no PDF attachment.
 //
-// Unlike the PO email there is no PDF attachment and no line table: a
-// vendor_quote_requests row (00162) carries only free-text scope / timeline /
-// message, so the body is those three fields plus who is asking. There is
-// deliberately NO project or item context — the schema has none, and the row
-// is already scoped to one vendor + one designer, so "only this vendor's
-// content" holds by construction.
+// Unlike the PO email there is no line table: a vendor_quote_requests row
+// (00162) carries only free-text scope / timeline / message, so the body is
+// those three fields plus who is asking. There is deliberately NO project or
+// item context — the schema has none, and the row is already scoped to one
+// vendor + one designer, so "only this vendor's content" holds by construction.
+
+import {
+  callout,
+  muted,
+  paragraph,
+  renderBrandedShell,
+  spacer,
+} from "./branded-email.ts";
 
 function escapeHtml(s: string): string {
   return s
@@ -47,9 +55,7 @@ export interface QuoteRequestEmailParams {
 function metaLine(label: string, value: string | null | undefined): string {
   const v = value?.trim();
   if (!v) return "";
-  return `<p style="margin:0 0 10px"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(
-    v,
-  )}</p>`;
+  return paragraph(`<strong>${escapeHtml(label)}:</strong> ${escapeHtml(v)}`);
 }
 
 /**
@@ -66,24 +72,21 @@ export function buildQuoteRequestEmail(
   const subject = `Quote request from ${studio}`;
 
   const messageBlock = params.message.trim()
-    ? `<blockquote style="border-left:3px solid #d4c8b0;padding:8px 16px;margin:16px 0;color:#3d3a36">${escapeHtml(
-        params.message.trim(),
-      )}</blockquote>`
+    ? callout(escapeHtml(params.message.trim()))
     : "";
 
   const scopeLine = metaLine("Scope", params.scope);
   const timelineLine = metaLine("Timeline", params.timeline);
-  const contextBlock =
-    scopeLine || timelineLine
-      ? `<div style="margin:12px 0">${scopeLine}${timelineLine}</div>`
-      : "";
 
   const replyPrompt = params.designerEmail?.trim()
-    ? `<p style="margin:24px 0 0">Please reply with your quote and lead time to
-        <a href="mailto:${escapeHtml(params.designerEmail.trim())}" style="color:#2c2926">${escapeHtml(
+    ? paragraph(
+        `Please reply with your quote and lead time to <a href="mailto:${escapeHtml(
           params.designerEmail.trim(),
-        )}</a>.</p>`
-    : `<p style="margin:24px 0 0">Please reply to this email with your quote and lead time.</p>`;
+        )}" style="color:#4E7A66; text-decoration:none;">${escapeHtml(
+          params.designerEmail.trim(),
+        )}</a>.`,
+      )
+    : paragraph(`Please reply to this email with your quote and lead time.`);
 
   const signoff =
     params.designerName.trim() &&
@@ -91,17 +94,22 @@ export function buildQuoteRequestEmail(
       ? `${escapeHtml(params.designerName.trim())}, ${escapeHtml(params.studioName.trim())}`
       : escapeHtml(studio);
 
-  const html = `
-    <div style="font-family:Inter,Arial,sans-serif;max-width:560px;color:#2c2926;line-height:1.55">
-      <p>Hello ${escapeHtml(params.vendorName)},</p>
-      <p>${escapeHtml(studio)} would like to request a quote.</p>
-      ${contextBlock}
-      ${messageBlock}
-      ${replyPrompt}
-      <p style="margin-top:32px;color:#766a5c">&mdash; ${signoff}</p>
-      <p style="font-size:12px;color:#766a5c">Sent via Patina &middot; patina.cloud</p>
-    </div>
-  `;
+  const body =
+    paragraph(`Hello ${escapeHtml(params.vendorName)},`) +
+    paragraph(`${escapeHtml(studio)} would like to request a quote.`) +
+    scopeLine +
+    timelineLine +
+    messageBlock +
+    replyPrompt +
+    spacer() +
+    muted(`&mdash; ${signoff}`) +
+    muted(`Sent via Patina &middot; patina.cloud`);
+
+  const html = renderBrandedShell({
+    title: subject,
+    eyebrow: "Quote request",
+    body,
+  });
 
   return { subject, html };
 }

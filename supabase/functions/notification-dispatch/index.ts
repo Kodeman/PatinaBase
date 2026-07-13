@@ -6,6 +6,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
 import { sendCompliantEmail, type SendCategory } from "../_shared/send-email.ts";
+import {
+  renderBrandedShell,
+  heading,
+  paragraph,
+  ctaButton,
+  spacer,
+} from "../_shared/branded-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -221,55 +228,46 @@ function buildSubject(type: string, data: Record<string, unknown>): string {
 }
 
 function buildEmailHtml(templateId: string, data: Record<string, unknown>): string {
-  // Minimal HTML wrapper. In a full implementation, this renders the
-  // React Email template server-side. For the Edge Function, we use
-  // a simple HTML structure matching the brand.
+  // Fallback branded shell, used only when a template slug has no DB row
+  // (renderTemplateFromDb is preferred by the caller). Composes the body from
+  // the shared design-system helpers and wraps it in renderBrandedShell().
   const name = (data.displayName as string) || "";
-  const greeting = name ? `Hi ${name},` : "Hello,";
+  const greeting = name ? `Hi ${escapeHtml(name)},` : "Hello,";
 
   const templates: Record<string, string> = {
-    "welcome-verification": `
-      <h1>Welcome to Patina</h1>
-      <p>${greeting}</p>
-      <p>We're delighted you're here. Verify your email to get started.</p>
-      <a href="${data.verificationUrl}" style="display:inline-block;background:#C4A57B;color:#fff;padding:14px 32px;border-radius:24px;text-decoration:none;font-weight:600;">Verify My Email</a>
-    `,
-    "password-reset": `
-      <h1>Reset your password</h1>
-      <p>${greeting}</p>
-      <p>We received a request to reset your password.</p>
-      <a href="${data.resetUrl}" style="display:inline-block;background:#C4A57B;color:#fff;padding:14px 32px;border-radius:24px;text-decoration:none;font-weight:600;">Reset Password</a>
-    `,
-    "security-alert": `
-      <h1>Security Alert</h1>
-      <p>${greeting}</p>
-      <p>${data.alertDescription || "Unusual activity was detected on your account."}</p>
-      <a href="${data.secureAccountUrl}" style="display:inline-block;background:#C45B4A;color:#fff;padding:14px 32px;border-radius:24px;text-decoration:none;font-weight:600;">Secure My Account</a>
-    `,
+    "welcome-verification":
+      heading("Welcome to Patina") +
+      paragraph(greeting) +
+      paragraph("We're delighted you're here. Verify your email to get started.") +
+      spacer(6) +
+      ctaButton(data.verificationUrl as string, "Verify my email"),
+    "password-reset":
+      heading("Reset your password") +
+      paragraph(greeting) +
+      paragraph("We received a request to reset your password.") +
+      spacer(6) +
+      ctaButton(data.resetUrl as string, "Reset password"),
+    "security-alert":
+      heading("Security alert") +
+      paragraph(greeting) +
+      paragraph(
+        escapeHtml(
+          (data.alertDescription as string) ||
+            "Unusual activity was detected on your account.",
+        ),
+      ) +
+      spacer(6) +
+      ctaButton(data.secureAccountUrl as string, "Secure my account", "brass"),
     "in-app-message": buildInAppMessageHtml(data, false),
     "in-app-message-mention": buildInAppMessageHtml(data, true),
   };
 
-  const body = templates[templateId] || `<p>${greeting} You have a new notification from Patina.</p>`;
+  const body =
+    templates[templateId] ||
+    heading("A new notification") +
+      paragraph(`${greeting} You have a new notification from Patina.`);
 
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"></head>
-    <body style="background:#FAF7F2;font-family:Inter,Helvetica,Arial,sans-serif;margin:0;padding:0;">
-      <div style="max-width:600px;margin:0 auto;background:#fff;">
-        <div style="background:linear-gradient(135deg,#C4A57B,#8B7355);padding:32px 40px;text-align:center;">
-          <span style="color:#fff;font-size:28px;font-weight:600;letter-spacing:2px;">Patina</span>
-        </div>
-        <div style="padding:40px;">${body}</div>
-        <div style="background:#2C2926;padding:32px 40px;text-align:center;">
-          <p style="color:#A09890;font-size:13px;margin:0 0 8px;">Patina — Furniture intelligence for design professionals</p>
-          <p style="color:#7A736C;font-size:11px;margin:0;">Patina Inc. · 123 Design Way, Suite 100 · San Francisco, CA 94102</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+  return renderBrandedShell({ title: "Patina", eyebrow: "Notification", body });
 }
 
 function escapeHtml(s: string): string {
@@ -302,12 +300,15 @@ function buildInAppMessageHtml(
   const muteThreadUrl = (data.muteThreadUrl as string) || "";
   const recipientName = (data.displayName as string) || "";
 
+  const SERIF = "'Fraunces', Georgia, 'Times New Roman', serif";
+  const SANS =
+    "'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+
   const headline = isMention
     ? `${escapeHtml(senderName)} mentioned you`
     : `${escapeHtml(senderName)} sent you a message`;
-  const headlineColor = isMention ? "#A56A3F" : "#2C2926";
-  const bubbleBg = isMention ? "#FBF3EA" : "#FAF7F2";
-  const bubbleBorder = isMention ? "#E5D2BB" : "#EEE6DB";
+  const headlineColor = isMention ? "#B08A46" : "#1F1B16";
+  const bubbleBorder = isMention ? "#B08A46" : "#E6DDCC";
 
   const context = (() => {
     if (threadKind === "project" && projectTitle) {
@@ -327,31 +328,31 @@ function buildInAppMessageHtml(
 
   const avatarMarkup = senderAvatarUrl
     ? `<img src="${escapeHtml(senderAvatarUrl)}" alt="${escapeHtml(senderName)}" width="36" height="36" style="border-radius:50%;display:block;" />`
-    : `<div style="width:36px;height:36px;border-radius:50%;background:#C4A57B;color:#fff;font-size:15px;font-weight:600;line-height:36px;text-align:center;">${escapeHtml(senderInitial)}</div>`;
+    : `<div style="width:36px;height:36px;border-radius:50%;background:#B08A46;color:#F5F0E6;font-family:${SANS};font-size:15px;font-weight:600;line-height:36px;text-align:center;">${escapeHtml(senderInitial)}</div>`;
 
   const muteFooter = muteThreadUrl
-    ? `<p style="color:#7A736C;font-size:12px;line-height:18px;margin:0;text-align:center;">
-         Too much? <a href="${escapeHtml(muteThreadUrl)}" style="color:#A3927C;text-decoration:underline;">Mute this conversation</a> and we'll stop emailing about it.
-       </p>`
+    ? `<p class="ink3" style="color:#8C8578;font-family:${SANS};font-size:13px;line-height:1.6;margin:0;">Too much? <a href="${escapeHtml(muteThreadUrl)}" style="color:#4E7A66;text-decoration:underline;">Mute this conversation</a> and we'll stop emailing about it.</p>`
     : "";
 
   return `
-    <p style="color:#7A736C;font-size:13px;margin:0 0 4px 0;letter-spacing:0.02em;">${greeting}</p>
-    <h1 style="color:${headlineColor};font-size:22px;font-weight:600;line-height:28px;margin:0 0 4px 0;">${headline}</h1>
-    <p style="color:#7A736C;font-size:13px;margin:0 0 20px 0;font-style:italic;">${context}</p>
-    <div style="background:${bubbleBg};border-radius:12px;border:1px solid ${bubbleBorder};padding:16px;margin:0 0 24px 0;">
-      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
-        <tr>
-          <td style="width:48px;vertical-align:top;padding-right:12px;">${avatarMarkup}</td>
-          <td style="vertical-align:top;">
-            <p style="color:#2C2926;font-size:13px;font-weight:600;margin:0 0 4px 0;">${escapeHtml(senderName)}</p>
-            <p style="color:#3A3530;font-size:15px;line-height:22px;margin:0;white-space:pre-wrap;">${escapeHtml(previewBody)}</p>
-          </td>
-        </tr>
-      </table>
-    </div>
-    <div style="margin:0 0 24px 0;text-align:center;">
-      <a href="${escapeHtml(deepLink)}" style="display:inline-block;background:#C4A57B;color:#fff;padding:14px 32px;border-radius:24px;text-decoration:none;font-weight:600;">${isMention ? "See the mention" : "Open conversation"}</a>
+    <p class="ink3" style="color:#8C8578;font-family:${SANS};font-size:13px;margin:0 0 6px;letter-spacing:0.01em;">${greeting}</p>
+    <h1 class="h1 ink" style="color:${headlineColor};font-family:${SERIF};font-size:27px;font-weight:600;line-height:1.18;letter-spacing:-0.015em;margin:0 0 6px;">${headline}</h1>
+    <p class="ink3" style="color:#8C8578;font-family:${SERIF};font-size:14px;font-style:italic;margin:0 0 20px;">${context}</p>
+    <table role="presentation" class="chip" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFFFFF;border:1px solid ${bubbleBorder};border-radius:10px;margin:0 0 24px;">
+      <tr><td style="padding:16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+          <tr>
+            <td width="48" valign="top" style="padding-right:12px;">${avatarMarkup}</td>
+            <td valign="top">
+              <p class="ink" style="color:#1F1B16;font-family:${SANS};font-size:13px;font-weight:600;margin:0 0 4px;">${escapeHtml(senderName)}</p>
+              <p class="ink2" style="color:#4B463E;font-family:${SANS};font-size:15px;line-height:1.55;margin:0;white-space:pre-wrap;">${escapeHtml(previewBody)}</p>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+    <div style="margin:0 0 24px;">
+      ${ctaButton(escapeHtml(deepLink), isMention ? "See the mention" : "Open conversation")}
     </div>
     ${muteFooter}
   `;

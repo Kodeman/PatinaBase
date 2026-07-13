@@ -19,6 +19,16 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  renderBrandedShell,
+  heading,
+  paragraph,
+  muted,
+  callout,
+  ctaButton,
+  spacer,
+  escapeHtml,
+} from '../_shared/branded-email.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -41,15 +51,6 @@ interface ProposalRow {
   client_id: string | null;
   designer: { full_name: string | null; email: string | null } | null;
   client: { full_name: string | null; email: string | null } | null;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function formatCurrency(amount: number): string {
@@ -124,36 +125,38 @@ Deno.serve(async (req: Request) => {
   const clientName = proposal.client?.full_name ?? 'there';
   const link = `${CLIENT_PORTAL_URL}/proposals/${proposal.id}`;
   const totalLine = proposal.total_amount
-    ? `<p style="margin:0 0 12px"><strong>Investment:</strong> ${formatCurrency(proposal.total_amount)}</p>`
+    ? paragraph(`<strong>Investment:</strong> ${formatCurrency(proposal.total_amount)}`)
     : '';
   const expiryLine = proposal.valid_until
-    ? `<p style="margin:0 0 12px;color:#766a5c"><em>Please review by ${formatDate(proposal.valid_until)}.</em></p>`
+    ? muted(`<em>Please review by ${formatDate(proposal.valid_until)}.</em>`)
     : '';
   const personalBlock = proposal.personal_message
-    ? `<blockquote style="border-left:3px solid #d4c8b0;padding:8px 16px;margin:16px 0;color:#3d3a36">${escapeHtml(
-        proposal.personal_message
-      )}</blockquote>`
+    ? callout(escapeHtml(proposal.personal_message))
     : '';
 
   const subject = `${designerName} sent you a proposal: "${proposal.title}"`;
-  const html = `
-    <div style="font-family:Inter,Arial,sans-serif;max-width:560px;color:#2c2926;line-height:1.55">
-      <p>Hi ${escapeHtml(clientName)},</p>
-      <p>${escapeHtml(designerName)} has prepared a design proposal for you: <strong>${escapeHtml(
-        proposal.title
-      )}</strong>.</p>
-      ${personalBlock}
-      ${totalLine}
-      ${expiryLine}
-      <p style="margin:24px 0">
-        <a href="${link}" style="display:inline-block;background:#2c2926;color:#fff;padding:12px 24px;text-decoration:none;border-radius:3px">
-          Review proposal
-        </a>
-      </p>
-      <p style="font-size:12px;color:#766a5c">If the button doesn&rsquo;t work, copy this link: <br>${link}</p>
-      <p style="margin-top:32px;color:#766a5c">— Patina</p>
-    </div>
-  `;
+  const html = renderBrandedShell({
+    title: subject,
+    preview: `${designerName} has prepared a design proposal for you.`,
+    eyebrow: 'Proposal',
+    body: [
+      heading('Your proposal is ready'),
+      paragraph(`Hi ${escapeHtml(clientName)},`),
+      paragraph(
+        `${escapeHtml(designerName)} has prepared a design proposal for you: <strong>${escapeHtml(
+          proposal.title
+        )}</strong>.`
+      ),
+      personalBlock,
+      totalLine,
+      expiryLine,
+      spacer(10),
+      ctaButton(link, 'Review proposal', 'ink'),
+      spacer(),
+      muted(`If the button doesn&rsquo;t work, copy this link:<br>${link}`),
+      muted('— Patina'),
+    ].join(''),
+  });
 
   const payload: Record<string, unknown> = {
     from: FROM_ADDRESS,

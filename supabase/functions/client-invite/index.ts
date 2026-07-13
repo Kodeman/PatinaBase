@@ -9,6 +9,15 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  renderBrandedShell,
+  paragraph,
+  muted,
+  callout,
+  ctaButton,
+  spacer,
+  escapeHtml,
+} from '../_shared/branded-email.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -25,15 +34,6 @@ interface SendBody {
 
 interface AcceptBody {
   token?: string;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function json(body: unknown, status = 200): Response {
@@ -110,29 +110,30 @@ async function handleSend(req: Request): Promise<Response> {
 
   const link = `${CLIENT_PORTAL_URL}/auth/invite/${token}`;
   const personalBlock = body.personalMessage
-    ? `<blockquote style="border-left:3px solid #d4c8b0;padding:8px 16px;margin:16px 0;color:#3d3a36">${escapeHtml(
-        body.personalMessage,
-      )}</blockquote>`
+    ? callout(escapeHtml(body.personalMessage))
     : '';
   const projectLine = projectName
-    ? `<p style="margin:0 0 12px"><strong>Project:</strong> ${escapeHtml(projectName)}</p>`
+    ? paragraph(`<strong style="color:#1F1B16; font-weight:600;">Project:</strong> ${escapeHtml(projectName)}`)
     : '';
   const subject = `${designerName} invited you to Patina`;
-  const html = `
-    <div style="font-family:Inter,Arial,sans-serif;max-width:560px;color:#2c2926;line-height:1.55">
-      <p>Hi,</p>
-      <p>${escapeHtml(designerName)} would like to collaborate with you on Patina.</p>
-      ${personalBlock}
-      ${projectLine}
-      <p style="margin:24px 0">
-        <a href="${link}" style="display:inline-block;background:#2c2926;color:#fff;padding:12px 24px;text-decoration:none;border-radius:3px">
-          Accept invitation
-        </a>
-      </p>
-      <p style="font-size:12px;color:#766a5c">This invitation expires in 7 days. If the button doesn&rsquo;t work, copy this link:<br>${link}</p>
-      <p style="margin-top:32px;color:#766a5c">— Patina</p>
-    </div>
-  `;
+  const html = renderBrandedShell({
+    title: subject,
+    preview: `${designerName} would like to collaborate with you on Patina.`,
+    eyebrow: 'Invitation',
+    body: [
+      paragraph('Hi,'),
+      paragraph(`${escapeHtml(designerName)} would like to collaborate with you on Patina.`),
+      personalBlock,
+      projectLine,
+      spacer(6),
+      ctaButton(link, 'Accept invitation', 'brass'),
+      spacer(10),
+      muted(
+        `This invitation expires in 7 days. If the button doesn&rsquo;t work, copy this link:<br><a href="${link}" style="color:#4E7A66; text-decoration:underline; word-break:break-all;">${link}</a>`,
+      ),
+      paragraph('— Patina'),
+    ].join(''),
+  });
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
