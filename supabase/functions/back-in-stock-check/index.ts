@@ -46,6 +46,11 @@ serve(async (req) => {
 
     const productImageUrl = product?.images?.[0] || null;
     const productUrl = product?.source_url || "https://admin.patina.cloud";
+    // Pre-built <img> tag for the branded email (empty string when there is no
+    // image, so the template's centered slot collapses gracefully).
+    const productImageTag = productImageUrl
+      ? `<img src="${productImageUrl}" alt="${String(product_name || "A product").replace(/&/g, "&amp;").replace(/"/g, "&quot;")}" width="260" style="max-width:260px;width:100%;height:auto;border-radius:10px;border:1px solid #E6DDCC;" />`
+      : "";
     const priceFormatted = product?.price_retail
       ? `$${(product.price_retail / 100).toLocaleString("en-US", {
           minimumFractionDigits: 2,
@@ -114,6 +119,7 @@ serve(async (req) => {
             data: {
               productName: product_name || "A product",
               productImageUrl,
+              productImageTag,
               priceFormatted,
               quantityAvailable: quantity_available,
               productUrl,

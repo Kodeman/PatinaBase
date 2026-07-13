@@ -59,6 +59,11 @@ serve(async (req) => {
 
     const productImageUrl = product?.images?.[0] || null;
     const productUrl = product?.source_url || "https://admin.patina.cloud";
+    // Pre-built <img> tag for the branded email (empty string when there is no
+    // image, so the template's centered slot collapses gracefully).
+    const productImageTag = productImageUrl
+      ? `<img src="${productImageUrl}" alt="${String(product_name || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;")}" width="260" style="max-width:260px;width:100%;height:auto;border-radius:10px;border:1px solid #E6DDCC;" />`
+      : "";
 
     // Find users who have this product on their wishlist
     const { data: wishlistEntries, error: wishlistError } = await supabase
@@ -122,10 +127,12 @@ serve(async (req) => {
             data: {
               productName: product_name,
               productImageUrl,
+              productImageTag,
               oldPriceFormatted,
               newPriceFormatted,
               savingsFormatted,
               savingsPercent,
+              percentOff: savingsPercent,
               productUrl,
               productId: product_id,
             },
