@@ -10,6 +10,15 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  renderBrandedShell,
+  heading,
+  paragraph,
+  muted,
+  ctaButton,
+  spacer,
+  escapeHtml,
+} from '../_shared/branded-email.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -31,15 +40,6 @@ interface ProposalRow {
   client_id: string | null;
   designer: { full_name: string | null; email: string | null } | null;
   client: { full_name: string | null; email: string | null } | null;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function formatDate(iso: string): string {
@@ -168,28 +168,32 @@ Deno.serve(async (req: Request) => {
   const clientName = proposal.client?.full_name ?? 'there';
   const link = `${CLIENT_PORTAL_URL}/proposals/${proposal.id}`;
   const expiryLine = proposal.valid_until
-    ? `<p style="margin:0 0 12px;color:#766a5c"><em>It&rsquo;s open for your review through ${formatDate(
-        proposal.valid_until
-      )}.</em></p>`
+    ? muted(
+        `<em>It&rsquo;s open for your review through ${formatDate(proposal.valid_until)}.</em>`
+      )
     : '';
 
   const subject = `A gentle reminder about your proposal: "${proposal.title}"`;
-  const html = `
-    <div style="font-family:Inter,Arial,sans-serif;max-width:560px;color:#2c2926;line-height:1.55">
-      <p>Hi ${escapeHtml(clientName)},</p>
-      <p>Just a gentle nudge — ${escapeHtml(designerName)}&rsquo;s proposal <strong>${escapeHtml(
-        proposal.title
-      )}</strong> is still waiting for you whenever you have a moment to review it.</p>
-      ${expiryLine}
-      <p style="margin:24px 0">
-        <a href="${link}" style="display:inline-block;background:#2c2926;color:#fff;padding:12px 24px;text-decoration:none;border-radius:3px">
-          Review proposal
-        </a>
-      </p>
-      <p style="font-size:12px;color:#766a5c">If the button doesn&rsquo;t work, copy this link: <br>${link}</p>
-      <p style="margin-top:32px;color:#766a5c">— Patina</p>
-    </div>
-  `;
+  const html = renderBrandedShell({
+    title: subject,
+    preview: `${designerName}'s proposal is still waiting for your review.`,
+    eyebrow: 'Reminder',
+    body: [
+      heading('A gentle reminder'),
+      paragraph(`Hi ${escapeHtml(clientName)},`),
+      paragraph(
+        `Just a gentle nudge — ${escapeHtml(designerName)}&rsquo;s proposal <strong>${escapeHtml(
+          proposal.title
+        )}</strong> is still waiting for you whenever you have a moment to review it.`
+      ),
+      expiryLine,
+      spacer(10),
+      ctaButton(link, 'Review proposal', 'ink'),
+      spacer(),
+      muted(`If the button doesn&rsquo;t work, copy this link:<br>${link}`),
+      muted('— Patina'),
+    ].join(''),
+  });
 
   const payload: Record<string, unknown> = {
     from: FROM_ADDRESS,

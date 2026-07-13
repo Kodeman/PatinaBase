@@ -8,6 +8,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
 import { renderTemplateFromDb } from "../_shared/render-template.ts";
+import {
+  renderBrandedShell,
+  ctaButton,
+  muted,
+  spacer,
+} from "../_shared/branded-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -589,6 +595,12 @@ function buildCampaignEmailHtml(
   data: Record<string, unknown>,
   unsubscribeUrl: string
 ): string {
+  const SERIF = "'Fraunces', Georgia, 'Times New Roman', serif";
+  const SANS =
+    "'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+  const MONO =
+    "'IBM Plex Mono', ui-monospace, SFMono-Regular, 'Courier New', monospace";
+
   const name = (data.displayName as string) || "";
   const greeting = name ? `Hi ${name},` : "Hello,";
 
@@ -604,23 +616,23 @@ function buildCampaignEmailHtml(
       const heroImageUrl = data.heroImageUrl as string;
 
       body = `
-        ${heroImageUrl ? `<img src="${heroImageUrl}" alt="Product launch" style="width:100%;border-radius:12px;margin-bottom:24px;" />` : ""}
-        <h1 style="color:#2C2926;font-size:26px;font-weight:600;margin:0 0 16px;">${headline}</h1>
-        <p style="color:#4A453F;font-size:15px;line-height:24px;margin:0 0 28px;">${bodyText}</p>
+        ${heroImageUrl ? `<img src="${heroImageUrl}" alt="Product launch" style="width:100%;border-radius:10px;margin-bottom:24px;" />` : ""}
+        <h1 style="color:#1F1B16;font-family:${SERIF};font-size:28px;font-weight:600;line-height:1.16;letter-spacing:-0.015em;margin:0 0 16px;">${headline}</h1>
+        <p style="color:#4B463E;font-family:${SANS};font-size:16px;line-height:1.62;margin:0 0 28px;">${bodyText}</p>
         ${products
           .slice(0, 3)
           .map(
             (p) => `
           <div style="margin-bottom:20px;">
-            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;border-radius:12px;margin-bottom:12px;" />` : ""}
-            <p style="color:#2C2926;font-size:16px;font-weight:600;margin:0 0 4px;">${p.name}</p>
-            <p style="color:#2C2926;font-size:15px;margin:0;">${p.priceFormatted}${p.maker ? ` <span style="color:#7A736C;font-style:italic;">by ${p.maker}</span>` : ""}</p>
+            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;border-radius:10px;margin-bottom:12px;" />` : ""}
+            <p style="color:#1F1B16;font-family:${SERIF};font-size:17px;font-weight:600;margin:0 0 4px;">${p.name}</p>
+            <p style="color:#1F1B16;font-family:${SANS};font-size:15px;margin:0;">${p.priceFormatted}${p.maker ? ` <span style="color:#8C8578;font-style:italic;">by ${p.maker}</span>` : ""}</p>
           </div>
         `
           )
-          .join('<hr style="border-color:#E8E2DB;margin:20px 0;" />')}
-        <div style="text-align:center;margin:28px 0;">
-          <a href="${ctaUrl}" style="display:inline-block;background:#C4A57B;color:#fff;padding:14px 32px;border-radius:24px;text-decoration:none;font-weight:600;">${ctaText}</a>
+          .join('<hr style="border:0;border-top:1px solid #E6DDCC;margin:20px 0;" />')}
+        <div style="margin:28px 0;">
+          ${ctaButton(ctaUrl, ctaText)}
         </div>
       `;
       break;
@@ -635,26 +647,26 @@ function buildCampaignEmailHtml(
       const products = (data.products as Array<Record<string, string>>) || [];
 
       body = `
-        <div style="text-align:center;margin:0 0 20px;">
-          <span style="display:inline-block;background:#2C2926;color:#C4A57B;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:6px 16px;border-radius:20px;">${season}</span>
+        <div style="margin:0 0 16px;">
+          <span style="display:inline-block;font-family:${MONO};font-size:11px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:#4E7A66;">${season}</span>
         </div>
-        ${moodImageUrl ? `<img src="${moodImageUrl}" alt="${season}" style="width:100%;border-radius:12px;margin-bottom:24px;" />` : ""}
-        <h1 style="color:#2C2926;font-size:26px;font-weight:600;margin:0 0 16px;">${headline}</h1>
-        <p style="color:#4A453F;font-size:15px;line-height:24px;margin:0 0 28px;">${bodyText}</p>
+        ${moodImageUrl ? `<img src="${moodImageUrl}" alt="${season}" style="width:100%;border-radius:10px;margin-bottom:24px;" />` : ""}
+        <h1 style="color:#1F1B16;font-family:${SERIF};font-size:28px;font-weight:600;line-height:1.16;letter-spacing:-0.015em;margin:0 0 16px;">${headline}</h1>
+        <p style="color:#4B463E;font-family:${SANS};font-size:16px;line-height:1.62;margin:0 0 28px;">${bodyText}</p>
         ${products
           .slice(0, 4)
           .map(
             (p) => `
           <div style="margin-bottom:16px;">
             ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;border-radius:8px;margin-bottom:8px;" />` : ""}
-            <p style="color:#2C2926;font-size:14px;font-weight:600;margin:0 0 2px;">${p.name}</p>
-            <p style="color:#2C2926;font-size:13px;margin:0;">${p.priceFormatted}</p>
+            <p style="color:#1F1B16;font-family:${SERIF};font-size:15px;font-weight:600;margin:0 0 2px;">${p.name}</p>
+            <p style="color:#1F1B16;font-family:${SANS};font-size:13px;margin:0;">${p.priceFormatted}</p>
           </div>
         `
           )
           .join("")}
-        <div style="text-align:center;margin:28px 0;">
-          <a href="${ctaUrl}" style="display:inline-block;background:#C4A57B;color:#fff;padding:14px 32px;border-radius:24px;text-decoration:none;font-weight:600;">Shop the ${season} Collection</a>
+        <div style="margin:28px 0;">
+          ${ctaButton(ctaUrl, `Shop the ${season} Collection`)}
         </div>
       `;
       break;
@@ -670,34 +682,31 @@ function buildCampaignEmailHtml(
       const ctaUrl = (data.ctaUrl as string) || PORTAL_URL;
 
       body = `
-        <p style="color:#C4A57B;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:center;margin:0 0 16px;">Maker Spotlight</p>
-        <div style="text-align:center;margin:0 0 24px;">
-          ${makerPortraitUrl ? `<img src="${makerPortraitUrl}" alt="${makerName}" width="100" height="100" style="border-radius:50%;margin:0 auto 12px;" />` : ""}
-          <h1 style="color:#2C2926;font-size:24px;font-weight:600;margin:0 0 4px;">${makerName}</h1>
-          ${makerLocation ? `<p style="color:#7A736C;font-size:14px;font-style:italic;margin:0;">${makerLocation}</p>` : ""}
+        <p style="color:#4E7A66;font-family:${MONO};font-size:11px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;margin:0 0 16px;">Maker Spotlight</p>
+        <div style="margin:0 0 24px;">
+          ${makerPortraitUrl ? `<img src="${makerPortraitUrl}" alt="${makerName}" width="100" height="100" style="border-radius:50%;display:block;margin:0 0 12px;" />` : ""}
+          <h1 style="color:#1F1B16;font-family:${SERIF};font-size:26px;font-weight:600;line-height:1.16;letter-spacing:-0.015em;margin:0 0 4px;">${makerName}</h1>
+          ${makerLocation ? `<p style="color:#8C8578;font-family:${SERIF};font-size:14px;font-style:italic;margin:0;">${makerLocation}</p>` : ""}
         </div>
-        <p style="color:#4A453F;font-size:15px;line-height:24px;margin:0 0 24px;">${narrative}</p>
+        <p style="color:#4B463E;font-family:${SANS};font-size:16px;line-height:1.62;margin:0 0 24px;">${narrative}</p>
         ${
           quote
-            ? `<div style="background:#FAF7F2;border-radius:12px;padding:20px 24px;text-align:center;margin:0 0 24px;">
-          <p style="color:#2C2926;font-size:16px;font-style:italic;line-height:26px;margin:0 0 8px;">&ldquo;${quote}&rdquo;</p>
-          <p style="color:#7A736C;font-size:13px;margin:0;">&mdash; ${makerName}</p>
-        </div>`
+            ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="chip" style="border-left:3px solid #B08A46;background:#FFFFFF;margin:0 0 24px;"><tr><td style="padding:16px 20px;font-family:${SERIF};font-size:16px;font-style:italic;line-height:1.5;color:#4B463E;">&ldquo;${quote}&rdquo;<div style="font-family:${SANS};font-size:13px;font-style:normal;color:#8C8578;margin-top:8px;">&mdash; ${makerName}</div></td></tr></table>`
             : ""
         }
         ${products
           .map(
             (p) => `
           <div style="margin-bottom:16px;">
-            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;border-radius:12px;margin-bottom:12px;" />` : ""}
-            <p style="color:#2C2926;font-size:16px;font-weight:600;margin:0 0 4px;">${p.name}</p>
-            <p style="color:#2C2926;font-size:15px;margin:0 0 8px;">${p.priceFormatted}</p>
+            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;border-radius:10px;margin-bottom:12px;" />` : ""}
+            <p style="color:#1F1B16;font-family:${SERIF};font-size:17px;font-weight:600;margin:0 0 4px;">${p.name}</p>
+            <p style="color:#1F1B16;font-family:${SANS};font-size:15px;margin:0 0 8px;">${p.priceFormatted}</p>
           </div>
         `
           )
-          .join('<hr style="border-color:#E8E2DB;margin:16px 0;" />')}
-        <div style="text-align:center;margin:28px 0;">
-          <a href="${ctaUrl}" style="display:inline-block;background:#C4A57B;color:#fff;padding:14px 32px;border-radius:24px;text-decoration:none;font-weight:600;">Explore ${makerName}'s Work</a>
+          .join('<hr style="border:0;border-top:1px solid #E6DDCC;margin:16px 0;" />')}
+        <div style="margin:28px 0;">
+          ${ctaButton(ctaUrl, `Explore ${makerName}'s Work`)}
         </div>
       `;
       break;
@@ -712,21 +721,21 @@ function buildCampaignEmailHtml(
       const ctaText = (data.ctaText as string) || "Rediscover Patina";
 
       body = `
-        <h1 style="color:#2C2926;font-size:26px;font-weight:600;margin:0 0 16px;">${name ? `We miss you, ${name}` : "We miss you"}</h1>
+        <h1 style="color:#1F1B16;font-family:${SERIF};font-size:28px;font-weight:600;line-height:1.16;letter-spacing:-0.015em;margin:0 0 16px;">${name ? `We miss you, ${name}` : "We miss you"}</h1>
         ${
           daysSince
-            ? `<div style="background:#FAF7F2;border-radius:12px;padding:20px;text-align:center;margin:0 0 20px;">
-          <p style="color:#C4A57B;font-size:36px;font-weight:700;line-height:42px;margin:0;">${daysSince}</p>
-          <p style="color:#7A736C;font-size:13px;margin:4px 0 0;">days since your last visit</p>
-        </div>`
+            ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" style="background:#FFFFFF;border:1px solid #E6DDCC;border-radius:10px;margin:0 0 20px;"><tr><td style="padding:20px;text-align:center;">
+          <div style="color:#B08A46;font-family:${SERIF};font-size:36px;font-weight:600;line-height:1;">${daysSince}</div>
+          <div style="color:#8C8578;font-family:${MONO};font-size:10px;letter-spacing:0.12em;text-transform:uppercase;margin-top:9px;">days since your last visit</div>
+        </td></tr></table>`
             : ""
         }
-        <p style="color:#4A453F;font-size:15px;line-height:24px;margin:0 0 24px;">${greeting} A lot has happened since you were last here. We've curated some new pieces we think you'll love.</p>
+        <p style="color:#4B463E;font-family:${SANS};font-size:16px;line-height:1.62;margin:0 0 24px;">${greeting} A lot has happened since you were last here. We've curated some new pieces we think you'll love.</p>
         ${
           offerText
-            ? `<div style="background:#2C2926;border-radius:12px;padding:16px 24px;text-align:center;margin:0 0 28px;">
-          <p style="color:#C4A57B;font-size:15px;font-weight:600;margin:0;">${offerText}</p>
-        </div>`
+            ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#1F1B16;border-radius:10px;margin:0 0 28px;"><tr><td style="padding:16px 24px;text-align:center;">
+          <p style="color:#E8CB8E;font-family:${SANS};font-size:15px;font-weight:600;margin:0;">${offerText}</p>
+        </td></tr></table>`
             : ""
         }
         ${products
@@ -734,42 +743,33 @@ function buildCampaignEmailHtml(
           .map(
             (p) => `
           <div style="margin-bottom:20px;">
-            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;border-radius:12px;margin-bottom:12px;" />` : ""}
-            <p style="color:#2C2926;font-size:16px;font-weight:600;margin:0 0 4px;">${p.name}</p>
-            <p style="color:#2C2926;font-size:15px;margin:0;">${p.priceFormatted}</p>
-            ${p.matchReason ? `<p style="color:#C4A57B;font-size:12px;font-weight:500;margin:4px 0 0;">${p.matchReason}</p>` : ""}
+            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="${p.name}" style="width:100%;border-radius:10px;margin-bottom:12px;" />` : ""}
+            <p style="color:#1F1B16;font-family:${SERIF};font-size:17px;font-weight:600;margin:0 0 4px;">${p.name}</p>
+            <p style="color:#1F1B16;font-family:${SANS};font-size:15px;margin:0;">${p.priceFormatted}</p>
+            ${p.matchReason ? `<p style="color:#4E7A66;font-family:${SANS};font-size:12px;font-weight:500;margin:4px 0 0;">${p.matchReason}</p>` : ""}
           </div>
         `
           )
-          .join('<hr style="border-color:#E8E2DB;margin:20px 0;" />')}
-        <div style="text-align:center;margin:28px 0;">
-          <a href="${ctaUrl}" style="display:inline-block;background:#C4A57B;color:#fff;padding:14px 32px;border-radius:24px;text-decoration:none;font-weight:600;">${ctaText}</a>
+          .join('<hr style="border:0;border-top:1px solid #E6DDCC;margin:20px 0;" />')}
+        <div style="margin:28px 0;">
+          ${ctaButton(ctaUrl, ctaText)}
         </div>
       `;
       break;
     }
 
     default:
-      body = `<p>${greeting} You have a new update from Patina.</p>`;
+      body = `<p style="color:#4B463E;font-family:${SANS};font-size:16px;line-height:1.62;margin:0 0 16px;">${greeting} You have a new update from Patina.</p>`;
   }
 
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"></head>
-    <body style="background:#FAF7F2;font-family:Inter,Helvetica,Arial,sans-serif;margin:0;padding:0;">
-      <div style="max-width:600px;margin:0 auto;background:#fff;">
-        <div style="background:linear-gradient(135deg,#C4A57B,#8B7355);padding:32px 40px;text-align:center;">
-          <span style="color:#fff;font-size:28px;font-weight:600;letter-spacing:2px;">Patina</span>
-        </div>
-        <div style="padding:40px;">${body}</div>
-        <div style="background:#2C2926;padding:32px 40px;text-align:center;">
-          <p style="color:#A09890;font-size:13px;margin:0 0 8px;">Patina — Furniture intelligence for design professionals</p>
-          <p style="color:#7A736C;font-size:11px;margin:0 0 12px;">Patina Inc. &middot; 123 Design Way, Suite 100 &middot; San Francisco, CA 94102</p>
-          <a href="${unsubscribeUrl}" style="color:#7A736C;font-size:11px;">Unsubscribe</a>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+  return renderBrandedShell({
+    title: "Patina",
+    eyebrow: "News",
+    body:
+      body +
+      spacer(10) +
+      muted(
+        `You received this because you opted in to Patina updates. <a href="${unsubscribeUrl}" style="color:#4E7A66;text-decoration:underline;">Unsubscribe</a>.`,
+      ),
+  });
 }

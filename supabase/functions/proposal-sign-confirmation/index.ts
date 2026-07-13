@@ -9,6 +9,15 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  renderBrandedShell,
+  heading,
+  paragraph,
+  muted,
+  ctaButton,
+  spacer,
+  escapeHtml,
+} from '../_shared/branded-email.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -30,15 +39,6 @@ interface ProposalRow {
   signed_by_name: string | null;
   designer: { full_name: string | null; email: string | null } | null;
   client: { full_name: string | null; email: string | null } | null;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function formatCurrency(amount: number): string {
@@ -129,27 +129,33 @@ Deno.serve(async (req: Request) => {
   const signerName = proposal.signed_by_name ?? proposal.client?.full_name ?? 'Client';
   const designerName = proposal.designer?.full_name ?? 'your designer';
   const totalLine = proposal.total_amount
-    ? `<p style="margin:0 0 12px"><strong>Investment:</strong> ${formatCurrency(proposal.total_amount)}</p>`
+    ? paragraph(`<strong>Investment:</strong> ${formatCurrency(proposal.total_amount)}`)
     : '';
 
   const results: Record<string, unknown> = { client: false, designer: false };
 
   if (proposal.client?.email) {
     const link = `${CLIENT_PORTAL_URL}/proposals/${proposal.id}`;
-    const html = `
-      <div style="font-family:Inter,Arial,sans-serif;max-width:560px;color:#2c2926;line-height:1.55">
-        <p>Hi ${escapeHtml(proposal.client.full_name ?? 'there')},</p>
-        <p>Thanks for signing &ldquo;<strong>${escapeHtml(proposal.title)}</strong>&rdquo;. Your designer is now activating your project.</p>
-        ${totalLine}
-        <p style="margin:0 0 12px"><strong>Signed:</strong> ${formatDate(signedAt)} by ${escapeHtml(signerName)}</p>
-        <p style="margin:24px 0">
-          <a href="${link}" style="display:inline-block;background:#2c2926;color:#fff;padding:12px 24px;text-decoration:none;border-radius:3px">
-            View signed proposal
-          </a>
-        </p>
-        <p style="margin-top:32px;color:#766a5c">— Patina</p>
-      </div>
-    `;
+    const html = renderBrandedShell({
+      title: `Signed: "${proposal.title}"`,
+      preview: `Your signed copy of ${proposal.title}, for your records.`,
+      eyebrow: 'Signed',
+      body: [
+        heading('Thanks for signing'),
+        paragraph(`Hi ${escapeHtml(proposal.client.full_name ?? 'there')},`),
+        paragraph(
+          `Thanks for signing &ldquo;<strong>${escapeHtml(
+            proposal.title
+          )}</strong>&rdquo;. Your designer is now activating your project.`
+        ),
+        totalLine,
+        paragraph(`<strong>Signed:</strong> ${formatDate(signedAt)} by ${escapeHtml(signerName)}`),
+        spacer(10),
+        ctaButton(link, 'View proposal', 'ink'),
+        spacer(),
+        muted('— Patina'),
+      ].join(''),
+    });
     const { ok, detail } = await sendEmail({
       to: proposal.client.email,
       subject: `Signed: "${proposal.title}"`,
@@ -160,21 +166,25 @@ Deno.serve(async (req: Request) => {
 
   if (proposal.designer?.email) {
     const link = `${DESIGNER_PORTAL_URL}/portal/proposals/${proposal.id}/signed`;
-    const html = `
-      <div style="font-family:Inter,Arial,sans-serif;max-width:560px;color:#2c2926;line-height:1.55">
-        <p>Hi ${escapeHtml(designerName)},</p>
-        <p><strong>${escapeHtml(signerName)}</strong> just signed &ldquo;<strong>${escapeHtml(
-          proposal.title
-        )}</strong>&rdquo;.</p>
-        ${totalLine}
-        <p style="margin:24px 0">
-          <a href="${link}" style="display:inline-block;background:#2c2926;color:#fff;padding:12px 24px;text-decoration:none;border-radius:3px">
-            Activate project
-          </a>
-        </p>
-        <p style="margin-top:32px;color:#766a5c">— Patina</p>
-      </div>
-    `;
+    const html = renderBrandedShell({
+      title: `Signed: "${proposal.title}"`,
+      preview: `${signerName} just signed ${proposal.title}.`,
+      eyebrow: 'Proposal signed',
+      body: [
+        heading('Your proposal was signed'),
+        paragraph(`Hi ${escapeHtml(designerName)},`),
+        paragraph(
+          `<strong>${escapeHtml(signerName)}</strong> just signed &ldquo;<strong>${escapeHtml(
+            proposal.title
+          )}</strong>&rdquo;.`
+        ),
+        totalLine,
+        spacer(10),
+        ctaButton(link, 'Activate project', 'ink'),
+        spacer(),
+        muted('— Patina'),
+      ].join(''),
+    });
     const { ok, detail } = await sendEmail({
       to: proposal.designer.email,
       subject: `Signed: "${proposal.title}"`,

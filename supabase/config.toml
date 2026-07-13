@@ -145,10 +145,32 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# Branded auth email templates (Patina email design system).
+# Prod (Strata) mirrors these via scripts/emails/deploy-auth-templates.ts —
+# these files are the single source of truth for local and prod.
+[auth.email.template.magic_link]
+subject = "Sign in to Patina"
+content_path = "./supabase/templates/magic-link.html"
+
+[auth.email.template.confirmation]
+subject = "Confirm your Patina email address"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Patina password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.email_change]
+subject = "Confirm your new Patina email"
+content_path = "./supabase/templates/email-change.html"
+
+[auth.email.template.invite]
+subject = "You're invited to Patina"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.reauthentication]
+subject = "Your Patina verification code"
+content_path = "./supabase/templates/reauthentication.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.

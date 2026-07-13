@@ -2,10 +2,19 @@
 //
 // Procurement Wave 4 (po-send). HTML builders only — delivery goes through
 // the sendCompliantEmail chokepoint (./send-email.ts) with the rendered PO
-// PDF attached. Visual style mirrors _shared/invoice-emails.ts: inline
-// styles, Inter stack, Patina ink (#2c2926) on white, muted #766a5c
-// metadata. Unlike the invoice templates there is no portal CTA button —
-// vendors have no Patina login; the attached PDF is the document.
+// PDF attached. Visual style is the shared Patina branded email shell
+// (./branded-email.ts): color-bar header, Fraunces/Hanken type, mono eyebrow,
+// and the standard footer. Unlike the invoice templates there is no portal CTA
+// button — vendors have no Patina login; the attached PDF is the document.
+// (The PDF attachment is added by the calling edge function, not here.)
+
+import {
+  callout,
+  muted,
+  paragraph,
+  renderBrandedShell,
+  spacer,
+} from "./branded-email.ts";
 
 function escapeHtml(s: string): string {
   return s
@@ -76,28 +85,22 @@ export function buildPoSentEmail(params: PoSentEmailParams): RenderedPoEmail {
     : `Purchase Order ${params.poNumber}`;
 
   const personalBlock = params.personalMessage?.trim()
-    ? `<blockquote style="border-left:3px solid #d4c8b0;padding:8px 16px;margin:16px 0;color:#3d3a36">${escapeHtml(
-        params.personalMessage.trim(),
-      )}</blockquote>`
+    ? callout(escapeHtml(params.personalMessage.trim()))
     : "";
 
   const scheduleRows = params.payments
     .map((p) => {
       const due = formatPoEmailDate(p.dueDate);
-      return `<li style="margin:0 0 6px">${escapeHtml(p.label)}: <strong>${formatPoCurrency(
+      return `${escapeHtml(p.label)}: <strong>${formatPoCurrency(
         p.amountCents,
         params.currency,
-      )}</strong>${due ? ` — due ${due}` : ""}</li>`;
+      )}</strong>${due ? ` — due ${due}` : ""}`;
     })
-    .join("");
-  const scheduleBlock = scheduleRows
-    ? `<ul style="margin:0 0 12px;padding-left:20px">${scheduleRows}</ul>`
-    : "";
+    .join("<br>");
+  const scheduleBlock = scheduleRows ? paragraph(scheduleRows) : "";
 
   const sidemarkLine = params.sidemark?.trim()
-    ? `<p style="margin:0 0 12px"><strong>Sidemark:</strong> ${escapeHtml(
-        params.sidemark.trim(),
-      )}</p>`
+    ? paragraph(`<strong>Sidemark:</strong> ${escapeHtml(params.sidemark.trim())}`)
     : "";
 
   const signoff =
@@ -106,28 +109,35 @@ export function buildPoSentEmail(params: PoSentEmailParams): RenderedPoEmail {
       ? `${escapeHtml(params.designerName.trim())}, ${escapeHtml(params.studioName.trim())}`
       : escapeHtml(params.studioName.trim());
 
-  const html = `
-    <div style="font-family:Inter,Arial,sans-serif;max-width:560px;color:#2c2926;line-height:1.55">
-      <p>Hello ${escapeHtml(params.vendorName)},</p>
-      <p>${escapeHtml(params.studioName)} has issued purchase order
-        <strong>${escapeHtml(params.poNumber)}</strong>. The full order document is
-        attached as a PDF.</p>
-      ${personalBlock}
-      ${sidemarkLine}
-      <p style="margin:0 0 12px"><strong>Order total (trade):</strong> ${formatPoCurrency(
+  const body =
+    paragraph(`Hello ${escapeHtml(params.vendorName)},`) +
+    paragraph(
+      `${escapeHtml(params.studioName)} has issued purchase order <strong>${escapeHtml(
+        params.poNumber,
+      )}</strong>. The full order document is attached as a PDF.`,
+    ) +
+    personalBlock +
+    sidemarkLine +
+    paragraph(
+      `<strong>Order total (trade):</strong> ${formatPoCurrency(
         params.tradeTotalCents,
         params.currency,
-      )}</p>
-      <p style="margin:0 0 6px"><strong>Payment terms:</strong> ${escapeHtml(
-        params.paymentPatternLabel,
-      )}</p>
-      ${scheduleBlock}
-      <p style="margin:24px 0 0">Please confirm receipt of this order, your production
-        timeline, and an estimated ship date by replying to this email.</p>
-      <p style="margin-top:32px;color:#766a5c">&mdash; ${signoff}</p>
-      <p style="font-size:12px;color:#766a5c">Sent via Patina &middot; patina.cloud</p>
-    </div>
-  `;
+      )}`,
+    ) +
+    paragraph(`<strong>Payment terms:</strong> ${escapeHtml(params.paymentPatternLabel)}`) +
+    scheduleBlock +
+    paragraph(
+      `Please confirm receipt of this order, your production timeline, and an estimated ship date by replying to this email.`,
+    ) +
+    spacer() +
+    muted(`&mdash; ${signoff}`) +
+    muted(`Sent via Patina &middot; patina.cloud`);
+
+  const html = renderBrandedShell({
+    title: subject,
+    eyebrow: "Purchase order",
+    body,
+  });
 
   return { subject, html };
 }

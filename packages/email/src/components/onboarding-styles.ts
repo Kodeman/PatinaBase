@@ -1,62 +1,63 @@
 // Shared style constants for the designer-onboarding template family
 // (T0/N1/N2 invite track, W0/E2-E10 spine, M1-M4 milestones — see
-// docs/marketing/founding-onboarding/copy-deck.md). Kept in one place so the
-// 17 templates stay visually consistent instead of repeating a style
-// dictionary per file. Palette matches BaseEmailLayout/Button's BRAND
-// constants (kept in sync by eye — those files are the source of truth for
-// the house brand).
+// docs/marketing/founding-onboarding/copy-deck.md). Keys are preserved so the
+// 17 templates inherit the new brand palette without per-file edits; values now
+// draw from the canonical design tokens in ./brand.ts.
 import type { CSSProperties } from 'react';
+import { COLORS, FONTS } from './brand';
 
 export const BRAND = {
-  linen: '#FAF7F2',
-  warmGold: '#C4A57B',
-  deepGold: '#8B7355',
-  charcoal: '#2C2926',
-  ink: '#4A453F',
-  faint: '#7A736C',
-  white: '#FFFFFF',
-  hairline: '#E8E2DB',
+  linen: COLORS.card, // #FCF9F2
+  warmGold: COLORS.brass, // #B08A46 (accent)
+  deepGold: COLORS.verd, // #4E7A66 (signature accent / links)
+  charcoal: COLORS.ink, // #1F1B16
+  ink: COLORS.ink2, // #4B463E
+  faint: COLORS.ink3, // #8C8578
+  white: COLORS.cardAlt, // #FFFFFF
+  hairline: COLORS.line, // #E6DDCC
 };
 
-// Default body copy — used by the spine/milestone/nudge emails (E2-E9,
-// M1-M4, N1).
+// Default body copy — used by the spine/milestone/nudge emails (E2-E9, M1-M4, N1).
 export const paragraph: CSSProperties = {
+  fontFamily: FONTS.sans,
   color: BRAND.ink,
-  fontSize: '15px',
-  lineHeight: '25px',
-  margin: '0 0 18px 0',
+  fontSize: '16px',
+  lineHeight: '1.62',
+  margin: '0 0 16px 0',
 };
 
-// Letters (T0, N2, W0, E10) render with more generous spacing per the copy
-// deck's conventions ("must render as letters — no feature grids, no
-// screenshots, generous line spacing").
+// Letters (T0, N2, W0, E10) render with more generous spacing per the copy deck.
 export const letterParagraph: CSSProperties = {
   ...paragraph,
-  lineHeight: '28px',
-  margin: '0 0 22px 0',
+  lineHeight: '1.75',
+  margin: '0 0 20px 0',
 };
 
 export const bullet: CSSProperties = {
+  fontFamily: FONTS.sans,
   color: BRAND.ink,
   fontSize: '15px',
-  lineHeight: '24px',
+  lineHeight: '1.55',
   margin: '0 0 10px 0',
   paddingLeft: '4px',
 };
 
 export const buttonContainer: CSSProperties = {
-  margin: '30px 0',
-  textAlign: 'center',
+  margin: '28px 0',
+  textAlign: 'left',
 };
 
 export const signature: CSSProperties = {
-  color: BRAND.charcoal,
-  fontSize: '15px',
-  lineHeight: '24px',
-  margin: '26px 0 0 0',
+  fontFamily: FONTS.serif,
+  fontStyle: 'italic',
+  color: BRAND.ink,
+  fontSize: '16px',
+  lineHeight: '1.5',
+  margin: '22px 0 0 0',
 };
 
 export const tagline: CSSProperties = {
+  fontFamily: FONTS.sans,
   color: BRAND.faint,
   fontSize: '13px',
   fontStyle: 'italic',
@@ -64,8 +65,9 @@ export const tagline: CSSProperties = {
 };
 
 export const smallText: CSSProperties = {
+  fontFamily: FONTS.sans,
   color: BRAND.faint,
   fontSize: '13px',
-  lineHeight: '20px',
+  lineHeight: '1.6',
   margin: '0 0 16px 0',
 };

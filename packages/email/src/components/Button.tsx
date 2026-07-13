@@ -1,49 +1,40 @@
 import * as React from 'react';
 import { Button as EmailButton } from '@react-email/components';
+import { COLORS, FONTS } from './brand';
 
 export interface ButtonProps {
   href: string;
   children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'urgent';
+  /** primary = ink (default), accent = brass (celebratory), secondary = outline, urgent = rust. */
+  variant?: 'primary' | 'accent' | 'secondary' | 'urgent';
 }
-
-const BRAND = {
-  warmGold: '#C4A57B',
-  deepGold: '#8B7355',
-  charcoal: '#2C2926',
-  white: '#FFFFFF',
-  urgentRed: '#C45B4A',
-};
 
 const variantStyles: Record<string, React.CSSProperties> = {
   primary: {
-    backgroundColor: BRAND.warmGold,
-    color: BRAND.white,
+    backgroundColor: COLORS.ink,
+    color: COLORS.buttonInkText,
+    border: `1px solid ${COLORS.ink}`,
+  },
+  accent: {
+    backgroundColor: COLORS.brass,
+    color: '#FFFFFF',
+    border: `1px solid ${COLORS.brassBorder}`,
   },
   secondary: {
-    backgroundColor: 'transparent',
-    color: BRAND.warmGold,
-    border: `2px solid ${BRAND.warmGold}`,
+    backgroundColor: COLORS.cardAlt,
+    color: COLORS.ink,
+    border: `1px solid ${COLORS.line}`,
   },
   urgent: {
-    backgroundColor: BRAND.urgentRed,
-    color: BRAND.white,
+    backgroundColor: COLORS.rust,
+    color: '#FFFFFF',
+    border: `1px solid ${COLORS.rust}`,
   },
 };
 
-export const Button: React.FC<ButtonProps> = ({
-  href,
-  children,
-  variant = 'primary',
-}) => {
+export const Button: React.FC<ButtonProps> = ({ href, children, variant = 'primary' }) => {
   return (
-    <EmailButton
-      href={href}
-      style={{
-        ...styles.base,
-        ...variantStyles[variant],
-      }}
-    >
+    <EmailButton href={href} style={{ ...styles.base, ...variantStyles[variant] }}>
       {children}
     </EmailButton>
   );
@@ -52,14 +43,15 @@ export const Button: React.FC<ButtonProps> = ({
 const styles = {
   base: {
     display: 'inline-block',
-    borderRadius: '24px',
+    borderRadius: '7px',
+    fontFamily: FONTS.sans,
     fontSize: '15px',
     fontWeight: '600' as const,
+    letterSpacing: '0.01em',
     textDecoration: 'none',
     textAlign: 'center' as const,
-    padding: '14px 32px',
-    minHeight: '48px',
-    lineHeight: '20px',
+    padding: '15px 32px',
+    lineHeight: '1',
   },
 };
 

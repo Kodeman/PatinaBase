@@ -7,6 +7,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "../_shared/send-email.ts";
+import {
+  renderBrandedShell,
+  heading,
+  paragraph,
+  muted,
+  ctaButton,
+  spacer,
+} from "../_shared/branded-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -156,6 +164,12 @@ function buildDigestHtml(
   frequency: DigestFrequency,
   baseUrl: string,
 ): string {
+  const SERIF = "'Fraunces', Georgia, 'Times New Roman', serif";
+  const SANS =
+    "'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+  const MONO =
+    "'IBM Plex Mono', ui-monospace, SFMono-Regular, 'Courier New', monospace";
+
   // Group by type
   const byType = new Map<string, NotificationRow[]>();
   for (const row of rows) {
@@ -178,18 +192,18 @@ function buildDigestHtml(
             (meta.client_name as string) ||
             (meta.product_name as string) ||
             "Update";
-          return `<li style="margin:0 0 6px;color:#3D3A36;font-size:14px;">${escape(
+          return `<li style="margin:0 0 6px;color:#4B463E;font-family:${SANS};font-size:15px;line-height:1.5;">${escape(
             preview,
           )}</li>`;
         })
         .join("");
       const overflow =
         items.length > 5
-          ? `<li style="margin:0;color:#7A736C;font-size:13px;font-style:italic;">+${items.length - 5} more</li>`
+          ? `<li style="margin:0;color:#8C8578;font-family:${SANS};font-size:13px;font-style:italic;">+${items.length - 5} more</li>`
           : "";
       return `
         <div style="margin:0 0 24px;">
-          <h2 style="color:#2C2926;font-size:16px;font-weight:600;margin:0 0 8px;">${label} (${items.length})</h2>
+          <h2 style="color:#1F1B16;font-family:${SERIF};font-size:17px;font-weight:600;letter-spacing:-0.01em;margin:0 0 8px;">${label} <span style="font-family:${MONO};font-size:12px;font-weight:500;color:#8C8578;">(${items.length})</span></h2>
           <ul style="padding-left:18px;margin:0;">${lis}${overflow}</ul>
         </div>
       `;
@@ -203,31 +217,19 @@ function buildDigestHtml(
     monthly: "Patina this month",
   };
 
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"></head>
-    <body style="background:#FAF7F2;font-family:Inter,Helvetica,Arial,sans-serif;margin:0;padding:0;">
-      <div style="max-width:600px;margin:0 auto;background:#fff;">
-        <div style="background:linear-gradient(135deg,#C4A57B,#8B7355);padding:32px 40px;text-align:center;">
-          <span style="color:#fff;font-size:24px;font-weight:600;letter-spacing:2px;">Patina</span>
-        </div>
-        <div style="padding:32px 40px;">
-          <h1 style="color:#2C2926;font-size:22px;font-weight:600;margin:0 0 8px;">${titleByFreq[frequency] || "Patina digest"}</h1>
-          <p style="color:#7A736C;font-size:13px;margin:0 0 24px;">${rows.length} updates since your last digest.</p>
-          ${sections || '<p style="color:#7A736C;">No new updates.</p>'}
-          <div style="text-align:center;margin:32px 0 0;">
-            <a href="${baseUrl}" style="display:inline-block;background:#2C2926;color:#fff;padding:12px 28px;border-radius:24px;text-decoration:none;font-weight:600;font-size:14px;">Open Patina</a>
-          </div>
-        </div>
-        <div style="background:#2C2926;padding:24px 40px;text-align:center;">
-          <p style="color:#A09890;font-size:12px;margin:0 0 4px;">You're receiving the ${frequency} Patina digest.</p>
-          <p style="color:#7A736C;font-size:11px;margin:0;">Manage your digest preference in your account settings.</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+  const title = titleByFreq[frequency] || "Patina digest";
+  const body =
+    heading(title) +
+    paragraph(`${rows.length} updates since your last digest.`) +
+    (sections || paragraph("No new updates.")) +
+    spacer(6) +
+    ctaButton(baseUrl, "Open Patina") +
+    spacer(10) +
+    muted(
+      `You're receiving the ${frequency} Patina digest. Manage your digest preference in your account settings.`,
+    );
+
+  return renderBrandedShell({ title, eyebrow: "This week", body });
 }
 
 function escape(s: string): string {

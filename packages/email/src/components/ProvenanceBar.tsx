@@ -1,17 +1,12 @@
 import * as React from 'react';
 import { Section, Text } from '@react-email/components';
+import { COLORS, FONTS } from './brand';
 
 export interface ProvenanceBarProps {
   maker?: string;
   origin?: string;
   material?: string;
 }
-
-const BRAND = {
-  linen: '#FAF7F2',
-  warmGray: '#6B645D',
-  deepGold: '#8B7355',
-};
 
 export const ProvenanceBar: React.FC<ProvenanceBarProps> = ({
   maker,
@@ -37,18 +32,20 @@ export const ProvenanceBar: React.FC<ProvenanceBarProps> = ({
 
 const styles = {
   bar: {
-    backgroundColor: BRAND.linen,
-    borderRadius: '8px',
+    backgroundColor: COLORS.cardAlt,
+    border: `1px solid ${COLORS.line}`,
+    borderRadius: '10px',
     padding: '12px 16px',
     margin: '16px 0',
   },
   text: {
-    color: BRAND.warmGray,
-    fontSize: '12px',
+    fontFamily: FONTS.mono,
+    color: COLORS.ink3,
+    fontSize: '11px',
     lineHeight: '16px',
     margin: '0',
     textAlign: 'center' as const,
-    letterSpacing: '0.5px',
+    letterSpacing: '0.12em',
     textTransform: 'uppercase' as const,
   },
 };

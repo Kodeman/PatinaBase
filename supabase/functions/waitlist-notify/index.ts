@@ -6,6 +6,8 @@
 // internal alert (not a user-facing/compliance email), so it sends directly
 // rather than through the compliance mailer.
 
+import { renderBrandedShell, heading } from '../_shared/branded-email.ts';
+
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
 const FROM_ADDRESS =
   Deno.env.get('RESEND_FROM_TRANSACTIONAL') ||
@@ -52,17 +54,23 @@ Deno.serve(async (req: Request) => {
       ['UTM campaign', row.utm_campaign],
       ['Referrer', row.referrer],
     ];
-    const html =
-      `<h2 style="font-family:Georgia,serif">New waitlist signup</h2>` +
-      `<table style="font-family:-apple-system,Arial,sans-serif;font-size:14px;border-collapse:collapse">` +
-      rows
-        .map(
-          ([k, v]) =>
-            `<tr><td style="padding:2px 12px 2px 0;color:#888">${esc(k)}</td>` +
-            `<td style="padding:2px 0"><strong>${esc(v)}</strong></td></tr>`,
-        )
-        .join('') +
-      `</table>`;
+    const tableRows = rows
+      .map(
+        ([k, v]) =>
+          `<tr>` +
+          `<td style="padding:7px 18px 7px 0; font-family:'IBM Plex Mono', ui-monospace, SFMono-Regular, 'Courier New', monospace; font-size:11px; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color:#8C8578; border-bottom:1px solid #E6DDCC; vertical-align:top; white-space:nowrap;">${esc(k)}</td>` +
+          `<td style="padding:7px 0; font-family:'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; font-size:14px; line-height:1.5; color:#1F1B16; border-bottom:1px solid #E6DDCC;"><strong style="font-weight:600;">${esc(v)}</strong></td>` +
+          `</tr>`,
+      )
+      .join('');
+    const html = renderBrandedShell({
+      title: `New waitlist signup: ${email}`,
+      preview: `New waitlist signup: ${email}`,
+      eyebrow: 'Waitlist',
+      body:
+        heading('New waitlist signup') +
+        `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; margin:4px 0 8px;">${tableRows}</table>`,
+    });
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',

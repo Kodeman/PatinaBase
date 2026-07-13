@@ -31,6 +31,31 @@ export function interpolate(
   });
 }
 
+/**
+ * Static brand footer/nav variables shared by every branded template
+ * (dashboard_url, help_url, prefs_url, unsub_url, business_address, app_url).
+ * Merged UNDER caller data so a caller-supplied key (e.g. campaign-dispatch's
+ * per-recipient unsub_url) always wins. The RFC-8058 List-Unsubscribe header
+ * added by sendCompliantEmail is the real one-click opt-out; the footer link
+ * points at the in-app notification settings page.
+ */
+export function brandDefaults(): Record<string, string> {
+  const portal =
+    Deno.env.get("DESIGNER_PORTAL_URL")?.replace(/\/$/, "") ??
+    "https://app.patina.cloud";
+  const prefs = `${portal}/portal/settings/notifications`;
+  return {
+    app_url: portal,
+    dashboard_url: portal,
+    help_url: `${portal}/help`,
+    prefs_url: prefs,
+    unsub_url: prefs,
+    business_address:
+      Deno.env.get("EMAIL_BUSINESS_ADDRESS") ??
+      "A workshop for interior designers and the makers they trust.",
+  };
+}
+
 function resolveKey(data: Record<string, unknown>, key: string): unknown {
   if (!key.includes(".")) return data[key];
   const parts = key.split(".");
@@ -66,10 +91,11 @@ export async function renderTemplateFromDb(
     if (tmpl.is_active === false) return null;
     if (!tmpl.html_content || String(tmpl.html_content).trim() === "") return null;
 
+    const merged = { ...brandDefaults(), ...data };
     return {
-      html: interpolate(String(tmpl.html_content), data),
+      html: interpolate(String(tmpl.html_content), merged),
       subject: tmpl.subject_default
-        ? interpolate(String(tmpl.subject_default), data)
+        ? interpolate(String(tmpl.subject_default), merged)
         : "",
     };
   } catch (err) {

@@ -1,6 +1,19 @@
 // Pure, side-effect-free helpers for the notification-digest edge function.
 // Extracted so they can be unit-tested with `deno test` without a live DB.
 
+import {
+  renderBrandedShell,
+  heading,
+  paragraph,
+  muted,
+  ctaButton,
+  spacer,
+} from "../_shared/branded-email.ts";
+
+const SERIF = "'Fraunces', Georgia, 'Times New Roman', serif";
+const SANS =
+  "'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+
 export type ReminderDigestCategory = "proposal" | "decision";
 
 export interface ReminderDigestItem {
@@ -73,42 +86,34 @@ export function buildReminderDigestEmail(
       .map((it) => {
         const label = escapeHtml(it.title || "Update");
         const body = it.link
-          ? `<a href="${it.link}" style="color:#2c2926;text-decoration:underline;">${label}</a>`
+          ? `<a href="${it.link}" style="color:#4E7A66;text-decoration:underline;">${label}</a>`
           : label;
-        return `<li style="margin:0 0 8px;color:#3D3A36;font-size:14px;line-height:1.5;">${body}</li>`;
+        return `<li style="margin:0 0 8px;color:#4B463E;font-family:${SANS};font-size:15px;line-height:1.5;">${body}</li>`;
       })
       .join("");
     return `
       <div style="margin:0 0 24px;">
-        <h2 style="color:#2C2926;font-size:16px;font-weight:600;margin:0 0 8px;">${CATEGORY_LABELS[category]}</h2>
+        <h2 style="color:#1F1B16;font-family:${SERIF};font-size:17px;font-weight:600;letter-spacing:-0.01em;margin:0 0 8px;">${CATEGORY_LABELS[category]}</h2>
         <ul style="padding-left:18px;margin:0;">${lis}</ul>
       </div>`;
   }).join("");
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"></head>
-    <body style="background:#FAF7F2;font-family:Inter,Helvetica,Arial,sans-serif;margin:0;padding:0;">
-      <div style="max-width:600px;margin:0 auto;background:#fff;">
-        <div style="background:linear-gradient(135deg,#C4A57B,#8B7355);padding:32px 40px;text-align:center;">
-          <span style="color:#fff;font-size:24px;font-weight:600;letter-spacing:2px;">Patina</span>
-        </div>
-        <div style="padding:32px 40px;">
-          <h1 style="color:#2C2926;font-size:22px;font-weight:600;margin:0 0 8px;">Your daily summary</h1>
-          <p style="color:#7A736C;font-size:13px;margin:0 0 24px;">A few things are waiting for you.</p>
-          ${sections || '<p style="color:#7A736C;">Nothing new right now.</p>'}
-          <div style="text-align:center;margin:32px 0 0;">
-            <a href="${baseUrl}" style="display:inline-block;background:#2C2926;color:#fff;padding:12px 28px;border-radius:24px;text-decoration:none;font-weight:600;font-size:14px;">Open Patina</a>
-          </div>
-        </div>
-        <div style="background:#2C2926;padding:24px 40px;text-align:center;">
-          <p style="color:#A09890;font-size:12px;margin:0 0 4px;">You're getting one daily summary instead of individual reminders.</p>
-          <p style="color:#7A736C;font-size:11px;margin:0;">Change this anytime in your notification settings.</p>
-        </div>
-      </div>
-    </body>
-    </html>`;
+  const body =
+    heading("Your daily summary") +
+    paragraph("A few things are waiting for you.") +
+    (sections || paragraph("Nothing new right now.")) +
+    spacer(6) +
+    ctaButton(baseUrl, "Open Patina") +
+    spacer(10) +
+    muted(
+      "You're getting one daily summary instead of individual reminders. Change this anytime in your notification settings.",
+    );
+
+  const html = renderBrandedShell({
+    title: "Your daily summary",
+    eyebrow: "Reminders",
+    body,
+  });
 
   return { subject, html };
 }

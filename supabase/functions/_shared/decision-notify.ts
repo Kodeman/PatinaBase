@@ -26,6 +26,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendCompliantEmail } from "./send-email.ts";
+import { renderBrandedShell, paragraph, escapeHtml } from "./branded-email.ts";
 
 // The three decision notification kinds. These mirror the
 // decision_notification_kind enum (00173) and the NotificationType members
@@ -215,15 +216,6 @@ async function emailAlreadyLogged(
   return (count ?? 0) > 0;
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 interface RenderedEmail {
   subject: string;
   html: string;
@@ -240,24 +232,34 @@ function renderDecisionEmail(
   if (kind === "decision_resolved") {
     return {
       subject: `Resolved: "${title}"`,
-      html: `
-        <p>Hi ${escapeHtml(name)},</p>
-        <p>Your client has responded to the decision <strong>${escapeHtml(title)}</strong>.</p>
-        <p>Open your Patina dashboard to review their selection.</p>
-        <p>— Patina</p>
-      `,
+      html: renderBrandedShell({
+        title: `Resolved: "${title}"`,
+        preview: `Your client has responded to "${title}".`,
+        eyebrow: "Resolved",
+        body: [
+          paragraph(`Hi ${escapeHtml(name)},`),
+          paragraph(`Your client has responded to the decision <strong style="color:#1F1B16; font-weight:600;">${escapeHtml(title)}</strong>.`),
+          paragraph("Open your Patina dashboard to review their selection."),
+          paragraph("— Patina"),
+        ].join(""),
+      }),
     };
   }
 
   if (kind === "decision_overdue") {
     return {
       subject: `Overdue: "${title}" still needs your decision`,
-      html: `
-        <p>Hi ${escapeHtml(name)},</p>
-        <p>The decision <strong>${escapeHtml(title)}</strong> has passed its due date and is still waiting on you.</p>
-        <p>Open your Patina dashboard to review the options and pick one.</p>
-        <p>— Patina</p>
-      `,
+      html: renderBrandedShell({
+        title: `Overdue: "${title}" still needs your decision`,
+        preview: `"${title}" has passed its due date and still needs your decision.`,
+        eyebrow: "Overdue",
+        body: [
+          paragraph(`Hi ${escapeHtml(name)},`),
+          paragraph(`The decision <strong style="color:#1F1B16; font-weight:600;">${escapeHtml(title)}</strong> has passed its due date and is still waiting on you.`),
+          paragraph("Open your Patina dashboard to review the options and pick one."),
+          paragraph("— Patina"),
+        ].join(""),
+      }),
     };
   }
 
@@ -271,19 +273,24 @@ function renderDecisionEmail(
               (1000 * 60 * 60),
           ),
         );
-        return `<p>It's due in approximately <strong>${hoursLeft} hour${hoursLeft === 1 ? "" : "s"}</strong>.</p>`;
+        return paragraph(`It's due in approximately <strong style="color:#1F1B16; font-weight:600;">${hoursLeft} hour${hoursLeft === 1 ? "" : "s"}</strong>.`);
       })()
     : "";
 
   return {
     subject: `Reminder: "${title}" needs your decision`,
-    html: `
-      <p>Hi ${escapeHtml(name)},</p>
-      <p>Your designer is waiting on a decision: <strong>${escapeHtml(title)}</strong>.</p>
-      ${dueClause}
-      <p>Open your Patina dashboard to review the options and pick one.</p>
-      <p>— Patina</p>
-    `,
+    html: renderBrandedShell({
+      title: `Reminder: "${title}" needs your decision`,
+      preview: `Your designer is waiting on a decision: "${title}".`,
+      eyebrow: "Decision needed",
+      body: [
+        paragraph(`Hi ${escapeHtml(name)},`),
+        paragraph(`Your designer is waiting on a decision: <strong style="color:#1F1B16; font-weight:600;">${escapeHtml(title)}</strong>.`),
+        dueClause,
+        paragraph("Open your Patina dashboard to review the options and pick one."),
+        paragraph("— Patina"),
+      ].join(""),
+    }),
   };
 }
 
