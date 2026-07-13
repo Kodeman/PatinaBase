@@ -28,6 +28,12 @@ export interface RenderContext {
    * `supabase/functions/_shared/render-template.ts`.
    */
   variables?: Record<string, unknown>;
+  /**
+   * Optional hidden inbox-preview snippet, emitted by wrapSkeleton
+   * immediately after <body> (see welcome.html). Only used by renderTemplate
+   * — has no effect on renderBlock/renderBlocks.
+   */
+  preheader?: string;
 }
 
 /**
@@ -108,5 +114,5 @@ export function renderBlocks(blocks: ContentBlock[], ctx: RenderContext = {}): s
 export function renderTemplate(blocks: ContentBlock[], ctx: RenderContext = {}): string {
   if (!blocks || blocks.length === 0) return '';
   const innerRows = blocks.map((block) => renderBlock(block, ctx)).join('\n');
-  return wrapSkeleton(innerRows);
+  return wrapSkeleton(innerRows, ctx.preheader);
 }

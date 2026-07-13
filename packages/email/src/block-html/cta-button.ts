@@ -10,8 +10,8 @@ export function renderCtaButton(props: CtaButtonProps, _ctx: RenderContext): str
   const borderColor = isDark ? COLORS.ink : COLORS.brassBorder;
 
   return `          <tr>
-            <td style="padding:24px 40px;text-align:center;" class="mobile-padding">
-              ${props.supporting_text ? `<p style="margin:0 0 16px;font-family:${FONTS.sans};font-size:14px;line-height:1.5;color:${COLORS.ink3};">${esc(props.supporting_text)}</p>` : ''}
+            <td class="px" style="padding:24px 40px;text-align:center;">
+              ${props.supporting_text ? `<p class="ink3" style="margin:0 0 16px;font-family:${FONTS.sans};font-size:14px;line-height:1.5;color:${COLORS.ink3};">${esc(props.supporting_text)}</p>` : ''}
               <table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
                 <tr>
                   <td align="center" style="border-radius:7px;background:${bgColor};">

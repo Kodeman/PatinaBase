@@ -260,10 +260,10 @@ serve(async (req) => {
 
       const avatarHtml = senderAvatarUrl
         ? `<img src="${escapeHtml(senderAvatarUrl)}" alt="${escapeHtml(senderName)}" width="36" height="36" style="border-radius:50%;display:block;" />`
-        : `<div style="width:36px;height:36px;border-radius:50%;background:#C4A57B;color:#fff;font-size:15px;font-weight:600;line-height:36px;text-align:center;">${escapeHtml(senderInitial)}</div>`;
+        : `<div style="width:36px;height:36px;border-radius:50%;background:#B08A46;color:#FFFFFF;font-size:15px;font-weight:600;line-height:36px;text-align:center;">${escapeHtml(senderInitial)}</div>`;
 
       const muteFooterHtml = muteThreadUrl
-        ? `<p style="color:#7A736C;font-size:12px;line-height:18px;margin:0;text-align:center;">Too much? <a href="${escapeHtml(muteThreadUrl)}" style="color:#A3927C;text-decoration:underline;">Mute this conversation</a> and we'll stop emailing about it.</p>`
+        ? `<p style="color:#8C8578;font-family:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;margin:0;text-align:center;">Too much? <a href="${escapeHtml(muteThreadUrl)}" style="color:#4E7A66;text-decoration:underline;">Mute this conversation</a> and we'll stop emailing about it.</p>`
         : "";
 
       return {
