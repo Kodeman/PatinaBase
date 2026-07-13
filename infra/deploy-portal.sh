@@ -49,6 +49,93 @@ echo "==> Deploying portal '${PORTAL}'  (workspace package: ${PKG_NAME})"
 echo
 
 # ---------------------------------------------------------------------------
+# Phase 0 — preflight: fail closed on a broken client Supabase env.
+#
+# WHY THIS GUARD EXISTS
+# ---------------------
+# Deploy d8f8f1be was built in a git worktree that had no apps/<portal>/.env.local,
+# so `next build` inlined EMPTY NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY
+# into the client bundle. createBrowserClient() then threw "URL and API key are
+# required" on every route and app.patina.cloud served a white-screen "This page
+# couldn't load". This guard refuses to build unless BOTH values resolve non-empty
+# AND the URL is not local-pointed — so a worktree/local build can never ship again.
+#
+# Resolution mirrors what `next build` actually sees: an already-exported
+# process.env value wins (that is precisely the environment the child build
+# inherits, and Next never overrides a value already in process.env); otherwise
+# the highest-precedence app env file that defines the var, in Next order
+# .env.production.local > .env.local > .env.production > .env.
+# ---------------------------------------------------------------------------
+echo "==> [0/3] Preflight: resolving client Supabase env the way next build will"
+
+resolve_next_public_var() {
+  # $1 = variable name. Prints the resolved value (possibly empty) to stdout.
+  var_name="$1"
+
+  # 1) An exported process.env value wins. printenv reports ONLY exported vars,
+  #    which is exactly the environment a spawned `next build` inherits; if the
+  #    var is exported (even to an empty string), Next uses it and never lets an
+  #    env file override it.
+  if exported_val="$(printenv "$var_name")"; then
+    printf '%s' "$exported_val"
+    return 0
+  fi
+
+  # 2) Otherwise walk the app's env files in Next precedence order; the first
+  #    file that defines the var wins.
+  for env_file in \
+    "$APP_DIR/.env.production.local" \
+    "$APP_DIR/.env.local" \
+    "$APP_DIR/.env.production" \
+    "$APP_DIR/.env"; do
+    [ -f "$env_file" ] || continue
+    # Take the last assignment in the file (dotenv last-wins). Match an optional
+    # leading `export ` and require `=` immediately after the name so we never
+    # match a longer key. Split on the FIRST `=` only, so values that themselves
+    # contain `=` (e.g. JWT-style anon keys) survive intact.
+    line="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${var_name}=" "$env_file" | tail -n 1 || true)"
+    [ -n "$line" ] || continue
+    val="${line#*${var_name}=}"
+    # Strip one layer of matching surrounding quotes, mirroring dotenv.
+    case "$val" in
+      \"*\") val="${val#\"}"; val="${val%\"}" ;;
+      \'*\') val="${val#\'}"; val="${val%\'}" ;;
+    esac
+    printf '%s' "$val"
+    return 0
+  done
+
+  # Defined nowhere → empty.
+  printf '%s' ''
+  return 0
+}
+
+PREFLIGHT_URL="$(resolve_next_public_var NEXT_PUBLIC_SUPABASE_URL)"
+PREFLIGHT_ANON="$(resolve_next_public_var NEXT_PUBLIC_SUPABASE_ANON_KEY)"
+
+if [ -z "$PREFLIGHT_URL" ] || [ -z "$PREFLIGHT_ANON" ]; then
+  echo "ERROR: refusing to build ${PORTAL} portal — NEXT_PUBLIC_SUPABASE_URL and/or" >&2
+  echo "       NEXT_PUBLIC_SUPABASE_ANON_KEY resolved EMPTY for ${APP_DIR}." >&2
+  echo "       next build would inline empty values and createBrowserClient() would" >&2
+  echo "       throw 'URL and API key are required' on every route (white-screen)." >&2
+  echo "       Likely cause: building in a worktree without .env.local. Build from a" >&2
+  echo "       checkout that has apps/${PORTAL}-portal/.env.local (prod Supabase values)." >&2
+  exit 1
+fi
+
+case "$PREFLIGHT_URL" in
+  *localhost*|*127.0.0.1*)
+    echo "ERROR: refusing to build ${PORTAL} portal — resolved NEXT_PUBLIC_SUPABASE_URL" >&2
+    echo "       points at a local host (${PREFLIGHT_URL}). Refusing to ship a" >&2
+    echo "       local-pointed build to production. Check apps/${PORTAL}-portal/.env.local." >&2
+    exit 1
+    ;;
+esac
+
+echo "==> [0/3] Preflight OK: NEXT_PUBLIC_SUPABASE_URL=${PREFLIGHT_URL}"
+echo
+
+# ---------------------------------------------------------------------------
 # Phase 1 — rebuild this app's workspace dependencies (the stale-dist guard).
 # ---------------------------------------------------------------------------
 echo "==> [1/3] Building workspace dependencies via Turborepo"
