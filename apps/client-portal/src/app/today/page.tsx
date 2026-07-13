@@ -8,20 +8,15 @@ import { getUser } from '@patina/supabase/server';
 // designer jargon. Analytics fire automatically on first CMS hit.
 import { SectionIntro, SurfaceKeys } from '@patina/help-system';
 
-import { ClientHeader } from '@/components/layout/client-header';
 import { StrataMark } from '@/components/strata-mark';
 import { TodayPage } from '@/components/today/TodayPage';
-import { fetchClientProjects } from '@/lib/data/projects';
 
 export default async function Page() {
   const user = await getUser();
   if (!user) redirect('/auth/signin?callbackUrl=/today');
 
-  const projects = await fetchClientProjects();
-
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
-      <ClientHeader projects={projects} />
       <main className="mx-auto flex w-full max-w-4xl flex-col px-6 py-12">
         <section>
           <p className="type-meta">Today</p>

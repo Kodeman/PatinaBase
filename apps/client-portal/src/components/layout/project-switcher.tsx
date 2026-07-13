@@ -45,7 +45,7 @@ export function ProjectSwitcher({ projects, activeProjectId }: ProjectSwitcherPr
         aria-expanded={isOpen}
       >
         <span className="truncate max-w-[12rem] text-left">
-          {activeName ?? 'Select a project'}
+          {activeName ?? 'Projects'}
         </span>
         <ChevronDown className={`h-4 w-4 text-[var(--text-muted)] transition ${isOpen ? 'rotate-180' : ''}`} aria-hidden />
       </button>

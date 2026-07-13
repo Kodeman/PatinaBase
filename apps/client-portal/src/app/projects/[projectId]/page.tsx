@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
 
-import { ClientHeader } from '@/components/layout/client-header';
 import { ProjectViewWrapper } from '@/components/project-view-wrapper';
 import { fetchClientProjectView, fetchClientProjects } from '@/lib/data/projects';
 
@@ -21,17 +20,10 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     notFound();
   }
 
-  const { project, milestones, lastUpdated } = projectView;
+  const { project, milestones } = projectView;
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
-      <ClientHeader
-        projects={projects}
-        activeProjectId={project.id}
-        approvalsPending={project.approvalsPending}
-        unreadMessages={project.unreadMessages}
-        lastUpdated={lastUpdated}
-      />
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
         <ProjectViewWrapper
           projectId={project.id}

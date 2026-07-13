@@ -4,10 +4,8 @@ import { ArrowLeft } from 'lucide-react';
 
 import { getUser } from '@patina/supabase/server';
 
-import { ClientHeader } from '@/components/layout/client-header';
 import { ClientRoomScanViewer } from '@/components/scans/ClientRoomScanViewer';
 import { RoomScanShareStatus } from '@/components/scans/RoomScanShareStatus';
-import { fetchClientProjects } from '@/lib/data/projects';
 
 interface ScanDetailPageProps {
   params: Promise<{ scanId: string }>;
@@ -19,11 +17,8 @@ export default async function ScanDetailPage({ params }: ScanDetailPageProps) {
   const user = await getUser();
   if (!user) redirect(`/auth/signin?callbackUrl=/scans/${scanId}`);
 
-  const projects = await fetchClientProjects();
-
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
-      <ClientHeader projects={projects} />
       <main className="mx-auto flex w-full max-w-6xl flex-col px-6 py-10">
         <Link
           href="/scans"

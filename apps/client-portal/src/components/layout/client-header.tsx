@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, Box, HelpCircle, MessageSquare } from 'lucide-react';
+import { Bell, Box, ChevronDown, HelpCircle, MessageSquare } from 'lucide-react';
 
 import {
   useProfile,
@@ -26,16 +26,26 @@ import {
 import type { ProjectListItem } from '../../types/project';
 import { useAuth } from '../../hooks/use-auth';
 import { authEvents } from '../../lib/analytics/events';
-import { formatRelativeTime } from '../../lib/utils/format';
 import { pathnameToSurfaceKey } from '../../lib/help-system/pathname-to-surface-key';
 import { ProjectSwitcher } from './project-switcher';
+import { MobileNavDrawer } from './mobile-nav-drawer';
+import { PRIMARY_NAV_ITEMS, OVERFLOW_NAV_ITEMS } from './nav-config';
 
 interface ClientHeaderProps {
   projects: ProjectListItem[];
   activeProjectId?: string;
   approvalsPending?: number;
   unreadMessages?: number;
-  lastUpdated?: string;
+}
+
+/** Small count pill — rendered only when there is something to show. */
+function CountBadge({ value }: { value: number }) {
+  if (!value || value <= 0) return null;
+  return (
+    <span className="rounded-sm bg-[var(--accent-primary)] px-1.5 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider text-white">
+      {value}
+    </span>
+  );
 }
 
 export function ClientHeader({
@@ -43,89 +53,88 @@ export function ClientHeader({
   activeProjectId,
   approvalsPending = 0,
   unreadMessages = 0,
-  lastUpdated,
 }: ClientHeaderProps) {
+  const pathname = usePathname() ?? '';
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const navLinkClass = (href: string) =>
+    `hidden min-h-[44px] min-w-0 items-center whitespace-nowrap type-meta transition-opacity hover:opacity-70 md:inline-flex ${
+      isActive(href) ? 'text-[var(--text-primary)] opacity-100' : ''
+    }`;
+
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--border-default)] bg-[var(--bg-primary)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--bg-primary)]/80">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
-        <div className="flex min-w-0 items-center gap-3 sm:gap-6">
+      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
+        {/* Left: mobile menu (md-) + logo + project switcher */}
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+          <MobileNavDrawer />
           <Link
             href="/projects"
-            className="inline-flex min-h-[44px] items-center font-heading text-lg tracking-wide text-[var(--text-primary)] transition-opacity hover:opacity-70"
+            className="inline-flex min-h-[44px] flex-shrink-0 items-center font-heading text-lg tracking-wide text-[var(--text-primary)] transition-opacity hover:opacity-70"
           >
             Patina
           </Link>
           <ProjectSwitcher projects={projects} activeProjectId={activeProjectId} />
-          <Link
-            href="/today"
-            className="hidden min-h-[44px] items-center type-meta transition-opacity hover:opacity-70 sm:inline-flex"
-            data-testid="header-today-link"
-          >
-            Today
-          </Link>
-          <Link
-            href="/decisions"
-            className="hidden min-h-[44px] items-center type-meta transition-opacity hover:opacity-70 sm:inline-flex"
-            data-testid="header-decisions-link"
-          >
-            Decisions
-          </Link>
-          <Link
-            href="/proposals"
-            className="hidden min-h-[44px] items-center type-meta transition-opacity hover:opacity-70 sm:inline-flex"
-            data-testid="header-proposals-link"
-          >
-            Proposals
-          </Link>
-          <Link
-            href="/invoices"
-            className="hidden min-h-[44px] items-center type-meta transition-opacity hover:opacity-70 sm:inline-flex"
-            data-testid="header-invoices-link"
-          >
-            Invoices
-          </Link>
-          <Link
-            href="/budget"
-            className="hidden min-h-[44px] items-center type-meta transition-opacity hover:opacity-70 sm:inline-flex"
-            data-testid="header-budget-link"
-          >
-            Budget
-          </Link>
-          <Link
-            href="/documents"
-            className="hidden min-h-[44px] items-center type-meta transition-opacity hover:opacity-70 sm:inline-flex"
-            data-testid="header-documents-link"
-          >
-            Documents
-          </Link>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-3 sm:gap-5">
-          <div className="flex min-h-[44px] items-center gap-2">
+
+        {/* Center: primary links + More (desktop only) */}
+        <nav className="hidden min-w-0 flex-1 items-center gap-5 md:flex lg:gap-6">
+          {PRIMARY_NAV_ITEMS.map((item) => (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={navLinkClass(item.href)}
+              data-testid={`header-${item.key}-link`}
+            >
+              {item.label}
+            </Link>
+          ))}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="hidden min-h-[44px] items-center gap-1 whitespace-nowrap type-meta transition-opacity hover:opacity-70 md:inline-flex"
+                data-testid="header-more-menu"
+              >
+                More
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-[11rem]">
+              {OVERFLOW_NAV_ITEMS.map((item) => (
+                <DropdownMenuItem key={item.key} asChild>
+                  <Link
+                    href={item.href}
+                    data-testid={`header-more-${item.key}-link`}
+                    className="flex items-center gap-2"
+                  >
+                    <item.icon className="h-4 w-4 text-[var(--accent-primary)]" aria-hidden />
+                    {item.label}
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </nav>
+
+        {/* Right: utilities (compact; counts only when > 0) */}
+        <div className="ml-auto flex flex-shrink-0 items-center gap-3 sm:gap-4">
+          <div className="hidden min-h-[44px] items-center gap-1.5 md:flex" title="Approvals pending">
             <Bell className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
-            <span className="font-heading text-lg font-bold text-[var(--text-primary)]">
-              {approvalsPending}
-            </span>
-            <span className="type-meta hidden sm:inline">approvals</span>
+            <span className="type-meta hidden lg:inline">approvals</span>
+            <CountBadge value={approvalsPending} />
           </div>
           <Link
             href="/messages"
-            className="inline-flex min-h-[44px] items-center gap-2 transition-opacity hover:opacity-70"
+            className="hidden min-h-[44px] items-center gap-1.5 transition-opacity hover:opacity-70 md:flex"
           >
             <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
-            <span className="font-heading text-lg font-bold text-[var(--text-primary)]">
-              {unreadMessages}
-            </span>
-            <span className="type-meta hidden sm:inline">messages</span>
+            <span className="type-meta hidden lg:inline">messages</span>
+            <CountBadge value={unreadMessages} />
           </Link>
           <RoomsLink />
           <ReviewsLink />
           <NotificationBell />
           <HelpButton />
-          {lastUpdated ? (
-            <span className="type-meta hidden md:inline">
-              Updated {formatRelativeTime(lastUpdated) ?? 'recently'}
-            </span>
-          ) : null}
           <UserMenu />
         </div>
       </div>
@@ -140,11 +149,11 @@ function RoomsLink() {
   return (
     <Link
       href="/scans"
-      className="inline-flex min-h-[44px] items-center gap-2 transition-opacity hover:opacity-70"
+      className="hidden min-h-[44px] items-center gap-1.5 transition-opacity hover:opacity-70 md:inline-flex"
       data-testid="header-rooms-link"
     >
       <Box className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
-      <span className="type-meta hidden sm:inline">rooms</span>
+      <span className="type-meta hidden lg:inline">rooms</span>
     </Link>
   );
 }
@@ -157,10 +166,10 @@ function ReviewsLink() {
   return (
     <Link
       href="/reviews"
-      className="inline-flex min-h-[44px] items-center gap-2 transition-opacity hover:opacity-70"
+      className="hidden min-h-[44px] items-center gap-1.5 transition-opacity hover:opacity-70 md:inline-flex"
       data-testid="header-reviews-link"
     >
-      <span className="type-meta hidden sm:inline">reviews</span>
+      <span className="type-meta hidden lg:inline">reviews</span>
       {pending.length > 0 ? (
         <span className="rounded-sm bg-[var(--accent-primary)] px-1.5 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider text-white">
           {pending.length}
@@ -171,30 +180,13 @@ function ReviewsLink() {
 }
 
 /**
- * HelpButton — Sprint 2 · C6 (client).
- *
- * Renders the `?` trigger that opens the <ContextualHelpPanel /> for the
- * surface the homeowner currently has open. The surface key is derived from
- * `usePathname()` (see ./lib/help-system/pathname-to-surface-key) and
- * memoised so the panel only refetches on navigation. The panel itself fires
- * `help.panel.opened` / `help.panel.closed` analytics — no extra wiring.
- *
- * The client-portal voice is consumer-facing (homeowner viewing their
- * design project), so authors will write distinct copy against the
- * `client-portal/*` keys; the pattern matches designer-portal C6 exactly.
+ * HelpButton — the `?` trigger that opens the <ContextualHelpPanel /> for the
+ * surface the homeowner currently has open (surface key derived from the path).
  */
 function HelpButton() {
   const pathname = usePathname();
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-
-  // Recompute the surface key on navigation so the panel always asks for
-  // articles tied to the page the homeowner actually has open. Sprint 3
-  // will replace this with `useSurfaceKey()` sourced from page-level
-  // providers; see pathnameToSurfaceKey for context.
-  const surfaceKey = useMemo(
-    () => pathnameToSurfaceKey(pathname ?? '/'),
-    [pathname],
-  );
+  const surfaceKey = useMemo(() => pathnameToSurfaceKey(pathname ?? '/'), [pathname]);
 
   return (
     <>
@@ -206,12 +198,10 @@ function HelpButton() {
         aria-expanded={isHelpOpen}
         title="Help"
         data-testid="header-help-trigger"
-        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-[var(--text-primary)] transition-opacity hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)]"
+        className="hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-[var(--text-primary)] transition-opacity hover:opacity-70 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] sm:inline-flex"
       >
         <HelpCircle className="h-3.5 w-3.5 text-[var(--accent-primary)]" aria-hidden />
       </button>
-      {/* Contextual help panel (renders in its own portal; mounted here so it
-          inherits portal-tree theming + auth context). */}
       <ContextualHelpPanel
         open={isHelpOpen}
         onOpenChange={setIsHelpOpen}
@@ -276,4 +266,3 @@ function UserMenu() {
     </DropdownMenu>
   );
 }
-

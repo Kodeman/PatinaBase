@@ -7,23 +7,15 @@ import Link from 'next/link';
 // instead of "navigate" / "click."
 import { SectionIntro, SurfaceKeys } from '@patina/help-system';
 
-import { ClientHeader } from '@/components/layout/client-header';
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState';
 import { StrataMark } from '@/components/strata-mark';
 import { fetchClientProjects } from '@/lib/data/projects';
 
 export default async function ProjectsPage() {
   const projects = await fetchClientProjects();
-  const approvalsPending = projects.reduce((total, project) => total + project.approvalsPending, 0);
-  const unreadMessages = projects.reduce((total, project) => total + project.unreadMessages, 0);
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
-      <ClientHeader
-        projects={projects}
-        approvalsPending={approvalsPending}
-        unreadMessages={unreadMessages}
-      />
       <main className="mx-auto flex w-full max-w-6xl flex-col px-6 py-12">
         {/* Hero */}
         <section>

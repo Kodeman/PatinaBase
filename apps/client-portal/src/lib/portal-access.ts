@@ -177,6 +177,9 @@ export function foreignPortalFromDomain(domain: string): { label: string; url: s
   if (domain === 'designer') {
     return { label: 'the Patina designer workspace', url: 'https://app.patina.cloud' };
   }
+  if (domain === 'manufacturer') {
+    return { label: 'the Patina maker workspace', url: 'https://manufacturer.patina.cloud' };
+  }
   return null;
 }
 

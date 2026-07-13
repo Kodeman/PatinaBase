@@ -16,6 +16,7 @@
  * try the consumer-tailored variant first before falling back to 'all'.
  */
 
+import Link from 'next/link';
 import { EmptyState, SurfaceKeys, useHelpContent } from '@patina/help-system';
 import { Folder } from 'lucide-react';
 
@@ -61,6 +62,14 @@ export function ProjectsEmptyState() {
         Your designer kicks off a project when you’re ready to begin. Once they
         do, you’ll see its timeline, approvals, and updates here.
       </p>
+      <div className="mt-6">
+        <Link
+          href="/messages"
+          className="inline-flex items-center rounded-[3px] border border-[var(--border-default)] px-4 py-2 type-meta text-[var(--text-primary)] transition hover:border-[var(--accent-primary)]"
+        >
+          Message your designer
+        </Link>
+      </div>
     </div>
   );
 }
