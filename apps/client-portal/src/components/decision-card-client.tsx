@@ -317,7 +317,12 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
         data-coordination-kind={kind}
         data-court={court}
       >
-        <CoordinationBanner kind={kind} court={court} />
+        <CoordinationBanner
+          kind={kind}
+          court={court}
+          projectId={decision.project_id}
+          designerId={decision.designer_id}
+        />
         <h3 className="font-heading text-lg text-[var(--text-primary)]">
           {decision.title}
         </h3>
@@ -451,6 +456,8 @@ export function DecisionCardClient({ decision, compact }: DecisionCardClientProp
             busy={selectOption.isPending}
             onConfirm={handleConsentConfirm}
             onCancel={() => setShowConsent(false)}
+            projectId={decision.project_id}
+            designerId={decision.designer_id}
           />
         </div>
       )}

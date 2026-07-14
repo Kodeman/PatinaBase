@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useStudioIdentity } from '@patina/supabase';
 
 interface DecisionConsentBlockProps {
   decisionTitle: string;
@@ -8,6 +9,9 @@ interface DecisionConsentBlockProps {
   busy?: boolean;
   onConfirm: (consent: { method: 'electronic_signature'; signature: string }) => void;
   onCancel: () => void;
+  /** Prefer projectId when a project is in scope; falls back to designerId. */
+  projectId?: string | null;
+  designerId?: string;
 }
 
 export function DecisionConsentBlock({
@@ -16,9 +20,15 @@ export function DecisionConsentBlock({
   busy = false,
   onConfirm,
   onCancel,
+  projectId,
+  designerId,
 }: DecisionConsentBlockProps) {
   const [signature, setSignature] = useState('');
   const [agreed, setAgreed] = useState(false);
+  const { data: identity } = useStudioIdentity(
+    projectId ? { projectId } : designerId ? { designerId } : {}
+  );
+  const designerLabel = identity?.name ?? 'your designer';
 
   const canSubmit = signature.trim().length >= 2 && agreed && !busy;
 
@@ -56,8 +66,8 @@ export function DecisionConsentBlock({
           data-testid="decision-consent-agree"
         />
         <span>
-          I authorize this selection and understand it cannot be changed without designer
-          approval.
+          I authorize this selection and understand it cannot be changed without{' '}
+          {designerLabel}&rsquo;s approval.
         </span>
       </label>
 
