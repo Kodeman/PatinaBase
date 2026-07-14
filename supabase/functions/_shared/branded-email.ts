@@ -130,6 +130,19 @@ export interface BrandedShellOpts {
   footerLinks?: { label: string; href: string }[];
   /** Legal line under the shell. Defaults to the Patina tagline. */
   businessAddress?: string;
+  /**
+   * Optional studio co-brand name (Designer Studios, plan D4). When set, renders
+   * a byline directly under the Patina wordmark — Patina stays the primary
+   * brand, the studio is the sender-of-record. Escaped here. Omit for the plain
+   * Patina shell (byte-identical to the pre-co-brand output).
+   */
+  studioName?: string;
+  /**
+   * Optional public studio logo URL, rendered ≤24px tall beside the studio
+   * name. Only meaningful alongside `studioName`; without it the byline falls
+   * back to a name-only "Sent on behalf of …" line.
+   */
+  studioLogoUrl?: string;
 }
 
 export function renderBrandedShell(opts: BrandedShellOpts): string {
@@ -144,6 +157,27 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
     : "";
   const eyebrow = opts.eyebrow
     ? `<td align="right" valign="middle" class="ink3" style="font-family:${F.mono}; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:${C.ink3};">${escapeHtml(opts.eyebrow)}</td>`
+    : "";
+  // Studio co-brand byline (plan D4). Rendered as its own row directly under the
+  // Patina wordmark header. Empty string when no studio params → the shell is
+  // byte-identical to the plain Patina output. Leads with "\n" + indentation and
+  // carries no trailing newline so the existing markup follows unchanged.
+  const studioName = opts.studioName?.trim();
+  const studioLogoUrl = opts.studioLogoUrl?.trim();
+  const cobrand = studioLogoUrl
+    ? `\n        <tr><td class="px" style="padding:10px 40px 0;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td valign="middle" style="padding-right:10px;"><img src="${escapeHtml(studioLogoUrl)}" height="20" alt="${escapeHtml(studioName ?? "")}" style="display:block; height:20px; max-height:24px; width:auto; border:0; outline:none; text-decoration:none;"></td>${
+        studioName
+          ? `\n            <td valign="middle" class="ink2" style="font-family:${F.sans}; font-size:13px; font-weight:500; color:${C.ink2};">${escapeHtml(studioName)}</td>`
+          : ""
+      }
+          </tr></table>
+        </td></tr>`
+    : studioName
+    ? `\n        <tr><td class="px" style="padding:8px 40px 0;">
+          <div class="ink3" style="font-family:${F.mono}; font-size:11px; letter-spacing:0.1em; color:${C.ink3};">Sent on behalf of ${escapeHtml(studioName)}</div>
+        </td></tr>`
     : "";
   const footerNav = links
     .map(
@@ -185,7 +219,7 @@ export function renderBrandedShell(opts: BrandedShellOpts): string {
             <td align="left" valign="middle" class="wordmark" style="font-family:${F.serif}; font-size:23px; font-weight:600; letter-spacing:-0.01em; color:${C.ink};">Patina</td>
             ${eyebrow}
           </tr></table>
-        </td></tr>
+        </td></tr>${cobrand}
         <tr><td class="px" style="padding:22px 40px 0px;">
           ${opts.body}
         </td></tr>

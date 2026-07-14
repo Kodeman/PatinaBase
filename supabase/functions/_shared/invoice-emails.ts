@@ -65,7 +65,15 @@ export interface RenderedInvoiceEmail {
 export interface InvoiceSentEmailParams {
   invoiceNumber: string;
   projectName: string;
+  /** Person named in the body prose (the individual designer). */
   designerName: string;
+  /**
+   * Studio/business name that leads the SUBJECT line (Designer Studios). When
+   * omitted the subject falls back to `designerName` (byte-identical to before).
+   * The body prose always stays `designerName` — subject co-brands, prose stays
+   * personal.
+   */
+  senderName?: string;
   /** Greeting name; falls back to "there". */
   clientName?: string | null;
   totalCents: number;
@@ -76,6 +84,9 @@ export interface InvoiceSentEmailParams {
   /** Optional personal note from the designer (plain text, escaped here). */
   personalMessage?: string | null;
   currency?: string;
+  /** Studio co-brand byline (Designer Studios). Omit → plain Patina shell. */
+  studioName?: string;
+  studioLogoUrl?: string;
 }
 
 /**
@@ -89,11 +100,13 @@ function wrap(
   inner: string,
   portalUrl: string,
   cta: string,
-  opts: { eyebrow?: string; title?: string } = {},
+  opts: { eyebrow?: string; title?: string; studioName?: string; studioLogoUrl?: string } = {},
 ): string {
   return renderBrandedShell({
     title: opts.title ?? "Patina",
     eyebrow: opts.eyebrow ?? "Invoice",
+    studioName: opts.studioName,
+    studioLogoUrl: opts.studioLogoUrl,
     body:
       inner +
       spacer() +
@@ -112,7 +125,7 @@ export function buildInvoiceSentEmail(params: InvoiceSentEmailParams): RenderedI
     ? callout(escapeHtml(params.personalMessage.trim()))
     : "";
 
-  const subject = `${params.designerName} sent you invoice ${params.invoiceNumber} — ${params.projectName}`;
+  const subject = `${params.senderName ?? params.designerName} sent you invoice ${params.invoiceNumber} — ${params.projectName}`;
   const html = wrap(
     paragraph(`Hi ${escapeHtml(clientName)},`) +
       paragraph(
@@ -128,7 +141,12 @@ export function buildInvoiceSentEmail(params: InvoiceSentEmailParams): RenderedI
       dueLine,
     params.portalUrl,
     "View invoice",
-    { eyebrow: "Invoice", title: subject },
+    {
+      eyebrow: "Invoice",
+      title: subject,
+      studioName: params.studioName,
+      studioLogoUrl: params.studioLogoUrl,
+    },
   );
 
   return { subject, html };
@@ -154,6 +172,9 @@ export interface InvoiceReminderEmailParams {
   /** Absolute client-portal link to the invoice. */
   portalUrl: string;
   currency?: string;
+  /** Studio co-brand byline (Designer Studios). Omit → plain Patina shell. */
+  studioName?: string;
+  studioLogoUrl?: string;
 }
 
 function reminderFacts(params: InvoiceReminderEmailParams): string {
@@ -186,7 +207,12 @@ export function buildInvoiceUpcomingReminderEmail(
       ),
     params.portalUrl,
     "View & pay invoice",
-    { eyebrow: "Payment due", title: subject },
+    {
+      eyebrow: "Payment due",
+      title: subject,
+      studioName: params.studioName,
+      studioLogoUrl: params.studioLogoUrl,
+    },
   );
   return { subject, html };
 }
@@ -213,7 +239,12 @@ export function buildInvoiceOverdueNoticeEmail(
       ),
     params.portalUrl,
     "Pay invoice",
-    { eyebrow: "Overdue", title: subject },
+    {
+      eyebrow: "Overdue",
+      title: subject,
+      studioName: params.studioName,
+      studioLogoUrl: params.studioLogoUrl,
+    },
   );
   return { subject, html };
 }
@@ -241,7 +272,12 @@ export function buildInvoiceSecondNoticeEmail(
       ),
     params.portalUrl,
     "Pay invoice now",
-    { eyebrow: "Overdue", title: subject },
+    {
+      eyebrow: "Overdue",
+      title: subject,
+      studioName: params.studioName,
+      studioLogoUrl: params.studioLogoUrl,
+    },
   );
   return { subject, html };
 }
@@ -269,7 +305,12 @@ export function buildInvoiceFinalNoticeEmail(
       ),
     params.portalUrl,
     "Pay invoice immediately",
-    { eyebrow: "Overdue", title: subject },
+    {
+      eyebrow: "Overdue",
+      title: subject,
+      studioName: params.studioName,
+      studioLogoUrl: params.studioLogoUrl,
+    },
   );
   return { subject, html };
 }
@@ -337,6 +378,9 @@ export interface PaymentReceiptEmailParams {
   balanceCents: number;
   portalUrl: string;
   currency?: string;
+  /** Studio co-brand byline (Designer Studios). Omit → plain Patina shell. */
+  studioName?: string;
+  studioLogoUrl?: string;
 }
 
 /**
@@ -377,7 +421,12 @@ export function buildPaymentReceiptEmail(
       balanceLine,
     params.portalUrl,
     "View receipt",
-    { eyebrow: "Receipt", title: subject },
+    {
+      eyebrow: "Receipt",
+      title: subject,
+      studioName: params.studioName,
+      studioLogoUrl: params.studioLogoUrl,
+    },
   );
 
   return { subject, html };
@@ -561,6 +610,9 @@ export interface PaymentFailedEmailParams {
   amountCents: number;
   portalUrl: string;
   currency?: string;
+  /** Studio co-brand byline (Designer Studios). Omit → plain Patina shell. */
+  studioName?: string;
+  studioLogoUrl?: string;
 }
 
 /**
@@ -597,7 +649,12 @@ export function buildPaymentFailedEmail(
       ),
     params.portalUrl,
     "Try payment again",
-    { eyebrow: "Payment failed", title: subject },
+    {
+      eyebrow: "Payment failed",
+      title: subject,
+      studioName: params.studioName,
+      studioLogoUrl: params.studioLogoUrl,
+    },
   );
 
   return { subject, html };
