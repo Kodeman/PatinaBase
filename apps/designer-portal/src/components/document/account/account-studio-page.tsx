@@ -14,7 +14,7 @@
  * doesn't either.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   useOrganizations,
   useOrganizationMembers,
@@ -23,13 +23,27 @@ import {
   useUpdateMemberRole,
   useRemoveMember,
   useLeaveOrganization,
+  useTransferOrganizationOwnership,
   type MemberRole,
 } from '@patina/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { Select, StatusBadge, type StatusTone } from '@/components/ui/controls';
 import { monogramOf } from '@/lib/document/account-identity';
 import { StudioInviteModal } from './studio-invite-modal';
+import { StudioLogoUploadField } from './studio-logo-upload-field';
 import { studioEvents } from '@/lib/analytics/studio-events';
+
+/** Map studio DB error codes to friendly copy (see 00319 guard + RPCs). */
+function friendlyStudioError(err: unknown, fallback: string): string {
+  const msg = err instanceof Error ? err.message : String(err ?? '');
+  if (msg.includes('last_owner_protected')) return 'Transfer ownership to another member first.';
+  if (msg.includes('not_owner')) return 'Only the studio owner can do this.';
+  if (msg.includes('target_not_active_member')) return 'That teammate must be an active studio member.';
+  if (msg.includes('owner_change_requires_owner')) return 'Only an owner can change owner roles.';
+  if (msg.includes('owner_promotion_requires_owner')) return 'Only an owner can promote a member to owner.';
+  if (msg.includes('owner_insert_requires_owner')) return 'Only an owner can add another owner.';
+  return msg || fallback;
+}
 
 const FIELD =
   'w-full max-w-md border-0 border-b border-[var(--color-pearl)] bg-transparent py-2 text-[14px] text-[var(--color-charcoal)] outline-none transition-colors placeholder:text-[var(--text-faint)] focus:border-[var(--color-clay)]';
@@ -66,11 +80,43 @@ export function AccountStudioPage() {
   const updateRole = useUpdateMemberRole();
   const removeMember = useRemoveMember();
   const leaveOrg = useLeaveOrganization();
+  const transferOwner = useTransferOrganizationOwnership();
 
   const [newStudioName, setNewStudioName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
+
+  // Branding form (contact + address). Seeded from the studio row; re-synced
+  // when the active studio changes (keyed on id so a background refetch doesn't
+  // clobber in-progress edits).
+  const [branding, setBranding] = useState({
+    website: '',
+    email: '',
+    phone: '',
+    line1: '',
+    line2: '',
+    city: '',
+    state: '',
+    zip: '',
+  });
+
+  useEffect(() => {
+    if (!studio) return;
+    const a = (studio.address ?? {}) as Record<string, unknown>;
+    const s = (v: unknown) => (typeof v === 'string' ? v : '');
+    setBranding({
+      website: studio.website ?? '',
+      email: studio.email ?? '',
+      phone: studio.phone ?? '',
+      line1: s(a.line1),
+      line2: s(a.line2),
+      city: s(a.city),
+      state: s(a.state),
+      zip: s(a.zip),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studio?.id]);
 
   const myRole = studio?.membership.role ?? null;
   const canManage = myRole === 'owner' || myRole === 'admin';
@@ -122,6 +168,36 @@ export function AccountStudioPage() {
     if (!studio) return;
     if (!confirm(`Leave ${studio.name}? You'll lose access to its projects and clients.`)) return;
     leaveOrg.mutate(studio.id);
+  };
+
+  const handleSaveBranding = () => {
+    if (!studio || updateOrg.isPending) return;
+    const address = {
+      line1: branding.line1.trim() || null,
+      line2: branding.line2.trim() || null,
+      city: branding.city.trim() || null,
+      state: branding.state.trim() || null,
+      zip: branding.zip.trim() || null,
+    };
+    const hasAddress = Object.values(address).some((v) => v !== null);
+    updateOrg.mutate({
+      id: studio.id,
+      website: branding.website.trim() || null,
+      email: branding.email.trim() || null,
+      phone: branding.phone.trim() || null,
+      address: hasAddress ? address : null,
+    });
+  };
+
+  const handleTransfer = (newOwnerUserId: string, label: string) => {
+    if (!studio) return;
+    if (
+      !confirm(
+        `Make ${label} the studio owner? You'll become an admin. This can't be undone without their help.`,
+      )
+    )
+      return;
+    transferOwner.mutate({ organizationId: studio.id, newOwnerUserId });
   };
 
   // ── No-studio state ───────────────────────────────────────────────────
@@ -179,6 +255,25 @@ export function AccountStudioPage() {
   }
 
   // ── Studio state ──────────────────────────────────────────────────────
+  const currentAddress = (studio.address ?? {}) as Record<string, unknown>;
+  const asStr = (v: unknown) => (typeof v === 'string' ? v : '');
+  const brandingDirty =
+    branding.website !== (studio.website ?? '') ||
+    branding.email !== (studio.email ?? '') ||
+    branding.phone !== (studio.phone ?? '') ||
+    branding.line1 !== asStr(currentAddress.line1) ||
+    branding.line2 !== asStr(currentAddress.line2) ||
+    branding.city !== asStr(currentAddress.city) ||
+    branding.state !== asStr(currentAddress.state) ||
+    branding.zip !== asStr(currentAddress.zip);
+  const addressLines = [
+    asStr(currentAddress.line1),
+    asStr(currentAddress.line2),
+    [asStr(currentAddress.city), asStr(currentAddress.state), asStr(currentAddress.zip)]
+      .filter(Boolean)
+      .join(', '),
+  ].filter((l) => l.trim().length > 0);
+
   return (
     <div className="pt-1">
       {/* Identity */}
@@ -231,10 +326,184 @@ export function AccountStudioPage() {
             )}
           </div>
         )}
-        {updateOrg.isError && (
+        {isRenaming && updateOrg.isError && (
           <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
             {updateOrg.error instanceof Error ? updateOrg.error.message : 'Failed to save.'}
           </p>
+        )}
+      </div>
+
+      {/* Branding */}
+      <div className="mb-6 border-t border-[var(--color-pearl)] pt-5">
+        <h3 className={`${LABEL} mb-3`}>Branding</h3>
+        <p className={`${HELP} mb-4 mt-0`}>
+          Your studio&rsquo;s logo and contact details appear on invoices, client-facing
+          emails, and the client app.
+        </p>
+
+        {/* Logo */}
+        <div className="mb-5">
+          <span className={LABEL}>Logo</span>
+          {canManage ? (
+            <div className="mt-1.5">
+              <StudioLogoUploadField
+                studioId={studio.id}
+                currentUrl={studio.logo_url}
+                name={studio.name}
+              />
+            </div>
+          ) : studio.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={studio.logo_url}
+              alt={`${studio.name} logo`}
+              className="mt-1.5 h-16 w-16 rounded-[6px] border border-[var(--color-pearl)] object-contain"
+            />
+          ) : (
+            <p className={HELP}>No logo set.</p>
+          )}
+        </div>
+
+        {canManage ? (
+          <div className="max-w-md">
+            <div className="mb-4">
+              <label htmlFor="studio-website" className={LABEL}>
+                Website
+              </label>
+              <input
+                id="studio-website"
+                type="url"
+                value={branding.website}
+                onChange={(e) => setBranding((b) => ({ ...b, website: e.target.value }))}
+                placeholder="https://your-studio.com"
+                className={FIELD}
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="studio-email" className={LABEL}>
+                Contact email
+              </label>
+              <input
+                id="studio-email"
+                type="email"
+                value={branding.email}
+                onChange={(e) => setBranding((b) => ({ ...b, email: e.target.value }))}
+                placeholder="hello@your-studio.com"
+                className={FIELD}
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="studio-phone" className={LABEL}>
+                Phone
+              </label>
+              <input
+                id="studio-phone"
+                type="tel"
+                value={branding.phone}
+                onChange={(e) => setBranding((b) => ({ ...b, phone: e.target.value }))}
+                placeholder="(555) 555-5555"
+                className={FIELD}
+              />
+            </div>
+
+            <span className={`${LABEL} mt-2`}>Address</span>
+            <div className="mt-1.5 space-y-3">
+              <input
+                aria-label="Address line 1"
+                type="text"
+                value={branding.line1}
+                onChange={(e) => setBranding((b) => ({ ...b, line1: e.target.value }))}
+                placeholder="Street address"
+                className={FIELD}
+              />
+              <input
+                aria-label="Address line 2"
+                type="text"
+                value={branding.line2}
+                onChange={(e) => setBranding((b) => ({ ...b, line2: e.target.value }))}
+                placeholder="Suite, unit, etc. (optional)"
+                className={FIELD}
+              />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <input
+                  aria-label="City"
+                  type="text"
+                  value={branding.city}
+                  onChange={(e) => setBranding((b) => ({ ...b, city: e.target.value }))}
+                  placeholder="City"
+                  className={`${FIELD} col-span-2`}
+                />
+                <input
+                  aria-label="State"
+                  type="text"
+                  value={branding.state}
+                  onChange={(e) => setBranding((b) => ({ ...b, state: e.target.value }))}
+                  placeholder="State"
+                  className={FIELD}
+                />
+                <input
+                  aria-label="ZIP"
+                  type="text"
+                  value={branding.zip}
+                  onChange={(e) => setBranding((b) => ({ ...b, zip: e.target.value }))}
+                  placeholder="ZIP"
+                  className={FIELD}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSaveBranding}
+                disabled={!brandingDirty || updateOrg.isPending}
+                className={PRIMARY}
+              >
+                {updateOrg.isPending ? 'Saving…' : 'Save branding'}
+              </button>
+              {!brandingDirty && !updateOrg.isPending && (
+                <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--color-aged-oak)]">
+                  Saved
+                </span>
+              )}
+            </div>
+            {!isRenaming && updateOrg.isError && (
+              <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
+                {friendlyStudioError(updateOrg.error, 'Failed to save branding.')}
+              </p>
+            )}
+          </div>
+        ) : (
+          <dl className="max-w-md space-y-3">
+            <div>
+              <dt className={LABEL}>Website</dt>
+              <dd className="text-[13px] text-[var(--color-charcoal)]">
+                {studio.website || <span className="text-[var(--color-aged-oak)]">Not set</span>}
+              </dd>
+            </div>
+            <div>
+              <dt className={LABEL}>Contact email</dt>
+              <dd className="text-[13px] text-[var(--color-charcoal)]">
+                {studio.email || <span className="text-[var(--color-aged-oak)]">Not set</span>}
+              </dd>
+            </div>
+            <div>
+              <dt className={LABEL}>Phone</dt>
+              <dd className="text-[13px] text-[var(--color-charcoal)]">
+                {studio.phone || <span className="text-[var(--color-aged-oak)]">Not set</span>}
+              </dd>
+            </div>
+            <div>
+              <dt className={LABEL}>Address</dt>
+              <dd className="text-[13px] text-[var(--color-charcoal)]">
+                {addressLines.length > 0 ? (
+                  addressLines.map((line, i) => <div key={i}>{line}</div>)
+                ) : (
+                  <span className="text-[var(--color-aged-oak)]">Not set</span>
+                )}
+              </dd>
+            </div>
+          </dl>
         )}
       </div>
 
@@ -298,6 +567,16 @@ export function AccountStudioPage() {
                         <option value="admin">Admin</option>
                         <option value="member">Member</option>
                       </Select>
+                      {myRole === 'owner' && m.status === 'active' && m.role !== 'owner' && (
+                        <button
+                          type="button"
+                          onClick={() => handleTransfer(m.user_id, label)}
+                          disabled={transferOwner.isPending}
+                          className={LINK}
+                        >
+                          Make owner
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleRemove(m.id, label)}
@@ -319,20 +598,29 @@ export function AccountStudioPage() {
         </ul>
       )}
 
-      {/* Leave studio — owners must transfer ownership first (no self-serve
-          path for the last owner; UI-level guard, see isLastOwner above). */}
-      {myRole !== 'owner' && (
-        <div className="mt-6 border-t border-[var(--color-pearl)] pt-4">
-          <button
-            type="button"
-            onClick={handleLeave}
-            disabled={leaveOrg.isPending}
-            className={LINK_DANGER}
-          >
-            {leaveOrg.isPending ? 'Leaving…' : 'Leave studio'}
-          </button>
-        </div>
+      {transferOwner.isError && (
+        <p role="alert" className="mt-3 text-[12px] text-[var(--color-terracotta)]">
+          {friendlyStudioError(transferOwner.error, 'Failed to transfer ownership.')}
+        </p>
       )}
+
+      {/* Leave studio. The last owner is blocked by the DB guard (00319) — they
+          must transfer ownership first; the error copy below tells them so. */}
+      <div className="mt-6 border-t border-[var(--color-pearl)] pt-4">
+        <button
+          type="button"
+          onClick={handleLeave}
+          disabled={leaveOrg.isPending}
+          className={LINK_DANGER}
+        >
+          {leaveOrg.isPending ? 'Leaving…' : 'Leave studio'}
+        </button>
+        {leaveOrg.isError && (
+          <p role="alert" className="mt-2 text-[12px] text-[var(--color-terracotta)]">
+            {friendlyStudioError(leaveOrg.error, 'Failed to leave the studio.')}
+          </p>
+        )}
+      </div>
 
       <StudioInviteModal
         open={inviteOpen}
