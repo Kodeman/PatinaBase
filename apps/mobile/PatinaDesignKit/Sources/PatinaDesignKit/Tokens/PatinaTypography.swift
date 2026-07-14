@@ -102,6 +102,18 @@ public enum PatinaTypography {
 
     /// Small UI labels
     public static let uiSmall = Font.custom(bodyFont + "-Medium", size: 13, relativeTo: .footnote)
+
+    // MARK: - Fixed-size Glyphs (monogram avatars)
+
+    /// A monogram-avatar initial (profile, studio) — deliberately
+    /// non-scaling: it's a glyph decoration inside a fixed-size circle, not
+    /// running text, so Dynamic Type scaling would overflow the circle.
+    /// No `relativeTo:` on purpose. 36pt avatar size (profile monogram).
+    public static let monogramGlyph = Font.custom(displayFont + "-Medium", size: 14)
+
+    /// Same rationale as `monogramGlyph`, sized for compact inline avatars
+    /// (e.g. a 20pt studio-logo fallback next to body text).
+    public static let monogramGlyphSmall = Font.custom(displayFont + "-Medium", size: 9)
 }
 
 // MARK: - View Modifiers
