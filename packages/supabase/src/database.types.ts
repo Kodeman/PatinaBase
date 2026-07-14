@@ -17757,6 +17757,7 @@ export type Database = {
         Args: { body?: Json; fn_name: string }
         Returns: number
       }
+      is_active_org_member: { Args: { p_org_id: string }; Returns: boolean }
       is_aesthete_lead: { Args: { p_user_id: string }; Returns: boolean }
       is_comms_admin: { Args: { p_user_id: string }; Returns: boolean }
       is_comms_thread_participant: {
