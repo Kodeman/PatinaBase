@@ -3,7 +3,7 @@
 import { use } from 'react';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
-import { useInvoice } from '@patina/supabase';
+import { useInvoice, useStudioIdentity } from '@patina/supabase';
 import {
   INVOICE_STATUS_LABELS,
   INVOICE_PAYMENT_METHOD_LABELS,
@@ -24,6 +24,9 @@ export default function ClientInvoicePrintPage({
 }) {
   const { invoiceId } = use(params);
   const { data: invoice, isLoading } = useInvoice(invoiceId);
+  // Studio brand identity (Designer Studios). projectId path; disabled until the
+  // invoice resolves. name/logoUrl are nullable — fall back to the designer join.
+  const { data: identity } = useStudioIdentity({ projectId: invoice?.project_id });
 
   if (isLoading) {
     return (
@@ -43,9 +46,12 @@ export default function ClientInvoicePrintPage({
 
   const balance = invoiceBalanceCents(invoice);
   const designerName =
-    invoice.designer?.full_name?.trim() ||
-    invoice.designer?.business_name?.trim() ||
-    'Your Designer';
+    identity?.name ??
+    (invoice.designer?.full_name?.trim() ||
+      invoice.designer?.business_name?.trim() ||
+      'Your Designer');
+  // logoUrl is non-null only for a resolved studio org; already ?v= cache-busted.
+  const logoUrl = identity?.logoUrl ?? null;
   const taxPercent = (Number(invoice.tax_rate) * 100).toFixed(2).replace(/\.?0+$/, '');
   const succeededPayments = (invoice.payments ?? []).filter((p) => p.status === 'succeeded');
 
@@ -96,6 +102,14 @@ export default function ClientInvoicePrintPage({
         {/* Brand header */}
         <div className="mb-10 flex items-start justify-between">
           <div>
+            {logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoUrl}
+                alt={designerName}
+                style={{ maxHeight: '48px', width: 'auto', marginBottom: '0.6rem', display: 'block' }}
+              />
+            )}
             <div
               style={{
                 fontFamily: 'var(--font-heading, Georgia, serif)',
