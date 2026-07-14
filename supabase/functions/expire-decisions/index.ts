@@ -25,6 +25,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { deliverDecisionNotification } from '../_shared/decision-notify.ts';
+import { resolveStudioIdentity, studioCobrand } from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -33,6 +34,8 @@ interface OverdueDecision {
   id: string;
   title: string;
   due_date: string;
+  designer_id: string | null;
+  project_id: string | null;
   designer_client: {
     client_id: string | null;
     client_email: string | null;
@@ -53,7 +56,7 @@ Deno.serve(async (_req: Request) => {
   const { data: overdueRows, error: overdueErr } = await supabase
     .from('client_decisions')
     .select(`
-      id, title, due_date,
+      id, title, due_date, designer_id, project_id,
       designer_client:designer_clients(
         client_id,
         client_email,
@@ -76,11 +79,19 @@ Deno.serve(async (_req: Request) => {
       const recipientEmail = dc?.client?.email ?? dc?.client_email ?? null;
       const recipientName = dc?.client?.full_name ?? dc?.client_name ?? null;
 
+      // Studio co-brand (Designer Studios): prefer a linked project's studio,
+      // else the decision's designer's primary studio.
+      const identity = await resolveStudioIdentity(supabase, {
+        projectId: d.project_id,
+        designerId: d.designer_id,
+      });
+
       const result = await deliverDecisionNotification(
         supabase,
         'decision_overdue',
         { id: d.id, title: d.title, dueDate: d.due_date },
         { userId: recipientUserId, email: recipientEmail, name: recipientName },
+        studioCobrand(identity),
       );
       if (result.emailSent || result.inAppOk) overdueNotified++;
       if (

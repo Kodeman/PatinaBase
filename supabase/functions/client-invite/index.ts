@@ -18,6 +18,11 @@ import {
   spacer,
   escapeHtml,
 } from '../_shared/branded-email.ts';
+import {
+  resolveStudioIdentity,
+  studioCobrand,
+  studioDisplayName,
+} from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -80,10 +85,19 @@ async function handleSend(req: Request): Promise<Response> {
     .eq('id', user.id)
     .maybeSingle();
 
+  // Studio co-brand (Designer Studios). Prefer a project's studio when the
+  // invite is scoped to one; otherwise the designer's primary studio.
+  const identity = await resolveStudioIdentity(admin, {
+    projectId: body.projectId ?? null,
+    designerId: user.id,
+  });
   const designerName =
     (designer as { full_name?: string | null } | null)?.full_name?.trim() ??
     (designer as { business_name?: string | null } | null)?.business_name?.trim() ??
+    identity?.name ??
     'Your designer';
+  const senderName = studioDisplayName(identity, designerName);
+  const cobrand = studioCobrand(identity);
 
   let projectName: string | null = null;
   if (body.projectId) {
@@ -115,11 +129,13 @@ async function handleSend(req: Request): Promise<Response> {
   const projectLine = projectName
     ? paragraph(`<strong style="color:#1F1B16; font-weight:600;">Project:</strong> ${escapeHtml(projectName)}`)
     : '';
-  const subject = `${designerName} invited you to Patina`;
+  const subject = `${senderName} invited you to Patina`;
   const html = renderBrandedShell({
     title: subject,
-    preview: `${designerName} would like to collaborate with you on Patina.`,
+    preview: `${senderName} would like to collaborate with you on Patina.`,
     eyebrow: 'Invitation',
+    studioName: cobrand.studioName,
+    studioLogoUrl: cobrand.studioLogoUrl,
     body: [
       paragraph('Hi,'),
       paragraph(`${escapeHtml(designerName)} would like to collaborate with you on Patina.`),

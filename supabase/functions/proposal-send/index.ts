@@ -29,6 +29,11 @@ import {
   spacer,
   escapeHtml,
 } from '../_shared/branded-email.ts';
+import {
+  resolveStudioIdentity,
+  studioCobrand,
+  studioDisplayName,
+} from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -49,6 +54,8 @@ interface ProposalRow {
   valid_until: string | null;
   total_amount: number | null;
   client_id: string | null;
+  designer_id: string | null;
+  project_id: string | null;
   designer: { full_name: string | null; email: string | null } | null;
   client: { full_name: string | null; email: string | null } | null;
 }
@@ -102,6 +109,7 @@ Deno.serve(async (req: Request) => {
     .select(
       `
       id, title, personal_message, cc_email, valid_until, total_amount, client_id,
+      designer_id, project_id,
       designer:profiles!designer_id(full_name, email),
       client:profiles!client_id(full_name, email)
     `
@@ -121,7 +129,18 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'no_recipient' }, 422);
   }
 
-  const designerName = proposal.designer?.full_name ?? 'Your designer';
+  // Studio co-brand (Designer Studios). Proposals are typically sent before
+  // activation into a project (project_id NULL), so resolve by the designer;
+  // pass project_id too so a linked proposal still prefers its studio.
+  const identity = await resolveStudioIdentity(supabase, {
+    projectId: proposal.project_id,
+    designerId: proposal.designer_id,
+  });
+  // Personal designer name stays in the greeting prose; fall back to the
+  // resolver's studio/business name before the generic 'Your designer'.
+  const designerName = proposal.designer?.full_name ?? identity?.name ?? 'Your designer';
+  const senderName = studioDisplayName(identity, designerName);
+  const cobrand = studioCobrand(identity);
   const clientName = proposal.client?.full_name ?? 'there';
   const link = `${CLIENT_PORTAL_URL}/proposals/${proposal.id}`;
   const totalLine = proposal.total_amount
@@ -134,11 +153,13 @@ Deno.serve(async (req: Request) => {
     ? callout(escapeHtml(proposal.personal_message))
     : '';
 
-  const subject = `${designerName} sent you a proposal: "${proposal.title}"`;
+  const subject = `${senderName} sent you a proposal: "${proposal.title}"`;
   const html = renderBrandedShell({
     title: subject,
     preview: `${designerName} has prepared a design proposal for you.`,
     eyebrow: 'Proposal',
+    studioName: cobrand.studioName,
+    studioLogoUrl: cobrand.studioLogoUrl,
     body: [
       heading('Your proposal is ready'),
       paragraph(`Hi ${escapeHtml(clientName)},`),

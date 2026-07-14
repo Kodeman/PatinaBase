@@ -68,6 +68,7 @@ import {
   buildPaymentRefundedEmail,
   formatInvoiceCurrency,
 } from '../_shared/invoice-emails.ts';
+import { resolveStudioIdentity, studioCobrand } from '../_shared/studio-identity.ts';
 // Agent OS (WP-2.1) — reconciliation emission onto the agent_tasks queue.
 // Additive: the constants + enqueue helper live in ./reconcile-emit.ts (kept out
 // of this Deno.serve module so they unit-test offline, per the repo's core/index
@@ -293,6 +294,13 @@ async function sendSuccessSideEffects(
     // notification_log row that doubles as their in-app inbox entry).
     const recipient = await resolveRecipient(admin, invoice);
     if (recipient.email) {
+      // Studio co-brand (Designer Studios): the invoice's project resolves brand.
+      const cobrand = studioCobrand(
+        await resolveStudioIdentity(admin, {
+          projectId: invoice.project_id,
+          designerId: invoice.designer_id,
+        }),
+      );
       const rendered = buildPaymentReceiptEmail({
         invoiceNumber,
         projectName,
@@ -302,6 +310,8 @@ async function sendSuccessSideEffects(
         balanceCents,
         portalUrl,
         currency: invoice.currency,
+        studioName: cobrand.studioName,
+        studioLogoUrl: cobrand.studioLogoUrl,
       });
       const sendResult = await sendCompliantEmail(admin, {
         to: recipient.email,
@@ -375,6 +385,13 @@ async function sendFailureSideEffects(
 
     const recipient = await resolveRecipient(admin, invoice);
     if (recipient.email) {
+      // Studio co-brand (Designer Studios): the invoice's project resolves brand.
+      const cobrand = studioCobrand(
+        await resolveStudioIdentity(admin, {
+          projectId: invoice.project_id,
+          designerId: invoice.designer_id,
+        }),
+      );
       const rendered = buildPaymentFailedEmail({
         invoiceNumber,
         projectName,
@@ -383,6 +400,8 @@ async function sendFailureSideEffects(
         amountCents: row.amount_cents,
         portalUrl,
         currency: invoice.currency,
+        studioName: cobrand.studioName,
+        studioLogoUrl: cobrand.studioLogoUrl,
       });
       const sendResult = await sendCompliantEmail(admin, {
         to: recipient.email,

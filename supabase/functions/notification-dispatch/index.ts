@@ -13,6 +13,12 @@ import {
   ctaButton,
   spacer,
 } from "../_shared/branded-email.ts";
+import {
+  resolveStudioIdentity,
+  studioCobrand,
+  type StudioIdentity,
+} from "../_shared/studio-identity.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -135,10 +141,17 @@ serve(async (req) => {
         });
       }
 
+      // Prefer the DB-backed render; the inline fallback co-brands the shell
+      // when the job metadata carries a project_id/designer_id (Designer
+      // Studios), otherwise renders the plain Patina shell unchanged.
+      const html =
+        rendered?.html ||
+        (await buildEmailHtml(supabase, job.template_id, enrichedData, job.data));
+
       const result = await sendCompliantEmail(supabase, {
         to: profile.email,
         subject: rendered?.subject || buildSubject(job.type, job.data),
-        html: rendered?.html || buildEmailHtml(job.template_id, enrichedData),
+        html,
         userId: job.user_id,
         notificationType: job.type,
         category: deriveCategory(job),
@@ -227,12 +240,28 @@ function buildSubject(type: string, data: Record<string, unknown>): string {
   return subjects[type] || "Notification from Patina";
 }
 
-function buildEmailHtml(templateId: string, data: Record<string, unknown>): string {
+async function buildEmailHtml(
+  supabase: SupabaseClient,
+  templateId: string,
+  data: Record<string, unknown>,
+  meta: Record<string, unknown>,
+): Promise<string> {
   // Fallback branded shell, used only when a template slug has no DB row
   // (renderTemplateFromDb is preferred by the caller). Composes the body from
   // the shared design-system helpers and wraps it in renderBrandedShell().
   const name = (data.displayName as string) || "";
   const greeting = name ? `Hi ${escapeHtml(name)},` : "Hello,";
+
+  // Studio co-brand (Designer Studios): only when the payload carries a
+  // project_id / designer_id. Without one, the resolver is skipped and the
+  // shell renders byte-identically to the plain Patina output.
+  const projectId = (meta?.project_id ?? data.project_id ?? null) as string | null;
+  const designerId = (meta?.designer_id ?? data.designer_id ?? null) as string | null;
+  let identity: StudioIdentity | null = null;
+  if (projectId || designerId) {
+    identity = await resolveStudioIdentity(supabase, { projectId, designerId });
+  }
+  const cobrand = studioCobrand(identity);
 
   const templates: Record<string, string> = {
     "welcome-verification":
@@ -267,7 +296,13 @@ function buildEmailHtml(templateId: string, data: Record<string, unknown>): stri
     heading("A new notification") +
       paragraph(`${greeting} You have a new notification from Patina.`);
 
-  return renderBrandedShell({ title: "Patina", eyebrow: "Notification", body });
+  return renderBrandedShell({
+    title: "Patina",
+    eyebrow: "Notification",
+    body,
+    studioName: cobrand.studioName,
+    studioLogoUrl: cobrand.studioLogoUrl,
+  });
 }
 
 function escapeHtml(s: string): string {

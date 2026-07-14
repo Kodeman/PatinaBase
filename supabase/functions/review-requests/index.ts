@@ -19,6 +19,11 @@ import {
   spacer,
   escapeHtml,
 } from '../_shared/branded-email.ts';
+import {
+  resolveStudioIdentity,
+  studioCobrand,
+  studioDisplayName,
+} from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -54,9 +59,13 @@ async function sendReviewEmail(opts: {
   designerClientId: string;
   clientEmail: string;
   clientName: string | null;
-  designerName: string | null;
+  /** Display name for the subject/prose — studio, designer, or 'Patina'. */
+  senderName: string;
+  /** Studio co-brand byline (Designer Studios). */
+  studioName?: string;
+  studioLogoUrl?: string;
 }): Promise<boolean> {
-  const senderDisplay = opts.designerName ?? 'Patina';
+  const senderDisplay = opts.senderName;
   const greeting = opts.clientName ? `Hi ${escapeHtml(opts.clientName)},` : 'Hi there,';
   const reviewUrl = `${CLIENT_PORTAL_URL}/review/${opts.projectId}`;
   const subject = `Share your experience with ${senderDisplay}`;
@@ -65,6 +74,8 @@ async function sendReviewEmail(opts: {
     title: subject,
     preview: `Your ${opts.projectName} project is complete — we'd love to hear what you thought.`,
     eyebrow: 'Review request',
+    studioName: opts.studioName,
+    studioLogoUrl: opts.studioLogoUrl,
     body: [
       paragraph(greeting),
       paragraph(`Your <strong style="color:#1F1B16; font-weight:600;">${escapeHtml(opts.projectName)}</strong> project is complete and we&apos;d love to hear what you thought.`),
@@ -218,13 +229,24 @@ Deno.serve(async (_req: Request) => {
     const clientName = clientProfile?.full_name ?? dc.client_name;
     const designerName = designerProfile?.full_name ?? null;
 
+    // Studio co-brand (Designer Studios): the completed project resolves the
+    // studio brand for the review-request shell + sender display.
+    const identity = await resolveStudioIdentity(supabase, {
+      projectId: project.id,
+      designerId: project.designer_id,
+    });
+    const senderName = studioDisplayName(identity, designerName ?? 'Patina');
+    const cobrand = studioCobrand(identity);
+
     const ok = await sendReviewEmail({
       projectId: project.id,
       projectName: project.name,
       designerClientId: dc.id,
       clientEmail,
       clientName,
-      designerName,
+      senderName,
+      studioName: cobrand.studioName,
+      studioLogoUrl: cobrand.studioLogoUrl,
     });
 
     if (ok) {
