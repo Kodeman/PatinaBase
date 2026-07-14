@@ -143,6 +143,28 @@ public final class FirstLaunchTourModel {
     /// UserDefaults only (same behaviour as v1 / Sprint 3).
     @ObservationIgnored private var supabaseAdapter: SupabaseHelpStateAdapter?
 
+    /// Anchors currently mounted in the view tree. The anchor modifier
+    /// registers on appear / unregisters on disappear, so the orchestrator can
+    /// SKIP a step whose anchor never renders — e.g. the `.savedHeart` product
+    /// card doesn't exist for a brand-new user with zero rooms, which used to
+    /// strand the tour on an invisible middle step.
+    @ObservationIgnored private var mountedAnchors: Set<FirstLaunchTourAnchor> = []
+
+    /// Becomes `true` the first time any anchor registers. Skip-unmounted logic
+    /// only kicks in once the anchor system is live, so a model driven directly
+    /// (unit tests, no view tree) keeps the simple sequential advance behavior.
+    @ObservationIgnored private var anchorTrackingActive = false
+
+    /// Pending "skip this step if its anchor never mounts" check.
+    @ObservationIgnored private var skipTask: Task<Void, Never>?
+
+    /// Grace window given to a step's anchor to mount before the step is
+    /// skipped. Covers the async case — e.g. `.savedHeart`'s product card only
+    /// mounts after the recommendations feed loads over the network — so a
+    /// not-yet-mounted anchor still gets its coachmark, while a truly-absent one
+    /// (zero-room user) is skipped once the window elapses. Settable for tests.
+    @ObservationIgnored var anchorMountGracePeriod: Duration = .seconds(1.5)
+
     public init(
         tourKey: String = FirstLaunchTourModel.defaultTourKey,
         steps: [FirstLaunchTourStep] = FirstLaunchTourModel.defaultSteps,
@@ -275,11 +297,11 @@ public final class FirstLaunchTourModel {
     public func advance() {
         guard isActive else { return }
         guard !steps.isEmpty else { return }
-        if currentStep >= steps.count - 1 {
+        let nextIndex = currentStep + 1
+        guard nextIndex < steps.count else {
             complete()
             return
         }
-        let nextIndex = currentStep + 1
         currentStep = nextIndex
         viewedSteps.insert(nextIndex)
         analytics.tourStepAdvanced(
@@ -287,12 +309,40 @@ public final class FirstLaunchTourModel {
             stepNumber: nextIndex,
             stepSurfaceKey: steps[nextIndex].surfaceKey
         )
+        // If this step's anchor isn't on screen, don't skip it outright — its
+        // view may still be mounting (e.g. `.savedHeart`'s product card while
+        // the feed loads). Give it a grace window; the reactive popover binding
+        // shows it the moment it mounts, and only if it's STILL absent after the
+        // window do we skip forward — which auto-clears the zero-room dead step.
+        scheduleSkipIfAnchorNeverMounts(for: nextIndex)
+    }
+
+    /// After landing on `index`, wait one grace window; if that step's anchor
+    /// still hasn't mounted (and we haven't moved on), advance past it. No-op
+    /// when the anchor system isn't live (unit tests) or the anchor is already
+    /// mounted.
+    private func scheduleSkipIfAnchorNeverMounts(for index: Int) {
+        skipTask?.cancel()
+        guard anchorTrackingActive else { return }
+        guard steps.indices.contains(index) else { return }
+        guard !mountedAnchors.contains(steps[index].anchor) else { return }
+        let grace = anchorMountGracePeriod
+        skipTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: grace)
+            guard let self, !Task.isCancelled else { return }
+            if self.isActive,
+               self.currentStep == index,
+               !self.mountedAnchors.contains(self.steps[index].anchor) {
+                self.advance()
+            }
+        }
     }
 
     /// Mark the tour completed and write final persistence. Fires
     /// `help.tour.completed`.
     public func complete() {
         guard isActive else { return }
+        skipTask?.cancel()
         let durationMs: Int
         if let startedAt {
             durationMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1000))
@@ -332,6 +382,7 @@ public final class FirstLaunchTourModel {
     /// persists `abandoned: true` so the tour never re-auto-starts.
     public func skip() {
         guard isActive else { return }
+        skipTask?.cancel()
         analytics.tourAbandoned(
             tourKey: tourKey,
             atStep: currentStep,
@@ -365,6 +416,24 @@ public final class FirstLaunchTourModel {
     }
 
     // MARK: - Anchor helpers
+
+    /// Record that `anchor`'s view is mounted (called on appear). Lets
+    /// `advance()` skip steps whose anchor never renders.
+    public func registerAnchor(_ anchor: FirstLaunchTourAnchor) {
+        anchorTrackingActive = true
+        mountedAnchors.insert(anchor)
+        // The current step's anchor mounted within its grace window — cancel the
+        // pending skip so its coachmark shows (via the reactive popover binding)
+        // instead of being auto-skipped.
+        if isActive, steps.indices.contains(currentStep), steps[currentStep].anchor == anchor {
+            skipTask?.cancel()
+        }
+    }
+
+    /// Record that `anchor`'s view left the tree (called on disappear).
+    public func unregisterAnchor(_ anchor: FirstLaunchTourAnchor) {
+        mountedAnchors.remove(anchor)
+    }
 
     /// Returns `true` when the currently-active step's anchor matches
     /// `anchor`. The `.firstLaunchTourAnchor` modifier reads this to decide
@@ -495,6 +564,11 @@ private struct FirstLaunchTourAnchorModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // Track this anchor's presence so the orchestrator can skip a step
+            // whose anchor never mounts (e.g. `.savedHeart` for a zero-room
+            // user) instead of stalling on an invisible popover.
+            .onAppear { model?.registerAnchor(anchor) }
+            .onDisappear { model?.unregisterAnchor(anchor) }
             .popover(isPresented: isShownBinding, arrowEdge: .top) {
                 popoverContent
                     .presentationCompactAdaptation(.popover)

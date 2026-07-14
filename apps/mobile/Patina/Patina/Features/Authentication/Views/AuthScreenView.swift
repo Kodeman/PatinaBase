@@ -2,18 +2,32 @@
 //  AuthScreenView.swift
 //  Patina
 //
-//  Authentication screen matching the new design — wordmark, strata, auth buttons
+//  Welcome / authentication screen. Passwordless-first: Apple is the hero,
+//  email uses a one-time code (no password, no confirmation round-trip), and a
+//  prominent "Look around first" fully defers the account (soft wall). Password
+//  is a de-emphasized fallback for returning users.
 //
 
 import SwiftUI
 import AuthenticationServices
 
 struct AuthScreenView: View {
-    var onSignInWithApple: (Result<ASAuthorization, Error>) -> Void = { _ in }
+    /// Apple completion carries the raw nonce so the service can pass it to
+    /// `signInWithIdToken(nonce:)`.
+    var onSignInWithApple: (Result<ASAuthorization, Error>, _ rawNonce: String) -> Void = { _, _ in }
     var onSignInWithGoogle: () -> Void = {}
-    var onSignInWithEmail: () -> Void = {}
-    var onCreateAccount: () -> Void = {}
+    /// Opens the passwordless email-code flow (unified sign-up + sign-in).
+    var onContinueWithEmail: () -> Void = {}
+    /// Soft wall — browse the marketplace without an account.
     var onBrowseAsGuest: () -> Void = {}
+    /// De-emphasized fallback for returning password users.
+    var onUsePassword: () -> Void = {}
+    /// Whether to show the "Look around first" guest affordance. Hidden when
+    /// the screen is used as a hard gate (e.g. the design-request upload step),
+    /// where browsing without an account isn't a meaningful action.
+    var showGuest: Bool = true
+    /// Latest auth error (Apple/Google/service). Rendered as a small banner.
+    var errorMessage: String? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,51 +55,84 @@ struct AuthScreenView: View {
                 .foregroundStyle(PatinaColors.Text.primary)
                 .padding(.bottom, 6)
 
-            Text("Join thousands of design enthusiasts")
+            Text("Start with a piece you love")
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.muted)
-                .padding(.bottom, 32)
+                .padding(.bottom, 24)
 
-            // Auth buttons
+            // Error banner — surfaces Apple/Google/service failures that the
+            // welcome screen previously swallowed. User-cancellation is silent.
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 16)
+                    .accessibilityIdentifier("auth.welcome.errorBanner")
+            }
+
+            // Primary auth methods — Apple hero, then Google, then email code.
             VStack(spacing: 12) {
-                SignInWithAppleButton(.signIn) { request in
-                    request.requestedScopes = [.email, .fullName]
-                } onCompletion: { result in
-                    onSignInWithApple(result)
+                PatinaSignInWithAppleButton { result, rawNonce in
+                    onSignInWithApple(result, rawNonce)
                 }
-                .signInWithAppleButtonStyle(.black)
-                .frame(maxWidth: .infinity, minHeight: 50, maxHeight: 50)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .accessibilityIdentifier("auth.welcome.appleButton")
 
                 AuthButton(title: "Continue with Google", icon: "G", style: .google, action: onSignInWithGoogle)
                     .accessibilityIdentifier("auth.welcome.googleButton")
-                AuthButton(title: "Sign in with Email", icon: "✉", style: .email, action: onSignInWithEmail)
+
+                AuthButton(title: "Continue with email", icon: "✉", style: .email, action: onContinueWithEmail)
                     .accessibilityIdentifier("auth.welcome.emailButton")
-                AuthButton(title: "Create Account", icon: "+", style: .email, action: onCreateAccount)
-                    .accessibilityIdentifier("auth.welcome.createAccountButton")
             }
             .padding(.horizontal, 28)
 
-            // Divider
-            HStack(spacing: 16) {
-                Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
-                Text("or")
-                    .font(PatinaTypography.caption)
+            if showGuest {
+                // Divider
+                HStack(spacing: 16) {
+                    Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
+                    Text("or")
+                        .font(PatinaTypography.caption)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                    Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, 20)
+
+                // Soft wall — prominent "look around" that fully works without
+                // an account (browse + save via the marketplace home).
+                Button(action: onBrowseAsGuest) {
+                    HStack(spacing: 8) {
+                        Text("Look around first")
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .font(PatinaTypography.uiAction)
+                    .foregroundStyle(PatinaColors.Text.primary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(PatinaColors.Background.secondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(PatinaColors.pearl, lineWidth: 1.5)
+                    )
+                }
+                .buttonStyle(PressableButtonStyle())
+                .padding(.horizontal, 28)
+                .accessibilityIdentifier("auth.welcome.guestButton")
+            }
+
+            // Password fallback — de-emphasized, for returning password users.
+            Button(action: onUsePassword) {
+                (Text("Have a password? ")
                     .foregroundStyle(PatinaColors.Text.muted)
-                Rectangle().fill(PatinaColors.Text.muted.opacity(0.25)).frame(height: 1)
+                 + Text("Sign in")
+                    .foregroundStyle(PatinaColors.Text.interactive))
+                    .font(PatinaTypography.caption)
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 20)
-
-            // Browse as guest
-            Button {
-                onBrowseAsGuest()
-            } label: {
-                Text("Browse as Guest")
-                    .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.Text.interactive)
-            }
-            .accessibilityIdentifier("auth.welcome.guestButton")
+            .padding(.top, 16)
+            .accessibilityIdentifier("auth.welcome.passwordButton")
 
             Spacer()
 
@@ -103,5 +150,9 @@ struct AuthScreenView: View {
 }
 
 #Preview {
-    AuthScreenView()
+    AuthScreenView(errorMessage: nil)
+}
+
+#Preview("With error") {
+    AuthScreenView(errorMessage: "Apple Sign In couldn't be completed. Please try again.")
 }

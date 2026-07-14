@@ -39,7 +39,7 @@ struct WorkWithDesignerCTA: View {
             .padding(.bottom, 8)
 
             Text("Ready to bring in a designer?")
-                .font(.custom("PlayfairDisplay-Regular", size: 20, relativeTo: .title3))
+                .font(PatinaTypography.h4)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .lineSpacing(2)
                 .padding(.bottom, 6)
