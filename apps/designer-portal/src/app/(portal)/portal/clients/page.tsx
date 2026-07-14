@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useClients, useClientStats } from '@patina/supabase';
 import type { DesignerClient, ClientLifecycleStage } from '@patina/supabase';
+import { useStudioHasTeam } from '@/hooks/use-studio-has-team';
 import { SearchInput } from '@/components/portal/search-input';
 import { FilterRow } from '@/components/portal/filter-row';
 import { MetricsRow } from '@/components/portal/metrics-row';
@@ -110,6 +111,9 @@ function ClientDirectoryContent() {
   const { data: rawClients, isLoading } = useClients(filters);
   const { data: stats } = useClientStats();
   const clients = (Array.isArray(rawClients) ? rawClients : []) as DesignerClient[];
+  // Studio Wave 5 — owner-attribution byline shown only once the signed-in
+  // designer's studio has >1 active member; solo designers see no change.
+  const showOwner = useStudioHasTeam();
 
   // Client-side search filter
   const filtered = search
@@ -222,6 +226,12 @@ function ClientDirectoryContent() {
                 projectDescription={client.notes?.split('\n')[0]?.slice(0, 50) || undefined}
                 location={client.location || undefined}
                 stage={stage}
+                ownerName={
+                  showOwner
+                    ? (client.designer?.full_name ?? client.designer?.display_name ?? null)
+                    : null
+                }
+                ownerAvatarUrl={showOwner ? client.designer?.avatar_url ?? null : null}
                 stageDetail={
                   stage === 'active'
                     ? `${client.total_projects || 0} active project${(client.total_projects || 0) !== 1 ? 's' : ''}`

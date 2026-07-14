@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { StageBadge } from './stage-badge';
+import { OwnerByline } from '@/components/ui/owner-byline';
 
 type Stage = 'lead' | 'proposal' | 'active' | 'completed' | 'nurture';
 
@@ -23,6 +24,15 @@ interface ClientListItemProps {
   stageDetail?: string;
   financialValue?: string;
   financialLabel?: string;
+  /**
+   * Shared-workspace owner attribution (Studio Wave 5). The caller gates
+   * this on `useStudioHasTeam()`, so it's `undefined`/omitted for solo
+   * designers — zero visible change for the common case. `null` when the
+   * row's joined designer profile didn't resolve (legacy data); either way
+   * `OwnerByline` renders nothing.
+   */
+  ownerName?: string | null;
+  ownerAvatarUrl?: string | null;
 }
 
 export function ClientListItem({
@@ -35,6 +45,8 @@ export function ClientListItem({
   stageDetail,
   financialValue,
   financialLabel,
+  ownerName,
+  ownerAvatarUrl,
 }: ClientListItemProps) {
   const colors = avatarColors[stage] || avatarColors.active;
 
@@ -70,6 +82,11 @@ export function ClientListItem({
         <div className="type-label-secondary mt-0.5">
           {[projectDescription, location].filter(Boolean).join(' \u00B7 ')}
         </div>
+        {ownerName && (
+          <div className="type-meta-small mt-1">
+            <OwnerByline name={ownerName} avatarUrl={ownerAvatarUrl} />
+          </div>
+        )}
       </div>
 
       {/* Stage badge + detail */}
