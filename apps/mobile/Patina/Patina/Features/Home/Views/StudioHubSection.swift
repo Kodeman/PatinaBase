@@ -65,6 +65,12 @@ struct StudioHubSection: View {
 
     @Environment(\.appCoordinator) private var coordinator
 
+    /// Studio name resolved for the active (matched) designer, Wave 6 / D2.
+    /// Loaded on its own `.task` — starts nil (the static badge title shows
+    /// first) and swaps in once/if the resolver returns a studio brand, so
+    /// the row never blocks or waits on this fetch.
+    @State private var resolvedDesignerStudioName: String?
+
     /// Tracked `@Observable` reads — the section re-renders when a badge
     /// refresh lands or the auth state flips.
     private var badges: BadgeCountService { BadgeCountService.shared }
@@ -77,13 +83,31 @@ struct StudioHubSection: View {
     /// service holds no requests for guests).
     private var hasDesignRequests: Bool { !isGuest && !requestStatus.requests.isEmpty }
 
+    /// The promoted (or newest) request, when one exists.
+    private var currentRequest: DesignRequestStatus? {
+        requestStatus.promotedRequest ?? requestStatus.requests.first
+    }
+
+    /// The matched designer's id, only once the relationship is active —
+    /// drives the studio-name resolution below. Nil for every other stage.
+    private var activeDesignerId: UUID? {
+        guard let request = currentRequest, request.stage.isMatched else { return nil }
+        return request.designerId
+    }
+
     /// Stage label for the "Your Designer" meta — rendered uppercase by the
     /// row's `textCase`, so "Finding your designer" reads "FINDING YOUR
     /// DESIGNER". Falls back to the newest request when none is promoted.
+    /// Once matched, prefers the resolved studio name over the generic
+    /// "Designer matched" badge title (Wave 6 / D2), keeping the static
+    /// fallback until (or unless) that resolves.
     private var designerMeta: String {
         guard hasDesignRequests else { return "Get design help" }
-        let stage = requestStatus.promotedRequest?.stage ?? requestStatus.requests.first?.stage
-        return stage?.badgeTitle ?? "Get design help"
+        guard let stage = currentRequest?.stage else { return "Get design help" }
+        if stage.isMatched, let resolvedDesignerStudioName {
+            return resolvedDesignerStudioName
+        }
+        return stage.badgeTitle
     }
 
     private var designerRoute: AppRoute {
@@ -251,6 +275,14 @@ struct StudioHubSection: View {
                 .padding(.horizontal, PatinaSpacing.mdLarge)
                 .padding(.top, PatinaSpacing.lg)
             }
+        }
+        .task(id: activeDesignerId) {
+            guard let activeDesignerId else {
+                resolvedDesignerStudioName = nil
+                return
+            }
+            resolvedDesignerStudioName = await StudioIdentityService.shared
+                .identity(forDesigner: activeDesignerId)?.name
         }
     }
 

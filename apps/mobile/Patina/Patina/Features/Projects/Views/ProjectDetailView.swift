@@ -72,6 +72,9 @@ struct ProjectDetailView: View {
                     .font(PatinaTypography.caption)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
+            // Wave 6 / D2: the studio behind this project — resolved async
+            // and independent of the rest of the header (see StudioIdentityLine).
+            StudioIdentityLine(projectId: project.id)
         }
         .padding(.top, 56)
         .padding(.horizontal, 24)
