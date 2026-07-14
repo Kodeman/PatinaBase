@@ -21,6 +21,11 @@
 -- True when the calling user shares an active organization membership with the
 -- user p_owner (or IS p_owner). NULL-safe: unassigned pool leads carry
 -- designer_id IS NULL → returns false, so the studio legs never expose the pool.
+-- Guest exclusion: the member_role enum (00021) includes 'guest', and the
+-- catalog domain (00152/00154) treats guests as lesser. A guest on EITHER side
+-- of the shared membership does NOT confer co-membership — a guest never gains
+-- the studio's book, and a co-worker never inherits a guest owner's rows. The
+-- self-branch (p_owner = auth.uid()) is unaffected: you always see your own.
 CREATE OR REPLACE FUNCTION public.is_studio_comember(p_owner uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -37,8 +42,10 @@ AS $$
         ON owner.organization_id = me.organization_id
       WHERE me.user_id    = (select auth.uid())
         AND me.status     = 'active'
+        AND me.role       <> 'guest'
         AND owner.user_id = p_owner
         AND owner.status  = 'active'
+        AND owner.role    <> 'guest'
     )
   );
 $$;

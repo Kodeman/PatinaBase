@@ -9,9 +9,11 @@
 --   1. p_project_id → projects.studio_id → organizations       (source='studio')
 --   2. else owning designer (p_designer_id, or the project's designer_id when
 --      p_designer_id is null) → _primary_studio_for → organizations (source='studio')
---   3. fallback profiles.business_name                    (source='business_name')
---   4. fallback profiles.full_name / display_name         (source='full_name')
--- Always returns EXACTLY ONE row (nulls when nothing resolvable).
+--   3. fallback profiles.business_name (is_designer only)  (source='business_name')
+--   4. fallback profiles.full_name / display_name (is_designer only) (source='full_name')
+-- The profile fallback is gated on is_designer so an anon caller can't enumerate
+-- a non-designer (client) name through this RPC — a non-designer UUID falls
+-- through to the all-NULL row. Always returns EXACTLY ONE row.
 --
 -- GRANT EXECUTE to anon is deliberate + safe: client print pages and the iOS
 -- client app hit with the anon key, and only brand fields are exposed — same
@@ -72,25 +74,31 @@ BEGIN
     END IF;
   END IF;
 
-  -- 3/4. Fallback to the designer's profile identity.
+  -- 3/4. Fallback to the designer's profile identity — ONLY for actual designers.
+  -- profiles are world-readable via 00013 RLS, but this resolver must not double
+  -- as an anon enumeration convenience: a non-designer UUID (e.g. a client)
+  -- matches no row here (is_designer filter) and falls through to the all-NULL
+  -- row below rather than leaking a private individual's name.
   IF v_designer IS NOT NULL THEN
     SELECT pr.business_name, COALESCE(pr.full_name, pr.display_name)
     INTO v_biz, v_full
     FROM profiles pr
-    WHERE pr.id = v_designer;
+    WHERE pr.id = v_designer AND pr.is_designer;
 
-    IF v_biz IS NOT NULL AND btrim(v_biz) <> '' THEN
-      studio_id := NULL; name := v_biz;  logo_url := NULL; website := NULL; source := 'business_name';
+    IF FOUND THEN
+      IF v_biz IS NOT NULL AND btrim(v_biz) <> '' THEN
+        studio_id := NULL; name := v_biz;  logo_url := NULL; website := NULL; source := 'business_name';
+        RETURN NEXT;
+        RETURN;
+      END IF;
+
+      studio_id := NULL; name := v_full; logo_url := NULL; website := NULL; source := 'full_name';
       RETURN NEXT;
       RETURN;
     END IF;
-
-    studio_id := NULL; name := v_full; logo_url := NULL; website := NULL; source := 'full_name';
-    RETURN NEXT;
-    RETURN;
   END IF;
 
-  -- Nothing resolvable → one empty row (exactly-one-row contract).
+  -- Nothing resolvable (or a non-designer UUID) → one empty row (exactly-one-row contract).
   studio_id := NULL; name := NULL; logo_url := NULL; website := NULL; source := NULL;
   RETURN NEXT;
 END;
@@ -100,7 +108,7 @@ REVOKE ALL ON FUNCTION public.resolve_studio_identity(uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.resolve_studio_identity(uuid, uuid) TO anon, authenticated, service_role;
 
 COMMENT ON FUNCTION public.resolve_studio_identity(uuid, uuid) IS
-  'Canonical studio brand resolver (plan D2): project→studio→org, else designer→primary studio→org, else profile business_name/full_name. Returns exactly one row, brand columns only. anon-granted (brand-only, same posture as open_design_requests).';
+  'Canonical studio brand resolver (plan D2): project→studio→org, else designer→primary studio→org, else profile business_name/full_name (gated on is_designer so anon can''t enumerate non-designer names). Returns exactly one row, brand columns only. anon-granted (brand-only, same posture as open_design_requests).';
 
 -- ─── studio-logos storage bucket (modeled on 00115 avatars) ──────────────────
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

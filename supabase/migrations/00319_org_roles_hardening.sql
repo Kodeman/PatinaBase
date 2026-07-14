@@ -1,16 +1,21 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- 00319 — Organization roles hardening (last-owner guard + ownership transfer)
 --
--- Two gaps today:
+-- Three gaps today:
 --   1. Last-owner protection is UI-only (00295 "Members can leave" has no DB
 --      guard) → the last owner can leave a studio ownerless.
 --   2. The 00068/00021 "Org admins can update members" policy has NO WITH CHECK
 --      → any admin can UPDATE a member row to any role: self-promote to owner or
 --      demote the real owner (privilege escalation).
+--   3. The 00068 INSERT policy lets any admin INSERT an ('owner','active') row
+--      for an arbitrary user_id → an admin escalates via a confederate account.
 --
--- Close both with one BEFORE UPDATE OR DELETE trigger on organization_members
--- (INSERT stays governed by the existing insert policies + provisioning). Add a
--- transfer_studio_ownership RPC so the last owner still has a clean exit path.
+-- Close all three with one BEFORE INSERT OR UPDATE OR DELETE trigger on
+-- organization_members. The INSERT leg blocks an owner row unless the actor is
+-- already an owner, EXCEPT when the org has no active owner yet (first-owner
+-- provisioning — create_studio_workspace/_provision_studio insert the first
+-- owner under the caller's authenticated JWT). Add a transfer_studio_ownership
+-- RPC so the last owner still has a clean exit path.
 --
 -- service_role BYPASS: edge functions (workspace-member-invite) and provisioning
 -- run as service_role and must not trip the guard. accept/decline invitation run
@@ -33,6 +38,27 @@ BEGIN
   -- Edge functions / provisioning run as service_role → bypass entirely.
   IF (auth.jwt() ->> 'role') = 'service_role' THEN
     RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+  END IF;
+
+  -- INSERT of an owner row: block unless the actor is already an owner of the
+  -- org OR the org has no active owner yet. The 00068 INSERT policy on
+  -- organization_members lets any admin INSERT an ('owner','active') row for an
+  -- arbitrary user_id → an admin could escalate via a confederate account. The
+  -- zero-existing-owners allowance is load-bearing: create_studio_workspace /
+  -- _provision_studio run SECURITY DEFINER under the caller's authenticated JWT
+  -- (auth.uid() set, role NOT service_role) and insert the FIRST owner — no
+  -- active owner exists yet → allowed. Auto-provision at seed/migration time
+  -- (auth.uid() NULL) likewise inserts a first owner and passes.
+  IF TG_OP = 'INSERT' AND NEW.role = 'owner' THEN
+    IF NOT public.is_org_owner(NEW.organization_id, v_actor)
+       AND EXISTS (
+         SELECT 1 FROM organization_members
+         WHERE organization_id = NEW.organization_id
+           AND role = 'owner'
+           AND status = 'active'
+       ) THEN
+      RAISE EXCEPTION 'owner_insert_requires_owner';
+    END IF;
   END IF;
 
   -- Demoting or removing an existing ACTIVE owner.
@@ -67,11 +93,11 @@ GRANT EXECUTE ON FUNCTION public.guard_org_membership_changes() TO authenticated
 
 DROP TRIGGER IF EXISTS guard_org_membership_changes ON public.organization_members;
 CREATE TRIGGER guard_org_membership_changes
-  BEFORE UPDATE OR DELETE ON public.organization_members
+  BEFORE INSERT OR UPDATE OR DELETE ON public.organization_members
   FOR EACH ROW EXECUTE FUNCTION public.guard_org_membership_changes();
 
 COMMENT ON FUNCTION public.guard_org_membership_changes() IS
-  'DB-side last-owner protection + owner-mutation authorization (closes the 00068 no-WITH-CHECK admin self-promotion). service_role bypasses so invite/provisioning still work.';
+  'DB-side last-owner protection + owner-mutation authorization: closes the 00068 no-WITH-CHECK admin self-promotion (UPDATE) AND the INSERT-owner escalation (an admin INSERTing an owner row for a confederate). Owner INSERT allowed only for an existing org owner, or when the org has no active owner yet (first-owner provisioning). service_role bypasses so invite/provisioning still work.';
 
 -- ─── transfer_studio_ownership(p_org_id, p_new_owner) ────────────────────────
 -- Promote-then-demote ordering: the new owner satisfies the last-owner guard

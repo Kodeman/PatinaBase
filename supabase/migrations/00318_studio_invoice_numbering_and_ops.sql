@@ -23,7 +23,10 @@ ALTER TABLE public.invoices
 CREATE INDEX IF NOT EXISTS idx_invoices_studio
   ON public.invoices(studio_id) WHERE studio_id IS NOT NULL;
 
--- ─── 2. BEFORE INSERT trigger — keeps hooks unchanged (they never set studio_id)
+-- ─── 2. BEFORE INSERT OR UPDATE OF studio_id trigger — hooks never set studio_id
+--        (they take the NULL-derive path); a crafted write that DOES set it is
+--        validated against the invoice designer's studio membership, else it
+--        could pollute a foreign org's counter and brand (mirrors 00317).
 CREATE OR REPLACE FUNCTION public.set_invoice_studio_id()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -31,7 +34,20 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  IF NEW.studio_id IS NULL THEN
+  IF NEW.studio_id IS NOT NULL THEN
+    -- User-context write may only stamp an invoice with a studio the invoice's
+    -- designer belongs to. Service-role / migration (auth.uid() NULL) bypass.
+    IF (select auth.uid()) IS NOT NULL
+       AND COALESCE(auth.jwt() ->> 'role', '') <> 'service_role'
+       AND NOT EXISTS (
+         SELECT 1 FROM organization_members om
+         WHERE om.organization_id = NEW.studio_id
+           AND om.user_id         = NEW.designer_id
+           AND om.status          = 'active'
+       ) THEN
+      RAISE EXCEPTION 'studio_id_not_designer_studio';
+    END IF;
+  ELSIF TG_OP = 'INSERT' THEN
     NEW.studio_id := COALESCE(
       (SELECT p.studio_id FROM projects p WHERE p.id = NEW.project_id),
       public._primary_studio_for(NEW.designer_id)
@@ -46,7 +62,7 @@ GRANT EXECUTE ON FUNCTION public.set_invoice_studio_id() TO authenticated, servi
 
 DROP TRIGGER IF EXISTS set_invoice_studio_id ON public.invoices;
 CREATE TRIGGER set_invoice_studio_id
-  BEFORE INSERT ON public.invoices
+  BEFORE INSERT OR UPDATE OF studio_id ON public.invoices
   FOR EACH ROW EXECUTE FUNCTION public.set_invoice_studio_id();
 
 -- ─── 3. Backfill existing invoices (after 00317 populated projects.studio_id) ─
