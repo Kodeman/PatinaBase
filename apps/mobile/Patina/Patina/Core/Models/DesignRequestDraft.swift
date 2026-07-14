@@ -70,6 +70,12 @@ public final class DesignRequestDraft {
     /// The primary scan (`leads.room_scan_id`). Must be within `scanIds`.
     public var primaryScanId: UUID?
 
+    /// A roomless request — the user wants design help WITHOUT attaching a room
+    /// scan. Skips scan pick + upload and submits with an empty scan set
+    /// (`leads.room_scan_id` NULL). Inline default so SwiftData migrates
+    /// existing rows; `false` = the normal scan-based flow.
+    public var isRoomless: Bool = false
+
     /// `leads.source`, human-readable. Always "Patina app" from this app.
     public var sourceRaw: String
 
@@ -107,6 +113,7 @@ public final class DesignRequestDraft {
         requestDescription: String = "",
         scanIds: [UUID] = [],
         primaryScanId: UUID? = nil,
+        isRoomless: Bool = false,
         source: String = "Patina app"
     ) {
         self.id = id
@@ -119,6 +126,7 @@ public final class DesignRequestDraft {
         self.requestDescription = requestDescription
         self.scanIdsJSON = (try? JSONEncoder().encode(scanIds)) ?? Data()
         self.primaryScanId = primaryScanId ?? scanIds.first
+        self.isRoomless = isRoomless
         self.sourceRaw = source
         self.leadId = nil
         self.lastError = nil

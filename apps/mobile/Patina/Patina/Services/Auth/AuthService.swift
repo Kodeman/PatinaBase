@@ -81,6 +81,14 @@ public final class AuthService {
             for await (event, session) in supabase.auth.authStateChanges {
                 self.session = session
 
+                // Account isolation: the local SwiftData store is device-global
+                // and unscoped, so wipe the previous owner's rooms/scans/etc.
+                // whenever a DIFFERENT real account signs in. A guest→account
+                // transition keeps the guest's local scans (see the helper).
+                if let user = session?.user {
+                    Self.reconcileLocalStoreOwner(userId: user.id.uuidString)
+                }
+
                 // Mark auth state as ready after first event and fan out
                 // to every awaiting caller.
                 if !self.isAuthStateReady {
@@ -153,6 +161,40 @@ public final class AuthService {
         await withCheckedContinuation { continuation in
             self.authReadyContinuations.append(continuation)
         }
+    }
+
+    // MARK: - Account isolation
+
+    /// UserDefaults key holding the user id that currently owns the device-local
+    /// SwiftData store.
+    private static let localStoreOwnerKey = "local_store_owner_user_id"
+
+    /// Enforce per-account isolation of the device-global local store. Wipe the
+    /// previous owner's user-scoped data ONLY when a DIFFERENT real account has
+    /// taken over; a fresh/guest owner (nil) claims the store WITHOUT wiping, so
+    /// a guest who scanned a room keeps it after signing up. Same-user events
+    /// (relaunch, token refresh) are a no-op. Never wiped on sign-out — the same
+    /// user re-signing-in keeps their rooms (the app doesn't sync rooms back
+    /// down, so a sign-out wipe would lose them).
+    @MainActor
+    private static func reconcileLocalStoreOwner(userId: String) {
+        let defaults = UserDefaults.standard
+        let stored = defaults.string(forKey: localStoreOwnerKey)
+        if shouldWipeLocalStore(previousOwner: stored, incomingUser: userId) {
+            PatinaLog.auth.debug("[account-isolation] owner changed — wiping local store")
+            LocalStoreReset.wipeUserScopedData()
+        }
+        if stored != userId {
+            defaults.set(userId, forKey: localStoreOwnerKey)
+        }
+    }
+
+    /// Pure decision (unit-tested): wipe only when a DIFFERENT real account
+    /// takes over. A nil previous owner (fresh install / guest that just scanned)
+    /// claims the store WITHOUT wiping; the same account re-signing-in is a no-op.
+    static func shouldWipeLocalStore(previousOwner: String?, incomingUser: String) -> Bool {
+        guard let previousOwner else { return false }
+        return previousOwner != incomingUser
     }
 
     // MARK: - Sign In Methods

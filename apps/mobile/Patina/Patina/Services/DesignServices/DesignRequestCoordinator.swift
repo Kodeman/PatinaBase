@@ -90,9 +90,11 @@ public final class DesignRequestCoordinator {
     public func adopt(_ existing: DesignRequestDraft) {
         draft = existing
         // A resumed draft never auto-submits: drop `submitting` back to
-        // `readyToSubmit` (if its scans are all synced) or `uploading`.
+        // `readyToSubmit`. A roomless draft has no scans to (re)sync, so it is
+        // always ready; a scan draft is ready only once every scan is synced.
         if existing.phase == .submitting {
-            existing.setPhase(allScansSynced(for: existing) ? .readyToSubmit : .uploading)
+            let ready = existing.isRoomless || allScansSynced(for: existing)
+            existing.setPhase(ready ? .readyToSubmit : .uploading)
             try? modelContext.save()
         }
         rebuildScanPhases(for: existing)
@@ -105,6 +107,7 @@ public final class DesignRequestCoordinator {
     public func createDraft(
         scanIds: [UUID],
         primaryScanId: UUID?,
+        isRoomless: Bool = false,
         details: DesignRequestDetails = DesignRequestDetails()
     ) -> DesignRequestDraft {
         discardActiveDraft()
@@ -114,8 +117,9 @@ public final class DesignRequestCoordinator {
             budgetRaw: details.budget?.rawValue,
             timelineRaw: details.timeline?.rawValue,
             requestDescription: details.description,
-            scanIds: scanIds,
-            primaryScanId: primaryScanId ?? scanIds.first
+            scanIds: isRoomless ? [] : scanIds,
+            primaryScanId: isRoomless ? nil : (primaryScanId ?? scanIds.first),
+            isRoomless: isRoomless
         )
         modelContext.insert(newDraft)
         try? modelContext.save()
@@ -144,9 +148,16 @@ public final class DesignRequestCoordinator {
         guard let draft else { return }
         lastError = nil
 
-        // Validate we have what the RPC needs before touching the network.
-        guard !draft.scanIds.isEmpty else { lastError = .noScans; return }
         guard draft.projectTypeRaw != nil else { lastError = .invalidProjectType; return }
+
+        // Roomless request: no scans to upload — submit directly.
+        if draft.isRoomless {
+            await submit()
+            return
+        }
+
+        // Scan path: validate, upload every not-yet-synced scan, then submit.
+        guard !draft.scanIds.isEmpty else { lastError = .noScans; return }
 
         draft.setPhase(.uploading)
         try? modelContext.save()
@@ -188,13 +199,41 @@ public final class DesignRequestCoordinator {
         }
     }
 
+    /// Build the RPC params from a draft — empty scans + nil primary for a
+    /// roomless request, the full scan set otherwise.
+    private func makeSubmitParams(
+        for draft: DesignRequestDraft,
+        projectType: String,
+        primaryScanId: UUID?
+    ) -> SubmitDesignRequestParams {
+        SubmitDesignRequestParams(
+            scanIds: draft.isRoomless ? [] : draft.scanIds,
+            projectType: projectType,
+            primaryScanId: primaryScanId,
+            budgetRange: draft.budgetRaw,
+            timeline: draft.timelineRaw,
+            description: draft.requestDescription,
+            source: draft.sourceRaw,
+            clientRequestId: draft.id
+        )
+    }
+
     /// Fire the atomic RPC. Only valid once every scan is synced.
     public func submit() async {
         guard let draft else { return }
         guard draft.leadId == nil else { lastError = .alreadySubmitted; return }
-        guard allScansSynced(for: draft) else { return }
-        guard let projectType = draft.projectTypeRaw,
-              let primary = draft.primaryScanId else {
+
+        // Roomless requests carry no scans; scan requests must be fully synced.
+        if !draft.isRoomless {
+            guard allScansSynced(for: draft) else { return }
+        }
+        guard let projectType = draft.projectTypeRaw else {
+            lastError = .invalidProjectType
+            return
+        }
+        // Primary scan is required for a scan request, nil for a roomless one.
+        let primary: UUID? = draft.isRoomless ? nil : draft.primaryScanId
+        if !draft.isRoomless, primary == nil {
             lastError = .invalidProjectType
             return
         }
@@ -205,16 +244,7 @@ public final class DesignRequestCoordinator {
         try? modelContext.save()
         defer { isSubmitting = false }
 
-        let params = SubmitDesignRequestParams(
-            scanIds: draft.scanIds,
-            projectType: projectType,
-            primaryScanId: primary,
-            budgetRange: draft.budgetRaw,
-            timeline: draft.timelineRaw,
-            description: draft.requestDescription,
-            source: draft.sourceRaw,
-            clientRequestId: draft.id
-        )
+        let params = makeSubmitParams(for: draft, projectType: projectType, primaryScanId: primary)
 
         do {
             let submitResult = try await submitter.submitDesignRequest(params)

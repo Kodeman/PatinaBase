@@ -91,7 +91,7 @@ extension DesignRequestFlowView {
     var reviewStep: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
-                summaryRow("Scans", "\(selectedScanIds.count) selected")
+                summaryRow("Scans", isRoomless ? "No scan attached" : "\(selectedScanIds.count) selected")
                 if let projectType {
                     summaryRow("Help", projectType.displayName)
                 }
@@ -175,6 +175,16 @@ extension DesignRequestFlowView {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
+            } else if coordinator.draft?.isRoomless == true {
+                // Roomless: no uploads. The in-flight submit is the isSubmitting
+                // branch above; reaching here means we're idle — a fresh entry
+                // or a RESUMED draft (submit never auto-fires on resume). Always
+                // offer an explicit submit so a resumed roomless request can't
+                // strand on a dead spinner; "Try again" once an attempt failed.
+                PatinaButton(coordinator.lastError != nil ? "Try again" : "Send request",
+                             style: .primary) {
+                    Task { await coordinator.submit() }
+                }
             } else if hasFailedUpload {
                 PatinaButton("Try again", style: .primary) {
                     Task { await coordinator.retryAllFailed(); await maybeSubmit() }

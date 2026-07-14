@@ -46,6 +46,10 @@ struct DesignRequestFlowView: View {
     @State var timeline: DesignTimeline = .flexible
     @State var requestDescription: String = ""
 
+    /// Roomless request — the user asked for design help without attaching a
+    /// scan. Skips scan upload; submits with an empty scan set.
+    @State var isRoomless: Bool = false
+
     @State var showAuthSheet = false
     @State var awaitingAuthToSend = false
 
@@ -141,6 +145,7 @@ struct DesignRequestFlowView: View {
         budget = existing.budgetRaw.flatMap(DesignBudget.init(rawValue:))
         timeline = existing.timelineRaw.flatMap(DesignTimeline.init(rawValue:)) ?? .flexible
         requestDescription = existing.requestDescription
+        isRoomless = existing.isRoomless
         resumeDraft = nil
         step = .sending
     }
@@ -148,6 +153,7 @@ struct DesignRequestFlowView: View {
     private func discardAndStartFresh() {
         coordinator?.discardActiveDraft()
         resumeDraft = nil
+        isRoomless = false
         applyPreselection()
         step = .pickScans
     }
@@ -189,13 +195,38 @@ struct DesignRequestFlowView: View {
                 onDeleteHeld: deleteHeldScan
             )
             footer {
-                PatinaButton("Continue", style: .primary) {
-                    step = .details
+                if selectedScanIds.isEmpty {
+                    // No scan selected (or none exist): requesting help without a
+                    // scan is the primary action — you don't need a room to ask.
+                    PatinaButton("Request without a scan", style: .primary) {
+                        startRoomless()
+                    }
+                } else {
+                    VStack(spacing: 10) {
+                        PatinaButton("Continue", style: .primary) {
+                            step = .details
+                        }
+                        // "Both": even with scans on hand, allow requesting help
+                        // without attaching one.
+                        Button("Skip — request without a scan") {
+                            startRoomless()
+                        }
+                        .font(PatinaTypography.bodySmall)
+                        .foregroundStyle(PatinaColors.Text.interactive)
+                    }
                 }
-                .disabled(selectedScanIds.isEmpty)
-                .opacity(selectedScanIds.isEmpty ? 0.5 : 1)
             }
         }
+    }
+
+    /// Enter roomless mode: clear any scan selection, default the type to a
+    /// consultation (user can change it), and go straight to the details form.
+    private func startRoomless() {
+        isRoomless = true
+        selectedScanIds = []
+        primaryScanId = nil
+        if projectType == nil { projectType = .consultation }
+        step = .details
     }
 
     private func deleteHeldScan(_ package: RoomScanPackage) {
@@ -220,8 +251,9 @@ struct DesignRequestFlowView: View {
         guard let coordinator else { return }
         // Persist the draft from composing state, then run upload + submit.
         coordinator.createDraft(
-            scanIds: selectedScanIds,
-            primaryScanId: primaryScanId,
+            scanIds: isRoomless ? [] : selectedScanIds,
+            primaryScanId: isRoomless ? nil : primaryScanId,
+            isRoomless: isRoomless,
             details: DesignRequestDetails(
                 projectType: projectType,
                 budget: budget,
@@ -262,6 +294,7 @@ struct DesignRequestFlowView: View {
 
     var sendingHeadline: String {
         if coordinator?.isSubmitting == true { return "Submitting your request…" }
+        if isRoomless { return "Sending your request…" }
         if hasFailedUpload { return "Some scans didn't upload" }
         if !syncService.isNetworkAvailable { return "Saved — waiting for a connection" }
         return "Sending your scans…"

@@ -121,7 +121,7 @@ struct ScanPickerView: View {
             Text("No scans on this phone yet")
                 .font(PatinaTypography.bodySmallMedium)
                 .foregroundStyle(PatinaColors.Text.secondary)
-            Text("Scan a room first, then come back to send it to a designer.")
+            Text("You can scan a room to attach — or request design help without one below.")
                 .font(PatinaTypography.caption)
                 .foregroundStyle(PatinaColors.Text.muted)
                 .multilineTextAlignment(.center)

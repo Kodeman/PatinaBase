@@ -108,7 +108,9 @@ public enum DesignBudget: String, CaseIterable, Codable, Sendable {
 nonisolated public struct SubmitDesignRequestParams: Encodable, Sendable, Equatable {
     public let p_scan_ids: [String]
     public let p_project_type: String
-    public let p_primary_scan_id: String
+    /// Optional: a roomless (scanless) request sends `nil` and an empty
+    /// `p_scan_ids`; the RPC (00314+) inserts `leads.room_scan_id = NULL`.
+    public let p_primary_scan_id: String?
     public let p_budget_range: String?
     public let p_timeline: String?
     public let p_description: String?
@@ -118,7 +120,7 @@ nonisolated public struct SubmitDesignRequestParams: Encodable, Sendable, Equata
     public init(
         scanIds: [UUID],
         projectType: String,
-        primaryScanId: UUID,
+        primaryScanId: UUID?,
         budgetRange: String?,
         timeline: String?,
         description: String?,
@@ -127,7 +129,7 @@ nonisolated public struct SubmitDesignRequestParams: Encodable, Sendable, Equata
     ) {
         self.p_scan_ids = scanIds.map { $0.uuidString.lowercased() }
         self.p_project_type = projectType
-        self.p_primary_scan_id = primaryScanId.uuidString.lowercased()
+        self.p_primary_scan_id = primaryScanId?.uuidString.lowercased()
         let trimmedBudget = budgetRange?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.p_budget_range = (trimmedBudget?.isEmpty == false) ? trimmedBudget : nil
         let trimmedTimeline = timeline?.trimmingCharacters(in: .whitespacesAndNewlines)
