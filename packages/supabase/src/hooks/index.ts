@@ -500,6 +500,7 @@ export {
   useUpdateMemberRole,
   useRemoveMember,
   useLeaveOrganization,
+  useTransferOrganizationOwnership,
 } from './use-organizations';
 export type {
   Organization,
@@ -514,6 +515,12 @@ export type {
   CreateOrganizationInput,
   InviteMemberInput,
 } from './use-organizations';
+export { useStudioIdentity } from './use-studio-identity';
+export type {
+  StudioIdentity,
+  StudioIdentitySource,
+  UseStudioIdentityParams,
+} from './use-studio-identity';
 export {
   useUserRoles,
   useUserPermissions,
