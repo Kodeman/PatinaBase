@@ -296,6 +296,10 @@ serve(async (req) => {
           thread_id: msg.thread_id,
           message_id: msg.id,
           sender_id: msg.sender_id,
+          // Project of a project-scoped thread → lets notification-dispatch
+          // resolve the studio brand for the co-brand byline (Designer
+          // Studios). Null for direct/vendor threads → plain Patina shell.
+          project_id: thread.project_id ?? null,
         },
       };
     }),

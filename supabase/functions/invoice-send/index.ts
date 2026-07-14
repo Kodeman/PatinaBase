@@ -42,6 +42,7 @@ import {
   buildInvoiceOverdueNoticeEmail,
   buildInvoiceSentEmail,
 } from '../_shared/invoice-emails.ts';
+import { resolveStudioIdentity, studioCobrand, studioDisplayName } from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -195,6 +196,15 @@ Deno.serve(async (req: Request) => {
     invoice.designer?.full_name?.trim() ||
     invoice.designer?.business_name?.trim() ||
     'Your designer';
+  // Studio co-brand (Designer Studios): the invoice's project resolves the
+  // studio brand. Subject/in-app lead with the studio; email prose stays the
+  // individual designer's name.
+  const identity = await resolveStudioIdentity(admin, {
+    projectId: invoice.project_id,
+    designerId: invoice.designer_id,
+  });
+  const senderName = studioDisplayName(identity, designerName);
+  const cobrand = studioCobrand(identity);
   const projectName = invoice.project?.name ?? 'your project';
   const invoiceNumber = invoice.invoice_number ?? 'Invoice';
   const portalUrl = `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`;
@@ -216,17 +226,22 @@ Deno.serve(async (req: Request) => {
           dueDate: invoice.due_date,
           portalUrl,
           currency: invoice.currency,
+          studioName: cobrand.studioName,
+          studioLogoUrl: cobrand.studioLogoUrl,
         })
       : buildInvoiceSentEmail({
           invoiceNumber,
           projectName,
           designerName,
+          senderName,
           clientName: recipientName,
           totalCents: invoice.total_cents,
           dueDate: invoice.due_date,
           portalUrl,
           personalMessage,
           currency: invoice.currency,
+          studioName: cobrand.studioName,
+          studioLogoUrl: cobrand.studioLogoUrl,
         });
 
   let sendResult;
@@ -247,8 +262,8 @@ Deno.serve(async (req: Request) => {
         subject: rendered.subject,
         message:
           sendType === 'reminder'
-            ? `${designerName} sent a reminder about invoice ${invoiceNumber} for ${projectName}.`
-            : `${designerName} sent invoice ${invoiceNumber} for ${projectName}.`,
+            ? `${senderName} sent a reminder about invoice ${invoiceNumber} for ${projectName}.`
+            : `${senderName} sent invoice ${invoiceNumber} for ${projectName}.`,
         deep_link: `/invoices/${invoice.id}`,
       },
     });

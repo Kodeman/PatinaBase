@@ -58,6 +58,7 @@ import {
   type InvoiceReminderEmailParams,
   type RenderedInvoiceEmail,
 } from '../_shared/invoice-emails.ts';
+import { resolveStudioIdentity, studioCobrand } from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -322,6 +323,14 @@ Deno.serve(async (_req: Request) => {
       0,
     );
 
+    // Studio co-brand (Designer Studios): the invoice's project resolves the
+    // studio brand for the client-facing reminder shell.
+    const identity = await resolveStudioIdentity(admin, {
+      projectId: invoice.project_id,
+      designerId: invoice.designer_id,
+    });
+    const cobrand = studioCobrand(identity);
+
     const rendered = STAGE_BUILDERS[stage]({
       invoiceNumber,
       projectName,
@@ -331,6 +340,8 @@ Deno.serve(async (_req: Request) => {
       dueDate: invoice.due_date,
       portalUrl: `${CLIENT_PORTAL_URL}/invoices/${invoice.id}`,
       currency: invoice.currency,
+      studioName: cobrand.studioName,
+      studioLogoUrl: cobrand.studioLogoUrl,
     });
 
     let sendResult;

@@ -151,6 +151,31 @@ describe('Reusable components', () => {
     expect(React.isValidElement(element)).toBe(true);
   });
 
+  it('BaseEmailLayout accepts studio co-brand props (name + logo)', () => {
+    const element = React.createElement(BaseEmailLayout, {
+      preview: 'Test preview',
+      studioName: 'Oakline Studio',
+      studioLogoUrl: 'https://cdn.patina.cloud/studio-logos/s1/1.png',
+      children: React.createElement('p', null, 'Hello'),
+    });
+    expect(React.isValidElement(element)).toBe(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((element.props as any).studioName).toBe('Oakline Studio');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((element.props as any).studioLogoUrl).toContain('studio-logos');
+  });
+
+  it('BaseEmailLayout accepts studio co-brand name only (no logo)', () => {
+    const element = React.createElement(BaseEmailLayout, {
+      preview: 'Test preview',
+      studioName: 'Jane Doe Interiors',
+      children: React.createElement('p', null, 'Hello'),
+    });
+    expect(React.isValidElement(element)).toBe(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((element.props as any).studioLogoUrl).toBeUndefined();
+  });
+
   it('Button creates valid element with variants', () => {
     for (const variant of ['primary', 'secondary', 'urgent'] as const) {
       const element = React.createElement(Button, {

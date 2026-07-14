@@ -19,6 +19,11 @@ import {
   spacer,
   escapeHtml,
 } from '../_shared/branded-email.ts';
+import {
+  resolveStudioIdentity,
+  studioCobrand,
+  studioDisplayName,
+} from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -38,6 +43,8 @@ interface ProposalRow {
   cc_email: string | null;
   valid_until: string | null;
   client_id: string | null;
+  designer_id: string | null;
+  project_id: string | null;
   designer: { full_name: string | null; email: string | null } | null;
   client: { full_name: string | null; email: string | null } | null;
 }
@@ -83,6 +90,7 @@ Deno.serve(async (req: Request) => {
     .select(
       `
       id, title, status, cc_email, valid_until, client_id,
+      designer_id, project_id,
       designer:profiles!designer_id(full_name, email),
       client:profiles!client_id(full_name, email)
     `
@@ -164,7 +172,15 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  const designerName = proposal.designer?.full_name ?? 'Your designer';
+  // Studio co-brand (Designer Studios). Prefer a linked project's studio,
+  // otherwise the designer's primary studio.
+  const identity = await resolveStudioIdentity(supabase, {
+    projectId: proposal.project_id,
+    designerId: proposal.designer_id,
+  });
+  const designerName = proposal.designer?.full_name ?? identity?.name ?? 'Your designer';
+  const senderName = studioDisplayName(identity, designerName);
+  const cobrand = studioCobrand(identity);
   const clientName = proposal.client?.full_name ?? 'there';
   const link = `${CLIENT_PORTAL_URL}/proposals/${proposal.id}`;
   const expiryLine = proposal.valid_until
@@ -173,11 +189,17 @@ Deno.serve(async (req: Request) => {
       )
     : '';
 
-  const subject = `A gentle reminder about your proposal: "${proposal.title}"`;
+  // Lead the subject with the studio/sender when one resolves; otherwise keep
+  // the original generic reminder subject verbatim.
+  const subject = identity?.name
+    ? `A reminder from ${senderName} about your proposal: "${proposal.title}"`
+    : `A gentle reminder about your proposal: "${proposal.title}"`;
   const html = renderBrandedShell({
     title: subject,
     preview: `${designerName}'s proposal is still waiting for your review.`,
     eyebrow: 'Reminder',
+    studioName: cobrand.studioName,
+    studioLogoUrl: cobrand.studioLogoUrl,
     body: [
       heading('A gentle reminder'),
       paragraph(`Hi ${escapeHtml(clientName)},`),

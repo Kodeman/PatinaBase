@@ -9,6 +9,7 @@ import {
   Column,
   Text,
   Link,
+  Img,
   Preview,
 } from '@react-email/components';
 import { COLORS, FONTS, COLOR_BAR, FONT_LINK, HEAD_CSS, TAGLINE, URLS } from './brand';
@@ -27,6 +28,18 @@ export interface BaseEmailLayoutProps {
    * Defaults to true.
    */
   showHeader?: boolean;
+  /**
+   * Optional studio co-brand name (Designer Studios, plan D4). Renders a byline
+   * directly under the Patina wordmark — Patina stays primary, the studio is
+   * the sender-of-record. Mirror of BrandedShellOpts.studioName in the Deno
+   * shell (supabase/functions/_shared/branded-email.ts) — keep the two in step.
+   */
+  studioName?: string;
+  /**
+   * Optional public studio logo URL, rendered ≤24px tall beside the studio
+   * name. Without it the byline falls back to a name-only line.
+   */
+  studioLogoUrl?: string;
 }
 
 export const BaseEmailLayout: React.FC<BaseEmailLayoutProps> = ({
@@ -36,8 +49,13 @@ export const BaseEmailLayout: React.FC<BaseEmailLayoutProps> = ({
   eyebrow,
   showFooter = true,
   showHeader = true,
+  studioName,
+  studioLogoUrl,
 }) => {
   const unsub = unsubscribeUrl || URLS.prefs;
+  const studioNameTrimmed = studioName?.trim() || undefined;
+  const studioLogoTrimmed = studioLogoUrl?.trim() || undefined;
+  const showCobrand = showHeader && !!(studioNameTrimmed || studioLogoTrimmed);
   return (
     <Html lang="en">
       <Head>
@@ -77,6 +95,36 @@ export const BaseEmailLayout: React.FC<BaseEmailLayoutProps> = ({
               </Row>
             </Section>
           )}
+
+          {/* Studio co-brand byline (Designer Studios) — under the wordmark. */}
+          {showCobrand &&
+            (studioLogoTrimmed ? (
+              <Section className="px" style={styles.cobrandLogoPad}>
+                <Row>
+                  <Column style={styles.cobrandLogoCol}>
+                    <Img
+                      src={studioLogoTrimmed}
+                      height={20}
+                      alt={studioNameTrimmed || ''}
+                      style={styles.cobrandLogo}
+                    />
+                  </Column>
+                  {studioNameTrimmed && (
+                    <Column style={{ verticalAlign: 'middle' }}>
+                      <Text className="ink2" style={styles.cobrandName}>
+                        {studioNameTrimmed}
+                      </Text>
+                    </Column>
+                  )}
+                </Row>
+              </Section>
+            ) : (
+              <Section className="px" style={styles.cobrandNamePad}>
+                <Text className="ink3" style={styles.cobrandOnBehalf}>
+                  Sent on behalf of {studioNameTrimmed}
+                </Text>
+              </Section>
+            ))}
 
           {/* Body */}
           <Section className="px" style={styles.content}>
@@ -163,6 +211,30 @@ const styles = {
     fontSize: '11px',
     letterSpacing: '0.14em',
     textTransform: 'uppercase' as const,
+    color: COLORS.ink3,
+    margin: '0',
+  },
+  cobrandLogoPad: { padding: '10px 40px 0' },
+  cobrandNamePad: { padding: '8px 40px 0' },
+  cobrandLogoCol: { verticalAlign: 'middle' as const, width: '1%', paddingRight: '10px' },
+  cobrandLogo: {
+    display: 'block',
+    height: '20px',
+    maxHeight: '24px',
+    width: 'auto',
+    border: '0',
+  },
+  cobrandName: {
+    fontFamily: FONTS.sans,
+    fontSize: '13px',
+    fontWeight: 500 as const,
+    color: COLORS.ink2,
+    margin: '0',
+  },
+  cobrandOnBehalf: {
+    fontFamily: FONTS.mono,
+    fontSize: '11px',
+    letterSpacing: '0.1em',
     color: COLORS.ink3,
     margin: '0',
   },

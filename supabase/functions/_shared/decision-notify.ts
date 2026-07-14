@@ -221,15 +221,23 @@ interface RenderedEmail {
   html: string;
 }
 
+/** Optional studio co-brand byline for the client-facing decision emails. */
+export interface DecisionCobrand {
+  studioName?: string;
+  studioLogoUrl?: string;
+}
+
 function renderDecisionEmail(
   kind: DecisionNotificationKind,
   recipientName: string,
   decision: DecisionContext,
+  cobrand: DecisionCobrand = {},
 ): RenderedEmail {
   const name = recipientName || "there";
   const title = decision.title || "a decision";
 
   if (kind === "decision_resolved") {
+    // Designer-facing — never co-branded (the designer IS the studio).
     return {
       subject: `Resolved: "${title}"`,
       html: renderBrandedShell({
@@ -253,6 +261,8 @@ function renderDecisionEmail(
         title: `Overdue: "${title}" still needs your decision`,
         preview: `"${title}" has passed its due date and still needs your decision.`,
         eyebrow: "Overdue",
+        studioName: cobrand.studioName,
+        studioLogoUrl: cobrand.studioLogoUrl,
         body: [
           paragraph(`Hi ${escapeHtml(name)},`),
           paragraph(`The decision <strong style="color:#1F1B16; font-weight:600;">${escapeHtml(title)}</strong> has passed its due date and is still waiting on you.`),
@@ -283,6 +293,8 @@ function renderDecisionEmail(
       title: `Reminder: "${title}" needs your decision`,
       preview: `Your designer is waiting on a decision: "${title}".`,
       eyebrow: "Decision needed",
+      studioName: cobrand.studioName,
+      studioLogoUrl: cobrand.studioLogoUrl,
       body: [
         paragraph(`Hi ${escapeHtml(name)},`),
         paragraph(`Your designer is waiting on a decision: <strong style="color:#1F1B16; font-weight:600;">${escapeHtml(title)}</strong>.`),
@@ -308,6 +320,7 @@ export async function deliverDecisionNotification(
   kind: DecisionNotificationKind,
   decision: DecisionContext,
   recipient: DecisionRecipient,
+  cobrand: DecisionCobrand = {},
 ): Promise<DeliverDecisionNotificationResult> {
   // 1. In-app row via the frozen spine RPC (idempotent).
   const inApp = await fireDecisionInApp(supabase, decision.id, kind);
@@ -398,7 +411,7 @@ export async function deliverDecisionNotification(
   // clients (no auth user) no log row is written, and email idempotency falls
   // back to the caller's own guard: decision-reminders' reminder_sent_at stamp
   // and expire-decisions' one-shot pending→expired transition.
-  const rendered = renderDecisionEmail(kind, recipient.name ?? "", decision);
+  const rendered = renderDecisionEmail(kind, recipient.name ?? "", decision, cobrand);
   const result = await sendCompliantEmail(supabase, {
     to: recipient.email,
     subject: rendered.subject,
