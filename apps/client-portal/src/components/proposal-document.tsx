@@ -64,8 +64,10 @@ interface ProposalDocumentProps {
    * on a guest render.
    */
   feedbackEnabled?: boolean;
-  /** Guest share only: the studio name for the quiet "shared by" letterhead line. */
+  /** The studio name for the quiet "shared by" letterhead line. */
   sharedByStudio?: string;
+  /** Optional studio logo rendered next to the "Shared by" line. Nil-safe. */
+  sharedByStudioLogoUrl?: string;
 }
 
 function formatCurrency(amount: number): string {
@@ -97,6 +99,7 @@ export function ProposalDocument({
   visibility,
   feedbackEnabled = false,
   sharedByStudio,
+  sharedByStudioLogoUrl,
 }: ProposalDocumentProps) {
   const { user } = useAuth();
   const hasRecordedOpen = useRef(false);
@@ -308,7 +311,14 @@ export function ProposalDocument({
             {formatDate(proposal.created_at)}
           </span>
           {sharedByStudio && (
-            <span className="type-meta-small mt-1 block text-[var(--text-muted)]">
+            <span className="type-meta-small mt-1 flex items-center justify-end gap-1.5 text-[var(--text-muted)]">
+              {sharedByStudioLogoUrl && (
+                <img
+                  src={sharedByStudioLogoUrl}
+                  alt=""
+                  className="h-4 w-4 rounded-full object-cover"
+                />
+              )}
               Shared by {sharedByStudio}
             </span>
           )}

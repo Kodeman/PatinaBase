@@ -1,6 +1,6 @@
 'use client';
 
-import { useProjectTeamMembers } from '@patina/supabase';
+import { useProjectTeamMembers, useStudioIdentity } from '@patina/supabase';
 
 const ROLE_LABEL: Record<string, string> = {
   lead_designer: 'Lead Designer',
@@ -20,12 +20,47 @@ function initials(name?: string | null) {
 
 export function ProjectTeamPanel({ projectId }: { projectId: string }) {
   const { data: members = [], isLoading } = useProjectTeamMembers(projectId);
+  const { data: identity } = useStudioIdentity({ projectId });
+  const studioName = identity?.name ?? 'Your design team';
 
   return (
     <section
       className="rounded-lg border border-[var(--border-default)] bg-white p-5"
       data-testid="project-team-panel"
     >
+      <div
+        className="mb-4 flex items-center gap-3 border-b border-[var(--border-default)] pb-4"
+        data-testid="project-team-studio-header"
+      >
+        {identity?.logoUrl ? (
+          <img
+            src={identity.logoUrl}
+            alt=""
+            className="h-10 w-10 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-medium text-[var(--text-muted)]"
+            style={{ background: 'rgba(196,165,123,0.12)' }}
+          >
+            {initials(studioName)}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-[var(--text-primary)]">{studioName}</p>
+          {identity?.source === 'studio' && identity.website && (
+            <a
+              href={identity.website}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="type-meta-small truncate text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:underline"
+            >
+              {identity.website}
+            </a>
+          )}
+        </div>
+      </div>
+
       <h3 className="font-heading text-base text-[var(--text-primary)] mb-3">Your team</h3>
       {isLoading ? (
         <p className="type-body-small text-[var(--text-muted)]">Loading…</p>

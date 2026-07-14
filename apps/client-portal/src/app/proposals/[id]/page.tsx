@@ -10,6 +10,7 @@ import {
   useProposalExclusions,
   useProposalScopeRooms,
   useBoards,
+  useStudioIdentity,
 } from '@patina/supabase';
 import { FeatureAnnouncementCoachmark, SurfaceKeys } from '@patina/help-system';
 import { useClientProposal } from '@/hooks/use-proposals-client';
@@ -41,6 +42,11 @@ export default function ClientProposalDetailPage({
   const { data: scopeRooms } = useProposalScopeRooms(id);
   // RLS restricts board reads to non-draft proposals the client is on.
   const { data: boards } = useBoards(id);
+  const { data: identity } = useStudioIdentity(
+    proposal?.project_id
+      ? { projectId: proposal.project_id }
+      : { designerId: proposal?.designer_id }
+  );
   const [declineOpen, setDeclineOpen] = useState(false);
   const [requestChangeOpen, setRequestChangeOpen] = useState(false);
 
@@ -199,6 +205,7 @@ export default function ClientProposalDetailPage({
         scopeRooms={scopeRooms ?? []}
         boards={boards ?? []}
         feedbackEnabled={feedbackEnabled}
+        sharedByStudio={identity?.name ?? undefined}
       />
 
       {isActionable && (
