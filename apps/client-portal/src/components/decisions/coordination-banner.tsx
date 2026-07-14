@@ -1,5 +1,6 @@
 'use client';
 
+import { useStudioIdentity } from '@patina/supabase';
 import type { CoordinationKind, Court } from '@patina/supabase';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -29,19 +30,32 @@ const KIND_LABELS: Record<CoordinationKind, string> = {
   punch: 'Punch item',
 };
 
-/** Who the client is waiting on, when the item is not in their court. */
-const COURT_WAITING_LABEL: Partial<Record<Court, string>> = {
-  designer: 'Your designer is handling this',
-  gc: 'Your designer is handling this with the builder',
-  vendor: 'Your designer is handling this with the vendor',
-};
+/**
+ * Who the client is waiting on, when the item is not in their court. `who` is
+ * the resolved studio name, falling back to "Your designer".
+ */
+function courtWaitingLabel(court: Court, who: string): string {
+  const labels: Partial<Record<Court, string>> = {
+    designer: `${who} is handling this`,
+    gc: `${who} is handling this with the builder`,
+    vendor: `${who} is handling this with the vendor`,
+  };
+  return labels[court] ?? `${who} is handling this`;
+}
 
 interface CoordinationBannerProps {
   kind: CoordinationKind;
   court: Court;
+  /** Prefer projectId when a project is in scope; falls back to designerId. */
+  projectId?: string | null;
+  designerId?: string;
 }
 
-export function CoordinationBanner({ kind, court }: CoordinationBannerProps) {
+export function CoordinationBanner({ kind, court, projectId, designerId }: CoordinationBannerProps) {
+  const { data: identity } = useStudioIdentity(
+    projectId ? { projectId } : designerId ? { designerId } : {}
+  );
+  const who = identity?.name ?? 'Your designer';
   const isClientMove = court === 'client';
   const typeLabel = KIND_LABELS[kind] ?? 'Open item';
 
@@ -64,7 +78,7 @@ export function CoordinationBanner({ kind, court }: CoordinationBannerProps) {
     );
   }
 
-  const waitingLabel = COURT_WAITING_LABEL[court] ?? 'Your designer is handling this';
+  const waitingLabel = courtWaitingLabel(court, who);
 
   return (
     <div
