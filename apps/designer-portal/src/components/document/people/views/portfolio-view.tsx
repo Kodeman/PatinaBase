@@ -15,6 +15,8 @@ import { useRouter } from 'next/navigation';
 import { useProjects, usePeopleDirectory } from '@patina/supabase';
 import { ViewHeader } from '../view-shell';
 import type { PeopleViewProps } from '../types';
+import { useStudioHasTeam } from '@/hooks/use-studio-has-team';
+import { OwnerByline } from '@/components/ui/owner-byline';
 
 function yearOf(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -34,6 +36,9 @@ export function PortfolioView(_props: PeopleViewProps) {
   const router = useRouter();
   const { data: projects, isLoading } = useProjects();
   const { data: directory } = usePeopleDirectory({ role: 'client' });
+  // Studio Wave 5 — owner-attribution byline shown only once the signed-in
+  // designer's studio has >1 active member; solo designers see no change.
+  const showOwner = useStudioHasTeam();
 
   // client_id (auth profile) → display name, via the directory's client rows.
   const clientByProfile = useMemo(() => {
@@ -100,6 +105,14 @@ export function PortfolioView(_props: PeopleViewProps) {
                   </div>
                   {sub && (
                     <div className="truncate text-[0.58rem] text-[var(--color-aged-oak)]">{sub}</div>
+                  )}
+                  {showOwner && (
+                    <div className="mt-1 truncate text-[0.54rem]">
+                      <OwnerByline
+                        name={p.designer?.full_name ?? p.designer?.display_name ?? null}
+                        avatarUrl={p.designer?.avatar_url ?? null}
+                      />
+                    </div>
                   )}
                 </div>
               </button>
