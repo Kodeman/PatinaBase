@@ -262,6 +262,9 @@ export function useUpdateOrganization() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
       queryClient.invalidateQueries({ queryKey: ['organization', data.id] });
+      // A name/logo/website edit re-brands every surface that reads the
+      // studio identity resolver (invoices, PDFs, emails, client portal, iOS).
+      queryClient.invalidateQueries({ queryKey: ['studio-identity'] });
     },
   });
 }
@@ -456,6 +459,41 @@ export function useLeaveOrganization() {
       if (error) throw error;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizations'] });
+    },
+  });
+}
+
+/**
+ * Transfer studio ownership to another active member via the
+ * `transfer_studio_ownership` RPC (00319, SECURITY DEFINER). Promote-then-demote
+ * ordering so the last-owner guard never trips: the target becomes owner and the
+ * caller is demoted to admin in one call. Owner-only; the RPC raises `not_owner`
+ * / `target_not_active_member` which callers surface as friendly copy.
+ */
+export function useTransferOrganizationOwnership() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      organizationId,
+      newOwnerUserId,
+    }: {
+      organizationId: string;
+      newOwnerUserId: string;
+    }) => {
+      const supabase = getSupabase();
+      const { error } = await supabase.rpc('transfer_studio_ownership', {
+        p_org_id: organizationId,
+        p_new_owner: newOwnerUserId,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['organization-members', variables.organizationId],
+      });
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
     },
   });

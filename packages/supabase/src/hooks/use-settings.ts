@@ -214,30 +214,33 @@ export function useUploadAvatar() {
       if (!user.user) throw new Error('Not authenticated');
 
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user.user.id}-${Date.now()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      // Bucket is `avatars` (00115); its RLS accepts `{uid}/file.ext` — the old
+      // `profiles` bucket never existed and the `avatars/…` prefix matched no
+      // RLS naming convention, so this upload always failed.
+      const filePath = `${user.user.id}/${Date.now()}.${fileExt}`;
 
       // Upload file
       const { error: uploadError } = await supabase.storage
-        .from('profiles')
+        .from('avatars')
         .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
+      // Get public URL (cache-bust so a CDN-cached old avatar doesn't linger)
       const { data: urlData } = supabase.storage
-        .from('profiles')
+        .from('avatars')
         .getPublicUrl(filePath);
+      const publicUrl = `${urlData.publicUrl}?v=${Date.now()}`;
 
       // Update profile
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ avatar_url: urlData.publicUrl })
+        .update({ avatar_url: publicUrl })
         .eq('id', user.user.id);
 
       if (updateError) throw updateError;
 
-      return urlData.publicUrl;
+      return publicUrl;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
