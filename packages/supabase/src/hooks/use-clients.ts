@@ -42,6 +42,18 @@ export interface DesignerClient {
     avatar_url: string | null;
     phone: string | null;
   } | null;
+  /**
+   * The owning designer's profile (Wave 5 — shared-workspace attribution).
+   * Populated by `useClients()`'s join only; `undefined` from callers that
+   * don't select it (e.g. `useClient()`). `null` means the joined profile
+   * row didn't resolve (legacy data) — render no byline in that case.
+   */
+  designer?: {
+    id: string;
+    full_name: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+  } | null;
 }
 
 export interface ClientMessage {
@@ -80,6 +92,13 @@ export function useClients(filters?: ClientFilters) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
+      // Wave 5 (studio shared workspace): join the owning designer's profile
+      // alongside the existing client join — additive, one query, no N+1 per
+      // row. `profiles!designer_clients_designer_id_fkey` is the explicit
+      // constraint name since `designer_clients` FKs `profiles` twice
+      // (client_id and designer_id) — the column-only hint would be
+      // ambiguous were it not scoped per-column, so we spell out the
+      // constraint to match the client_id leg's own explicitness.
       let query = supabase
         .from('designer_clients')
         .select(`
@@ -92,6 +111,12 @@ export function useClients(filters?: ClientFilters) {
             full_name,
             avatar_url,
             phone
+          ),
+          designer:profiles!designer_clients_designer_id_fkey(
+            id,
+            full_name,
+            display_name,
+            avatar_url
           )
         `)
         .order('updated_at', { ascending: false });

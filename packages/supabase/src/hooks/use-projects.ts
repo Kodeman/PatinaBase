@@ -10,9 +10,16 @@ export function useProjects() {
     queryKey: ['projects'],
     queryFn: async () => {
       const supabase = getSupabase();
+      // Wave 5 (studio shared workspace): join the owning designer's profile
+      // so consumers can render an owner-attribution byline when a studio has
+      // >1 active member — additive to the existing `*` select, one query,
+      // no N+1 per row. `profiles!projects_designer_id_fkey` is unambiguous
+      // (projects also FKs profiles via client_id, a different constraint).
       const { data, error } = await supabase
         .from('projects')
-        .select('*')
+        .select(
+          '*, designer:profiles!projects_designer_id_fkey(id, full_name, display_name, avatar_url)'
+        )
         .order('created_at', { ascending: false });
 
       if (error) throw error;
