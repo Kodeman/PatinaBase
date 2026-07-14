@@ -2339,3 +2339,135 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.concierge_damage_photo_checklist() TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00314_design_request_submit_roomless.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.submit_design_request(uuid[], text, uuid, text, text, text, uuid, text, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00314_design_request_submit_roomless.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.submit_design_request(uuid[], text, uuid, text, text, text, uuid, text, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00315_studio_comember_helper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_studio_comember(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00315_studio_comember_helper.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_studio_comember(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00315_studio_comember_helper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._primary_studio_for(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00315_studio_comember_helper.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public._primary_studio_for(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00315_studio_comember_helper.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_org_owner(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00315_studio_comember_helper.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_org_owner(uuid, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00317_projects_studio_id_maintenance.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_project_studio_id() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00317_projects_studio_id_maintenance.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_project_studio_id() TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00318_studio_invoice_numbering_and_ops.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.set_invoice_studio_id() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00318_studio_invoice_numbering_and_ops.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.set_invoice_studio_id() TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00318_studio_invoice_numbering_and_ops.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.issue_invoice(UUID, DATE) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00318_studio_invoice_numbering_and_ops.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.issue_invoice(UUID, DATE) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00318_studio_invoice_numbering_and_ops.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.record_invoice_payment(UUID, INTEGER, TEXT, TEXT, TIMESTAMPTZ, TEXT) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00318_studio_invoice_numbering_and_ops.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.record_invoice_payment(UUID, INTEGER, TEXT, TEXT, TIMESTAMPTZ, TEXT) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00319_org_roles_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.guard_org_membership_changes() FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00319_org_roles_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.guard_org_membership_changes() TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00319_org_roles_hardening.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.transfer_studio_ownership(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00319_org_roles_hardening.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.transfer_studio_ownership(uuid, uuid) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00320_studio_branding_read_and_logos.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.resolve_studio_identity(uuid, uuid) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00320_studio_branding_read_and_logos.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.resolve_studio_identity(uuid, uuid) TO anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
