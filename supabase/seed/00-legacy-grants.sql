@@ -2471,3 +2471,15 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.resolve_studio_identity(uuid, uuid) TO anon, authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00321_org_members_comember_select.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.is_active_org_member(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00321_org_members_comember_select.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.is_active_org_member(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
