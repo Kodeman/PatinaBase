@@ -34,6 +34,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendCompliantEmail } from '../_shared/send-email.ts';
 import { buildQuoteRequestEmail } from '../_shared/quote-request-emails.ts';
+import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-identity.ts';
 import { parseQuoteRequestSendBody, resolveVendorRecipient } from './lib.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -138,10 +139,18 @@ Deno.serve(async (req: Request) => {
     .eq('id', request.designer_id)
     .maybeSingle();
 
-  const studioName =
+  // Studio identity via the canonical resolver (Designer Studios). An RFQ has no
+  // project (vendor + designer only), so the designerId path resolves the
+  // designer's primary studio; the profile fields stay the name fallback.
+  // logoUrl is non-null only for a real studio org.
+  const identity = await resolveStudioIdentity(admin, { designerId: request.designer_id });
+  const studioName = studioDisplayName(
+    identity,
     (designerProfile as any)?.business_name?.trim() ||
-    (designerProfile as any)?.full_name?.trim() ||
-    'Patina Designer';
+      (designerProfile as any)?.full_name?.trim() ||
+      'Patina Designer',
+  );
+  const studioLogoUrl = identity?.logoUrl ?? undefined;
   const designerName = (designerProfile as any)?.full_name?.trim() || studioName;
   const designerEmail: string | null = (designerProfile as any)?.email ?? null;
 
@@ -150,6 +159,7 @@ Deno.serve(async (req: Request) => {
   const rendered = buildQuoteRequestEmail({
     vendorName: request.vendor?.name ?? 'there',
     studioName,
+    studioLogoUrl,
     designerName,
     designerEmail,
     scope: request.scope,

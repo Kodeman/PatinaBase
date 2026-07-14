@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useInvoice, useProfile } from '@patina/supabase';
+import { useInvoice, useProfile, useStudioIdentity } from '@patina/supabase';
 import {
   INVOICE_STATUS_LABELS,
   INVOICE_PAYMENT_METHOD_LABELS,
@@ -25,6 +25,10 @@ export default function InvoicePrintPage() {
   const hydrated = useHydrated();
   const { data: invoice, isLoading } = useInvoice(params.id);
   const { data: profile } = useProfile();
+  // Studio brand identity (Designer Studios). projectId path is deterministic
+  // for multi-studio designers; disabled until the invoice (and its project_id)
+  // resolves. `name`/`logoUrl` are nullable — fall back to the profile below.
+  const { data: identity } = useStudioIdentity({ projectId: invoice?.project_id });
 
   if (!hydrated || isLoading) return <LoadingStrata />;
   if (!invoice) {
@@ -36,9 +40,15 @@ export default function InvoicePrintPage() {
   }
 
   const balance = invoiceBalanceCents(invoice);
-  const designerName =
+  const profileName =
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (profile as any)?.full_name || (profile as any)?.display_name || 'Your Designer';
+  // Studio identity leads (business/studio name + logo); the profile name is
+  // the fallback when the resolver returns nothing (identity.name is nullable).
+  const designerName = identity?.name ?? profileName;
+  // logoUrl is non-null only when a studio org resolved; it already carries a
+  // ?v= cache-bust, so don't append another.
+  const logoUrl = identity?.logoUrl ?? null;
   const taxPercent = (Number(invoice.tax_rate) * 100).toFixed(2).replace(/\.?0+$/, '');
 
   return (
@@ -81,6 +91,14 @@ export default function InvoicePrintPage() {
         {/* Brand header */}
         <div className="mb-10 flex items-start justify-between">
           <div>
+            {logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoUrl}
+                alt={designerName}
+                style={{ maxHeight: '48px', width: 'auto', marginBottom: '0.6rem', display: 'block' }}
+              />
+            )}
             <div
               style={{
                 fontFamily: 'var(--font-heading, Georgia, serif)',

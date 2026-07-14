@@ -71,6 +71,11 @@ export interface PoSentEmailParams {
   /** Vendor-facing TRADE total in cents. */
   tradeTotalCents: number;
   currency?: string;
+  /**
+   * Optional public studio logo URL (Designer Studios). Rendered ≤24px in the
+   * shell co-brand byline beside `studioName`. Omit → name-only byline.
+   */
+  studioLogoUrl?: string;
 }
 
 /**
@@ -133,10 +138,17 @@ export function buildPoSentEmail(params: PoSentEmailParams): RenderedPoEmail {
     muted(`&mdash; ${signoff}`) +
     muted(`Sent via Patina &middot; patina.cloud`);
 
+  // Co-brand the shell with the ordering studio (Designer Studios). Unlike the
+  // client-facing emails — where a bare personal name is the Patina-fronted
+  // sender and gets no byline — the vendor's counterparty IS the studio, and the
+  // prose already leads with `studioName`, so the byline reinforces who ordered.
+  // The logo shows only for a real studio org (resolver returns a logoUrl).
   const html = renderBrandedShell({
     title: subject,
     eyebrow: "Purchase order",
     body,
+    studioName: params.studioName,
+    studioLogoUrl: params.studioLogoUrl,
   });
 
   return { subject, html };

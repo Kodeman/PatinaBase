@@ -22,6 +22,7 @@ import {
   Page,
   Text,
   View,
+  Image,
   StyleSheet,
   renderToBuffer,
 } from 'npm:@react-pdf/renderer@4.3.0';
@@ -58,6 +59,9 @@ export interface PoPdfData {
   issuedAt: string;
   /** Studio / business name shown as the ordering party. */
   studioName: string;
+  /** Optional public studio logo URL (Designer Studios). Rendered small atop the
+   *  "From" block; null/undefined → no logo, byte-identical to the pre-logo PDF. */
+  studioLogoUrl?: string;
   /** Designer's personal name (may equal studioName). */
   designerName: string;
   designerEmail: string | null;
@@ -92,6 +96,9 @@ const styles = StyleSheet.create({
     color: '#5C4A3C',
     marginBottom: 4,
   },
+  // Studio logo (Designer Studios) — small, atop the "From" block. Height-capped
+  // so a tall logo can't blow out the row; width scales to the intrinsic ratio.
+  fromLogo: { height: 24, marginBottom: 6, objectFit: 'contain' },
   value: { fontSize: 11 },
   valueSmall: { fontSize: 9, color: '#3D3A36', marginTop: 2 },
   table: { border: '1pt solid #E5E2DD', borderRadius: 2 },
@@ -179,6 +186,9 @@ function PoDocument(data: PoPdfData) {
           View,
           { style: styles.block },
           h(Text, { style: styles.label }, 'From'),
+          data.studioLogoUrl
+            ? h(Image, { style: styles.fromLogo, src: data.studioLogoUrl })
+            : null,
           h(Text, { style: styles.value }, data.studioName),
           data.designerName && data.designerName !== data.studioName
             ? h(Text, { style: styles.valueSmall }, data.designerName)

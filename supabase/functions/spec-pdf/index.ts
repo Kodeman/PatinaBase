@@ -40,6 +40,7 @@ import {
   type SpecScheduleModel,
   type SpecVisibility,
 } from '../_shared/spec-pdf.ts';
+import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -214,14 +215,14 @@ type Prepared =
   | {
       kind: 'document';
       model: SpecScheduleModel;
-      header: { studioName: string; projectName: string; title: string };
+      header: { studioName: string; projectName: string; title: string; studioLogoUrl?: string };
       filename: string;
     }
   | { kind: 'item'; model: SpecItemModel; filename: string }
   | {
       kind: 'board';
       model: SpecBoardModel;
-      header: { studioName: string; projectName: string };
+      header: { studioName: string; projectName: string; studioLogoUrl?: string };
       filename: string;
     };
 
@@ -290,13 +291,26 @@ Deno.serve(async (req: Request) => {
       designerId = owner.designer_id;
     }
 
-    // ── Studio name (header) — designer profile ────────────────────────────
+    // ── Studio identity (header) — canonical resolver (Designer Studios) ────
+    // Post-sale docs have a project (projectId path is deterministic for
+    // multi-studio designers); pre-sale proposals have no project yet →
+    // designerId path. The designer profile stays the name fallback for the
+    // degenerate case (resolver returned no name). logoUrl is non-null only for
+    // a real studio org → no logo renders exactly as before.
     const { data: designerProfile } = await admin
       .from('profiles')
       .select('full_name')
       .eq('id', designerId)
       .maybeSingle();
-    const studioName = (designerProfile as any)?.full_name?.trim() || 'Patina Designer';
+    const identity = await resolveStudioIdentity(
+      admin,
+      isProposal ? { designerId } : { projectId: ownerId },
+    );
+    const studioName = studioDisplayName(
+      identity,
+      (designerProfile as any)?.full_name?.trim() || 'Patina Designer',
+    );
+    const studioLogoUrl = identity?.logoUrl ?? undefined;
 
     if (kind === 'board') {
       // ── Board export (B3) — the board must belong to the owner (404-collapse).
@@ -351,7 +365,7 @@ Deno.serve(async (req: Request) => {
       prepared = {
         kind: 'board',
         model,
-        header: { studioName, projectName: ownerName },
+        header: { studioName, projectName: ownerName, studioLogoUrl },
         filename: `board-${slug((board.name as string) || (board.id as string))}.pdf`,
       };
     } else {
@@ -480,7 +494,7 @@ Deno.serve(async (req: Request) => {
       prepared = {
         kind: 'document',
         model,
-        header: { studioName, projectName: ownerName, title: 'Specification' },
+        header: { studioName, projectName: ownerName, title: 'Specification', studioLogoUrl },
         filename: `schedule-${slug(ownerName || ownerId)}.pdf`,
       };
     } else {
@@ -512,6 +526,7 @@ Deno.serve(async (req: Request) => {
 
       const input: SpecItemInput = {
         studioName,
+        studioLogoUrl,
         projectName: ownerName,
         name: item.name,
         code: item.code,

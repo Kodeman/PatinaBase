@@ -49,6 +49,11 @@ export interface QuoteRequestEmailParams {
   timeline?: string | null;
   /** The request itself — required, the primary ask. */
   message: string;
+  /**
+   * Optional public studio logo URL (Designer Studios). Rendered ≤24px in the
+   * shell co-brand byline beside the requesting studio. Omit → name-only byline.
+   */
+  studioLogoUrl?: string;
 }
 
 /** A labeled metadata line ("Scope: …"), escaped; '' when the value is blank. */
@@ -105,10 +110,15 @@ export function buildQuoteRequestEmail(
     muted(`&mdash; ${signoff}`) +
     muted(`Sent via Patina &middot; patina.cloud`);
 
+  // Co-brand the shell with the requesting studio (Designer Studios). As with
+  // po-emails, the vendor's counterparty IS the studio (the prose leads with it),
+  // so the byline is appropriate; the logo shows only for a real studio org.
   const html = renderBrandedShell({
     title: subject,
     eyebrow: "Quote request",
     body,
+    studioName: studio,
+    studioLogoUrl: params.studioLogoUrl,
   });
 
   return { subject, html };

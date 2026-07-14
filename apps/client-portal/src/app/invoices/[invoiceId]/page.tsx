@@ -3,7 +3,13 @@
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, CreditCard, Loader2, Printer, X } from 'lucide-react';
-import { useInvoice, useStartCheckout, type Invoice, type InvoicePayment } from '@patina/supabase';
+import {
+  useInvoice,
+  useStartCheckout,
+  useStudioIdentity,
+  type Invoice,
+  type InvoicePayment,
+} from '@patina/supabase';
 import {
   INVOICE_PAYMENT_METHOD_LABELS,
   formatCurrency,
@@ -42,6 +48,9 @@ export default function ClientInvoiceDetailPage({
   const { invoiceId } = use(params);
   const { data: invoice, isLoading, refetch } = useInvoice(invoiceId);
   const startCheckout = useStartCheckout();
+  // Studio brand identity (Designer Studios). projectId path; disabled until the
+  // invoice resolves. name is nullable — fall back to the designer join below.
+  const { data: identity } = useStudioIdentity({ projectId: invoice?.project_id });
 
   // client_invoice_view — fires once, the first time the invoice resolves.
   const invoiceViewCaptured = useRef(false);
@@ -165,9 +174,10 @@ export default function ClientInvoiceDetailPage({
   );
   const hasProcessingStripe = processingPayments.some((p) => p.method === 'stripe');
   const designerName =
-    invoice.designer?.full_name?.trim() ||
-    invoice.designer?.business_name?.trim() ||
-    'your designer';
+    identity?.name ??
+    (invoice.designer?.full_name?.trim() ||
+      invoice.designer?.business_name?.trim() ||
+      'your designer');
   const taxPercent = (Number(invoice.tax_rate) * 100).toFixed(2).replace(/\.?0+$/, '');
 
   const canPay =
