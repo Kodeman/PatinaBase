@@ -168,6 +168,9 @@ export interface SpecItemCustomField {
 
 export interface SpecItemModel {
   studioName: string;
+  /** Optional public studio logo URL (Designer Studios). Rendered small in the
+   *  header; null/undefined → no logo, byte-identical to the pre-logo output. */
+  studioLogoUrl?: string;
   projectName: string;
   name: string;
   code: string | null;
@@ -191,6 +194,8 @@ export interface SpecItemModel {
 /** Raw fields the edge fn normalizes before building the item model. */
 export interface SpecItemInput {
   studioName: string;
+  /** Optional public studio logo URL (Designer Studios). */
+  studioLogoUrl?: string;
   projectName: string;
   name: string;
   code: string | null;
@@ -240,6 +245,7 @@ export function buildItemModel(
 
   const model: SpecItemModel = {
     studioName: input.studioName,
+    studioLogoUrl: input.studioLogoUrl,
     projectName: input.projectName,
     name: input.name,
     code: input.code,
@@ -408,6 +414,9 @@ export function buildBoardModel(input: SpecBoardInput, visibility: SpecVisibilit
 const styles = StyleSheet.create({
   page: { padding: 56, fontSize: 10, fontFamily: 'Helvetica', color: '#2C2926' },
   header: { borderBottom: '1pt solid #2C2926', paddingBottom: 16, marginBottom: 24 },
+  // Studio logo (Designer Studios) — small, above the title. Height-capped so a
+  // tall logo can't blow out the header; width scales to the intrinsic ratio.
+  headerLogo: { height: 30, marginBottom: 10, objectFit: 'contain' },
   title: { fontSize: 18, fontWeight: 700, marginBottom: 4 },
   meta: { fontSize: 9, color: '#5C4A3C' },
   itemCode: { fontSize: 11, color: '#5C4A3C', marginTop: 4, fontFamily: 'Courier' },
@@ -558,10 +567,14 @@ function ItemDocument(model: SpecItemModel) {
     h(
       Page,
       { size: 'LETTER', style: styles.page },
-      // Header — big item name, then studio · project · Specification, then code
+      // Header — optional studio logo, big item name, then studio · project ·
+      // Specification, then code. Logo guarded → null renders as before.
       h(
         View,
         { style: styles.header },
+        model.studioLogoUrl
+          ? h(Image, { style: styles.headerLogo, src: model.studioLogoUrl })
+          : null,
         h(Text, { style: styles.title }, model.name),
         h(
           Text,
@@ -633,7 +646,7 @@ function ItemDocument(model: SpecItemModel) {
 
 function ScheduleDocument(
   model: SpecScheduleModel,
-  header: { studioName: string; projectName: string; title: string },
+  header: { studioName: string; projectName: string; title: string; studioLogoUrl?: string },
 ) {
   return h(
     Document,
@@ -641,10 +654,13 @@ function ScheduleDocument(
     h(
       Page,
       { size: 'LETTER', style: styles.page },
-      // Header
+      // Header (optional studio logo above the title; guarded → null as before)
       h(
         View,
         { style: styles.header },
+        header.studioLogoUrl
+          ? h(Image, { style: styles.headerLogo, src: header.studioLogoUrl })
+          : null,
         h(Text, { style: styles.title }, header.title),
         h(
           Text,
@@ -742,7 +758,7 @@ function ScheduleDocument(
 
 function BoardDocument(
   model: SpecBoardModel,
-  header: { studioName: string; projectName: string },
+  header: { studioName: string; projectName: string; studioLogoUrl?: string },
 ) {
   return h(
     Document,
@@ -750,10 +766,13 @@ function BoardDocument(
     h(
       Page,
       { size: 'LETTER', style: styles.page, wrap: true },
-      // Header — the board is the title.
+      // Header — optional studio logo above the board title (guarded → null).
       h(
         View,
         { style: styles.header },
+        header.studioLogoUrl
+          ? h(Image, { style: styles.headerLogo, src: header.studioLogoUrl })
+          : null,
         h(Text, { style: styles.title }, model.boardName),
         h(
           Text,
@@ -820,7 +839,7 @@ export async function renderSpecItemPdf(model: SpecItemModel): Promise<Uint8Arra
 /** Render the per-project Specification schedule to PDF bytes. */
 export async function renderSpecSchedulePdf(
   model: SpecScheduleModel,
-  header: { studioName: string; projectName: string; title: string },
+  header: { studioName: string; projectName: string; title: string; studioLogoUrl?: string },
 ): Promise<Uint8Array> {
   const buffer = await renderToBuffer(ScheduleDocument(model, header));
   return new Uint8Array(buffer);
@@ -829,7 +848,7 @@ export async function renderSpecSchedulePdf(
 /** Render a single board (B3) to PDF bytes — a section-grouped tile grid. */
 export async function renderBoardPdf(
   model: SpecBoardModel,
-  header: { studioName: string; projectName: string },
+  header: { studioName: string; projectName: string; studioLogoUrl?: string },
 ): Promise<Uint8Array> {
   const buffer = await renderToBuffer(BoardDocument(model, header));
   return new Uint8Array(buffer);

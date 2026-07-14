@@ -43,6 +43,7 @@
 
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import Stripe from 'npm:stripe@17';
+import { resolveStudioIdentity } from '../_shared/studio-identity.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -186,9 +187,15 @@ async function loadInvoicePayable(
     return json({ error: 'nothing_due', detail: 'This invoice has no remaining balance.' }, 409);
   }
 
+  // Human-readable line item — append the studio name (Designer Studios) when
+  // the resolver returns one. This is TEXT ONLY: no Stripe Connect, and the
+  // statement descriptor / merchant identity stay "Patina" (single platform
+  // account). projectId path is deterministic for multi-studio designers.
+  const identity = await resolveStudioIdentity(admin, { projectId: invoice.project_id });
+  const studioSuffix = identity?.name?.trim() ? ` · ${identity.name.trim()}` : '';
   const label = `Invoice ${invoice.invoice_number ?? invoice.id.slice(0, 8)} — ${
     invoice.project?.name ?? 'Patina project'
-  }`;
+  }${studioSuffix}`;
 
   return {
     payableType: 'invoice',

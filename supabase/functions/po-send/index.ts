@@ -51,6 +51,7 @@ import { encode as encodeBase64 } from 'https://deno.land/std@0.168.0/encoding/b
 import { sendCompliantEmail } from '../_shared/send-email.ts';
 import { buildPoPdf, type PoPdfData } from '../_shared/po-pdf.ts';
 import { buildPoSentEmail } from '../_shared/po-emails.ts';
+import { resolveStudioIdentity, studioDisplayName } from '../_shared/studio-identity.ts';
 import {
   buildFallbackSidemark,
   checkPoTotalsCoherence,
@@ -313,10 +314,18 @@ Deno.serve(async (req: Request) => {
     clientName = (clientProfile as any)?.full_name ?? null;
   }
 
-  const studioName =
+  // Studio identity via the canonical resolver (Designer Studios). projectId
+  // path so a studio-owned project's PO shows the STUDIO, not the designer's
+  // personal business_name. The profile fields stay the fallback (resolver
+  // returned no name); logoUrl is non-null only for a real studio org.
+  const identity = await resolveStudioIdentity(admin, { projectId: po.project_id });
+  const studioName = studioDisplayName(
+    identity,
     (designerProfile as any)?.business_name?.trim() ||
-    (designerProfile as any)?.full_name?.trim() ||
-    'Patina Designer';
+      (designerProfile as any)?.full_name?.trim() ||
+      'Patina Designer',
+  );
+  const studioLogoUrl = identity?.logoUrl ?? undefined;
   const designerName = (designerProfile as any)?.full_name?.trim() || studioName;
   const designerEmail: string | null = (designerProfile as any)?.email ?? null;
 
@@ -393,6 +402,7 @@ Deno.serve(async (req: Request) => {
     poNumber,
     issuedAt: po.sent_at ?? new Date().toISOString(),
     studioName,
+    studioLogoUrl,
     designerName,
     designerEmail,
     vendorName: po.vendor?.name ?? 'Vendor',
@@ -490,6 +500,7 @@ Deno.serve(async (req: Request) => {
       sidemark,
       vendorName: po.vendor?.name ?? 'there',
       studioName,
+      studioLogoUrl,
       designerName,
       personalMessage: message,
       paymentPatternLabel: patternLabel,
