@@ -5755,6 +5755,7 @@ export type Database = {
           sent_at: string | null
           status: string
           stripe_checkout_session_id: string | null
+          studio_id: string | null
           subtotal_cents: number
           tax_cents: number
           tax_rate: number
@@ -5785,6 +5786,7 @@ export type Database = {
           sent_at?: string | null
           status?: string
           stripe_checkout_session_id?: string | null
+          studio_id?: string | null
           subtotal_cents?: number
           tax_cents?: number
           tax_rate?: number
@@ -5815,6 +5817,7 @@ export type Database = {
           sent_at?: string | null
           status?: string
           stripe_checkout_session_id?: string | null
+          studio_id?: string | null
           subtotal_cents?: number
           tax_cents?: number
           tax_rate?: number
@@ -5864,6 +5867,20 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "v_studios"
             referencedColumns: ["id"]
           },
         ]
@@ -13773,6 +13790,36 @@ export type Database = {
         }
         Relationships: []
       }
+      studio_invoice_counters: {
+        Row: {
+          next_number: number
+          studio_id: string
+        }
+        Insert: {
+          next_number?: number
+          studio_id: string
+        }
+        Update: {
+          next_number?: number
+          studio_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_invoice_counters_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studio_invoice_counters_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: true
+            referencedRelation: "v_studios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       style_centroids: {
         Row: {
           centroid: string
@@ -16785,6 +16832,7 @@ export type Database = {
       }
       _aesthete_utilization: { Args: { p_ratio: number }; Returns: number }
       _compute_quiz_profile: { Args: { p_answers: Json }; Returns: Json }
+      _primary_studio_for: { Args: { p_user: string }; Returns: string }
       _provision_studio: {
         Args: { p_name: string; p_user_id: string }
         Returns: {
@@ -17723,6 +17771,10 @@ export type Database = {
         Args: { _organization_id: string; _user_id?: string }
         Returns: boolean
       }
+      is_org_owner: {
+        Args: { _organization_id: string; _user_id?: string }
+        Returns: boolean
+      }
       is_product_in_active_use: {
         Args: { p_product_id: string }
         Returns: boolean
@@ -17731,6 +17783,7 @@ export type Database = {
         Args: { _project_id: string; _user_id?: string }
         Returns: boolean
       }
+      is_studio_comember: { Args: { p_owner: string }; Returns: boolean }
       issue_invoice: {
         Args: { p_due_date?: string; p_invoice_id: string }
         Returns: {
@@ -17755,6 +17808,7 @@ export type Database = {
           sent_at: string | null
           status: string
           stripe_checkout_session_id: string | null
+          studio_id: string | null
           subtotal_cents: number
           tax_cents: number
           tax_rate: number
@@ -18196,6 +18250,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      resolve_studio_identity: {
+        Args: { p_designer_id?: string; p_project_id?: string }
+        Returns: {
+          logo_url: string
+          name: string
+          source: string
+          studio_id: string
+          website: string
+        }[]
       }
       retire_designer_taste: {
         Args: { p_designer_id: string }
@@ -18674,6 +18738,10 @@ export type Database = {
         }
         Returns: Json
       }
+      transfer_studio_ownership: {
+        Args: { p_new_owner: string; p_org_id: string }
+        Returns: undefined
+      }
       update_my_biases: { Args: { p_overrides: Json }; Returns: Json }
       user_has_role: {
         Args: { p_role_name: string; p_user_id: string }
@@ -18718,6 +18786,7 @@ export type Database = {
           sent_at: string | null
           status: string
           stripe_checkout_session_id: string | null
+          studio_id: string | null
           subtotal_cents: number
           tax_cents: number
           tax_rate: number
