@@ -44,6 +44,11 @@ final class BadgeCountService {
     /// Wave 2 / D.2 money rail.
     private(set) var payableInvoiceCount: Int = 0
 
+    /// Projects the client has with a design studio (`public.projects`, RLS
+    /// `client_id = auth.uid()`). Drives the engagement-tier gate: a project
+    /// is the signal that unlocks the full Studio hub (see `EngagementTier`).
+    private(set) var projectCount: Int = 0
+
     /// True once a refresh has completed for an authenticated session.
     /// Guests never load — the rail renders invitations, not counts.
     private(set) var hasLoaded: Bool = false
@@ -61,6 +66,7 @@ final class BadgeCountService {
             unreadMessageCount = 0
             proposalsAwaitingSignatureCount = 0
             payableInvoiceCount = 0
+            projectCount = 0
             hasLoaded = false
             return
         }
@@ -69,8 +75,9 @@ final class BadgeCountService {
         async let summariesFetch = try? MessagingAPIClient.shared.listThreadSummaries()
         async let proposalsFetch = try? ProposalsAPIClient.shared.listProposals()
         async let invoicesFetch = try? InvoicesAPIClient.shared.listInvoices()
-        let (decisions, summaries, proposals, invoices) = await (
-            decisionsFetch, summariesFetch, proposalsFetch, invoicesFetch
+        async let projectsFetch = try? ProjectsAPIClient.shared.listProjects()
+        let (decisions, summaries, proposals, invoices, projects) = await (
+            decisionsFetch, summariesFetch, proposalsFetch, invoicesFetch, projectsFetch
         )
 
         if let decisions {
@@ -88,7 +95,11 @@ final class BadgeCountService {
         if let invoices {
             payableInvoiceCount = invoices.filter { $0.isPayable }.count
         }
-        if decisions != nil || summaries != nil || proposals != nil || invoices != nil {
+        if let projects {
+            projectCount = projects.count
+        }
+        if decisions != nil || summaries != nil || proposals != nil
+            || invoices != nil || projects != nil {
             hasLoaded = true
         }
     }

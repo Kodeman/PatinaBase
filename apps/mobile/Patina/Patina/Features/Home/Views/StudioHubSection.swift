@@ -44,6 +44,11 @@ struct StudioHubSection: View {
         var requiresAuth: Bool = true
         /// PostHog `row` property captured on `studio_hub_row_tapped`.
         let analyticsKey: String
+        /// Lowest engagement tier at which this row appears. Discovering-tier
+        /// users see none of the hub (the home shows a designer CTA instead);
+        /// `.engaged` reveals the designer + messaging surfaces; the default
+        /// `.activeProject` gates the rest until a project exists.
+        var minimumTier: EngagementTier = .activeProject
     }
 
     /// Unread notification count — supplied by the parent, which already
@@ -52,6 +57,11 @@ struct StudioHubSection: View {
 
     /// Captured rooms — drives the "Your Spaces" row's meta line.
     let roomCount: Int
+
+    /// Progressive-disclosure tier — filters which rows are visible. The
+    /// parent only renders this section at `.engaged` or higher; at
+    /// `.discovering` the home shows a "Work with a designer" CTA instead.
+    let tier: EngagementTier
 
     @Environment(\.appCoordinator) private var coordinator
 
@@ -96,134 +106,152 @@ struct StudioHubSection: View {
         }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Studio")
-                .font(PatinaTypography.monoMedium)
-                .tracking(1)
-                .textCase(.uppercase)
-                .foregroundStyle(PatinaColors.Text.muted)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.bottom, PatinaSpacing.xs)
+    /// Every hub row in display order, each tagged with the tier that unlocks
+    /// it. `body` filters this by the current tier; the parent decides whether
+    /// to render the section at all (discovering tier shows a designer CTA
+    /// instead of the hub).
+    private var allRows: [StudioRow] {
+        [
+            StudioRow(
+                title: "Your Spaces",
+                meta: yourSpacesMeta,
+                guestMeta: yourSpacesMeta,
+                badge: 0,
+                route: .yourSpaces,
+                hint: "Opens your rooms.",
+                requiresAuth: false,
+                analyticsKey: "your_spaces",
+                minimumTier: .engaged
+            ),
+            StudioRow(
+                title: "Your Designer",
+                meta: designerMeta,
+                guestMeta: "Get design help",
+                badge: designerBadge,
+                route: designerRoute,
+                hint: hasDesignRequests
+                    ? "Opens your design request."
+                    : "Opens designer services.",
+                requiresAuth: false,
+                analyticsKey: "your_designer",
+                minimumTier: .engaged
+            ),
+            StudioRow(
+                title: "Projects",
+                meta: "With your design studio",
+                guestMeta: "Sign in to see your projects",
+                badge: 0,
+                route: .projectList,
+                hint: "Opens your projects.",
+                analyticsKey: "projects"
+            ),
+            StudioRow(
+                title: "Proposals",
+                meta: badges.proposalsAwaitingSignatureCount > 0
+                    ? "\(badges.proposalsAwaitingSignatureCount) awaiting your signature"
+                    : "Nothing to review",
+                guestMeta: "Sign in to review proposals",
+                badge: badges.proposalsAwaitingSignatureCount,
+                route: .proposalList,
+                hint: "Opens your proposals.",
+                analyticsKey: "proposals"
+            ),
+            StudioRow(
+                title: "Invoices",
+                meta: badges.payableInvoiceCount > 0
+                    ? "\(badges.payableInvoiceCount) to pay"
+                    : "Nothing due",
+                guestMeta: "Sign in to view invoices",
+                badge: badges.payableInvoiceCount,
+                route: .invoiceList,
+                hint: "Opens your invoices.",
+                analyticsKey: "invoices"
+            ),
+            StudioRow(
+                title: "Budget",
+                meta: "Across your projects",
+                guestMeta: "Sign in to see your budget",
+                badge: 0,
+                route: .budget,
+                hint: "Opens your budget.",
+                analyticsKey: "budget"
+            ),
+            StudioRow(
+                title: "Documents",
+                meta: "Contracts, drawings & files",
+                guestMeta: "Sign in to see shared documents",
+                badge: 0,
+                route: .documentList,
+                hint: "Opens documents shared with you.",
+                analyticsKey: "documents"
+            ),
+            StudioRow(
+                title: "Messages",
+                meta: badges.unreadMessageCount > 0
+                    ? "\(badges.unreadMessageCount) unread"
+                    : "Up to date",
+                guestMeta: "Sign in to message your designer",
+                badge: badges.unreadMessageCount,
+                route: .threadList,
+                hint: "Opens your conversations.",
+                analyticsKey: "messages",
+                minimumTier: .engaged
+            ),
+            StudioRow(
+                title: "Decisions",
+                meta: badges.pendingDecisionCount > 0
+                    ? "\(badges.pendingDecisionCount) waiting on you"
+                    : "Nothing waiting",
+                guestMeta: "Sign in to review decisions",
+                badge: badges.pendingDecisionCount,
+                route: .decisionList,
+                hint: "Opens decisions waiting on you.",
+                analyticsKey: "decisions"
+            ),
+            StudioRow(
+                title: "Notifications",
+                meta: unreadNotifications > 0
+                    ? "\(unreadNotifications) new"
+                    : "Up to date",
+                guestMeta: "Sign in for updates",
+                badge: unreadNotifications,
+                route: .notifications,
+                hint: "Opens your notifications.",
+                analyticsKey: "notifications"
+            )
+        ]
+    }
 
-            VStack(spacing: 0) {
-                row(StudioRow(
-                    title: "Your Spaces",
-                    meta: yourSpacesMeta,
-                    guestMeta: yourSpacesMeta,
-                    badge: 0,
-                    route: .yourSpaces,
-                    hint: "Opens your rooms.",
-                    requiresAuth: false,
-                    analyticsKey: "your_spaces"
-                ))
-                hairline
-                row(StudioRow(
-                    title: "Your Designer",
-                    meta: designerMeta,
-                    guestMeta: "Get design help",
-                    badge: designerBadge,
-                    route: designerRoute,
-                    hint: hasDesignRequests
-                        ? "Opens your design request."
-                        : "Opens designer services.",
-                    requiresAuth: false,
-                    analyticsKey: "your_designer"
-                ))
-                hairline
-                row(StudioRow(
-                    title: "Projects",
-                    meta: "With your design studio",
-                    guestMeta: "Sign in to see your projects",
-                    badge: 0,
-                    route: .projectList,
-                    hint: "Opens your projects.",
-                    analyticsKey: "projects"
-                ))
-                hairline
-                row(StudioRow(
-                    title: "Proposals",
-                    meta: badges.proposalsAwaitingSignatureCount > 0
-                        ? "\(badges.proposalsAwaitingSignatureCount) awaiting your signature"
-                        : "Nothing to review",
-                    guestMeta: "Sign in to review proposals",
-                    badge: badges.proposalsAwaitingSignatureCount,
-                    route: .proposalList,
-                    hint: "Opens your proposals.",
-                    analyticsKey: "proposals"
-                ))
-                hairline
-                row(StudioRow(
-                    title: "Invoices",
-                    meta: badges.payableInvoiceCount > 0
-                        ? "\(badges.payableInvoiceCount) to pay"
-                        : "Nothing due",
-                    guestMeta: "Sign in to view invoices",
-                    badge: badges.payableInvoiceCount,
-                    route: .invoiceList,
-                    hint: "Opens your invoices.",
-                    analyticsKey: "invoices"
-                ))
-                hairline
-                row(StudioRow(
-                    title: "Budget",
-                    meta: "Across your projects",
-                    guestMeta: "Sign in to see your budget",
-                    badge: 0,
-                    route: .budget,
-                    hint: "Opens your budget.",
-                    analyticsKey: "budget"
-                ))
-                hairline
-                row(StudioRow(
-                    title: "Documents",
-                    meta: "Contracts, drawings & files",
-                    guestMeta: "Sign in to see shared documents",
-                    badge: 0,
-                    route: .documentList,
-                    hint: "Opens documents shared with you.",
-                    analyticsKey: "documents"
-                ))
-                hairline
-                row(StudioRow(
-                    title: "Messages",
-                    meta: badges.unreadMessageCount > 0
-                        ? "\(badges.unreadMessageCount) unread"
-                        : "Up to date",
-                    guestMeta: "Sign in to message your designer",
-                    badge: badges.unreadMessageCount,
-                    route: .threadList,
-                    hint: "Opens your conversations.",
-                    analyticsKey: "messages"
-                ))
-                hairline
-                row(StudioRow(
-                    title: "Decisions",
-                    meta: badges.pendingDecisionCount > 0
-                        ? "\(badges.pendingDecisionCount) waiting on you"
-                        : "Nothing waiting",
-                    guestMeta: "Sign in to review decisions",
-                    badge: badges.pendingDecisionCount,
-                    route: .decisionList,
-                    hint: "Opens decisions waiting on you.",
-                    analyticsKey: "decisions"
-                ))
-                hairline
-                row(StudioRow(
-                    title: "Notifications",
-                    meta: unreadNotifications > 0
-                        ? "\(unreadNotifications) new"
-                        : "Up to date",
-                    guestMeta: "Sign in for updates",
-                    badge: unreadNotifications,
-                    route: .notifications,
-                    hint: "Opens your notifications.",
-                    analyticsKey: "notifications"
-                ))
+    var body: some View {
+        let visible = allRows.filter { tier >= $0.minimumTier }
+        return Group {
+            if visible.isEmpty {
+                // Discovering tier (or nothing to show) — the parent renders a
+                // designer CTA in this slot instead of an empty "Studio" header.
+                EmptyView()
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Studio")
+                        .font(PatinaTypography.monoMedium)
+                        .tracking(1)
+                        .textCase(.uppercase)
+                        .foregroundStyle(PatinaColors.Text.muted)
+                        .accessibilityAddTraits(.isHeader)
+                        .padding(.bottom, PatinaSpacing.xs)
+
+                    VStack(spacing: 0) {
+                        // Hairlines are interleaved BETWEEN visible rows only,
+                        // so a filtered-out row never leaves a dangling divider.
+                        ForEach(Array(visible.enumerated()), id: \.element.title) { index, model in
+                            if index > 0 { hairline }
+                            row(model)
+                        }
+                    }
+                }
+                .padding(.horizontal, PatinaSpacing.mdLarge)
+                .padding(.top, PatinaSpacing.lg)
             }
         }
-        .padding(.horizontal, PatinaSpacing.mdLarge)
-        .padding(.top, PatinaSpacing.lg)
     }
 
     // MARK: - Row
@@ -289,9 +317,17 @@ struct StudioHubSection: View {
     }
 }
 
-#Preview {
+#Preview("Active project — full hub") {
     ScrollView {
-        StudioHubSection(unreadNotifications: 3, roomCount: 3)
+        StudioHubSection(unreadNotifications: 3, roomCount: 3, tier: .activeProject)
+            .environment(\.appCoordinator, AppCoordinator())
+    }
+    .background(PatinaColors.Background.primary)
+}
+
+#Preview("Engaged — designer + messages only") {
+    ScrollView {
+        StudioHubSection(unreadNotifications: 1, roomCount: 2, tier: .engaged)
             .environment(\.appCoordinator, AppCoordinator())
     }
     .background(PatinaColors.Background.primary)
