@@ -204,9 +204,17 @@ public final class AuthService {
             || description.contains("email_not_confirmed")
     }
 
-    /// Sign in with Apple
+    /// Sign in with Apple.
+    ///
+    /// `rawNonce` is the unhashed nonce whose SHA256 was set on the
+    /// authorization request (see `AppleSignInNonce` / `PatinaSignInWithAppleButton`);
+    /// GoTrue verifies it against the id_token's `nonce` claim. Passing it is
+    /// what makes the id-token flow replay-resistant.
     @MainActor
-    public func signInWithApple(credential: ASAuthorizationAppleIDCredential) async throws {
+    public func signInWithApple(
+        credential: ASAuthorizationAppleIDCredential,
+        rawNonce: String?
+    ) async throws {
         lastAttemptedSignInMethod = "apple"
         isLoading = true
         errorMessage = nil
@@ -222,14 +230,29 @@ public final class AuthService {
             let session = try await supabase.auth.signInWithIdToken(
                 credentials: .init(
                     provider: .apple,
-                    idToken: tokenString
+                    idToken: tokenString,
+                    nonce: rawNonce
                 )
             )
             self.session = session
+            await captureAppleName(from: credential)
         } catch {
             errorMessage = error.localizedDescription
             throw error
         }
+    }
+
+    /// Apple sends the user's name ONLY on the very first authorization, so
+    /// persist it as GoTrue user metadata now or lose it forever. Best-effort
+    /// — a failure here must never fail the sign-in that already succeeded.
+    @MainActor
+    private func captureAppleName(from credential: ASAuthorizationAppleIDCredential) async {
+        guard let fullName = credential.fullName else { return }
+        let name = PersonNameComponentsFormatter().string(from: fullName)
+        guard !name.isEmpty else { return }
+        _ = try? await supabase.auth.update(
+            user: UserAttributes(data: ["display_name": .string(name)])
+        )
     }
 
     /// Sign in with Google via OAuth (opens ASWebAuthenticationSession)
@@ -246,14 +269,24 @@ public final class AuthService {
                 redirectTo: URL(string: "\(APIConfiguration.appURLScheme)://auth/callback")
             )
         } catch {
-            errorMessage = error.localizedDescription
+            // Backing out of the OAuth web sheet is a user cancellation, not an
+            // error — mirror the Apple `.canceled` filter so the welcome
+            // screen's error banner stays silent instead of showing a raw
+            // "WebAuthenticationSession error 1" string.
+            if (error as? ASWebAuthenticationSessionError)?.code != .canceledLogin {
+                errorMessage = error.localizedDescription
+            }
             throw error
         }
     }
 
     // MARK: - Sign Up
 
-    /// Sign up with email and password
+    /// Sign up with email and password.
+    ///
+    /// `role` metadata tags the account as a client so the `handle_new_user`
+    /// trigger sets `profiles.role` correctly (otherwise it falls back to the
+    /// legacy table default of `'designer'`).
     @MainActor
     public func signUp(email: String, password: String, displayName: String?) async throws {
         isLoading = true
@@ -261,16 +294,42 @@ public final class AuthService {
         defer { isLoading = false }
 
         do {
-            let session = try await supabase.auth.signUp(
+            var metadata: [String: AnyJSON] = ["role": .string("homeowner")]
+            if let displayName, !displayName.isEmpty {
+                metadata["display_name"] = .string(displayName)
+            }
+            let response = try await supabase.auth.signUp(
                 email: email,
                 password: password,
-                data: displayName.map { ["display_name": .string($0)] } ?? [:]
+                data: metadata
             )
-            self.session = session.session
+            if let session = response.session {
+                self.session = session
+            } else {
+                // Production has email confirmation on, so GoTrue returns a
+                // user but NO session here. Surface the same case `signIn`
+                // throws so the UI routes to the "check your inbox" recovery
+                // panel instead of silently stranding the user with a spinner
+                // that resolves to nothing.
+                throw AuthServiceError.emailNotConfirmed(email: email)
+            }
+        } catch let error as AuthServiceError {
+            // Already the typed "verify your email" case — don't wrap it in a
+            // generic error banner (the view model routes it to the panel).
+            throw error
         } catch {
             errorMessage = error.localizedDescription
             throw error
         }
+    }
+
+    /// Surface an error from an external sign-in surface (e.g. the Apple
+    /// authorization callback) on the shared auth error banner. Used by the
+    /// welcome screen, which otherwise has no way to report a pre-service
+    /// failure. User-cancellation should NOT be reported here.
+    @MainActor
+    public func reportExternalError(_ message: String) {
+        errorMessage = message
     }
 
     // MARK: - Sign Out
@@ -336,7 +395,13 @@ public final class AuthService {
 
     // MARK: - Magic Link
 
-    /// Send magic link to email for passwordless login
+    /// Send a passwordless sign-in code (and matching magic link) to `email`.
+    ///
+    /// `shouldCreateUser: true` makes this a single unified sign-up + sign-in:
+    /// an unknown email creates the account, a known one signs in — so there is
+    /// no separate password "Create Account" path and no email-confirmation
+    /// round-trip (entering the emailed code IS the confirmation). `role`
+    /// metadata tags a newly-created account as a client for `handle_new_user`.
     @MainActor
     public func sendMagicLink(email: String) async throws {
         lastAttemptedSignInMethod = "magic-link"
@@ -347,7 +412,9 @@ public final class AuthService {
         do {
             try await supabase.auth.signInWithOTP(
                 email: email,
-                redirectTo: URL(string: "\(APIConfiguration.appURLScheme)://auth/callback")
+                redirectTo: URL(string: "\(APIConfiguration.appURLScheme)://auth/callback"),
+                shouldCreateUser: true,
+                data: ["role": .string("homeowner")]
             )
         } catch {
             errorMessage = error.localizedDescription

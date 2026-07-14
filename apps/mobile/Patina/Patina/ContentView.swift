@@ -11,11 +11,11 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.appCoordinator) private var coordinator
 
-    /// Sheet presentation flags for the `.auth` phase's email/sign-up
-    /// affordances. Apple, Google, and Guest all complete in-place; only
-    /// the email paths still open a nested form sheet.
-    @State private var showingEmailAuth = false
-    @State private var showingEmailSignUp = false
+    /// Sheet presentation flags for the `.auth` phase. Apple, Google, and
+    /// Guest complete in-place; the email-code flow and the password fallback
+    /// each open a form sheet.
+    @State private var showingEmailCode = false
+    @State private var showingPasswordSignIn = false
 
     var body: some View {
         ZStack {
@@ -35,27 +35,38 @@ struct ContentView: View {
 
             case .auth:
                 AuthScreenView(
-                    onSignInWithApple: { result in
+                    onSignInWithApple: { result, rawNonce in
                         Task {
                             let viewModel = AuthViewModel()
-                            await viewModel.handleAppleSignIn(result: result)
+                            await viewModel.handleAppleSignIn(result: result, rawNonce: rawNonce)
                         }
                     },
                     onSignInWithGoogle: {
+                        // Failures set AuthService.errorMessage, which the
+                        // welcome screen's error banner surfaces.
                         Task {
                             try? await AuthService.shared.signInWithGoogle()
                         }
                     },
-                    onSignInWithEmail: { showingEmailAuth = true },
-                    onCreateAccount: { showingEmailSignUp = true },
-                    onBrowseAsGuest: { coordinator.guestModeOptIn = true }
+                    onContinueWithEmail: {
+                        AuthService.shared.clearError()
+                        showingEmailCode = true
+                    },
+                    onBrowseAsGuest: { coordinator.guestModeOptIn = true },
+                    onUsePassword: {
+                        AuthService.shared.clearError()
+                        showingPasswordSignIn = true
+                    },
+                    errorMessage: AuthService.shared.errorMessage
                 )
                 .transition(.opacity)
-                .sheet(isPresented: $showingEmailAuth) {
-                    AuthenticationView()
+                // Passwordless email code (unified sign-up + sign-in).
+                .sheet(isPresented: $showingEmailCode) {
+                    AuthenticationView(initialMode: .magicLink)
                 }
-                .sheet(isPresented: $showingEmailSignUp) {
-                    AuthenticationView(initialMode: .signUp)
+                // Password fallback for returning users.
+                .sheet(isPresented: $showingPasswordSignIn) {
+                    AuthenticationView(initialMode: .signIn)
                 }
 
             case .onboarding:

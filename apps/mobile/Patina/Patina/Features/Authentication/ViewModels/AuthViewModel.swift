@@ -148,6 +148,12 @@ public final class AuthViewModel {
     public func signUp() async {
         do {
             try await authService.signUp(email: email, password: password, displayName: displayName)
+        } catch AuthServiceError.emailNotConfirmed(let unverifiedEmail) {
+            // Production returns a user but no session on signup (email
+            // confirmation on). Route to the same "check your inbox" recovery
+            // panel the sign-in path uses instead of stranding the user.
+            emailAwaitingVerification = unverifiedEmail
+            authService.clearError()
         } catch {
             // Error is already set in authService
         }
@@ -172,7 +178,10 @@ public final class AuthViewModel {
         }
     }
 
-    /// Send magic link
+    /// Request a passwordless sign-in code and go straight to the code-entry
+    /// surface. We lead with the 6-digit code (not the "click the link" panel)
+    /// because the code is the lowest-friction, redirect-free path — the emailed
+    /// link is a fallback the user can still reach from the "← Back" affordance.
     @MainActor
     public func sendMagicLink() async {
         do {
@@ -180,7 +189,9 @@ public final class AuthViewModel {
             magicLinkSent = true
             magicLinkEmail = email
             magicLinkCooldown = 60
-            successMessage = "Check your email for a magic link"
+            showOtpEntry = true
+            otpToken = ""
+            successMessage = "We emailed you a 6-digit code"
             startCooldownTimer()
         } catch {
             // Error is already set in authService
@@ -311,17 +322,28 @@ public final class AuthViewModel {
     /// auth state to the coordinator, which is exactly the pattern that
     /// left the view re-rendering instead of dismissing on success.
     @MainActor
-    public func handleAppleSignIn(result: Result<ASAuthorization, Error>) async {
+    public func handleAppleSignIn(
+        result: Result<ASAuthorization, Error>,
+        rawNonce: String?
+    ) async {
         switch result {
         case .success(let authorization):
             if let credential = authorization.credential as? ASAuthorizationAppleIDCredential {
                 do {
-                    try await authService.signInWithApple(credential: credential)
+                    try await authService.signInWithApple(credential: credential, rawNonce: rawNonce)
                 } catch {
                     // Error is already set in authService
                 }
             }
         case .failure(let error):
+            // A user-cancelled prompt is not an error and must stay silent;
+            // anything else surfaces on the shared auth banner so the welcome
+            // screen no longer swallows Apple failures.
+            if (error as? ASAuthorizationError)?.code != .canceled {
+                authService.reportExternalError(
+                    "Apple Sign In couldn't be completed. Please try again."
+                )
+            }
             PatinaLog.auth.error("Apple Sign In failed: \(error.localizedDescription)")
         }
     }

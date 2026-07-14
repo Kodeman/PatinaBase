@@ -275,6 +275,57 @@ struct FirstLaunchTourTests {
     }
 
     @Test
+    func advance_skipsStepWhoseAnchorNeverMounts() async {
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        model.anchorMountGracePeriod = .milliseconds(20)
+        // Zero-room home: greeting + profile mount, but the `.savedHeart`
+        // product card never does.
+        model.registerAnchor(.homeGreeting)
+        model.registerAnchor(.profileMonogram)
+        model.startTour(triggerSource: "test")
+
+        #expect(model.currentStep == 0)   // homeGreeting
+        model.advance()
+        #expect(model.currentStep == 1)   // lands on .savedHeart first…
+        // …then auto-skips once the grace window elapses with no mount.
+        try? await Task.sleep(for: .milliseconds(120))
+        #expect(model.currentStep == 2)   // .profileMonogram (mounted)
+        #expect(model.isActive)
+
+        model.advance()
+        #expect(!model.isActive)          // completes cleanly
+        #expect(getFirstLaunchTourState(model.tourKey).completed == true)
+    }
+
+    @Test
+    func advance_keepsStepWhoseAnchorMountsLate() async {
+        let stub = StubFirstLaunchTourDefaults()
+        setFirstLaunchTourDefaults(stub)
+        defer { resetFirstLaunchTourDefaults() }
+
+        let model = FirstLaunchTourModel()
+        model.anchorMountGracePeriod = .milliseconds(200)
+        model.registerAnchor(.homeGreeting)
+        model.registerAnchor(.profileMonogram)
+        model.startTour(triggerSource: "test")
+
+        model.advance()
+        #expect(model.currentStep == 1)   // .savedHeart, not mounted yet
+        // The product card mounts a beat later, inside the grace window — the
+        // pending skip must cancel so the coachmark is kept (the regression the
+        // async-skip fix guards against).
+        try? await Task.sleep(for: .milliseconds(20))
+        model.registerAnchor(.savedHeart)
+        try? await Task.sleep(for: .milliseconds(260))
+        #expect(model.currentStep == 1)   // stayed on .savedHeart
+        #expect(model.isActive)
+    }
+
+    @Test
     func complete_writesPersistenceAndStops() {
         let stub = StubFirstLaunchTourDefaults()
         setFirstLaunchTourDefaults(stub)

@@ -98,9 +98,9 @@ public struct CompanionAuthPanel: View {
     private var authButtons: some View {
         VStack(spacing: PatinaSpacing.md) {
             // Apple Sign In (Primary - black background per Apple guidelines)
-            PatinaSignInWithAppleButton { result in
+            PatinaSignInWithAppleButton { result, rawNonce in
                 Task {
-                    await handleAppleSignIn(result: result)
+                    await handleAppleSignIn(result: result, rawNonce: rawNonce)
                 }
             }
             .frame(minHeight: 44) // Minimum touch target
@@ -160,7 +160,7 @@ public struct CompanionAuthPanel: View {
 
     // MARK: - Actions
 
-    private func handleAppleSignIn(result: Result<ASAuthorization, Error>) async {
+    private func handleAppleSignIn(result: Result<ASAuthorization, Error>, rawNonce: String?) async {
         switch result {
         case .success(let authorization):
             if let credential = authorization.credential as? ASAuthorizationAppleIDCredential {
@@ -168,7 +168,7 @@ public struct CompanionAuthPanel: View {
                 errorMessage = nil
 
                 do {
-                    try await AuthService.shared.signInWithApple(credential: credential)
+                    try await AuthService.shared.signInWithApple(credential: credential, rawNonce: rawNonce)
                     HapticManager.shared.impact(.medium)
 
                     // Track successful auth

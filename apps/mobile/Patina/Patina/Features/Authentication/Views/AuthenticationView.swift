@@ -117,6 +117,9 @@ public struct AuthenticationView: View {
         if viewModel.emailAwaitingVerification != nil {
             return "Verify your email"
         }
+        if viewModel.mode == .magicLink {
+            return "Continue with email"
+        }
         return viewModel.mode.rawValue
     }
 
@@ -130,7 +133,7 @@ public struct AuthenticationView: View {
         case .signUp:
             return "Join the furniture discovery journey"
         case .magicLink:
-            return "Sign in with a magic link"
+            return "We'll email you a sign-in code — no password needed"
         case .resetPassword:
             return "We'll send you a reset link"
         }
@@ -373,14 +376,28 @@ public struct AuthenticationView: View {
             .disabled(viewModel.otpToken.count != 6 || viewModel.isVerifyingOtp)
             .accessibilityIdentifier("auth.otp.verifyButton")
 
-            // Back to email link — returns to the magic-link-sent panel
-            // without losing the sent state (so the user can still resend
-            // or try a different email from there).
+            // Resend the code (cooldown-gated, mirrors the send throttle).
+            Button {
+                Task { await viewModel.resendMagicLink() }
+            } label: {
+                Text(viewModel.magicLinkCooldown > 0
+                     ? "Resend code in \(viewModel.magicLinkCooldown)s"
+                     : "Resend code")
+                    .font(PatinaTypography.bodySmall)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+            }
+            .disabled(viewModel.magicLinkCooldown > 0 || viewModel.isLoading)
+            .accessibilityIdentifier("auth.otp.resendButton")
+
+            // Change email — returns to the email-entry field (not the old
+            // "click the link" panel, which the code-first flow bypasses).
             Button {
                 viewModel.showOtpEntry = false
+                viewModel.magicLinkSent = false
                 viewModel.otpToken = ""
+                viewModel.successMessage = nil
             } label: {
-                Text("← Back to email")
+                Text("← Use a different email")
                     .font(PatinaTypography.bodySmall)
                     .foregroundStyle(PatinaColors.Text.muted)
             }
@@ -513,7 +530,7 @@ public struct AuthenticationView: View {
         case .signUp:
             return "Create Account"
         case .magicLink:
-            return "Send Magic Link"
+            return "Email me a code"
         case .resetPassword:
             return "Send Reset Link"
         }
@@ -560,9 +577,9 @@ public struct AuthenticationView: View {
     // MARK: - Apple Sign In
 
     private var appleSignIn: some View {
-        PatinaSignInWithAppleButton { result in
+        PatinaSignInWithAppleButton { result, rawNonce in
             Task {
-                await viewModel.handleAppleSignIn(result: result)
+                await viewModel.handleAppleSignIn(result: result, rawNonce: rawNonce)
             }
         }
     }
@@ -593,7 +610,7 @@ public struct AuthenticationView: View {
             }
 
             if viewModel.mode == .magicLink && !viewModel.magicLinkSent {
-                Button("Use password instead") {
+                Button("Use a password instead") {
                     viewModel.mode = .signIn
                     viewModel.clearForm()
                 }
@@ -601,20 +618,25 @@ public struct AuthenticationView: View {
                 .foregroundStyle(PatinaColors.Text.secondary)
             }
 
-            HStack(spacing: PatinaSpacing.xs) {
-                Text(viewModel.mode == .signIn || viewModel.mode == .magicLink
-                     ? "Don't have an account?"
-                     : "Already have an account?")
-                    .font(PatinaTypography.bodySmall)
-                    .foregroundStyle(PatinaColors.Text.muted)
+            // The email-code path unifies sign-up and sign-in, so it never
+            // shows the password "Sign Up / Sign In" account toggle — that
+            // only belongs to the password fallback form.
+            if viewModel.mode != .magicLink {
+                HStack(spacing: PatinaSpacing.xs) {
+                    Text(viewModel.mode == .signIn
+                         ? "Don't have an account?"
+                         : "Already have an account?")
+                        .font(PatinaTypography.bodySmall)
+                        .foregroundStyle(PatinaColors.Text.muted)
 
-                Button(viewModel.mode == .signIn || viewModel.mode == .magicLink ? "Sign Up" : "Sign In") {
-                    viewModel.mode = (viewModel.mode == .signIn || viewModel.mode == .magicLink) ? .signUp : .signIn
-                    viewModel.clearForm()
+                    Button(viewModel.mode == .signIn ? "Sign Up" : "Sign In") {
+                        viewModel.mode = viewModel.mode == .signIn ? .signUp : .signIn
+                        viewModel.clearForm()
+                    }
+                    .font(PatinaTypography.bodySmallMedium)
+                    .foregroundStyle(PatinaColors.Text.secondary)
+                    .accessibilityIdentifier("auth.form.modeSwitcherButton")
                 }
-                .font(PatinaTypography.bodySmallMedium)
-                .foregroundStyle(PatinaColors.Text.secondary)
-                .accessibilityIdentifier("auth.form.modeSwitcherButton")
             }
         }
         .padding(.top, PatinaSpacing.md)

@@ -173,7 +173,12 @@ struct DailyRoomView: View {
     }
 
     private var content: some View {
-        ScrollView(showsIndicators: false) {
+        // Read the engagement tier here so the whole home observes the two
+        // services that drive it (design-request status + badge counts); the
+        // reads register as SwiftUI dependencies and the home re-renders as the
+        // client progresses from marketplace → engaged → active project.
+        let tier = EngagementTier.current
+        return ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
                 DailyGreetingHeader(
                     dateString: viewModel.greetingDate.uppercased(),
@@ -240,16 +245,10 @@ struct DailyRoomView: View {
                     .padding(.top, 8)
                 }
 
-                // C.1 / R29: the Studio rail — Projects / Messages /
-                // Decisions / Notifications, the transactional hub the app
-                // was missing. Room-independent, so it renders above the
-                // room-dependent feed for zero-room users too.
-                StudioHubSection(
-                    unreadNotifications: notificationsViewModel.notifications
-                        .filter { !$0.isRead }.count,
-                    roomCount: viewModel.rooms.count
-                )
-
+                // Editorial hero: the "today" story sits front and centre,
+                // directly under the greeting/resume cards. The transactional
+                // Studio hub is no longer stacked above it — it now grows in
+                // BELOW the feed, gated by engagement tier (see bottomSection).
                 if let story = viewModel.todayStory {
                     Button {
                         withAnimation(reduceMotion ? nil : .patinaHero) {
@@ -288,8 +287,38 @@ struct DailyRoomView: View {
                     roomFeed
                 }
 
+                // Progressive disclosure. At `.discovering` the home shows a
+                // single soft "Work with a designer" CTA (marketplace-first);
+                // once the client engages a designer the Studio hub grows in
+                // below the editorial hero, revealing more as the relationship
+                // deepens.
+                bottomSection(tier: tier)
+
                 Spacer().frame(height: 120)
             }
+        }
+    }
+
+    /// The tier-gated bottom of the home surface. Discovering-tier users see
+    /// only the designer bridge + discovery links; engaged/active users get the
+    /// `StudioHubSection`, which itself filters its rows by tier.
+    @ViewBuilder
+    private func bottomSection(tier: EngagementTier) -> some View {
+        if tier == .discovering {
+            WorkWithDesignerCTA(
+                onWorkWithDesigner: { coordinator.navigate(to: .designerConsultation) },
+                onBrowse: { coordinator.navigate(to: .emergence(pieceId: nil)) },
+                onSaved: { coordinator.navigate(to: .table) }
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+        } else {
+            StudioHubSection(
+                unreadNotifications: notificationsViewModel.notifications
+                    .filter { !$0.isRead }.count,
+                roomCount: viewModel.rooms.count,
+                tier: tier
+            )
         }
     }
 

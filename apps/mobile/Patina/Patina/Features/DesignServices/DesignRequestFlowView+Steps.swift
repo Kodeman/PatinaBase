@@ -343,29 +343,37 @@ extension DesignRequestFlowView {
 /// Wraps `AuthScreenView` for the request flow's upload gate. Guests can still
 /// browse (no-op) but the flow only advances on a real sign-in.
 struct InFlowAuthSheet: View {
-    @State private var showingEmailAuth = false
-    @State private var showingEmailSignUp = false
+    @State private var showingEmailCode = false
+    @State private var showingPasswordSignIn = false
 
     var body: some View {
         AuthScreenView(
-            onSignInWithApple: { result in
+            onSignInWithApple: { result, rawNonce in
                 Task {
                     let viewModel = AuthViewModel()
-                    await viewModel.handleAppleSignIn(result: result)
+                    await viewModel.handleAppleSignIn(result: result, rawNonce: rawNonce)
                 }
             },
             onSignInWithGoogle: {
                 Task { try? await AuthService.shared.signInWithGoogle() }
             },
-            onSignInWithEmail: { showingEmailAuth = true },
-            onCreateAccount: { showingEmailSignUp = true },
-            onBrowseAsGuest: { /* no-op: the flow requires auth to upload */ }
+            onContinueWithEmail: {
+                AuthService.shared.clearError()
+                showingEmailCode = true
+            },
+            onUsePassword: {
+                AuthService.shared.clearError()
+                showingPasswordSignIn = true
+            },
+            // Upload requires a real account, so hide the guest affordance.
+            showGuest: false,
+            errorMessage: AuthService.shared.errorMessage
         )
-        .sheet(isPresented: $showingEmailAuth) {
-            AuthenticationView()
+        .sheet(isPresented: $showingEmailCode) {
+            AuthenticationView(initialMode: .magicLink)
         }
-        .sheet(isPresented: $showingEmailSignUp) {
-            AuthenticationView(initialMode: .signUp)
+        .sheet(isPresented: $showingPasswordSignIn) {
+            AuthenticationView(initialMode: .signIn)
         }
     }
 }
