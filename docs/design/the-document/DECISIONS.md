@@ -3233,3 +3233,55 @@ resolver's fallback; chain adoption becomes a Slice 03 compose-time human
 act, assisted, confirmed, never silent.
 
 *Entries add: I56 · last id = I56*
+
+### O9 · Open — where do The Work's task rows live in the spine grammar? — 2026-07-15
+
+R99 gives the spine three row types — milestones, items, threads. Project
+tasks (The Work, `project_tasks` via useSectionTasks) are none of the
+three, yet §2 dissolves The Work into the spine. Slice 01 mounts
+`CoordinationWork` verbatim beneath the phase list — zero regression:
+tasks keep their CRUD and their ⊘ blocked-ticks, which open the blocking
+item's sheet through the spine's sheet state — pending a ruling: do task
+rows become a fourth row type inside phases, stay a separate band beneath
+the spine, or fold into items? Resolve at the Slice 01 review.
+
+*Entries add: O9 · last id = O9*
+
+### I57 · Slice 01 built — the Spine renders behind the gate — 2026-07-15
+
+Branch `schedule/slice-01`. Landed this slice: the chain schema (00323,
+additive — chain columns on project_phases, `schedule_milestones`,
+`schedule_revisions` with RPC-only writes, `blocks_milestone_id`); the
+pure resolver (`resolveSchedule` in @patina/utils — chain in; dates,
+slack, conflicts out; forward/backward/anchors/threads/legacy fallback;
+19-case jest matrix); the schedule hooks (`useResolvedSchedule`, the
+single impure door — nothing else in the app computes time); the
+specimen seed (Aspen Loft: five chained phases, thread-lane Procurement,
+anchored install +40d carrying 12 days slack, an overdue blocking
+sign-off); and `<ScheduleSpine/>` replacing `CoordinationBand` behind the
+PostHog flag **`schedule-spine`** (fail-closed; while the flag loads the
+old band renders — zero flash for the non-pilot cohort). `PhaseTimeline`
+is untouched — the Rule is Slice 02. Items sort blocking-first then due
+(R101.2); court survives as a chip via an additive OpenItemRow prop;
+court grouping dies only behind the gate-on branch. OpenItemSheet and
+ItemComposer mount byte-identical to the band's — item CRUD preserved by
+construction. Telemetry: `spine_phase_unfolded` (§7 name-contract) fires
+on fold→unfold only.
+
+Code-only blesses: `schedule_milestones` named against the
+payment-milestone collision; no chain backfill (I56's ruling); `+ New
+open item` moves to the spine's section head (hidden until the
+designer-client resolves — the court bar's entry point dissolves with the
+band); items on thread-lane phases render no main-phase row (the thread
+is the stitch; their room is the Loom) while null/deleted-phase items
+land in the active phase (A0.2).
+
+Escalations for the Slice 01 review (designer-visible): the unfold/fold
+affordance is a persistent quiet mono mark, not the prototype's
+hover-reveal (hover actions are banned in a read slice; touch has no
+hover); the thread stitch omits the FF&E "N of M lines ordered" meta;
+and O9 — the task rows' place in the spine grammar. The screenshot drop
+follows as the FIRST REVIEW MILESTONE; the flip gate stays off until the
+ruling blesses the dissolve.
+
+*Entries add: I57 · last id = I57*
