@@ -3337,3 +3337,19 @@ status weight per R99's words vs the prototype's past/future ink split
 `delayed` phases reading as `ahead` weight on the rule.
 
 *Entries add: I58 · last id = I58*
+
+### R103 · Slice 02 review — accepted; Slice 03 (Compose) begins — 2026-07-15
+
+**Ruled (design authority, on the Slice 02 screenshot drop): accepted.**
+Slice 03 — Compose, §4 of the package — begins. Conservative readings,
+stated so nothing is assumed: the flip gate stays **off**; the Slice 02
+escalations ride as-implemented unless separately overruled (the
+pin-strip height with its inline title; the stagger's N-row growth
+beyond two rows; the `Unplaced · N` and render-nothing empty
+treatments; the minimal mobile fold; the minimap's silent no-op when
+the spine section isn't mounted; the active segment's per-phase status
+ink; `delayed` reading as `ahead` weight; the 20px thread-lane pitch).
+O9 remains open. Slice 03 builds on `schedule/slice-03`, stacked on
+slice-02; its review milestone gates Slice 04 (Adjust).
+
+*Entries add: R103 · last id = R103*
