@@ -3422,5 +3422,3 @@ error; the weeks-mirror rounds 1–3d to 0w in summary totals; the
 accordion hosts milestones under "Deliverables, gates & key dates."
 
 *Entries add: I59 · last id = I59*
-
-*Entries add: I59 · last id = I59*
