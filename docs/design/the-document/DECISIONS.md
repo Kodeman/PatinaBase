@@ -2997,6 +2997,8 @@ The open Brief also gains a **scan strip** (`BriefScanStrip`, between the facts 
 
 *Entries add: R98 · last id = R98*
 
+## The Document — the Schedule package: the Spine & the Rule (R99–R101 · O8) — 2026-07-15
+
 ### R99 · The Schedule master direction — the Spine and the Rule — 2026-07-15
 
 **Ruled.** From the four-directions review (Jul 14–15): the Ledger Spine (B)
@@ -3175,3 +3177,59 @@ each batch's footer from the post-append contents — the corruption alarm
 the package specifies.
 
 *Entries add: I55 · last id = I55*
+
+### I56 · §0 audit — the schedule builds on what exists — 2026-07-15
+
+The audit-before-building the package mandates, run against main @ 156f6b13.
+Findings by the package's own checklist:
+
+**A0.1 · Phases.** `project_phases` (00066) is the table behind "tap a
+phase to set dates": `start_date` / `target_end_date` DATE columns,
+`duration_weeks`, `sort_order`, status CHECK
+(pending/in_progress/completed/delayed), designer-ALL / client-SELECT RLS.
+The chain model **extends** it — `duration_days`, `follows_phase_id`,
+`anchor_date`, `lane` land as additive columns (migration 00323); nothing
+is superseded. Precedence: `duration_days` when set, else
+`duration_weeks × 7`, else the stored legacy dates. Live rows carry dates
+with no chain — the resolver renders them as-is (source `legacy-dates`)
+and never infers order from `sort_order`.
+
+**A0.2 · Items.** Open items are `client_decisions`, widened by 00213
+(`coordination_kind` incl. signoff/punch, `court`, `blocks_kind`).
+`phase_id` already exists (00084) and is reused; FF&E blocking is already
+modeled (`project_ffe_items.blocked_by_decision_id` + `blocks_kind='ffe'`).
+The only schema addition is `blocks_milestone_id`. Items with no inferable
+phase render in the active phase — a read-time rule, not a backfill.
+
+**A0.3 · Milestones.** No schedule-milestone table exists under any name.
+`project_payment_milestones` / `proposal_payment_milestones` are PAYMENT
+milestones — a live semantic collision — so the new table is named
+`schedule_milestones`.
+
+**A0.4 · The signature event.** A real event surface exists — not a bare
+status column: `sign_proposal` (00210) and `record_offline_signature`
+(00254) both settle `proposals.status='accepted'` and call
+`activate_proposal_as_project` (head body **00279** — not 00274; 00279
+reconciles an FF&E dual-pricing regression onto 00274's body and is the
+last `CREATE OR REPLACE`, confirmed by grepping every migration for the
+function name — the only place `project_phases` rows are created), and
+00291's `ae_proposal_signed_dispatch` trigger fires on the accepted
+transition. The Slice 05 baseline cut hooks the activation RPC. Nothing to
+work around.
+
+**A0.5 · The dissolving sections.** `CoordinationBand` (which renders
+`CoordinationWork` inside itself, coordination-band.tsx:153) mounts at
+doc/[id]/page.tsx:533 — one subtree, one flip-gate point. `PhaseTimeline`
+(the current bar, "tap a phase to set dates") is a separate sibling at
+page.tsx:448, untouched in Slice 01; the Rule replaces it in Slice 02.
+The spine reuses the band's queries verbatim (useCoordinationItems,
+useSectionTasks, useProjectParties, the coordination realtime channel).
+
+**Ruling (code-only): no chain backfill migration.** A0.1 demands
+unparseable chains be flagged for manual review, never guessed — a
+migration UPDATE cannot flag-and-wait, and the live data is known-dirty
+(phases drawn out of order). Slice 01 reads legacy dates through the
+resolver's fallback; chain adoption becomes a Slice 03 compose-time human
+act, assisted, confirmed, never silent.
+
+*Entries add: I56 · last id = I56*
