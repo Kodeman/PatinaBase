@@ -15,11 +15,12 @@
  * Depth is value contrast + a 1px hairline bottom edge, never a shadow (D4).
  */
 
-import type { CoordinationItem } from '@patina/supabase';
+import type { CoordinationItem, Court } from '@patina/supabase';
 import type { SectionTask } from '@/hooks/use-section-work';
 import { chipStyle, itemTypeToken } from './item-type';
+import { partyFor, type PartyLike } from './party';
 import { blocksText, dueState } from '@/lib/document/coordination-derivation';
-import { fmtDay } from '@/lib/document/format';
+import { fmtDay, todayYmd } from '@/lib/document/format';
 
 // ── open-item-row.tsx — a single open item line (type chip, title, blocks, due) ──
 export interface OpenItemRowProps {
@@ -27,9 +28,15 @@ export interface OpenItemRowProps {
   /** For blocksText(item, tasks). */
   tasks: SectionTask[];
   onOpen: () => void;
+  /** Ball-in-court read, inline (the Schedule Spine's phase rows carry it —
+   *  prototype `Ball: you` / `Ball: sub`). Omitted by the court groups, whose
+   *  section heads already name the court; when absent the row renders exactly
+   *  as before. Resolution mirrors court-group: a concrete party row wins,
+   *  else the generic court token / the client's name (partyFor). */
+  court?: { court: Court; party?: PartyLike | null; clientName?: string };
 }
 
-export function OpenItemRow({ item, tasks, onOpen }: OpenItemRowProps) {
+export function OpenItemRow({ item, tasks, onOpen, court }: OpenItemRowProps) {
   const token = itemTypeToken(item.coordination_kind);
   const blocks = blocksText(item, tasks);
   const due = item.due_date;
@@ -38,6 +45,13 @@ export function OpenItemRow({ item, tasks, onOpen }: OpenItemRowProps) {
   // The ⊘ marker (the prototype `.bk`) fronts a real blocking line — but not the
   // "ahead of the work" / blocks-kind-less fallback, which carries no marker.
   const blocked = Boolean(blocks) && blocks!.startsWith('blocks ');
+
+  // The ball-in-court chip (only when the host passes `court`): terracotta ink
+  // when the row is blocking AND past due — the ball someone is sitting on.
+  const courtToken = court
+    ? partyFor(court.court, { party: court.party, clientName: court.clientName })
+    : null;
+  const courtLate = blocked && due != null && due < todayYmd();
 
   return (
     <button
@@ -70,6 +84,22 @@ export function OpenItemRow({ item, tasks, onOpen }: OpenItemRowProps) {
           </span>
         )}
       </span>
+
+      {/* ball-in-court chip — dot + mono label, between the body and the due
+          read (Spine rows only; absent when `court` isn't passed) */}
+      {courtToken && (
+        <span
+          className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.04em]"
+          style={{ color: courtLate ? '#C4836F' : 'var(--color-aged-oak)' }}
+        >
+          <span
+            aria-hidden
+            className="inline-block h-[6px] w-[6px] rounded-full"
+            style={{ background: courtToken.dotColor }}
+          />
+          Ball: {court!.court === 'designer' ? 'you' : courtToken.label}
+        </span>
+      )}
 
       {/* due read — mono, terracotta ink when due-soon, aged-oak otherwise */}
       {due && (
