@@ -318,6 +318,10 @@ export function useAddProposalPhase() {
       revisionLimit,
       gateCondition,
       deliverables,
+      durationDays,
+      anchorDate,
+      followsPhaseId,
+      lane,
     }: {
       proposalId: string;
       name: string;
@@ -327,6 +331,16 @@ export function useAddProposalPhase() {
       revisionLimit?: number;
       gateCondition?: string;
       deliverables?: Array<{ label: string; type?: string }>;
+      /**
+       * Chain columns (00323/00324 — Schedule Compose). Additive: existing
+       * callers that omit these keep the exact prior insert shape —
+       * duration_days/anchor_date/follows_phase_id NULL, lane 'main' (the
+       * column's own DB default).
+       */
+      durationDays?: number;
+      anchorDate?: string;
+      followsPhaseId?: string;
+      lane?: 'main' | 'thread';
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -352,6 +366,10 @@ export function useAddProposalPhase() {
           gate_condition: gateCondition || null,
           deliverables: deliverables || [],
           sort_order: nextOrder,
+          duration_days: durationDays ?? null,
+          anchor_date: anchorDate ?? null,
+          follows_phase_id: followsPhaseId ?? null,
+          lane: lane ?? 'main',
         })
         .select()
         .single();
@@ -415,6 +433,154 @@ export function useRemoveProposalPhase() {
     onSuccess: (_, { proposalId }) => {
       queryClient.invalidateQueries({ queryKey: ['proposal-phases', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['scope-builder-summary', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+    },
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROPOSAL SCHEDULE MILESTONES (00324 — the client-visible readonly delta,
+// R101.3: proposals carry ANCHORED dates only, no offset-days branch —
+// anchor_date is NOT NULL on this table, unlike schedule_milestones which
+// also allows offset_days).
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ProposalScheduleMilestone {
+  id: string;
+  phase_id: string;
+  name: string;
+  kind: string;
+  anchor_date: string;
+  sort_order: number;
+}
+
+/**
+ * proposal_schedule_milestones for a proposal, joined through proposal_phases
+ * (the table has no proposal_id of its own — every milestone hangs off a
+ * phase), mirroring useScheduleMilestones' join-through-parent shape on the
+ * project side (use-schedule.ts). Key `['proposal-schedule-milestones', proposalId]`.
+ */
+export function useProposalScheduleMilestones(proposalId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['proposal-schedule-milestones', proposalId],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('proposal_schedule_milestones')
+        .select('*, proposal_phases!inner(proposal_id)')
+        .eq('proposal_phases.proposal_id', proposalId)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      // The join is a filter only — strip the embed so the returned shape is
+      // exactly the proposal_schedule_milestones row.
+      return (data ?? []).map((row: ProposalScheduleMilestone & { proposal_phases?: unknown }) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { proposal_phases: _joined, ...rest } = row;
+        return rest as ProposalScheduleMilestone;
+      });
+    },
+    enabled: !!proposalId,
+  });
+}
+
+export function useAddProposalScheduleMilestone() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      phaseId,
+      name,
+      kind,
+      anchorDate,
+    }: {
+      /** Required for invalidation only — not a column on proposal_schedule_milestones. */
+      proposalId: string;
+      phaseId: string;
+      name: string;
+      kind?: string;
+      /** NOT NULL on this table — proposals carry anchored dates only (R101.3). */
+      anchorDate: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+
+      const { data: existing } = await supabase
+        .from('proposal_schedule_milestones')
+        .select('sort_order')
+        .eq('phase_id', phaseId)
+        .order('sort_order', { ascending: false })
+        .limit(1);
+
+      const nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
+
+      const { data, error } = await supabase
+        .from('proposal_schedule_milestones')
+        .insert({
+          phase_id: phaseId,
+          name,
+          kind: kind || 'event',
+          anchor_date: anchorDate,
+          sort_order: nextOrder,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: ['proposal-schedule-milestones', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+    },
+  });
+}
+
+export function useUpdateProposalScheduleMilestone() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      milestoneId,
+      updates,
+    }: {
+      milestoneId: string;
+      /** Required for invalidation only — not a column on proposal_schedule_milestones. */
+      proposalId: string;
+      updates: Record<string, unknown>;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase
+        .from('proposal_schedule_milestones')
+        .update(updates)
+        .eq('id', milestoneId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: ['proposal-schedule-milestones', proposalId] });
+      queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
+    },
+  });
+}
+
+export function useRemoveProposalScheduleMilestone() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      milestoneId,
+    }: {
+      milestoneId: string;
+      /** Required for invalidation only — not a column on proposal_schedule_milestones. */
+      proposalId: string;
+    }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { error } = await supabase.from('proposal_schedule_milestones').delete().eq('id', milestoneId);
+      if (error) throw error;
+    },
+    onSuccess: (_, { proposalId }) => {
+      queryClient.invalidateQueries({ queryKey: ['proposal-schedule-milestones', proposalId] });
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
     },
   });

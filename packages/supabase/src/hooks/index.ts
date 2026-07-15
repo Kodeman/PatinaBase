@@ -764,12 +764,18 @@ export {
   useProposalChangeOrderTerms,
   useUpsertChangeOrderTerms,
   useScopeBuilderSummary,
+  // Proposal Schedule Milestones (00324 — Schedule Compose)
+  useProposalScheduleMilestones,
+  useAddProposalScheduleMilestone,
+  useUpdateProposalScheduleMilestone,
+  useRemoveProposalScheduleMilestone,
 } from './use-scope-builder';
 export type {
   ProposalScopeRoom,
   ProposalPhase,
   ProposalExclusion,
   ProposalPaymentMilestone,
+  ProposalScheduleMilestone,
 } from './use-scope-builder';
 export {
   // Project v2 (scope-aware)
@@ -1338,3 +1344,18 @@ export {
   mapMilestoneRowToScheduleInput,
 } from './use-schedule';
 export type { PhaseRow, MilestoneRow, ScheduleRevisionRow, UseResolvedScheduleResult } from './use-schedule';
+
+// The Document · Schedule (C4) — Slice 03 (Compose): write paths for
+// schedule_milestones + the project_phases chain columns, delete-with-relink,
+// and the two birth RPCs (seed_project_schedule_from_template /
+// copy_schedule_as_built). use-schedule.ts above stays read-only.
+export {
+  useAddScheduleMilestone,
+  useUpdateScheduleMilestone,
+  useRemoveScheduleMilestone,
+  useUpdateProjectPhaseChain,
+  useDeletePhaseWithRelink,
+  useSeedProjectScheduleFromTemplate,
+  useCopyScheduleAsBuilt,
+} from './use-schedule-compose';
+export type { PhaseRelinkUpdate } from './use-schedule-compose';

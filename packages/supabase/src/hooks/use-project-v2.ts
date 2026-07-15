@@ -443,12 +443,25 @@ export function useCreateProjectPhase() {
       name,
       sortOrder,
       status = 'pending',
+      durationDays,
+      anchorDate,
+      followsPhaseId,
+      lane,
     }: {
       projectId: string;
       phaseKey: string;
       name: string;
       sortOrder?: number;
       status?: string;
+      /**
+       * Chain columns (00323/00324 — Schedule Compose). Additive: omit any
+       * of these and the DB default/NULL applies, matching pre-Slice-03
+       * behavior exactly for every existing caller.
+       */
+      durationDays?: number;
+      anchorDate?: string;
+      followsPhaseId?: string;
+      lane?: 'main' | 'thread';
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
@@ -459,6 +472,10 @@ export function useCreateProjectPhase() {
         status,
       };
       if (sortOrder !== undefined) insert.sort_order = sortOrder;
+      if (durationDays !== undefined) insert.duration_days = durationDays;
+      if (anchorDate !== undefined) insert.anchor_date = anchorDate;
+      if (followsPhaseId !== undefined) insert.follows_phase_id = followsPhaseId;
+      if (lane !== undefined) insert.lane = lane;
       const { data, error } = await supabase
         .from('project_phases')
         .insert(insert)
