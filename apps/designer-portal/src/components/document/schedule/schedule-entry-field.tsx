@@ -40,6 +40,11 @@ export interface ScheduleEntryFieldProps {
   bareNumberUnit?: 'days' | 'weeks' | 'reject';
   /** Which parse kinds this surface accepts. Default: both. */
   accept?: Array<'duration' | 'anchor'>;
+  /** Override the "valid parse, wrong kind" reason text (default:
+   *  REASON_FOR_KIND[accept[0]]). E.g. a proposal milestone date field
+   *  (`accept={['anchor']}`) rejects a typed duration with "proposals carry
+   *  anchored dates only" instead of the generic reason (R101.3). */
+  wrongKindReason?: string;
   placeholder?: string;
   initialValue?: string;
   autoFocus?: boolean;
@@ -60,6 +65,7 @@ export function ScheduleEntryField({
   today,
   bareNumberUnit = 'reject',
   accept = ['duration', 'anchor'],
+  wrongKindReason,
   placeholder,
   initialValue = '',
   autoFocus = true,
@@ -85,7 +91,7 @@ export function ScheduleEntryField({
       return;
     }
     if (!accept.includes(parsed.kind)) {
-      setError(REASON_FOR_KIND[accept[0] ?? 'duration']);
+      setError(wrongKindReason ?? REASON_FOR_KIND[accept[0] ?? 'duration']);
       return;
     }
     onCommit(parsed);

@@ -13,12 +13,14 @@ import {
   useProposalPhases,
   useProposalExclusions,
   useProposalScopeRooms,
+  useProposalScheduleMilestones,
 } from '@patina/supabase';
 import type {
   ProposalPaymentMilestone,
   ProposalPhase,
   ProposalExclusion,
   ProposalScopeRoom,
+  ProposalScheduleMilestone,
 } from '@patina/supabase';
 import {
   LineItemsBlock,
@@ -28,6 +30,17 @@ import {
   ScopeRoomsBlock,
 } from '@patina/design-system';
 import { useProposal } from '@/hooks/use-proposals';
+import { fmtDay } from '@/lib/document/format';
+
+/** Sign-off · Decision · Delivery · Event — the same kind labels the composer
+ *  wears (milestone-composer.tsx's KINDS), so a milestone reads identically
+ *  whether it's being drafted or reviewed read-only. */
+const MILESTONE_KIND_LABEL: Record<string, string> = {
+  signoff: 'Sign-off',
+  decision: 'Decision',
+  delivery: 'Delivery',
+  event: 'Event',
+};
 
 function BlockLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -53,6 +66,14 @@ export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
   };
   const { data: scopeRooms } = useProposalScopeRooms(proposalId) as {
     data: ProposalScopeRoom[] | undefined;
+  };
+  // Slice 03 (R101.3) — anchored proposal milestones are the one client-
+  // visible compose delta; they ride the proposal's existing non-draft RLS,
+  // not a flag. Deliberately NOT the working (offset) milestones a designer
+  // sketches on the project side — only the hard-dated commitments a client
+  // signs against exist on this table at all.
+  const { data: scheduleMilestones } = useProposalScheduleMilestones(proposalId) as {
+    data: ProposalScheduleMilestone[] | undefined;
   };
 
   if (isLoading) {
@@ -159,8 +180,34 @@ export function ProposalBlocksReadOnly({ proposalId }: { proposalId: string }) {
             phases={(phases ?? []).map((p) => ({
               name: p.name,
               duration_weeks: p.duration_weeks,
+              duration_days: p.duration_days,
             }))}
           />
+
+          {/* Slice 03 — anchored milestones as a "Key dates" sub-line inside
+              the Timeline block (the boring placement, escalated: could also
+              weave per-phase — a flat chronological list read faster for a
+              client scanning commitments than a list re-grouped by phase). */}
+          {(scheduleMilestones ?? []).length > 0 && (
+            <div className="mt-3 border-t border-[var(--border-default)] pt-2">
+              <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.06em] text-[var(--text-muted)]">
+                Key dates
+              </p>
+              <ul className="space-y-1.5">
+                {(scheduleMilestones ?? [])
+                  .slice()
+                  .sort((a, b) => (a.anchor_date < b.anchor_date ? -1 : a.anchor_date > b.anchor_date ? 1 : 0))
+                  .map((m) => (
+                    <li key={m.id} className="flex items-baseline gap-2 type-body-small">
+                      <span className="text-[var(--text-body)]">{m.name}</span>
+                      <span className="text-[var(--text-muted)]">
+                        · {MILESTONE_KIND_LABEL[m.kind] ?? m.kind} · {fmtDay(m.anchor_date)}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 

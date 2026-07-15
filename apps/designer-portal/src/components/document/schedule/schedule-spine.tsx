@@ -187,6 +187,10 @@ export function ScheduleSpine({
     () => schedule.resolved?.milestones ?? [],
     [schedule.resolved],
   );
+  const resolvedConflicts = useMemo(
+    () => schedule.resolved?.conflicts ?? [],
+    [schedule.resolved],
+  );
 
   /** The rendered entries — main-lane phases only; threads stitch into hosts. */
   const mainLane = useMemo(
@@ -261,7 +265,15 @@ export function ScheduleSpine({
           ? rowById.get(row.follows_phase_id)?.name ?? null
           : null;
 
-        const metaLine = phaseMeta({
+        // Slice 03 — a chain_does_not_fit conflict tags BOTH phaseId and
+        // anchorId with the ANCHORED phase's own id (the anchor names
+        // itself), so this phase's overrun (if any) is always found by its
+        // own id — never a downstream/upstream lookup.
+        const chainConflict = resolvedConflicts.find(
+          (c) => c.kind === 'chain_does_not_fit' && c.phaseId === phase.id,
+        );
+
+        const { text: metaLine, overrunText } = phaseMeta({
           state,
           start: phase.start,
           end: phase.end,
@@ -273,6 +285,11 @@ export function ScheduleSpine({
           predecessorName,
           durationDays,
           milestoneCount: milestones.length,
+          slackDays: phase.slackDays,
+          overrun:
+            chainConflict && phase.start
+              ? { anchorDate: phase.start, overrunDays: chainConflict.overrunDays ?? 0 }
+              : null,
         });
 
         const threads = (threadMap.get(phase.id) ?? [])
@@ -289,6 +306,7 @@ export function ScheduleSpine({
           name: row?.name ?? '',
           state,
           metaLine,
+          overrunText,
           milestones,
           items: phaseItems,
           threads,
@@ -305,6 +323,7 @@ export function ScheduleSpine({
       validPhaseIds,
       threadMap,
       resolvedPhases,
+      resolvedConflicts,
     ],
   );
 
@@ -353,7 +372,10 @@ export function ScheduleSpine({
   const [ghostResetSignal, setGhostResetSignal] = useState(0);
 
   const handleAddPhase = (input: GhostAddInput) => {
-    // telemetry: wired in S3-6 (schedule_phase_added; schedule_anchor_set when anchorDate)
+    // Captured BEFORE the mutate call — resolvedPhases.length flips the
+    // instant the write lands, so "was this the birthing add?" has to be
+    // decided from the render that triggered the click, not the one after.
+    const wasEmpty = resolvedPhases.length === 0;
     createPhase.mutate(
       {
         projectId,
@@ -364,7 +386,23 @@ export function ScheduleSpine({
         anchorDate: input.anchorDate,
         followsPhaseId: lastMainPhaseId ?? undefined,
       },
-      { onSuccess: () => setGhostResetSignal((n) => n + 1) },
+      {
+        onSuccess: () => {
+          if (wasEmpty) {
+            scheduleEvents.scheduleBorn({ surface: 'project', project_id: projectId, kind: 'blank' });
+          }
+          scheduleEvents.schedulePhaseAdded({ surface: 'project', project_id: projectId, via: 'ghost_line' });
+          if (input.anchorDate) {
+            scheduleEvents.scheduleAnchorSet({
+              surface: 'project',
+              project_id: projectId,
+              target: 'phase',
+              set: true,
+            });
+          }
+          setGhostResetSignal((n) => n + 1);
+        },
+      },
     );
   };
   const ghostError = createPhase.isError
@@ -375,16 +413,27 @@ export function ScheduleSpine({
     updateChain.mutate({ phaseId, projectId, durationDays: days }, { onSuccess: closeCompose });
   };
   const handleSetAnchor = (phaseId: string, date: string) => {
-    // telemetry: wired in S3-6 (schedule_anchor_set target 'phase')
-    updateChain.mutate({ phaseId, projectId, anchorDate: date }, { onSuccess: closeCompose });
+    updateChain.mutate(
+      { phaseId, projectId, anchorDate: date },
+      {
+        onSuccess: () => {
+          scheduleEvents.scheduleAnchorSet({ surface: 'project', project_id: projectId, target: 'phase', set: true });
+          closeCompose();
+        },
+      },
+    );
   };
   const handleUnpinPhase = (phaseId: string) => {
-    // telemetry: wired in S3-6 (schedule_anchor_set unpin target 'phase')
-    updateChain.mutate({ phaseId, projectId, anchorDate: null });
+    updateChain.mutate(
+      { phaseId, projectId, anchorDate: null },
+      {
+        onSuccess: () =>
+          scheduleEvents.scheduleAnchorSet({ surface: 'project', project_id: projectId, target: 'phase', set: false }),
+      },
+    );
   };
 
   const handleAddMilestone = (phaseId: string, draft: MilestoneDraft) => {
-    // telemetry: wired in S3-6 (schedule_anchor_set target 'milestone' when anchorDate)
     addMilestone.mutate(
       {
         projectId,
@@ -394,12 +443,34 @@ export function ScheduleSpine({
         offsetDays: draft.offsetDays,
         anchorDate: draft.anchorDate,
       },
-      { onSuccess: closeCompose },
+      {
+        onSuccess: () => {
+          if (draft.anchorDate) {
+            scheduleEvents.scheduleAnchorSet({
+              surface: 'project',
+              project_id: projectId,
+              target: 'milestone',
+              set: true,
+            });
+          }
+          closeCompose();
+        },
+      },
     );
   };
   const handleUnpinMilestone = (milestoneId: string) => {
-    // telemetry: wired in S3-6 (schedule_anchor_set unpin target 'milestone')
-    updateMilestone.mutate({ milestoneId, projectId, anchorDate: null });
+    updateMilestone.mutate(
+      { milestoneId, projectId, anchorDate: null },
+      {
+        onSuccess: () =>
+          scheduleEvents.scheduleAnchorSet({
+            surface: 'project',
+            project_id: projectId,
+            target: 'milestone',
+            set: false,
+          }),
+      },
+    );
   };
 
   const handleDeletePhase = (phaseId: string) => {
@@ -418,12 +489,27 @@ export function ScheduleSpine({
   };
 
   const handleSeedPatinaSix = () => {
-    // telemetry: wired in S3-6 (schedule_born · project · patina_six)
-    seedTemplate.mutate({ projectId, templateSlug: 'patina_six' });
+    seedTemplate.mutate(
+      { projectId, templateSlug: 'patina_six' },
+      {
+        onSuccess: () =>
+          scheduleEvents.scheduleBorn({ surface: 'project', project_id: projectId, kind: 'patina_six' }),
+      },
+    );
   };
   const handleCopyFromProject = (sourceProjectId: string) => {
-    // telemetry: wired in S3-6 (schedule_born · project · past_project + source_project_id)
-    copyAsBuilt.mutate({ sourceProjectId, targetProjectId: projectId });
+    copyAsBuilt.mutate(
+      { sourceProjectId, targetProjectId: projectId },
+      {
+        onSuccess: () =>
+          scheduleEvents.scheduleBorn({
+            surface: 'project',
+            project_id: projectId,
+            kind: 'past_project',
+            source_project_id: sourceProjectId,
+          }),
+      },
+    );
   };
 
   const birthBusy = seedTemplate.isPending || copyAsBuilt.isPending;
@@ -665,6 +751,7 @@ export function ScheduleSpine({
                               )
                       }
                       metaLine={entry.metaLine}
+                      overrunText={entry.overrunText}
                       milestones={entry.milestones}
                       items={entry.items}
                       tasks={allTasks}

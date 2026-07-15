@@ -145,13 +145,17 @@ export function GhostAddLine({
     if (!trimmedName) return;
     const trimmedDur = durationText.trim();
     if (!trimmedDur) {
-      // telemetry: wired in S3-6 (schedule_phase_added)
+      // schedule_phase_added (+ schedule_born on a birthing add) fires in the
+      // caller's onSuccess (schedule-spine.tsx handleAddPhase /
+      // phase-builder.tsx's proposal-surface equivalent) — this component
+      // only signals intent via onAdd, never calls PostHog itself.
       onAdd({ name: trimmedName });
       return;
     }
     const parsed = parseScheduleEntry(trimmedDur, today, { bareNumberUnit: 'weeks' });
     if (parsed.kind === 'invalid') return; // reason already shows on the compute line
-    // telemetry: wired in S3-6 (schedule_phase_added; schedule_anchor_set on the anchor arm)
+    // schedule_phase_added + schedule_anchor_set (anchor arm) both fire in
+    // the caller's onSuccess — see note above.
     if (parsed.kind === 'duration') onAdd({ name: trimmedName, durationDays: parsed.days });
     else onAdd({ name: trimmedName, anchorDate: parsed.date });
   };

@@ -96,7 +96,9 @@ export function ScheduleBirth({
 
   const onRow = (numeral: string) => {
     if (numeral === 'i') {
-      // telemetry: wired in S3-6 (schedule_born · kind 'patina_six')
+      // schedule_born (kind 'patina_six') fires in the caller's onSuccess
+      // (schedule-spine.tsx handleSeedPatinaSix / phase-builder.tsx's
+      // proposal-surface equivalent) — onSeedPatinaSix only signals intent.
       onSeedPatinaSix();
     } else if (numeral === 'ii') {
       setShowPicker((v) => !v);

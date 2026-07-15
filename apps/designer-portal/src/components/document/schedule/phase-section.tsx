@@ -46,6 +46,10 @@ export interface PhaseSectionProps {
   onToggle: (() => void) | null;
   /** Pre-composed by phaseMeta — '' renders nothing. */
   metaLine: string;
+  /** phaseMeta's separate terracotta segment (Slice 03 — a chain_does_not_fit
+   *  conflict naming THIS phase as its anchor). null/undefined → the entry
+   *  renders byte-identically to Slice 01/02 (no extra line, no extra DOM). */
+  overrunText?: string | null;
   /** This phase's resolved milestones, augmented with display names. */
   milestones: Array<ResolvedMilestone & { name: string }>;
   /** Already filtered (itemsForPhase) + sorted blocking-first by the caller. */
@@ -96,6 +100,7 @@ export function PhaseSection({
   expanded,
   onToggle,
   metaLine,
+  overrunText,
   milestones,
   items,
   tasks,
@@ -190,6 +195,16 @@ export function PhaseSection({
         {metaLine && (
           <div className="mb-[0.2rem] mt-[0.15rem] font-mono text-[0.6rem] uppercase tracking-[0.08em] text-[var(--color-clay)]">
             {metaLine}
+          </div>
+        )}
+
+        {/* Slice 03 — the chain-doesn't-fit overrun, inked separately from the
+            meta line above so it can wear terracotta without the clay text
+            around it. Absent whenever this phase isn't the conflict's anchor
+            (the common case) — no extra DOM, byte-identical to before. */}
+        {overrunText && (
+          <div className="mb-[0.2rem] font-mono text-[0.6rem] uppercase tracking-[0.08em] text-[var(--color-terracotta)]">
+            {overrunText}
           </div>
         )}
 

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import { updateProposalTotal } from '../lib/proposal-total';
+import type { SchedulePhaseInput, ScheduleMilestoneInput, MilestoneKind } from '@patina/utils';
 
 const getSupabase = () => createBrowserClient();
 
@@ -33,6 +34,15 @@ export interface ProposalPhase {
   gate_condition: string | null;
   deliverables: Array<{ label: string; type?: string }>;
   sort_order: number;
+  /**
+   * Chain columns (00324 — Schedule Compose). Nullable/defaulted on rows
+   * written before this migration; `useProposalPhases` selects `*` so these
+   * are always present on the wire, just possibly null.
+   */
+  duration_days: number | null;
+  follows_phase_id: string | null;
+  anchor_date: string | null;
+  lane: 'main' | 'thread';
 }
 
 export interface ProposalExclusion {
@@ -584,6 +594,65 @@ export function useRemoveProposalScheduleMilestone() {
       queryClient.invalidateQueries({ queryKey: ['proposal', proposalId] });
     },
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PURE ROW → RESOLVER-INPUT MAPPERS (Slice 03 §4 — the proposal-side
+// equivalents of use-schedule.ts's mapPhaseRowToScheduleInput /
+// mapMilestoneRowToScheduleInput). Feed PhaseBuilder's ScheduleBirth /
+// GhostAddLine so the compute-preview line resolves against the REAL
+// committed proposal chain (R100 — resolveSchedule stays the only engine;
+// this only reshapes rows). proposal_phases has no `status` column (a
+// proposal phase is always notionally 'pending' pre-activation) and
+// proposal_schedule_milestones has neither `offset_days` nor `status`
+// (R101.3 — always a hard anchor date) — both map to the resolver's
+// closest honest constant rather than a DB column that doesn't exist.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Narrowed to the chain columns only (Pick, not the full ProposalPhase) so a
+ * caller with its own row shape (e.g. PhaseBuilder's local ProposalPhaseRow,
+ * which omits `deliverables`) can pass it structurally without carrying
+ * fields this mapper never reads.
+ */
+export type ProposalPhaseChainRow = Pick<
+  ProposalPhase,
+  'id' | 'name' | 'duration_days' | 'duration_weeks' | 'follows_phase_id' | 'anchor_date' | 'lane' | 'sort_order'
+>;
+
+export function mapProposalPhaseRowToScheduleInput(row: ProposalPhaseChainRow): SchedulePhaseInput {
+  return {
+    id: row.id,
+    name: row.name,
+    durationDays: row.duration_days ?? null,
+    durationWeeks: row.duration_weeks ?? null,
+    followsPhaseId: row.follows_phase_id ?? null,
+    anchorDate: row.anchor_date ?? null,
+    lane: row.lane === 'thread' ? 'thread' : 'main',
+    startDate: null,
+    targetEndDate: null,
+    sortOrder: row.sort_order ?? 0,
+    status: 'pending',
+  };
+}
+
+const PROPOSAL_MILESTONE_KINDS: readonly MilestoneKind[] = ['signoff', 'decision', 'delivery', 'event'];
+
+export function mapProposalScheduleMilestoneRowToScheduleInput(
+  row: ProposalScheduleMilestone
+): ScheduleMilestoneInput {
+  return {
+    id: row.id,
+    phaseId: row.phase_id,
+    name: row.name,
+    kind: (PROPOSAL_MILESTONE_KINDS as readonly string[]).includes(row.kind)
+      ? (row.kind as MilestoneKind)
+      : 'event',
+    offsetDays: null, // proposal milestones are never offset — always anchored (R101.3)
+    anchorDate: row.anchor_date,
+    status: 'upcoming',
+    sortOrder: row.sort_order ?? 0,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

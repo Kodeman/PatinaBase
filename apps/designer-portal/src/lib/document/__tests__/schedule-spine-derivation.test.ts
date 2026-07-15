@@ -219,35 +219,46 @@ describe('phaseMeta', () => {
           end: '2026-06-01',
           itemCount: 3,
           lastSigned: { name: 'Leah', date: '2026-05-30' },
-        }),
+        }).text,
       ).toBe('Closed Jun 1 · 3 items · Leah signed May 30');
     });
 
     it('omits item count when zero', () => {
-      expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 0 })).toBe('Closed Jun 1');
+      expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 0 }).text).toBe('Closed Jun 1');
     });
 
     it('omits last-signed when absent', () => {
       expect(
-        phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 2, lastSigned: null }),
+        phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 2, lastSigned: null }).text,
       ).toBe('Closed Jun 1 · 2 items');
     });
 
     it('omits the closed-date segment when end is null', () => {
-      expect(phaseMeta({ ...base, state: 'closed', end: null, itemCount: 1 })).toBe('1 item');
+      expect(phaseMeta({ ...base, state: 'closed', end: null, itemCount: 1 }).text).toBe('1 item');
     });
 
     it('singularizes item count at exactly 1, pluralizes otherwise', () => {
-      expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 1 })).toBe(
+      expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 1 }).text).toBe(
         'Closed Jun 1 · 1 item',
       );
-      expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 2 })).toBe(
+      expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 2 }).text).toBe(
         'Closed Jun 1 · 2 items',
       );
     });
 
     it('a fully empty closed phase renders nothing', () => {
-      expect(phaseMeta({ ...base, state: 'closed', end: null, itemCount: 0, lastSigned: null })).toBe('');
+      expect(phaseMeta({ ...base, state: 'closed', end: null, itemCount: 0, lastSigned: null }).text).toBe('');
+    });
+
+    it('overrunText is computed independent of state — a real chain conflict at this phase is worth surfacing regardless of its status classification', () => {
+      expect(
+        phaseMeta({
+          ...base,
+          state: 'closed',
+          end: '2026-06-01',
+          overrun: { anchorDate: '2026-09-21', overrunDays: 6 },
+        }).overrunText,
+      ).toBe('Chain overruns Sep 21 by 6 days');
     });
   });
 
@@ -261,33 +272,100 @@ describe('phaseMeta', () => {
           end: '2026-07-23',
           openCount: 4,
           blockingCount: 2,
-        }),
+        }).text,
       ).toBe('Jul 9 – Jul 23 · 4 open · 2 blocking');
     });
 
     it('omits open/blocking counts when zero', () => {
       expect(
-        phaseMeta({ ...base, state: 'active', start: '2026-07-09', end: '2026-07-23', openCount: 0, blockingCount: 0 }),
+        phaseMeta({ ...base, state: 'active', start: '2026-07-09', end: '2026-07-23', openCount: 0, blockingCount: 0 })
+          .text,
       ).toBe('Jul 9 – Jul 23');
     });
 
     it('omits the date-range segment when either date is null', () => {
-      expect(phaseMeta({ ...base, state: 'active', start: null, end: '2026-07-23', openCount: 1 })).toBe('1 open');
-      expect(phaseMeta({ ...base, state: 'active', start: '2026-07-09', end: null, openCount: 1 })).toBe('1 open');
+      expect(phaseMeta({ ...base, state: 'active', start: null, end: '2026-07-23', openCount: 1 }).text).toBe(
+        '1 open',
+      );
+      expect(phaseMeta({ ...base, state: 'active', start: '2026-07-09', end: null, openCount: 1 }).text).toBe(
+        '1 open',
+      );
     });
   });
 
   describe('future, anchored', () => {
     it('full: date range + the two constant segments', () => {
       expect(
-        phaseMeta({ ...base, state: 'future', anchored: true, start: '2026-08-01', end: '2026-08-15' }),
+        phaseMeta({ ...base, state: 'future', anchored: true, start: '2026-08-01', end: '2026-08-15' }).text,
       ).toBe('Aug 1 – Aug 15 · Anchored · Holds when upstream moves');
     });
 
     it('omits the date-range segment when dates are null but keeps the constants', () => {
-      expect(phaseMeta({ ...base, state: 'future', anchored: true, start: null, end: null })).toBe(
+      expect(phaseMeta({ ...base, state: 'future', anchored: true, start: null, end: null }).text).toBe(
         'Anchored · Holds when upstream moves',
       );
+    });
+
+    it('slackDays appends "N days slack" after the constants', () => {
+      expect(
+        phaseMeta({
+          ...base,
+          state: 'future',
+          anchored: true,
+          start: '2026-08-01',
+          end: '2026-08-15',
+          slackDays: 4,
+        }).text,
+      ).toBe('Aug 1 – Aug 15 · Anchored · Holds when upstream moves · 4 days slack');
+    });
+
+    it('slackDays of exactly 0 still renders (a tight fit is honest information)', () => {
+      expect(
+        phaseMeta({ ...base, state: 'future', anchored: true, start: null, end: null, slackDays: 0 }).text,
+      ).toBe('Anchored · Holds when upstream moves · 0 days slack');
+    });
+
+    it('omits the slack segment when slackDays is null/undefined', () => {
+      expect(
+        phaseMeta({ ...base, state: 'future', anchored: true, start: null, end: null, slackDays: null }).text,
+      ).toBe('Anchored · Holds when upstream moves');
+      expect(phaseMeta({ ...base, state: 'future', anchored: true, start: null, end: null }).text).toBe(
+        'Anchored · Holds when upstream moves',
+      );
+    });
+
+    it('overrun produces a separate overrunText, plural days', () => {
+      const result = phaseMeta({
+        ...base,
+        state: 'future',
+        anchored: true,
+        start: '2026-09-21',
+        end: '2026-09-28',
+        overrun: { anchorDate: '2026-09-21', overrunDays: 6 },
+      });
+      expect(result.text).toBe('Sep 21 – Sep 28 · Anchored · Holds when upstream moves');
+      expect(result.overrunText).toBe('Chain overruns Sep 21 by 6 days');
+    });
+
+    it('overrun singularizes at exactly 1 day', () => {
+      expect(
+        phaseMeta({
+          ...base,
+          state: 'future',
+          anchored: true,
+          overrun: { anchorDate: '2026-09-21', overrunDays: 1 },
+        }).overrunText,
+      ).toBe('Chain overruns Sep 21 by 1 day');
+    });
+
+    it('overrunText is null when overrun is absent/null', () => {
+      expect(
+        phaseMeta({ ...base, state: 'future', anchored: true, start: '2026-08-01', end: '2026-08-15' })
+          .overrunText,
+      ).toBeNull();
+      expect(
+        phaseMeta({ ...base, state: 'future', anchored: true, start: null, end: null, overrun: null }).overrunText,
+      ).toBeNull();
     });
   });
 
@@ -301,50 +379,72 @@ describe('phaseMeta', () => {
           predecessorName: 'Framing',
           durationDays: 14,
           milestoneCount: 2,
-        }),
+        }).text,
       ).toBe('Follows Framing · 2w · 2 milestones');
     });
 
     it('non-multiple-of-7 duration renders as days', () => {
       expect(
-        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 10, milestoneCount: 0 }),
+        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 10, milestoneCount: 0 })
+          .text,
       ).toBe('Follows Framing · 10d');
     });
 
     it('omits predecessor when unknown', () => {
       expect(
-        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: null, durationDays: 7, milestoneCount: 1 }),
+        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: null, durationDays: 7, milestoneCount: 1 })
+          .text,
       ).toBe('1w · 1 milestone');
     });
 
     it('singularizes milestone count at exactly 1, pluralizes otherwise', () => {
       expect(
-        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 7, milestoneCount: 1 }),
+        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 7, milestoneCount: 1 })
+          .text,
       ).toBe('Follows Framing · 1w · 1 milestone');
       expect(
-        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 7, milestoneCount: 2 }),
+        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 7, milestoneCount: 2 })
+          .text,
       ).toBe('Follows Framing · 1w · 2 milestones');
     });
 
     it('omits duration when null or zero', () => {
       expect(
-        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: null, milestoneCount: 0 }),
+        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: null, milestoneCount: 0 })
+          .text,
       ).toBe('Follows Framing');
       expect(
-        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 0, milestoneCount: 0 }),
+        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 0, milestoneCount: 0 })
+          .text,
       ).toBe('Follows Framing');
     });
 
     it('omits milestone count when zero', () => {
       expect(
-        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 7, milestoneCount: 0 }),
+        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 7, milestoneCount: 0 })
+          .text,
       ).toBe('Follows Framing · 1w');
     });
 
     it('a fully empty unanchored future phase renders nothing', () => {
       expect(
-        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: null, durationDays: null, milestoneCount: 0 }),
+        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: null, durationDays: null, milestoneCount: 0 })
+          .text,
       ).toBe('');
+    });
+
+    it('slackDays is ignored on the unanchored branch (no segment) — slack is anchored-only', () => {
+      expect(
+        phaseMeta({
+          ...base,
+          state: 'future',
+          anchored: false,
+          predecessorName: 'Framing',
+          durationDays: 7,
+          milestoneCount: 0,
+          slackDays: 3,
+        }).text,
+      ).toBe('Follows Framing · 1w');
     });
   });
 });

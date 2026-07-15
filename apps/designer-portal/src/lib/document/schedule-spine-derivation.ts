@@ -154,6 +154,20 @@ function dateRange(start: string | null, end: string | null): string | null {
 }
 
 /**
+ * phaseMeta's result. `overrunText` is kept SEPARATE from `text` rather than
+ * woven into one string because it wears a different ink (terracotta vs the
+ * meta line's clay) — phase-section.tsx renders each in its own span so the
+ * color split doesn't require parsing a composed string back apart. Slice 01
+ * callers that never pass `overrun` always get `overrunText: null` and a
+ * `text` byte-identical to the old plain-string return (the only behavior
+ * change for them is the return SHAPE — the string itself moved to `.text`).
+ */
+export interface PhaseMetaResult {
+  text: string;
+  overrunText: string | null;
+}
+
+/**
  * The DM Mono meta line under a phase heading. Exact copy grammar — segments
  * joined by ' · ', absent segments omitted entirely (never a stray double
  * separator), a fully empty result returns '' so the caller renders nothing:
@@ -162,11 +176,23 @@ function dateRange(start: string | null, end: string | null): string | null {
  *                        `${lastSigned.name} signed ${fmt(lastSigned.date)}` (if any)
  *   active:              `${fmt(start)} – ${fmt(end)}` · `${openCount} open` (>0) ·
  *                        `${blockingCount} blocking` (>0)
- *   future, anchored:    `${fmt(start)} – ${fmt(end)}` · `Anchored` · `Holds when upstream moves`
+ *   future, anchored:    `${fmt(start)} – ${fmt(end)}` · `Anchored` · `Holds when upstream moves` ·
+ *                        `${slackDays} days slack` (Slice 03 — slackDays != null)
  *   future, unanchored:  `Follows ${predecessorName}` (if known) ·
  *                        `${weeksOrDays(durationDays)}` (if a duration) · `${milestoneCount} milestones` (>0)
  *
  * Dates null → omit that segment; never throws on missing/null input.
+ *
+ * Slice 03 additions (both optional — omitted, `text` is unchanged from
+ * Slice 01 and `overrunText` is null):
+ *   - `slackDays` renders `N days slack` on the future+anchored branch only
+ *     (the resolver's per-phase slack is "gap to the nearest downstream
+ *     anchor" — narratively that's an anchored phase's own room to breathe).
+ *   - `overrun` — the resolver's `chain_does_not_fit` conflict, when this
+ *     phase IS the anchor it's tagged against — produces `overrunText`:
+ *     `Chain overruns {fmt(anchorDate)} by {overrunDays} days`, returned
+ *     separately (see PhaseMetaResult) so the caller can ink it terracotta
+ *     without touching `text`'s clay styling.
  */
 export function phaseMeta(input: {
   state: SpinePhaseState;
@@ -180,7 +206,13 @@ export function phaseMeta(input: {
   predecessorName?: string | null;
   durationDays?: number | null;
   milestoneCount: number;
-}): string {
+  /** Slice 03 — the resolver's per-phase slackDays; rendered on the
+   *  future+anchored branch only. Omitted/null → no slack segment. */
+  slackDays?: number | null;
+  /** Slice 03 — set when this phase is the anchor a chain_does_not_fit
+   *  conflict names. Omitted/null → no overrun text. */
+  overrun?: { anchorDate: string; overrunDays: number } | null;
+}): PhaseMetaResult {
   const segments: string[] = [];
 
   switch (input.state) {
@@ -207,6 +239,7 @@ export function phaseMeta(input: {
         if (range) segments.push(range);
         segments.push('Anchored');
         segments.push('Holds when upstream moves');
+        if (input.slackDays != null) segments.push(`${input.slackDays} days slack`);
       } else {
         if (input.predecessorName) segments.push(`Follows ${input.predecessorName}`);
         if (input.durationDays) segments.push(weeksOrDays(input.durationDays));
@@ -218,7 +251,13 @@ export function phaseMeta(input: {
     }
   }
 
-  return segments.join(' · ');
+  const overrunText = input.overrun
+    ? `Chain overruns ${fmtDay(input.overrun.anchorDate)} by ${input.overrun.overrunDays} day${
+        input.overrun.overrunDays === 1 ? '' : 's'
+      }`
+    : null;
+
+  return { text: segments.join(' · '), overrunText };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

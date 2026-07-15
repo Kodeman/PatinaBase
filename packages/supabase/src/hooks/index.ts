@@ -769,6 +769,8 @@ export {
   useAddProposalScheduleMilestone,
   useUpdateProposalScheduleMilestone,
   useRemoveProposalScheduleMilestone,
+  mapProposalPhaseRowToScheduleInput,
+  mapProposalScheduleMilestoneRowToScheduleInput,
 } from './use-scope-builder';
 export type {
   ProposalScopeRoom,

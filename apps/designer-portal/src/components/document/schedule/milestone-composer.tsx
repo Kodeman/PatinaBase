@@ -72,7 +72,9 @@ export function MilestoneComposer({
       setError(parsed.reason);
       return;
     }
-    // telemetry: wired in S3-6 (schedule_anchor_set target 'milestone' on the anchor arm)
+    // schedule_anchor_set (target 'milestone', the anchor arm) fires in the
+    // caller's onSuccess (schedule-spine.tsx handleAddMilestone) — this
+    // component only signals intent via onSubmit.
     if (parsed.kind === 'duration') onSubmit({ name: trimmedName, kind, offsetDays: parsed.days });
     else onSubmit({ name: trimmedName, kind, anchorDate: parsed.date });
   };
