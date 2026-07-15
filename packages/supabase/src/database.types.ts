@@ -1461,6 +1461,7 @@ export type Database = {
           answered_by: string | null
           blocking_status: string
           blocks_kind: string
+          blocks_milestone_id: string | null
           client_consent_method: string | null
           client_consented_at: string | null
           client_signature: string | null
@@ -1497,6 +1498,7 @@ export type Database = {
           answered_by?: string | null
           blocking_status?: string
           blocks_kind?: string
+          blocks_milestone_id?: string | null
           client_consent_method?: string | null
           client_consented_at?: string | null
           client_signature?: string | null
@@ -1533,6 +1535,7 @@ export type Database = {
           answered_by?: string | null
           blocking_status?: string
           blocks_kind?: string
+          blocks_milestone_id?: string | null
           client_consent_method?: string | null
           client_consented_at?: string | null
           client_signature?: string | null
@@ -1564,6 +1567,13 @@ export type Database = {
           viewed_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "client_decisions_blocks_milestone_id_fkey"
+            columns: ["blocks_milestone_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_milestones"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "client_decisions_court_party_id_fkey"
             columns: ["court_party_id"]
@@ -9761,14 +9771,18 @@ export type Database = {
       }
       project_phases: {
         Row: {
+          anchor_date: string | null
           completed_at: string | null
           created_at: string
           deliverables: Json | null
+          duration_days: number | null
           duration_weeks: number | null
           estimated_hours: number | null
           fee_cents: number | null
+          follows_phase_id: string | null
           gate_condition: string | null
           id: string
+          lane: string
           name: string
           phase_key: string | null
           progress: number | null
@@ -9783,14 +9797,18 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          anchor_date?: string | null
           completed_at?: string | null
           created_at?: string
           deliverables?: Json | null
+          duration_days?: number | null
           duration_weeks?: number | null
           estimated_hours?: number | null
           fee_cents?: number | null
+          follows_phase_id?: string | null
           gate_condition?: string | null
           id?: string
+          lane?: string
           name: string
           phase_key?: string | null
           progress?: number | null
@@ -9805,14 +9823,18 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          anchor_date?: string | null
           completed_at?: string | null
           created_at?: string
           deliverables?: Json | null
+          duration_days?: number | null
           duration_weeks?: number | null
           estimated_hours?: number | null
           fee_cents?: number | null
+          follows_phase_id?: string | null
           gate_condition?: string | null
           id?: string
+          lane?: string
           name?: string
           phase_key?: string | null
           progress?: number | null
@@ -9827,6 +9849,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_phases_follows_phase_id_fkey"
+            columns: ["follows_phase_id"]
+            isOneToOne: false
+            referencedRelation: "project_phases"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_phases_project_id_fkey"
             columns: ["project_id"]
@@ -13112,6 +13141,101 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_milestones: {
+        Row: {
+          anchor_date: string | null
+          created_at: string
+          id: string
+          kind: string
+          name: string
+          offset_days: number | null
+          phase_id: string
+          sort_order: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          anchor_date?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          name: string
+          offset_days?: number | null
+          phase_id: string
+          sort_order?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          anchor_date?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          name?: string
+          offset_days?: number | null
+          phase_id?: string
+          sort_order?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_milestones_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "project_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_revisions: {
+        Row: {
+          actor: string | null
+          created_at: string
+          cut_at: string
+          id: string
+          phase_snapshots: Json
+          project_id: string
+          reason: string | null
+          v: number
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          cut_at?: string
+          id?: string
+          phase_snapshots?: Json
+          project_id: string
+          reason?: string | null
+          v: number
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          cut_at?: string
+          id?: string
+          phase_snapshots?: Json
+          project_id?: string
+          reason?: string | null
+          v?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_revisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "schedule_revisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -18182,6 +18306,7 @@ export type Database = {
           answered_by: string | null
           blocking_status: string
           blocks_kind: string
+          blocks_milestone_id: string | null
           client_consent_method: string | null
           client_consented_at: string | null
           client_signature: string | null

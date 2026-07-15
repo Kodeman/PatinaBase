@@ -1326,3 +1326,15 @@ export type {
 } from './use-taught-alternatives';
 export { useCaptureFromUrl } from './use-capture-from-url';
 export type { CaptureFromUrlResult } from './use-capture-from-url';
+
+// The Document · Schedule (C4) — the Spine's data layer: read-only
+// schedule_milestones/schedule_revisions + useResolvedSchedule, the single
+// door the ScheduleSpine UI consumes.
+export {
+  useScheduleMilestones,
+  useScheduleRevisions,
+  useResolvedSchedule,
+  mapPhaseRowToScheduleInput,
+  mapMilestoneRowToScheduleInput,
+} from './use-schedule';
+export type { PhaseRow, MilestoneRow, ScheduleRevisionRow, UseResolvedScheduleResult } from './use-schedule';
