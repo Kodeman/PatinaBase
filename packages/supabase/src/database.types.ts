@@ -11558,12 +11558,16 @@ export type Database = {
       }
       proposal_phases: {
         Row: {
+          anchor_date: string | null
           created_at: string
           deliverables: Json | null
+          duration_days: number | null
           duration_weeks: number | null
           fee_cents: number
+          follows_phase_id: string | null
           gate_condition: string | null
           id: string
+          lane: string
           name: string
           phase_key: string | null
           proposal_id: string
@@ -11572,12 +11576,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          anchor_date?: string | null
           created_at?: string
           deliverables?: Json | null
+          duration_days?: number | null
           duration_weeks?: number | null
           fee_cents?: number
+          follows_phase_id?: string | null
           gate_condition?: string | null
           id?: string
+          lane?: string
           name: string
           phase_key?: string | null
           proposal_id: string
@@ -11586,12 +11594,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          anchor_date?: string | null
           created_at?: string
           deliverables?: Json | null
+          duration_days?: number | null
           duration_weeks?: number | null
           fee_cents?: number
+          follows_phase_id?: string | null
           gate_condition?: string | null
           id?: string
+          lane?: string
           name?: string
           phase_key?: string | null
           proposal_id?: string
@@ -11601,10 +11613,58 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "proposal_phases_follows_phase_id_fkey"
+            columns: ["follows_phase_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_phases"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "proposal_phases_proposal_id_fkey"
             columns: ["proposal_id"]
             isOneToOne: false
             referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_schedule_milestones: {
+        Row: {
+          anchor_date: string
+          created_at: string
+          id: string
+          kind: string
+          name: string
+          phase_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          anchor_date: string
+          created_at?: string
+          id?: string
+          kind?: string
+          name: string
+          phase_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          anchor_date?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          name?: string
+          phase_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_schedule_milestones_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_phases"
             referencedColumns: ["id"]
           },
         ]
@@ -17337,6 +17397,14 @@ export type Database = {
         Args: { p_project_board_id: string }
         Returns: string
       }
+      copy_schedule_as_built: {
+        Args: {
+          p_source_project_id: string
+          p_target_project_id?: string
+          p_target_proposal_id?: string
+        }
+        Returns: string[]
+      }
       create_direct_order: {
         Args: { p_product_id: string; p_quantity?: number }
         Returns: {
@@ -18535,6 +18603,10 @@ export type Database = {
         }[]
       }
       seed_house_from_validated_catalog: { Args: never; Returns: string }
+      seed_project_schedule_from_template: {
+        Args: { p_project_id: string; p_template_slug: string }
+        Returns: string[]
+      }
       send_proposal: {
         Args: {
           p_cc_email?: string

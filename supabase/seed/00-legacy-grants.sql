@@ -2507,3 +2507,45 @@ DO $g$ BEGIN
   GRANT ALL ON public.schedule_revisions TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00324_schedule_compose.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.proposal_schedule_milestones TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00324_schedule_compose.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.proposal_schedule_milestones TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00324_schedule_compose.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION apply_phase_template(UUID, TEXT) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00324_schedule_compose.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.seed_project_schedule_from_template(UUID, TEXT) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00324_schedule_compose.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.seed_project_schedule_from_template(UUID, TEXT) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00324_schedule_compose.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.copy_schedule_as_built(UUID, UUID, UUID) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00324_schedule_compose.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.copy_schedule_as_built(UUID, UUID, UUID) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
