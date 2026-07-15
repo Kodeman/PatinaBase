@@ -14,6 +14,7 @@
 
 import {
   resolveSchedule,
+  epochDayFromISO,
   type SchedulePhaseInput,
   type ScheduleMilestoneInput,
   type PhaseLane,
@@ -375,5 +376,49 @@ describe('resolveSchedule — R100 pure engine', () => {
     expect(P(r, 'a').source).toBe('unresolved');
     // Self-link is handled defensively as a cycle.
     expect(r.conflicts.some((c) => c.kind === 'chain_cycle')).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// epochDayFromISO (Slice 02, packages/utils §4) — additive export reusing the
+// resolver's own day math (`parseDate` internally). Pinned cases: round-trip
+// vs the resolver's own formatDate (exercised indirectly via resolveSchedule,
+// since formatDate itself is not exported — R100's "one date-math impl" means
+// there is nothing else to compare against), rejects an impossible calendar
+// date, and returns null for anything malformed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('epochDayFromISO', () => {
+  it('round-trips through the resolver’s own day math: parse → resolve (0-offset legacy dates) → format lands back on the same ISO string', () => {
+    const iso = '2026-03-15';
+    const epoch = epochDayFromISO(iso);
+    expect(epoch).not.toBeNull();
+
+    // A legacy-dates phase with start === end exercises formatDate on exactly
+    // the epoch epochDayFromISO produced, with no arithmetic in between.
+    const r = resolveSchedule([phase({ id: 'a', startDate: iso, targetEndDate: iso })], [], opts({ today: iso }));
+    expect(P(r, 'a').start).toBe(iso);
+    expect(P(r, 'a').end).toBe(iso);
+  });
+
+  it('consecutive calendar days are exactly 1 epoch day apart (self-consistent day math, incl. a month boundary)', () => {
+    expect(epochDayFromISO('2026-01-02')! - epochDayFromISO('2026-01-01')!).toBe(1);
+    expect(epochDayFromISO('2026-03-01')! - epochDayFromISO('2026-02-28')!).toBe(1); // 2026 is not a leap year
+  });
+
+  it('rejects a calendrically impossible date (2026-02-30) — null, not a clamped/rolled-over date', () => {
+    expect(epochDayFromISO('2026-02-30')).toBeNull();
+  });
+
+  it('null on malformed input: wrong separators, wrong-length parts, empty string, non-date text', () => {
+    expect(epochDayFromISO('2026/01/01')).toBeNull();
+    expect(epochDayFromISO('26-01-01')).toBeNull();
+    expect(epochDayFromISO('')).toBeNull();
+    expect(epochDayFromISO('not-a-date')).toBeNull();
+  });
+
+  it('null on null/undefined — never throws', () => {
+    expect(epochDayFromISO(null)).toBeNull();
+    expect(epochDayFromISO(undefined)).toBeNull();
   });
 });

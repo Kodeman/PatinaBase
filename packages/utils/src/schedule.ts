@@ -189,6 +189,20 @@ function formatDate(epoch: number | null): string | null {
   return `${pad(y, 4)}-${pad(m, 2)}-${pad(d, 2)}`;
 }
 
+/**
+ * ADDITIVE export (Slice 02): the resolver's own day math, exposed so other
+ * pure lib code (the Rule's date→x scale) can turn an ISO date into an
+ * integer epoch day WITHOUT a second date-math implementation — R100's "ONE
+ * date-math impl" rule applies here too. A thin delegation to the same
+ * `parseDate` this file already uses internally; behavior is identical
+ * (strict 'YYYY-MM-DD', round-trip-rejects impossible calendar dates like
+ * 2026-02-30, null for anything malformed/null/undefined). Does not change
+ * `parseDate` or any existing export.
+ */
+export function epochDayFromISO(iso: string | null | undefined): number | null {
+  return parseDate(iso);
+}
+
 /** Effective duration in days (semantic 1); null when neither is a finite number. */
 function effectiveDuration(p: SchedulePhaseInput): number | null {
   const d = p.durationDays;
