@@ -3285,3 +3285,20 @@ follows as the FIRST REVIEW MILESTONE; the flip gate stays off until the
 ruling blesses the dissolve.
 
 *Entries add: I57 · last id = I57*
+
+### R102 · Slice 01 review — good to go; Slice 02 (the Rule) begins — 2026-07-15
+
+**Ruled (design authority, on the Slice 01 screenshot drop).** Proceed to
+Slice 02 — the Ruled Line, §3 of the package. Conservative readings of
+the ruling, stated so nothing is assumed: the flip gate stays **off** —
+enabling `schedule-spine` for pilots is a separate, explicit act this
+ruling does not grant; the four escalations shipped with the drop ride
+as-implemented unless separately overruled (the persistent quiet
+unfold/fold mark; the thread stitch without FF&E order meta; thread-lane
+items rendering no main-phase row — their room is the Loom); and **O9
+remains open** — CoordinationWork stays mounted verbatim beneath the
+spine through Slice 02. Slice 02 builds on the branch stacked over
+slice-01 (`schedule/slice-02`); the Rule replaces the old phase bar
+behind the same gate, and its review milestone gates Slice 03.
+
+*Entries add: R102 · last id = R102*
