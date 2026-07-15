@@ -50,7 +50,10 @@ export function RuleDiamond({ xPct, status, label, pinned, onClick }: RuleDiamon
       type="button"
       onClick={onClick}
       aria-label={`${label} — reveal in the schedule`}
-      className="absolute rotate-45 cursor-pointer p-0"
+      // z-[1]: interactive controls sit above the decorative layers (track /
+      // today / thread — all z-auto AND pointer-events-none) in both paint
+      // and hit-test order (D-2).
+      className="absolute z-[1] rotate-45 cursor-pointer p-0"
       style={{
         left: `${xPct}%`,
         top,

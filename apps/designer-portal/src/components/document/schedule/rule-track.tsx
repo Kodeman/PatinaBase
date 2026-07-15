@@ -12,8 +12,11 @@
  * "you are here"), ahead pearl 1px. Boundary ticks (aged-oak) stand at every
  * phase start/end. `pinned` collapses the whole track to ~22px per the
  * prototype's `.pin-rule` — same lines, same ticks, reduced height. Read-only:
- * ticks are hairlines here, never handles (drag is Slice 04). Zero shadows
- * (D4): the line IS the depth.
+ * ticks are hairlines here, never handles (drag is Slice 04). The whole track
+ * is `pointer-events-none` decoration — its full-canvas container paints OVER
+ * earlier layers (DOM order) and must never swallow a click meant for a label
+ * or diamond button (live-walk defect D-2). Zero shadows (D4): the line IS
+ * the depth.
  */
 
 import type { RuleSegment, RuleWeight } from '@/lib/document/schedule-rule-derivation';
@@ -48,7 +51,11 @@ export function RuleTrack({ segments, pinned }: RuleTrackProps) {
   );
 
   return (
-    <div aria-hidden className="absolute inset-x-0" style={{ top: 0, height: pinned ? 22 : 132 }}>
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-x-0"
+      style={{ top: 0, height: pinned ? 22 : 132 }}
+    >
       {/* Continuous pearl hairline behind everything — the future/unscheduled
           backing so gaps between phases still read as one line. */}
       <span

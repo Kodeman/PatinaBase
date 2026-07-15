@@ -17,26 +17,39 @@
  * (Slice 04).
  *
  * Two modes, one file:
- *  · at rest — the full 132px canvas (labels + thread + line + diamonds +
- *    today).
+ *  · at rest — the full canvas (132px base + one 20px lane per extra
+ *    thread): labels + threads + line + diamonds + today.
  *  · pinned — a ~22px fold (line + ticks + diamonds + today only, per
  *    foldedLayers), the project title inline at left; labels + thread fold
  *    away and the today date-label hides (the prototype's `.pin-rule`).
  *
  * Pin containment — the sticky element IS the wrapper. The component renders
  * two flow siblings: a 1px sentinel, then a `sticky top-0` wrapper whose
- * height is PERMANENTLY the full resting canvas (~132px). The wrapper itself
- * is transparent and `pointer-events-none`; only the rule surface inside is
+ * height is PERMANENT for a given schedule (the full resting canvas — 132px
+ * plus one thread-lane pitch per extra thread; it varies with DATA, never
+ * with scroll or pin). The wrapper itself is transparent and
+ * `pointer-events-none`; only the rule surface inside is
  * `pointer-events-auto` (pinned, the ~22px strip at its top carries the
- * `--doc-paper` background — the remaining ~110px stays see-through and
- * click-through as content scrolls beneath). Because the wrapper's height
- * never changes and it stays in flow, folding shifts NOTHING downstream —
- * and because the sticky element is the wrapper itself, its sticking range
- * is bounded by its PARENT, not by a short internal container, so the pinned
- * fold holds at every scroll depth of that parent. The sentinel scrolling
- * above the viewport (IntersectionObserver) flips the mode. z-[3]: above the
- * document's in-flow chrome (margin rail z-[1], doc-spine z-[2]), below the
- * unified mobile bar (z-40) and DocSheet overlays (z-50).
+ * `--doc-paper` background — the rest stays see-through and click-through as
+ * content scrolls beneath). Because the wrapper's height never changes on
+ * pin and it stays in flow, folding shifts NOTHING downstream — and because
+ * the sticky element is the wrapper itself, its sticking range is bounded by
+ * its PARENT, not by a short internal container, so the pinned fold holds at
+ * every scroll depth of that parent. The sentinel scrolling above the
+ * viewport (IntersectionObserver) flips the mode; the observer attaches via
+ * a STATE-held callback ref (`ref={setSentinelEl}` + effect on
+ * `[sentinelEl]`), never a bare `useRef` + `[]` effect — the component
+ * `return null`s while `useResolvedSchedule` loads, so a mount-time effect
+ * would fire before the sentinel exists and never re-attach (live-walk
+ * defect D-1: the pin silently never engaged on a cold load). z-[3]: above
+ * the document's in-flow chrome (margin rail z-[1], doc-spine z-[2]), below
+ * the unified mobile bar (z-40) and DocSheet overlays (z-50).
+ *
+ * Hit-testing (live-walk defect D-2): every decorative layer — track, ticks,
+ * today line, thread hairlines — is `pointer-events-none`; the interactive
+ * controls (label + diamond buttons, z-[1]) sit above them in paint and
+ * hit-test order. A click anywhere on the rule can only ever land on a
+ * button or fall through.
  *
  * MOUNT CONTRACT (step 3): mount as a child of the document page's main flow
  * where the parent spans the whole scrollable document (e.g. directly in
@@ -53,7 +66,7 @@
  * Zero shadows (D4).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useResolvedSchedule } from '@patina/supabase';
 import type { ResolvedPhase } from '@patina/utils';
 import {
@@ -71,7 +84,7 @@ import { useScheduleNav } from './schedule-nav-context';
 import { RuleTrack } from './rule-track';
 import { RuleDiamond } from './rule-diamond';
 import { RuleToday } from './rule-today';
-import { RuleThread } from './rule-thread';
+import { RuleThread, THREAD_LANE_PITCH } from './rule-thread';
 import { RuleLabelRow, type RuleLabelItem } from './rule-label-row';
 
 export interface ScheduleRuleProps {
@@ -80,7 +93,9 @@ export interface ScheduleRuleProps {
   projectTitle: string;
 }
 
-const CANVAS_H = 132; // the resting rule's full height (prototype `.ma-canvas`)
+/** The resting rule's base height (prototype `.ma-canvas`) — one thread lane
+ *  included; each EXTRA thread lane adds THREAD_LANE_PITCH (D-4). */
+const BASE_CANVAS_H = 132;
 
 /** A phase's one-line mono subtitle — anchor date, or its resolved range. */
 function phaseSubline(rp: ResolvedPhase | null): string {
@@ -175,22 +190,33 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   );
 
   // ── pin: a 1px sentinel at the top; when it scrolls above the viewport the
-  // rule folds to the pinned bar. Zero downstream shift — the outer reserves
-  // the full resting height and the inner is sticky (see the file header). ──
+  // rule folds to the pinned bar. Zero downstream shift — the sticky wrapper
+  // keeps its full resting height (see the file header). MOUNT-AWARE attach
+  // (D-1): the sentinel element lives in STATE via a callback ref, and the
+  // observer effect keys on it — so it attaches whenever the sentinel
+  // actually mounts (first data render after the loading `return null`, or
+  // any remount) and disconnects when it unmounts (React calls the callback
+  // ref with null → sentinelEl null → cleanup runs, effect early-returns).
+  // A bare useRef + []-deps effect fired during the loading render, found no
+  // sentinel, and never re-attached — the pin silently never engaged cold.
   const [pinned, setPinned] = useState(false);
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [sentinelEl, setSentinelEl] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
+    if (!sentinelEl || typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(
       ([entry]) => setPinned(!entry.isIntersecting && entry.boundingClientRect.top < 0),
       { threshold: 0 },
     );
-    observer.observe(el);
+    observer.observe(sentinelEl);
     return () => observer.disconnect();
-  }, []);
+  }, [sentinelEl]);
 
   const layers = foldedLayers(pinned);
+
+  // Canvas height: base + one lane pitch per EXTRA thread (D-4 — every
+  // thread gets its own lane row). Data-derived, so it is constant across
+  // scroll/pin for a given schedule — the no-shift-on-pin invariant holds.
+  const canvasH = BASE_CANVAS_H + Math.max(0, threads.length - 1) * THREAD_LANE_PITCH;
 
   const revealPhase = (phaseId: string) => {
     reveal({ kind: 'phase', phaseId });
@@ -221,7 +247,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
     <>
       {/* 1px sentinel, in flow ABOVE the sticky wrapper — it leaves the
           viewport exactly as the wrapper reaches the top, flipping the fold. */}
-      <div ref={sentinelRef} aria-hidden className="h-px w-full" />
+      <div ref={setSentinelEl} aria-hidden className="h-px w-full" />
 
       {/* THE sticky element is this wrapper (see the file header's pin
           containment + mount contract): permanent resting height, in flow,
@@ -229,7 +255,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
       <section
         aria-label="Schedule rule"
         className="pointer-events-none sticky top-0 z-[3]"
-        style={{ height: CANVAS_H }}
+        style={{ height: canvasH }}
       >
         {pinned ? (
           /* The ~22px fold at the wrapper's TOP — the only painted, hit-
@@ -279,10 +305,11 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
 
             {todayX != null && <RuleToday xPct={todayX} today={today} pinned={false} />}
 
-            {/* thread hairlines — hidden <980px, folded away when pinned. */}
+            {/* thread hairlines — hidden <980px, folded away when pinned;
+                one lane per thread, array order (D-4). */}
             {layers.thread && (
               <div className="hidden min-[980px]:block">
-                {threads.map((t) => (
+                {threads.map((t, i) => (
                   <RuleThread
                     key={t.id}
                     leftPct={t.leftPct}
@@ -290,6 +317,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
                     name={t.name}
                     start={t.start}
                     end={t.end}
+                    laneIndex={i}
                   />
                 ))}
               </div>

@@ -9,10 +9,23 @@
  * never forced into it. It draws as one quiet aged-oak hairline (70% ink) with
  * short end-caps, beneath the main rule, its mono label naming the span. Folds
  * away when pinned (foldedLayers.thread — the fold keeps only line, diamonds,
- * today). Read-only. Zero shadows (D4).
+ * today). Read-only.
+ *
+ * Lanes (live-walk defect D-4): the prototype drew its single thread at y112;
+ * two-plus threads at one y overprint each other's labels mid-line. Each
+ * thread now gets its OWN lane row — `laneIndex` (array order, one lane per
+ * thread, no packing) offsets the whole block by +20px per lane. 20px is the
+ * block's real occupancy (label ~y-15..-6, hairline+caps y-2.5..+3.5), so
+ * lane N+1's label clears lane N's caps; the orchestrator grows the canvas by
+ * the same pitch per extra lane. Decoration: aria-hidden AND
+ * `pointer-events-none` (D-2). Zero shadows (D4).
  */
 
 import { fmtDay } from '@/lib/document/format';
+
+/** First lane's hairline y (prototype `.ma-proc` top) + per-lane pitch. */
+export const THREAD_LANE_TOP = 112;
+export const THREAD_LANE_PITCH = 20;
 
 export interface RuleThreadProps {
   leftPct: number;
@@ -20,15 +33,23 @@ export interface RuleThreadProps {
   name: string;
   start: string | null;
   end: string | null;
+  /** This thread's lane row (0-based, array order); each lane sits
+   *  THREAD_LANE_PITCH below the previous. */
+  laneIndex: number;
 }
 
-export function RuleThread({ leftPct, widthPct, name, start, end }: RuleThreadProps) {
+export function RuleThread({ leftPct, widthPct, name, start, end, laneIndex }: RuleThreadProps) {
   const range = start && end ? ` · runs ${fmtDay(start)} – ${fmtDay(end)}` : '';
   return (
     <div
       aria-hidden
-      className="absolute"
-      style={{ left: `${leftPct}%`, width: `${Math.max(0, widthPct)}%`, top: 112, height: 1 }}
+      className="pointer-events-none absolute"
+      style={{
+        left: `${leftPct}%`,
+        width: `${Math.max(0, widthPct)}%`,
+        top: THREAD_LANE_TOP + laneIndex * THREAD_LANE_PITCH,
+        height: 1,
+      }}
     >
       {/* the hairline + its two end-caps (the prototype's ::before/::after) */}
       <span

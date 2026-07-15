@@ -105,7 +105,12 @@ export function RuleLabelRow({ labels, onReveal }: RuleLabelRowProps) {
   }, [labels]);
 
   return (
-    <div ref={containerRef} className="absolute inset-x-0 top-0 h-[60px]">
+    // z-[1]: the label buttons are interactive minimap controls — they sit
+    // above the decorative layers (track/today/thread, all z-auto and
+    // pointer-events-none) in paint and hit-test order (live-walk D-2: the
+    // track's full-canvas container, later in DOM order, was swallowing every
+    // label click).
+    <div ref={containerRef} className="absolute inset-x-0 top-0 z-[1] h-[60px]">
       {labels.map((l) => {
         const row = rows.get(l.id) ?? 0;
         const pos: CSSProperties =
