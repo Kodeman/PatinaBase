@@ -32,10 +32,14 @@
  *     (arrival earlier) or a chain_does_not_fit conflict with overrunDays
  *     (arrival later). The anchor holds; upstream keeps its computed dates so the
  *     UI can draw the collision; downstream flows from the anchor.
- *  8. Overlap is legal: a phase whose computed start precedes a main-lane phase's
- *     end — or whose stored lane is 'thread' — resolves lane:'thread'. No error,
- *     no snap-back. (Determinism: phases are packed onto 'main' in output order;
- *     an overlapping later phase is promoted to 'thread'.)
+ *  8. Overlap is legal: an UNANCHORED phase whose computed start precedes a
+ *     main-lane phase's end — or whose stored lane is 'thread' — resolves
+ *     lane:'thread'. No error, no snap-back. (Determinism: phases are packed
+ *     onto 'main' in output order; an overlapping later UNANCHORED phase is
+ *     promoted to 'thread'.) An ANCHORED phase is NEVER overlap-promoted: it
+ *     holds the main line so a chain_does_not_fit collision stays visible.
+ *     That single main-lane overlap is the honest conflict signal, not a bug —
+ *     the ONE exception to the packer's non-overlapping main-lane invariant.
  *  9. Legacy fallback: no effective duration + no anchor + no resolvable link ⇒
  *     stored startDate/targetEndDate as-is (source:'legacy-dates'). Chain order is
  *     NEVER inferred from sortOrder. Nothing at all ⇒ source:'unresolved' + an
@@ -43,9 +47,14 @@
  * 10. Milestone date = anchorDate ?? (phaseEnd != null ? phaseEnd + (offsetDays
  *     ?? 0) : null); anchored milestones hold. A milestone landing strictly after
  *     a downstream anchored entry contributes past_anchor.
- * 11. Slack: per-phase slackDays = the gap absorbed at the nearest binding
- *     downstream anchor; null when none downstream. Top-level = min across
- *     anchors; negative slack is a conflict, never a negative number (omit it).
+ * 11. Slack: an ANCHORED phase's slackDays = the float absorbed at ITS OWN pin
+ *     — the gap between the chain arriving at it and its pinned start (this is
+ *     what the spine meta renders: "holds Sep 21 with N days slack"). An
+ *     UNANCHORED phase's slackDays = the min float across the anchors reachable
+ *     downstream of it. Either is null when no binding anchor absorbs the phase's
+ *     float (a root anchor, an overrun, or no downstream anchor at all).
+ *     Top-level = min across anchors; negative slack is a conflict, never a
+ *     negative number (omit it).
  * 12. Output ordering is deterministic: phases by start asc (nulls last), then
  *     sortOrder, then id; milestones by date asc (nulls last), then sortOrder, id.
  * 13. Empty inputs ⇒ empty outputs. The function is total.
@@ -110,10 +119,10 @@ export interface ResolvedPhase {
   id: string;
   start: string | null; // 'YYYY-MM-DD'
   end: string | null;
-  lane: PhaseLane; // input lane, promoted to 'thread' on computed overlap
+  lane: PhaseLane; // input lane; UNANCHORED phases promoted to 'thread' on overlap (an anchored phase never is)
   anchored: boolean;
   source: 'chain' | 'anchor' | 'legacy-dates' | 'unresolved';
-  slackDays: number | null; // gap to nearest downstream anchor; null when none downstream
+  slackDays: number | null; // anchored: own absorbed float; unanchored: min float to a downstream anchor; null if none
 }
 
 export interface ResolvedMilestone {
@@ -541,8 +550,9 @@ export function resolveSchedule(
   {
     let mainEnd: number | null = null;
     for (const id of phaseOrder) {
+      const n = nodes.get(id)!;
       const r = res.get(id)!;
-      const inputLane = nodes.get(id)!.input.lane;
+      const inputLane = n.input.lane;
       if (r.start == null) {
         laneMap.set(id, inputLane === 'thread' ? 'thread' : 'main');
         continue;
@@ -551,8 +561,19 @@ export function resolveSchedule(
         laneMap.set(id, 'thread'); // stored thread — never packed onto main
         continue;
       }
-      if (mainEnd != null && r.start < mainEnd) {
-        laneMap.set(id, 'thread'); // overlaps a main-lane phase → promote
+      // Anchored phases HOLD the main line: they are NEVER overlap-promoted to
+      // the thread lane. When an upstream chain overruns an anchored install,
+      // the anchor's pinned start sits earlier than the running main-lane end;
+      // demoting the anchor (or letting the overrunner keep main so the anchor's
+      // collision vanishes) would hide exactly the chain_does_not_fit signal the
+      // spine exists to show. So the anchor stays on main and its overlap with
+      // the upstream phase remains visible. This is the ONE sanctioned exception
+      // to "the main lane never overlaps": only an anchor collision produces a
+      // visible main-lane overlap, and that overlap IS the honest signal.
+      // Unanchored overlap promotion is unchanged (R100: overlap is legal).
+      const isAnchored = n.anchorEpoch != null;
+      if (!isAnchored && mainEnd != null && r.start < mainEnd) {
+        laneMap.set(id, 'thread'); // unanchored phase overlaps main → promote
       } else {
         laneMap.set(id, 'main');
         const e = r.end != null ? r.end : r.start;
@@ -610,6 +631,18 @@ export function resolveSchedule(
   const resolvedPhases: ResolvedPhase[] = phaseOrder.map((id) => {
     const n = nodes.get(id)!;
     const r = res.get(id)!;
+    // Slack attribution (semantic 11). An ANCHORED phase renders its OWN
+    // absorbed float — the slack of the chain segment ARRIVING at its pin
+    // (anchorSlack.get(id)); this is the value the spine meta reads ("holds
+    // Sep 21 with N days slack"). `downstreamSlack` walks a phase's FOLLOWERS,
+    // so it would return null for the anchor itself — the exact mis-attribution
+    // the walk found. An UNANCHORED phase inherits the min float across the
+    // anchors reachable downstream of it (downstreamSlack). Either resolves to
+    // null when no binding anchor absorbs float: a root anchor (no arriving
+    // chain), an overrun (a chain_does_not_fit conflict, never a slack entry),
+    // or an unanchored phase with no downstream anchor.
+    const slackDays =
+      n.anchorEpoch != null ? (anchorSlack.has(id) ? anchorSlack.get(id)! : null) : downstreamSlack(id);
     return {
       id,
       start: formatDate(r.start),
@@ -617,7 +650,7 @@ export function resolveSchedule(
       lane: laneMap.get(id) ?? (n.input.lane === 'thread' ? 'thread' : 'main'),
       anchored: n.anchorEpoch != null,
       source: r.source ?? 'unresolved',
-      slackDays: downstreamSlack(id),
+      slackDays,
     };
   });
 

@@ -31,10 +31,12 @@ import {
 //  - A `chain_does_not_fit` conflict sets BOTH `phaseId` and `anchorId` to the
 //    anchored phase's own id (the anchor names itself as the point of
 //    conflict) — don't assume `anchorId` always points upstream.
-//  - In a multi-anchor chain, an intermediate PINNED phase can still report a
-//    non-null `slackDays` — it reflects the gap absorbed at a nearer
-//    downstream anchor, not "float before this phase moves." Don't render
-//    per-phase slack on an anchored phase without accounting for this corner.
+//  - An anchored phase's `slackDays` is the float absorbed at ITS OWN pin —
+//    the gap between the chain arriving at it and its pinned start ("holds
+//    Sep 21 with N days slack"), NOT a downstream anchor's gap. It is null when
+//    nothing feeds the anchor (a root pin) or the chain overruns it (a
+//    chain_does_not_fit conflict). An unanchored phase's `slackDays` is instead
+//    the min float across the anchors reachable downstream of it.
 //
 // useProjectPhases (./use-project-v2) is the ONE canonical project_phases
 // fetch — useResolvedSchedule composes it, never re-queries the table.

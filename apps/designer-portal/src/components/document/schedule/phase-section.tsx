@@ -156,23 +156,57 @@ export function PhaseSection({
       {/* ── body ── */}
       <div className={BODY_PAD[state]}>
         {(() => {
+          // The unfold mark stays visible — never hover-revealed (touch exists;
+          // a hidden affordance on a closed chapter is a lie).
+          const foldLabel = expanded ? 'Fold' : 'Unfold';
+          const foldCls =
+            'ml-4 font-mono text-[0.58rem] font-normal uppercase tracking-[0.08em] text-[var(--color-clay)]';
+          // An unpinnable anchor chip renders a real <button>; it must never
+          // nest inside the fold toggle <button> (invalid HTML — the walk's
+          // hydration warning). When the chip is inert (a <span>, the read-only
+          // path) it nests harmlessly and the markup stays byte-identical to
+          // Slice 01.
+          const chipInteractive = phase.anchored && !!onUnpinPhaseAnchor;
           const headingEl = (
             <h3 className={`font-heading leading-tight ${HEADING_CLS[state]}`}>
               {onToggle ? (
-                <button
-                  type="button"
-                  onClick={onToggle}
-                  aria-expanded={expanded}
-                  className="cursor-pointer text-left"
-                >
-                  {name}
-                  {anchorChip}
-                  {/* The unfold mark stays visible — never hover-revealed (touch
-                      exists; a hidden affordance on a closed chapter is a lie). */}
-                  <span className="ml-4 font-mono text-[0.58rem] font-normal uppercase tracking-[0.08em] text-[var(--color-clay)]">
-                    {expanded ? 'Fold' : 'Unfold'}
-                  </span>
-                </button>
+                chipInteractive ? (
+                  // Split the toggle into two sibling affordances (name + fold
+                  // mark) that flank the chip: the visual order (name · chip ·
+                  // fold mark) and click-to-fold behavior are preserved, and no
+                  // interactive element nests inside another.
+                  <>
+                    <button
+                      type="button"
+                      onClick={onToggle}
+                      aria-expanded={expanded}
+                      className="cursor-pointer text-left"
+                    >
+                      {name}
+                    </button>
+                    {anchorChip}
+                    <button
+                      type="button"
+                      onClick={onToggle}
+                      aria-expanded={expanded}
+                      aria-label={foldLabel}
+                      className={`cursor-pointer ${foldCls}`}
+                    >
+                      {foldLabel}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onToggle}
+                    aria-expanded={expanded}
+                    className="cursor-pointer text-left"
+                  >
+                    {name}
+                    {anchorChip}
+                    <span className={foldCls}>{foldLabel}</span>
+                  </button>
+                )
               ) : (
                 <>
                   {name}

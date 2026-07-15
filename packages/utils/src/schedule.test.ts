@@ -125,8 +125,14 @@ describe('resolveSchedule — R100 pure engine', () => {
     ];
     const r = resolveSchedule(phases, [], opts({ projectStartDate: '2026-01-01', today: '2026-01-01' }));
 
+    // The phase immediately before the anchor carries the arriving slack…
     expect(P(r, 'a')).toMatchObject({ start: '2026-01-01', end: '2026-01-11', source: 'chain', slackDays: 9 });
-    expect(P(r, 'b')).toMatchObject({ start: '2026-01-20', end: '2026-01-25', source: 'anchor', anchored: true, slackDays: null });
+    // …and the anchor itself now reports its OWN absorbed float (the gap between
+    // the chain arriving at it, 2026-01-11, and its pin, 2026-01-20 = 9 days).
+    // Was asserted `null` before the slack-attribution fix — that was the bug
+    // the spine meta ("holds Jan 20 with N days slack") depended on; the anchor's
+    // own slack was never wired to the field the UI reads (walk Finding 1).
+    expect(P(r, 'b')).toMatchObject({ start: '2026-01-20', end: '2026-01-25', source: 'anchor', anchored: true, slackDays: 9 });
     expect(r.conflicts).toEqual([]);
     expect(r.slackDays).toBe(9);
   });
@@ -139,10 +145,16 @@ describe('resolveSchedule — R100 pure engine', () => {
     ];
     const r = resolveSchedule(phases, [], opts({ projectStartDate: '2026-01-01', today: '2026-01-01' }));
 
-    // A keeps its computed dates so the UI can draw the collision.
-    expect(P(r, 'a')).toMatchObject({ start: '2026-01-01', end: '2026-01-31', source: 'chain' });
-    // The anchor holds.
-    expect(P(r, 'b')).toMatchObject({ start: '2026-01-15', end: '2026-01-25', source: 'anchor', anchored: true, lane: 'thread' });
+    // A keeps its computed dates so the UI can draw the collision — and it stays
+    // on the MAIN lane (its overrun into the anchor is the honest signal).
+    expect(P(r, 'a')).toMatchObject({ start: '2026-01-01', end: '2026-01-31', source: 'chain', lane: 'main' });
+    // The anchor holds AND stays on the main lane. It was asserted `lane:'thread'`
+    // before the fix — the greedy packer demoted it because its pinned start
+    // (2026-01-15) precedes A's projected end (2026-01-31). That demotion hid the
+    // very chain_does_not_fit collision the terracotta conflict exists to show
+    // (walk Finding 2). Anchored phases are now never overlap-promoted, so the
+    // A↔B overlap remains visible on main.
+    expect(P(r, 'b')).toMatchObject({ start: '2026-01-15', end: '2026-01-25', source: 'anchor', anchored: true, lane: 'main' });
 
     const fit = r.conflicts.find((c) => c.kind === 'chain_does_not_fit');
     expect(fit).toBeDefined();
@@ -376,6 +388,100 @@ describe('resolveSchedule — R100 pure engine', () => {
     expect(P(r, 'a').source).toBe('unresolved');
     // Self-link is handled defensively as a cycle.
     expect(r.conflicts.some((c) => c.kind === 'chain_cycle')).toBe(true);
+  });
+
+  // ── Slack attribution matrix (walk Finding 1 — the arriving-segment fix) ─────
+
+  it('slack attribution: multi-hop chain feeds one downstream anchor — every upstream phase gets the arriving slack, the anchor gets its own', () => {
+    const phases = [
+      phase({ id: 'a', durationDays: 5, sortOrder: 1 }),
+      phase({ id: 'b', durationDays: 5, followsPhaseId: 'a', sortOrder: 2 }),
+      phase({ id: 'c', durationDays: 5, followsPhaseId: 'b', anchorDate: '2026-02-01', sortOrder: 3 }),
+    ];
+    // a→b→c: a 01-01..01-06, b 01-06..01-11, chain arrives at c on 01-11; c pins
+    // 02-01 → 21 days absorbed at c.
+    const r = resolveSchedule(phases, [], opts({ projectStartDate: '2026-01-01', today: '2026-01-01' }));
+    // Every phase upstream of the anchor reports the same absorbed float (the
+    // gap the chain has before c's pin is threatened), reached over multiple hops.
+    expect(P(r, 'a').slackDays).toBe(21);
+    expect(P(r, 'b').slackDays).toBe(21);
+    // The anchor itself reports its OWN arriving-segment slack (not null — the
+    // pre-fix bug, since downstreamSlack walks c's followers and c has none).
+    expect(P(r, 'c').slackDays).toBe(21);
+    expect(r.slackDays).toBe(21);
+    expect(r.conflicts).toEqual([]);
+  });
+
+  it('slack attribution: a fork feeding two anchors of differing room reports the MINIMUM across them', () => {
+    const phases = [
+      phase({ id: 'a', durationDays: 10, sortOrder: 1 }),
+      // Two phases follow a; each is anchored with different room.
+      phase({ id: 'near', durationDays: 5, followsPhaseId: 'a', anchorDate: '2026-01-14', sortOrder: 2 }), // 3 days room
+      phase({ id: 'far', durationDays: 5, followsPhaseId: 'a', anchorDate: '2026-01-25', sortOrder: 3 }), // 14 days room
+    ];
+    // a: 01-01..01-11. near pins 01-14 (3 days room), far pins 01-25 (14 days room).
+    const r = resolveSchedule(phases, [], opts({ projectStartDate: '2026-01-01', today: '2026-01-01' }));
+    // a reaches BOTH downstream anchors → min(3, 14) = 3.
+    expect(P(r, 'a').slackDays).toBe(3);
+    // Each anchor reports its own absorbed float.
+    expect(P(r, 'near').slackDays).toBe(3);
+    expect(P(r, 'far').slackDays).toBe(14);
+    // Top-level is the min across all anchors.
+    expect(r.slackDays).toBe(3);
+    expect(r.conflicts).toEqual([]);
+  });
+
+  it('slack attribution: no downstream anchor anywhere → every phase reports null slack', () => {
+    const phases = [
+      phase({ id: 'a', durationDays: 10, sortOrder: 1 }),
+      phase({ id: 'b', durationDays: 5, followsPhaseId: 'a', sortOrder: 2 }),
+    ];
+    const r = resolveSchedule(phases, [], opts({ projectStartDate: '2026-01-01', today: '2026-01-01' }));
+    expect(P(r, 'a').slackDays).toBeNull();
+    expect(P(r, 'b').slackDays).toBeNull();
+    expect(r.slackDays).toBeNull();
+  });
+
+  it('slack attribution: a ROOT anchor (nothing feeding it) reports null slack — no arriving segment to absorb float', () => {
+    const phases = [phase({ id: 'a', durationDays: 5, anchorDate: '2026-03-01', sortOrder: 1 })];
+    const r = resolveSchedule(phases, [], opts({ today: '2026-01-01' }));
+    expect(P(r, 'a')).toMatchObject({ start: '2026-03-01', end: '2026-03-06', anchored: true, slackDays: null });
+    expect(r.slackDays).toBeNull();
+  });
+
+  // ── Anchored-never-demoted (walk Finding 2 — the lane-promotion fix) ─────────
+
+  it('anchored never demoted: an upstream MAIN phase overrunning a later anchored install keeps the anchor on main and emits chain_does_not_fit', () => {
+    // Mirrors the walk: a long unanchored phase's end is pushed past a later
+    // anchored install; the anchor must NOT vanish into the thread lane.
+    const phases = [
+      phase({ id: 'design', durationDays: 40, sortOrder: 1 }), // 01-01..02-10
+      phase({ id: 'install', durationDays: 7, followsPhaseId: 'design', anchorDate: '2026-01-20', sortOrder: 2 }),
+    ];
+    const r = resolveSchedule(phases, [], opts({ projectStartDate: '2026-01-01', today: '2026-01-01' }));
+    // Both stay on the MAIN lane — the overlap between design's end (02-10) and
+    // install's pin (01-20) is the honest chain_does_not_fit signal, not hidden.
+    expect(P(r, 'design').lane).toBe('main');
+    expect(P(r, 'install').lane).toBe('main');
+    expect(r.phases.filter((p) => p.lane === 'thread')).toHaveLength(0);
+    expect(r.conflicts.find((c) => c.kind === 'chain_does_not_fit')).toMatchObject({
+      anchorId: 'install',
+      overrunDays: 21, // 02-10 arrival vs 01-20 pin
+    });
+  });
+
+  it('anchored-never-demoted does not disturb legitimate unanchored overlap promotion (R100 unchanged)', () => {
+    // A fork where BOTH followers are unanchored: the later-in-order one still
+    // promotes to thread. Only anchored phases are exempt from promotion.
+    const phases = [
+      phase({ id: 'a', durationDays: 10, sortOrder: 1 }),
+      phase({ id: 'b', durationDays: 5, followsPhaseId: 'a', sortOrder: 2 }),
+      phase({ id: 'c', durationDays: 7, followsPhaseId: 'a', sortOrder: 3 }),
+    ];
+    const r = resolveSchedule(phases, [], opts({ projectStartDate: '2026-01-01', today: '2026-01-01' }));
+    expect(P(r, 'b').lane).toBe('main');
+    expect(P(r, 'c').lane).toBe('thread'); // unanchored overlap still promotes
+    expect(r.conflicts).toEqual([]);
   });
 });
 

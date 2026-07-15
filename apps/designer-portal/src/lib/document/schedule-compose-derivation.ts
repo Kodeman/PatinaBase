@@ -98,8 +98,9 @@ const PENDING_PHASE_ID = '__pending-phase__';
  * warn about exactly that, so conflicts are matched against the affected
  * phase PLUS everything downstream of it in the hypothetical follows graph
  * (walked forward, cycle-safe). `slackDays` needs no equivalent widening —
- * the resolver's per-phase `slackDays` is already "gap to the nearest
- * downstream anchor", so the affected phase's own value carries it.
+ * the resolver's per-phase `slackDays` already carries the affected phase's
+ * own room (an anchored phase's absorbed float at its pin, an unanchored
+ * phase's float to its nearest downstream anchor).
  *
  * Total: an `edit-phase` pending edit whose `id` isn't among
  * `committedPhases`, or a malformed `pendingEdit`, degrades to the empty
@@ -177,7 +178,8 @@ export function composePreview(
     (c) => (c.phaseId != null && implicated.has(c.phaseId)) || (c.anchorId != null && implicated.has(c.anchorId)),
   );
 
-  // slackDays needs no downstream widening: the resolver's per-phase value is
-  // already "gap absorbed at the nearest binding downstream anchor".
+  // slackDays needs no downstream widening: the resolver's per-phase value
+  // already carries the affected phase's own room (anchored → float absorbed
+  // at its own pin; unanchored → float to the nearest downstream anchor).
   return { start: phase.start, end: phase.end, slackDays: phase.slackDays, conflicts };
 }
