@@ -224,6 +224,35 @@ export function blocksText(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// sortItemsBlockingFirst — R101.2 the Schedule Spine's in-phase item order
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * R101.2 — inside an open phase, the thing holding the line surfaces first.
+ * "Blocking" is exactly `blocksText(item, tasks) !== null` — the same row set
+ * that already wears the ⊘ marker, so glyph and sort always agree (an item
+ * with `blocks_kind: 'none'` still sorts as blocking when a live task names
+ * it via `blocked_by_item_id`). Order: blocking first, then due date
+ * ascending (nulls last), then title, then id as a total-order guard.
+ * Non-mutating — returns a new array.
+ */
+export function sortItemsBlockingFirst<T extends CoordinationItemLike>(
+  items: T[],
+  tasks: readonly CoordinationTaskLike[] = [],
+): T[] {
+  return [...items].sort((a, b) => {
+    const ba = blocksText(a, tasks) !== null;
+    const bb = blocksText(b, tasks) !== null;
+    if (ba !== bb) return ba ? -1 : 1; // 1 · blocking first
+    const da = a.due_date ? parseLocalDate(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+    const db = b.due_date ? parseLocalDate(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+    if (da !== db) return da - db; // 2 · due asc, nulls last
+    const t = a.title.localeCompare(b.title); // 3 · stable human tiebreak
+    return t !== 0 ? t : a.id.localeCompare(b.id); // 4 · total-order guard
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // deriveBlocksKind — the composer's "what does it block?" → blocks_kind (R55)
 // ═══════════════════════════════════════════════════════════════════════════
 

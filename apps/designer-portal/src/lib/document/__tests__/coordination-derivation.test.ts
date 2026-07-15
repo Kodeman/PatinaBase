@@ -6,6 +6,7 @@ import {
   isBlocked,
   dueState,
   deriveBlocksKind,
+  sortItemsBlockingFirst,
   COURT_ORDER,
   type CoordinationItemLike,
   type CoordinationTaskLike,
@@ -250,5 +251,80 @@ describe('deriveBlocksKind', () => {
 
   it('task is the gate only when neither FF&E nor phase is picked', () => {
     expect(deriveBlocksKind({ ffe: false, phase: false, task: true })).toBe('task');
+  });
+});
+
+describe('sortItemsBlockingFirst', () => {
+  it('sorts blocking items before non-blocking regardless of due date', () => {
+    const items = [
+      mkItem({ id: 'early-nonblock', title: 'Early', due_date: '2026-06-12', blocks_kind: 'none' }),
+      mkItem({ id: 'late-block', title: 'Late', due_date: '2026-06-20', blocks_kind: 'phase' }),
+    ];
+    const sorted = sortItemsBlockingFirst(items);
+    expect(sorted.map((i) => i.id)).toEqual(['late-block', 'early-nonblock']);
+  });
+
+  it('sorts by due date ascending within the blocking band', () => {
+    const items = [
+      mkItem({ id: 'b-later', title: 'Zed', due_date: '2026-06-20', blocks_kind: 'phase' }),
+      mkItem({ id: 'b-sooner', title: 'Alpha', due_date: '2026-06-12', blocks_kind: 'phase' }),
+    ];
+    const sorted = sortItemsBlockingFirst(items);
+    expect(sorted.map((i) => i.id)).toEqual(['b-sooner', 'b-later']);
+  });
+
+  it('sorts by due date ascending within the non-blocking band', () => {
+    const items = [
+      mkItem({ id: 'later', title: 'Zed', due_date: '2026-06-20', blocks_kind: 'none' }),
+      mkItem({ id: 'sooner', title: 'Alpha', due_date: '2026-06-12', blocks_kind: 'none' }),
+    ];
+    const sorted = sortItemsBlockingFirst(items);
+    expect(sorted.map((i) => i.id)).toEqual(['sooner', 'later']);
+  });
+
+  it('places a null due date last within its band', () => {
+    const items = [
+      mkItem({ id: 'noDue', title: 'Zed', due_date: null, blocks_kind: 'none' }),
+      mkItem({ id: 'dated', title: 'Alpha', due_date: '2026-06-12', blocks_kind: 'none' }),
+    ];
+    const sorted = sortItemsBlockingFirst(items);
+    expect(sorted.map((i) => i.id)).toEqual(['dated', 'noDue']);
+  });
+
+  it('breaks same-due ties by title, then by id for a total order', () => {
+    const sameTitle = [
+      mkItem({ id: 'z', title: 'Same', due_date: null, blocks_kind: 'none' }),
+      mkItem({ id: 'a', title: 'Same', due_date: null, blocks_kind: 'none' }),
+    ];
+    expect(sortItemsBlockingFirst(sameTitle).map((i) => i.id)).toEqual(['a', 'z']);
+
+    const differentTitle = [
+      mkItem({ id: 'x', title: 'Zeta', due_date: '2026-06-12', blocks_kind: 'none' }),
+      mkItem({ id: 'y', title: 'Alpha', due_date: '2026-06-12', blocks_kind: 'none' }),
+    ];
+    expect(sortItemsBlockingFirst(differentTitle).map((i) => i.id)).toEqual(['y', 'x']);
+  });
+
+  it('an item with blocks_kind "none" but a live task pointer still sorts as blocking', () => {
+    const items = [
+      mkItem({ id: 'truly-open', title: 'No blocker', due_date: '2026-06-05', blocks_kind: 'none' }),
+      mkItem({ id: 'task-linked', title: 'Task linked', due_date: '2026-06-20', blocks_kind: 'none' }),
+    ];
+    const tasks = [mkTask({ id: 't1', blocked_by_item_id: 'task-linked' })];
+    const sorted = sortItemsBlockingFirst(items, tasks);
+    // task-linked has a later due date but a live task pointer makes it "blocking" —
+    // it must still surface before the truly-open, non-blocking item.
+    expect(sorted.map((i) => i.id)).toEqual(['task-linked', 'truly-open']);
+  });
+
+  it('is non-mutating — returns a new array and leaves the input order untouched', () => {
+    const items = [
+      mkItem({ id: 'b', title: 'B', due_date: '2026-06-20', blocks_kind: 'none' }),
+      mkItem({ id: 'a', title: 'A', due_date: '2026-06-12', blocks_kind: 'none' }),
+    ];
+    const originalOrder = items.map((i) => i.id);
+    const sorted = sortItemsBlockingFirst(items);
+    expect(items.map((i) => i.id)).toEqual(originalOrder);
+    expect(sorted).not.toBe(items);
   });
 });
