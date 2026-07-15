@@ -1,0 +1,41 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 00322 — Scope co-member roster SELECT to authenticated (fix-forward on 00321)
+--
+-- THE REGRESSION (introduced by 00321): the co-member roster policy
+-- "Active members can view co-members" on public.organization_members was
+-- created FOR SELECT with no TO clause, so Postgres defaults it TO public —
+-- meaning it is evaluated for the anon role too. Its predicate calls
+-- public.is_active_org_member(organization_id), and 00321 (correctly) REVOKEs
+-- that helper from PUBLIC, anon (granting only authenticated + service_role).
+--
+-- So any ANON query whose RLS transitively sub-selects organization_members now
+-- errors instead of returning an empty set. organization_members is reached via
+-- co-membership / org-scoping predicates from many tables — e.g. organizations,
+-- field_captures, project_change_order_templates, api_keys, audit_logs. For an
+-- anon caller those reads previously returned 200 `[]` (no matching rows); post
+-- 00321 they throw `42501 permission denied for function is_active_org_member`
+-- the moment the planner touches this policy's predicate.
+--
+-- NO DATA LEAK — only the DENIAL SHAPE changed: anon still sees zero rows. But a
+-- 42501 error where clients expect `[]` is a behavior regression on prod.
+--
+-- THE FIX: recreate the policy IDENTICALLY except scoped `TO authenticated`.
+-- RLS SELECT policies are a UNION per role; anon is simply never subject to this
+-- leg, so its reads fall through to the other policies (own-row 00021,
+-- admin-view-all 00068) and gracefully resolve to `[]` again. Authenticated
+-- members keep the full-shared-workspace roster visibility 00321 delivered — the
+-- helper stays granted to authenticated, so is_active_org_member evaluates fine.
+--
+-- This is TIGHTER than the alternative of granting anon EXECUTE on the helper:
+-- the helper remains non-executable by anon, and anon never even reaches it.
+--
+-- ADDITIVE / NON-DESTRUCTIVE: this only re-scopes the one 00321 policy. The
+-- own-row (00021), admin-view-all (00068), INSERT/UPDATE/DELETE (00068), the
+-- 00319 last-owner guard, and the is_active_org_member helper + its grants are
+-- all untouched. Adds ZERO GRANT/REVOKE statements → no legacy-grants regen.
+-- No schema/type surface changes → no database.types.ts regen.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DROP POLICY IF EXISTS "Active members can view co-members" ON public.organization_members;
+CREATE POLICY "Active members can view co-members" ON public.organization_members
+  FOR SELECT TO authenticated USING (public.is_active_org_member(organization_id));
