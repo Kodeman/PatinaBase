@@ -35,8 +35,19 @@ import {
   useCoordinationRealtime,
   useDesignerClientForClientUser,
   useResolvedSchedule,
+  useProjects,
+  useCreateProjectPhase,
+  useProjectPhaseCounts,
+  useAddScheduleMilestone,
+  useUpdateScheduleMilestone,
+  useUpdateProjectPhaseChain,
+  useDeletePhaseWithRelink,
+  useSeedProjectScheduleFromTemplate,
+  useCopyScheduleAsBuilt,
+  mapPhaseRowToScheduleInput,
+  mapMilestoneRowToScheduleInput,
 } from '@patina/supabase';
-import type { ResolvedPhase } from '@patina/utils';
+import type { ResolvedPhase, SchedulePhaseInput, ScheduleMilestoneInput } from '@patina/utils';
 import { useSectionTasks } from '@/hooks/use-section-work';
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
 import {
@@ -47,6 +58,7 @@ import {
   threadsFor,
   type SpinePhaseState,
 } from '@/lib/document/schedule-spine-derivation';
+import { relinkOnDelete } from '@/lib/document/schedule-compose-derivation';
 import {
   blocksText,
   sortItemsBlockingFirst,
@@ -64,6 +76,29 @@ import {
 import { CoordinationWork } from '../coordination/coordination-work';
 import { PhaseSection } from './phase-section';
 import { TodayRule } from './today-rule';
+import { GhostAddLine, type GhostAddInput } from './ghost-add-line';
+import { ScheduleBirth } from './schedule-birth';
+import { PhaseComposeActions } from './phase-compose-actions';
+import { PhaseDeleteConfirm } from './phase-delete-confirm';
+import { MilestoneComposer, type MilestoneDraft } from './milestone-composer';
+import { ScheduleEntryField } from './schedule-entry-field';
+import type { PastProjectOption } from './past-project-picker';
+
+/** Best-effort phase_key from a free-typed name (phase_key is nullable + not
+ *  unique on project_phases, so a plain slug is safe — no dedupe needed). */
+function slugifyPhaseKey(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'phase'
+  );
+}
+
+/** Which inline compose panel is open, and on which phase (one across the spine). */
+type ComposeState = { phaseId: string; kind: 'edit' | 'milestone' | 'delete' } | null;
 
 // ── schedule-spine.tsx (orchestrator; owns ALL sheet-open LOCAL state) ──
 // Props byte-identical to CoordinationBandProps — the spine replaces the band
@@ -96,6 +131,24 @@ export function ScheduleSpine({
   const schedule = useResolvedSchedule(projectId);
   // Subscribe ONCE for the whole spine — the rows above re-read on invalidation.
   useCoordinationRealtime(projectId);
+
+  // ── compose mutations — the spine owns EVERY schedule write (R100). Each
+  //    hook invalidates ['project-phases'|'schedule-milestones', id], and
+  //    useResolvedSchedule composes off those keys, so the Rule + Spine both
+  //    re-resolve after a write with no extra plumbing. ──
+  const createPhase = useCreateProjectPhase();
+  const updateChain = useUpdateProjectPhaseChain();
+  const addMilestone = useAddScheduleMilestone();
+  const updateMilestone = useUpdateScheduleMilestone();
+  const deletePhaseWithRelink = useDeletePhaseWithRelink();
+  const seedTemplate = useSeedProjectScheduleFromTemplate();
+  const copyAsBuilt = useCopyScheduleAsBuilt();
+
+  // ── birth "from a past project" — the designer's readable projects, each
+  //    with a phase count (the copy RPC refuses a target that already has
+  //    phases, and a source with none has nothing to copy). ──
+  const { data: projectRows, isPending: projectsPending } = useProjects();
+  const { data: phaseCounts, isPending: countsPending } = useProjectPhaseCounts();
 
   // The Rule (the minimap) reveals phases/milestones here through the nav
   // context. Inert when no provider is above (the spine works standalone).
@@ -255,6 +308,131 @@ export function ScheduleSpine({
     ],
   );
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // Compose (Slice 03) — birth + write paths. The entry grammar's parsed
+  // output is persisted here; resolveSchedule stays the only engine (R100).
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // Committed chain in resolver-input shape — feeds the ghost-add compute line.
+  const committedPhaseInputs = useMemo<SchedulePhaseInput[]>(
+    () => schedule.phases.map(mapPhaseRowToScheduleInput),
+    [schedule.phases],
+  );
+  const committedMilestoneInputs = useMemo<ScheduleMilestoneInput[]>(
+    () => schedule.milestones.map(mapMilestoneRowToScheduleInput),
+    [schedule.milestones],
+  );
+
+  // A new phase joins the END of the main lane; an empty spine → a root (null).
+  const lastMainPhaseId = useMemo(
+    () => (mainLane.length > 0 ? mainLane[mainLane.length - 1].id : null),
+    [mainLane],
+  );
+
+  const pastProjectOptions = useMemo<PastProjectOption[]>(() => {
+    const rows = (projectRows ?? []) as Array<{ id: string; name?: string | null }>;
+    return rows
+      .filter((p) => p.id !== projectId && (phaseCounts?.[p.id] ?? 0) > 0)
+      .map((p) => ({
+        id: p.id,
+        name: p.name ?? 'Untitled project',
+        phaseCount: phaseCounts?.[p.id] ?? 0,
+      }));
+  }, [projectRows, phaseCounts, projectId]);
+
+  // Which inline compose panel is open, on which phase (one across the spine).
+  const [compose, setCompose] = useState<ComposeState>(null);
+  const closeCompose = () => setCompose(null);
+
+  // ── error honesty (R83 inline idiom — the Document opts out of global
+  //    toasts): every handler resets/closes ONLY on onSuccess; a failure
+  //    keeps the acting surface open with an inline terracotta line, so a
+  //    failed write never masquerades as a saved one. ──
+
+  // Bumped on a successful create — clears the ghost line's kept fields.
+  const [ghostResetSignal, setGhostResetSignal] = useState(0);
+
+  const handleAddPhase = (input: GhostAddInput) => {
+    // telemetry: wired in S3-6 (schedule_phase_added; schedule_anchor_set when anchorDate)
+    createPhase.mutate(
+      {
+        projectId,
+        phaseKey: slugifyPhaseKey(input.name),
+        name: input.name,
+        sortOrder: schedule.phases.length,
+        durationDays: input.durationDays,
+        anchorDate: input.anchorDate,
+        followsPhaseId: lastMainPhaseId ?? undefined,
+      },
+      { onSuccess: () => setGhostResetSignal((n) => n + 1) },
+    );
+  };
+  const ghostError = createPhase.isError
+    ? 'Add failed — nothing was saved; your entry is kept'
+    : null;
+
+  const handleEditDuration = (phaseId: string, days: number) => {
+    updateChain.mutate({ phaseId, projectId, durationDays: days }, { onSuccess: closeCompose });
+  };
+  const handleSetAnchor = (phaseId: string, date: string) => {
+    // telemetry: wired in S3-6 (schedule_anchor_set target 'phase')
+    updateChain.mutate({ phaseId, projectId, anchorDate: date }, { onSuccess: closeCompose });
+  };
+  const handleUnpinPhase = (phaseId: string) => {
+    // telemetry: wired in S3-6 (schedule_anchor_set unpin target 'phase')
+    updateChain.mutate({ phaseId, projectId, anchorDate: null });
+  };
+
+  const handleAddMilestone = (phaseId: string, draft: MilestoneDraft) => {
+    // telemetry: wired in S3-6 (schedule_anchor_set target 'milestone' when anchorDate)
+    addMilestone.mutate(
+      {
+        projectId,
+        phaseId,
+        name: draft.name,
+        kind: draft.kind,
+        offsetDays: draft.offsetDays,
+        anchorDate: draft.anchorDate,
+      },
+      { onSuccess: closeCompose },
+    );
+  };
+  const handleUnpinMilestone = (milestoneId: string) => {
+    // telemetry: wired in S3-6 (schedule_anchor_set unpin target 'milestone')
+    updateMilestone.mutate({ milestoneId, projectId, anchorDate: null });
+  };
+
+  const handleDeletePhase = (phaseId: string) => {
+    // relink FIRST (followers → deleted phase's own predecessor), then delete —
+    // relinkOnDelete computes the patch the hook applies before the DELETE.
+    const relinkUpdates = relinkOnDelete(
+      schedule.phases.map((r) => ({ id: r.id, followsPhaseId: r.follows_phase_id ?? null })),
+      phaseId,
+    ).map((u) => ({ phaseId: u.id, followsPhaseId: u.followsPhaseId }));
+    // Close ONLY on success — the sequence is not transactional (relinks may
+    // have applied when the delete fails), and the confirm must say so.
+    deletePhaseWithRelink.mutate(
+      { projectId, phaseId, relinkUpdates },
+      { onSuccess: closeCompose },
+    );
+  };
+
+  const handleSeedPatinaSix = () => {
+    // telemetry: wired in S3-6 (schedule_born · project · patina_six)
+    seedTemplate.mutate({ projectId, templateSlug: 'patina_six' });
+  };
+  const handleCopyFromProject = (sourceProjectId: string) => {
+    // telemetry: wired in S3-6 (schedule_born · project · past_project + source_project_id)
+    copyAsBuilt.mutate({ sourceProjectId, targetProjectId: projectId });
+  };
+
+  const birthBusy = seedTemplate.isPending || copyAsBuilt.isPending;
+  const birthError = seedTemplate.isError
+    ? 'Couldn’t seed the Patina Six — nothing was saved'
+    : copyAsBuilt.isError
+      ? 'Couldn’t copy that schedule — nothing was saved'
+      : null;
+
   // ── spine-LOCAL sheet state — never a route/tab (D1) ──
   const [sheet, setSheet] = useState<SheetState>(null);
 
@@ -375,44 +553,169 @@ export function ScheduleSpine({
         </p>
       ) : (
         <>
-          <div className="mt-5">
-            {entries.map((entry, i) => (
-              <Fragment key={entry.phase.id}>
-                {i === todayIdx && <TodayRule today={today} />}
-                <PhaseSection
-                  phase={entry.phase}
-                  name={entry.name}
-                  state={entry.state}
-                  anchorId={phaseAnchorId(entry.phase.id)}
-                  highlightMilestoneId={highlightMilestoneId}
-                  expanded={entry.state === 'active' ? true : unfolded.has(entry.phase.id)}
-                  onToggle={
-                    entry.state === 'active'
-                      ? null
-                      : () =>
-                          handlePhaseToggle(
-                            entry.phase.id,
-                            entry.state,
-                            entry.items.length,
-                            entry.milestones.length,
-                          )
-                  }
-                  metaLine={entry.metaLine}
-                  milestones={entry.milestones}
-                  items={entry.items}
-                  tasks={allTasks}
-                  parties={allParties}
-                  clientName={clientName}
-                  threads={entry.threads}
-                  onOpenItem={openItem}
-                  today={today}
-                />
-              </Fragment>
-            ))}
-            {entries.length > 0 && todayIdx === entries.length && (
-              <TodayRule today={today} />
-            )}
-          </div>
+          {resolvedPhases.length === 0 ? (
+            // ── Birth — a schedule with no phases yet (R100). Three quiet
+            //    starting points + the ghost line; the mutations are ours. ──
+            <ScheduleBirth
+              surface="project"
+              onSeedPatinaSix={handleSeedPatinaSix}
+              onCopyFromPastProject={handleCopyFromProject}
+              pastProjects={pastProjectOptions}
+              pastProjectsLoading={projectsPending || countsPending}
+              busy={birthBusy}
+              errorText={birthError}
+              ghostCommittedPhases={committedPhaseInputs}
+              ghostCommittedMilestones={committedMilestoneInputs}
+              ghostFollowsPhaseId={lastMainPhaseId}
+              ghostToday={today}
+              onGhostAdd={handleAddPhase}
+              ghostErrorText={ghostError}
+              ghostResetSignal={ghostResetSignal}
+            />
+          ) : (
+            <div className="mt-5">
+              {entries.map((entry, i) => {
+                const composeKind = compose?.phaseId === entry.phase.id ? compose.kind : null;
+                const row = rowById.get(entry.phase.id);
+                const predecessorName = row?.follows_phase_id
+                  ? rowById.get(row.follows_phase_id)?.name ?? null
+                  : null;
+                const followerCount = schedule.phases.filter(
+                  (p) => p.follows_phase_id === entry.phase.id,
+                ).length;
+
+                // The revealed compose surface for this phase, per open kind.
+                const composePanel =
+                  composeKind === 'edit' ? (
+                    <div className="mt-[0.5rem] flex flex-col gap-[0.5rem]">
+                      <ScheduleEntryField
+                        aria-label="Set phase duration"
+                        today={today}
+                        bareNumberUnit="weeks"
+                        accept={['duration']}
+                        placeholder="Duration — 4w · 28d"
+                        onCommit={(e) =>
+                          e.kind === 'duration' && handleEditDuration(entry.phase.id, e.days)
+                        }
+                        onCancel={closeCompose}
+                      />
+                      <ScheduleEntryField
+                        aria-label="Anchor phase date"
+                        today={today}
+                        accept={['anchor']}
+                        autoFocus={false}
+                        placeholder="Anchor a date — Sep 21"
+                        onCommit={(e) =>
+                          e.kind === 'anchor' && handleSetAnchor(entry.phase.id, e.date)
+                        }
+                        onCancel={closeCompose}
+                      />
+                      {updateChain.isError && (
+                        <span className="font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
+                          Change failed — nothing was saved
+                        </span>
+                      )}
+                    </div>
+                  ) : composeKind === 'milestone' ? (
+                    <MilestoneComposer
+                      today={today}
+                      onSubmit={(draft) => handleAddMilestone(entry.phase.id, draft)}
+                      onCancel={closeCompose}
+                      busy={addMilestone.isPending}
+                      errorText={
+                        addMilestone.isError ? 'Add failed — nothing was saved' : null
+                      }
+                    />
+                  ) : composeKind === 'delete' ? (
+                    <PhaseDeleteConfirm
+                      name={entry.name}
+                      milestoneCount={entry.milestones.length}
+                      followerCount={followerCount}
+                      predecessorName={predecessorName}
+                      onConfirm={() => handleDeletePhase(entry.phase.id)}
+                      onCancel={closeCompose}
+                      busy={deletePhaseWithRelink.isPending}
+                      errorText={
+                        deletePhaseWithRelink.isError
+                          ? 'Delete failed — the chain may have been relinked; refresh to see its current state'
+                          : null
+                      }
+                    />
+                  ) : null;
+
+                return (
+                  <Fragment key={entry.phase.id}>
+                    {i === todayIdx && <TodayRule today={today} />}
+                    <PhaseSection
+                      phase={entry.phase}
+                      name={entry.name}
+                      state={entry.state}
+                      anchorId={phaseAnchorId(entry.phase.id)}
+                      highlightMilestoneId={highlightMilestoneId}
+                      expanded={entry.state === 'active' ? true : unfolded.has(entry.phase.id)}
+                      onToggle={
+                        entry.state === 'active'
+                          ? null
+                          : () =>
+                              handlePhaseToggle(
+                                entry.phase.id,
+                                entry.state,
+                                entry.items.length,
+                                entry.milestones.length,
+                              )
+                      }
+                      metaLine={entry.metaLine}
+                      milestones={entry.milestones}
+                      items={entry.items}
+                      tasks={allTasks}
+                      parties={allParties}
+                      clientName={clientName}
+                      threads={entry.threads}
+                      onOpenItem={openItem}
+                      today={today}
+                      headingActions={
+                        <PhaseComposeActions
+                          onAddItem={openComposer}
+                          // Each open resets its mutation's stale error state
+                          // (updateChain is shared with the chip unpin) so a
+                          // fresh panel never opens wearing an old failure.
+                          onAddMilestone={() => {
+                            addMilestone.reset();
+                            setCompose({ phaseId: entry.phase.id, kind: 'milestone' });
+                          }}
+                          onEditDates={() => {
+                            updateChain.reset();
+                            setCompose({ phaseId: entry.phase.id, kind: 'edit' });
+                          }}
+                          onDelete={() => {
+                            deletePhaseWithRelink.reset();
+                            setCompose({ phaseId: entry.phase.id, kind: 'delete' });
+                          }}
+                        />
+                      }
+                      composePanel={composePanel}
+                      onUnpinPhaseAnchor={() => handleUnpinPhase(entry.phase.id)}
+                      onUnpinMilestoneAnchor={handleUnpinMilestone}
+                    />
+                  </Fragment>
+                );
+              })}
+              {entries.length > 0 && todayIdx === entries.length && (
+                <TodayRule today={today} />
+              )}
+
+              {/* The ongoing +add — the same ghost line, joining the main lane. */}
+              <GhostAddLine
+                committedPhases={committedPhaseInputs}
+                committedMilestones={committedMilestoneInputs}
+                followsPhaseId={lastMainPhaseId}
+                today={today}
+                onAdd={handleAddPhase}
+                errorText={ghostError}
+                resetSignal={ghostResetSignal}
+              />
+            </div>
+          )}
 
           {/* The work + the dependency web — lives here pending a design
               ruling; a blocked ⊘ tick opens its blocker's sheet. */}

@@ -1350,6 +1350,7 @@ export type { PhaseRow, MilestoneRow, ScheduleRevisionRow, UseResolvedScheduleRe
 // and the two birth RPCs (seed_project_schedule_from_template /
 // copy_schedule_as_built). use-schedule.ts above stays read-only.
 export {
+  useProjectPhaseCounts,
   useAddScheduleMilestone,
   useUpdateScheduleMilestone,
   useRemoveScheduleMilestone,

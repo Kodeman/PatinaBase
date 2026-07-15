@@ -22,6 +22,7 @@
  * the meta line arrives composed (phaseMeta). Zero shadows (D4).
  */
 
+import type { ReactNode } from 'react';
 import type { ResolvedMilestone, ResolvedPhase } from '@patina/utils';
 import type { CoordinationItem, ProjectParty } from '@patina/supabase';
 import type { SectionTask } from '@/hooks/use-section-work';
@@ -59,6 +60,17 @@ export interface PhaseSectionProps {
   onOpenItem: (id: string) => void;
   /** 'YYYY-MM-DD' — for the milestone stamps' overdue arithmetic. */
   today: string;
+  // ── Compose (Slice 03) — all optional; omit every one and the entry
+  //    renders byte-identically to the read-only Slice 01 markup. ──
+  /** The persistent quiet mono action cluster on the heading (PhaseComposeActions). */
+  headingActions?: ReactNode;
+  /** A revealed compose surface under the meta line — the grammar fields, the
+   *  milestone composer, or the delete confirm. Renders regardless of fold. */
+  composePanel?: ReactNode;
+  /** When the phase is anchored, its heading chip becomes a one-click unpin. */
+  onUnpinPhaseAnchor?: () => void;
+  /** When a milestone is anchored, its chip becomes a one-click unpin. */
+  onUnpinMilestoneAnchor?: (milestoneId: string) => void;
 }
 
 /** Heading weight/size/ink per state (`.mb-entry h3` + state variants). */
@@ -92,6 +104,10 @@ export function PhaseSection({
   threads,
   onOpenItem,
   today,
+  headingActions,
+  composePanel,
+  onUnpinPhaseAnchor,
+  onUnpinMilestoneAnchor,
 }: PhaseSectionProps) {
   // The ball-in-court chip resolves the concrete party the court-group way:
   // a live project_parties row named by the item wins, else the embedded
@@ -100,7 +116,7 @@ export function PhaseSection({
     parties.find((p) => p.id === item.court_party_id) ?? item.court_party ?? null;
 
   const anchorChip = phase.anchored ? (
-    <AnchorChip date={phase.start} className="ml-[0.7rem] align-[3px]" />
+    <AnchorChip date={phase.start} className="ml-[0.7rem] align-[3px]" onUnpin={onUnpinPhaseAnchor} />
   ) : null;
 
   return (
@@ -134,35 +150,52 @@ export function PhaseSection({
 
       {/* ── body ── */}
       <div className={BODY_PAD[state]}>
-        <h3 className={`font-heading leading-tight ${HEADING_CLS[state]}`}>
-          {onToggle ? (
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-expanded={expanded}
-              className="cursor-pointer text-left"
-            >
-              {name}
-              {anchorChip}
-              {/* The unfold mark stays visible — never hover-revealed (touch
-                  exists; a hidden affordance on a closed chapter is a lie). */}
-              <span className="ml-4 font-mono text-[0.58rem] font-normal uppercase tracking-[0.08em] text-[var(--color-clay)]">
-                {expanded ? 'Fold' : 'Unfold'}
-              </span>
-            </button>
+        {(() => {
+          const headingEl = (
+            <h3 className={`font-heading leading-tight ${HEADING_CLS[state]}`}>
+              {onToggle ? (
+                <button
+                  type="button"
+                  onClick={onToggle}
+                  aria-expanded={expanded}
+                  className="cursor-pointer text-left"
+                >
+                  {name}
+                  {anchorChip}
+                  {/* The unfold mark stays visible — never hover-revealed (touch
+                      exists; a hidden affordance on a closed chapter is a lie). */}
+                  <span className="ml-4 font-mono text-[0.58rem] font-normal uppercase tracking-[0.08em] text-[var(--color-clay)]">
+                    {expanded ? 'Fold' : 'Unfold'}
+                  </span>
+                </button>
+              ) : (
+                <>
+                  {name}
+                  {anchorChip}
+                </>
+              )}
+            </h3>
+          );
+          // No compose actions → the heading renders exactly as Slice 01 did.
+          return headingActions ? (
+            <div className="flex items-baseline justify-between gap-4">
+              {headingEl}
+              {headingActions}
+            </div>
           ) : (
-            <>
-              {name}
-              {anchorChip}
-            </>
-          )}
-        </h3>
+            headingEl
+          );
+        })()}
 
         {metaLine && (
           <div className="mb-[0.2rem] mt-[0.15rem] font-mono text-[0.6rem] uppercase tracking-[0.08em] text-[var(--color-clay)]">
             {metaLine}
           </div>
         )}
+
+        {/* The revealed compose surface (grammar fields / milestone composer /
+            delete confirm) sits under the meta, visible regardless of fold. */}
+        {composePanel}
 
         {/* Collapsed closed/future entries stop here — history in a whisper. */}
         {expanded && (
@@ -173,6 +206,9 @@ export function PhaseSection({
                 milestone={m}
                 today={today}
                 highlighted={highlightMilestoneId === m.id}
+                onUnpinAnchor={
+                  onUnpinMilestoneAnchor ? () => onUnpinMilestoneAnchor(m.id) : undefined
+                }
               />
             ))}
 

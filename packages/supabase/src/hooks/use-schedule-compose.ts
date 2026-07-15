@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
 import type { MilestoneKind, MilestoneStatus } from '@patina/utils';
 
@@ -20,6 +20,33 @@ import type { MilestoneKind, MilestoneStatus } from '@patina/utils';
 // ═══════════════════════════════════════════════════════════════════════════
 
 const getSupabase = () => createBrowserClient();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BIRTH SUPPORT — past-project phase counts (the "from a past project"
+// picker, Slice 03 §3/§4). ONE grouped read: project_phases is designer-scoped
+// by RLS, so a bare select returns only this designer's phases; we count them
+// per project_id client-side rather than firing N `useProjectPhases` queries.
+// Read-only — lives here (not use-schedule.ts, the Spine's own read door)
+// because it exists only to feed the birth picker, a compose surface.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** `{ [projectId]: phaseCount }` across every project the designer can read. */
+export function useProjectPhaseCounts() {
+  return useQuery({
+    queryKey: ['project-phase-counts'],
+    queryFn: async (): Promise<Record<string, number>> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabase = getSupabase() as any;
+      const { data, error } = await supabase.from('project_phases').select('project_id');
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      for (const row of (data ?? []) as Array<{ project_id: string | null }>) {
+        if (row.project_id) counts[row.project_id] = (counts[row.project_id] ?? 0) + 1;
+      }
+      return counts;
+    },
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SCHEDULE MILESTONES (project side)
