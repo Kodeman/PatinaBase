@@ -15,6 +15,7 @@
 import {
   resolveSchedule,
   epochDayFromISO,
+  isoFromEpochDay,
   type SchedulePhaseInput,
   type ScheduleMilestoneInput,
   type PhaseLane,
@@ -526,5 +527,53 @@ describe('epochDayFromISO', () => {
   it('null on null/undefined — never throws', () => {
     expect(epochDayFromISO(null)).toBeNull();
     expect(epochDayFromISO(undefined)).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// isoFromEpochDay (Slice 04) — the INVERSE of epochDayFromISO, wrapping the same
+// private civil date math. Round-trips exactly for every calendar date.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('isoFromEpochDay', () => {
+  it('formats an epoch day back to strict YYYY-MM-DD', () => {
+    // The epoch-day 0 is the algorithm's civil epoch (1970-01-01).
+    expect(isoFromEpochDay(0)).toBe('1970-01-01');
+    expect(isoFromEpochDay(epochDayFromISO('2026-07-29'))).toBe('2026-07-29');
+  });
+
+  it('round-trips isoFromEpochDay(epochDayFromISO(iso)) === iso across month/year/leap boundaries', () => {
+    for (const iso of [
+      '2026-01-01',
+      '2026-02-28',
+      '2026-03-01',
+      '2026-07-29',
+      '2026-12-31',
+      '2024-02-29', // a real leap day
+      '2000-02-29', // century leap
+      '1999-12-31',
+    ]) {
+      expect(isoFromEpochDay(epochDayFromISO(iso))).toBe(iso);
+    }
+  });
+
+  it('round-trips epochDayFromISO(isoFromEpochDay(epoch)) === epoch for a run of integer days', () => {
+    const base = epochDayFromISO('2026-01-01')!;
+    for (let d = 0; d < 400; d++) {
+      expect(epochDayFromISO(isoFromEpochDay(base + d))).toBe(base + d);
+    }
+  });
+
+  it('rounds a fractional epoch to the nearest whole day (day math is integer-only)', () => {
+    const base = epochDayFromISO('2026-07-29')!;
+    expect(isoFromEpochDay(base + 0.4)).toBe('2026-07-29');
+    expect(isoFromEpochDay(base + 0.6)).toBe('2026-07-30');
+  });
+
+  it('null on null/undefined/non-finite — never throws', () => {
+    expect(isoFromEpochDay(null)).toBeNull();
+    expect(isoFromEpochDay(undefined)).toBeNull();
+    expect(isoFromEpochDay(Number.NaN)).toBeNull();
+    expect(isoFromEpochDay(Number.POSITIVE_INFINITY)).toBeNull();
   });
 });

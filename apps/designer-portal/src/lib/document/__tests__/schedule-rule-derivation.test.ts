@@ -1,7 +1,8 @@
 import type { ResolvedPhase, ResolvedMilestone } from '@patina/utils';
-import { epochDayFromISO } from '@patina/utils';
+import { epochDayFromISO, isoFromEpochDay } from '@patina/utils';
 import {
   buildTimeScale,
+  xToEpochDay,
   assignLabelRows,
   ruleWeightForStatus,
   ruleSegments,
@@ -406,5 +407,75 @@ describe('foldedLayers', () => {
       today: true,
       line: true,
     });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// xToEpochDay — the INVERSE of buildTimeScale.toX (day-snapped, clamped)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('xToEpochDay', () => {
+  // A scale over day 0..100 (2026-01-01 .. 2026-04-11), today inside the range.
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('round-trips every dated point in range: xToEpochDay(scale, toX(iso)) === epochDayFromISO(iso)', () => {
+    const base = epochDayFromISO('2026-01-01')!;
+    for (let d = 0; d <= 100; d++) {
+      const iso = isoFromEpochDay(base + d)!;
+      const x = scale.toX(iso)!;
+      expect(xToEpochDay(scale, x)).toBe(base + d);
+    }
+  });
+
+  it('round-trips through toX for every whole-day x it produces (toX ∘ xToEpochDay stable on days)', () => {
+    const base = epochDayFromISO('2026-01-01')!;
+    for (let d = 0; d <= 100; d += 7) {
+      const iso = isoFromEpochDay(base + d)!;
+      const x = scale.toX(iso)!;
+      // The snapped epoch feeds back through toX to (approximately) the same x,
+      // and re-snaps to the identical day — the inverse is stable.
+      const epoch = xToEpochDay(scale, x);
+      const x2 = scale.toX(isoFromEpochDay(epoch))!;
+      expect(xToEpochDay(scale, x2)).toBe(epoch);
+    }
+  });
+
+  it('clamps at both ends: x below 0 → the min day, x above 100 → the max day', () => {
+    const loEpoch = xToEpochDay(scale, -50);
+    const hiEpoch = xToEpochDay(scale, 150);
+    expect(loEpoch).toBe(Math.round(scale.minEpoch));
+    expect(hiEpoch).toBe(Math.round(scale.maxEpoch));
+    // And they bracket the whole dated range.
+    expect(loEpoch).toBeLessThanOrEqual(epochDayFromISO('2026-01-01')!);
+    expect(hiEpoch).toBeGreaterThanOrEqual(epochDayFromISO('2026-04-11')!);
+  });
+
+  it('x=0 and x=100 land on the padded domain edges (rounded to whole days)', () => {
+    expect(xToEpochDay(scale, 0)).toBe(Math.round(scale.minEpoch));
+    expect(xToEpochDay(scale, 100)).toBe(Math.round(scale.maxEpoch));
+  });
+
+  it('snaps a fractional x to the nearest whole day', () => {
+    const base = epochDayFromISO('2026-01-01')!;
+    const dayX = scale.toX('2026-02-15')!;
+    const nextX = scale.toX('2026-02-16')!;
+    const target = epochDayFromISO('2026-02-15')!;
+    // A point 40% of the way from one day to the next snaps back to the day.
+    expect(xToEpochDay(scale, dayX + (nextX - dayX) * 0.4)).toBe(target);
+    // 60% of the way snaps forward to the next day.
+    expect(xToEpochDay(scale, dayX + (nextX - dayX) * 0.6)).toBe(target + 1);
+    expect(target).toBe(base + 45);
+  });
+
+  it('single-day scale never divides by zero (span guard mirrors buildTimeScale)', () => {
+    const oneDay = buildTimeScale([{ start: '2026-05-01', end: '2026-05-01' }], '2026-05-01')!;
+    const epoch = xToEpochDay(oneDay, 50);
+    expect(Number.isFinite(epoch)).toBe(true);
+    expect(epoch).toBe(epochDayFromISO('2026-05-01')!);
+  });
+
+  it('non-finite x reads as the left edge; never NaN', () => {
+    expect(xToEpochDay(scale, Number.NaN)).toBe(Math.round(scale.minEpoch));
+    expect(Number.isFinite(xToEpochDay(scale, Number.POSITIVE_INFINITY))).toBe(true);
   });
 });

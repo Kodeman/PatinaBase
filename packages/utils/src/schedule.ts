@@ -212,6 +212,24 @@ export function epochDayFromISO(iso: string | null | undefined): number | null {
   return parseDate(iso);
 }
 
+/**
+ * ADDITIVE export (Slice 04): the INVERSE of `epochDayFromISO` — turn an
+ * integer epoch day back into a strict 'YYYY-MM-DD' string, via the resolver's
+ * own civil date math (R100's "ONE date-math impl" — never a timezone-sensitive
+ * `Date`, never a clock). A thin wrapper over the private `formatDate` this file
+ * already uses internally; behavior is identical. `null`/`undefined`/non-finite
+ * → `null`. A non-integer input is rounded to the nearest whole day first (day
+ * math is integer-only), so it composes cleanly with `xToEpochDay`'s day-snapped
+ * output. Lets other pure lib code (the Rule's x→date inverse scale, the
+ * ripple's projected-date arithmetic) render a date from epoch-day integers
+ * WITHOUT a second date-math implementation. Does not change `formatDate` or any
+ * existing export.
+ */
+export function isoFromEpochDay(epoch: number | null | undefined): string | null {
+  if (epoch == null || !Number.isFinite(epoch)) return null;
+  return formatDate(Math.round(epoch));
+}
+
 /** Effective duration in days (semantic 1); null when neither is a finite number. */
 function effectiveDuration(p: SchedulePhaseInput): number | null {
   const d = p.durationDays;

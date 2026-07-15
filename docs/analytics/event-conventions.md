@@ -101,7 +101,11 @@ in PostHog today.
   NOT flag-gated — they fire from BOTH the Spine (project) and PhaseBuilder
   (proposal, `apps/designer-portal/src/components/portal/scope-builder/
   phase-builder.tsx` — designer-only already, no separate gate needed). All
-  three fire ONLY inside a mutation's `onSuccess`),
+  three fire ONLY inside a mutation's `onSuccess`. Slice 04 (adjust) adds
+  `schedule_edit_committed` (`surface: 'rule' | 'spine'`, `edit_kind`,
+  `ripple_size`, `conflict_count`) — a previewed time edit committed through
+  the ripple's confirm strip, project surface only, fired ONLY inside the
+  commit mutation's `onSuccess` (a reverted/Esc edit never fires)),
   `apps/designer-portal/src/lib/analytics/procurement-events.ts`,
   `apps/designer-portal/src/lib/analytics/nomination-events.ts`.
 - Client Portal: `apps/client-portal/src/lib/analytics/events.ts` (auth,

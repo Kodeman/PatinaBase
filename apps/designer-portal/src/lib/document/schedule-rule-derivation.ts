@@ -77,6 +77,39 @@ export function buildTimeScale(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// xToEpochDay — the INVERSE of TimeScale.toX (day-snapped, clamped)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Invert a `TimeScale`: an x-position in % [0..100] → the epoch day it names,
+ * snapped to a whole day and clamped to the scale's padded domain. This is the
+ * drag reader's other half of `buildTimeScale.toX` (Slice 04 — a boundary
+ * handle / diamond dragged to `xPct` reads its intended date here). Recomputes
+ * `span` from the scale's own `minEpoch`/`maxEpoch` with the SAME single-day
+ * guard `toX` used (`|| 1`), so a degenerate one-day scale never divides by
+ * zero — it is the exact algebraic inverse of `toX`, not a second scale.
+ *
+ * - `xPct` is first clamped to [0, 100] (a drag past either edge reads as the
+ *   edge, never off-scale); a non-finite `xPct` reads as the left edge (0).
+ * - The raw epoch (`minEpoch + x/100·span`) is `Math.round`ed — a fractional x
+ *   snaps to the nearest whole day, so the handle always lands ON a day.
+ * - The snapped day is clamped to the rounded padded bounds
+ *   [round(minEpoch), round(maxEpoch)] so it can never fall a rounding step
+ *   outside the domain. Round-trips with `toX` for any dated point in range:
+ *   `xToEpochDay(scale, scale.toX(iso)!) === epochDayFromISO(iso)`.
+ *
+ * Total: returns a finite integer for every input; never throws, never NaN.
+ */
+export function xToEpochDay(scale: TimeScale, xPct: number): number {
+  const span = scale.maxEpoch - scale.minEpoch || 1; // single-day guard, mirrors buildTimeScale
+  const clampedX = Math.max(0, Math.min(100, Number.isFinite(xPct) ? xPct : 0));
+  const snapped = Math.round(scale.minEpoch + (clampedX / 100) * span);
+  const lo = Math.round(scale.minEpoch);
+  const hi = Math.round(scale.maxEpoch);
+  return Math.max(lo, Math.min(hi, snapped));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // assignLabelRows — greedy lowest-free-row staggering (never truncates)
 // ═══════════════════════════════════════════════════════════════════════════
 

@@ -14,6 +14,10 @@
  * there unconditionally). Every one of these three fires ONLY inside a
  * mutation's `onSuccess` — a failed write is never counted as a compose act.
  *
+ * Slice 04 (adjust) adds `schedule_edit_committed` — one previewed time edit
+ * committed through the ripple's confirm strip, fired ONLY inside the commit
+ * mutation's `onSuccess` (project surface only; a reverted edit never fires).
+ *
  * No-ops when PostHog is not initialized (the track() guard).
  */
 
@@ -75,4 +79,24 @@ export const scheduleEvents = {
     /** true = an anchor was set; false = unpinned (cleared). */
     set: boolean;
   }) => track('schedule_anchor_set', p),
+
+  // ── Slice 04 (Adjust — the ripple) — a previewed time edit committed ──
+
+  /** A time edit was committed through the ripple's confirm strip (R100 —
+   *  "Nothing moves until Commit"). Fires ONLY inside the commit mutation's
+   *  `onSuccess`: a reverted (Esc) or failed edit is never counted. `surface`
+   *  names the edit origin — `'rule'` (a boundary/diamond drag on the Rule) or
+   *  `'spine'` (an inline date field in a phase meta line). `edit_kind` mirrors
+   *  `RipplePendingEdit['kind']`; `ripple_size` is the diff's `rippleSize`
+   *  (phases + milestones moved); `conflict_count` is the committed edit's
+   *  remaining conflict count (an anchor-violating edit cannot commit, so this
+   *  is only ever the non-blocking residue). Project-side only — no proposal
+   *  surface edits a live schedule. */
+  scheduleEditCommitted: (p: {
+    project_id: string;
+    surface: 'rule' | 'spine';
+    edit_kind: 'phase-duration' | 'phase-anchor' | 'milestone-offset';
+    ripple_size: number;
+    conflict_count: number;
+  }) => track('schedule_edit_committed', p),
 };
