@@ -57,62 +57,73 @@ export function OpenItemRow({ item, tasks, onOpen, court }: OpenItemRowProps) {
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-3 border-b border-[var(--color-pearl)] px-1 py-2.5 text-left transition-colors hover:bg-[rgba(196,165,123,0.04)]"
+      className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--color-pearl)] px-1 py-2.5 text-left transition-colors hover:bg-[rgba(196,165,123,0.04)]"
     >
-      {/* type chip — mono, fixed 80px, the brand border+tint+ink trio (D4: a
-          1.5px flat border + faint tint, no shadow). */}
-      <span
-        className="w-20 flex-shrink-0 rounded-[3px] border-[1.5px] px-2 py-[3px] text-center font-mono text-[8px] font-semibold uppercase tracking-[0.07em]"
-        style={chipStyle(item.coordination_kind)}
-      >
-        {token.label}
+      {/* type chip + title/blocking, grouped with a readable floor width —
+          on a crowded/narrow row the trailing meta group wraps to a second
+          line instead of squeezing this group (and so the title) toward
+          zero (wrapping is fine, clipping is not). */}
+      <span className="flex min-w-[9rem] flex-1 items-center gap-3">
+        {/* type chip — mono, fixed 80px, the brand border+tint+ink trio (D4:
+            a 1.5px flat border + faint tint, no shadow). */}
+        <span
+          className="w-20 flex-shrink-0 rounded-[3px] border-[1.5px] px-2 py-[3px] text-center font-mono text-[8px] font-semibold uppercase tracking-[0.07em]"
+          style={chipStyle(item.coordination_kind)}
+        >
+          {token.label}
+        </span>
+
+        {/* body — title + the blocking line */}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-medium leading-snug text-[var(--color-charcoal)]">
+            {item.title}
+          </span>
+          {blocks && (
+            <span className="mt-[1px] flex items-center gap-1.5 text-[10px] text-[var(--color-aged-oak)]">
+              {blocked && (
+                <span aria-hidden className="font-mono" style={{ color: '#C4836F' }}>
+                  ⊘
+                </span>
+              )}
+              <span className="truncate">{blocks}</span>
+            </span>
+          )}
+        </span>
       </span>
 
-      {/* body — title + the blocking line */}
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-medium leading-snug text-[var(--color-charcoal)]">
-          {item.title}
-        </span>
-        {blocks && (
-          <span className="mt-[1px] flex items-center gap-1.5 text-[10px] text-[var(--color-aged-oak)]">
-            {blocked && (
-              <span aria-hidden className="font-mono" style={{ color: '#C4836F' }}>
-                ⊘
-              </span>
-            )}
-            <span className="truncate">{blocks}</span>
+      {/* ball-in-court chip + due read + chevron — a second group so it can
+          wrap below the title group as a unit rather than each shrinking
+          independently. */}
+      <span className="ml-auto flex flex-shrink-0 items-center gap-3">
+        {/* ball-in-court chip — dot + mono label (Spine rows only; absent
+            when `court` isn't passed) */}
+        {courtToken && (
+          <span
+            className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.04em]"
+            style={{ color: courtLate ? '#C4836F' : 'var(--color-aged-oak)' }}
+          >
+            <span
+              aria-hidden
+              className="inline-block h-[6px] w-[6px] rounded-full"
+              style={{ background: courtToken.dotColor }}
+            />
+            Ball: {court!.court === 'designer' ? 'you' : courtToken.label}
           </span>
         )}
-      </span>
 
-      {/* ball-in-court chip — dot + mono label, between the body and the due
-          read (Spine rows only; absent when `court` isn't passed) */}
-      {courtToken && (
-        <span
-          className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.04em]"
-          style={{ color: courtLate ? '#C4836F' : 'var(--color-aged-oak)' }}
-        >
+        {/* due read — mono, terracotta ink when due-soon, aged-oak otherwise */}
+        {due && (
           <span
-            aria-hidden
-            className="inline-block h-[6px] w-[6px] rounded-full"
-            style={{ background: courtToken.dotColor }}
-          />
-          Ball: {court!.court === 'designer' ? 'you' : courtToken.label}
-        </span>
-      )}
+            className="flex-shrink-0 whitespace-nowrap text-right font-mono text-[9px] uppercase tracking-[0.04em]"
+            style={{ color: soon ? '#C4836F' : 'var(--color-aged-oak)' }}
+          >
+            {soon ? `due ${fmtDay(due)}` : fmtDay(due)}
+          </span>
+        )}
 
-      {/* due read — mono, terracotta ink when due-soon, aged-oak otherwise */}
-      {due && (
-        <span
-          className="flex-shrink-0 whitespace-nowrap text-right font-mono text-[9px] uppercase tracking-[0.04em]"
-          style={{ color: soon ? '#C4836F' : 'var(--color-aged-oak)' }}
-        >
-          {soon ? `due ${fmtDay(due)}` : fmtDay(due)}
+        <span aria-hidden className="flex-shrink-0 text-[13px] text-[var(--color-aged-oak)]">
+          ›
         </span>
-      )}
-
-      <span aria-hidden className="flex-shrink-0 text-[13px] text-[var(--color-aged-oak)]">
-        ›
       </span>
     </button>
   );

@@ -85,7 +85,7 @@ BEGIN
     start_date, target_end_date,
     duration_days, follows_phase_id, anchor_date, lane, sort_order
   ) VALUES (
-    v_phase_sd, v_project_id, 'Schematic Design', 'schematic_design', 'completed',
+    v_phase_sd, v_project_id, 'Schematic Design', NULL, 'completed',
     CURRENT_DATE - 35, CURRENT_DATE - 14,
     21, NULL, CURRENT_DATE - 35, 'main', 0
   );
@@ -96,7 +96,7 @@ BEGIN
     start_date, target_end_date,
     duration_days, follows_phase_id, anchor_date, lane, sort_order
   ) VALUES (
-    v_phase_dd, v_project_id, 'Design Development', 'design_development', 'in_progress',
+    v_phase_dd, v_project_id, 'Design Development', NULL, 'in_progress',
     CURRENT_DATE - 14, CURRENT_DATE + 14,
     28, v_phase_sd, NULL, 'main', 1
   );
@@ -133,7 +133,7 @@ BEGIN
     start_date, target_end_date,
     duration_days, follows_phase_id, anchor_date, lane, sort_order
   ) VALUES (
-    v_phase_comp, v_project_id, 'Completion', 'completion', 'pending',
+    v_phase_comp, v_project_id, 'Completion', NULL, 'pending',
     CURRENT_DATE + 45, CURRENT_DATE + 52,
     7, v_phase_inst, NULL, 'main', 4
   );

@@ -234,7 +234,16 @@ describe('phaseMeta', () => {
     });
 
     it('omits the closed-date segment when end is null', () => {
-      expect(phaseMeta({ ...base, state: 'closed', end: null, itemCount: 1 })).toBe('1 items');
+      expect(phaseMeta({ ...base, state: 'closed', end: null, itemCount: 1 })).toBe('1 item');
+    });
+
+    it('singularizes item count at exactly 1, pluralizes otherwise', () => {
+      expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 1 })).toBe(
+        'Closed Jun 1 · 1 item',
+      );
+      expect(phaseMeta({ ...base, state: 'closed', end: '2026-06-01', itemCount: 2 })).toBe(
+        'Closed Jun 1 · 2 items',
+      );
     });
 
     it('a fully empty closed phase renders nothing', () => {
@@ -305,7 +314,16 @@ describe('phaseMeta', () => {
     it('omits predecessor when unknown', () => {
       expect(
         phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: null, durationDays: 7, milestoneCount: 1 }),
-      ).toBe('1w · 1 milestones');
+      ).toBe('1w · 1 milestone');
+    });
+
+    it('singularizes milestone count at exactly 1, pluralizes otherwise', () => {
+      expect(
+        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 7, milestoneCount: 1 }),
+      ).toBe('Follows Framing · 1w · 1 milestone');
+      expect(
+        phaseMeta({ ...base, state: 'future', anchored: false, predecessorName: 'Framing', durationDays: 7, milestoneCount: 2 }),
+      ).toBe('Follows Framing · 1w · 2 milestones');
     });
 
     it('omits duration when null or zero', () => {

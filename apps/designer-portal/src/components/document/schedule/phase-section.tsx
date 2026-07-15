@@ -96,7 +96,7 @@ export function PhaseSection({
   ) : null;
 
   return (
-    <div className="grid grid-cols-[30px_1fr] gap-x-[1.1rem]">
+    <div className="grid grid-cols-[30px_minmax(0,1fr)] gap-x-[1.1rem]">
       {/* ── spine cell — per-entry segment + node so the line reads continuous ── */}
       <div className="relative" aria-hidden>
         {state === 'future' ? (

@@ -186,7 +186,9 @@ export function phaseMeta(input: {
   switch (input.state) {
     case 'closed': {
       if (input.end) segments.push(`Closed ${fmtDay(input.end)}`);
-      if (input.itemCount > 0) segments.push(`${input.itemCount} items`);
+      if (input.itemCount > 0) {
+        segments.push(`${input.itemCount} item${input.itemCount === 1 ? '' : 's'}`);
+      }
       if (input.lastSigned && input.lastSigned.date) {
         segments.push(`${input.lastSigned.name} signed ${fmtDay(input.lastSigned.date)}`);
       }
@@ -208,7 +210,9 @@ export function phaseMeta(input: {
       } else {
         if (input.predecessorName) segments.push(`Follows ${input.predecessorName}`);
         if (input.durationDays) segments.push(weeksOrDays(input.durationDays));
-        if (input.milestoneCount > 0) segments.push(`${input.milestoneCount} milestones`);
+        if (input.milestoneCount > 0) {
+          segments.push(`${input.milestoneCount} milestone${input.milestoneCount === 1 ? '' : 's'}`);
+        }
       }
       break;
     }
