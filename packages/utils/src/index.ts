@@ -8,6 +8,7 @@ export * from './error';
 export * from './retry';
 export * from './slug';
 export * from './proposal-visibility';
+export * from './schedule';
 export * from './document-share';
 export * from './item-feedback';
 // Schedule & Boards Wave 3 · Track A — Designer-Taught Intelligence
