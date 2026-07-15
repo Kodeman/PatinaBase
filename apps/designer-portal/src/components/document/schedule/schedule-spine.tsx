@@ -27,7 +27,7 @@
  * ink weight, and pearl hairlines.
  */
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useCoordinationItems,
   useProjectParties,
@@ -51,6 +51,8 @@ import {
   blocksText,
   sortItemsBlockingFirst,
 } from '@/lib/document/coordination-derivation';
+import { phaseAnchorId } from '@/lib/document/phase-anchor';
+import { useScheduleNav, type ScheduleRevealTarget } from './schedule-nav-context';
 import { StrataMiniRule } from '../strata-mini-rule';
 import { DocSheet } from '../overlays/doc-sheet';
 import { OpenItemSheet } from '../coordination/open-item-sheet';
@@ -94,6 +96,10 @@ export function ScheduleSpine({
   const schedule = useResolvedSchedule(projectId);
   // Subscribe ONCE for the whole spine — the rows above re-read on invalidation.
   useCoordinationRealtime(projectId);
+
+  // The Rule (the minimap) reveals phases/milestones here through the nav
+  // context. Inert when no provider is above (the spine works standalone).
+  const { registerRevealHandler } = useScheduleNav();
 
   const allItems = useMemo(() => items ?? [], [items]);
   const allTasks = useMemo(() => tasks ?? [], [tasks]);
@@ -299,6 +305,46 @@ export function ScheduleSpine({
     });
   };
 
+  // ── minimap reveal — the Rule asks the spine to surface a phase/milestone.
+  // A milestone target also flashes its row (~1.6s transient highlight). ──
+  const [highlightMilestoneId, setHighlightMilestoneId] = useState<string | null>(null);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleReveal = useCallback((target: ScheduleRevealTarget) => {
+    // Unfold the target phase through the SAME Set the header toggle uses
+    // (a no-op for the always-open active phase); never fold it back.
+    setUnfolded((prev) => {
+      if (prev.has(target.phaseId)) return prev;
+      const next = new Set(prev);
+      next.add(target.phaseId);
+      return next;
+    });
+
+    if (target.kind === 'milestone') {
+      setHighlightMilestoneId(target.milestoneId);
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+      highlightTimer.current = setTimeout(() => setHighlightMilestoneId(null), 1600);
+    }
+
+    // Scroll after the unfold paints — the page's rAF + smooth + scroll-mt
+    // pattern; each PhaseSection wears phaseAnchorId(phaseId) as its DOM id.
+    requestAnimationFrame(() => {
+      document
+        .getElementById(phaseAnchorId(target.phaseId))
+        ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+  }, []);
+
+  // Register for as long as the spine is mounted; unregister on unmount so a
+  // reveal from a still-mounted Rule no-ops once the spine is gone.
+  useEffect(() => {
+    registerRevealHandler(handleReveal);
+    return () => {
+      registerRevealHandler(null);
+      if (highlightTimer.current) clearTimeout(highlightTimer.current);
+    };
+  }, [registerRevealHandler, handleReveal]);
+
   const loading = schedule.isLoading || schedule.resolved == null;
 
   return (
@@ -337,6 +383,8 @@ export function ScheduleSpine({
                   phase={entry.phase}
                   name={entry.name}
                   state={entry.state}
+                  anchorId={phaseAnchorId(entry.phase.id)}
+                  highlightMilestoneId={highlightMilestoneId}
                   expanded={entry.state === 'active' ? true : unfolded.has(entry.phase.id)}
                   onToggle={
                     entry.state === 'active'

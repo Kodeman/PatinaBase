@@ -34,6 +34,12 @@ export interface PhaseSectionProps {
   phase: ResolvedPhase;
   name: string;
   state: SpinePhaseState;
+  /** DOM id + scroll target for the Rule's minimap reveal (phaseAnchorId).
+   *  Omitted → the entry renders exactly as before (byte-identical). */
+  anchorId?: string;
+  /** The milestone currently flashed by a minimap reveal, or null. Passed
+   *  straight to each MilestoneRow; undefined → no row ever highlights. */
+  highlightMilestoneId?: string | null;
   expanded: boolean;
   /** null = not foldable (the active phase never folds). */
   onToggle: (() => void) | null;
@@ -73,6 +79,8 @@ export function PhaseSection({
   phase,
   name,
   state,
+  anchorId,
+  highlightMilestoneId,
   expanded,
   onToggle,
   metaLine,
@@ -96,7 +104,12 @@ export function PhaseSection({
   ) : null;
 
   return (
-    <div className="grid grid-cols-[30px_minmax(0,1fr)] gap-x-[1.1rem]">
+    <div
+      id={anchorId}
+      className={`grid grid-cols-[30px_minmax(0,1fr)] gap-x-[1.1rem]${
+        anchorId ? ' scroll-mt-24' : ''
+      }`}
+    >
       {/* ── spine cell — per-entry segment + node so the line reads continuous ── */}
       <div className="relative" aria-hidden>
         {state === 'future' ? (
@@ -155,7 +168,12 @@ export function PhaseSection({
         {expanded && (
           <div className="max-w-[640px]">
             {milestones.map((m) => (
-              <MilestoneRow key={m.id} milestone={m} today={today} />
+              <MilestoneRow
+                key={m.id}
+                milestone={m}
+                today={today}
+                highlighted={highlightMilestoneId === m.id}
+              />
             ))}
 
             {items.length > 0 && (

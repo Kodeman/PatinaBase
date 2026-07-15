@@ -24,6 +24,10 @@ export interface MilestoneRowProps {
   milestone: ResolvedMilestone & { name: string };
   /** 'YYYY-MM-DD' — for the stamp's overdue arithmetic. */
   today: string;
+  /** Transiently flashed by a Rule minimap reveal (~1.6s). A clay-tint band +
+   *  name underline — NEVER a shadow (D4). Default false → the row renders
+   *  byte-identically to the pre-reveal Slice 01 markup. */
+  highlighted?: boolean;
 }
 
 /** The diamond per derived status (`.dia.signed/.due/.ahead` + slipped). */
@@ -41,16 +45,28 @@ const DIAMOND: Record<MilestoneStatus, CSSProperties> = {
   slipped: { background: 'var(--color-terracotta)' },
 };
 
-export function MilestoneRow({ milestone, today }: MilestoneRowProps) {
+export function MilestoneRow({ milestone, today, highlighted = false }: MilestoneRowProps) {
   const stamp = milestoneStamp(milestone, today);
   return (
-    <div className="flex items-center gap-[0.7rem] py-[0.42rem] text-[0.8rem] text-[var(--color-mocha)]">
+    <div
+      className={`flex items-center gap-[0.7rem] py-[0.42rem] text-[0.8rem] text-[var(--color-mocha)]${
+        highlighted
+          ? ' -mx-2 rounded-[3px] bg-[rgba(196,165,123,0.14)] px-2 transition-colors'
+          : ''
+      }`}
+    >
       <span
         aria-hidden
         className="h-[7px] w-[7px] flex-none rotate-45"
         style={DIAMOND[milestone.derivedStatus]}
       />
-      <span className="min-w-0 truncate">{milestone.name}</span>
+      <span
+        className={`min-w-0 truncate${
+          highlighted ? ' underline decoration-[var(--color-clay)] underline-offset-2' : ''
+        }`}
+      >
+        {milestone.name}
+      </span>
       {milestone.anchored && <AnchorChip date={milestone.date} className="flex-none" />}
       <span
         className="ml-auto whitespace-nowrap pl-3 font-mono text-[0.58rem] uppercase tracking-[0.06em]"
