@@ -120,7 +120,7 @@ export function RuleLabelRow({ labels, onReveal }: RuleLabelRowProps) {
               else labelRefs.current.delete(l.id);
             }}
             type="button"
-            onClick={() => onReveal(l.id) /* telemetry: wired in S2-4 */}
+            onClick={() => onReveal(l.id)}
             aria-label={`${l.name} — reveal in the schedule`}
             className="absolute block cursor-pointer whitespace-nowrap font-body text-[0.78rem] leading-tight tracking-[0.02em]"
             style={{ top: row * ROW_PITCH_PX, ...pos, fontWeight: WEIGHT[l.weight], color: INK[l.weight] }}

@@ -47,8 +47,10 @@
  * containers measure 0 wide, so the stagger never runs) — the line, diamonds
  * and today remain. Full mobile treatment is a review escalation (§7).
  *
- * NOT mounted in this slice — step 3 gates + mounts it and adds the telemetry
- * at the `// telemetry: wired in S2-4` seams. Zero shadows (D4).
+ * Mounted (S2-4) at the document page's `<main>` top-level flow behind the
+ * `schedule-spine` flag, replacing `PhaseTimeline`; every reveal call fires
+ * `rule_minimap_jump` alongside it (`@/lib/analytics/schedule-events`).
+ * Zero shadows (D4).
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -64,6 +66,7 @@ import {
   ruleWeightForStatus,
 } from '@/lib/document/schedule-rule-derivation';
 import { fmtDay } from '@/lib/document/format';
+import { scheduleEvents } from '@/lib/analytics/schedule-events';
 import { useScheduleNav } from './schedule-nav-context';
 import { RuleTrack } from './rule-track';
 import { RuleDiamond } from './rule-diamond';
@@ -191,11 +194,22 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
 
   const revealPhase = (phaseId: string) => {
     reveal({ kind: 'phase', phaseId });
-    // telemetry: wired in S2-4
+    scheduleEvents.ruleMinimapJump({
+      project_id: projectId,
+      target_kind: 'phase',
+      phase_id: phaseId,
+      from_pinned: pinned,
+    });
   };
   const revealMilestone = (phaseId: string, milestoneId: string) => {
     reveal({ kind: 'milestone', phaseId, milestoneId });
-    // telemetry: wired in S2-4
+    scheduleEvents.ruleMinimapJump({
+      project_id: projectId,
+      target_kind: 'milestone',
+      phase_id: phaseId,
+      milestone_id: milestoneId,
+      from_pinned: pinned,
+    });
   };
 
   // Fully-undated schedule (or still loading): the Rule draws nothing — the
@@ -291,7 +305,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
         <div className="mt-1 flex justify-end">
           <button
             type="button"
-            onClick={() => revealPhase(unplaced[0].id) /* telemetry: wired in S2-4 */}
+            onClick={() => revealPhase(unplaced[0].id)}
             aria-label={`${unplaced.length} unplaced ${
               unplaced.length === 1 ? 'phase' : 'phases'
             } — reveal the first in the schedule`}

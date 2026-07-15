@@ -6,8 +6,9 @@
  * module-local `track()` guarding `isAnalyticsEnabled()` → `posthog.capture`,
  * flat snake_case props.
  *
- * Only `spine_phase_unfolded` is scaffolded here — the rest of §7's contract
- * belongs to later slices; do not add events ahead of the UI that fires them.
+ * `spine_phase_unfolded` (Slice 01) and `rule_minimap_jump` (Slice 02) are
+ * scaffolded here; the rest of §7's contract belongs to later slices — do
+ * not add events ahead of the UI that fires them.
  *
  * No-ops when PostHog is not initialized (the track() guard).
  */
@@ -29,4 +30,13 @@ export const scheduleEvents = {
     item_count: number;
     milestone_count: number;
   }) => track('spine_phase_unfolded', props),
+  /** §7 contract — a Rule minimap control (label, diamond, or the Unplaced
+   *  control) revealed a phase/milestone in the spine (Slice 02). */
+  ruleMinimapJump: (p: {
+    project_id: string;
+    target_kind: 'phase' | 'milestone';
+    phase_id: string;
+    milestone_id?: string;
+    from_pinned: boolean;
+  }) => track('rule_minimap_jump', p),
 };

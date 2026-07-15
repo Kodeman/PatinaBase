@@ -94,7 +94,8 @@ in PostHog today.
   `apps/designer-portal/src/lib/analytics/document-events.ts` (Document/desk
   telemetry — command bar, wayfinding, margin items),
   `apps/designer-portal/src/lib/analytics/schedule-events.ts` (Schedule
-  Spine telemetry, `schedule-spine` flag — `spine_phase_unfolded`),
+  Spine telemetry, `schedule-spine` flag — `spine_phase_unfolded`,
+  `rule_minimap_jump`),
   `apps/designer-portal/src/lib/analytics/procurement-events.ts`,
   `apps/designer-portal/src/lib/analytics/nomination-events.ts`.
 - Client Portal: `apps/client-portal/src/lib/analytics/events.ts` (auth,
