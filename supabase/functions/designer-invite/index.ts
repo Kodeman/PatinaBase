@@ -61,10 +61,24 @@ interface InviteBody {
   role?: string;
 }
 
+// Browser-facing: the admin portal's "Invite Designer" flow (Users page)
+// calls this via supabase.functions.invoke, which fires a CORS preflight
+// (custom auth/apikey headers + JSON body → non-simple request). We MUST
+// answer OPTIONS and echo these headers on every response — otherwise the
+// browser blocks the call before the handler runs, and supabase-js surfaces a
+// FunctionsFetchError ("Failed to send a request to the Edge Function").
+// Mirrors the proven create-checkout-session pattern.
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
 
@@ -285,6 +299,11 @@ async function handleInvite(req: Request): Promise<Response> {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+  if (req.method !== 'POST') {
+    return json({ error: 'method_not_allowed' }, 405);
+  }
   return handleInvite(req);
 });
