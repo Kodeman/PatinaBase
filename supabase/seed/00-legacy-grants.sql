@@ -2483,3 +2483,27 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.is_active_org_member(uuid) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00323_schedule_spine_schema.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.schedule_milestones TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00323_schedule_spine_schema.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.schedule_milestones TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00323_schedule_spine_schema.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.schedule_revisions TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00323_schedule_spine_schema.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.schedule_revisions TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
