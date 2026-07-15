@@ -17363,6 +17363,10 @@ export type Database = {
         }
         Returns: Json
       }
+      commit_schedule_edit: {
+        Args: { p_edits: Json; p_project_id: string; p_reason?: string }
+        Returns: string
+      }
       comms_resolve_role: { Args: { p_user_id: string }; Returns: string }
       complete_aesthete_job: {
         Args: { p_error?: string; p_id: number; p_status: string }

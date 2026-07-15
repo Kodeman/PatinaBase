@@ -1360,5 +1360,7 @@ export {
   useDeletePhaseWithRelink,
   useSeedProjectScheduleFromTemplate,
   useCopyScheduleAsBuilt,
+  useCommitScheduleEdit,
+  serializeRippleEditForRpc,
 } from './use-schedule-compose';
-export type { PhaseRelinkUpdate } from './use-schedule-compose';
+export type { PhaseRelinkUpdate, RipplePendingEditInput, SerializedRippleEdit } from './use-schedule-compose';
