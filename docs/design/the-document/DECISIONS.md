@@ -3353,3 +3353,74 @@ O9 remains open. Slice 03 builds on `schedule/slice-03`, stacked on
 slice-02; its review milestone gates Slice 04 (Adjust).
 
 *Entries add: R103 · last id = R103*
+
+### R104 · Process ruling — continuous execution through Slice 05 — 2026-07-15
+
+**Ruled (design authority, mid-Slice 03):** "I want you to continue
+through all the slices before I review again." The package's per-slice
+review gates are superseded for Slices 03–05: the build proceeds
+continuously; each slice still produces its screenshot drop, its
+DECISIONS entries, and its escalation list; the design authority
+reviews all three in one consolidated pass at the end. The flip gate
+stays off throughout; nothing ships to production.
+
+*Entries add: R104 · last id = R104*
+
+### I59 · Slice 03 built — Compose: the schedule is born and grows inline — 2026-07-15
+
+Branch `schedule/slice-03` (stacked on slice-02). Landed: migration 00324
+(proposal chain columns, anchored-only `proposal_schedule_milestones`,
+the `patina_six` template, `apply_phase_template` regrafted for
+linear-chain insertion, two birth RPCs — `seed_project_schedule_from_
+template` and `copy_schedule_as_built` — and `activate_proposal_as_
+project` regrafted to carry chain columns and milestones through a
+two-pass follows remap); `parseScheduleEntry`, the one grammar durations,
+anchors, and offsets all speak; the compose UI — ghost add-line, the
+grammar-driven entry field, the milestone composer, delete-with-relink,
+and the three-starting-points birth surface — on both the project spine
+and the proposal composer; `PhaseBuilder`'s grammar field, its anchored-
+milestones mini-list, and the readonly proposal's "Key dates"; telemetry
+`schedule_born`, `schedule_phase_added`, `schedule_anchor_set`. The
+hardening the reviews forced: mutation error surfaces inline (never a
+toast) and the negative-duration CRITICAL closed three levels deep — the
+field's own inline reject plus `duration_days > 0` CHECKs on both
+`project_phases` and `proposal_phases`.
+
+**Walk results (S3-7, live, DB + driver evidence):** all nine §9 checks
+run end to end. Clean: proposal Patina-Six birth (4.3s), blank birth +
+<5s single add, past-project as-built copy, proposal readonly Key-dates
+with zero unanchored milestones, activation (chain cols + remapped
+follows + milestones landed offset-NULL/upcoming + legacy cascade + zero
+`schedule_revisions` rows, all psql-asserted), spine add/edit/delete-
+relink (confirm wording and the psql-verified relink both correct), the
+chain-doesn't-fit terracotta, the negative-duration guard on both
+surfaces, and gate-off (old band byte-identical; the proposal composer's
+grammar field un-gated as designed). **One confirmed defect:** the
+resolver's per-phase `slackDays` (`schedule.ts:620`) reads
+`downstreamSlack(id)` — a phase's followers' slack — instead of its own
+`anchorSlack` entry, so "N days slack" never renders on the anchored
+phase itself (the chip and "Holds when upstream moves" are unaffected).
+Two structural findings: thread-lane phases expose no compose actions at
+all (confirmed, not just anticipated); and the lane packer can
+auto-promote an overrunning anchor to thread before its terracotta meta
+ever renders, so the overrun UI only reaches the main lane. One copy
+nit: the delete confirm's "1 milestone go with it" doesn't conjugate for
+singular count.
+
+Escalations (plan §10 plus this walk's carry-forwards): bare-number unit
+per surface; year inference to next on-or-after; the ghost line's compute
+text is passive, not the ripple (Slice 04); delete-relink wording;
+slack + overrun placement (sharpened by the findings above); no
+follows/lane editors in the proposal composer; anchored milestones now
+client-visible in readonly (placement); Patina Six's names/durations and
+whether Procurement defaults thread; as-built = actual-elapsed with a
+planned fallback; project-side birth shipped in scope; the composer rides
+`schedule-spine`; `proposal_schedule_milestones` RLS omits the
+studio-comember leg (deliberate); edit-dates commits once per open; a
+name-only phase needs two Enters; chip-unpin failures show no inline
+error; the weeks-mirror rounds 1–3d to 0w in summary totals; the
+accordion hosts milestones under "Deliverables, gates & key dates."
+
+*Entries add: I59 · last id = I59*
+
+*Entries add: I59 · last id = I59*
