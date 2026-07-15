@@ -104,6 +104,30 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_proposal_phases_follows
   ON public.proposal_phases(follows_phase_id) WHERE follows_phase_id IS NOT NULL;
 
+-- Positive-duration guards (S3-6 review fix). The entry grammar accepts
+-- signed durations ('-3d') because milestone OFFSETS need them — but a
+-- PHASE duration must be a positive day count: a negative duration_days
+-- would run activate_proposal_as_project's legacy v_running_date cascade
+-- BACKWARD, corrupting every downstream phase date. The UI rejects signed
+-- input on phase-duration fields (ScheduleEntryField durationSign
+-- 'unsigned'); these CHECKs are the backstop for direct PostgREST writes.
+-- Covers project_phases too (its duration_days landed in 00323, but this
+-- file is the compose slice's local-only migration — safe to extend).
+-- Deliberately NOT on schedule_milestones.offset_days (signed by design).
+DO $$ BEGIN
+  ALTER TABLE public.proposal_phases
+    ADD CONSTRAINT proposal_phases_duration_days_positive
+      CHECK (duration_days IS NULL OR duration_days > 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE public.project_phases
+    ADD CONSTRAINT project_phases_duration_days_positive
+      CHECK (duration_days IS NULL OR duration_days > 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 COMMENT ON COLUMN public.proposal_phases.duration_days IS
   'Chain duration in days. Authoritative when non-null; else the resolver '
   'falls back to duration_weeks*7. Set by the compose path (Slice 03+).';

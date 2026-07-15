@@ -40,6 +40,17 @@ export interface ScheduleEntryFieldProps {
   bareNumberUnit?: 'days' | 'weeks' | 'reject';
   /** Which parse kinds this surface accepts. Default: both. */
   accept?: Array<'duration' | 'anchor'>;
+  /**
+   * Sign policy for the DURATION branch. Default 'unsigned' — a phase
+   * duration must be a positive day count, so a signed-form input ('+2w',
+   * '-3d', even '+5d' whose value is positive) or any parse resolving to
+   * days <= 0 is rejected inline with no write. Milestone-OFFSET surfaces
+   * pass 'signed' explicitly (offsets are relative to the phase end;
+   * negative/zero are meaningful there). Load-bearing: duration_days has a
+   * positive CHECK in the DB (00324), and a negative value would run
+   * activate_proposal_as_project's legacy date cascade backwards.
+   */
+  durationSign?: 'unsigned' | 'signed';
   /** Override the "valid parse, wrong kind" reason text (default:
    *  REASON_FOR_KIND[accept[0]]). E.g. a proposal milestone date field
    *  (`accept={['anchor']}`) rejects a typed duration with "proposals carry
@@ -61,10 +72,13 @@ const REASON_FOR_KIND: Record<'duration' | 'anchor', string> = {
   anchor: 'this field takes a date (Sep 21, 9/21) — not a duration',
 };
 
+const UNSIGNED_REASON = 'Durations must be positive — e.g. 3w or 10d';
+
 export function ScheduleEntryField({
   today,
   bareNumberUnit = 'reject',
   accept = ['duration', 'anchor'],
+  durationSign = 'unsigned',
   wrongKindReason,
   placeholder,
   initialValue = '',
@@ -92,6 +106,18 @@ export function ScheduleEntryField({
     }
     if (!accept.includes(parsed.kind)) {
       setError(wrongKindReason ?? REASON_FOR_KIND[accept[0] ?? 'duration']);
+      return;
+    }
+    // Unsigned surfaces (phase durations) reject BOTH a non-positive result
+    // AND the signed input FORM itself ('+5d' parses to a positive 5, but a
+    // leading sign is offset grammar — accepting it here would teach a
+    // different meaning than the milestone fields give it).
+    if (
+      parsed.kind === 'duration' &&
+      durationSign === 'unsigned' &&
+      (parsed.days <= 0 || /^[+-]/.test(trimmed))
+    ) {
+      setError(UNSIGNED_REASON);
       return;
     }
     onCommit(parsed);

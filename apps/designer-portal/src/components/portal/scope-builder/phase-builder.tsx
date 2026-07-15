@@ -657,7 +657,7 @@ export function PhaseBuilder({ proposalId }: PhaseBuilderProps) {
               <Accordion type="single" collapsible variant="default">
                 <AccordionItem value={`phase-${id}`}>
                   <AccordionTrigger className="!py-2 font-mono text-[0.65rem] uppercase tracking-wider text-[var(--text-muted)] hover:!no-underline">
-                    Deliverables &amp; gates
+                    Deliverables, gates &amp; key dates
                     {legacyText && (
                       <span
                         className="ml-2 rounded-[2px] px-1 py-0 font-mono text-[0.55rem] uppercase tracking-wider"

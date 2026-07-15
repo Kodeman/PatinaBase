@@ -68,6 +68,19 @@ interface ComputeLine {
   tone: 'clay' | 'terracotta';
 }
 
+/**
+ * The ghost line captures PHASE durations — always unsigned. The parser
+ * accepts signed forms ('-3d', '+2w') because milestone OFFSETS need them,
+ * but a phase's duration_days must be a positive day count (00324 CHECK;
+ * a negative value would run activate_proposal_as_project's legacy date
+ * cascade backwards). Rejects a non-positive result AND the signed input
+ * form itself — mirrors ScheduleEntryField's `durationSign: 'unsigned'`.
+ */
+const UNSIGNED_REASON = 'Durations must be positive — e.g. 3w or 10d';
+function violatesUnsigned(parsed: { kind: string; days?: number }, rawInput: string): boolean {
+  return parsed.kind === 'duration' && ((parsed.days ?? 0) <= 0 || /^[+-]/.test(rawInput));
+}
+
 export function GhostAddLine({
   committedPhases,
   committedMilestones,
@@ -108,6 +121,9 @@ export function GhostAddLine({
     if (parsed.kind === 'invalid') return { text: parsed.reason, tone: 'terracotta' };
     if (parsed.kind === 'anchor') {
       return { text: `→ Anchored · ${fmtDay(parsed.date)}`, tone: 'clay' };
+    }
+    if (violatesUnsigned(parsed, trimmedDur)) {
+      return { text: UNSIGNED_REASON, tone: 'terracotta' };
     }
 
     const preview = composePreview(
@@ -154,6 +170,7 @@ export function GhostAddLine({
     }
     const parsed = parseScheduleEntry(trimmedDur, today, { bareNumberUnit: 'weeks' });
     if (parsed.kind === 'invalid') return; // reason already shows on the compute line
+    if (violatesUnsigned(parsed, trimmedDur)) return; // ditto — the compute line names it
     // schedule_phase_added + schedule_anchor_set (anchor arm) both fire in
     // the caller's onSuccess — see note above.
     if (parsed.kind === 'duration') onAdd({ name: trimmedName, durationDays: parsed.days });
