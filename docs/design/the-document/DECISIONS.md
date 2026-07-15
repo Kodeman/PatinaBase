@@ -3302,3 +3302,38 @@ slice-01 (`schedule/slice-02`); the Rule replaces the old phase bar
 behind the same gate, and its review milestone gates Slice 03.
 
 *Entries add: R102 · last id = R102*
+
+### I58 · Slice 02 built — the Rule renders behind the gate — 2026-07-15
+
+Branch `schedule/slice-02` (stacked on slice-01). Landed: the pure rule
+derivation lib (time scale, greedy N-row label stagger — truncation is
+structurally impossible; `overflowBeyondTwo` flags the >2-row case),
+`epochDayFromISO` shared from @patina/utils (one day-math door), two
+phase-count-extreme specimen projects (Birch Hollow · 3 long-named
+phases; Marrow & Vale Residence · 7 phases, 2 threads, anchored install
+with 12 days slack), and `<ScheduleRule/>` — staggered natural-width
+labels, status-weight track segments, milestone diamonds in stamp
+colors, the charcoal today rule, thread hairlines beneath the line, and
+pin-on-scroll as a self-sticky wrapper (permanent-height, zero layout
+shift, folds to line + diamonds + today at ~22px with the project title
+inline). The Rule replaces `PhaseTimeline` at the top of the document
+behind the same `schedule-spine` flag (loading renders the old bar);
+mobile (<980px) folds to line + diamonds + today. Minimap: labels and
+diamonds are buttons that reveal through a page-level
+`ScheduleNavProvider` — the spine unfolds the phase, scrolls to it, and
+transiently highlights the milestone row. Telemetry:
+`rule_minimap_jump` (§7 name-contract) with target kind and pinned
+state. Time-surface drag is Slice 04; nothing on the rule edits.
+
+Escalations for the Slice 02 review (designer-visible): pin-strip height
+and the inline project title; the stagger's N-row growth when two rows
+can't fit (design says two; we never truncate); the `Unplaced · N`
+treatment for undated phases and the render-nothing empty state; the
+full mobile rule treatment (this slice ships the minimal fold); minimap
+clicks when the spine section isn't mounted (silent no-op today —
+should it switch sections?); the active phase's segment ink (per-phase
+status weight per R99's words vs the prototype's past/future ink split
+— both readings are defensible, the authority should pick); and
+`delayed` phases reading as `ahead` weight on the rule.
+
+*Entries add: I58 · last id = I58*
