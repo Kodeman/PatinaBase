@@ -89,7 +89,12 @@ export interface RippleHeldAnchor {
  * The full ripple diff — everything the ghost layer and the confirm strip read.
  * `rippleSize` counts every entity that moved (phases + milestones, INCLUDING
  * the edited one); `followerCount` counts only the OTHER phases that moved
- * (rippleSize's phase share minus the directly-edited phase). `slackDelta` is
+ * (rippleSize's phase share minus the directly-edited phase). `slackBefore`/
+ * `slackAfter` are sourced from the EDITED PHASE's own per-phase `slackDays`
+ * for phase edits — its chain's binding-anchor float; the top-level
+ * min-across-all-anchors would suppress the clause in multi-anchor projects —
+ * and from the top-level `slackDays` for milestone slides (the host phase
+ * never moves). `slackDelta` is
  * `slackAfter − slackBefore` only when BOTH are numbers (a numeric delta across
  * a null boundary — a newly-created or wholly-removed anchor — is meaningless,
  * so it is `null`; the sentence still shows both endpoints honestly).
@@ -210,15 +215,10 @@ export function rippleDiff(
   const editedPhaseId = edit && typeof edit === 'object' ? edit.phaseId : '';
   let pendingPhases = phases;
   let pendingMilestones = milestones;
-  let durationDelta: number | null = null;
 
   if (edit && typeof edit === 'object') {
     if (edit.kind === 'phase-duration') {
-      pendingPhases = phases.map((p) => {
-        if (p.id !== edit.phaseId) return p;
-        durationDelta = edit.durationDays - (effectiveDuration(p) ?? 0);
-        return { ...p, durationDays: edit.durationDays };
-      });
+      pendingPhases = phases.map((p) => (p.id === edit.phaseId ? { ...p, durationDays: edit.durationDays } : p));
     } else if (edit.kind === 'phase-anchor') {
       pendingPhases = phases.map((p) => (p.id === edit.phaseId ? { ...p, anchorDate: edit.anchorDate } : p));
     } else if (edit.kind === 'milestone-offset') {
@@ -234,6 +234,29 @@ export function rippleDiff(
 
   const beforePhase = new Map(before.phases.map((p) => [p.id, p]));
   const beforeMs = new Map(before.milestones.map((m) => [m.id, m]));
+
+  // ── durationDelta (phase-duration only) ───────────────────────────────────
+  // Baseline = the committed EFFECTIVE duration (days, else weeks×7). A
+  // legacy-dated phase (no duration fields at all) baselines against its
+  // RESOLVED committed span — end − start from the before resolution — so the
+  // ±Nd lead is honest about how much the edit actually changed the phase.
+  // Only a phase with no resolvable dates at all falls back to 0 (the lead
+  // then reads the full new duration, the only honest number left). Unknown
+  // edited id keeps null (the no-op degrade).
+  let durationDelta: number | null = null;
+  if (edit && typeof edit === 'object' && edit.kind === 'phase-duration') {
+    const committed = phases.find((p) => p.id === edit.phaseId);
+    if (committed) {
+      let baseline = effectiveDuration(committed);
+      if (baseline == null) {
+        const pre = beforePhase.get(edit.phaseId);
+        const s = epochDayFromISO(pre?.start ?? null);
+        const e = epochDayFromISO(pre?.end ?? null);
+        if (s != null && e != null) baseline = e - s;
+      }
+      durationDelta = edit.durationDays - (baseline ?? 0);
+    }
+  }
 
   // ── Phase changes (iterate the pending order — deterministic, start-sorted) ─
   const phaseChanges: RipplePhaseChange[] = after.phases.map((post) => {
@@ -277,8 +300,26 @@ export function rippleDiff(
   const followerCount = phaseChanges.filter((pc) => pc.moved && pc.phaseId !== editedPhaseId).length;
   const rippleSize = phaseChanges.filter((pc) => pc.moved).length + milestoneMoves.filter((mm) => mm.moved).length;
 
-  const slackBefore = before.slackDays;
-  const slackAfter = after.slackDays;
+  // ── Slack sourcing ─────────────────────────────────────────────────────────
+  // A PHASE edit reads the EDITED PHASE's own per-phase slackDays in each
+  // resolution — its chain's binding-anchor float (unanchored: min float to a
+  // downstream anchor; anchored: the float absorbed at its own pin). The
+  // top-level slackDays is the min across ALL anchors, which in a multi-anchor
+  // project suppresses or misattributes the clause (edit chain A 10→5 while
+  // chain B holds the global min at 3 → top-level reads 3→3 and says nothing).
+  // A MILESTONE slide keeps top-level: its host phase never moves, so no
+  // chain's float changes and the global number is the honest one. Unknown
+  // edited id falls back to top-level (totality).
+  let slackBefore = before.slackDays;
+  let slackAfter = after.slackDays;
+  if (edit && typeof edit === 'object' && (edit.kind === 'phase-duration' || edit.kind === 'phase-anchor')) {
+    const pre = beforePhase.get(edit.phaseId);
+    const post = after.phases.find((p) => p.id === edit.phaseId);
+    if (pre && post) {
+      slackBefore = pre.slackDays;
+      slackAfter = post.slackDays;
+    }
+  }
   const slackDelta = slackBefore != null && slackAfter != null ? slackAfter - slackBefore : null;
 
   const conflicts = after.conflicts;
@@ -376,7 +417,8 @@ function buildSlackClause(slackBefore: number | null, slackAfter: number | null)
   // endpoints honestly ('—' for the null side).
   if (slackBefore === slackAfter) return null;
   const s = (n: number | null) => (n == null ? EM_DASH : String(n));
-  return `slack ${s(slackBefore)} → ${s(slackAfter)} days`;
+  // The unit reads off the landing number: "slack 4 → 1 day", "slack 11 → 6 days".
+  return `slack ${s(slackBefore)} → ${s(slackAfter)} day${slackAfter === 1 ? '' : 's'}`;
 }
 
 function buildConflictClause(diff: RippleDiff): string | null {

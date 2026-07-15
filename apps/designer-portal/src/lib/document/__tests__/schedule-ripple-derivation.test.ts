@@ -417,3 +417,96 @@ describe('rippleDiff — totality', () => {
     expect(diff.durationDelta).toBe(2);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Fix round (S4-1 review): per-phase slack sourcing · day/days · legacy delta
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('slack sourcing — the edited phase\'s own chain, not the global min (M1)', () => {
+  // Two independent chains, each ending at its own anchor:
+  //   A: a1 (Jan 1, 10d → ends Jan 11) → a2 (anchored Jan 21) — slack 10
+  //   B: b1 (Jan 1, 10d → ends Jan 11) → b2 (anchored Jan 14) — slack 3
+  // Top-level slackDays = min(10, 3) = 3 on BOTH sides of an A-edit — reading
+  // it would suppress the clause entirely. The edited phase's own slackDays
+  // carries the honest number.
+  const twoChains = () => [
+    phase({ id: 'a1', startDate: '2026-01-01', durationDays: 10 }),
+    phase({ id: 'a2', followsPhaseId: 'a1', durationDays: 5, anchorDate: '2026-01-21' }),
+    phase({ id: 'b1', startDate: '2026-01-01', durationDays: 10 }),
+    phase({ id: 'b2', followsPhaseId: 'b1', durationDays: 5, anchorDate: '2026-01-14' }),
+  ];
+
+  it('an edit on chain A reports A\'s own slack 10 → 5 while chain B holds the global min at 3', () => {
+    const diff = rippleDiff(twoChains(), [], { kind: 'phase-duration', phaseId: 'a1', durationDays: 15 }, noNames, TODAY);
+    expect(diff.slackBefore).toBe(10); // NOT the global min 3
+    expect(diff.slackAfter).toBe(5);
+    expect(diff.slackDelta).toBe(-5);
+    expect(rippleSentence(diff).slackClause).toBe(`slack 10 ${ARROW} 5 days`);
+    // Both anchors held (neither moved) — B's untouched anchor is still a hold.
+    expect(diff.heldAnchors.map((a) => a.phaseId).sort()).toEqual(['a2', 'b2']);
+    expect(diff.anchorViolation).toBe(false);
+  });
+
+  it('a phase-anchor edit also reads the edited phase\'s own slack (its new pin\'s absorbed float)', () => {
+    // Anchor b1's follower-free twin: re-anchor a2 from Jan 21 to Jan 26 —
+    // its own absorbed float goes 10 → 15 while the global min stays 3.
+    const diff = rippleDiff(twoChains(), [], { kind: 'phase-anchor', phaseId: 'a2', anchorDate: '2026-01-26' }, noNames, TODAY);
+    expect(diff.slackBefore).toBe(10);
+    expect(diff.slackAfter).toBe(15);
+    expect(diff.slackDelta).toBe(5);
+    expect(rippleSentence(diff).slackClause).toBe(`slack 10 ${ARROW} 15 days`);
+  });
+
+  it('a milestone slide keeps the top-level slack (its host phase never moves)', () => {
+    const ms = [milestone({ id: 'm', phaseId: 'a1', offsetDays: 0 })];
+    const diff = rippleDiff(
+      twoChains(),
+      ms,
+      { kind: 'milestone-offset', milestoneId: 'm', phaseId: 'a1', offsetDays: 2 },
+      noNames,
+      TODAY,
+    );
+    expect(diff.slackBefore).toBe(3); // global min — B's anchor
+    expect(diff.slackAfter).toBe(3);
+    expect(rippleSentence(diff).slackClause).toBeNull(); // unchanged → no clause
+  });
+});
+
+describe('slack clause singularization (M2)', () => {
+  it('a landing slack of 1 reads "day", not "days"', () => {
+    const phases = [
+      phase({ id: 'p1', startDate: '2026-01-01', durationDays: 10 }),
+      phase({ id: 'p2', followsPhaseId: 'p1', durationDays: 5, anchorDate: '2026-01-15' }), // slack 4
+    ];
+    const diff = rippleDiff(phases, [], { kind: 'phase-duration', phaseId: 'p1', durationDays: 13 }, noNames, TODAY);
+    expect(diff.slackBefore).toBe(4);
+    expect(diff.slackAfter).toBe(1);
+    expect(rippleSentence(diff).slackClause).toBe(`slack 4 ${ARROW} 1 day`);
+  });
+});
+
+describe('durationDelta baseline for legacy-dated phases (M3)', () => {
+  it('a legacy-dated phase (no duration fields) baselines against its resolved committed span', () => {
+    // start Jan 1, targetEnd Jan 13 → resolved span 12 days (source legacy-dates).
+    const phases = [phase({ id: 'a', startDate: '2026-01-01', targetEndDate: '2026-01-13' })];
+    const diff = rippleDiff(phases, [], { kind: 'phase-duration', phaseId: 'a', durationDays: 15 }, noNames, TODAY);
+    expect(diff.durationDelta).toBe(3); // 15 − 12, not 15 − 0
+    expect(rippleSentence(diff).lead).toBe('a +3d');
+    const a = diff.phaseChanges.find((p) => p.phaseId === 'a')!;
+    expect(a.fromEnd).toBe('2026-01-13');
+    expect(a.toEnd).toBe('2026-01-16'); // Jan 1 + 15
+  });
+
+  it('falls back to 0 only when the phase has no resolvable dates at all', () => {
+    const phases = [phase({ id: 'x' })]; // no duration, no anchor, no dates → unresolved
+    const diff = rippleDiff(phases, [], { kind: 'phase-duration', phaseId: 'x', durationDays: 15 }, noNames, TODAY);
+    expect(diff.durationDelta).toBe(15); // 15 − 0
+    expect(rippleSentence(diff).lead).toBe('x +15d');
+  });
+
+  it('effective duration still wins over the resolved span when both exist (weeks×7)', () => {
+    const phases = [phase({ id: 'a', startDate: '2026-01-01', durationWeeks: 2 })]; // effective 14d
+    const diff = rippleDiff(phases, [], { kind: 'phase-duration', phaseId: 'a', durationDays: 20 }, noNames, TODAY);
+    expect(diff.durationDelta).toBe(6); // 20 − 14, baseline never falls through to the span
+  });
+});
