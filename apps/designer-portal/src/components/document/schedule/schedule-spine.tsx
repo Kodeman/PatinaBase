@@ -38,6 +38,7 @@ import {
 } from '@patina/supabase';
 import type { ResolvedPhase } from '@patina/utils';
 import { useSectionTasks } from '@/hooks/use-section-work';
+import { scheduleEvents } from '@/lib/analytics/schedule-events';
 import {
   phaseState,
   itemsForPhase,
@@ -267,9 +268,29 @@ export function ScheduleSpine({
   // the active phase" rule structurally — ids load async, sets don't wait. ──
   const [unfolded, setUnfolded] = useState<Set<string>>(() => new Set());
 
-  const handlePhaseToggle = (phaseId: string, state: SpinePhaseState) => {
-    // telemetry: wired in C7 (state distinguishes unfolding history vs future)
-    void state;
+  const handlePhaseToggle = (
+    phaseId: string,
+    state: SpinePhaseState,
+    itemCount: number,
+    milestoneCount: number,
+  ) => {
+    // C7: spine_phase_unfolded fires ONLY on the fold→unfold transition of a
+    // closed/future phase — read `unfolded` (current render's state) directly
+    // rather than inside the setUnfolded updater, since a functional updater
+    // can run more than once (batching / Strict Mode) and would double-fire.
+    // The active phase never reaches here (its onToggle is null below), but
+    // the state guard stays as a defensive no-op boundary, not a load-bearing
+    // check.
+    const isUnfolding = !unfolded.has(phaseId);
+    if (isUnfolding && state !== 'active') {
+      scheduleEvents.spinePhaseUnfolded({
+        project_id: projectId,
+        phase_id: phaseId,
+        phase_state: state,
+        item_count: itemCount,
+        milestone_count: milestoneCount,
+      });
+    }
     setUnfolded((prev) => {
       const next = new Set(prev);
       if (next.has(phaseId)) next.delete(phaseId);
@@ -320,7 +341,13 @@ export function ScheduleSpine({
                   onToggle={
                     entry.state === 'active'
                       ? null
-                      : () => handlePhaseToggle(entry.phase.id, entry.state)
+                      : () =>
+                          handlePhaseToggle(
+                            entry.phase.id,
+                            entry.state,
+                            entry.items.length,
+                            entry.milestones.length,
+                          )
                   }
                   metaLine={entry.metaLine}
                   milestones={entry.milestones}

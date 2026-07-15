@@ -31,6 +31,7 @@ import { SettledBar } from '@/components/document/settled-bar';
 import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-readonly';
 import { FFESection } from '@/components/document/ffe-section';
 import { CoordinationBand } from '@/components/document/coordination/coordination-band';
+import { ScheduleSpine } from '@/components/document/schedule/schedule-spine';
 import { BriefSection } from '@/components/document/brief-section';
 import { BriefRecap } from '@/components/document/brief-recap';
 import { CareBand } from '@/components/document/care-band';
@@ -51,6 +52,7 @@ import { DocColophon } from '@/components/document/doc-colophon';
 import { useDocumentRooms } from '@/hooks/use-document-rooms';
 import { gateState, useSectionGates } from '@/hooks/use-section-work';
 import { deriveFillState } from '@/lib/document/fill-state';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -250,6 +252,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
   useEffect(() => {
     rememberDocumentInHand(heldEngagementId, { title: heldTitle, subtitle: heldSubtitle });
   }, [heldEngagementId, heldTitle, heldSubtitle]);
+
+  // C7 — the Schedule Spine flip gate. Rules of hooks: called unconditionally
+  // above the early returns below, alongside the page's other hooks.
+  const spineGate = useFeatureFlag('schedule-spine');
 
   if (isLoading || resolution?.kind === 'redirect') {
     return (
@@ -529,12 +535,25 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
                   The band resolves designerClientId itself from clientUserId
                   (work-block.tsx pattern); the page passes clientUserId, never a
                   raw uid. Mounts ABOVE the FF&E section in the project home (D1:
-                  its sheets are band-local overlays, never a route). */}
-              <CoordinationBand
-                projectId={row.project_id}
-                clientUserId={row.client_profile_id}
-                clientName={row.client_name}
-              />
+                  its sheets are band-local overlays, never a route).
+                  C7 — the schedule-spine flip gate: while the flag is loading
+                  (or resolves off), the old band renders — fail-closed default
+                  IS the accepted current page, so this is zero flash/layout
+                  shift for the non-pilot cohort (PostHog persists flags, so
+                  pilots see at most one first-visit swap). */}
+              {!spineGate.isLoading && spineGate.value ? (
+                <ScheduleSpine
+                  projectId={row.project_id}
+                  clientUserId={row.client_profile_id}
+                  clientName={row.client_name}
+                />
+              ) : (
+                <CoordinationBand
+                  projectId={row.project_id}
+                  clientUserId={row.client_profile_id}
+                  clientName={row.client_name}
+                />
+              )}
               <FFESection
                 projectId={row.project_id}
                 projectName={row.title}
