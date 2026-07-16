@@ -7,6 +7,8 @@ import {
   assignLabelRows,
   ruleWeightForStatus,
   ruleSegments,
+  splitActiveSegmentAtToday,
+  ruleTrackPaintSegments,
   ruleDiamonds,
   ruleThreads,
   ruleBoundaries,
@@ -303,6 +305,83 @@ describe('ruleSegments', () => {
       rphase({ id: 'c', start: null, end: null, lane: 'main', source: 'unresolved' }),
     ];
     expect(ruleSegments(phases, statusById, scale)).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// splitActiveSegmentAtToday / ruleTrackPaintSegments (R105 ink hybrid)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('splitActiveSegmentAtToday', () => {
+  const activeSeg = { id: 'a', leftPct: 20, widthPct: 40, weight: 'active' as const }; // span 20..60
+  const closedSeg = { id: 'c', leftPct: 0, widthPct: 20, weight: 'closed' as const };
+  const aheadSeg = { id: 'ah', leftPct: 60, widthPct: 20, weight: 'ahead' as const };
+
+  it('non-active weights pass through untouched, regardless of todayXPct', () => {
+    expect(splitActiveSegmentAtToday(closedSeg, 40)).toEqual([closedSeg]);
+    expect(splitActiveSegmentAtToday(aheadSeg, 40)).toEqual([aheadSeg]);
+  });
+
+  it('today strictly inside the span: elapsed active + remaining ahead, split exactly at today', () => {
+    const out = splitActiveSegmentAtToday(activeSeg, 35);
+    expect(out).toEqual([
+      { id: 'a', leftPct: 20, widthPct: 15, weight: 'active' },
+      { id: 'a:ahead', leftPct: 35, widthPct: 25, weight: 'ahead' },
+    ]);
+    // the two pieces reassemble the original span exactly.
+    const last = out[out.length - 1];
+    expect(out[0].leftPct).toBe(activeSeg.leftPct);
+    expect(last.leftPct + last.widthPct).toBeCloseTo(activeSeg.leftPct + activeSeg.widthPct, 10);
+  });
+
+  it('today at or before the span start: the WHOLE span draws light (ahead), no elapsed piece', () => {
+    expect(splitActiveSegmentAtToday(activeSeg, 20)).toEqual([
+      { id: 'a:ahead', leftPct: 20, widthPct: 40, weight: 'ahead' },
+    ]);
+    // before the start entirely — clamped to the same result, not a negative cut.
+    expect(splitActiveSegmentAtToday(activeSeg, 5)).toEqual([
+      { id: 'a:ahead', leftPct: 20, widthPct: 40, weight: 'ahead' },
+    ]);
+  });
+
+  it('today at or after the span end: the WHOLE span stays bold (active), no remaining piece', () => {
+    expect(splitActiveSegmentAtToday(activeSeg, 60)).toEqual([
+      { id: 'a', leftPct: 20, widthPct: 40, weight: 'active' },
+    ]);
+    // past the end entirely (slipped, still open) — clamped, still fully bold.
+    expect(splitActiveSegmentAtToday(activeSeg, 95)).toEqual([
+      { id: 'a', leftPct: 20, widthPct: 40, weight: 'active' },
+    ]);
+  });
+
+  it('null todayXPct degrades to the unsplit segment (defensive — the Rule never mounts without a scale)', () => {
+    expect(splitActiveSegmentAtToday(activeSeg, null)).toEqual([activeSeg]);
+  });
+
+  it('a degenerate zero-width active segment never vanishes', () => {
+    const zero = { id: 'z', leftPct: 50, widthPct: 0, weight: 'active' as const };
+    expect(splitActiveSegmentAtToday(zero, 50)).toEqual([zero]);
+  });
+});
+
+describe('ruleTrackPaintSegments', () => {
+  it('splits only the active segment in a mixed list, preserving the others', () => {
+    const segments = [
+      { id: 'closed', leftPct: 0, widthPct: 20, weight: 'closed' as const },
+      { id: 'active', leftPct: 20, widthPct: 40, weight: 'active' as const },
+      { id: 'ahead', leftPct: 60, widthPct: 20, weight: 'ahead' as const },
+    ];
+    const painted = ruleTrackPaintSegments(segments, 35);
+    expect(painted.map((s) => s.id)).toEqual(['closed', 'active', 'active:ahead', 'ahead']);
+    expect(painted.map((s) => s.weight)).toEqual(['closed', 'active', 'ahead', 'ahead']);
+  });
+
+  it('a fully-closed/ahead list (no active phase) passes through unchanged', () => {
+    const segments = [
+      { id: 'closed', leftPct: 0, widthPct: 50, weight: 'closed' as const },
+      { id: 'ahead', leftPct: 50, widthPct: 50, weight: 'ahead' as const },
+    ];
+    expect(ruleTrackPaintSegments(segments, 30)).toEqual(segments);
   });
 });
 

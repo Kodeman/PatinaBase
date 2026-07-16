@@ -367,7 +367,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
               {projectTitle}
             </span>
             <div ref={trackRef} className="relative h-[22px] flex-1">
-              <RuleTrack segments={segments} pinned />
+              <RuleTrack segments={segments} pinned todayXPct={todayX} />
               {diamonds.map((d) => {
                 const pe = phaseEndEpochById.get(d.phaseId) ?? null;
                 return (
@@ -416,7 +416,7 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
               </div>
             )}
 
-            <RuleTrack segments={segments} pinned={false} />
+            <RuleTrack segments={segments} pinned={false} todayXPct={todayX} />
 
             {diamonds.map((d) => {
               const pe = phaseEndEpochById.get(d.phaseId) ?? null;

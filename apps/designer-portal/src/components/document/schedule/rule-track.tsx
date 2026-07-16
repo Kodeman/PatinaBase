@@ -17,13 +17,28 @@
  * earlier layers (DOM order) and must never swallow a click meant for a label
  * or diamond button (live-walk defect D-2). Zero shadows (D4): the line IS
  * the depth.
+ *
+ * R105 ink hybrid: the ACTIVE phase's ink splits at today — elapsed
+ * (start→today) stays the heaviest `active` weight, remaining (today→end)
+ * draws the light `ahead` weight, "you are here" folded into the line itself
+ * rather than left to the separate today-cut alone. `ruleTrackPaintSegments`
+ * (schedule-rule-derivation) does the split — PURE, tested there; this stays
+ * dumb paint. Boundary ticks are computed from the ORIGINAL `segments` prop
+ * (never the split paint list), so the mid-phase today cut never grows a
+ * phantom third tick at today — that's `RuleToday`'s mark alone.
  */
 
 import type { RuleSegment, RuleWeight } from '@/lib/document/schedule-rule-derivation';
+import { ruleTrackPaintSegments } from '@/lib/document/schedule-rule-derivation';
 
 export interface RuleTrackProps {
   segments: RuleSegment[];
   pinned: boolean;
+  /** Today's x% within the SAME scale `segments` was built from — the R105
+   *  split point for the active phase's ink. null degrades to the pre-R105
+   *  solid-active treatment (defensive only; the Rule never mounts without a
+   *  scale, and a scale always seeds its domain with today). */
+  todayXPct: number | null;
 }
 
 /** Ink + thickness per weight (`.ma-rule-past` mocha 2px, `.ma-rule-future`
@@ -35,7 +50,7 @@ const WEIGHT_INK: Record<RuleWeight, string> = {
 };
 const WEIGHT_THICK: Record<RuleWeight, number> = { closed: 2, active: 2, ahead: 1 };
 
-export function RuleTrack({ segments, pinned }: RuleTrackProps) {
+export function RuleTrack({ segments, pinned, todayXPct }: RuleTrackProps) {
   // Baseline center of the line within the track, and the tick geometry —
   // the two numbers that differ between the resting canvas and the pin.
   const baseline = pinned ? 12 : 70; // px from the track top the line centers on
@@ -43,12 +58,18 @@ export function RuleTrack({ segments, pinned }: RuleTrackProps) {
   const tickHeight = pinned ? 10 : 12;
 
   // Boundary ticks: the unique set of every segment start and end, so shared
-  // boundaries between adjacent phases draw a single tick, not two.
+  // boundaries between adjacent phases draw a single tick, not two. Computed
+  // from the ORIGINAL (unsplit) segments — the R105 today-cut is not a phase
+  // boundary and must never grow its own tick.
   const tickXs = Array.from(
     new Set(
       segments.flatMap((s) => [round(s.leftPct), round(s.leftPct + s.widthPct)]),
     ),
   );
+
+  // Paint-time projection: the active phase's segment splits at today
+  // (R105); every other segment passes through unchanged.
+  const paintSegments = ruleTrackPaintSegments(segments, todayXPct);
 
   return (
     <div
@@ -63,8 +84,9 @@ export function RuleTrack({ segments, pinned }: RuleTrackProps) {
         style={{ top: baseline - 0.5, height: 1, background: 'var(--color-pearl)' }}
       />
 
-      {/* Per-phase weighted segments. */}
-      {segments.map((s) => {
+      {/* Per-phase weighted segments — the active phase's ink already split
+          at today (R105) by `paintSegments`. */}
+      {paintSegments.map((s) => {
         const thick = WEIGHT_THICK[s.weight];
         return (
           <span
