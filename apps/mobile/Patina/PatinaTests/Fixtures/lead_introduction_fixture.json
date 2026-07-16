@@ -1,0 +1,121 @@
+[
+  {
+    "id": "a5e00001-0000-4000-8000-000000000001",
+    "status": "new",
+    "designer_id": "d1519e00-0001-4000-8000-000000000010",
+    "project_type": "full_room",
+    "budget_range": "25k_40k",
+    "timeline": "1_3_months",
+    "project_description": "Living room refresh — warm-minimal, keep the reading nook.",
+    "created_at": "2026-07-16T09:12:44.512-05:00",
+    "updated_at": "2026-07-16T14:03:10-05:00",
+    "contacted_at": null,
+    "accepted_at": null,
+    "declined_at": null,
+    "client_request_id": "c1e70001-0000-4000-8000-000000000001",
+    "designer": { "full_name": "Ada Whitfield", "display_name": "Ada" },
+    "lead_room_scans": [
+      { "scan_id": "5ca50001-0000-4000-8000-000000000001" }
+    ],
+    "match_ceremonies": null
+  },
+  {
+    "id": "a5e00002-0000-4000-8000-000000000002",
+    "status": "new",
+    "designer_id": "d1519e00-0002-4000-8000-000000000020",
+    "project_type": "single_space",
+    "budget_range": "$25k–$40k",
+    "timeline": "flexible",
+    "project_description": "Primary bedroom — calm, textured, low-clutter.",
+    "created_at": "2026-07-15T11:20:00-05:00",
+    "updated_at": "2026-07-16T15:20:05.221-05:00",
+    "contacted_at": null,
+    "accepted_at": null,
+    "declined_at": null,
+    "client_request_id": "c1e70002-0000-4000-8000-000000000002",
+    "designer": { "full_name": "Elena Marsh", "display_name": "Elena" },
+    "lead_room_scans": [
+      { "scan_id": "5ca50002-0000-4000-8000-000000000002" }
+    ],
+    "match_ceremonies": {
+      "id": "ce420002-0000-4000-8000-000000000002",
+      "state": "sent",
+      "intro_text": "Hi — I loved the light in your bedroom. I work in warm, quiet materials and I think we'd have a lot of fun with this one.",
+      "credential_line": "Principal, Middle Studio · 12 years in residential",
+      "portfolio_url": "https://middlestudio.example/portfolio",
+      "offered_slots": [
+        {
+          "id": "51070002-0000-4000-8000-000000000201",
+          "starts_at": "2026-07-22T14:00:00-05:00",
+          "duration_minutes": 30
+        },
+        {
+          "id": "51070002-0000-4000-8000-000000000202",
+          "starts_at": "2026-07-23T10:30:00-05:00",
+          "duration_minutes": 30
+        },
+        {
+          "id": "51070002-0000-4000-8000-000000000203",
+          "starts_at": "2026-07-24T16:00:00-05:00",
+          "duration_minutes": 45
+        }
+      ],
+      "timezone": "America/Chicago",
+      "offered_at": "2026-07-16T15:20:05.221-05:00",
+      "picked_slot_id": null,
+      "picked_slot_starts_at": null,
+      "thread_id": "74e00002-0000-4000-8000-000000000002",
+      "created_at": "2026-07-16T15:20:05.221-05:00"
+    }
+  },
+  {
+    "id": "a5e00003-0000-4000-8000-000000000003",
+    "status": "contacted",
+    "designer_id": "d1519e00-0003-4000-8000-000000000030",
+    "project_type": "whole_home",
+    "budget_range": "40k_75k",
+    "timeline": "3_6_months",
+    "project_description": "Whole-home direction after a move — start with the living + dining.",
+    "created_at": "2026-07-12T08:05:00-05:00",
+    "updated_at": "2026-07-16T18:44:12.900-05:00",
+    "contacted_at": "2026-07-14T09:00:00-05:00",
+    "accepted_at": null,
+    "declined_at": null,
+    "client_request_id": "c1e70003-0000-4000-8000-000000000003",
+    "designer": { "full_name": "Nadia Cole", "display_name": "Nadia" },
+    "lead_room_scans": [
+      { "scan_id": "5ca50003-0000-4000-8000-000000000003" },
+      { "scan_id": "5ca50003-0000-4000-8000-000000000013" }
+    ],
+    "match_ceremonies": {
+      "id": "ce420003-0000-4000-8000-000000000003",
+      "state": "picked",
+      "intro_text": "So glad you reached out — a whole-home direction is exactly my favorite kind of project. Let's start with the rooms you live in most.",
+      "credential_line": "Founder, Cole & Co · award-winning residential",
+      "portfolio_url": "https://coleandco.example/work",
+      "offered_slots": [
+        {
+          "id": "51070003-0000-4000-8000-000000000301",
+          "starts_at": "2026-07-21T13:00:00-05:00",
+          "duration_minutes": 45
+        },
+        {
+          "id": "51070003-0000-4000-8000-000000000302",
+          "starts_at": "2026-07-23T15:30:00-05:00",
+          "duration_minutes": 45
+        },
+        {
+          "id": "51070003-0000-4000-8000-000000000303",
+          "starts_at": "2026-07-24T16:00:00-05:00",
+          "duration_minutes": 60
+        }
+      ],
+      "timezone": "America/Chicago",
+      "offered_at": "2026-07-16T12:10:00-05:00",
+      "picked_slot_id": "51070003-0000-4000-8000-000000000303",
+      "picked_slot_starts_at": "2026-07-24T16:00:00-05:00",
+      "thread_id": "74e00003-0000-4000-8000-000000000003",
+      "created_at": "2026-07-16T12:10:00-05:00"
+    }
+  }
+]
