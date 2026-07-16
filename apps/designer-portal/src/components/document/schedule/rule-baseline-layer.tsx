@@ -5,13 +5,18 @@
  * "Memory", Slice 05). Prototype: the Ledger slide's `.bl-ghost` (faint clay
  * ticks + "v1 · <date>" labels beneath the live line — "the promise, in Clay").
  *
- * The clay sibling of RuleGhostLayer: it reuses the SAME dashed-mark primitives
+ * The clay sibling of RuleGhostLayer: it reuses the SAME mark primitives
  * (GhostTick / GhostDiamond / GhostLabel, tone="clay") and the SAME committed
  * TimeScale, but its source is a `baselineGhostDiff` (schedule-baseline-
  * derivation) rather than a live `RippleDiff`. It draws ONLY the boundaries and
  * milestones whose current dates differ from the signed baseline — "where the
  * promise stood." `projectBaselineGhosts` (pure, tested) does the placement;
  * this component is dumb paint.
+ *
+ * R105: tone="clay" renders SOLID (thin solid tick, solid-outline diamond,
+ * plain label) — dashes stay exclusive to RuleGhostLayer's terracotta "in
+ * flight" preview; a signed v1 baseline is a standing fact, not a pending
+ * edit, so it never borrows that dashed read.
  *
  * Mounted ONLY in the resting (unpinned) canvas and ONLY when no ripple is in
  * flight — terracotta preview ghosts take precedence, and the pinned fold shows
