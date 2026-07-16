@@ -383,6 +383,12 @@ public final class AuthService {
         errorMessage = nil
         defer { isLoading = false }
 
+        // Push: delete this device's token row BEFORE the session dies —
+        // `device_push_tokens` RLS is owner-only (user_id = auth.uid()), so
+        // the delete needs a live JWT. Best-effort: a failure here must
+        // never block sign-out.
+        await PushTokenService.shared.removeCurrentToken()
+
         do {
             try await supabase.auth.signOut()
             session = nil

@@ -255,6 +255,12 @@ public final class DesignRequestCoordinator {
             recordSubmittedRequest(submitResult, draft: draft)
             try? modelContext.save()
 
+            // Push (W3-push): the authorization "moment" — first successful
+            // design-request submission ever. Internally guarded to fire
+            // the system prompt at most once per install; a no-op on every
+            // later submission.
+            PushTokenService.shared.promptForAuthorizationAfterFirstSubmission()
+
             PostHogService.shared.capture("design_request_submitted", properties: [
                 "scan_count": draft.scanIds.count,
                 "pooled": submitResult.pooled,

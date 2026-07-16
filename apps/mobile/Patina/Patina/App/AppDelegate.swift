@@ -2,7 +2,7 @@
 //  AppDelegate.swift
 //  Patina
 //
-//  UIKit application delegate. Bridges two iOS-only callbacks into the
+//  UIKit application delegate. Bridges three iOS-only callbacks into the
 //  SwiftUI app:
 //   1. `application(_:handleEventsForBackgroundURLSession:completionHandler:)`
 //      → `BackgroundScanUploader` so paused scan uploads can finish.
@@ -12,6 +12,11 @@
 //      `DeepLinkHandler.shared.navigate(to:)`. The originating
 //      `notification_log.id` is marked opened via
 //      `NotificationsAPIClient.markOpened`.
+//   3. APNs registration callbacks → `PushTokenService`, which uploads
+//      the hex-encoded device token to `device_push_tokens`. Registration
+//      itself (`requestAuthorization` / `registerForRemoteNotifications`)
+//      is triggered elsewhere (post-first-submission, foreground
+//      re-register) — this delegate only handles the system's response.
 //
 
 import UIKit
@@ -40,6 +45,34 @@ final class PatinaAppDelegate: NSObject, UIApplicationDelegate {
             handleNotificationPayload(userInfo, source: "cold_launch")
         }
         return true
+    }
+
+    // MARK: - APNs Registration
+
+    /// APNs granted a device token — hex-encode + upload it via
+    /// `PushTokenService`. This fires only after an explicit
+    /// `registerForRemoteNotifications()` call (post-first-submission or a
+    /// foreground re-register for an already-authorized user); it is never
+    /// triggered at cold launch on its own.
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        Task { @MainActor in
+            await PushTokenService.shared.uploadToken(deviceToken)
+        }
+    }
+
+    /// Registration failed (simulator without push capability, no network,
+    /// user denied, etc). Log quietly — this is routine on Simulator and
+    /// must never surface as a user-facing error.
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        #if DEBUG
+        PatinaLog.ui.debug("[Push] registerForRemoteNotifications failed: \(error.localizedDescription)")
+        #endif
     }
 
     // MARK: - Background URL Session

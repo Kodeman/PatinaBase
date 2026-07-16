@@ -237,13 +237,17 @@ extension DesignRequestFlowView {
 
     private var successMessage: String {
         let followUp = " You can follow its progress from your home screen."
+        // Push (W3-push): pairs with the authorization prompt this screen
+        // triggers — names what the notification is FOR, not that one
+        // exists.
+        let pushNote = " We'll tell you the instant a designer takes this in hand."
         guard let result = coordinator?.result else {
-            return "A designer will reach out soon." + followUp
+            return "A designer will reach out soon." + followUp + pushNote
         }
         let lead = result.pooled
             ? "We're matching you with a designer. You'll hear back soon."
             : "Your designer has your request and will reach out soon."
-        return lead + followUp
+        return lead + followUp + pushNote
     }
 
     // MARK: - Reusable bits

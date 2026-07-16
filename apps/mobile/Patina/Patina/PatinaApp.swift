@@ -148,6 +148,14 @@ struct PatinaApp: App {
                         Task { @MainActor in
                             await RoomScanSyncService.shared.processQueueIfOnline()
                         }
+                        // Push: for a returning user who already granted
+                        // notification authorization in a prior session,
+                        // re-register on every foreground to keep the
+                        // uploaded token fresh. No-ops (no prompt, no call)
+                        // if authorization was never granted.
+                        Task { @MainActor in
+                            await PushTokenService.shared.reregisterIfAuthorized()
+                        }
                     case .background:
                         PostHogService.shared.capture("app_background")
                         PostHogService.shared.flush()
