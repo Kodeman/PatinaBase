@@ -30,12 +30,19 @@
 --   (4) Shape D emits `dc.lead_id AS lead_id` (was hardcoded null::uuid at 00236
 --       line ~326). The accepted-lead → relationship linkage becomes visible so
 --       the People lane can resolve /doc/{lead_id} to the relationship.
---   (5) Kody-ruled (I65): Shape D's project-pair exclusion
---       (NOT EXISTS projects for the designer/client pair — the repeat-client
---       404) is removed so a status='lead' relationship ALWAYS emits, even when
---       the pair already has a signed project. Shape D already filters
---       status='lead'; the proposal-chain (shape B) and open-lead (shape C)
---       exclusions are PRESERVED verbatim.
+--   (5) Kody-ruled (I65): Shape D's project-pair exclusion (NOT EXISTS projects
+--       for the designer/client pair — the repeat-client 404) is removed
+--       ENTIRELY, AND the remaining two exclusions (proposal-chain/shape B,
+--       open-lead/shape C) are re-scoped from PAIR to ENGAGEMENT. A lead-status
+--       relationship is suppressed only by ITS OWN proposal (linked via
+--       proposals.designer_client_id) or ITS OWN open lead (dc.lead_id), never by
+--       any historical proposal / signed project / unrelated open lead that
+--       merely shares the designer/client pair — so a repeat client's fresh
+--       Discovery ALWAYS emits and never 404s the post-ceremony landing (the live
+--       walk found the pair-scoped legs still suppressing every lead-status row
+--       for a client with ANY prior proposal or open lead). The pair heuristic
+--       survives ONLY as a legacy fallback for rows that predate the linkage
+--       (dc.lead_id NULL; arc-born and 00285-era rows always carry lead_id).
 --
 -- Head-body discipline (patina-db-migrations): the view body below is the
 -- 00236 v10 definition copied VERBATIM (grep|sort|tail-1 winner among the nine
@@ -432,41 +439,61 @@ select
 from designer_clients dc
 left join profiles cp on cp.id = dc.client_id
 where dc.status = 'lead'
-  -- not already represented by a live proposal chain (shape B). Matched EITHER
-  -- by the direct household link (I62 — a no-login household has client_id
-  -- NULL, so the pair join below is never true for it; without this leg the
-  -- household emits BOTH a Shape D and a Shape B doc) OR by the legacy
-  -- designer/client profile pair.
+  -- Graduated to a proposal chain (shape B)? ENGAGEMENT-scoped (I65 fix): only
+  -- THIS relationship's OWN proposal (linked by designer_client_id) suppresses
+  -- it. A repeat client's earlier proposal for the same designer/client pair must
+  -- NOT suppress a fresh Discovery relationship — that pair-scoped leg was the
+  -- post-ceremony 404. Legacy rows (dc.lead_id NULL — the pre-linkage world where
+  -- one pair = one engagement) keep the designer/client pair heuristic as a
+  -- fallback. A no-login household has client_id NULL, so the pair leg is never
+  -- true for it anyway; its designer_client_id link is the only thing that can
+  -- suppress the otherwise-duplicate D+B pair.
   and not exists (
     select 1 from proposals pp
     where pp.status in ('draft', 'sent', 'viewed', 'accepted', 'declined', 'expired')
       and (pp.designer_client_id = dc.id
-           or (pp.designer_id = dc.designer_id and pp.client_id = dc.client_id))
+           or (dc.lead_id is null
+               and pp.designer_id = dc.designer_id
+               and pp.client_id = dc.client_id))
   )
-  -- not already represented by an open lead (shape C)
+  -- Still an open lead (shape C)? ENGAGEMENT-scoped (I65 fix): only the
+  -- relationship's OWN lead being open suppresses it (it shows as the Brief
+  -- instead). Another open lead for the same pair must NOT suppress it. Legacy
+  -- fallback (dc.lead_id NULL) keeps the designer/homeowner pair heuristic.
   and not exists (
     select 1 from leads l2
-    where l2.designer_id = dc.designer_id
-      and l2.homeowner_id = dc.client_id
-      and l2.status in ('new', 'viewed', 'contacted')
+    where l2.status in ('new', 'viewed', 'contacted')
+      and (l2.id = dc.lead_id
+           or (dc.lead_id is null
+               and l2.designer_id = dc.designer_id
+               and l2.homeowner_id = dc.client_id))
   );
   -- Arrival Arc, delta 5 (I65, Kody-ruled): the shape-A project-pair exclusion
-  -- is REMOVED. A status='lead' relationship ALWAYS emits — a repeat client's
-  -- new Discovery must not 404 just because an earlier signed project exists for
-  -- the same designer/client pair. (They carry different engagement_ids: the
-  -- project keys shape A on projects.id, this keys shape D on designer_clients.id.)
+  -- was REMOVED entirely, and the proposal-chain (shape B) + open-lead (shape C)
+  -- exclusions above are now ENGAGEMENT-scoped (linked by designer_client_id /
+  -- lead_id) rather than PAIR-scoped. A status='lead' relationship ALWAYS emits
+  -- for a repeat client — a historical proposal, signed project, or unrelated
+  -- open lead sharing the designer/client pair no longer 404s the fresh
+  -- Discovery landing. (Each shape carries a distinct engagement_id: project keys
+  -- shape A on projects.id, proposal keys shape B on the chain root, this keys
+  -- shape D on designer_clients.id.) The pair heuristic survives ONLY for legacy
+  -- rows that predate the linkage (dc.lead_id NULL — arc-born and 00285-era rows
+  -- always carry lead_id).
 
 comment on view document_state is
   'The Document read model (R1 shapes A-D). v11 (00327, Arrival Arc): '
   'shape B client_name rescues no-login households via the new '
   'proposals.designer_client_id → designer_clients.client_name link, household '
-  'label FIRST to match shape D precedence (I62); shape D''s proposal-chain '
-  'exclusion gains a designer_client_id leg so a linked household emits ONE doc, '
-  'not a D+B pair; shapes C and D prefer profiles.display_name over full_name '
-  '(00289 precedent); shape D emits dc.lead_id and no longer excludes '
-  'designer/client pairs that already have a project (I65 repeat-client 404 fix, '
-  'Kody-ruled — status=lead always emits). Otherwise the 00236 v10 body verbatim '
-  '(columns/order unchanged).';
+  'label FIRST to match shape D precedence (I62); shapes C and D prefer '
+  'profiles.display_name over full_name (00289 precedent); shape D emits '
+  'dc.lead_id. Shape D''s three exclusions are ENGAGEMENT-scoped (I65 '
+  'repeat-client 404 fix, Kody-ruled): a lead-status relationship is suppressed '
+  'only by its OWN proposal (designer_client_id leg — a linked household emits '
+  'ONE doc, not a D+B pair) or its OWN open lead (dc.lead_id leg), never by a '
+  'historical proposal / signed project / unrelated open lead that merely shares '
+  'the designer/client pair — status=lead ALWAYS emits for repeat clients. The '
+  'pair heuristic survives only as a legacy fallback for rows with dc.lead_id '
+  'NULL. Otherwise the 00236 v10 body verbatim (columns/order unchanged).';
 
 -- Re-issue grants explicitly (idempotent; defends any column/owner edge case).
 grant select on document_state to authenticated;

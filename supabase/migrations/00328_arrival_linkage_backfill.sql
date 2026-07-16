@@ -8,6 +8,12 @@
 -- IS NULL / status precondition so this migration is safe to re-run and safe on
 -- an empty local database (each UPDATE simply matches zero rows).
 --
+-- Statement (4) additionally closes the residual legacy-duplicate window opened
+-- by 00327's ENGAGEMENT-scoped shape-D exclusions (I65): it stamps
+-- proposals.designer_client_id from the pair's dc row, but ONLY where the pair
+-- has exactly one relationship (unambiguous); multi-relationship pairs are left
+-- for manual review.
+--
 -- No schema change, no grants — data only. Additive in spirit (D7): it only
 -- fills columns that were NULL; it never overwrites a value a human already set.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -47,6 +53,30 @@ update proposals
    set designer_client_id = '5eed0104-2026-4707-8104-000000000104'
  where id = 'f9970369-b7da-4c03-9892-386e6a82d37e'
    and designer_client_id is null;
+
+-- (4) Close the residual legacy-duplicate window created by 00327's now
+-- ENGAGEMENT-scoped shape-D exclusions (I65). A designer_clients row WITH a
+-- lead_id whose graduated proposal predates designer_client_id stamping would
+-- emit shape D alongside shape B: the engagement-scoped proposal leg only
+-- suppresses D when proposals.designer_client_id = dc.id, and the pair fallback
+-- no longer fires for a lead_id-bearing row. Stamp proposals.designer_client_id
+-- from the pair's dc row — but ONLY where the match is UNAMBIGUOUS: exactly one
+-- designer_clients row exists for the (designer_id, client_id) pair. A pair with
+-- multiple relationships (the very repeat-client case this program serves) is
+-- left for manual review — auto-stamping the wrong engagement would mislink the
+-- proposal. Guarded by designer_client_id IS NULL (idempotent, never overwrites)
+-- and client_id IS NOT NULL (no-login households are handled by (3); a NULL pair
+-- key must never drive a match). Safe on an empty/local database → 0 rows.
+update proposals pr
+   set designer_client_id = dc.id
+  from designer_clients dc
+ where pr.designer_client_id is null
+   and pr.client_id is not null
+   and dc.designer_id = pr.designer_id
+   and dc.client_id = pr.client_id
+   and (select count(*) from designer_clients dc2
+         where dc2.designer_id = pr.designer_id
+           and dc2.client_id = pr.client_id) = 1;
 
 -- ── Deliberately NOT repaired ───────────────────────────────────────────────
 -- The two prod orphan projects 5eed0005 / 5eed0006 are NOT repaired here. Their
