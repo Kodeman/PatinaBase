@@ -28,8 +28,10 @@ interface MockBuilder {
   update: any;
   delete: any;
   eq: any;
+  neq: any;
   is: any;
   order: any;
+  limit: any;
   single: any;
   maybeSingle: any;
   /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -63,8 +65,10 @@ function makeBuilder(queue: BuilderResult[] = []): MockBuilder {
   builder.update = record('update');
   builder.delete = record('delete');
   builder.eq = record('eq');
+  builder.neq = record('neq');
   builder.is = record('is');
   builder.order = record('order');
+  builder.limit = record('limit');
 
   builder.single = vi.fn(() => {
     builder.__chain.push({ method: 'single', args: [] });
@@ -115,7 +119,7 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 // Import AFTER the mocks are wired up.
-import { useAcceptLead } from '../use-leads';
+import { useAcceptLead, useBeginDiscovery } from '../use-leads';
 
 beforeEach(() => {
   Object.keys(builders).forEach((k) => delete builders[k]);
@@ -218,6 +222,184 @@ describe('useAcceptLead — manual lead, idempotent on idx_designer_clients_uniq
       source: 'lead',
       lead_id: 'lead-1',
       status: 'active',
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// I65 bug 2 ripple — the (designer, client) pair can now carry >1
+// designer_clients row, so a bare pair-scoped `.maybeSingle()` would error.
+// Both useAcceptLead and useBeginDiscovery route the read through the shared
+// `resolvePairDesignerClient` selection (byLead → engaged → newest, each an
+// ordered `.limit(1)` so `.maybeSingle()` never sees >1 row).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const HOMEOWNER_LEAD = {
+  id: 'lead-1',
+  homeowner_id: 'client-1',
+  designer_id: 'designer-1',
+  contact_name: null,
+  contact_email: null,
+};
+
+function getBeginDiscoveryFn() {
+  return (useBeginDiscovery() as unknown as {
+    mutationFn: (leadId: string) => Promise<unknown>;
+  }).mutationFn;
+}
+
+function countMaybeSingle(dc: MockBuilder): number {
+  return dc.__chain.filter((c) => c.method === 'maybeSingle').length;
+}
+
+describe('useAcceptLead — homeowner pair, ordered-limit(1) selection (I65 bug 2)', () => {
+  it('a row already linked to THIS lead wins at tier 1 (idempotent re-run) — one read, then update', async () => {
+    setTableQueue('leads', [
+      { data: HOMEOWNER_LEAD, error: null },
+      { data: null, error: null },
+    ]);
+    // Tier 1 (byLead) hits immediately — tiers 2/3 never run.
+    const dc = setTableQueue('designer_clients', [
+      { data: { id: 'dc-byLead', lead_id: 'lead-1', status: 'active' }, error: null },
+      { data: null, error: null }, // the update
+    ]);
+
+    const mutationFn = getAcceptFn();
+    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+
+    expect(countMaybeSingle(dc)).toBe(1);
+    const updateCall = dc.__chain.find((c) => c.method === 'update');
+    expect(updateCall?.args[0]).toEqual({ source: 'lead', lead_id: 'lead-1', status: 'active' });
+    const updateEq = dc.__chain.filter((c) => c.method === 'eq' && c.args[0] === 'id');
+    expect(updateEq.at(-1)?.args).toEqual(['id', 'dc-byLead']);
+  });
+
+  it('no row tied to this lead, but an engaged row exists for the pair — tier 2 wins, updates that row', async () => {
+    setTableQueue('leads', [
+      { data: HOMEOWNER_LEAD, error: null },
+      { data: null, error: null },
+    ]);
+    const dc = setTableQueue('designer_clients', [
+      { data: null, error: null }, // tier 1 (byLead) miss
+      { data: { id: 'dc-engaged', lead_id: null, status: 'active' }, error: null }, // tier 2 hit
+      { data: null, error: null }, // the update
+    ]);
+
+    const mutationFn = getAcceptFn();
+    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+
+    expect(countMaybeSingle(dc)).toBe(2); // tier 3 never runs
+    const updateCall = dc.__chain.find((c) => c.method === 'update');
+    const updateEq = dc.__chain.filter((c) => c.method === 'eq' && c.args[0] === 'id');
+    expect(updateEq.at(-1)?.args).toEqual(['id', 'dc-engaged']);
+    expect(updateCall?.args[0]).toMatchObject({ status: 'active' });
+    expect(dc.__chain.some((c) => c.method === 'insert')).toBe(false);
+  });
+
+  it('no row at all for the pair — falls through all three tiers, then inserts', async () => {
+    setTableQueue('leads', [
+      { data: HOMEOWNER_LEAD, error: null },
+      { data: null, error: null },
+    ]);
+    const dc = setTableQueue('designer_clients', [
+      { data: null, error: null }, // tier 1
+      { data: null, error: null }, // tier 2
+      { data: null, error: null }, // tier 3
+      { data: null, error: null }, // insert
+    ]);
+
+    const mutationFn = getAcceptFn();
+    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+
+    expect(countMaybeSingle(dc)).toBe(3);
+    const insertCall = dc.__chain.find((c) => c.method === 'insert');
+    expect(insertCall?.args[0]).toEqual({
+      designer_id: 'designer-1',
+      client_id: 'client-1',
+      source: 'lead',
+      lead_id: 'lead-1',
+      status: 'active',
+    });
+  });
+});
+
+describe('useBeginDiscovery — homeowner pair, never-downgrade guard (I65 bug 2)', () => {
+  it('an existing lead-status row wins at tier 1 — updates in place, no insert', async () => {
+    setTableQueue('leads', [
+      { data: HOMEOWNER_LEAD, error: null },
+      { data: null, error: null },
+    ]);
+    const dc = setTableQueue('designer_clients', [
+      { data: { id: 'dc-lead', lead_id: 'lead-1', status: 'lead' }, error: null },
+      { data: null, error: null }, // the update
+    ]);
+
+    const mutationFn = getBeginDiscoveryFn();
+    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+
+    expect(dc.__chain.some((c) => c.method === 'insert')).toBe(false);
+    const updateCall = dc.__chain.find((c) => c.method === 'update');
+    expect(updateCall?.args[0]).toEqual({ source: 'lead', lead_id: 'lead-1', status: 'lead' });
+    const updateEq = dc.__chain.filter((c) => c.method === 'eq' && c.args[0] === 'id');
+    expect(updateEq.at(-1)?.args).toEqual(['id', 'dc-lead']);
+  });
+
+  it('I65 bug 2: an ENGAGED (active) row for the pair is never downgraded — inserts a fresh lead row instead', async () => {
+    setTableQueue('leads', [
+      { data: HOMEOWNER_LEAD, error: null },
+      { data: null, error: null },
+    ]);
+    const dc = setTableQueue('designer_clients', [
+      { data: null, error: null }, // tier 1 (byLead) miss
+      { data: { id: 'dc-active', lead_id: null, status: 'active' }, error: null }, // tier 2 hit — the seeded relationship
+      { data: null, error: null }, // the insert
+    ]);
+
+    const mutationFn = getBeginDiscoveryFn();
+    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+
+    // The proven I65 bug: the engaged row must NEVER be the target of an
+    // update (that would silently downgrade it to 'lead').
+    const updateCall = dc.__chain.find((c) => c.method === 'update');
+    expect(updateCall).toBeUndefined();
+    const touchedEngagedRow = dc.__chain.some(
+      (c) => c.method === 'eq' && c.args[0] === 'id' && c.args[1] === 'dc-active',
+    );
+    expect(touchedEngagedRow).toBe(false);
+
+    // Instead: a fresh status='lead' row, mirroring ceremony_complete.
+    const insertCall = dc.__chain.find((c) => c.method === 'insert');
+    expect(insertCall?.args[0]).toEqual({
+      designer_id: 'designer-1',
+      client_id: 'client-1',
+      source: 'lead',
+      lead_id: 'lead-1',
+      status: 'lead',
+    });
+  });
+
+  it('no row at all for the pair — inserts a fresh lead row (unaffected baseline)', async () => {
+    setTableQueue('leads', [
+      { data: HOMEOWNER_LEAD, error: null },
+      { data: null, error: null },
+    ]);
+    const dc = setTableQueue('designer_clients', [
+      { data: null, error: null }, // tier 1
+      { data: null, error: null }, // tier 2
+      { data: null, error: null }, // tier 3
+      { data: null, error: null }, // insert
+    ]);
+
+    const mutationFn = getBeginDiscoveryFn();
+    await expect(mutationFn('lead-1')).resolves.toBeTruthy();
+
+    const insertCall = dc.__chain.find((c) => c.method === 'insert');
+    expect(insertCall?.args[0]).toEqual({
+      designer_id: 'designer-1',
+      client_id: 'client-1',
+      source: 'lead',
+      lead_id: 'lead-1',
+      status: 'lead',
     });
   });
 });

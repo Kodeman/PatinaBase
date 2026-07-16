@@ -91,6 +91,10 @@ export type NeedKind =
   // C4 (Schedule & Boards Wave 2): the client flagged lines on a live proposal.
   | 'lines_flagged'
   | 'new_lead'
+  // R106 §3 (the Arrival Arc): a claimed lead whose ceremony was put down
+  // mid-draft — the act is WRITING the introduction, so it earns a folder
+  // (the R22 action test), never a chip.
+  | 'ceremony_pending'
   | 'reconnect_due'
   | 'hesitating_proposal'
   | 'awaiting_inspection'
@@ -138,6 +142,26 @@ export interface DeskFlaggedSignal {
   proposalId: string;
 }
 
+/** R106 (the Arrival Arc) ceremony input, structural (not imported — the
+ *  desk-conflicts precedent: this module stays dependency-free). One
+ *  `match_ceremonies` row's Desk-relevant shape, built by
+ *  lib/document/desk-ceremonies.ts and looked up per engagement by
+ *  partitionDesk — by lead_id for the parked-card need (Shape C), by
+ *  designer_client_id for the in-motion chip (Shape D). A flag-off designer
+ *  has no ceremony rows at all, so every ceremony-shaped branch below is
+ *  simply unreachable — that IS the flag-off safety net at this pure layer;
+ *  no separate flag check belongs here. */
+export interface DeskCeremonySignal {
+  id: string;
+  state: 'draft' | 'sent' | 'picked';
+  introText: string | null;
+  offeredSlots: ReadonlyArray<{ id: string; starts_at: string; duration_minutes: number }> | null;
+  offeredAt: string | null;
+  pickedSlotStartsAt: string | null;
+  timezone: string | null;
+  threadId: string | null;
+}
+
 export interface NeedLine {
   kind: NeedKind;
   text: string;
@@ -154,6 +178,10 @@ export interface NeedLine {
    *  The lines_flagged walk-in points at the Drafting Room (?flagged=1), where the
    *  flagged line's Alternatives band lives. Typed structurally; folder-card maps it. */
   deepLink?: string;
+  /** R106 §3: the parked-ceremony card's held-draft preview — the intro's
+   *  first words, when she'd started writing before putting it down. Absent
+   *  for every other need kind (and for a ceremony still at its blank stub). */
+  sub?: string;
 }
 
 export interface DeskFolder {
@@ -244,12 +272,30 @@ export type MotionKind =
   | 'paused'
   | 'in_flight'
   | 'drift'
-  | 'conflict';
+  | 'conflict'
+  // R106 §4 (the Arrival Arc): the four ceremony-in-motion states, replacing
+  // the static "Schedule the discovery call" text for a relationship whose
+  // ceremony has sent. Never promotes to a folder — the wait is a chip
+  // forever (the prototype's own note: "the wait is a chip, never a desk
+  // folder — R22").
+  | 'discovery_scheduled'
+  | 'slots_stale'
+  | 'intro_nudge'
+  | 'intro_sent';
 
 export interface MotionChip {
   row: DocumentStateRow;
   kind: MotionKind;
   text: string;
+  /** Overrides the default `/doc/{engagement_id}` destination. R106 §4: the
+   *  discovery-scheduled/stale-slots states deep-link into the Discovery
+   *  fold, and the nudge state opens the thread instead of the document.
+   *  Absent for every pre-arc chip kind — the default stays byte-identical. */
+  href?: string;
+  /** R106 §5 (telemetry) — the ceremony this chip renders, so the
+   *  nudge/fresh-times-requested events can dedupe per ceremony rather than
+   *  per render. Set only for the ceremony-derived chip kinds. */
+  ceremonyId?: string;
 }
 
 const DAY_MS = 86_400_000;
@@ -296,6 +342,11 @@ const NEED_RANK: Record<NeedKind, number> = {
   // hesitation. Fractional to stay surgical (the sort is numeric).
   lines_flagged: 5.5,
   new_lead: 6,
+  // R106 §3: a claimed lead with the ceremony parked mid-draft — the same
+  // Brief-active triage tier as a fresh lead (rank "at/near new_lead" per the
+  // ruling); ties break on the fallback date key (row.updated_at, which the
+  // claim itself stamps).
+  ceremony_pending: 6,
   // R65: a due reconnect is a real need but a soft one — it sorts just under a
   // fresh inquiry (a new lead outranks a scheduled touchpoint) and above the
   // hesitating-proposal nudge. Fractional to stay surgical (sort is numeric).
@@ -333,6 +384,38 @@ const fmtDay = (iso: string) =>
 const daysBetween = (earlierIso: string, now: Date) =>
   Math.floor((now.getTime() - new Date(earlierIso).getTime()) / DAY_MS);
 
+// R106 — the Arrival Arc's small text helpers. Kept local (not folder-tab's
+// last-name convention): the parked card's copy is first-name, conversational
+// ("Introduce yourself to Elena").
+function firstName(name: string | null | undefined, fallback = 'them'): string {
+  const first = (name ?? '').trim().split(/\s+/)[0];
+  return first || fallback;
+}
+
+/** "Discovery · Thu 2:00 PM" — day + time in the ceremony's own timezone
+ *  (falls back to UTC when the ceremony carries none). No comma (unlike
+ *  Intl's default weekday+time punctuation) to match the prototype's copy. */
+function fmtDayTime(iso: string, timezone: string | null): string {
+  const d = new Date(iso);
+  const tz = timezone || 'UTC';
+  const day = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tz }).format(d);
+  const time = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: tz,
+  }).format(d);
+  return `${day} ${time}`;
+}
+
+/** The parked-ceremony sub-line's draft preview (scene 3b: "draft held —
+ *  'Elena, I keep thinking about what you said about rooms that…'"). */
+function truncateWords(text: string, maxChars: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  return `${trimmed.slice(0, maxChars).trimEnd()}…`;
+}
+
 /** Words that mean "we don't actually know the client" — the view's
  *  fallbacks and seed-account role nouns. The tab never wears them (R16). */
 const ROLE_NOUNS = new Set(['client', 'user']);
@@ -354,6 +437,7 @@ export function deriveNeed(
   conflict?: DeskConflictInput | null,
   receivable?: ReceivableSignal | null,
   flagged?: DeskFlaggedSignal | null,
+  ceremony?: DeskCeremonySignal | null,
 ): NeedLine | null {
   if (row.is_archived || row.is_paused) return null;
 
@@ -474,6 +558,24 @@ export function deriveNeed(
   }
 
   if (row.engagement_kind === 'lead') {
+    // R106 §3: a claimed lead whose ceremony was put down mid-draft is
+    // "Introduce yourself to {first name}" — the act available is WRITING
+    // the introduction, so it earns a folder (the R22 action test), never a
+    // chip. Outranks the nurture/new-lead branches below; a lead never
+    // routed through the arc's claim (or a flag-off designer, who has no
+    // ceremony rows at all) falls straight through unchanged.
+    if (ceremony && ceremony.state === 'draft') {
+      const draftText = (ceremony.introText ?? '').trim();
+      return {
+        kind: 'ceremony_pending',
+        text: `Introduce yourself to ${firstName(row.client_name)}`,
+        stamp: { label: 'CLAIMED · CEREMONY WAITING', ...STAMP.clay },
+        urgent: false,
+        deepLink: `/ceremony/${row.lead_id}`,
+        sub: draftText ? `Your draft is held — "${truncateWords(draftText, 60)}"` : undefined,
+      };
+    }
+
     // R65 — a nurtured lead (status='contacted') carries a RECONNECT DATE in
     // response_deadline. It stays off the needs-hand band until that date, then
     // rises again here as a 'reconnect_due' need — a dated thing earns a return
@@ -631,7 +733,8 @@ export function deriveMotion(
   row: DocumentStateRow,
   now: Date,
   conflict?: DeskConflictInput | null,
-): { kind: MotionKind; text: string } | null {
+  ceremony?: DeskCeremonySignal | null,
+): { kind: MotionKind; text: string; href?: string; ceremonyId?: string } | null {
   if (row.is_archived) return null;
   if (row.is_paused) return { kind: 'paused', text: 'Paused' };
 
@@ -671,8 +774,62 @@ export function deriveMotion(
   // R61: a relationship in Discovery (Shape D — the post-Accept state) carries
   // its real next act. "Schedule the discovery call" reads more honestly than the
   // bare "In discovery": it tells the designer what the document is waiting on.
-  if (row.engagement_kind === 'relationship')
+  //
+  // R106 §4: once the Arrival Arc ceremony has actually sent, that static
+  // line is replaced by the real state of the introduction — in priority
+  // order: picked (the discovery is scheduled) → stale offered slots → a
+  // quiet-48h nudge → a fresh "awaiting their pick". A relationship with no
+  // ceremony row (pre-arc, or a flag-off designer) falls straight through to
+  // the byte-identical default below.
+  if (row.engagement_kind === 'relationship') {
+    if (ceremony) {
+      if (ceremony.state === 'picked' && ceremony.pickedSlotStartsAt) {
+        return {
+          kind: 'discovery_scheduled',
+          text: `Discovery · ${fmtDayTime(ceremony.pickedSlotStartsAt, ceremony.timezone)}`,
+          href: `/doc/${row.engagement_id}#discovery`,
+          ceremonyId: ceremony.id,
+        };
+      }
+      // Chip texts are NAMELESS by ruling: the InMotionChip wrapper already
+      // renders "{row.title} — {chip.text}", so R106 §4's example line
+      // ("Elena Vasquez — intro sent, awaiting her pick") is achieved by the
+      // wrapper + a name-free text. Pronoun-neutral ("their") — the ruling's
+      // "her" was Elena-specific.
+      if (ceremony.state === 'sent') {
+        const slots = ceremony.offeredSlots ?? [];
+        const allStale =
+          slots.length > 0 && slots.every((s) => new Date(s.starts_at).getTime() < now.getTime());
+        if (allStale) {
+          return {
+            kind: 'slots_stale',
+            text: 'offered times went by — offer fresh ones',
+            href: `/doc/${row.engagement_id}#discovery`,
+            ceremonyId: ceremony.id,
+          };
+        }
+        const offeredAtMs = ceremony.offeredAt ? new Date(ceremony.offeredAt).getTime() : null;
+        const quiet48h = offeredAtMs !== null && now.getTime() - offeredAtMs >= 48 * 3_600_000;
+        if (quiet48h) {
+          return {
+            kind: 'intro_nudge',
+            // Scene 04's exact register: "quiet 48h — nudge, or offer fresh
+            // times". State carried, but an act exists again at 48h (R22).
+            text: 'quiet 48h — nudge, or offer fresh times',
+            href: ceremony.threadId ? `/people?thread=${ceremony.threadId}` : `/doc/${row.engagement_id}`,
+            ceremonyId: ceremony.id,
+          };
+        }
+        return {
+          kind: 'intro_sent',
+          text: 'intro sent, awaiting their pick',
+          href: `/doc/${row.engagement_id}`,
+          ceremonyId: ceremony.id,
+        };
+      }
+    }
     return { kind: 'in_discovery', text: 'Schedule the discovery call' };
+  }
 
   // R28/R22 drift tier: state carried, never a nag.
   if (conflict?.drift) return { kind: 'drift', text: conflict.drift };
@@ -706,13 +863,19 @@ function needSortKey(folder: DeskFolder): [number, number, number] {
 }
 
 /** Split rows into the needs-your-hand stack and the in-motion chips.
- *  `conflicts` (R28) maps project_id → Desk conflict inputs. */
+ *  `conflicts` (R28) maps project_id → Desk conflict inputs. `ceremoniesByLeadId`
+ *  / `ceremoniesByDesignerClientId` (R106, the Arrival Arc) map a `match_ceremonies`
+ *  row two ways: by lead_id for a Shape C lead's parked-card need, by
+ *  designer_client_id for a Shape D relationship's in-motion chip — the same
+ *  ceremony is looked up under whichever key matches the row's shape. */
 export function partitionDesk(
   rows: DocumentStateRow[],
   now: Date,
   conflicts?: ReadonlyMap<string, DeskConflictInput>,
   receivables?: ReadonlyMap<string, ReceivableSignal>,
   flaggedLines?: ReadonlyMap<string, DeskFlaggedSignal>,
+  ceremoniesByLeadId?: ReadonlyMap<string, DeskCeremonySignal>,
+  ceremoniesByDesignerClientId?: ReadonlyMap<string, DeskCeremonySignal>,
 ): { folders: DeskFolder[]; chips: MotionChip[] } {
   const folders: DeskFolder[] = [];
   const chips: MotionChip[] = [];
@@ -724,13 +887,28 @@ export function partitionDesk(
     // C4: flagged lines are keyed by proposal_id (a proposal engagement carries
     // proposal_id, project_id null).
     const flagged = row.proposal_id ? (flaggedLines?.get(row.proposal_id) ?? null) : null;
-    const need = deriveNeed(row, now, conflict, receivable, flagged);
+    // R106: a lead row's ceremony is found by lead_id; a relationship row's by
+    // its own engagement_id (== designer_clients.id == designer_client_id).
+    const ceremony =
+      row.engagement_kind === 'lead' && row.lead_id
+        ? (ceremoniesByLeadId?.get(row.lead_id) ?? null)
+        : row.engagement_kind === 'relationship'
+          ? (ceremoniesByDesignerClientId?.get(row.engagement_id) ?? null)
+          : null;
+    const need = deriveNeed(row, now, conflict, receivable, flagged, ceremony);
     if (need) {
       folders.push({ row, need });
       continue;
     }
-    const motion = deriveMotion(row, now, conflict);
-    if (motion) chips.push({ row, kind: motion.kind, text: motion.text });
+    const motion = deriveMotion(row, now, conflict, ceremony);
+    if (motion)
+      chips.push({
+        row,
+        kind: motion.kind,
+        text: motion.text,
+        href: motion.href,
+        ceremonyId: motion.ceremonyId,
+      });
   }
 
   folders.sort((a, b) => {

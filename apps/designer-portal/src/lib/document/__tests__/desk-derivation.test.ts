@@ -11,6 +11,7 @@ import {
   deriveReconnectNeeds,
   type DocumentStateRow,
   type NurtureLike,
+  type DeskCeremonySignal,
 } from '../desk-derivation';
 
 const NOW = new Date('2026-06-11T12:00:00Z');
@@ -824,6 +825,362 @@ describe('partitionDesk — flagged lines (C4)', () => {
       'proposal_declined',
       'lines_flagged',
       'new_lead',
+    ]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R106 — the Arrival Arc: the parked-ceremony card (§3) + the four in-motion
+// chip states (§4). Mirrors the C4 flagged-lines suites' style directly above.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const hoursAgo = (n: number) => new Date(NOW.getTime() - n * 3_600_000).toISOString();
+
+function mkCeremony(partial: Partial<DeskCeremonySignal> = {}): DeskCeremonySignal {
+  return {
+    id: 'cer-1',
+    state: 'draft',
+    introText: null,
+    offeredSlots: null,
+    offeredAt: null,
+    pickedSlotStartsAt: null,
+    timezone: null,
+    threadId: null,
+    ...partial,
+  };
+}
+
+const leadRow = (partial: Partial<DocumentStateRow> = {}) =>
+  mkRow({
+    engagement_kind: 'lead',
+    engagement_id: 'lead-1',
+    active_section: 'brief',
+    project_id: null,
+    lead_id: 'lead-1',
+    lead_status: 'new',
+    client_name: 'Elena Vasquez',
+    ...partial,
+  });
+
+const relationshipRow = (partial: Partial<DocumentStateRow> = {}) =>
+  mkRow({
+    engagement_kind: 'relationship',
+    engagement_id: 'dc-1',
+    active_section: 'discovery',
+    project_id: null,
+    lead_id: 'lead-1',
+    client_name: 'Elena Vasquez',
+    ...partial,
+  });
+
+describe('deriveNeed — ceremony_pending, the parked card (R106 §3)', () => {
+  it('a draft ceremony on a claimed lead → "Introduce yourself to {first name}" folder', () => {
+    const need = deriveNeed(leadRow(), NOW, null, null, null, mkCeremony({ state: 'draft' }));
+    expect(need!.kind).toBe('ceremony_pending');
+    expect(need!.text).toBe('Introduce yourself to Elena');
+    expect(need!.stamp.label).toBe('CLAIMED · CEREMONY WAITING');
+    expect(need!.stamp.color).toBe('var(--color-clay)');
+    expect(need!.urgent).toBe(false);
+    expect(need!.deepLink).toBe('/ceremony/lead-1');
+  });
+
+  it('a non-empty draft intro carries a truncated sub-line (scene 3b)', () => {
+    const long = 'A'.repeat(80);
+    const need = deriveNeed(
+      leadRow(),
+      NOW,
+      null,
+      null,
+      null,
+      mkCeremony({ state: 'draft', introText: long }),
+    );
+    expect(need!.sub).toBe(`Your draft is held — "${'A'.repeat(60)}…"`);
+  });
+
+  it('a short draft intro (under the truncation length) carries it verbatim, no ellipsis', () => {
+    const need = deriveNeed(
+      leadRow(),
+      NOW,
+      null,
+      null,
+      null,
+      mkCeremony({ state: 'draft', introText: 'Elena, I loved the light in your living room' }),
+    );
+    expect(need!.sub).toBe(
+      'Your draft is held — "Elena, I loved the light in your living room"',
+    );
+  });
+
+  it('a blank/empty draft intro carries no sub-line', () => {
+    const need = deriveNeed(
+      leadRow(),
+      NOW,
+      null,
+      null,
+      null,
+      mkCeremony({ state: 'draft', introText: '' }),
+    );
+    expect(need!.sub).toBeUndefined();
+    const need2 = deriveNeed(
+      leadRow(),
+      NOW,
+      null,
+      null,
+      null,
+      mkCeremony({ state: 'draft', introText: '   ' }),
+    );
+    expect(need2!.sub).toBeUndefined();
+  });
+
+  it('no ceremony at all → the plain new_lead need, byte-identical to pre-arc behavior', () => {
+    const withoutArg = deriveNeed(leadRow({ lead_response_deadline: daysAhead(5) }), NOW);
+    const withNullCeremony = deriveNeed(
+      leadRow({ lead_response_deadline: daysAhead(5) }),
+      NOW,
+      null,
+      null,
+      null,
+      null,
+    );
+    expect(withoutArg!.kind).toBe('new_lead');
+    expect(withoutArg).toEqual(withNullCeremony);
+  });
+
+  it('a ceremony past draft (sent/picked) on a Shape C row falls through unchanged — draft is the only trigger', () => {
+    // Belt-and-braces: in practice a sent/picked ceremony's lead has already
+    // left Shape C (leads.status flips to 'accepted' on send), but the guard
+    // itself must key on ceremony.state, not mere presence of a row.
+    const need = deriveNeed(
+      leadRow({ lead_response_deadline: daysAhead(5) }),
+      NOW,
+      null,
+      null,
+      null,
+      mkCeremony({ state: 'sent' }),
+    );
+    expect(need!.kind).toBe('new_lead');
+  });
+
+  it('ceremony_pending outranks the nurture (contacted) branch', () => {
+    const need = deriveNeed(
+      leadRow({ lead_status: 'contacted', lead_response_deadline: daysAhead(5) }),
+      NOW,
+      null,
+      null,
+      null,
+      mkCeremony({ state: 'draft' }),
+    );
+    expect(need!.kind).toBe('ceremony_pending');
+  });
+});
+
+describe('deriveMotion — the four ceremony chip states (R106 §4)', () => {
+  it('picked → "Discovery · {Day time}" in the ceremony timezone, deep-linked to the fold', () => {
+    // 2026-06-11 is a Thursday; 14:00 UTC in America/Chicago (UTC-5 in June, DST) = 9:00 AM.
+    // Use an explicit UTC instant + a named zone so the formatted output is unambiguous.
+    const motion = deriveMotion(
+      relationshipRow(),
+      NOW,
+      null,
+      mkCeremony({
+        state: 'picked',
+        pickedSlotStartsAt: '2026-06-11T19:00:00Z',
+        timezone: 'America/Chicago',
+      }),
+    );
+    expect(motion!.kind).toBe('discovery_scheduled');
+    expect(motion!.text).toBe('Discovery · Thu 2:00 PM');
+    expect(motion!.href).toBe('/doc/dc-1#discovery');
+  });
+
+  it('sent, every offered slot already past → slots_stale, deep-linked to the fold', () => {
+    const motion = deriveMotion(
+      relationshipRow(),
+      NOW,
+      null,
+      mkCeremony({
+        state: 'sent',
+        offeredAt: hoursAgo(1),
+        offeredSlots: [
+          { id: 's1', starts_at: hoursAgo(2), duration_minutes: 45 },
+          { id: 's2', starts_at: hoursAgo(3), duration_minutes: 45 },
+        ],
+      }),
+    );
+    expect(motion!.kind).toBe('slots_stale');
+    // Nameless by ruling — the InMotionChip wrapper prefixes "{title} — ".
+    expect(motion!.text).toBe('offered times went by — offer fresh ones');
+    expect(motion!.href).toBe('/doc/dc-1#discovery');
+  });
+
+  it('sent, at LEAST one offered slot still future → not stale even if others have passed', () => {
+    const motion = deriveMotion(
+      relationshipRow(),
+      NOW,
+      null,
+      mkCeremony({
+        state: 'sent',
+        offeredAt: hoursAgo(1),
+        offeredSlots: [
+          { id: 's1', starts_at: hoursAgo(2), duration_minutes: 45 },
+          { id: 's2', starts_at: daysAhead(1), duration_minutes: 45 },
+        ],
+      }),
+    );
+    expect(motion!.kind).not.toBe('slots_stale');
+  });
+
+  it('sent, quiet exactly 48h → intro_nudge (inclusive boundary), thread href', () => {
+    const motion = deriveMotion(
+      relationshipRow(),
+      NOW,
+      null,
+      mkCeremony({
+        state: 'sent',
+        offeredAt: hoursAgo(48),
+        offeredSlots: [{ id: 's1', starts_at: daysAhead(1), duration_minutes: 45 }],
+        threadId: 'thread-9',
+      }),
+    );
+    expect(motion!.kind).toBe('intro_nudge');
+    // Nameless by ruling — scene 04's own register verbatim.
+    expect(motion!.text).toBe('quiet 48h — nudge, or offer fresh times');
+    expect(motion!.href).toBe('/people?thread=thread-9');
+  });
+
+  it('sent, quiet 47h59m → still fresh (intro_sent), NOT the nudge (boundary)', () => {
+    const motion = deriveMotion(
+      relationshipRow(),
+      NOW,
+      null,
+      mkCeremony({
+        state: 'sent',
+        offeredAt: hoursAgo(47.983), // 47h 59m
+        offeredSlots: [{ id: 's1', starts_at: daysAhead(1), duration_minutes: 45 }],
+      }),
+    );
+    expect(motion!.kind).toBe('intro_sent');
+  });
+
+  it('sent, fresh (well under 48h) → "intro sent, awaiting their pick"', () => {
+    const motion = deriveMotion(
+      relationshipRow(),
+      NOW,
+      null,
+      mkCeremony({
+        state: 'sent',
+        offeredAt: hoursAgo(2),
+        offeredSlots: [{ id: 's1', starts_at: daysAhead(1), duration_minutes: 45 }],
+      }),
+    );
+    expect(motion!.kind).toBe('intro_sent');
+    // Nameless + pronoun-neutral by ruling — the wrapper carries the name.
+    expect(motion!.text).toBe('intro sent, awaiting their pick');
+    expect(motion!.href).toBe('/doc/dc-1');
+  });
+
+  it('sent with no offered slots at all never reads as stale (empty array guard)', () => {
+    const motion = deriveMotion(
+      relationshipRow(),
+      NOW,
+      null,
+      mkCeremony({ state: 'sent', offeredAt: hoursAgo(2), offeredSlots: [] }),
+    );
+    expect(motion!.kind).not.toBe('slots_stale');
+    expect(motion!.kind).toBe('intro_sent');
+  });
+
+  it('no ceremony at all → the plain "Schedule the discovery call" line, byte-identical to pre-arc behavior', () => {
+    const withoutArg = deriveMotion(relationshipRow(), NOW);
+    const withNullCeremony = deriveMotion(relationshipRow(), NOW, null, null);
+    expect(withoutArg).toEqual({ kind: 'in_discovery', text: 'Schedule the discovery call' });
+    expect(withoutArg).toEqual(withNullCeremony);
+  });
+
+  it('a still-draft ceremony on a relationship row (defensive) falls through to the default line', () => {
+    const motion = deriveMotion(relationshipRow(), NOW, null, mkCeremony({ state: 'draft' }));
+    expect(motion).toEqual({ kind: 'in_discovery', text: 'Schedule the discovery call' });
+  });
+});
+
+describe('partitionDesk — ceremonies wiring (R106)', () => {
+  it('threads ceremoniesByLeadId into a ceremony_pending folder for a Shape C lead', () => {
+    const row = leadRow({ lead_response_deadline: daysAhead(5) });
+    const byLead = new Map([['lead-1', mkCeremony({ state: 'draft' })]]);
+    const { folders } = partitionDesk([row], NOW, undefined, undefined, undefined, byLead);
+    expect(folders).toHaveLength(1);
+    expect(folders[0].need.kind).toBe('ceremony_pending');
+  });
+
+  it('threads ceremoniesByDesignerClientId into a chip for a Shape D relationship', () => {
+    const row = relationshipRow();
+    const byDc = new Map([
+      ['dc-1', mkCeremony({ state: 'sent', offeredAt: hoursAgo(2), offeredSlots: [] })],
+    ]);
+    const { chips } = partitionDesk(
+      [row],
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      byDc,
+    );
+    expect(chips).toHaveLength(1);
+    expect(chips[0].kind).toBe('intro_sent');
+  });
+
+  it('a lead ceremony never leaks onto a relationship lookup and vice versa (keyed correctly)', () => {
+    const lead = leadRow({ lead_response_deadline: daysAhead(5) });
+    const relationship = relationshipRow({ engagement_id: 'dc-2', lead_id: 'lead-2' });
+    const byLead = new Map([['lead-1', mkCeremony({ state: 'draft' })]]);
+    const byDc = new Map([
+      ['dc-1', mkCeremony({ state: 'sent', offeredAt: hoursAgo(2), offeredSlots: [] })],
+    ]);
+    const { folders, chips } = partitionDesk(
+      [lead, relationship],
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      byLead,
+      byDc,
+    );
+    expect(folders).toHaveLength(1);
+    expect(folders[0].need.kind).toBe('ceremony_pending');
+    // The relationship's OWN designer_client_id ('dc-2') isn't in byDc, so it
+    // gets the default in_discovery chip, not the 'dc-1' ceremony's state.
+    expect(chips).toHaveLength(1);
+    expect(chips[0].kind).toBe('in_discovery');
+  });
+
+  it('ceremony_pending ranks alongside new_lead — above hesitating, below overdue', () => {
+    const parked = leadRow({ engagement_id: 'lead-parked', lead_id: 'lead-parked' });
+    const overdue = mkRow({
+      engagement_id: 'e-dec',
+      overdue_decision_count: 1,
+      earliest_overdue_due: daysAgo(1),
+    });
+    const hesitating = mkRow({
+      engagement_id: 'e-hes',
+      engagement_kind: 'proposal',
+      project_id: null,
+      proposal_status: 'sent',
+      proposal_sent_at: daysAgo(5),
+    });
+    const byLead = new Map([['lead-parked', mkCeremony({ state: 'draft' })]]);
+    const { folders } = partitionDesk(
+      [hesitating, parked, overdue],
+      NOW,
+      undefined,
+      undefined,
+      undefined,
+      byLead,
+    );
+    expect(folders.map((f) => f.need.kind)).toEqual([
+      'overdue_decision',
+      'ceremony_pending',
+      'hesitating_proposal',
     ]);
   });
 });
