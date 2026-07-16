@@ -46,7 +46,20 @@ const getSupabase = () => createBrowserClient();
 
 export type PhaseRow = Tables<'project_phases'>;
 export type MilestoneRow = Tables<'schedule_milestones'>;
-export type ScheduleRevisionRow = Tables<'schedule_revisions'>;
+/**
+ * `Tables<'schedule_revisions'>` widened on ONE column: `phase_snapshots` is
+ * typed `unknown` here instead of the generated `Json`. Slice 05 (R100
+ * "Memory") never trusts the snapshot's shape at this boundary — it is a
+ * frozen resolver-input array cut by `cut_schedule_revision` (00326), and the
+ * ONE place that narrows it is the pure, TOTAL `snapshotToResolverInputs`
+ * (apps/designer-portal/src/lib/document/schedule-baseline-derivation.ts),
+ * which already accepts `unknown` and degrades rather than throwing on a
+ * malformed shape. Typing it loosely here forces every consumer through that
+ * narrowing instead of trusting `Json`'s shape at the query boundary.
+ */
+export type ScheduleRevisionRow = Omit<Tables<'schedule_revisions'>, 'phase_snapshots'> & {
+  phase_snapshots: unknown;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enum narrowing — the DB columns are free TEXT (no CHECK constraint mirrors

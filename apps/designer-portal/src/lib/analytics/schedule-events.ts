@@ -18,6 +18,18 @@
  * committed through the ripple's confirm strip, fired ONLY inside the commit
  * mutation's `onSuccess` (project surface only; a reverted edit never fires).
  *
+ * Slice 05 (memory) adds `schedule_revision_cut` — a numbered
+ * `schedule_revisions` row was cut (00326's `cut_schedule_revision`, the ONE
+ * writer to that ledger). DEF ONLY here — S5-2 defines the event, S5-3 wires
+ * the call site: the confirm strip's commit mutation `onSuccess` (mirrors
+ * `scheduleEditCommitted`'s placement), reading `v` off `useCommitScheduleEdit`'s
+ * now-numeric return value and firing with `trigger: 'edit'`. The
+ * `trigger: 'signature'` case (v1, cut inside `activate_proposal_as_project`
+ * on the client's signing flow) has no designer-portal call site — a future
+ * slice may wire it from wherever the signature flow's success path lives, if
+ * that surface should also see the cut. Both cases fire ONLY on a successful
+ * cut; there is no failure path that fires with a stale `v`.
+ *
  * No-ops when PostHog is not initialized (the track() guard).
  */
 
@@ -99,4 +111,15 @@ export const scheduleEvents = {
     ripple_size: number;
     conflict_count: number;
   }) => track('schedule_edit_committed', p),
+
+  // ── Slice 05 (Memory, R100) — a numbered revision was cut ──
+
+  /** A `schedule_revisions` row was cut (00326's `cut_schedule_revision`, the
+   *  ONE writer to that append-only ledger). `v` is the newly cut revision's
+   *  number (returned by the RPC — `activate_proposal_as_project` for
+   *  `trigger: 'signature'`, `commit_schedule_edit` for `trigger: 'edit'`).
+   *  Def only in S5-2; S5-3 wires the `trigger: 'edit'` call site into the
+   *  ripple's confirm-strip commit mutation `onSuccess` (see module banner). */
+  scheduleRevisionCut: (p: { project_id: string; v: number; trigger: 'signature' | 'edit' }) =>
+    track('schedule_revision_cut', p),
 };

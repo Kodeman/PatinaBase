@@ -105,7 +105,11 @@ in PostHog today.
   `schedule_edit_committed` (`surface: 'rule' | 'spine'`, `edit_kind`,
   `ripple_size`, `conflict_count`) — a previewed time edit committed through
   the ripple's confirm strip, project surface only, fired ONLY inside the
-  commit mutation's `onSuccess` (a reverted/Esc edit never fires)),
+  commit mutation's `onSuccess` (a reverted/Esc edit never fires). Slice 05
+  (memory) adds `schedule_revision_cut` (`v`, `trigger: 'signature' | 'edit'`)
+  — a numbered `schedule_revisions` row was cut (00326's
+  `cut_schedule_revision`); defined in S5-2, wired in S5-3 (see "Known
+  intentionally-unwired events" below)),
   `apps/designer-portal/src/lib/analytics/procurement-events.ts`,
   `apps/designer-portal/src/lib/analytics/nomination-events.ts`.
 - Client Portal: `apps/client-portal/src/lib/analytics/events.ts` (auth,
@@ -138,6 +142,12 @@ events; more remain dead by design (see below).
   `clientEvents`), admin's `adminEvents`, and `nominate.*` remain dead —
   explicitly deferred in the PostHog build-out plan's backlog, not part of
   this wave.
+- `schedule_revision_cut` (`apps/designer-portal/src/lib/analytics/schedule-events.ts`,
+  Schedule Slice 05) — defined against `cut_schedule_revision` (migration
+  00326) but not yet wired; the intended `trigger: 'edit'` call site is the
+  ripple confirm strip's commit mutation `onSuccess`
+  (`schedule-confirm-strip.tsx`), reading `v` off `useCommitScheduleEdit`'s
+  now-numeric return. Slice 05's UI pass (S5-3) wires it.
 
 ## Env / build-time wiring note
 

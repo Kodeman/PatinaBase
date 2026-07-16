@@ -362,12 +362,19 @@ export function serializeRippleEditForRpc(edit: RipplePendingEditInput): Seriali
 }
 
 /**
- * Thin wrapper over the `commit_schedule_edit` RPC (00325) — the ripple's
- * commit door. `edits` is normally a ONE-element array (the ripple previews
- * exactly one pending edit at a time, T6's single-session state), but the
- * door itself is batch-shaped for Slice 05+. Invalidates every cache the
- * committed edit can move: the phase chain, the milestones, and the
- * project-v2 rollup the Spine/header both read.
+ * Thin wrapper over the `commit_schedule_edit` RPC — the ripple's commit
+ * door. `edits` is normally a ONE-element array (the ripple previews exactly
+ * one pending edit at a time, T6's single-session state), but the door
+ * itself is batch-shaped for Slice 05+. Invalidates every cache the
+ * committed edit can move: the phase chain, the milestones, the project-v2
+ * rollup the Spine/header both read, and — Slice 05 (R100 "Memory") —
+ * `schedule-revisions`, since 00326's regraft cuts a new numbered revision
+ * every time this RPC runs.
+ *
+ * ⚠ Return type: migration 00326 changed `commit_schedule_edit`'s return
+ * from UUID (the placeholder `p_project_id`, pre-Slice-05) to INTEGER (the
+ * newly cut revision's `v`). Callers that previously treated the resolved
+ * value as an opaque string must not — it is now the revision number.
  */
 export function useCommitScheduleEdit() {
   const queryClient = useQueryClient();
@@ -389,12 +396,13 @@ export function useCommitScheduleEdit() {
         p_reason: reason ?? null,
       });
       if (error) throw error;
-      return data as string;
+      return data as number;
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: ['project-phases', projectId] });
       queryClient.invalidateQueries({ queryKey: ['schedule-milestones', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['schedule-revisions', projectId] });
     },
   });
 }
