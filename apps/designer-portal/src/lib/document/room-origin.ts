@@ -48,6 +48,9 @@ export function originLabel(origin: string): string {
   if (origin.startsWith('/doc/')) return 'the document';
   if (origin === '/desk' || origin === '') return 'the Desk';
   if (origin === '/library' || origin.startsWith('/library/')) return 'the Library';
+  if (origin === '/rooms' || origin.startsWith('/rooms/') || origin.startsWith('/room/')) {
+    return 'the Rooms';
+  }
   return 'back';
 }
 
@@ -58,6 +61,12 @@ export function isRoomPath(pathname: string): boolean {
     pathname === '/compose' ||
     pathname.startsWith('/compose/') ||
     pathname === '/drafting' ||
-    pathname.startsWith('/drafting/')
+    pathname.startsWith('/drafting/') ||
+    // R107 — The Rooms (index) and the Room View (detail): plural prefix for
+    // the roster, singular for one room, same as library/[id] is a Room too.
+    pathname === '/rooms' ||
+    pathname.startsWith('/rooms/') ||
+    pathname === '/room' ||
+    pathname.startsWith('/room/')
   );
 }

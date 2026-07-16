@@ -37,7 +37,7 @@ import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { AccountNameplate } from './account/account-nameplate';
 import type { OpenLedgerContext } from './command-bar';
 
-/** R93 — the five doors, sourced from the Studio Surface Registry: label,
+/** R93/R107 — the six doors, sourced from the Studio Surface Registry: label,
  *  icon, and weight all come from one place now, so a rename or re-icon
  *  there changes the drawer (and ⌘K, and Contents) together. Only display
  *  order and each room's href stay this component's concern — the registry
@@ -48,7 +48,7 @@ function findSurface(key: string) {
   return surface;
 }
 
-type LedgerKey = 'library' | 'orders' | 'accounts' | 'people' | 'hours';
+type LedgerKey = 'library' | 'orders' | 'accounts' | 'people' | 'rooms' | 'hours';
 
 interface Ledger {
   key: LedgerKey;
@@ -62,20 +62,21 @@ interface Ledger {
 const DOOR_HREF: Partial<Record<LedgerKey, string>> = {
   library: '/library',
   people: '/people',
+  rooms: '/rooms',
 };
 
-const LEDGERS: Ledger[] = (['library', 'orders', 'accounts', 'people', 'hours'] as const).map(
-  (key) => {
-    const surface = findSurface(key);
-    return {
-      key,
-      name: surface.label,
-      icon: surface.icon,
-      weight: surface.weight === 'room' ? 'room' : ('sheet' as const),
-      href: DOOR_HREF[key],
-    };
-  },
-);
+const LEDGERS: Ledger[] = (
+  ['library', 'orders', 'accounts', 'people', 'rooms', 'hours'] as const
+).map((key) => {
+  const surface = findSurface(key);
+  return {
+    key,
+    name: surface.label,
+    icon: surface.icon,
+    weight: surface.weight === 'room' ? 'room' : ('sheet' as const),
+    href: DOOR_HREF[key],
+  };
+});
 
 // The Post (F6) shares the registry's canonical name + icon even though the
 // bell isn't a door in the row — the two can never drift apart this way.
@@ -94,6 +95,7 @@ function breadcrumbFor(pathname: string | null): string | null {
   if (!pathname || pathname === '/desk') return null;
   if (pathname.startsWith('/library')) return 'Library';
   if (pathname.startsWith('/people')) return 'People';
+  if (pathname.startsWith('/rooms') || pathname.startsWith('/room/')) return 'Rooms';
   if (pathname.startsWith('/drafting') || pathname.startsWith('/compose')) return 'Drafting';
   if (pathname.startsWith('/doc')) return 'Document';
   return null;
@@ -299,7 +301,8 @@ export function StudioDrawer() {
         </div>
       </nav>
 
-      {/* Sheet-weight ledgers only — the Library (room) never opens here. */}
+      {/* Sheet-weight ledgers only — room-weight doors (Library, People, Rooms)
+          never open here. */}
       <DocSheet
         open={open !== null && open.weight === 'sheet'}
         onClose={() => setOpenLedger(null)}
@@ -315,8 +318,9 @@ export function StudioDrawer() {
         )}
         {open?.key === 'hours' && <HoursLedger initialContext={sheetContext} />}
         {open?.key === 'feedback' && <FeedbackLedger />}
-        {/* All sheet-weight ledgers (orders/accounts/hours) are bound; People is
-            a Room (R50), so no generic placeholder branch remains. */}
+        {/* All sheet-weight ledgers (orders/accounts/hours) are bound; People
+            and Rooms are Rooms (R50/R107), so no generic placeholder branch
+            remains. */}
       </DocSheet>
 
       {/* R82 — the Post: what the bell opens. A Drawer-weight charcoal sheet
