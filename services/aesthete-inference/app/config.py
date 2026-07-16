@@ -33,6 +33,11 @@ class Settings:
     text_max_tokens: int = 2048
     # §12.1 / §18: batch ≤ 16 per request; larger is a 400.
     max_batch: int = 16
+    # Room View USDZ→GLB conversion lane (R107). RoomPlan captures are a few MB;
+    # generous caps that still bound a hostile/oversized fetch. The convert route
+    # holds a ConcurrencyGate slot while the CPU-bound parse runs in the threadpool.
+    usdz_fetch_timeout_s: float = 30.0
+    usdz_max_bytes: int = 64 * 1024 * 1024
 
 
 def settings_from_env() -> Settings:
@@ -52,4 +57,6 @@ def settings_from_env() -> Settings:
         image_fetch_timeout_s=float(os.environ.get("IMAGE_FETCH_TIMEOUT_S", "10")),
         image_max_bytes=int(os.environ.get("IMAGE_MAX_BYTES", str(15 * 1024 * 1024))),
         text_max_tokens=int(os.environ.get("TEXT_MAX_TOKENS", "2048")),
+        usdz_fetch_timeout_s=float(os.environ.get("USDZ_FETCH_TIMEOUT_S", "30")),
+        usdz_max_bytes=int(os.environ.get("USDZ_MAX_BYTES", str(64 * 1024 * 1024))),
     )

@@ -27,6 +27,9 @@ FROM python:3.12-slim
 
 WORKDIR /srv
 COPY requirements.txt .
+# ⚠ Room View (R107): usd-core adds ~220 MB unpacked (~35 MB wheel) to the
+# image for the USDZ→GLB archival lane; its import is lazy (app/usdz.py) so it
+# never costs the embed path a millisecond, only image size + rare convert calls.
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ app/

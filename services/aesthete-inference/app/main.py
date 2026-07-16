@@ -26,7 +26,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 from .config import Settings, settings_from_env
@@ -43,8 +43,10 @@ from .schemas import (
     TasteFitRequest,
     TasteFitResponse,
     TextEmbedRequest,
+    UsdzConvertRequest,
     Vector,
 )
+from .usdz import UsdConversionError, UsdFetchError, convert_usdz_to_glb, fetch_usdz, usd_available
 
 # §4.2: task prefixes are load-bearing and live in exactly one place — here.
 TASK_PREFIXES = {
@@ -144,6 +146,7 @@ def create_app(
             text_dim=eng.text_dim if eng is not None else 768,
             image_dim=eng.image_dim if eng is not None else 768,
             warmed=bool(eng is not None and eng.warmed),
+            usd_available=usd_available(),
         )
 
     @app.post("/embed/text", response_model=EmbedResponse, dependencies=[Depends(require_token)])
@@ -302,5 +305,36 @@ def create_app(
             n_train=result.n_train,
             n_test=result.n_test,
         )
+
+    # ── Room View USDZ→GLB (archival lane — R107) ────────────────────────────
+    # Fetch the (signed) USDZ, parse it into minimal binary glTF. USD/pygltflib
+    # imports are lazy (app.usdz), so a broken USD wheel can never take down
+    # /embed/*. The CPU-bound parse runs in the threadpool while a gate slot is
+    # held, exactly like the embed routes.
+    #   200 model/gltf-binary  → converted bytes
+    #   422                    → unconvertible (not a USD stage / no meshes)
+    #   502                    → upstream fetch failure
+    @app.post("/convert/usdz-to-glb", dependencies=[Depends(require_token)])
+    async def convert_usdz(req: UsdzConvertRequest) -> Response:
+        client: httpx.AsyncClient = app.state.http_client
+        try:
+            data = await fetch_usdz(
+                client,
+                req.usdz_url,
+                timeout_s=settings.usdz_fetch_timeout_s,
+                max_bytes=settings.usdz_max_bytes,
+            )
+        except UsdFetchError as err:
+            raise HTTPException(status_code=502, detail=f"usdz fetch failed: {err}")
+
+        enter_gate()
+        try:
+            glb = await run_in_threadpool(convert_usdz_to_glb, data)
+        except UsdConversionError as err:
+            raise HTTPException(status_code=422, detail=str(err))
+        finally:
+            gate.leave()
+
+        return Response(content=glb, media_type="model/gltf-binary")
 
     return app
