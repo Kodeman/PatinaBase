@@ -475,6 +475,11 @@ export function useClientProjects(clientId: string) {
 
       if (dcError) throw dcError;
       if (!designerClient) return [];
+      // No-login household: client_id (profile id) is NULL. Postgres rejects
+      // `.eq('client_id', null)` (serializes as eq.null, 22P02 uuid cast) —
+      // and semantically a no-login household has no profile-keyed projects
+      // anyway, so short-circuit before issuing the query (I63).
+      if (!designerClient.client_id) return [];
 
       // Get projects for this designer that involve this client.
       // Note: project_products has no `quantity` column — the join below
