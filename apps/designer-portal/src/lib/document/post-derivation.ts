@@ -52,6 +52,34 @@ export const NOTIFICATION_NEED_KIND: Record<string, NeedKind> = {
   proposal_expired: 'proposal_expired',
 };
 
+// ─── R106 (the Arrival Arc) — notification audience census ──────────────────
+//
+// Three new notification_log types ride the arc (accept_design_request /
+// ceremony_complete / client_pick). All three are read through the SAME
+// designer-portal path — use-inbox.ts's `.eq('user_id', userId)` against the
+// signed-in designer's own id — so a row's `user_id` decides whether The Post
+// ever sees it at all, independent of any type-level mapping here:
+//
+//   · 'design_request_held'     — accept_design_request writes
+//     user_id = leads.homeowner_id. Homeowner-bound; a designer's own
+//     `.eq('user_id', <designer>)` read never matches this row. SKIPPED —
+//     nothing to map, the row never reaches this designer's Post.
+//   · 'match_introduction'      — ceremony_complete writes
+//     user_id = leads.homeowner_id. Same as above — homeowner-bound, SKIPPED.
+//   · 'discovery_call_picked'   — client_pick writes
+//     user_id = match_ceremonies.designer_id — THIS is the one the designer
+//     actually receives. It is NOT need-backed (no Desk folder derives from a
+//     picked discovery time — only the in-motion chip does, and R82's
+//     cross-reference rule is scoped to Desk NEED lines, not chips), so it is
+//     correctly a plain NOTICE, not a cross-reference. It needs no entry in
+//     NOTIFICATION_NEED_KIND. Its RPC-authored metadata already carries
+//     everything the generic notice path reads: `title` ("{Client} chose
+//     {day time}" — the P3-fixed named+timed copy), `message`, and
+//     `deep_link`/`url` = `/doc/{designer_client_id ?? lead_id}` — a Document
+//     route, so `deepLinkFor` + `isDocumentRoute` resolve it without any
+//     code change here. Pinned by the `discovery_call_picked` cases in
+//     post-derivation.test.ts.
+
 export type RecordRowKind = 'cross_reference' | 'notice';
 
 export interface RecordRow {

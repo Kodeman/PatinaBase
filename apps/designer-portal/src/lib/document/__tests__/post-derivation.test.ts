@@ -159,6 +159,76 @@ describe('deriveRecordRow — cross-reference vs notice (R82)', () => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// R106 (the Arrival Arc) — notification audience census. Two of the three new
+// types ('design_request_held', 'match_introduction') are homeowner-bound
+// (user_id = leads.homeowner_id in their writing RPCs) and never reach this
+// designer-portal Post at all — use-inbox.ts's own `.eq('user_id', <this
+// designer>)` read excludes them upstream, so there is nothing to classify
+// here. Only 'discovery_call_picked' (user_id = the designer) is ever read;
+// it is a plain NOTICE (no Desk NEED line derives from a picked time — only
+// the in-motion chip does, and R82 scopes cross-references to Desk needs),
+// so it needs no NOTIFICATION_NEED_KIND entry — the fixtures below use the
+// EXACT metadata shape client_pick's RPC writes.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('discovery_call_picked (R106) — designer-bound, a plain notice', () => {
+  it('is not need-backed — no NOTIFICATION_NEED_KIND entry', () => {
+    expect(NOTIFICATION_NEED_KIND['discovery_call_picked']).toBeUndefined();
+  });
+
+  it('renders as a notice, deep-linked via the RPC-authored deep_link (designer_client_id)', () => {
+    const row = deriveRecordRow(
+      notif({
+        type: 'discovery_call_picked',
+        metadata: {
+          lead_id: 'lead-1',
+          ceremony_id: 'cer-1',
+          designer_client_id: 'dc-1',
+          thread_id: 'thread-1',
+          title: 'Elena chose Thu 2:00 PM',
+          message: 'Elena chose Thu 2:00 PM for the discovery call.',
+          deep_link: '/doc/dc-1',
+          url: '/doc/dc-1',
+        },
+      }),
+    );
+    expect(row.kind).toBe('notice');
+    expect(row.onDesk).toBe(false);
+    expect(row.needKind).toBeNull();
+    expect(row.href).toBe('/doc/dc-1');
+  });
+
+  it('falls back to the lead_id-addressed deep_link when no designer_client_id exists yet', () => {
+    const row = deriveRecordRow(
+      notif({
+        type: 'discovery_call_picked',
+        metadata: {
+          lead_id: 'lead-1',
+          deep_link: '/doc/lead-1',
+          url: '/doc/lead-1',
+        },
+      }),
+    );
+    expect(row.href).toBe('/doc/lead-1');
+  });
+
+  it('titles and bodies from the RPC-authored subject/message', () => {
+    const item = inboxRecordItem(
+      notif({
+        type: 'discovery_call_picked',
+        metadata: {
+          title: 'Elena chose Thu 2:00 PM',
+          message: 'Elena chose Thu 2:00 PM for the discovery call.',
+          deep_link: '/doc/dc-1',
+        },
+      }),
+    );
+    expect(item.title).toBe('Elena chose Thu 2:00 PM');
+    expect(item.body).toBe('Elena chose Thu 2:00 PM for the discovery call.');
+    expect(item.row.kind).toBe('notice');
+  });
+});
+
 describe('metadata readers', () => {
   it('documentHrefFor reads snake and camel project keys', () => {
     expect(documentHrefFor(notif({ metadata: { project_id: 'a' } }))).toBe('/doc/a');
