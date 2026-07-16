@@ -23,7 +23,9 @@
 //    success, else 'failed') + provider_id (apns-id header), mirroring
 //    _shared/send-email.ts's log-update pattern.
 //
-// Secrets (names only): APNS_AUTH_KEY (.p8 PEM contents), APNS_KEY_ID,
+// Secrets (names only): APNS_AUTH_KEY (.p8 contents — full PEM or a bare
+// base64 body; normalizePkcs8Pem in core.ts handles either shape, since
+// jose's importPKCS8 hard-requires BEGIN/END PRIVATE KEY framing), APNS_KEY_ID,
 // APNS_TEAM_ID, APNS_TOPIC.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -33,6 +35,7 @@ import {
   apnsDeviceUrl,
   buildApnsPayload,
   isDeadTokenResponse,
+  normalizePkcs8Pem,
   type ResolvedToken,
   resolveTokens,
 } from "./core.ts";
@@ -56,8 +59,10 @@ async function providerJwt(
   if (cachedJwt && Date.now() - cachedJwt.mintedAt < JWT_TTL_MS) {
     return cachedJwt.value;
   }
-  // Secrets stores often carry literal \n in PEM values — normalize.
-  const pem = authKeyPem.replace(/\\n/g, "\n");
+  // Secrets stores vary: full PEM (maybe with literal \n escapes) or a bare
+  // base64 body with the BEGIN/END framing stripped — normalize either shape
+  // into what importPKCS8 requires.
+  const pem = normalizePkcs8Pem(authKeyPem);
   const key = await importPKCS8(pem, "ES256");
   const value = await new SignJWT({})
     .setProtectedHeader({ alg: "ES256", kid: keyId })

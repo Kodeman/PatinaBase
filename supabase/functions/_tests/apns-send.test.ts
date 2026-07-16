@@ -15,6 +15,7 @@ import {
   apnsHostFor,
   buildApnsPayload,
   isDeadTokenResponse,
+  normalizePkcs8Pem,
   resolveTokens,
 } from "../apns-send/core.ts";
 
@@ -101,4 +102,59 @@ Deno.test("isDeadTokenResponse: 410 and Apple's dead-token reasons delete the ro
   assert(!isDeadTokenResponse(403, "ExpiredProviderToken"));
   assert(!isDeadTokenResponse(429, "TooManyRequests"));
   assert(!isDeadTokenResponse(500));
+});
+
+// ── normalizePkcs8Pem ────────────────────────────────────────────────────
+// jose's importPKCS8 REQUIRES the BEGIN/END PRIVATE KEY framing; a bare
+// base64 body (what `supabase secrets set KEY=<paste>` yields if the PEM
+// header/footer got stripped before paste) throws
+// `"pkcs8" must be PKCS#8 formatted string` — confirmed locally against the
+// exact jose@v5.2.0 version pinned in index.ts, with a throwaway
+// (non-Patina) ES256 test key. These tests exercise the string-shaping
+// logic only (no jose/network — same "pure helper" posture as the rest of
+// this file); the actual jose round-trip was verified out-of-band.
+const FAKE_BODY =
+  "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgWIFGm3azGxwHtyU" +
+  "xVtaM6MRGxieVHeCMRgwPkfENr2hRANCAAQVTY9RCTvPfFAMikwlrLeICOWNWA9x" +
+  "rTC9Rn3lWwWoa2Zxm8XKfEuk8KHJ5vwLGrfWzalQotF2KvZ9SX6Jl9";
+const FAKE_PEM = `-----BEGIN PRIVATE KEY-----\n${
+  FAKE_BODY.match(/.{1,64}/g)!.join("\n")
+}\n-----END PRIVATE KEY-----`;
+
+Deno.test("normalizePkcs8Pem: bare base64 body gets BEGIN/END framing + 64-char wrap", () => {
+  const result = normalizePkcs8Pem(FAKE_BODY);
+  assert(result.startsWith("-----BEGIN PRIVATE KEY-----\n"));
+  assert(result.endsWith("\n-----END PRIVATE KEY-----"));
+  const inner = result
+    .replace("-----BEGIN PRIVATE KEY-----\n", "")
+    .replace("\n-----END PRIVATE KEY-----", "");
+  const lines = inner.split("\n");
+  for (const line of lines.slice(0, -1)) {
+    assertEquals(line.length, 64);
+  }
+  assert(lines[lines.length - 1].length <= 64);
+  // Re-joining the wrapped body recovers the exact original base64.
+  assertEquals(lines.join(""), FAKE_BODY);
+});
+
+Deno.test("normalizePkcs8Pem: bare base64 with stray whitespace/newlines is still recognized (no BEGIN marker)", () => {
+  const messy = `  ${FAKE_BODY.slice(0, 40)}\n${FAKE_BODY.slice(40)}  \n`;
+  const result = normalizePkcs8Pem(messy);
+  assert(result.startsWith("-----BEGIN PRIVATE KEY-----\n"));
+  assert(result.endsWith("\n-----END PRIVATE KEY-----"));
+  const inner = result
+    .replace("-----BEGIN PRIVATE KEY-----\n", "")
+    .replace("\n-----END PRIVATE KEY-----", "")
+    .split("\n")
+    .join("");
+  assertEquals(inner, FAKE_BODY);
+});
+
+Deno.test("normalizePkcs8Pem: full PEM (already framed) passes through unchanged", () => {
+  assertEquals(normalizePkcs8Pem(FAKE_PEM), FAKE_PEM);
+});
+
+Deno.test("normalizePkcs8Pem: full PEM with literal \\n escapes (single-line secret) gets real newlines", () => {
+  const singleLineEscaped = FAKE_PEM.split("\n").join("\\n");
+  assertEquals(normalizePkcs8Pem(singleLineEscaped), FAKE_PEM);
 });

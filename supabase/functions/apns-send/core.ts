@@ -91,3 +91,30 @@ export function isDeadTokenResponse(status: number, reason?: string): boolean {
   if (status === 410) return true;
   return reason === "BadDeviceToken" || reason === "Unregistered";
 }
+
+/**
+ * Normalize APNS_AUTH_KEY into the PEM shape jose's `importPKCS8` requires.
+ *
+ * `importPKCS8` REQUIRES the full `-----BEGIN PRIVATE KEY-----` /
+ * `-----END PRIVATE KEY-----` framing — it throws `"pkcs8" must be PKCS#8
+ * formatted string` on a bare base64 body (confirmed locally against
+ * jose@v5.2.0, the version pinned in index.ts). Secrets managers vary in how
+ * they store a pasted .p8: some keep the full PEM (possibly with literal
+ * `\n` escapes instead of real newlines), some strip the framing and keep
+ * only the base64 body. Handle both without asking for a re-paste:
+ *  - already has the BEGIN marker → just fix literal `\n` escapes.
+ *  - no BEGIN marker → treat as a bare base64 body, strip all whitespace,
+ *    rewrap at 64 chars/line, and add the BEGIN/END framing.
+ */
+export function normalizePkcs8Pem(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.includes("BEGIN PRIVATE KEY")) {
+    return trimmed.replace(/\\n/g, "\n");
+  }
+  const body = trimmed.replace(/\s+/g, "");
+  const lines: string[] = [];
+  for (let i = 0; i < body.length; i += 64) {
+    lines.push(body.slice(i, i + 64));
+  }
+  return `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----`;
+}
