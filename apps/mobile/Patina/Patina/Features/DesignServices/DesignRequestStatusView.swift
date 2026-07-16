@@ -25,6 +25,11 @@ struct DesignRequestStatusView: View {
     /// focus in place). Falls back to the routed `focusLeadId`, then newest.
     @State private var selectedLeadId: UUID?
 
+    /// Booking orchestration for the Match Ceremony pick (R106 §6). Owned here,
+    /// not by `MatchIntroductionView`, so its in-flight + failure state survive
+    /// the introduced → booked → introduced body swap the optimistic pick drives.
+    @State private var booking = MatchBookingModel()
+
     private var service: DesignRequestStatusService { DesignRequestStatusService.shared }
 
     private var focused: DesignRequestStatus? {
@@ -47,7 +52,13 @@ struct DesignRequestStatusView: View {
     var body: some View {
         Group {
             if let focused {
-                detail(for: focused)
+                if focused.stage == .introduced {
+                    // The "You're matched" moment swaps the whole detail body
+                    // (no new route) — R106 §6.
+                    MatchIntroductionView(request: focused, booking: booking)
+                } else {
+                    detail(for: focused)
+                }
             } else {
                 // No requests yet — the orphaned landing becomes the
                 // no-request state so the screen never dead-ends.
@@ -55,6 +66,20 @@ struct DesignRequestStatusView: View {
             }
         }
         .task { await service.refresh() }
+        // Fire `client_held_state_shown` once per lead the first time a held
+        // request is rendered here (deduped durably inside the analytics helper).
+        .task(id: heldFocusLeadId) {
+            if let heldFocusLeadId {
+                MatchCeremonyAnalytics.heldStateShownIfNeeded(leadId: heldFocusLeadId)
+            }
+        }
+    }
+
+    /// The focused lead id ONLY when it is at the held stage — the trigger for
+    /// the held-state telemetry `.task(id:)`.
+    private var heldFocusLeadId: UUID? {
+        guard let focused, focused.stage == .held else { return nil }
+        return focused.leadId
     }
 
     // MARK: - Detail
@@ -62,10 +87,20 @@ struct DesignRequestStatusView: View {
     private func detail(for request: DesignRequestStatus) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 28) {
-                stageHero(request)
+                if request.stage == .booked {
+                    MatchBookedHero(
+                        request: request,
+                        studioName: heroStudioName(request),
+                        onOpenConversation: { openConversation(request) }
+                    )
+                } else {
+                    stageHero(request)
+                }
                 timeline(request)
                 whatYouSent(request)
-                if request.designerName != nil {
+                // The booked hero already carries a condensed designer + a jump
+                // into the conversation, so the generic designer card is skipped.
+                if request.designerName != nil && request.stage != .booked {
                     designerCard(request)
                 }
                 if request.stage.isTerminal {
@@ -120,17 +155,65 @@ struct DesignRequestStatusView: View {
     private func timeline(_ request: DesignRequestStatus) -> some View {
         let stage = request.stage
         let sentSub = "sent \(request.relativeSubmitted)"
-        let matchedSub: String? = stage.isMatched ? request.designerName : nil
-        let matchedState: StepState = {
-            if stage.isMatched { return .done }
-            if stage.isTerminal { return .future }
-            return .current
-        }()
+        let studioLabel = request.studioName ?? request.designerName
+
+        // Introduction step — the Match Ceremony reaching the client.
+        let introState: StepState
+        let introSub: String?
+        switch stage {
+        case .finding, .closed, .expired:
+            introState = .future; introSub = nil
+        case .held, .inTouch:
+            introState = .current; introSub = nil
+        case .introduced, .booked, .matched:
+            introState = .done; introSub = studioLabel
+        }
+
+        // Discovery step — booking (then holding) the first call.
+        let discoveryState: StepState
+        let discoverySub: String?
+        switch stage {
+        case .booked:
+            discoveryState = .done
+            discoverySub = request.introduction?.pickedSlotStartsAt.map(Self.timelineSlotLabel)
+        case .introduced:
+            discoveryState = .current; discoverySub = nil
+        case .matched:
+            discoveryState = .done; discoverySub = nil
+        default:
+            discoveryState = .future; discoverySub = nil
+        }
+
         return VStack(alignment: .leading, spacing: 0) {
             sectionHeader("Progress")
             timelineRow(title: "Request sent", subtitle: sentSub, state: .done, isLast: false)
-            timelineRow(title: "Designer matched", subtitle: matchedSub, state: matchedState, isLast: false)
-            timelineRow(title: "Project underway", subtitle: nil, state: .future, isLast: true)
+            timelineRow(title: "Introduction", subtitle: introSub, state: introState, isLast: false)
+            timelineRow(title: "Discovery", subtitle: discoverySub, state: discoveryState, isLast: true)
+        }
+    }
+
+    /// Compact "Thu, Jul 24 · 2:00 PM" label for the Discovery step's subtitle
+    /// (device-local zone). The match screen owns the richer picker formatting.
+    private static func timelineSlotLabel(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("EEE MMM d j mm")
+        return formatter.string(from: date)
+    }
+
+    /// Studio name for the booked hero — the reconciled name, then the
+    /// designer's own, then a neutral default. No fetch (booked always has a
+    /// resolved designer + name from the reconcile pass).
+    private func heroStudioName(_ request: DesignRequestStatus) -> String {
+        request.studioName ?? request.designerName ?? "Your designer"
+    }
+
+    /// Open the client–designer conversation — the intro thread when known,
+    /// else the inbox.
+    private func openConversation(_ request: DesignRequestStatus) {
+        if let threadId = request.introduction?.threadId {
+            coordinator.navigate(to: .threadDetail(threadId: threadId.uuidString))
+        } else {
+            coordinator.navigate(to: .threadList)
         }
     }
 

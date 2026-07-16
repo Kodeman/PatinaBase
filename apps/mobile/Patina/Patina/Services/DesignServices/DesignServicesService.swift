@@ -239,6 +239,66 @@ nonisolated public enum DesignServicesError: Error, LocalizedError, Equatable, S
     }
 }
 
+// MARK: - Match Ceremony: client pick
+
+// PostgREST maps these property names 1:1 to the RPC's argument names, so the
+// `p_*` snake_case is load-bearing.
+// swiftlint:disable identifier_name
+/// Encodable parameters for `client_pick(p_ceremony_id, p_slot_id)` — the
+/// homeowner books one of the offered discovery slots (Arrival Arc, R106 §6).
+/// UUIDs are lowercased strings for a deterministic wire shape, mirroring
+/// `SubmitDesignRequestParams`.
+nonisolated public struct PickIntroductionSlotParams: Encodable, Sendable, Equatable {
+    public let p_ceremony_id: String
+    public let p_slot_id: String
+
+    public init(ceremonyId: UUID, slotId: UUID) {
+        self.p_ceremony_id = ceremonyId.uuidString.lowercased()
+        self.p_slot_id = slotId.uuidString.lowercased()
+    }
+}
+// swiftlint:enable identifier_name
+
+/// Typed outcome of a failed `client_pick`. The RPC raises stable Postgres
+/// error slugs the client branches on (R106 §6 contract):
+/// - `already_picked` → another device won; the caller silently reconciles.
+/// - `slot_stale` → the slot has passed; the caller shows the stale state.
+/// - `not_found` → treated as a generic failure.
+/// Anything else (network, unknown) maps to `.failed`, an inline-retryable
+/// state that keeps the slot tappable.
+nonisolated public enum PickIntroductionError: Error, LocalizedError, Equatable, Sendable {
+    case alreadyPicked
+    case slotStale
+    case notFound
+    case failed(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .alreadyPicked: return "This time was just booked on another device."
+        case .slotStale: return "That time has passed. Choose another."
+        case .notFound: return "We couldn't book that time. Please try again."
+        case .failed(let message): return "Couldn't book that time: \(message)"
+        }
+    }
+
+    /// Map a Supabase/Postgres error into a typed pick error.
+    public static func map(_ error: Error) -> PickIntroductionError {
+        if let typed = error as? PickIntroductionError { return typed }
+        if let pg = error as? PostgrestError { return map(message: pg.message) }
+        return .failed(error.localizedDescription)
+    }
+
+    /// Pure, unit-testable mapping from the raised Postgres error message. The
+    /// RPC RAISEs a stable slug; match it case-insensitively.
+    public static func map(message: String) -> PickIntroductionError {
+        let lower = message.lowercased()
+        if lower.contains("already_picked") { return .alreadyPicked }
+        if lower.contains("slot_stale") { return .slotStale }
+        if lower.contains("not_found") { return .notFound }
+        return .failed(message)
+    }
+}
+
 // MARK: - Seam
 
 /// The submit boundary. Injected into `DesignRequestCoordinator` so tests can
@@ -271,6 +331,26 @@ nonisolated public struct DesignServicesService: DesignRequestSubmitting {
             return result
         } catch {
             throw DesignServicesError.map(error)
+        }
+    }
+
+    /// Book one of the offered discovery slots via the `client_pick` RPC
+    /// (Arrival Arc, R106 §6). Fire-for-effect: the return payload (the booked
+    /// slot) is intentionally not decoded — the caller stamps the pick
+    /// optimistically from the in-hand slot and reconciles the authoritative
+    /// state via `DesignRequestStatusService.refreshSoon()`. A raised Postgres
+    /// error is mapped into a typed `PickIntroductionError` the caller branches
+    /// on (`already_picked` / `slot_stale` / `not_found` / generic).
+    public func pickIntroductionSlot(ceremonyId: UUID, slotId: UUID) async throws {
+        do {
+            try await supabase
+                .rpc("client_pick", params: PickIntroductionSlotParams(
+                    ceremonyId: ceremonyId,
+                    slotId: slotId
+                ))
+                .execute()
+        } catch {
+            throw PickIntroductionError.map(error)
         }
     }
 }
