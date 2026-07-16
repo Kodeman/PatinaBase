@@ -5,6 +5,7 @@ node_modules/
 # Build outputs
 dist/
 build/
+.build/
 .next/
 .turbo/
 *.tsbuildinfo
@@ -104,3 +105,6 @@ packages/patina-design-system/.dssync-tailwind.css
 .open-next/
 .wrangler/
 .superpowers/
+
+# stray fuse artifacts (NFS/SSHFS remnants)
+.fuse_hidden*
