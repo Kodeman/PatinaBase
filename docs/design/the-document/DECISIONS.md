@@ -3651,8 +3651,6 @@ since I60 — pointer-only mechanics, still untested on touch).
 
 *Entries add: I61 · last id = I61*
 
-*Entries add: I61 · last id = I61*
-
 ### R105 · The consolidated review — slices 03–05 accepted; O8 and O9 ruled in direction — 2026-07-15
 
 **Ruled (design authority, interviewed on the full escalation ledger).**
