@@ -194,6 +194,33 @@ export const documentEvents = {
     scan_count: number;
   }) => track('design_request_claimed', props),
 
+  /** Arrival Arc (R106) — the Match Ceremony surface rendered for a lead.
+   *  Unprefixed `ceremony_*` family, sibling to `design_request_*`. */
+  ceremonyOpened: (props: { lead_id: string; has_scan: boolean; has_draft: boolean }) =>
+    track('ceremony_opened', props),
+
+  /** R106 §3 — the ceremony parked mid-write: the explicit "Put down for
+   *  now", or route-leave with a dirty (autosaved) draft still open. */
+  ceremonyPutDown: (props: {
+    lead_id: string;
+    via: 'put_down' | 'route_leave';
+    intro_length: number;
+    slot_count: number;
+  }) => track('ceremony_put_down', props),
+
+  /** R106 §7 — the threshold act completed. `time_to_complete_seconds` runs
+   *  from the ceremony row's created_at (the accept) to the send;
+   *  `slots_offered_count` is the offered-times block's final count. */
+  ceremonyCompleted: (props: {
+    lead_id: string;
+    ceremony_id: string;
+    designer_client_id: string;
+    slots_offered_count: number;
+    time_to_complete_seconds: number | null;
+    has_credential_line: boolean;
+    has_portfolio_url: boolean;
+  }) => track('ceremony_completed', props),
+
   commandBar,
   wayfinding,
 };

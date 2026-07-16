@@ -31,8 +31,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   useOpenDesignRequests,
   useClaimDesignRequest,
+  useAcceptDesignRequest,
   type OpenDesignRequest,
   type ClaimDesignRequestResult,
+  type AcceptDesignRequestResult,
 } from '@patina/supabase';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import { SectionEyebrow } from '@/components/document/section-eyebrow';
@@ -41,17 +43,47 @@ import { documentEvents } from '@/lib/analytics/document-events';
 
 const pretty = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-function RequestCard({ request }: { request: OpenDesignRequest }) {
+function RequestCard({ request, ceremonyPath }: { request: OpenDesignRequest; ceremonyPath: boolean }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   // R83 — this card renders already_claimed inline; opt the mutation out of
   // the global error toast (see useClaimDesignRequest's doc comment).
   const claim = useClaimDesignRequest({ errorSurface: 'inline' });
+  // Arrival Arc (R106) — flag-on, Accept claims via accept_design_request
+  // (claim + ceremony stub + client held-state) and opens the Match Ceremony.
+  const accept = useAcceptDesignRequest({ errorSurface: 'inline' });
   const [taken, setTaken] = useState(false);
   const [otherError, setOtherError] = useState(false);
 
+  const onError = (err: Error) => {
+    if (err.message === 'already_claimed') {
+      // Show the quiet inline note and let it sit — do NOT force an
+      // immediate pool refetch here, or the card (and the message on it)
+      // vanishes before the designer can read it. The strip's own 30s
+      // poll clears the stale card naturally once it's been seen.
+      setTaken(true);
+    } else {
+      setOtherError(true);
+    }
+  };
+
   const onAccept = () => {
     setOtherError(false);
+    if (ceremonyPath) {
+      accept.mutate(request.id, {
+        onSuccess: (result: AcceptDesignRequestResult) => {
+          documentEvents.designRequestClaimed({
+            lead_id: result.lead_id,
+            project_type: request.project_type,
+            scan_count: request.scan_count ?? 0,
+          });
+          void queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
+          router.push(`/ceremony/${result.lead_id}`);
+        },
+        onError,
+      });
+      return;
+    }
     claim.mutate(request.id, {
       onSuccess: (result: ClaimDesignRequestResult) => {
         documentEvents.designRequestClaimed({
@@ -65,17 +97,7 @@ function RequestCard({ request }: { request: OpenDesignRequest }) {
         void queryClient.invalidateQueries({ queryKey: ['document-state', 'desk'] });
         router.push(`/doc/${result.lead_id}`);
       },
-      onError: (err: Error) => {
-        if (err.message === 'already_claimed') {
-          // Show the quiet inline note and let it sit — do NOT force an
-          // immediate pool refetch here, or the card (and the message on it)
-          // vanishes before the designer can read it. The strip's own 30s
-          // poll clears the stale card naturally once it's been seen.
-          setTaken(true);
-        } else {
-          setOtherError(true);
-        }
-      },
+      onError,
     });
   };
 
@@ -160,10 +182,10 @@ function RequestCard({ request }: { request: OpenDesignRequest }) {
                 <button
                   type="button"
                   onClick={onAccept}
-                  disabled={claim.isPending}
+                  disabled={claim.isPending || accept.isPending}
                   className="rounded-[5px] bg-[var(--color-charcoal)] px-3.5 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--color-off-white)] disabled:opacity-50"
                 >
-                  {claim.isPending ? 'Accepting…' : 'Accept'}
+                  {claim.isPending || accept.isPending ? 'Accepting…' : 'Accept'}
                 </button>
               </div>
             )}
@@ -179,6 +201,10 @@ export function OpenRequestsStrip() {
   // non-pilot designer (matches procurement-workspace-pilot's gate). All
   // hooks stay above the render branch below (hook-order stability).
   const { value: enabled, isLoading: flagLoading } = useFeatureFlag('design-request-pool');
+  // Arrival Arc (R106): flag-on, Accept opens the Match Ceremony instead of
+  // landing straight in the Brief. Fail-closed — while resolving (or off),
+  // the claim → /doc path below stays byte-identical.
+  const { value: arrivalArc, isLoading: arcLoading } = useFeatureFlag('arrival-arc');
   const { data: requests } = useOpenDesignRequests({ enabled: !flagLoading && enabled });
 
   if (flagLoading || !enabled) return null;
@@ -194,7 +220,7 @@ export function OpenRequestsStrip() {
       </SectionEyebrow>
       <div className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2">
         {requests.map((r) => (
-          <RequestCard key={r.id} request={r} />
+          <RequestCard key={r.id} request={r} ceremonyPath={!arcLoading && arrivalArc} />
         ))}
       </div>
     </section>

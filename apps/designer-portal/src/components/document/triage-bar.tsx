@@ -31,8 +31,15 @@
  */
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBeginDiscovery, useNurtureLead, useDeclineLead } from '@patina/supabase';
+import {
+  useBeginDiscovery,
+  useNurtureLead,
+  useDeclineLead,
+  useAcceptDesignRequest,
+} from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 type Variant = 'desk' | 'brief';
 
@@ -65,14 +72,22 @@ export function TriageBar({
   variant?: Variant;
 }) {
   const qc = useQueryClient();
+  const router = useRouter();
   const beginDiscovery = useBeginDiscovery();
   const nurture = useNurtureLead();
   const decline = useDeclineLead();
+  // Arrival Arc (R106): flag-on, "Accept · begin" routes through the Match
+  // Ceremony (`accept_design_request` is idempotent for a lead the caller
+  // already owns — `already_yours`). Fail-closed: while the flag resolves
+  // (or off) the useBeginDiscovery path below stays exactly as-is.
+  const { value: arrivalArc, isLoading: arcLoading } = useFeatureFlag('arrival-arc');
+  const acceptRequest = useAcceptDesignRequest();
 
   // When true the bar shows the reconnect-date presets instead of the verbs.
   const [pickingDate, setPickingDate] = useState(false);
 
-  const busy = beginDiscovery.isPending || nurture.isPending || decline.isPending;
+  const busy =
+    beginDiscovery.isPending || nurture.isPending || decline.isPending || acceptRequest.isPending;
 
   // One-act-many-surfaces: the Desk re-derives without a reload (the mutation
   // hooks own ['leads']/['designer-clients']; the desk key is added here).
@@ -91,7 +106,18 @@ export function TriageBar({
     fn();
   };
 
-  const onAccept = () => beginDiscovery.mutate(leadId, { onSuccess: refreshDesk });
+  const onAccept = () => {
+    if (!arcLoading && arrivalArc) {
+      acceptRequest.mutate(leadId, {
+        onSuccess: () => {
+          refreshDesk();
+          router.push(`/ceremony/${leadId}`);
+        },
+      });
+      return;
+    }
+    beginDiscovery.mutate(leadId, { onSuccess: refreshDesk });
+  };
   const onPass = () => decline.mutate({ leadId }, { onSuccess: refreshDesk });
   const onReconnect = (reconnectAt: string) =>
     nurture.mutate(

@@ -439,11 +439,21 @@ export {
   useOpenDesignRequests,
   useClaimDesignRequest,
   useLeadScans,
+  useAcceptDesignRequest,
+  useCeremony,
+  useSaveCeremonyDraft,
+  useCeremonyComplete,
 } from './use-design-requests';
 export type {
   OpenDesignRequest,
   ClaimDesignRequestResult,
   LeadRoomScan,
+  CeremonySlot,
+  MatchCeremony,
+  AcceptDesignRequestResult,
+  CeremonyCompleteResult,
+  CeremonyDraftPatch,
+  CeremonyCompleteInput,
 } from './use-design-requests';
 export {
   useRooms,
