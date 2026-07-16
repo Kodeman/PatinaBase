@@ -13226,6 +13226,8 @@ export type Database = {
           features: Json | null
           floor_area: number | null
           furniture_detected: Json | null
+          glb_convert_attempts: number
+          glb_convert_error: string | null
           has_lidar: boolean | null
           hero_frame_candidate_count: number | null
           hero_frame_captured_at: string | null
@@ -13280,6 +13282,8 @@ export type Database = {
           features?: Json | null
           floor_area?: number | null
           furniture_detected?: Json | null
+          glb_convert_attempts?: number
+          glb_convert_error?: string | null
           has_lidar?: boolean | null
           hero_frame_candidate_count?: number | null
           hero_frame_captured_at?: string | null
@@ -13334,6 +13338,8 @@ export type Database = {
           features?: Json | null
           floor_area?: number | null
           furniture_detected?: Json | null
+          glb_convert_attempts?: number
+          glb_convert_error?: string | null
           has_lidar?: boolean | null
           hero_frame_candidate_count?: number | null
           hero_frame_captured_at?: string | null
