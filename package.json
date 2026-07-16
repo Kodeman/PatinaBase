@@ -23,6 +23,7 @@
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "lint:skills": "node scripts/lint-skills.mjs",
+    "dev:seed-room-fixture": "node scripts/dev/seed-room-scan-fixture.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,scss,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,scss,md}\"",
     "type-check": "turbo run type-check",

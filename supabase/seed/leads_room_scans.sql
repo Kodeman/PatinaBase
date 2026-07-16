@@ -9,7 +9,7 @@ ALTER TABLE leads DISABLE TRIGGER on_lead_created_notify_designer;
 
 DO $$
 DECLARE
-  v_designer_id uuid := '39b071a2-d61b-4364-ab3e-0d8b0b8da390';
+  v_designer_id uuid := 'a0000000-0000-0000-0000-000000000004'; -- designer@patina.dev (dev-accounts.sql)
 
   -- Homeowner UUIDs
   h1 uuid := gen_random_uuid();
