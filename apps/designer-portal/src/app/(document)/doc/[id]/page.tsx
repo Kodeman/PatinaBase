@@ -412,7 +412,14 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           if (s.key === 'brief') {
             body = <BriefRecap clientProfileId={row.client_profile_id} leadId={row.lead_id} />;
           } else if (s.key === 'discovery') {
-            body = <DiscoveryRecap clientProfileId={row.client_profile_id} />;
+            body = (
+              <DiscoveryRecap
+                clientProfileId={row.client_profile_id}
+                engagementKind={row.engagement_kind}
+                engagementId={row.engagement_id}
+                proposalId={row.proposal_id}
+              />
+            );
           } else if ((s.key === 'direction' || s.key === 'proposal') && unfoldProposalId) {
             body = (
               <>

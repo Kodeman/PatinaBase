@@ -8,11 +8,18 @@
  * the risk of editing locked history.
  *
  * Once the engagement advances, document_state's engagement_id is the
- * proposal/project id (not the relationship id), so we resolve the
- * designer_clients id from the client profile, then read client_discovery.
+ * proposal/project id (not the relationship id), so a LOGIN client resolves
+ * the designer_clients id from the client profile, then reads
+ * client_discovery. A NO-LOGIN household (Arrival Arc R106 §5) has no
+ * profile to resolve through — client_profile_id is null — so this also
+ * tries the relationship id directly, mirroring how use-person-documents.ts
+ * handles the two-leg problem: see use-discovery-relationship-id.ts for the
+ * full contract (Shape D direct, Shape B via proposals.designer_client_id,
+ * Shape A unresolved and out of scope).
  */
 
 import { useDiscovery, useDesignerClientForClientUser, useStyles } from '@patina/supabase';
+import { useDesignerClientIdForProposal } from '@/hooks/use-discovery-relationship-id';
 import { formatBudgetRange } from '@/lib/document/discovery-seed';
 import { fmtDay } from '@/lib/document/format';
 
@@ -29,14 +36,46 @@ function RecapRow({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-export function DiscoveryRecap({ clientProfileId }: { clientProfileId: string | null }) {
-  const { data: dc } = useDesignerClientForClientUser(clientProfileId ?? undefined);
-  const { data: read, isLoading } = useDiscovery(dc?.id ?? null);
+export function DiscoveryRecap({
+  clientProfileId,
+  engagementKind,
+  engagementId,
+  proposalId,
+}: {
+  clientProfileId: string | null;
+  /** document_state's engagement_kind/engagement_id/proposal_id for THIS
+   *  row — needed only for the no-login fallback (R106 §5); a login client
+   *  resolves entirely off clientProfileId, unchanged from before. */
+  engagementKind?: string;
+  engagementId?: string | null;
+  proposalId?: string | null;
+}) {
+  const { data: dc, isLoading: dcLoading } = useDesignerClientForClientUser(clientProfileId ?? undefined);
+
+  const noLogin = !clientProfileId;
+  // Shape D: engagement_id already IS designer_clients.id — no query needed.
+  const relationshipLegId = noLogin && engagementKind === 'relationship' ? (engagementId ?? null) : null;
+  // Shape B: resolve via the proposal's carried household link (only tried
+  // when the relationship leg didn't already answer it).
+  const tryProposalLeg = noLogin && !relationshipLegId && Boolean(proposalId);
+  const { data: proposalLegId, isLoading: proposalLegLoading } = useDesignerClientIdForProposal(
+    tryProposalLeg ? (proposalId as string) : null,
+  );
+
+  const designerClientId = dc?.id ?? relationshipLegId ?? proposalLegId ?? null;
+  const { data: read, isLoading: discoveryLoading } = useDiscovery(designerClientId);
   const { data: styles } = useStyles() as { data: { id: string; name: string }[] | undefined };
 
   const row = read?.row;
 
-  if (clientProfileId && isLoading) {
+  // Actively resolving — a login client's designer_clients lookup, a
+  // no-login household's proposal-leg lookup, or the discovery row itself —
+  // show the quiet loading line rather than flash the apology mid-resolution.
+  const resolving =
+    (Boolean(clientProfileId) && dcLoading) ||
+    (tryProposalLeg && proposalLegLoading) ||
+    (Boolean(designerClientId) && discoveryLoading);
+  if (resolving) {
     return <p className="py-2 text-[11.5px] italic text-[var(--text-muted)]">Opening discovery…</p>;
   }
   if (!row) {
