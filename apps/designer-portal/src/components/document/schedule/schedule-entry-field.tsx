@@ -49,8 +49,25 @@ export interface ScheduleEntryFieldProps {
    * negative/zero are meaningful there). Load-bearing: duration_days has a
    * positive CHECK in the DB (00324), and a negative value would run
    * activate_proposal_as_project's legacy date cascade backwards.
+   *
+   * 'relative' (R100 — the spine's Edit-dates ripple field only): an
+   * UNSIGNED parse ('28d', '4w') still means an absolute duration, same as
+   * 'unsigned'. A SIGNED parse ('+5d', '-3d') means a delta off the
+   * phase's last COMMITTED duration (`baselineDays`) — the committed
+   * result is `max(1, baselineDays + delta)`, floored the same way a drag
+   * gesture is clamped, never a negative or zero write. Without a
+   * `baselineDays` to shift, a signed input is rejected inline (there is
+   * nothing to be relative TO).
    */
-  durationSign?: 'unsigned' | 'signed';
+  durationSign?: 'unsigned' | 'signed' | 'relative';
+  /**
+   * The phase's last COMMITTED effective duration in days — required only
+   * when `durationSign === 'relative'` and only to resolve a SIGNED input.
+   * `null`/`undefined` means "no committed baseline" (e.g. a phase whose
+   * duration is legacy-dates-derived rather than an authored day count) —
+   * a signed entry is then rejected rather than silently guessing a base.
+   */
+  baselineDays?: number | null;
   /** Override the "valid parse, wrong kind" reason text (default:
    *  REASON_FOR_KIND[accept[0]]). E.g. a proposal milestone date field
    *  (`accept={['anchor']}`) rejects a typed duration with "proposals carry
@@ -73,12 +90,14 @@ const REASON_FOR_KIND: Record<'duration' | 'anchor', string> = {
 };
 
 const UNSIGNED_REASON = 'Durations must be positive — e.g. 3w or 10d';
+const NO_BASELINE_REASON = 'No committed duration to shift — enter an absolute duration';
 
 export function ScheduleEntryField({
   today,
   bareNumberUnit = 'reject',
   accept = ['duration', 'anchor'],
   durationSign = 'unsigned',
+  baselineDays,
   wrongKindReason,
   placeholder,
   initialValue = '',
@@ -108,17 +127,41 @@ export function ScheduleEntryField({
       setError(wrongKindReason ?? REASON_FOR_KIND[accept[0] ?? 'duration']);
       return;
     }
-    // Unsigned surfaces (phase durations) reject BOTH a non-positive result
-    // AND the signed input FORM itself ('+5d' parses to a positive 5, but a
-    // leading sign is offset grammar — accepting it here would teach a
-    // different meaning than the milestone fields give it).
-    if (
-      parsed.kind === 'duration' &&
-      durationSign === 'unsigned' &&
-      (parsed.days <= 0 || /^[+-]/.test(trimmed))
-    ) {
-      setError(UNSIGNED_REASON);
-      return;
+    if (parsed.kind === 'duration') {
+      // Unsigned surfaces (phase durations) reject BOTH a non-positive
+      // result AND the signed input FORM itself ('+5d' parses to a
+      // positive 5, but a leading sign is offset grammar — accepting it
+      // here would teach a different meaning than the milestone fields
+      // give it).
+      if (durationSign === 'unsigned' && (parsed.days <= 0 || /^[+-]/.test(trimmed))) {
+        setError(UNSIGNED_REASON);
+        return;
+      }
+      if (durationSign === 'relative') {
+        const isSignedInput = /^[+-]/.test(trimmed);
+        if (isSignedInput) {
+          // A signed parse is a DELTA off the last committed duration, not
+          // a day count on its own — resolve it here so the parent (and
+          // CommittedEntry) only ever sees an absolute day count, same
+          // shape as every other duration commit. Floored at 1, mirroring
+          // the drag clamp (a shift that would zero/negative the phase
+          // still leaves it at least one day long).
+          if (baselineDays == null) {
+            setError(NO_BASELINE_REASON);
+            return;
+          }
+          onCommit({ kind: 'duration', days: Math.max(1, baselineDays + parsed.days) });
+          return;
+        }
+        // Unsigned input in 'relative' mode is still an absolute duration
+        // (parseScheduleEntry already guarantees days > 0 for an unsigned
+        // parse — this mirrors 'unsigned' mode's check for symmetry/safety
+        // rather than because it's reachable today).
+        if (parsed.days <= 0) {
+          setError(UNSIGNED_REASON);
+          return;
+        }
+      }
     }
     onCommit(parsed);
   };

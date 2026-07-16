@@ -8,13 +8,18 @@
  * (the 00324 CHECK constraints are the DB backstop; these tests pin the
  * UI-level guard).
  *
- * Covers the TWO components that capture phase durations:
- *   - ScheduleEntryField (PhaseBuilder's grammar cell + the spine's
- *     Edit-dates panel) — `durationSign` defaults to 'unsigned'.
- *   - GhostAddLine (spine foot + ScheduleBirth's blank path) — its own
- *     inline guard, since it doesn't reuse ScheduleEntryField.
- * The milestone composer's offset-or-date field stays SIGNED by design and
- * is deliberately not exercised here.
+ * Covers the THREE `durationSign` modes:
+ *   - 'unsigned' (default) — PhaseBuilder's grammar cell + GhostAddLine's
+ *     own inline guard. A signed form is always rejected, whatever it
+ *     resolves to.
+ *   - 'relative' (Slice 04-5 fix, R100) — the spine's own "Edit dates"
+ *     duration field only. An UNSIGNED parse still means an absolute
+ *     duration (same guard as 'unsigned'); a SIGNED parse ('+5d', '-3d')
+ *     resolves as a delta off `baselineDays`, floored at 1.
+ *   - 'signed' — the milestone-offset shape; exercised at the parser level
+ *     via milestone-composer's own inline field, not through this
+ *     component (see that file), so deliberately not re-tested here beyond
+ *     the explicit-opt-in cases below.
  */
 
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -120,6 +125,88 @@ describe('ScheduleEntryField — durationSign', () => {
     const { onCommit, input } = renderField({ accept: ['duration', 'anchor'] });
     type(input, 'Sep 21');
     expect(onCommit).toHaveBeenCalledWith({ kind: 'anchor', date: '2026-09-21' });
+  });
+
+  it('the default mode (no durationSign passed — PhaseBuilder\'s call shape) is unchanged: +5d still rejected', () => {
+    // PhaseBuilder's ScheduleEntryField call passes no `durationSign` prop
+    // at all, so it stays on the 'unsigned' default — this slice touched
+    // nothing in phase-builder.tsx. Pinned here since 'unsigned' is the
+    // only mode PhaseBuilder ever exercises.
+    const { onCommit, input } = renderField();
+    type(input, '+5d');
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(screen.getByText(UNSIGNED_REASON)).toBeInTheDocument();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ScheduleEntryField — durationSign 'relative' (the spine's Edit-dates
+// duration field only, Slice 04-5 fix: R100 pins '+5d'/'-3d' as a relative
+// shift off the phase's last committed duration)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("ScheduleEntryField — durationSign 'relative'", () => {
+  function renderRelative(baselineDays: number | null | undefined) {
+    const onCommit = jest.fn();
+    render(
+      <ScheduleEntryField
+        aria-label="Set phase duration"
+        today={TODAY}
+        bareNumberUnit="weeks"
+        accept={['duration']}
+        durationSign="relative"
+        baselineDays={baselineDays}
+        onCommit={onCommit}
+      />,
+    );
+    return { onCommit, input: screen.getByRole('textbox', { name: 'Set phase duration' }) };
+  }
+
+  const type = (input: HTMLElement, value: string) => {
+    fireEvent.change(input, { target: { value } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+  };
+
+  it('a signed +5d shift with a committed baseline of 21 commits the resolved absolute (26)', () => {
+    const { onCommit, input } = renderRelative(21);
+    type(input, '+5d');
+    expect(onCommit).toHaveBeenCalledWith({ kind: 'duration', days: 26 });
+  });
+
+  it('a signed -25d shift with a committed baseline of 21 floors at 1, never zero/negative', () => {
+    const { onCommit, input } = renderRelative(21);
+    type(input, '-25d');
+    expect(onCommit).toHaveBeenCalledWith({ kind: 'duration', days: 1 });
+  });
+
+  it('a signed shift with no committed baseline (null) is rejected inline — nothing to be relative to', () => {
+    const { onCommit, input } = renderRelative(null);
+    type(input, '+5d');
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(
+      screen.getByText('No committed duration to shift — enter an absolute duration'),
+    ).toBeInTheDocument();
+  });
+
+  it('a signed shift with an undefined baseline is rejected the same way (undefined ≡ no baseline)', () => {
+    const { onCommit, input } = renderRelative(undefined);
+    type(input, '-3d');
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(
+      screen.getByText('No committed duration to shift — enter an absolute duration'),
+    ).toBeInTheDocument();
+  });
+
+  it('an UNSIGNED (absolute) duration still commits as-is, ignoring any baseline', () => {
+    const { onCommit, input } = renderRelative(21);
+    type(input, '31d');
+    expect(onCommit).toHaveBeenCalledWith({ kind: 'duration', days: 31 });
+  });
+
+  it('an unsigned zero-weeks input is still rejected (parse-level: unsigned durations must be positive)', () => {
+    const { onCommit, input } = renderRelative(21);
+    type(input, '0w');
+    expect(onCommit).not.toHaveBeenCalled();
   });
 });
 

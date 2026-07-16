@@ -98,3 +98,15 @@ SECURITY INVOKER — noted for whoever picks up Slice 05).
 Deferred to the consolidated review at the end of Slice 05, per R104. Nothing here blocks
 Slice 05 from starting. No confirmed product defects this walk — the one deviation
 (the mis-scoped locator) was a driver-script mistake, self-corrected, not a shipped bug.
+
+## Addendum — spec-gap closed post-walk
+
+`spine-field-ripple.png`'s "absolute grammar" caption above was this walk's one real find:
+R100 pins the spine's own duration field as accepting `+5d`/`-3d` (a relative shift), but the
+S3-6 negative-duration hardening had made every phase-duration field `durationSign:'unsigned'`,
+which refused any signed input outright — so the spine's "Set phase duration" field silently
+fell back to absolute-only, out of step with the Rule-drag path shown alongside it. Fixed: the
+field now carries a third `durationSign:'relative'` mode (spine's Edit-dates duration field
+only — PhaseBuilder, ghost-add, and the milestone offset field are unaffected), where a signed
+delta resolves against the phase's last committed duration and floors at 1 day, mirroring the
+drag clamp.

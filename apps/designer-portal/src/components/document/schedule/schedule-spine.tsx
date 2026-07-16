@@ -701,6 +701,22 @@ export function ScheduleSpine({
                   (p) => p.follows_phase_id === entry.phase.id,
                 ).length;
 
+                // The phase's last COMMITTED effective duration — same
+                // formula the meta line above computes (durationDays, line
+                // ~271): an authored day count, or weeks*7 when only a
+                // week count is stored, or null (e.g. legacy-dates-derived
+                // phases with neither). Feeds the Edit-dates duration
+                // field's 'relative' mode below — it's what a signed
+                // '+5d'/'-3d' shift resolves against. Not the resolved
+                // start/end span (that'd need epoch-day math this render
+                // path doesn't otherwise do) — the stored authored value is
+                // what "committed duration" means for R100's grammar.
+                const baselineDurationDays =
+                  row == null
+                    ? null
+                    : row.duration_days ??
+                      (row.duration_weeks != null ? row.duration_weeks * 7 : null);
+
                 // The revealed compose surface for this phase, per open kind.
                 const composePanel =
                   composeKind === 'edit' ? (
@@ -710,7 +726,9 @@ export function ScheduleSpine({
                         today={today}
                         bareNumberUnit="weeks"
                         accept={['duration']}
-                        placeholder="Duration — 4w · 28d"
+                        durationSign="relative"
+                        baselineDays={baselineDurationDays}
+                        placeholder="Duration — 4w · 28d · +5d"
                         onCommit={(e) =>
                           e.kind === 'duration' && handleEditDuration(entry.phase.id, e.days)
                         }
