@@ -4335,6 +4335,36 @@ export type Database = {
         }
         Relationships: []
       }
+      device_push_tokens: {
+        Row: {
+          created_at: string
+          environment: string
+          id: string
+          platform: string
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          environment: string
+          id?: string
+          platform?: string
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          environment?: string
+          id?: string
+          platform?: string
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       direct_orders: {
         Row: {
           amount_cents: number
@@ -6401,6 +6431,142 @@ export type Database = {
             columns: ["proposal_id"]
             isOneToOne: false
             referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_ceremonies: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          credential_line: string | null
+          designer_client_id: string | null
+          designer_id: string
+          draft_slots: Json
+          id: string
+          intro_message_id: string | null
+          intro_text: string | null
+          lead_id: string
+          offered_at: string | null
+          offered_slots: Json | null
+          picked_at: string | null
+          picked_slot_id: string | null
+          picked_slot_starts_at: string | null
+          portfolio_url: string | null
+          state: string
+          thread_id: string | null
+          timezone: string | null
+          updated_at: string
+          voice_attachment: Json | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          credential_line?: string | null
+          designer_client_id?: string | null
+          designer_id: string
+          draft_slots?: Json
+          id?: string
+          intro_message_id?: string | null
+          intro_text?: string | null
+          lead_id: string
+          offered_at?: string | null
+          offered_slots?: Json | null
+          picked_at?: string | null
+          picked_slot_id?: string | null
+          picked_slot_starts_at?: string | null
+          portfolio_url?: string | null
+          state?: string
+          thread_id?: string | null
+          timezone?: string | null
+          updated_at?: string
+          voice_attachment?: Json | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          credential_line?: string | null
+          designer_client_id?: string | null
+          designer_id?: string
+          draft_slots?: Json
+          id?: string
+          intro_message_id?: string | null
+          intro_text?: string | null
+          lead_id?: string
+          offered_at?: string | null
+          offered_slots?: Json | null
+          picked_at?: string | null
+          picked_slot_id?: string | null
+          picked_slot_starts_at?: string | null
+          portfolio_url?: string | null
+          state?: string
+          thread_id?: string | null
+          timezone?: string | null
+          updated_at?: string
+          voice_attachment?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_ceremonies_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_ceremonies_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_ceremonies_designer_client_id_fkey"
+            columns: ["designer_client_id"]
+            isOneToOne: false
+            referencedRelation: "designer_clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_ceremonies_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_ceremonies_designer_id_fkey"
+            columns: ["designer_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_ceremonies_intro_message_id_fkey"
+            columns: ["intro_message_id"]
+            isOneToOne: false
+            referencedRelation: "comms_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_ceremonies_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_ceremonies_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "open_design_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_ceremonies_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "comms_threads"
             referencedColumns: ["id"]
           },
         ]
@@ -17057,6 +17223,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      accept_design_request: { Args: { p_lead_id: string }; Returns: Json }
       accept_workspace_invitation: {
         Args: { p_token: string }
         Returns: {
@@ -17235,6 +17402,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      ceremony_complete: {
+        Args: {
+          p_credential_line?: string
+          p_intro: string
+          p_lead_id: string
+          p_portfolio_url?: string
+          p_slots: Json
+          p_timezone: string
+        }
+        Returns: Json
+      }
       chase_invoice: { Args: { p_invoice_id: string }; Returns: string }
       check_concierge_payment_discrepancies: { Args: never; Returns: Json }
       claim_aesthete_jobs: {
@@ -17305,6 +17483,10 @@ export type Database = {
       }
       claim_design_request: { Args: { p_lead_id: string }; Returns: Json }
       claim_quiz_session: { Args: { p_session_key: string }; Returns: Json }
+      client_pick: {
+        Args: { p_ceremony_id: string; p_slot_id: string }
+        Returns: Json
+      }
       clone_proposal: {
         Args: {
           p_mode?: string
@@ -18268,6 +18450,10 @@ export type Database = {
       }
       refresh_designer_teaching_stats: { Args: never; Returns: number }
       refresh_marketplace_vitals: { Args: never; Returns: Json }
+      refresh_offered_slots: {
+        Args: { p_ceremony_id: string; p_slots: Json }
+        Returns: Json
+      }
       refresh_product_behavior_stats: { Args: never; Returns: undefined }
       refresh_style_centroids: { Args: never; Returns: number }
       reopen_item_feedback: {

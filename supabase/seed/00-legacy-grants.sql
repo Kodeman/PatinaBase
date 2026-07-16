@@ -2585,3 +2585,69 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00327_document_state_arrival_linkage.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION clone_proposal(UUID, TEXT, TEXT) FROM PUBLIC;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00327_document_state_arrival_linkage.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION clone_proposal(UUID, TEXT, TEXT) TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00330_accept_design_request.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.accept_design_request(uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00330_accept_design_request.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.accept_design_request(uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00331_ceremony_complete.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.ceremony_complete(uuid, text, jsonb, text, text, text) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00331_ceremony_complete.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.ceremony_complete(uuid, text, jsonb, text, text, text) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00332_design_request_notify_ceremony_guard.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.notify_design_request_status_change() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00333_client_pick.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.client_pick(uuid, uuid) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00333_client_pick.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.client_pick(uuid, uuid) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00334_refresh_offered_slots.sql
+DO $g$ BEGIN
+  REVOKE EXECUTE ON FUNCTION public.refresh_offered_slots(uuid, jsonb) FROM PUBLIC, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00334_refresh_offered_slots.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.refresh_offered_slots(uuid, jsonb) TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
