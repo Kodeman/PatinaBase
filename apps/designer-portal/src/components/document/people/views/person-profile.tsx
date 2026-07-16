@@ -38,6 +38,7 @@ import {
   type ClientDecision,
   type PartyRole,
 } from '@patina/supabase';
+import { usePersonDocuments } from '@/hooks/use-person-documents';
 import {
   deriveRelationshipJourney,
   deriveStatusDot,
@@ -106,6 +107,11 @@ function ClientProfile({
 
   const { data: client } = useClient(personId);
   const { data: projects } = useClientProjects(personId);
+  // The Projects card's document list (I63/T2): document_state rows for this
+  // person, resolved by profile for login clients OR through the
+  // designer_clients relationship for no-login households — see
+  // use-person-documents.ts for the two-shape contract.
+  const { data: documents } = usePersonDocuments(personId, profileId);
   const { data: proposals } = useProposals(profileId ? { clientId: profileId } : undefined);
   const { data: decisions } = useClientDecisions(personId);
   const { data: allThreads } = useThreads({ scope: 'inbox' });
@@ -208,15 +214,20 @@ function ClientProfile({
     proposals, projects, decisions, threads, touchpointList, reviewList, now,
   ]);
 
-  // Side-card rows.
+  // Side-card rows: the Projects card lists this person's document_state
+  // rows (I63/T2 — "documents appear under Projects"), not the raw
+  // `projects` table alone, so a no-login household's Discovery/proposal
+  // document shows here even though it has no `projects` row yet. Each row
+  // opens `/doc/{engagement_id}` — the document resolver accepts any of a
+  // document's keys (project/proposal/lead/relationship id).
   const projectRows: ProfileProjectRow[] = useMemo(
     () =>
-      (projects ?? []).map((pj: Record<string, unknown>) => ({
-        id: pj['id'] as string,
-        name: (pj['name'] as string) ?? 'Project',
-        state: (pj['status'] as string) ?? 'project',
+      (documents ?? []).map((doc) => ({
+        id: doc.engagement_id,
+        name: doc.title,
+        state: doc.active_section,
       })),
-    [projects],
+    [documents],
   );
 
   const trust = useMemo(
