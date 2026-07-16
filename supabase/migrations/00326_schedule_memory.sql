@@ -66,6 +66,17 @@
 --    is retyped in S5-2; today's callers treat the return as opaque.
 --
 -- No prod ship in this slice — the Spine gate stays OFF (package §6).
+--
+-- R105 IN-PLACE WIDENING (pre-ship — this migration has never applied beyond
+-- local/main): cut_schedule_revision's actor guard and commit_schedule_edit's
+-- ownership guard are widened from `designer_id = auth.uid()` to
+-- `is_studio_comember(designer_id)` (00315), matching project_phases' RLS
+-- posture from 00316; is_studio_comember's own self-branch keeps the solo-
+-- studio case behaviorally identical. cut_schedule_revision keeps its
+-- designer-OR-client acceptance (the client leg is untouched). schedule_
+-- milestones' own RLS (00323) stays designer-only — a comember can commit a
+-- phase-duration/phase-anchor edit through commit_schedule_edit's widened
+-- guard today; the milestone-offset kind is unaffected by this pass.
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- ─── 1. cut_schedule_revision — the ONE writer to schedule_revisions ──────
@@ -98,12 +109,16 @@ BEGIN
     RAISE EXCEPTION 'schedule revision refused: no authenticated actor (auth.uid() is NULL)';
   END IF;
 
-  -- Actor guard: designer OR client of the project (see banner §1). Neither
-  -- → raise.
+  -- Actor guard: designer (or a studio comember of the designer) OR client
+  -- of the project (see banner §1). R105: designer_id = v_actor widened to
+  -- is_studio_comember(p.designer_id) — is_studio_comember's own self-branch
+  -- (p_owner = auth.uid()) still covers the plain designer-owns-it case, so
+  -- this is a strict widening, not a behavior change for a solo studio.
+  -- Neither → raise.
   IF NOT EXISTS (
     SELECT 1 FROM public.projects p
     WHERE p.id = p_project_id
-      AND (p.designer_id = v_actor OR p.client_id = v_actor)
+      AND (public.is_studio_comember(p.designer_id) OR p.client_id = v_actor)
   ) THEN
     RAISE EXCEPTION 'schedule revision refused: actor % is neither designer nor client of project % (or the project does not exist)',
       v_actor, p_project_id;
@@ -170,8 +185,10 @@ COMMENT ON FUNCTION public.cut_schedule_revision(UUID, TEXT) IS
   '(append-only by ACL). Actor = auth.uid(), derived internally — NEVER a '
   'parameter (a caller-suppliable actor would allow attribution forgery in '
   'an append-only audit ledger); NULL auth.uid() hard-fails. The ownership '
-  'guard accepts the project''s designer OR client because the v1 cut runs '
-  'on the signature path, where sign_proposal executes as the client. '
+  'guard accepts the project''s designer (or a studio comember of the '
+  'designer, R105 widening — is_studio_comember''s self-branch keeps a solo '
+  'studio unchanged) OR client, because the v1 cut runs on the signature '
+  'path, where sign_proposal executes as the client. '
   'Snapshots the resolver-input field set (phases + embedded milestones) as '
   'a jsonb array; v = MAX(v)+1 per project (UNIQUE backstop on the benign '
   'race). Returns the new revision''s v.';
@@ -683,9 +700,16 @@ DECLARE
 BEGIN
   -- Ownership guard (schema-qualified auth.uid() — search_path is pinned to
   -- 'public' above, so auth.uid() must be schema-qualified regardless).
+  -- R105: widened from designer_id = auth.uid() to also accept a studio
+  -- comember of the project's designer — matches project_phases' underlying
+  -- RLS posture (00316) that this explicit guard exists alongside (see the
+  -- migration banner's "second, independent gate" note). schedule_milestones'
+  -- own RLS (00323) stays designer-only — untouched here; only the
+  -- phase-duration/phase-anchor edit kinds (which write project_phases) are
+  -- reachable by a comember through this widening today.
   IF NOT EXISTS (
     SELECT 1 FROM public.projects
-    WHERE id = p_project_id AND designer_id = auth.uid()
+    WHERE id = p_project_id AND public.is_studio_comember(designer_id)
   ) THEN
     RAISE EXCEPTION 'project % not found or not owned by caller', p_project_id;
   END IF;
@@ -797,6 +821,9 @@ COMMENT ON FUNCTION public.commit_schedule_edit(UUID, JSONB, TEXT) IS
   'RipplePendingEdit objects (phase-duration/phase-anchor/milestone-offset) '
   'to project_phases/schedule_milestones under an ownership + project-scoped '
   'guard; unknown kinds raise; milestone-offset always clears anchor_date. '
+  'Ownership guard accepts the project''s designer or a studio comember of '
+  'the designer (R105 widening from designer_id = auth.uid(), matching '
+  '00316''s project_phases RLS posture). '
   '00326 (Slice 05): after the loop it cuts a numbered schedule_revisions row '
   'via cut_schedule_revision(p_project_id, p_reason) and RETURNS that '
   'revision''s v (INTEGER — was UUID/p_project_id in 00325; the hook is '

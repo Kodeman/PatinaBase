@@ -81,6 +81,14 @@
 -- Lineage of activate_proposal_as_project (body carried forward whole):
 --   00140 → 00167 → 00180 → 00185 → 00199 → 00262 → 00269 → 00274 → 00279 → 00324
 -- Lineage of apply_phase_template: 00135 → 00324.
+--
+-- R105 IN-PLACE WIDENING (pre-ship — this migration has never applied beyond
+-- local/main): seed_project_schedule_from_template's and copy_schedule_as_
+-- built's PROJECT-side ownership guards (source + target) are widened from
+-- `designer_id = auth.uid()` to `is_studio_comember(designer_id)` (00315),
+-- matching project_phases' RLS posture from 00316. copy_schedule_as_built's
+-- target-PROPOSAL leg and apply_phase_template's proposal guard are left
+-- designer-only, matching 1b's documented proposal-side posture above.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ─── 1a. proposal_phases — chain columns (mirror 00323's project_phases) ──────
@@ -443,7 +451,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM projects
      WHERE id = p_project_id
-       AND designer_id = auth.uid()
+       AND is_studio_comember(designer_id)  -- R105: widened from designer_id = auth.uid()
   ) THEN
     RAISE EXCEPTION 'project not found or not owned by caller';
   END IF;
@@ -526,9 +534,11 @@ BEGIN
     RAISE EXCEPTION 'exactly one of p_target_proposal_id / p_target_project_id must be provided';
   END IF;
 
-  -- Source ownership.
+  -- Source ownership. R105: widened from designer_id = auth.uid() to also
+  -- accept a studio comember of the source project's designer (proposal-side
+  -- targets below stay designer-only — see the migration banner).
   IF NOT EXISTS (
-    SELECT 1 FROM projects WHERE id = p_source_project_id AND designer_id = auth.uid()
+    SELECT 1 FROM projects WHERE id = p_source_project_id AND is_studio_comember(designer_id)
   ) THEN
     RAISE EXCEPTION 'source project not found or not owned by caller';
   END IF;
@@ -544,8 +554,10 @@ BEGIN
       RAISE EXCEPTION 'target proposal % already has phases; the schedule is never rebuilt (R100)', p_target_proposal_id;
     END IF;
   ELSE
+    -- R105: widened from designer_id = auth.uid() — a studio comember of the
+    -- target project's designer may also receive the as-built copy.
     IF NOT EXISTS (
-      SELECT 1 FROM projects WHERE id = p_target_project_id AND designer_id = auth.uid()
+      SELECT 1 FROM projects WHERE id = p_target_project_id AND is_studio_comember(designer_id)
     ) THEN
       RAISE EXCEPTION 'target project not found or not owned by caller';
     END IF;
