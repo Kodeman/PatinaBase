@@ -57,6 +57,24 @@ public final class SubmittedDesignRequest {
     /// `profiles!designer_id` embed. Nil until claimed / resolved.
     public var designerName: String?
 
+    /// The claiming designer's resolved studio brand (via
+    /// `resolve_studio_identity`). Additive (Arrival Arc / R106) — last-known
+    /// studio name so the held/introduced/booked copy names the studio offline.
+    public var studioName: String?
+
+    /// When the Match Ceremony introduction was delivered (`offered_at`).
+    /// Additive; drives the offline reconstruction of the `.introduced` stage.
+    public var introducedAt: Date?
+
+    /// The picked discovery slot's start (`picked_slot_starts_at`). Additive;
+    /// drives the offline reconstruction of the `.booked` stage and its
+    /// headline day + time. Nil until the client picks.
+    public var bookedSlotStartsAt: Date?
+
+    /// The introduction/discovery thread id (`match_ceremonies.thread_id`).
+    /// Additive; the head of the client–designer thread. Nil until introduced.
+    public var introThreadId: UUID?
+
     /// When the user dismissed the promoted home card, if ever.
     public var dismissedAt: Date?
 
@@ -80,6 +98,10 @@ public final class SubmittedDesignRequest {
         lastKnownStatusRaw: String = "new",
         designerId: UUID? = nil,
         designerName: String? = nil,
+        studioName: String? = nil,
+        introducedAt: Date? = nil,
+        bookedSlotStartsAt: Date? = nil,
+        introThreadId: UUID? = nil,
         dismissedAt: Date? = nil,
         dismissedStageRaw: String? = nil,
         lastRefreshedAt: Date? = nil
@@ -93,6 +115,10 @@ public final class SubmittedDesignRequest {
         self.lastKnownStatusRaw = lastKnownStatusRaw
         self.designerId = designerId
         self.designerName = designerName
+        self.studioName = studioName
+        self.introducedAt = introducedAt
+        self.bookedSlotStartsAt = bookedSlotStartsAt
+        self.introThreadId = introThreadId
         self.dismissedAt = dismissedAt
         self.dismissedStageRaw = dismissedStageRaw
         self.lastRefreshedAt = lastRefreshedAt

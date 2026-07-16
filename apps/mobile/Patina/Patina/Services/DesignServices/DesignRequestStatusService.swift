@@ -35,29 +35,54 @@ import Supabase
 public enum DesignRequestStage: String, Sendable, CaseIterable {
     /// Pooled, no designer yet.
     case finding
-    /// A designer is assigned and looking at the request.
-    case reviewing
-    /// The assigned designer has reached out.
+    /// A designer has claimed the request and taken it in hand — the
+    /// introduction (the Match Ceremony) is still pending (R106 §1). Replaces
+    /// the former `.reviewing`. NOTE: `dismissedStageRaw` values persisted as
+    /// "reviewing" by older builds no longer match this case's raw value
+    /// ("held") — an accepted meaning change: a request dismissed while
+    /// "reviewing" reappears once, now labelled `.held`.
+    case held
+    /// The assigned designer has reached out (legacy `contacted` path, no
+    /// ceremony).
     case inTouch
-    /// Accepted — an active working relationship.
+    /// The designer sent an introduction with offered call times; the client
+    /// hasn't picked one yet (Match Ceremony delivered — R106 §6).
+    case introduced
+    /// The client picked a discovery slot — the first call is booked.
+    case booked
+    /// Accepted — an active working relationship (legacy accepted rows with no
+    /// ceremony).
     case matched
     /// Declined.
     case closed
     /// Expired without a match.
     case expired
 
-    /// Pure mapping from the server row. `status` is `leads.status`
+    /// Pure mapping from the server row. Precedence, highest first: a terminal
+    /// status (declined/expired) always wins; then a delivered introduction
+    /// (`match_ceremonies.state` sent/picked) — a picked slot ⇒ `.booked`,
+    /// otherwise `.introduced`; then the legacy `(designer_id, status)`
+    /// derivation. Unit-tested — see `DesignRequestStageTests`.
+    ///
+    /// `status` is `leads.status`
     /// (`new/viewed/contacted/accepted/declined/expired`); `designerId` is
-    /// `leads.designer_id`. Unit-tested — see `DesignRequestStageTests`.
-    public static func from(designerId: UUID?, status: String) -> DesignRequestStage {
+    /// `leads.designer_id`; `introduction` is the `match_ceremonies` embed,
+    /// present only when the homeowner may see it (RLS delivers it at
+    /// `sent`/`picked`, never `draft`).
+    public static func from(
+        designerId: UUID?,
+        status: String,
+        introduction: IntroductionInfo?
+    ) -> DesignRequestStage {
+        if status == "declined" { return .closed }
+        if status == "expired" { return .expired }
+        if let introduction, introduction.state == "sent" || introduction.state == "picked" {
+            return introduction.pickedSlotId != nil ? .booked : .introduced
+        }
         switch status {
-        case "accepted": return .matched
-        case "declined": return .closed
-        case "expired": return .expired
-        case "contacted":
-            return designerId == nil ? .finding : .inTouch
-        default: // new / viewed / anything unexpected
-            return designerId == nil ? .finding : .reviewing
+        case "accepted": return .matched          // legacy accepted rows, no ceremony
+        case "contacted": return designerId == nil ? .finding : .inTouch
+        default: return designerId == nil ? .finding : .held
         }
     }
 
@@ -66,7 +91,9 @@ public enum DesignRequestStage: String, Sendable, CaseIterable {
         self == .closed || self == .expired
     }
 
-    /// A successful, active match.
+    /// A successful, active match. The ceremony stages (`.introduced`/`.booked`)
+    /// are deliberately NOT "matched": they are live, always-promoted, in-motion
+    /// stages, not the 14-day-windowed matched relationship.
     public var isMatched: Bool { self == .matched }
 
     /// Whether promotion visibility uses the 14-day window (terminal or
@@ -74,16 +101,17 @@ public enum DesignRequestStage: String, Sendable, CaseIterable {
     public var isTerminalOrMatched: Bool { isTerminal || isMatched }
 
     /// Stages that merit a hub-row attention badge — the user has something to
-    /// act on (a designer reached out, or a live match with messages).
+    /// act on (a designer reached out, an introduction awaits her pick, or a
+    /// live match with messages).
     public var needsAttention: Bool {
-        self == .inTouch || self == .matched
+        self == .inTouch || self == .introduced || self == .matched
     }
 
     /// Badge state for `PatinaStatusBadge`.
     public var badgeState: PatinaStatusBadge.State {
         switch self {
-        case .finding, .reviewing, .inTouch: return .info
-        case .matched: return .success
+        case .finding, .held, .inTouch: return .info
+        case .introduced, .booked, .matched: return .success
         case .closed, .expired: return .warning
         }
     }
@@ -93,26 +121,34 @@ public enum DesignRequestStage: String, Sendable, CaseIterable {
     public var badgeTitle: String {
         switch self {
         case .finding: return "Finding your designer"
-        case .reviewing: return "In review"
+        case .held: return "In hand"
         case .inTouch: return "In touch"
+        case .introduced: return "You're matched"
+        case .booked: return "Discovery booked"
         case .matched: return "Designer matched"
         case .closed: return "Not matched"
         case .expired: return "Expired"
         }
     }
 
-    /// One-line status copy. `designerName` falls back to "your designer".
-    public func subtitle(designerName: String?) -> String {
-        let name = designerName ?? "your designer"
+    /// One-line status copy. The arrival-arc stages (`.held`/`.introduced`/
+    /// `.booked`) name the studio, with precedence studioName → designerName →
+    /// "Your designer"; older stages keep their prior designer-name-only copy.
+    public func subtitle(studioName: String? = nil, designerName: String? = nil) -> String {
+        let studio = studioName ?? designerName ?? "Your designer"
         switch self {
         case .finding:
             return "We're matching your request with a designer."
-        case .reviewing:
-            return "A designer is reviewing your request."
+        case .held:
+            return "\(studio) has taken your request in hand — introduction on its way."
         case .inTouch:
-            return "\(name) has reached out — check your messages."
+            return "\(designerName ?? "your designer") has reached out — check your messages."
+        case .introduced:
+            return "\(studio) sent you an introduction and times for your first call."
+        case .booked:
+            return "You're set with \(studio). The call is on the calendar."
         case .matched:
-            return "You're working with \(name)."
+            return "You're working with \(designerName ?? "your designer")."
         case .closed:
             return "This one didn't work out. Send a new request anytime."
         case .expired:
@@ -120,15 +156,29 @@ public enum DesignRequestStage: String, Sendable, CaseIterable {
         }
     }
 
-    /// Headline for the promoted home card / detail hero.
-    public func cardTitle(designerName: String?) -> String {
+    /// Headline for the promoted home card / detail hero. `bookedSlotStartsAt`
+    /// (the picked ceremony slot) fills the `.booked` headline with the call
+    /// day + time; without it a generic booked headline is used.
+    public func cardTitle(
+        studioName: String? = nil,
+        designerName: String? = nil,
+        bookedSlotStartsAt: Date? = nil
+    ) -> String {
+        let studio = studioName ?? designerName ?? "Your designer"
         switch self {
         case .finding:
             return "Your design request is on its way"
-        case .reviewing:
-            return "A designer is reviewing your request"
+        case .held:
+            return "\(studio) has your request in hand"
         case .inTouch:
             return "Your designer reached out"
+        case .introduced:
+            return "You're matched — meet \(studio)"
+        case .booked:
+            if let bookedSlotStartsAt {
+                return "Discovery · \(Self.formatBookedSlot(bookedSlotStartsAt))"
+            }
+            return "Discovery call booked"
         case .matched:
             return "You're matched with \(designerName ?? "your designer")"
         case .closed:
@@ -136,6 +186,81 @@ public enum DesignRequestStage: String, Sendable, CaseIterable {
         case .expired:
             return "Your request expired"
         }
+    }
+
+    /// "Tue, Jul 22 at 2:00 PM"-style label for a booked discovery slot. Pixel
+    /// detail (locale, relative "today/tomorrow") is owned by the match-screen
+    /// lane; this is the graceful default the existing surfaces render today.
+    private static func formatBookedSlot(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE, MMM d 'at' h:mm a"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Introduction (Match Ceremony) DTOs
+
+/// One offered discovery-call slot from the Match Ceremony. `nonisolated`
+/// (mirroring `StudioIdentity`) so it decodes/constructs freely off the main
+/// actor.
+nonisolated public struct IntroductionSlot: Identifiable, Sendable, Equatable {
+    public let id: UUID
+    public let startsAt: Date
+    public let durationMinutes: Int
+
+    public init(id: UUID, startsAt: Date, durationMinutes: Int) {
+        self.id = id
+        self.startsAt = startsAt
+        self.durationMinutes = durationMinutes
+    }
+}
+
+/// The homeowner-visible view of a `match_ceremonies` row: the designer's
+/// introduction and the offered/picked call times. Present only when RLS
+/// delivers the embed (`state` sent/picked). `nonisolated` for the same reason
+/// as `IntroductionSlot`/`StudioIdentity`.
+nonisolated public struct IntroductionInfo: Sendable, Equatable {
+    /// `match_ceremonies.state`: "draft" | "sent" | "picked". Decoded as-is and
+    /// interpreted defensively (only sent/picked drive the stage).
+    public let state: String
+    public let ceremonyId: UUID
+    public let introText: String?
+    public let credentialLine: String?
+    public let portfolioUrl: String?
+    public let slots: [IntroductionSlot]
+    public let timezone: String?
+    public let offeredAt: Date?
+    public let pickedSlotId: UUID?
+    public let pickedSlotStartsAt: Date?
+    public let threadId: UUID?
+    public let createdAt: Date?
+
+    public init(
+        ceremonyId: UUID,
+        state: String,
+        introText: String?,
+        credentialLine: String?,
+        portfolioUrl: String?,
+        slots: [IntroductionSlot],
+        timezone: String?,
+        offeredAt: Date?,
+        pickedSlotId: UUID?,
+        pickedSlotStartsAt: Date?,
+        threadId: UUID?,
+        createdAt: Date?
+    ) {
+        self.ceremonyId = ceremonyId
+        self.state = state
+        self.introText = introText
+        self.credentialLine = credentialLine
+        self.portfolioUrl = portfolioUrl
+        self.slots = slots
+        self.timezone = timezone
+        self.offeredAt = offeredAt
+        self.pickedSlotId = pickedSlotId
+        self.pickedSlotStartsAt = pickedSlotStartsAt
+        self.threadId = threadId
+        self.createdAt = createdAt
     }
 }
 
@@ -157,11 +282,52 @@ public struct DesignRequestStatus: Identifiable, Sendable, Equatable {
     public let updatedAt: Date?
     public var dismissedAt: Date?
     public var dismissedStageRaw: String?
+    /// The Match Ceremony embed, when the homeowner may see it (RLS delivers it
+    /// at `sent`/`picked`). Drives the `.introduced`/`.booked` stages.
+    public let introduction: IntroductionInfo?
+    /// Studio brand for the claiming designer, resolved (actor-cached) by the
+    /// reconcile pass and last-known-persisted on the receipt. Nil until/unless
+    /// the resolver returns one — supplementary branding, never load-bearing.
+    public var studioName: String?
 
     public var id: UUID { leadId }
 
     public var stage: DesignRequestStage {
-        DesignRequestStage.from(designerId: designerId, status: statusRaw)
+        DesignRequestStage.from(designerId: designerId, status: statusRaw, introduction: introduction)
+    }
+
+    public init(
+        leadId: UUID,
+        statusRaw: String,
+        designerId: UUID?,
+        designerName: String?,
+        projectTypeRaw: String?,
+        budgetRange: String?,
+        timeline: String?,
+        requestDescription: String?,
+        scanCount: Int,
+        createdAt: Date,
+        updatedAt: Date?,
+        dismissedAt: Date?,
+        dismissedStageRaw: String?,
+        introduction: IntroductionInfo? = nil,
+        studioName: String? = nil
+    ) {
+        self.leadId = leadId
+        self.statusRaw = statusRaw
+        self.designerId = designerId
+        self.designerName = designerName
+        self.projectTypeRaw = projectTypeRaw
+        self.budgetRange = budgetRange
+        self.timeline = timeline
+        self.requestDescription = requestDescription
+        self.scanCount = scanCount
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.dismissedAt = dismissedAt
+        self.dismissedStageRaw = dismissedStageRaw
+        self.introduction = introduction
+        self.studioName = studioName
     }
 
     public var projectType: DesignServiceType? {
@@ -261,7 +427,7 @@ public final class DesignRequestStatusService {
 
         do {
             let rows = try await fetchLeadRows()
-            requests = reconcile(rows)
+            requests = await reconcile(rows)
             hasLoaded = true
         } catch {
             if !hasLoaded { hydrateFromLocal() }
@@ -331,20 +497,83 @@ public final class DesignRequestStatusService {
                 createdAt: row.submittedAt,
                 updatedAt: row.lastRefreshedAt,
                 dismissedAt: row.dismissedAt,
-                dismissedStageRaw: row.dismissedStageRaw
+                dismissedStageRaw: row.dismissedStageRaw,
+                introduction: Self.reconstructedIntroduction(from: row),
+                studioName: row.studioName
             )
         }
+    }
+
+    /// Rebuild a minimal `IntroductionInfo` from a receipt's additive ceremony
+    /// columns so the offline / cold-launch paint still derives `.introduced` /
+    /// `.booked`. The full ceremony (intro text, slots, credential) isn't
+    /// persisted — only what the stage derivation and the booked headline need.
+    /// RLS keeps a delivered ceremony visible, so the server fetch never
+    /// demotes below this reconstruction.
+    private static func reconstructedIntroduction(from row: SubmittedDesignRequest) -> IntroductionInfo? {
+        let hasBooked = row.bookedSlotStartsAt != nil
+        guard row.introducedAt != nil || hasBooked else { return nil }
+        return IntroductionInfo(
+            ceremonyId: row.leadId,                 // synthetic stand-in — never surfaced
+            state: hasBooked ? "picked" : "sent",
+            introText: nil,
+            credentialLine: nil,
+            portfolioUrl: nil,
+            slots: [],
+            timezone: nil,
+            offeredAt: row.introducedAt,
+            pickedSlotId: hasBooked ? row.leadId : nil,   // presence marker for .booked
+            pickedSlotStartsAt: row.bookedSlotStartsAt,
+            threadId: row.introThreadId,
+            createdAt: row.introducedAt
+        )
     }
 
     // MARK: - Reconciliation
 
     /// Merge freshly-fetched server rows with local receipts, emitting the
-    /// enriched `DesignRequestStatus` list (newest first).
-    private func reconcile(_ rows: [LeadStatusRow]) -> [DesignRequestStatus] {
+    /// enriched `DesignRequestStatus` list (newest first). A second, async pass
+    /// resolves the claiming designers' studio brands and stamps them onto both
+    /// the statuses and the receipts.
+    private func reconcile(_ rows: [LeadStatusRow]) async -> [DesignRequestStatus] {
         let context = PersistenceController.shared.container.mainContext
-        let result = rows.compactMap { enriched(from: $0, in: context) }
+        var statuses = rows.compactMap { enriched(from: $0, in: context) }
+
+        // Studio-name enrichment: resolve the distinct claiming designers'
+        // studio identities (actor-cached, failure-tolerant → nil) and stamp
+        // the name onto the statuses + receipts. Supplementary branding, so a
+        // failure just leaves `studioName` at its last-known/nil value.
+        let designerIds = Set(statuses.compactMap(\.designerId))
+        if !designerIds.isEmpty {
+            var studioNames: [UUID: String] = [:]
+            for designerId in designerIds {
+                if let name = await StudioIdentityService.shared.identity(forDesigner: designerId)?.name {
+                    studioNames[designerId] = name
+                }
+            }
+            if !studioNames.isEmpty {
+                statuses = statuses.map { status in
+                    guard let designerId = status.designerId,
+                          let name = studioNames[designerId] else { return status }
+                    var updated = status
+                    updated.studioName = name
+                    return updated
+                }
+                for status in statuses {
+                    guard let name = status.studioName else { continue }
+                    let leadId = status.leadId
+                    let descriptor = FetchDescriptor<SubmittedDesignRequest>(
+                        predicate: #Predicate { $0.leadId == leadId }
+                    )
+                    if let receipt = try? context.fetch(descriptor).first {
+                        receipt.studioName = name
+                    }
+                }
+            }
+        }
+
         try? context.save()
-        return result.sorted { $0.createdAt > $1.createdAt }
+        return statuses.sorted { $0.createdAt > $1.createdAt }
     }
 
     /// Reconcile one server row against its local receipt (update the
@@ -352,11 +581,12 @@ public final class DesignRequestStatusService {
     /// doesn't know it — reinstall / second device) and return the enriched
     /// status carrying the local dismissal state.
     private func enriched(from row: LeadStatusRow, in context: ModelContext) -> DesignRequestStatus? {
-        guard let leadId = UUID(uuidString: row.id) else { return nil }
-        let designerId = row.designer_id.flatMap { UUID(uuidString: $0) }
-        let designerName = row.designer?.full_name ?? row.designer?.display_name
-        let scanCount = row.lead_room_scans?.count ?? 0
-        let createdAt = Self.parseDate(row.created_at) ?? Date()
+        guard var status = Self.status(from: row) else { return nil }
+        let leadId = status.leadId
+        let designerId = status.designerId
+        let designerName = status.designerName
+        let scanCount = status.scanCount
+        let introduction = status.introduction
 
         let descriptor = FetchDescriptor<SubmittedDesignRequest>(
             predicate: #Predicate { $0.leadId == leadId }
@@ -365,7 +595,7 @@ public final class DesignRequestStatusService {
             let inserted = SubmittedDesignRequest(
                 leadId: leadId,
                 homeownerId: AuthService.shared.currentUser?.id,
-                submittedAt: createdAt,
+                submittedAt: status.createdAt,
                 projectTypeRaw: row.project_type,
                 scanCount: scanCount,
                 pooledAtSubmit: designerId == nil,
@@ -383,20 +613,84 @@ public final class DesignRequestStatusService {
         if receipt.projectTypeRaw == nil { receipt.projectTypeRaw = row.project_type }
         receipt.lastRefreshedAt = Date()
 
+        // Arrival-arc ceremony fields — persisted additively so the offline /
+        // cold-launch paint can reconstruct the introduced/booked stage without
+        // the embed (RLS delivers the embed only at sent/picked, so once set
+        // these never need clearing).
+        if let introduction {
+            receipt.introducedAt = introduction.offeredAt ?? introduction.createdAt
+            receipt.bookedSlotStartsAt = introduction.pickedSlotStartsAt
+            receipt.introThreadId = introduction.threadId
+        }
+
+        // Overlay the local-only fields the pure decode can't know: the
+        // dismissal record and the last-known studio name (the async reconcile
+        // pass refreshes the latter).
+        status.dismissedAt = receipt.dismissedAt
+        status.dismissedStageRaw = receipt.dismissedStageRaw
+        status.studioName = receipt.studioName
+        return status
+    }
+
+    // MARK: - Decode (pure, no SwiftData)
+
+    /// Pure decode seam: parse a `leads` select payload into the enriched
+    /// public statuses — carrying the `match_ceremonies` embed and the derived
+    /// stage, but WITHOUT the local receipt/dismissal/studio state that
+    /// `enriched(from:)` layers on. Unit tests use this to pin the wire decode
+    /// + stage derivation end-to-end.
+    static func decodeStatuses(_ data: Data) throws -> [DesignRequestStatus] {
+        try JSONDecoder().decode([LeadStatusRow].self, from: data).compactMap { status(from: $0) }
+    }
+
+    /// Wire row → public status, WITHOUT touching SwiftData. The dismissal and
+    /// studio fields stay nil — those come from the local receipt and the async
+    /// studio-identity pass respectively.
+    private static func status(from row: LeadStatusRow) -> DesignRequestStatus? {
+        guard let leadId = UUID(uuidString: row.id) else { return nil }
+        let designerId = row.designer_id.flatMap { UUID(uuidString: $0) }
         return DesignRequestStatus(
             leadId: leadId,
             statusRaw: row.status,
             designerId: designerId,
-            designerName: designerName,
+            designerName: row.designer?.full_name ?? row.designer?.display_name,
             projectTypeRaw: row.project_type,
             budgetRange: row.budget_range,
             timeline: row.timeline,
             requestDescription: row.project_description,
-            scanCount: scanCount,
-            createdAt: createdAt,
-            updatedAt: row.updated_at.flatMap(Self.parseDate),
-            dismissedAt: receipt.dismissedAt,
-            dismissedStageRaw: receipt.dismissedStageRaw
+            scanCount: row.lead_room_scans?.count ?? 0,
+            createdAt: parseDate(row.created_at) ?? Date(),
+            updatedAt: row.updated_at.flatMap(parseDate),
+            dismissedAt: nil,
+            dismissedStageRaw: nil,
+            introduction: introduction(from: row.match_ceremonies)
+        )
+    }
+
+    /// Map the `match_ceremonies` embed → the public `IntroductionInfo`. Returns
+    /// nil when the embed is absent (RLS delivers it only at `sent`/`picked`).
+    /// Slot timestamps decode with the same fractional-seconds-tolerant parse
+    /// as every other date on the row.
+    private static func introduction(from row: MatchCeremonyRow?) -> IntroductionInfo? {
+        guard let row, let ceremonyId = UUID(uuidString: row.id) else { return nil }
+        let slots = (row.offered_slots ?? []).compactMap { slot -> IntroductionSlot? in
+            guard let slotId = UUID(uuidString: slot.id),
+                  let startsAt = parseDate(slot.starts_at) else { return nil }
+            return IntroductionSlot(id: slotId, startsAt: startsAt, durationMinutes: slot.duration_minutes)
+        }
+        return IntroductionInfo(
+            ceremonyId: ceremonyId,
+            state: row.state,
+            introText: row.intro_text,
+            credentialLine: row.credential_line,
+            portfolioUrl: row.portfolio_url,
+            slots: slots,
+            timezone: row.timezone,
+            offeredAt: row.offered_at.flatMap(parseDate),
+            pickedSlotId: row.picked_slot_id.flatMap { UUID(uuidString: $0) },
+            pickedSlotStartsAt: row.picked_slot_starts_at.flatMap(parseDate),
+            threadId: row.thread_id.flatMap { UUID(uuidString: $0) },
+            createdAt: row.created_at.flatMap(parseDate)
         )
     }
 
@@ -405,7 +699,12 @@ public final class DesignRequestStatusService {
     private static let selectColumns =
         "id,status,designer_id,project_type,budget_range,timeline,project_description,"
         + "created_at,updated_at,contacted_at,accepted_at,declined_at,client_request_id,"
-        + "designer:profiles!designer_id(full_name,display_name),lead_room_scans(scan_id)"
+        + "designer:profiles!designer_id(full_name,display_name),lead_room_scans(scan_id),"
+        // Match Ceremony embed — to-one (unique FK on lead_id). RLS delivers it
+        // only when the homeowner may see it (state sent/picked); a draft
+        // ceremony arrives as NULL.
+        + "match_ceremonies(id,state,intro_text,credential_line,portfolio_url,offered_slots,"
+        + "timezone,offered_at,picked_slot_id,picked_slot_starts_at,thread_id,created_at)"
 
     private func fetchLeadRows() async throws -> [LeadStatusRow] {
         let url = APIConfiguration.apiURL
@@ -460,6 +759,9 @@ private struct LeadStatusRow: Decodable {
     let client_request_id: String?
     let designer: LeadDesignerRow?
     let lead_room_scans: [LeadScanRef]?
+    /// To-one Match Ceremony embed (unique FK on `lead_id`); null unless RLS
+    /// delivers it (state sent/picked).
+    let match_ceremonies: MatchCeremonyRow?
 }
 
 private struct LeadDesignerRow: Decodable {
@@ -469,6 +771,27 @@ private struct LeadDesignerRow: Decodable {
 
 private struct LeadScanRef: Decodable {
     let scan_id: String?
+}
+
+private struct MatchCeremonyRow: Decodable {
+    let id: String
+    let state: String
+    let intro_text: String?
+    let credential_line: String?
+    let portfolio_url: String?
+    let offered_slots: [OfferedSlotRow]?
+    let timezone: String?
+    let offered_at: String?
+    let picked_slot_id: String?
+    let picked_slot_starts_at: String?
+    let thread_id: String?
+    let created_at: String?
+}
+
+private struct OfferedSlotRow: Decodable {
+    let id: String
+    let starts_at: String
+    let duration_minutes: Int
 }
 
 // swiftlint:enable identifier_name

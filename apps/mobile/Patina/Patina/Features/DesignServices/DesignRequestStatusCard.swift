@@ -24,7 +24,11 @@ struct DesignRequestStatusCard: View {
     private var stage: DesignRequestStage { request.stage }
 
     private var title: String {
-        stage.cardTitle(designerName: request.designerName)
+        stage.cardTitle(
+            studioName: request.studioName,
+            designerName: request.designerName,
+            bookedSlotStartsAt: request.introduction?.pickedSlotStartsAt
+        )
     }
 
     private var subtitle: String {
@@ -76,7 +80,7 @@ struct DesignRequestStatusCard: View {
         .onTapGesture(perform: onOpen)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
-        .accessibilityValue(stage.subtitle(designerName: request.designerName))
+        .accessibilityValue(stage.subtitle(studioName: request.studioName, designerName: request.designerName))
         .accessibilityHint("Opens your design request to see its progress.")
         .accessibilityIdentifier("DailyRoomView.DesignRequestStatusCard")
     }

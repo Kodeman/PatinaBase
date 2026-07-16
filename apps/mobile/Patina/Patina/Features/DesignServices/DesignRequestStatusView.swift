@@ -96,11 +96,15 @@ struct DesignRequestStatusView: View {
     private func stageHero(_ request: DesignRequestStatus) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             PatinaStatusBadge(state: request.stage.badgeState, text: request.stage.badgeTitle)
-            Text(request.stage.cardTitle(designerName: request.designerName))
+            Text(request.stage.cardTitle(
+                studioName: request.studioName,
+                designerName: request.designerName,
+                bookedSlotStartsAt: request.introduction?.pickedSlotStartsAt
+            ))
                 .font(PatinaTypography.h2)
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(request.stage.subtitle(designerName: request.designerName))
+            Text(request.stage.subtitle(studioName: request.studioName, designerName: request.designerName))
                 .font(PatinaTypography.bodySmall)
                 .foregroundStyle(PatinaColors.Text.secondary)
                 .lineSpacing(3)

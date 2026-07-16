@@ -63,8 +63,8 @@ enum EngagementTier: Int, Comparable {
     /// A project is the strongest signal for the full platform; proposals /
     /// invoices / decisions are treated as fallbacks that imply a project, so
     /// the tier degrades gracefully if the project-count query returns empty.
-    /// Otherwise any non-terminal design request (finding / reviewing /
-    /// inTouch / matched) means the relationship has begun.
+    /// Otherwise any non-terminal design request (finding / held / inTouch /
+    /// introduced / booked / matched) means the relationship has begun.
     static func resolve(
         requests: [DesignRequestStatus],
         projectCount: Int,
