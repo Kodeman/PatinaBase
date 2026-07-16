@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patina — The Room View prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --offwhite:#FAF7F2; --clay:#C4A57B; --oak:#8B7355; --mocha:#5C4A3C;
+    --ink:#2C2926; --sage:#A8B5A0; --dusty:#8B9CAD; --terra:#D4A090; --gold:#E8C547;
+    --rule:rgba(44,41,38,.14); --rule-soft:rgba(44,41,38,.08);
+    --serif:'Playfair Display',Georgia,serif; --sans:'Inter',system-ui,sans-serif; --mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--offwhite);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  ::selection{background:var(--clay);color:var(--offwhite)}
+
+  .bar{position:sticky;top:0;z-index:50;background:var(--offwhite);border-bottom:1px solid var(--rule);
+       display:flex;align-items:center;gap:24px;padding:14px 32px}
+  .wordmark{font-family:var(--serif);font-size:17px;letter-spacing:.28em;font-weight:500}
+  .proto{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--oak);text-transform:uppercase}
+  .tabs{margin-left:auto;display:flex;gap:20px;align-items:center}
+  .tab{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mocha);
+       background:none;border:none;cursor:pointer;padding:6px 0;border-bottom:2px solid transparent}
+  .tab:hover{color:var(--ink)}
+  .tab.active{color:var(--ink);border-bottom-color:var(--clay)}
+  .notes-toggle{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+       border:1px solid var(--rule);background:none;color:var(--oak);padding:6px 12px;border-radius:3px;cursor:pointer}
+  body.notes-on .notes-toggle{background:var(--ink);color:var(--offwhite);border-color:var(--ink)}
+
+  .strata{display:inline-block;width:26px;vertical-align:middle;margin-right:10px}
+  .strata i{display:block;height:1.5px;background:var(--oak);margin:3px 0}
+  .strata i:nth-child(1){width:100%}.strata i:nth-child(2){width:72%}.strata i:nth-child(3){width:44%}
+  .label{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--oak)}
+  .label .count{color:var(--clay);margin-left:8px}
+
+  .scene{display:none;max-width:1180px;margin:0 auto;padding:48px 32px 90px}
+  .scene.active{display:block}
+  .kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--clay);margin-bottom:10px}
+  h1{font-family:var(--serif);font-weight:500;font-size:40px;line-height:1.12}
+  h1 .thin{font-style:italic;color:var(--mocha)}
+  .lede{font-family:var(--serif);font-style:italic;font-size:16.5px;color:var(--mocha);margin-top:8px}
+
+  .note{display:none;font-family:var(--mono);font-size:10.5px;line-height:1.6;color:var(--mocha);
+        background:rgba(232,197,71,.12);border-left:2px solid var(--gold);padding:10px 14px;margin:14px 0;border-radius:0 3px 3px 0}
+  body.notes-on .note{display:block}
+  .note b{color:var(--ink);font-weight:500}
+
+  .stagebanner{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mocha);
+        border:1px dashed var(--clay);border-radius:3px;padding:8px 14px;display:inline-block;margin-bottom:28px}
+
+  /* rooms index */
+  .roomgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;margin-top:30px}
+  .roomcard{background:#FFFDF9;border:1px solid var(--rule);border-radius:2px;padding:20px 22px;cursor:pointer;transition:border-color .15s}
+  .roomcard:hover{border-color:var(--clay)}
+  .roomcard .who{font-family:var(--serif);font-size:20px;font-weight:500}
+  .roomcard .what{font-size:12.5px;color:var(--mocha);margin-top:2px}
+  .roomcard .mini{margin:14px 0 10px}
+  .roomcard .mini svg{display:block;width:100%;height:auto}
+  .roomcard .metas{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--oak);text-transform:uppercase}
+  .roomcard .docref{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-soft);
+        font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--mocha);text-transform:uppercase}
+  .q-high{color:var(--sage)}.q-med{color:var(--gold)}
+
+  /* room view chrome */
+  .rv-head{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;margin-bottom:6px}
+  .rv-head h1{font-size:34px}
+  .rv-doclink{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--oak);text-transform:uppercase;cursor:pointer}
+  .rv-doclink:hover{color:var(--ink)}
+  .modes{display:flex;gap:0;margin:20px 0 24px;border-bottom:1px solid var(--rule)}
+  .mode{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mocha);
+        background:none;border:none;cursor:pointer;padding:10px 22px 12px;border-bottom:2px solid transparent}
+  .mode.active{color:var(--ink);border-bottom-color:var(--clay)}
+  .mode:disabled{opacity:.35;cursor:not-allowed}
+  .mode .soon{display:block;font-size:8px;letter-spacing:.1em;color:var(--clay)}
+
+  .rv-body{display:grid;grid-template-columns:230px 1fr;gap:36px;align-items:start}
+  @media(max-width:900px){.rv-body{grid-template-columns:1fr}}
+  .facts{border-top:1px solid var(--rule)}
+  .facts .f{padding:11px 2px;border-bottom:1px solid var(--rule-soft)}
+  .facts .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--oak);text-transform:uppercase}
+  .facts .v{font-size:14px;margin-top:2px}
+  .facts .v .sub{display:block;font-family:var(--serif);font-style:italic;font-size:12px;color:var(--mocha)}
+  .toolrow{display:flex;gap:10px;margin-top:16px}
+  .tool{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+        border:1px solid var(--rule);background:none;color:var(--mocha);padding:8px 14px;border-radius:3px;cursor:pointer}
+  .tool.on{background:var(--ink);color:var(--offwhite);border-color:var(--ink)}
+
+  .stage{position:relative;background:#FFFDF9;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
+  .stage svg{display:block;width:100%;height:auto}
+  #orbitwrap{display:none;position:relative}
+  #orbitcanvas{display:block;width:100%;height:560px;cursor:grab}
+  #orbitcanvas:active{cursor:grabbing}
+  .stagecap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+        color:var(--oak);text-transform:uppercase;padding:10px 14px;border-top:1px solid var(--rule-soft)}
+
+  .dimchip{position:absolute;pointer-events:none;background:var(--ink);color:var(--offwhite);
+        font-family:var(--mono);font-size:10px;letter-spacing:.08em;padding:5px 10px;border-radius:3px;display:none;z-index:5;white-space:nowrap}
+
+  /* svg plan styles */
+  .wall{fill:#8B7355;fill-opacity:.9}
+  .wall.lowconf{fill-opacity:.38}
+  .wall-hit{fill:transparent;cursor:crosshair}
+  .lowconf-stroke{stroke:#8B7355;stroke-width:1.2;stroke-dasharray:6 4;fill:none;opacity:.6}
+  .ghost{fill:rgba(139,115,85,.07);stroke:#8B7355;stroke-width:1.1;stroke-opacity:.55;cursor:crosshair}
+  .ghostlabel{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.12em;fill:#8B7355;text-transform:uppercase;opacity:.75}
+  .winline{stroke:#8B7355;stroke-width:1.2}
+  .measureline{stroke:#2C2926;stroke-width:1.2;stroke-dasharray:5 4}
+  .measurelabel{font-family:'IBM Plex Mono',monospace;font-size:11px;fill:#2C2926;letter-spacing:.05em}
+  .pin{cursor:pointer}
+  .pindot{fill:#8B9CAD}
+  .pinnum{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:#FAF7F2}
+  .fp{fill:rgba(196,165,123,.22);stroke:#C4A57B;stroke-width:1.6}
+  .fplabel{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.12em;fill:#5C4A3C;text-transform:uppercase}
+  .clr-ok{stroke:#A8B5A0;stroke-width:1.2;stroke-dasharray:4 3}
+  .clr-bad{stroke:#D4A090;stroke-width:1.2;stroke-dasharray:4 3}
+  .clrlab-ok{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:#7d8f74;letter-spacing:.05em}
+  .clrlab-bad{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:#b3705c;letter-spacing:.05em}
+
+  /* annotate margin */
+  .annwrap{display:grid;grid-template-columns:1fr 300px;gap:32px;align-items:start}
+  @media(max-width:900px){.annwrap{grid-template-columns:1fr}}
+  .margin h6{font-family:var(--mono);font-size:10px;letter-spacing:.15em;color:var(--oak);text-transform:uppercase;margin-bottom:14px}
+  .mnote{background:#FFFDF9;border:1px solid var(--rule);border-left:2px solid var(--dusty);border-radius:0 3px 3px 0;
+        padding:14px 16px;margin-bottom:14px}
+  .mnote .tag{font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;color:var(--dusty);text-transform:uppercase}
+  .mnote .txt{font-size:13px;margin-top:6px}
+  .mnote .flow{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:var(--oak);text-transform:uppercase;margin-top:10px;padding-top:8px;border-top:1px solid var(--rule-soft)}
+  .framecard{background:#FFFDF9;border:1px solid var(--rule);border-radius:2px;padding:10px;margin-bottom:14px}
+  .framecard .fimg{border:1px solid var(--rule-soft);background:var(--offwhite)}
+  .framecard .fcap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8.5px;letter-spacing:.11em;color:var(--oak);text-transform:uppercase;padding:8px 2px 2px}
+
+  /* place list */
+  .ffe{border-top:1px solid var(--rule)}
+  .ffeline{display:flex;align-items:baseline;gap:10px;padding:12px 2px;border-bottom:1px solid var(--rule-soft)}
+  .ffeline .nm{font-family:var(--serif);font-size:15.5px}
+  .ffeline .dim{font-family:var(--mono);font-size:9.5px;color:var(--oak);letter-spacing:.08em}
+  .ffeline .st{margin-left:auto;font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase}
+  .st-placed{color:var(--sage)} .st-un{color:var(--clay)}
+  .flag{background:rgba(212,160,144,.14);border:1px solid var(--terra);border-radius:3px;padding:12px 16px;margin-top:18px}
+  .flag .ft{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:#b3705c;text-transform:uppercase}
+  .flag .fb{font-size:13px;color:var(--mocha);margin-top:6px}
+  .flag .ov{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--oak);text-transform:uppercase;margin-top:10px;cursor:pointer;text-decoration:underline}
+
+  .footerbar{border-top:1px solid var(--rule);margin-top:10px;padding:22px 32px;display:flex;gap:24px;align-items:center}
+  .fm{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;color:var(--oak);text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <span class="wordmark">PATINA</span>
+  <span class="proto">The Room View · Prototype · pairs with ruling R{next}</span>
+  <nav class="tabs">
+    <button class="tab active" data-go="scene-rooms">01 · The Rooms</button>
+    <button class="tab" data-go="scene-room">02 · The Room</button>
+    <button class="tab" data-go="scene-annotate">03 · Annotate</button>
+    <button class="tab" data-go="scene-place">04 · Place</button>
+    <button class="notes-toggle" id="notesToggle">Notes</button>
+  </nav>
+</header>
+
+<!-- ————— SCENE 1 · THE ROOMS (Studio room) ————— -->
+<section class="scene active" id="scene-rooms">
+  <div class="kicker">The Studio · a new room beside Library and People</div>
+  <h1>The Rooms.</h1>
+  <div class="lede">Every scanned room, one roster — each a lens into its Document, nothing copied.</div>
+  <div class="note"><b>R§1 placement.</b> Rooms is a Studio room. Opening a card opens the Room View; opening the scan from a Document lands in the same viewer, scoped back. One viewer, two doors — the room always knows its Document.</div>
+
+  <div class="sectionhead" style="margin-top:34px;display:flex;align-items:center">
+    <span class="strata"><i></i><i></i><i></i></span><span class="label">Scanned rooms <span class="count">4</span></span>
+  </div>
+
+  <div class="roomgrid">
+    <div class="roomcard" data-go="scene-room">
+      <div class="who">Elena Vasquez</div>
+      <div class="what">Living room · scanned Jul 15</div>
+      <div class="mini">
+        <svg viewBox="0 0 190 140" fill="none" stroke="#8B7355" stroke-width="1.1">
+          <rect x="20" y="18" width="150" height="104" stroke-width="2"/>
+          <line x1="20" y1="38" x2="20" y2="62" stroke="#FAF7F2" stroke-width="3"/><line x1="17" y1="38" x2="17" y2="62"/><line x1="23" y1="38" x2="23" y2="62"/>
+          <line x1="20" y1="78" x2="20" y2="102" stroke="#FAF7F2" stroke-width="3"/><line x1="17" y1="78" x2="17" y2="102"/><line x1="23" y1="78" x2="23" y2="102"/>
+          <rect x="138" y="44" width="22" height="52" rx="2" opacity=".45"/>
+          <rect x="112" y="56" width="16" height="30" rx="2" opacity=".45"/>
+        </svg>
+      </div>
+      <div class="metas"><span>14′ × 19′ · 266 SQ FT</span><span class="q-high">● quality high</span></div>
+      <div class="docref">→ Her document · Discovery</div>
+    </div>
+
+    <div class="roomcard">
+      <div class="who">Jonah &amp; Bea Feldman</div>
+      <div class="what">Primary bedroom · scanned Jul 2</div>
+      <div class="mini">
+        <svg viewBox="0 0 190 140" fill="none" stroke="#8B7355" stroke-width="1.1">
+          <rect x="30" y="20" width="130" height="100" stroke-width="2"/>
+          <rect x="52" y="42" width="56" height="44" rx="2" opacity=".45"/>
+          <rect x="132" y="34" width="16" height="24" rx="2" opacity=".45"/>
+        </svg>
+      </div>
+      <div class="metas"><span>13′ × 15′ · 195 SQ FT</span><span class="q-high">● quality high</span></div>
+      <div class="docref">→ Their document · Project · Week 2</div>
+    </div>
+
+    <div class="roomcard">
+      <div class="who">Jonah &amp; Bea Feldman</div>
+      <div class="what">En-suite bath · scanned Jul 2</div>
+      <div class="mini">
+        <svg viewBox="0 0 190 140" fill="none" stroke="#8B7355" stroke-width="1.1">
+          <rect x="46" y="26" width="98" height="88" stroke-width="2"/>
+          <rect x="56" y="36" width="34" height="20" rx="6" opacity=".45"/>
+          <ellipse cx="122" cy="48" rx="10" ry="8" opacity=".45"/>
+        </svg>
+      </div>
+      <div class="metas"><span>8′ × 10′ · 80 SQ FT</span><span class="q-med">● quality medium</span></div>
+      <div class="docref">→ Their document · Project · Week 2</div>
+    </div>
+
+    <div class="roomcard">
+      <div class="who">Test Client Walkthrough</div>
+      <div class="what">Living room · scanned Jul 8</div>
+      <div class="mini">
+        <svg viewBox="0 0 190 140" fill="none" stroke="#8B7355" stroke-width="1.1">
+          <rect x="24" y="22" width="142" height="96" stroke-width="2"/>
+          <rect x="44" y="66" width="48" height="30" rx="2" opacity=".45"/>
+        </svg>
+      </div>
+      <div class="metas"><span>12′ × 17′ · 204 SQ FT</span><span class="q-high">● quality high</span></div>
+      <div class="docref">→ Their document · Proposal · signed</div>
+    </div>
+  </div>
+</section>
+
+<!-- ————— SCENE 2 · THE ROOM (Plan + Orbit) ————— -->
+<section class="scene" id="scene-room">
+  <div class="rv-head">
+    <h1>Elena Vasquez <span class="thin">· living room.</span></h1>
+    <span class="rv-doclink">→ her Document · Discovery</span>
+  </div>
+
+  <div class="modes">
+    <button class="mode active" id="modePlan">Plan</button>
+    <button class="mode" id="modeOrbit">Orbit</button>
+    <button class="mode" disabled>Walk<span class="soon">arrives with Place</span></button>
+  </div>
+  <div class="note"><b>R§3 the grammar.</b> One geometry, three distances. Plan is where a designer thinks; Orbit is where the volume reads. Walk is ruled into the arc and built last — walking an unfurnished box breaks the promise the word makes. No tabs in the product; a Strata rule carries the toggle.</div>
+
+  <div class="rv-body">
+    <aside>
+      <div class="facts">
+        <div class="f"><div class="k">Area</div><div class="v">266 sq ft · 14′ × 19′</div></div>
+        <div class="f"><div class="k">Walls</div><div class="v">8′ 0″ <span class="sub">stands in for ceiling — RoomPlan captures none</span></div></div>
+        <div class="f"><div class="k">Openings</div><div class="v">2 windows · 1 door <span class="sub">west light, both windows</span></div></div>
+        <div class="f"><div class="k">Detected</div><div class="v">sofa · coffee table · 2 chairs · television</div></div>
+        <div class="f"><div class="k">Scan</div><div class="v">Jul 15 · <span style="color:var(--sage)">quality high · 0.92</span></div></div>
+        <div class="f"><div class="k">Verify</div><div class="v"><span class="sub">north-east wall read at low confidence — drawn dashed; confirm on site</span></div></div>
+      </div>
+      <div class="toolrow">
+        <button class="tool" id="measureBtn">Measure</button>
+        <button class="tool" id="clearBtn" style="display:none">Clear</button>
+      </div>
+      <div class="note"><b>R§4 stage one.</b> Hover anything for its true dimension. Two-point measure in Plan. Detected furniture ghosts with its category — the client's current room, not the proposal. Low confidence draws lighter and dashed: a drawing that hides its uncertainty lies.</div>
+    </aside>
+
+    <div>
+      <div class="stage" id="planwrap">
+        <svg id="plansvg" viewBox="0 0 640 480"></svg>
+        <div class="dimchip" id="dimchip"></div>
+        <div class="stagecap"><span>Plan · drawn from her scan</span><span id="capright">hover for dimensions</span></div>
+      </div>
+      <div class="stage" id="orbitwrap">
+        <canvas id="orbitcanvas"></canvas>
+        <div class="stagecap"><span>Orbit · the volume</span><span>drag to orbit · scroll to move closer</span></div>
+      </div>
+      <div class="note"><b>R§2 substance.</b> Both views render one normalized geometry parsed from the CapturedRoom JSON — Patina's drawing, not Apple's boxes. The “as captured” mesh toggle is named for later; USDZ→GLB conversion happens at ingest as insurance, and USD never enters the browser.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ————— SCENE 3 · ANNOTATE (staged preview) ————— -->
+<section class="scene" id="scene-annotate">
+  <div class="kicker">Stage two</div>
+  <h1>The room, <span class="thin">speaking to the thread.</span></h1>
+  <div class="stagebanner" style="margin-top:18px">Designed scene · not yet interactive · builds after stage one ships</div>
+
+  <div class="annwrap">
+    <div class="stage">
+      <svg id="annsvg" viewBox="0 0 640 480"></svg>
+      <div class="stagecap"><span>Pins anchor to geometry</span><span>each pin is Document material</span></div>
+    </div>
+    <aside class="margin">
+      <h6>In the margin · from this room</h6>
+      <div class="mnote">
+        <div class="tag">Pin 1 · west wall · between windows</div>
+        <div class="txt">Afternoon glare lands here — she mentioned it on the call. Consider linen sheers over blackout.</div>
+        <div class="flow">→ flows to her Document's margin, room-referenced</div>
+      </div>
+      <div class="mnote">
+        <div class="tag">Pin 2 · north-east wall · low confidence</div>
+        <div class="txt">Scan is unsure of this wall — verify the radiator run before the built-in idea goes any further.</div>
+        <div class="flow">→ flows to her Document's margin, room-referenced</div>
+      </div>
+      <h6 style="margin-top:26px">Frames · saved viewpoints</h6>
+      <div class="framecard">
+        <div class="fimg">
+          <svg viewBox="0 0 260 130" fill="none" stroke="#8B7355" stroke-width="1">
+            <polygon points="40,34 220,34 244,118 16,118" stroke-width="1.4"/>
+            <polygon points="40,34 220,34 220,16 40,16" opacity=".4"/>
+            <rect x="70" y="58" width="76" height="34" rx="2" opacity=".5"/>
+            <rect x="168" y="50" width="26" height="46" rx="2" opacity=".5"/>
+          </svg>
+        </div>
+        <div class="fcap"><span>“From the entry”</span><span>→ folio · boards</span></div>
+      </div>
+      <div class="note"><b>R§5 stage two.</b> Pins are notes with a room-reference; frames are named viewpoints captured into the folio and boards. Nothing in the room dead-ends into chat.</div>
+    </aside>
+  </div>
+</section>
+
+<!-- ————— SCENE 4 · PLACE (staged preview) ————— -->
+<section class="scene" id="scene-place">
+  <div class="kicker">Stage three</div>
+  <h1>The room <span class="thin">knows its rules.</span></h1>
+  <div class="stagebanner" style="margin-top:18px">Designed scene · not yet interactive · builds after Annotate</div>
+
+  <div class="rv-body">
+    <aside>
+      <h6 style="font-family:var(--mono);font-size:10px;letter-spacing:.15em;color:var(--oak);text-transform:uppercase;margin-bottom:6px">FF&amp;E · from her Document</h6>
+      <div class="ffe">
+        <div class="ffeline"><span class="nm">Cloud sofa</span><span class="dim">84″ × 36″</span><span class="st st-placed">placed</span></div>
+        <div class="ffeline"><span class="nm">Oak coffee table</span><span class="dim">48″ × 24″</span><span class="st st-placed">placed</span></div>
+        <div class="ffeline"><span class="nm">Reading chair</span><span class="dim">30″ × 32″</span><span class="st st-un">drag onto the plan</span></div>
+        <div class="ffeline"><span class="nm">Floor lamp</span><span class="dim">Ø 12″</span><span class="st st-un">drag onto the plan</span></div>
+      </div>
+      <div class="flag">
+        <div class="ft">Walkway · 28″ — under 36″</div>
+        <div class="fb">Between the sofa's east arm and the wall. A fact about geometry, not a taste judgment.</div>
+        <div class="ov">Override — the designer's call</div>
+      </div>
+      <div class="note"><b>R§6 stage three.</b> Plan-first footprints, true to scale; clearances checked live against the standards designers already carry (30–36″ walkways, 14–18″ sofa-to-table). Existing detected pieces cleared per scenario — they render dotted here. Placements feed the proposal's space plan.</div>
+    </aside>
+    <div>
+      <div class="stage">
+        <svg id="placesvg" viewBox="0 0 640 480"></svg>
+        <div class="stagecap"><span>Placement scenario · “existing sofa cleared”</span><span>sage = clear · terracotta = under standard</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footerbar">
+  <span class="strata"><i></i><i></i><i></i></span>
+  <span class="fm">Prototype · land with the Room View ruling in docs/design/the-document/ · Claude Code ports intent, never markup · one geometry, two projections — literally, in this file's source</span>
+</footer>
+
+<script>
+/* ————————————————————————————————————————————
+   ONE GEOMETRY SOURCE — the normalized CapturedRoom parse.
+   Feet. Origin = north-west corner. x → east, z → south.
+   Both projections (SVG plan, three.js orbit) read only this.
+———————————————————————————————————————————— */
+const ROOM = {
+  width: 19, depth: 14, wallH: 8, thick: 0.45,
+  // walls: [x1,z1,x2,z2, confidence]
+  walls: [
+    {x1:0, z1:0,  x2:13, z2:0,  conf:'high', name:'North wall (west run)', len:13},
+    {x1:13,z1:0,  x2:19, z2:0,  conf:'low',  name:'North wall (east run)', len:6},
+    {x1:19,z1:0,  x2:19, z2:14, conf:'high', name:'East wall', len:14},
+    {x1:0, z1:14, x2:19, z2:14, conf:'high', name:'South wall', len:19},
+    {x1:0, z1:0,  x2:0,  z2:14, conf:'high', name:'West wall', len:14}
+  ],
+  // openings on west wall (windows) + south wall (door)
+  windows: [ {wall:'W', from:2.5, to:6.5, sill:2.5, head:7}, {wall:'W', from:8.5, to:12.5, sill:2.5, head:7} ],
+  door: {wall:'S', from:15.5, to:18.5, h:7},
+  // detected objects: oriented boxes [x, z, w(x), d(z), h, category, dims label]
+  objects: [
+    {x:15.6, z:3.5, w:3.0, d:7.0, h:2.6, cat:'sofa',        label:'sofa · 84″ × 36″'},
+    {x:12.6, z:5.5, w:2.0, d:4.0, h:1.4, cat:'table',       label:'coffee table · 48″ × 24″'},
+    {x:6.0,  z:1.6, w:2.6, d:2.6, h:2.5, cat:'chair',       label:'chair · 31″ × 31″'},
+    {x:6.0,  z:9.8, w:2.6, d:2.6, h:2.5, cat:'chair',       label:'chair · 31″ × 31″'},
+    {x:0.6,  z:5.6, w:1.5, d:5.0, h:1.8, cat:'television',  label:'media console · 60″ × 18″'}
+  ]
+};
+const SCALE = 28, PAD = 54;               // px per foot, svg padding
+const px = ft => ft*SCALE + PAD;
+const ftIn = ft => { const f=Math.floor(ft), i=Math.round((ft-f)*12); return i===12 ? (f+1)+'′ 0″' : f+'′ '+i+'″'; };
+
+/* ————— scene switching ————— */
+const tabs=[...document.querySelectorAll('.tab')];
+function go(id){
+  document.querySelectorAll('.scene').forEach(s=>s.classList.toggle('active',s.id===id));
+  tabs.forEach(t=>t.classList.toggle('active',t.dataset.go===id));
+  window.scrollTo({top:0});
+  if(id==='scene-room' && orbitInited) sizeOrbit();
+}
+document.querySelectorAll('[data-go]').forEach(el=>el.addEventListener('click',()=>go(el.dataset.go)));
+document.getElementById('notesToggle').addEventListener('click',()=>document.body.classList.toggle('notes-on'));
+
+/* ————— PLAN: build the SVG from ROOM ————— */
+const NS='http://www.w3.org/2000/svg';
+function el(tag, attrs, parent){ const e=document.createElementNS(NS,tag); for(const k in attrs)e.setAttribute(k,attrs[k]); if(parent)parent.appendChild(e); return e; }
+
+function drawPlan(svg, opts={}){
+  svg.innerHTML='';
+  const T = ROOM.thick*SCALE;
+  // floor
+  el('rect',{x:px(0),y:px(0),width:ROOM.width*SCALE,height:ROOM.depth*SCALE,fill:'rgba(139,115,85,.035)'},svg);
+  // walls as thick strips (outside the floor rect)
+  const wallDefs=[
+    {w:ROOM.walls[0], x:px(0)-T, y:px(0)-T, wd:13*SCALE+T, ht:T, horiz:true},
+    {w:ROOM.walls[1], x:px(13), y:px(0)-T, wd:6*SCALE+T,  ht:T, horiz:true},
+    {w:ROOM.walls[2], x:px(19), y:px(0)-T, wd:T, ht:14*SCALE+2*T, horiz:false},
+    {w:ROOM.walls[3], x:px(0)-T, y:px(14), wd:19*SCALE+2*T, ht:T, horiz:true},
+    {w:ROOM.walls[4], x:px(0)-T, y:px(0)-T, wd:T, ht:14*SCALE+2*T, horiz:false}
+  ];
+  wallDefs.forEach(d=>{
+    const r=el('rect',{x:d.x,y:d.y,width:d.wd,height:d.ht,class:'wall'+(d.w.conf==='low'?' lowconf':'')},svg);
+    if(d.w.conf==='low'){
+      el('rect',{x:d.x+1,y:d.y+1,width:d.wd-2,height:d.ht-2,class:'lowconf-stroke'},svg);
+    }
+    // hover hit area
+    const hit=el('rect',{x:d.x-3,y:d.y-3,width:d.wd+6,height:d.ht+6,class:'wall-hit'},svg);
+    hit.dataset.tip = d.w.name+' — '+ftIn(d.w.len)+(d.w.conf==='low'?' · low confidence — verify on site':'');
+  });
+  // west windows: clear the wall, draw triple lines
+  ROOM.windows.forEach(w=>{
+    const y1=px(w.from), y2=px(w.to);
+    el('rect',{x:px(0)-T-1,y:y1,width:T+2,height:y2-y1,fill:'#FFFDF9'},svg);
+    [px(0)-T+1, px(0)-T/2, px(0)-1].forEach(x=>el('line',{x1:x,y1:y1,x2:x,y2:y2,class:'winline'},svg));
+    const hit=el('rect',{x:px(0)-T-4,y:y1,width:T+8,height:y2-y1,class:'wall-hit'},svg);
+    hit.dataset.tip='window — '+ftIn(w.to-w.from)+' wide · sill '+ftIn(w.sill);
+  });
+  // south door: clear + swing arc
+  const d=ROOM.door, dx1=px(d.from), dx2=px(d.to);
+  el('rect',{x:dx1,y:px(14)-1,width:dx2-dx1,height:T+2,fill:'#FFFDF9'},svg);
+  el('line',{x1:dx1,y1:px(14),x2:dx1,y2:px(14)-(dx2-dx1),stroke:'#8B7355','stroke-width':1.2},svg);
+  el('path',{d:`M ${dx1} ${px(14)-(dx2-dx1)} A ${dx2-dx1} ${dx2-dx1} 0 0 1 ${dx2} ${px(14)}`,fill:'none',stroke:'#8B7355','stroke-width':1,'stroke-dasharray':'3 3',opacity:.6},svg);
+  const dhit=el('rect',{x:dx1,y:px(14)-6,width:dx2-dx1,height:T+12,class:'wall-hit'},svg);
+  dhit.dataset.tip='door — '+ftIn(d.to-d.from)+' wide';
+  // detected objects (ghosts) unless suppressed
+  if(!opts.hideObjects){
+    ROOM.objects.forEach(o=>{
+      if(opts.clearSofa && o.cat==='sofa') return;
+      const g=el('g',{},svg);
+      const r=el('rect',{x:px(o.x),y:px(o.z),width:o.w*SCALE,height:o.d*SCALE,rx:3,class:'ghost'},g);
+      if(opts.dotExisting){ r.setAttribute('stroke-dasharray','3 3'); r.setAttribute('stroke-opacity','.35'); }
+      r.dataset.tip=o.label;
+      el('text',{x:px(o.x)+o.w*SCALE/2,y:px(o.z)+o.d*SCALE/2+3,class:'ghostlabel','text-anchor':'middle'},g).textContent=o.cat;
+    });
+  }
+  // overall dims (quiet, corners)
+  el('text',{x:px(9.5),y:px(0)-T-10,class:'measurelabel','text-anchor':'middle',opacity:.55},svg).textContent='19′ 0″';
+  el('text',{x:px(0)-T-12,y:px(7),class:'measurelabel','text-anchor':'middle',opacity:.55,transform:`rotate(-90 ${px(0)-T-12} ${px(7)})`},svg).textContent='14′ 0″';
+  return svg;
+}
+
+const plansvg=document.getElementById('plansvg');
+drawPlan(plansvg);
+
+/* hover dimension chip */
+const chip=document.getElementById('dimchip');
+const planwrap=document.getElementById('planwrap');
+planwrap.addEventListener('mousemove',e=>{
+  const t=e.target;
+  if(t.dataset && t.dataset.tip){
+    chip.style.display='block';
+    chip.textContent=t.dataset.tip;
+    const r=planwrap.getBoundingClientRect();
+    chip.style.left=(e.clientX-r.left+14)+'px';
+    chip.style.top=(e.clientY-r.top-8)+'px';
+  } else chip.style.display='none';
+});
+planwrap.addEventListener('mouseleave',()=>chip.style.display='none');
+
+/* measure tool */
+const measureBtn=document.getElementById('measureBtn'), clearBtn=document.getElementById('clearBtn'), capright=document.getElementById('capright');
+let measuring=false, mPts=[], mLayer=null;
+measureBtn.addEventListener('click',()=>{
+  measuring=!measuring;
+  measureBtn.classList.toggle('on',measuring);
+  capright.textContent = measuring ? 'click two points' : 'hover for dimensions';
+});
+function svgPoint(e){
+  const pt=plansvg.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY;
+  return pt.matrixTransform(plansvg.getScreenCTM().inverse());
+}
+plansvg.addEventListener('click',e=>{
+  if(!measuring) return;
+  const p=svgPoint(e); mPts.push(p);
+  if(!mLayer){ mLayer=el('g',{},plansvg); }
+  el('circle',{cx:p.x,cy:p.y,r:3.4,fill:'#2C2926'},mLayer);
+  if(mPts.length===2){
+    const [a,b]=mPts;
+    el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,class:'measureline'},mLayer);
+    const distFt=Math.hypot(b.x-a.x,b.y-a.y)/SCALE;
+    const t=el('text',{x:(a.x+b.x)/2+8,y:(a.y+b.y)/2-8,class:'measurelabel'},mLayer);
+    t.textContent=ftIn(distFt);
+    mPts=[]; clearBtn.style.display='inline-block';
+  }
+});
+clearBtn.addEventListener('click',()=>{ if(mLayer){mLayer.remove();mLayer=null;} mPts=[]; clearBtn.style.display='none'; });
+
+/* ————— ORBIT: three.js from the same ROOM ————— */
+let orbitInited=false, renderer, scene, camera, canvas;
+let azim=0.82, polar=1.08, radius=32;
+const target={x:ROOM.width/2, y:2.2, z:ROOM.depth/2};
+
+function buildOrbit(){
+  canvas=document.getElementById('orbitcanvas');
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0xFAF7F2);
+  camera=new THREE.PerspectiveCamera(38,16/9,.1,400);
+
+  const oak=0x8B7355, mocha=0x5C4A3C;
+  const fillMat=new THREE.MeshBasicMaterial({color:oak,transparent:true,opacity:.05,depthWrite:false});
+  const fillMatLow=new THREE.MeshBasicMaterial({color:oak,transparent:true,opacity:.025,depthWrite:false});
+  const edgeMat=new THREE.LineBasicMaterial({color:mocha,transparent:true,opacity:.85});
+  const edgeGhost=new THREE.LineBasicMaterial({color:oak,transparent:true,opacity:.5});
+  const dashMat=new THREE.LineDashedMaterial({color:oak,dashSize:.32,gapSize:.22,transparent:true,opacity:.6});
+
+  function box(w,h,d,x,y,z,mats){
+    const g=new THREE.BoxGeometry(w,h,d);
+    const m=new THREE.Mesh(g,mats.fill); m.position.set(x,y,z); scene.add(m);
+    const eg=new THREE.EdgesGeometry(g);
+    let lines;
+    if(mats.dashed){ lines=new THREE.LineSegments(eg,dashMat); lines.computeLineDistances(); }
+    else lines=new THREE.LineSegments(eg,mats.edge);
+    lines.position.set(x,y,z); scene.add(lines);
+  }
+  const T=ROOM.thick, H=ROOM.wallH;
+  // floor
+  const floorG=new THREE.PlaneGeometry(ROOM.width,ROOM.depth);
+  const floor=new THREE.Mesh(floorG,new THREE.MeshBasicMaterial({color:oak,transparent:true,opacity:.08}));
+  floor.rotation.x=-Math.PI/2; floor.position.set(ROOM.width/2,0,ROOM.depth/2); scene.add(floor);
+  const fe=new THREE.LineSegments(new THREE.EdgesGeometry(floorG),edgeMat);
+  fe.rotation.x=-Math.PI/2; fe.position.copy(floor.position); scene.add(fe);
+
+  // walls (open-top): N-west run, N-east run (low conf), E, S (with door gap), W (with window gaps)
+  box(13,H,T, 6.5,H/2,-T/2, {fill:fillMat,edge:edgeMat});
+  box(6,H,T, 16,H/2,-T/2, {fill:fillMatLow,dashed:true});
+  box(T,H,ROOM.depth, ROOM.width+T/2,H/2,ROOM.depth/2, {fill:fillMat,edge:edgeMat});
+  // south wall in two runs around the door (door 15.5–18.5, header above)
+  box(15.5,H,T, 7.75,H/2,ROOM.depth+T/2, {fill:fillMat,edge:edgeMat});
+  box(.5,H,T, 18.75,H/2,ROOM.depth+T/2, {fill:fillMat,edge:edgeMat});
+  box(3,H-ROOM.door.h,T, 17,(H+ROOM.door.h)/2,ROOM.depth+T/2, {fill:fillMat,edge:edgeMat});
+  // west wall in runs around two windows (2.5–6.5, 8.5–12.5), sill 2.5 head 7
+  const W=ROOM.windows;
+  box(T,H,2.5, -T/2,H/2,1.25, {fill:fillMat,edge:edgeMat});
+  box(T,H,2,   -T/2,H/2,7.5,  {fill:fillMat,edge:edgeMat});
+  box(T,H,1.5, -T/2,H/2,13.25,{fill:fillMat,edge:edgeMat});
+  W.forEach(w=>{
+    const len=w.to-w.from, mid=(w.from+w.to)/2;
+    box(T,w.sill,len, -T/2,w.sill/2,mid, {fill:fillMat,edge:edgeMat});           // below sill
+    box(T,H-w.head,len, -T/2,(H+w.head)/2,mid, {fill:fillMat,edge:edgeMat});     // above head
+    // window frame outline on the opening
+    const fg=new THREE.PlaneGeometry(len, w.head-w.sill);
+    const fl=new THREE.LineSegments(new THREE.EdgesGeometry(fg),edgeMat);
+    fl.rotation.y=Math.PI/2; fl.position.set(0,(w.sill+w.head)/2,mid); scene.add(fl);
+    const cross=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(len/2,(w.head-w.sill))),new THREE.LineBasicMaterial({color:mocha,transparent:true,opacity:.35}));
+    cross.rotation.y=Math.PI/2; cross.position.set(0,(w.sill+w.head)/2,mid); scene.add(cross);
+  });
+  // detected furniture ghosts
+  ROOM.objects.forEach(o=>{
+    box(o.w,o.h,o.d, o.x+o.w/2,o.h/2,o.z+o.d/2, {fill:new THREE.MeshBasicMaterial({color:oak,transparent:true,opacity:.04,depthWrite:false}),edge:edgeGhost});
+  });
+  orbitInited=true;
+  sizeOrbit(); placeCamera(); renderLoop();
+}
+function placeCamera(){
+  camera.position.set(
+    target.x + radius*Math.sin(polar)*Math.cos(azim),
+    target.y + radius*Math.cos(polar),
+    target.z + radius*Math.sin(polar)*Math.sin(azim)
+  );
+  camera.lookAt(target.x,target.y,target.z);
+}
+function sizeOrbit(){
+  const w=canvas.clientWidth||canvas.parentElement.clientWidth, h=560;
+  renderer.setSize(w,h,false);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+function renderLoop(){ requestAnimationFrame(renderLoop); if(document.getElementById('orbitwrap').style.display!=='none') renderer.render(scene,camera); }
+
+let dragging=false,lx=0,ly=0;
+document.getElementById('orbitcanvas').addEventListener('pointerdown',e=>{dragging=true;lx=e.clientX;ly=e.clientY;});
+window.addEventListener('pointermove',e=>{
+  if(!dragging)return;
+  azim += (e.clientX-lx)*.006; polar -= (e.clientY-ly)*.004;
+  polar=Math.max(.35,Math.min(1.45,polar)); lx=e.clientX; ly=e.clientY; placeCamera();
+});
+window.addEventListener('pointerup',()=>dragging=false);
+document.getElementById('orbitcanvas').addEventListener('wheel',e=>{
+  e.preventDefault(); radius=Math.max(14,Math.min(60,radius+e.deltaY*.03)); placeCamera();
+},{passive:false});
+
+/* mode toggle */
+const modePlan=document.getElementById('modePlan'), modeOrbit=document.getElementById('modeOrbit');
+modePlan.addEventListener('click',()=>{
+  modePlan.classList.add('active'); modeOrbit.classList.remove('active');
+  planwrap.style.display='block'; document.getElementById('orbitwrap').style.display='none';
+});
+modeOrbit.addEventListener('click',()=>{
+  modeOrbit.classList.add('active'); modePlan.classList.remove('active');
+  planwrap.style.display='none'; document.getElementById('orbitwrap').style.display='block';
+  if(!orbitInited) buildOrbit(); else sizeOrbit();
+});
+
+/* ————— ANNOTATE scene: plan + pins ————— */
+const annsvg=document.getElementById('annsvg');
+drawPlan(annsvg);
+(function pins(){
+  const p1=el('g',{class:'pin'},annsvg);
+  el('circle',{cx:px(0)+10,cy:px(7.4),r:10,class:'pindot'},p1);
+  el('text',{x:px(0)+10,y:px(7.4)+3.5,class:'pinnum','text-anchor':'middle'},p1).textContent='1';
+  const p2=el('g',{class:'pin'},annsvg);
+  el('circle',{cx:px(16),cy:px(0)+6,r:10,class:'pindot'},p2);
+  el('text',{x:px(16),y:px(0)+9.5,class:'pinnum','text-anchor':'middle'},p2).textContent='2';
+})();
+
+/* ————— PLACE scene: plan + footprints + clearances ————— */
+const placesvg=document.getElementById('placesvg');
+drawPlan(placesvg,{clearSofa:true,dotExisting:true});
+(function place(){
+  // proposed Cloud sofa 84×36 against east wall, slightly north — leaves a tight walkway south
+  const s={x:15.9, z:2.6, w:3.0, d:7.0};
+  const g=el('g',{},placesvg);
+  el('rect',{x:px(s.x),y:px(s.z),width:s.w*SCALE,height:s.d*SCALE,rx:3,class:'fp'},g);
+  el('text',{x:px(s.x)+s.w*SCALE/2,y:px(s.z)+s.d*SCALE/2+3,class:'fplabel','text-anchor':'middle'},g).textContent='cloud sofa';
+  // proposed coffee table
+  const t={x:12.8,z:4.6,w:2.0,d:4.0};
+  el('rect',{x:px(t.x),y:px(t.z),width:t.w*SCALE,height:t.d*SCALE,rx:3,class:'fp'},placesvg);
+  el('text',{x:px(t.x)+t.w*SCALE/2,y:px(t.z)+t.d*SCALE/2+3,class:'fplabel','text-anchor':'middle'},placesvg).textContent='table';
+  // clearance ok: sofa front to table — 16"
+  el('line',{x1:px(s.x),y1:px(6.6),x2:px(t.x+t.w),y2:px(6.6),class:'clr-ok'},placesvg);
+  el('text',{x:(px(s.x)+px(t.x+t.w))/2,y:px(6.6)-7,class:'clrlab-ok','text-anchor':'middle'},placesvg).textContent='16″ ✓';
+  // clearance bad: sofa south end to south wall walkway — 28"
+  el('line',{x1:px(s.x+s.w/2),y1:px(s.z+s.d),x2:px(s.x+s.w/2),y2:px(14),class:'clr-bad'},placesvg);
+  el('text',{x:px(s.x+s.w/2)-8,y:(px(s.z+s.d)+px(14))/2+4,class:'clrlab-bad','text-anchor':'end'},placesvg).textContent='28″ — under 36″';
+})();
+</script>
+</body>
+</html>
