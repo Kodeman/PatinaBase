@@ -49,6 +49,15 @@ class Healthz(BaseModel):
     text_dim: int
     image_dim: int
     warmed: bool
+    usd_available: bool  # Room View USDZ→GLB toolchain importable (cheap cached probe)
+
+
+# ─── /convert/usdz-to-glb (Room View archival lane — R107) ───────────────────
+
+
+class UsdzConvertRequest(BaseModel):
+    usdz_url: str
+    scan_id: str
 
 
 # ─── /fit/taste (design §8.2 BT MAP refit — Wave 4A) ─────────────────────────

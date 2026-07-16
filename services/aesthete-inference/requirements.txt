@@ -6,3 +6,9 @@ pillow>=10.4,<12
 onnxruntime>=1.20,<2
 tokenizers>=0.20,<1
 numpy>=1.26,<3
+# Room View USDZ→GLB lane (R107). usd-core ships prebuilt wheels (incl. macOS
+# arm64 + manylinux); the runtime import is lazy (app/usdz.py) so /embed/* is
+# never blocked by it. ⚠ usd-core is large — ~35 MB wheel, ~220 MB unpacked on
+# disk (see Dockerfile stage-2 note).
+usd-core>=25.5,<27
+pygltflib>=1.16,<2

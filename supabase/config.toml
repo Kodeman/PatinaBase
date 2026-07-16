@@ -366,6 +366,16 @@ verify_jwt = true
 [functions.parse-room-scan]
 verify_jwt = true
 
+# Room View USDZ→GLB archival lane (R107, 00338). Cron-invoked every 15 min via
+# pg_cron -> invoke_edge_function (service-role Bearer, same cron->edge bridge as
+# the other Agent OS crons) and also callable with { scanId, force? }. It drives
+# aesthete-inference /convert/usdz-to-glb and stamps room_scans.model_url_gltf.
+# No browser calls it; the function additionally requires a service_role claim
+# in-code. verify_jwt = true is the platform default; explicit here for intent,
+# matching the other cron-invoked functions.
+[functions.convert-room-scan-glb]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
