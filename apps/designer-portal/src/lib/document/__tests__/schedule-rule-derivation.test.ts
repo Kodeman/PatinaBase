@@ -3,16 +3,27 @@ import { epochDayFromISO, isoFromEpochDay } from '@patina/utils';
 import {
   buildTimeScale,
   xToEpochDay,
+  clientXToPct,
   assignLabelRows,
   ruleWeightForStatus,
   ruleSegments,
   ruleDiamonds,
   ruleThreads,
+  ruleBoundaries,
+  boundaryDurationDays,
+  milestoneOffsetDays,
+  projectGhosts,
   unplacedPhases,
   foldedLayers,
   type TimeScale,
   type LabelInput,
 } from '../schedule-rule-derivation';
+import type {
+  RippleDiff,
+  RipplePendingEdit,
+  RipplePhaseChange,
+  RippleMilestoneMove,
+} from '../schedule-ripple-derivation';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Factories — every field defaulted so a case declares only what it exercises.
@@ -477,5 +488,276 @@ describe('xToEpochDay', () => {
   it('non-finite x reads as the left edge; never NaN', () => {
     expect(xToEpochDay(scale, Number.NaN)).toBe(Math.round(scale.minEpoch));
     expect(Number.isFinite(xToEpochDay(scale, Number.POSITIVE_INFINITY))).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ruleDiamonds — anchored flag pass-through (Slice 04 T7)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ruleDiamonds — anchored flag', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('carries the resolver anchored flag onto each diamond (drag-refuse source)', () => {
+    const ms = [
+      rmilestone({ id: 'held', phaseId: 'a', date: '2026-01-10', anchored: true, derivedStatus: 'signed' }),
+      rmilestone({ id: 'rides', phaseId: 'a', date: '2026-01-20', anchored: false, derivedStatus: 'due' }),
+    ];
+    const diamonds = ruleDiamonds(ms, scale);
+    expect(diamonds.map((d) => [d.id, d.anchored])).toEqual([
+      ['held', true],
+      ['rides', false],
+    ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// clientXToPct — pointer clientX → x% within a track rect
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('clientXToPct', () => {
+  it('maps clientX to a proportional percentage of the rect width', () => {
+    const rect = { left: 100, width: 400 };
+    expect(clientXToPct(100, rect)).toBe(0);
+    expect(clientXToPct(300, rect)).toBe(50);
+    expect(clientXToPct(500, rect)).toBe(100);
+  });
+
+  it('is NOT clamped (a drag past the edge overflows; xToEpochDay does the clamp)', () => {
+    const rect = { left: 0, width: 100 };
+    expect(clientXToPct(-20, rect)).toBe(-20);
+    expect(clientXToPct(150, rect)).toBe(150);
+  });
+
+  it('a zero/negative-width rect reads as the left edge (0), never NaN/Infinity', () => {
+    expect(clientXToPct(500, { left: 0, width: 0 })).toBe(0);
+    expect(clientXToPct(500, { left: 0, width: -10 })).toBe(0);
+    // composed with a real rect, x=left always reads 0.
+    expect(Number.isFinite(clientXToPct(42, { left: 42, width: 1 }))).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// boundaryDurationDays / milestoneOffsetDays — pure drag→edit mappers
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('boundaryDurationDays', () => {
+  it('duration = dragged day − upstream start', () => {
+    const start = epochDayFromISO('2026-01-01')!;
+    const dragged = epochDayFromISO('2026-01-15')!;
+    expect(boundaryDurationDays(start, dragged)).toBe(14);
+  });
+
+  it('clamps to ≥ 1 — a boundary dragged to/behind the start is a one-day phase', () => {
+    const start = epochDayFromISO('2026-01-10')!;
+    expect(boundaryDurationDays(start, start)).toBe(1); // onto the start
+    expect(boundaryDurationDays(start, start - 5)).toBe(1); // behind the start
+    expect(boundaryDurationDays(start, start + 1)).toBe(1); // exactly one day
+  });
+});
+
+describe('milestoneOffsetDays', () => {
+  it('offset = dragged day − host phase end (sign convention: negative = before)', () => {
+    const end = epochDayFromISO('2026-03-01')!;
+    expect(milestoneOffsetDays(end, epochDayFromISO('2026-03-11')!)).toBe(10);
+    expect(milestoneOffsetDays(end, epochDayFromISO('2026-02-19')!)).toBe(-10);
+    expect(milestoneOffsetDays(end, end)).toBe(0); // exactly at the end
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ruleBoundaries — internal-boundary drag handles
+// ═══════════════════════════════════════════════════════════════════════════
+
+function link(id: string, followsPhaseId: string | null, name = id) {
+  return { id, followsPhaseId, name };
+}
+
+describe('ruleBoundaries', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('one boundary per chain edge, at the UPSTREAM end, editing the upstream duration', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'b', start: '2026-01-31', end: '2026-02-28' }),
+      rphase({ id: 'c', start: '2026-02-28', end: '2026-03-31' }),
+    ];
+    const chain = [link('a', null), link('b', 'a'), link('c', 'b')];
+    const bounds = ruleBoundaries(phases, chain, scale);
+    // Two internal boundaries (a→b at a.end, b→c at b.end); root 'a' start absent.
+    expect(bounds.map((x) => x.upstreamPhaseId)).toEqual(['a', 'b']);
+    const ab = bounds.find((x) => x.upstreamPhaseId === 'a')!;
+    expect(ab.xPct).toBeCloseTo(scale.toX('2026-01-31')!, 10);
+    expect(ab.upstreamStartEpoch).toBe(epochDayFromISO('2026-01-01')!);
+    expect(ab.downstreamPhaseId).toBe('b');
+    expect(ab.locked).toBe(false);
+  });
+
+  it('root start is never a boundary (the root has no predecessor)', () => {
+    const phases = [rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' })];
+    // 'a' follows nobody → no boundary at its start; no successor → none at its end.
+    expect(ruleBoundaries(phases, [link('a', null)], scale)).toEqual([]);
+  });
+
+  it('locks the boundary when the DOWNSTREAM phase is anchored (refuse source)', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'install', start: '2026-02-15', end: '2026-03-15', anchored: true }),
+    ];
+    const bounds = ruleBoundaries(phases, [link('a', null), link('install', 'a', 'Installation')], scale);
+    expect(bounds).toHaveLength(1);
+    expect(bounds[0].locked).toBe(true);
+    expect(bounds[0].downstreamName).toBe('Installation');
+  });
+
+  it('omits a boundary whose upstream is not placed (no end on the scale)', () => {
+    const phases = [
+      rphase({ id: 'a', start: null, end: null, source: 'unresolved' }),
+      rphase({ id: 'b', start: '2026-02-01', end: '2026-03-01' }),
+    ];
+    expect(ruleBoundaries(phases, [link('a', null), link('b', 'a')], scale)).toEqual([]);
+  });
+
+  it('a fork collapses to one handle; locks if ANY successor is anchored and names it', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'b', start: '2026-01-31', end: '2026-02-15' }),
+      rphase({ id: 'c', start: '2026-02-20', end: '2026-03-10', anchored: true }),
+    ];
+    const chain = [link('a', null), link('b', 'a', 'B'), link('c', 'a', 'C-anchored')];
+    const bounds = ruleBoundaries(phases, chain, scale);
+    expect(bounds.map((x) => x.upstreamPhaseId)).toEqual(['a']);
+    expect(bounds[0].locked).toBe(true);
+    expect(bounds[0].downstreamName).toBe('C-anchored');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// projectGhosts — ripple diff → dashed-terracotta ghost layer
+// ═══════════════════════════════════════════════════════════════════════════
+
+function pchange(over: Partial<RipplePhaseChange> & { phaseId: string }): RipplePhaseChange {
+  return {
+    phaseId: over.phaseId,
+    name: over.name ?? over.phaseId,
+    fromStart: over.fromStart ?? null,
+    toStart: over.toStart ?? null,
+    fromEnd: over.fromEnd ?? null,
+    toEnd: over.toEnd ?? null,
+    moved: over.moved ?? false,
+    anchored: over.anchored ?? false,
+    holds: over.holds ?? false,
+  };
+}
+
+function mmove(over: Partial<RippleMilestoneMove> & { milestoneId: string; phaseId: string }): RippleMilestoneMove {
+  return {
+    milestoneId: over.milestoneId,
+    phaseId: over.phaseId,
+    name: over.name ?? over.milestoneId,
+    fromDate: over.fromDate ?? null,
+    toDate: over.toDate ?? null,
+    moved: over.moved ?? false,
+    anchored: over.anchored ?? false,
+  };
+}
+
+function rdiff(over: Partial<RippleDiff> & { edit: RipplePendingEdit }): RippleDiff {
+  return {
+    edit: over.edit,
+    editedName: over.editedName ?? '',
+    phaseChanges: over.phaseChanges ?? [],
+    milestoneMoves: over.milestoneMoves ?? [],
+    followerCount: over.followerCount ?? 0,
+    heldAnchors: over.heldAnchors ?? [],
+    slackBefore: over.slackBefore ?? null,
+    slackAfter: over.slackAfter ?? null,
+    slackDelta: over.slackDelta ?? null,
+    conflicts: over.conflicts ?? [],
+    anchorViolation: over.anchorViolation ?? false,
+    rippleSize: over.rippleSize ?? 0,
+    durationDelta: over.durationDelta ?? null,
+  };
+}
+
+describe('projectGhosts', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('phase-duration: edited tick at the new END, arrow old→new END, ticks for followers at their new START', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 40 },
+      phaseChanges: [
+        pchange({ phaseId: 'a', fromEnd: '2026-01-31', toEnd: '2026-02-10', moved: true }),
+        pchange({ phaseId: 'b', fromStart: '2026-01-31', toStart: '2026-02-10', toEnd: '2026-03-01', moved: true }),
+      ],
+    });
+    const g = projectGhosts(diff, scale);
+    // edited 'a' tick at its new END; follower 'b' tick at its new START.
+    const tickA = g.ticks.find((t) => t.id === 'a')!;
+    const tickB = g.ticks.find((t) => t.id === 'b')!;
+    expect(tickA.date).toBe('2026-02-10');
+    expect(tickA.xPct).toBeCloseTo(scale.toX('2026-02-10')!, 10);
+    expect(tickB.date).toBe('2026-02-10'); // b's new start
+    // arrow spans old end (Jan 31) → new end (Feb 10).
+    expect(g.arrow).not.toBeNull();
+    expect(g.arrow!.leftPct).toBeCloseTo(scale.toX('2026-01-31')!, 10);
+    expect(g.arrow!.widthPct).toBeCloseTo(scale.toX('2026-02-10')! - scale.toX('2026-01-31')!, 10);
+  });
+
+  it('phase-anchor: the edited tick sits at the new START (not the end)', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-anchor', phaseId: 'a', anchorDate: '2026-02-05' },
+      phaseChanges: [pchange({ phaseId: 'a', fromStart: '2026-01-01', toStart: '2026-02-05', toEnd: '2026-03-01', moved: true, anchored: true })],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks).toHaveLength(1);
+    expect(g.ticks[0].date).toBe('2026-02-05');
+  });
+
+  it('milestone-offset: a dashed diamond at the new date + an arrow old→new; no phase tick', () => {
+    const diff = rdiff({
+      edit: { kind: 'milestone-offset', milestoneId: 'm', phaseId: 'a', offsetDays: 3 },
+      milestoneMoves: [mmove({ milestoneId: 'm', phaseId: 'a', name: 'Sofa', fromDate: '2026-02-01', toDate: '2026-02-14', moved: true })],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks).toEqual([]);
+    expect(g.diamonds).toHaveLength(1);
+    expect(g.diamonds[0]).toMatchObject({ id: 'm', name: 'Sofa', date: '2026-02-14' });
+    expect(g.arrow).not.toBeNull();
+  });
+
+  it('an unmoved phase/milestone contributes no ghost', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 30 },
+      phaseChanges: [
+        pchange({ phaseId: 'a', fromEnd: '2026-01-31', toEnd: '2026-01-31', moved: false }),
+        pchange({ phaseId: 'held', toStart: '2026-03-01', moved: false, anchored: true, holds: true }),
+      ],
+      milestoneMoves: [mmove({ milestoneId: 'm', phaseId: 'a', fromDate: '2026-02-01', toDate: '2026-02-01', moved: false })],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks).toEqual([]);
+    expect(g.diamonds).toEqual([]);
+  });
+
+  it('a null/unplaceable to-date drops that ghost — never a ghost at x:0/NaN', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 30 },
+      phaseChanges: [pchange({ phaseId: 'a', fromEnd: '2026-01-31', toEnd: null, moved: true })],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks).toEqual([]);
+  });
+
+  it('a ghost past the scale edge overflows in x but keeps the TRUE date on the spec (label clamp)', () => {
+    // toEnd is far past the committed scale's max (2026-04-11) → toX > 100.
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 400 },
+      phaseChanges: [pchange({ phaseId: 'a', fromEnd: '2026-01-31', toEnd: '2026-08-01', moved: true })],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks).toHaveLength(1);
+    expect(g.ticks[0].xPct).toBeGreaterThan(100); // raw overflow — the component clamps position
+    expect(g.ticks[0].date).toBe('2026-08-01'); // the true date is preserved for the label
   });
 });

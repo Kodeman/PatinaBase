@@ -70,6 +70,15 @@ export interface RippleContextValue {
   clear: () => void;
   /** `session !== null`, exposed as its own field for render-branch clarity. */
   isActive: boolean;
+  /** `true` only under a real `RippleProvider`; `false` on the INERT default.
+   *  The DRAG SURFACES gate on this — the inert `begin()`/`update()` are no-ops,
+   *  so a handle mounted with no provider above would be a dead affordance
+   *  (`isActive` can't tell "no provider" from "provider, nothing pending").
+   *  This is the boring, safe signal: render handles only when a provider is
+   *  actually present. Batch 4 mounts the provider around the Rule, so in
+   *  practice this is always `true` when the Rule renders; until then handles
+   *  simply don't appear (no silent no-op drags). */
+  providerPresent: boolean;
   /** The committed (pre-edit) phases, mapped to the resolver's input shape —
    *  `rippleDiff`'s first argument, computed once here for every consumer. */
   committedPhases: SchedulePhaseInput[];
@@ -97,6 +106,7 @@ const INERT: RippleContextValue = {
   update: () => {},
   clear: () => {},
   isActive: false,
+  providerPresent: false,
   committedPhases: [],
   committedMilestones: [],
   nameById: () => undefined,
@@ -165,6 +175,7 @@ export function RippleProvider({ projectId, children }: { projectId: string; chi
       update,
       clear,
       isActive: session != null,
+      providerPresent: true,
       committedPhases,
       committedMilestones,
       nameById,

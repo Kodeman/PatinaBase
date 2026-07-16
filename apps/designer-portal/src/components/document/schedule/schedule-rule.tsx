@@ -66,26 +66,35 @@
  * Zero shadows (D4).
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useResolvedSchedule } from '@patina/supabase';
 import type { ResolvedPhase } from '@patina/utils';
+import { epochDayFromISO } from '@patina/utils';
 import {
   buildTimeScale,
   ruleSegments,
   ruleDiamonds,
   ruleThreads,
+  ruleBoundaries,
+  boundaryDurationDays,
+  milestoneOffsetDays,
+  xToEpochDay,
   unplacedPhases,
   foldedLayers,
   ruleWeightForStatus,
+  type RuleBoundary,
 } from '@/lib/document/schedule-rule-derivation';
 import { fmtDay } from '@/lib/document/format';
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
 import { useScheduleNav } from './schedule-nav-context';
+import { useRippleSession } from './schedule-ripple-context';
 import { RuleTrack } from './rule-track';
 import { RuleDiamond } from './rule-diamond';
 import { RuleToday } from './rule-today';
 import { RuleThread, THREAD_LANE_PITCH } from './rule-thread';
 import { RuleLabelRow, type RuleLabelItem } from './rule-label-row';
+import { RuleBoundaryHandle } from './rule-boundary-handle';
+import { RuleGhostLayer } from './rule-ghost-layer';
 
 export interface ScheduleRuleProps {
   projectId: string;
@@ -109,6 +118,15 @@ function phaseSubline(rp: ResolvedPhase | null): string {
 export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   const schedule = useResolvedSchedule(projectId);
   const { reveal } = useScheduleNav();
+  // The one preview session (Slice 04). INERT (no-op, providerPresent=false)
+  // until batch 4 mounts RippleProvider around the Rule — until then the drag
+  // handles simply don't render and the ghost layer never has a diff to draw.
+  const ripple = useRippleSession();
+
+  // The positioned track container — the % coordinate space every drag reads
+  // its pointer x against (attached to whichever of the pinned/unpinned surfaces
+  // is mounted; only one is at a time).
+  const trackRef = useRef<HTMLDivElement>(null);
 
   // Render-side clock — the same convention as useResolvedSchedule's injected
   // `today` (computed once per mount).
@@ -168,6 +186,27 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   const unplaced = useMemo(() => unplacedPhases(resolvedPhases), [resolvedPhases]);
 
   const todayX = useMemo(() => scale?.toX(today) ?? null, [scale, today]);
+
+  // Internal-boundary drag handles — one per chain edge (Slice 04 T7). The
+  // chain (id → followsPhaseId + name) comes from the raw rows; the resolver's
+  // start/end + anchored come from `resolvedPhases`. Null scale ⇒ [] (the empty
+  // early-return is below; the hook order stays fixed).
+  const boundaries = useMemo<RuleBoundary[]>(() => {
+    if (!scale) return [];
+    const chain = schedule.phases.map((r) => ({
+      id: r.id,
+      followsPhaseId: r.follows_phase_id ?? null,
+      name: r.name,
+    }));
+    return ruleBoundaries(resolvedPhases, chain, scale);
+  }, [resolvedPhases, schedule.phases, scale]);
+
+  // Host phase END epoch by phase id — a diamond drag's `milestone-offset` base
+  // (offset from the phase END). null when the host phase has no resolved end.
+  const phaseEndEpochById = useMemo(
+    () => new Map(resolvedPhases.map((p) => [p.id, epochDayFromISO(p.end)])),
+    [resolvedPhases],
+  );
 
   // Labels — one per placed main-lane phase (segments are exactly those). A
   // right-region label end-anchors (grows leftward off its phase END) so it
@@ -243,6 +282,32 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   // loading copy as the only "resolving…" affordance.
   if (schedule.resolved == null || scale == null) return null;
 
+  // Drag → ripple edits. `scale` is narrowed non-null past the early return
+  // above. A boundary drag edits the UPSTREAM phase's DURATION; a diamond drag
+  // the milestone's OFFSET from its host phase END. Both begin on the drag's
+  // first frame (past threshold) and update every frame after — `ripple.update`
+  // no-ops before `begin`, so ordering is safe. Session PERSISTS on pointerup
+  // (the preview stays; batch 4's strip commits or reverts). Handles render
+  // only when a provider is present; the ghost layer draws for BOTH origins
+  // (a spine-originated diff ghosts here too — it reads the same `ripple.diff`).
+  const beginBoundary = (b: RuleBoundary, xPct: number) =>
+    ripple.begin(
+      { kind: 'phase-duration', phaseId: b.upstreamPhaseId, durationDays: boundaryDurationDays(b.upstreamStartEpoch, xToEpochDay(scale, xPct)) },
+      'rule',
+    );
+  const frameBoundary = (b: RuleBoundary, xPct: number) =>
+    ripple.update({ kind: 'phase-duration', phaseId: b.upstreamPhaseId, durationDays: boundaryDurationDays(b.upstreamStartEpoch, xToEpochDay(scale, xPct)) });
+
+  const beginDiamond = (milestoneId: string, phaseId: string, phaseEndEpoch: number, xPct: number) =>
+    ripple.begin(
+      { kind: 'milestone-offset', milestoneId, phaseId, offsetDays: milestoneOffsetDays(phaseEndEpoch, xToEpochDay(scale, xPct)) },
+      'rule',
+    );
+  const frameDiamond = (milestoneId: string, phaseId: string, phaseEndEpoch: number, xPct: number) =>
+    ripple.update({ kind: 'milestone-offset', milestoneId, phaseId, offsetDays: milestoneOffsetDays(phaseEndEpoch, xToEpochDay(scale, xPct)) });
+
+  const handlesOn = ripple.providerPresent;
+
   return (
     <>
       {/* 1px sentinel, in flow ABOVE the sticky wrapper — it leaves the
@@ -265,23 +330,48 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
             <span className="whitespace-nowrap font-heading text-[0.95rem] text-[var(--color-charcoal)]">
               {projectTitle}
             </span>
-            <div className="relative h-[22px] flex-1">
+            <div ref={trackRef} className="relative h-[22px] flex-1">
               <RuleTrack segments={segments} pinned />
-              {diamonds.map((d) => (
-                <RuleDiamond
-                  key={d.id}
-                  xPct={d.xPct}
-                  status={d.status}
-                  label={milestoneNameById.get(d.id) ?? 'Milestone'}
-                  pinned
-                  onClick={() => revealMilestone(d.phaseId, d.id)}
-                />
-              ))}
+              {diamonds.map((d) => {
+                const pe = phaseEndEpochById.get(d.phaseId) ?? null;
+                return (
+                  <RuleDiamond
+                    key={d.id}
+                    xPct={d.xPct}
+                    status={d.status}
+                    label={milestoneNameById.get(d.id) ?? 'Milestone'}
+                    pinned
+                    onClick={() => revealMilestone(d.phaseId, d.id)}
+                    draggable={handlesOn}
+                    anchored={d.anchored}
+                    phaseEndEpoch={pe}
+                    suppressRefuse={ripple.isActive}
+                    trackRef={trackRef}
+                    onDragBegin={(x) => pe != null && beginDiamond(d.id, d.phaseId, pe, x)}
+                    onDragFrame={(x) => pe != null && frameDiamond(d.id, d.phaseId, pe, x)}
+                  />
+                );
+              })}
+              {handlesOn &&
+                boundaries.map((b) => (
+                  <RuleBoundaryHandle
+                    key={b.upstreamPhaseId}
+                    xPct={b.xPct}
+                    pinned
+                    locked={b.locked}
+                    refuseName={b.downstreamName}
+                    suppressRefuse={ripple.isActive}
+                    trackRef={trackRef}
+                    onDragBegin={(x) => beginBoundary(b, x)}
+                    onDragFrame={(x) => frameBoundary(b, x)}
+                  />
+                ))}
               {todayX != null && <RuleToday xPct={todayX} today={today} pinned />}
+              {ripple.diff && <RuleGhostLayer diff={ripple.diff} scale={scale} pinned />}
             </div>
           </div>
         ) : (
-          <div className="pointer-events-auto relative h-full">
+          <div ref={trackRef} className="pointer-events-auto relative h-full">
             {/* labels — hidden <980px (mobile); the stagger short-circuits on
                 a 0-wide container there. */}
             {layers.labels && (
@@ -292,16 +382,43 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
 
             <RuleTrack segments={segments} pinned={false} />
 
-            {diamonds.map((d) => (
-              <RuleDiamond
-                key={d.id}
-                xPct={d.xPct}
-                status={d.status}
-                label={milestoneNameById.get(d.id) ?? 'Milestone'}
-                pinned={false}
-                onClick={() => revealMilestone(d.phaseId, d.id)}
-              />
-            ))}
+            {diamonds.map((d) => {
+              const pe = phaseEndEpochById.get(d.phaseId) ?? null;
+              return (
+                <RuleDiamond
+                  key={d.id}
+                  xPct={d.xPct}
+                  status={d.status}
+                  label={milestoneNameById.get(d.id) ?? 'Milestone'}
+                  pinned={false}
+                  onClick={() => revealMilestone(d.phaseId, d.id)}
+                  draggable={handlesOn}
+                  anchored={d.anchored}
+                  phaseEndEpoch={pe}
+                  suppressRefuse={ripple.isActive}
+                  trackRef={trackRef}
+                  onDragBegin={(x) => pe != null && beginDiamond(d.id, d.phaseId, pe, x)}
+                  onDragFrame={(x) => pe != null && frameDiamond(d.id, d.phaseId, pe, x)}
+                />
+              );
+            })}
+
+            {/* boundary drag handles — internal boundaries only; render only
+                when a ripple provider is present (batch 4). */}
+            {handlesOn &&
+              boundaries.map((b) => (
+                <RuleBoundaryHandle
+                  key={b.upstreamPhaseId}
+                  xPct={b.xPct}
+                  pinned={false}
+                  locked={b.locked}
+                  refuseName={b.downstreamName}
+                  suppressRefuse={ripple.isActive}
+                  trackRef={trackRef}
+                  onDragBegin={(x) => beginBoundary(b, x)}
+                  onDragFrame={(x) => frameBoundary(b, x)}
+                />
+              ))}
 
             {todayX != null && <RuleToday xPct={todayX} today={today} pinned={false} />}
 
@@ -322,6 +439,10 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
                 ))}
               </div>
             )}
+
+            {/* ghost layer — LAST, over the solid committed layers, in the same
+                TimeScale; pointer-events-none; draws for BOTH edit origins. */}
+            {ripple.diff && <RuleGhostLayer diff={ripple.diff} scale={scale} pinned={false} />}
           </div>
         )}
       </section>

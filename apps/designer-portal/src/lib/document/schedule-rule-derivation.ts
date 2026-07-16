@@ -17,6 +17,9 @@
 import type { ResolvedPhase, ResolvedMilestone, MilestoneStatus } from '@patina/utils';
 import { epochDayFromISO } from '@patina/utils';
 import { phaseState } from './schedule-spine-derivation';
+// Type-only — the ghost projector reads a `RippleDiff` (schedule-ripple-
+// derivation imports NOTHING from this file, so this stays acyclic).
+import type { RippleDiff } from './schedule-ripple-derivation';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // buildTimeScale — the date→x proportional scale, spanning today
@@ -107,6 +110,217 @@ export function xToEpochDay(scale: TimeScale, xPct: number): number {
   const lo = Math.round(scale.minEpoch);
   const hi = Math.round(scale.maxEpoch);
   return Math.max(lo, Math.min(hi, snapped));
+}
+
+/**
+ * Turn a pointer's `clientX` into an x-position in % within a track's bounding
+ * rect — the drag surfaces' first step (clientX → `xPct`, then `xToEpochDay`
+ * snaps it to a day). Pure + total: a zero/negative-width rect (a hidden or
+ * unmeasured track) reads as the left edge (0), never NaN/Infinity. The result
+ * is NOT clamped here — `xToEpochDay` does the [0,100] clamp against the padded
+ * domain, so a drag a hair past the edge still reads as the edge day.
+ */
+export function clientXToPct(clientX: number, rect: { left: number; width: number }): number {
+  if (!rect || !Number.isFinite(rect.width) || rect.width <= 0) return 0;
+  const pct = ((clientX - rect.left) / rect.width) * 100;
+  return Number.isFinite(pct) ? pct : 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ruleBoundaries — internal-boundary drag handles (upstream phase-duration)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * One draggable boundary per CHAIN EDGE (a phase D that `followsPhaseId` an
+ * upstream phase U). The handle sits at U's resolved END (the shared boundary
+ * tick); a drag edits U's `phase-duration` (Slice 04 T7 — the ripple's
+ * `phase-duration` kind). The ROOT start is never a boundary (the root has no
+ * predecessor, so it never appears as a downstream `D`), satisfying "root start
+ * not draggable" by construction. A boundary is `locked` when the DOWNSTREAM
+ * phase is anchored: its start is pinned, so the boundary can't move — the drag
+ * surface refuses with a firm nudge naming `downstreamName` and begins no
+ * session ("anchored phase's own start refuses" is the same tick, since the
+ * boundary IS the downstream's start).
+ */
+export interface RuleBoundary {
+  /** Stable key + the UPSTREAM phase whose duration a drag edits. */
+  upstreamPhaseId: string;
+  downstreamPhaseId: string;
+  /** The downstream phase's name — the refuse nudge's `{name}`. */
+  downstreamName: string;
+  /** x% of the boundary tick — the upstream phase's resolved END. */
+  xPct: number;
+  /** Epoch day of the upstream phase's resolved START — the duration base
+   *  (a drag's new duration = draggedEpochDay − upstreamStartEpoch, clamped). */
+  upstreamStartEpoch: number;
+  /** Downstream anchored ⇒ locked: a drag refuses (nudge), begins no session. */
+  locked: boolean;
+}
+
+export function ruleBoundaries(
+  resolvedPhases: ReadonlyArray<ResolvedPhase>,
+  chain: ReadonlyArray<{ id: string; followsPhaseId: string | null; name: string }>,
+  scale: TimeScale,
+): RuleBoundary[] {
+  const byId = new Map(resolvedPhases.map((p) => [p.id, p]));
+  // Keyed by upstream so a fork (two phases following one) yields ONE handle at
+  // that boundary; it locks if ANY successor is anchored, and names the anchored
+  // one (the successor that actually blocks the drag).
+  const byUpstream = new Map<string, RuleBoundary>();
+
+  for (const d of chain) {
+    if (!d || d.followsPhaseId == null) continue; // root / unchained — no boundary
+    const down = byId.get(d.id);
+    const up = byId.get(d.followsPhaseId);
+    if (!down || !up) continue;
+    if (up.lane !== 'main') continue; // a thread upstream draws no main-lane boundary
+    const x = scale.toX(up.end);
+    const startEpoch = epochDayFromISO(up.start);
+    if (x == null || startEpoch == null) continue; // upstream not placed — no handle
+
+    const existing = byUpstream.get(up.id);
+    if (existing) {
+      if (down.anchored && !existing.locked) {
+        existing.locked = true;
+        existing.downstreamPhaseId = down.id;
+        existing.downstreamName = d.name;
+      }
+      continue;
+    }
+    byUpstream.set(up.id, {
+      upstreamPhaseId: up.id,
+      downstreamPhaseId: down.id,
+      downstreamName: d.name,
+      xPct: x,
+      upstreamStartEpoch: startEpoch,
+      locked: down.anchored,
+    });
+  }
+  return [...byUpstream.values()];
+}
+
+/**
+ * A boundary drag → the UPSTREAM phase's new effective duration in whole days,
+ * clamped to ≥ 1 (a phase can never shrink below a single day). `draggedEpochDay`
+ * is the day the handle was dragged to (`xToEpochDay`'s output). Pure — the
+ * `phase-duration` edit's `durationDays` value.
+ */
+export function boundaryDurationDays(upstreamStartEpoch: number, draggedEpochDay: number): number {
+  return Math.max(1, Math.round(draggedEpochDay) - Math.round(upstreamStartEpoch));
+}
+
+/**
+ * A diamond drag → the milestone's new offset from its host phase END in whole
+ * days (negative = before the end, matching `offsetDays`' sign convention).
+ * `phaseEndEpoch` is the host phase's resolved END; `draggedEpochDay` the day the
+ * diamond was dragged to. Pure — the `milestone-offset` edit's `offsetDays`.
+ */
+export function milestoneOffsetDays(phaseEndEpoch: number, draggedEpochDay: number): number {
+  return Math.round(draggedEpochDay) - Math.round(phaseEndEpoch);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// projectGhosts — the ripple diff → the Rule's dashed-terracotta ghost layer
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** A dashed ghost tick at a moved phase boundary's NEW date. `date` carries the
+ *  TRUE date so the label reads honestly even when `xPct` overflows the scale
+ *  (the component clamps the position, never the date). */
+export interface GhostTickSpec {
+  id: string;
+  xPct: number;
+  date: string | null;
+}
+/** A dashed ghost diamond at a moved milestone's NEW date (name for the label). */
+export interface GhostDiamondSpec {
+  id: string;
+  xPct: number;
+  name: string;
+  date: string | null;
+}
+/** The edit's old→new vector along the line (already clamped to [0,100]). */
+export interface GhostArrowSpec {
+  leftPct: number;
+  widthPct: number;
+}
+export interface RuleGhosts {
+  ticks: GhostTickSpec[];
+  diamonds: GhostDiamondSpec[];
+  arrow: GhostArrowSpec | null;
+}
+
+function clampPct(x: number): number {
+  return Math.max(0, Math.min(100, x));
+}
+
+/**
+ * Project a `RippleDiff` onto the Rule's ghost layer (Slice 04 T8). Positions
+ * are the diff's TO-dates run through `scale.toX` (the SAME committed scale the
+ * solid layers use — the ghosts pin to committed and overflow past its edge
+ * rather than rescaling). Works for BOTH origins: a spine-originated session's
+ * diff ghosts on the Rule identically to a rule drag's, because both read the
+ * same diff. Pure + total: a null/unplaceable date drops that one ghost, never
+ * a ghost at x:0/NaN.
+ *
+ *  - ticks    — one per MOVED phase, at the boundary the ripple moved: the
+ *               edited phase at its own dragged boundary (END for a duration
+ *               edit, START for an anchor edit), every follower at its shifted
+ *               START. This is "every downstream consequence" the prototype's
+ *               dashed ticks promise.
+ *  - diamonds — one per MOVED milestone (the dragged one AND any that rode a
+ *               moved phase), at its new date.
+ *  - arrow    — the single edit vector: the edited entity's old position → new
+ *               position along the line (duration=end, anchor=start,
+ *               milestone=date). Omitted when it wouldn't move or can't place.
+ */
+export function projectGhosts(diff: RippleDiff, scale: TimeScale): RuleGhosts {
+  const ticks: GhostTickSpec[] = [];
+  const diamonds: GhostDiamondSpec[] = [];
+  let arrow: GhostArrowSpec | null = null;
+
+  const edit = diff.edit;
+  const editedPhaseId = edit.kind === 'milestone-offset' ? null : edit.phaseId;
+
+  for (const pc of diff.phaseChanges) {
+    if (!pc.moved) continue;
+    const dateIso =
+      pc.phaseId === editedPhaseId && edit.kind === 'phase-anchor' ? pc.toStart : pc.phaseId === editedPhaseId ? pc.toEnd : pc.toStart;
+    const x = scale.toX(dateIso);
+    if (x == null) continue;
+    ticks.push({ id: pc.phaseId, xPct: x, date: dateIso });
+  }
+
+  for (const mm of diff.milestoneMoves) {
+    if (!mm.moved) continue;
+    const x = scale.toX(mm.toDate);
+    if (x == null) continue;
+    diamonds.push({ id: mm.milestoneId, xPct: x, name: mm.name, date: mm.toDate });
+  }
+
+  let fromIso: string | null = null;
+  let toIso: string | null = null;
+  if (edit.kind === 'phase-duration') {
+    const pc = diff.phaseChanges.find((p) => p.phaseId === edit.phaseId);
+    fromIso = pc?.fromEnd ?? null;
+    toIso = pc?.toEnd ?? null;
+  } else if (edit.kind === 'phase-anchor') {
+    const pc = diff.phaseChanges.find((p) => p.phaseId === edit.phaseId);
+    fromIso = pc?.fromStart ?? null;
+    toIso = pc?.toStart ?? null;
+  } else if (edit.kind === 'milestone-offset') {
+    const mm = diff.milestoneMoves.find((m) => m.milestoneId === edit.milestoneId);
+    fromIso = mm?.fromDate ?? null;
+    toIso = mm?.toDate ?? null;
+  }
+  const fromX = scale.toX(fromIso);
+  const toX = scale.toX(toIso);
+  if (fromX != null && toX != null && Math.abs(toX - fromX) > 0.01) {
+    const lo = clampPct(Math.min(fromX, toX));
+    const hi = clampPct(Math.max(fromX, toX));
+    if (hi - lo > 0.01) arrow = { leftPct: lo, widthPct: hi - lo };
+  }
+
+  return { ticks, diamonds, arrow };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -246,6 +460,10 @@ export interface RuleDiamond {
   phaseId: string;
   xPct: number;
   status: MilestoneStatus;
+  /** The resolver's own `anchored` flag — an anchored milestone HOLDS its date
+   *  (it does not ride the phase), so the drag surface refuses to slide it
+   *  (Slice 04 T7): anchored diamonds nudge, they don't begin a session. */
+  anchored: boolean;
 }
 
 /**
@@ -263,7 +481,7 @@ export function ruleDiamonds(m: ReadonlyArray<ResolvedMilestone>, scale: TimeSca
   for (const ms of m) {
     const x = scale.toX(ms.date);
     if (x == null) continue;
-    out.push({ id: ms.id, phaseId: ms.phaseId, xPct: x, status: ms.derivedStatus });
+    out.push({ id: ms.id, phaseId: ms.phaseId, xPct: x, status: ms.derivedStatus, anchored: ms.anchored });
   }
   return out;
 }
