@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patina — The Arrival Arc · Match Ceremony prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --offwhite:#FAF7F2; --clay:#C4A57B; --oak:#8B7355; --mocha:#5C4A3C;
+    --ink:#2C2926; --sage:#A8B5A0; --dusty:#8B9CAD; --terra:#D4A090; --gold:#E8C547;
+    --rule:rgba(44,41,38,.14); --rule-soft:rgba(44,41,38,.08);
+    --serif:'Playfair Display',Georgia,serif; --sans:'Inter',system-ui,sans-serif; --mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--offwhite);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  ::selection{background:var(--clay);color:var(--offwhite)}
+
+  /* ————— chrome ————— */
+  .bar{position:sticky;top:0;z-index:50;background:var(--offwhite);border-bottom:1px solid var(--rule);
+       display:flex;align-items:center;gap:28px;padding:14px 36px}
+  .wordmark{font-family:var(--serif);font-size:17px;letter-spacing:.28em;font-weight:500}
+  .bar .proto{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--oak);text-transform:uppercase}
+  .tabs{margin-left:auto;display:flex;gap:22px;align-items:center}
+  .tab{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--mocha);
+       background:none;border:none;cursor:pointer;padding:6px 0;border-bottom:2px solid transparent}
+  .tab:hover{color:var(--ink)}
+  .tab.active{color:var(--ink);border-bottom-color:var(--clay)}
+  .notes-toggle{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+       border:1px solid var(--rule);background:none;color:var(--oak);padding:6px 12px;border-radius:3px;cursor:pointer}
+  body.notes-on .notes-toggle{background:var(--ink);color:var(--offwhite);border-color:var(--ink)}
+
+  /* ————— strata + labels ————— */
+  .strata{display:inline-block;width:26px;vertical-align:middle;margin-right:10px}
+  .strata i{display:block;height:1.5px;background:var(--oak);margin:3px 0}
+  .strata i:nth-child(1){width:100%}.strata i:nth-child(2){width:72%}.strata i:nth-child(3){width:44%}
+  .label{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--oak)}
+  .label .count{color:var(--clay);margin-left:8px}
+
+  /* ————— scenes ————— */
+  .scene{display:none;max-width:1120px;margin:0 auto;padding:56px 36px 96px}
+  .scene.active{display:block}
+  .scenehead{margin-bottom:40px}
+  .scenehead .kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--clay);margin-bottom:10px}
+  h1{font-family:var(--serif);font-weight:500;font-size:44px;line-height:1.12}
+  h1 .thin{font-style:italic;color:var(--mocha)}
+  .lede{font-family:var(--serif);font-style:italic;font-size:17px;color:var(--mocha);margin-top:10px}
+
+  /* ————— notes layer ————— */
+  .note{display:none;font-family:var(--mono);font-size:10.5px;line-height:1.6;letter-spacing:.02em;
+        color:var(--mocha);background:rgba(232,197,71,.12);border-left:2px solid var(--gold);
+        padding:10px 14px;margin:14px 0;border-radius:0 3px 3px 0}
+  body.notes-on .note{display:block}
+  .note b{color:var(--ink);font-weight:500}
+
+  /* ————— desk pieces ————— */
+  .greeting{font-family:var(--serif);font-size:34px;font-weight:500}
+  .date{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--oak);text-transform:uppercase;margin-top:6px}
+  .section{margin-top:48px}
+  .sectionhead{display:flex;align-items:center;margin-bottom:18px}
+
+  .reqcard{position:relative;max-width:420px;background:#FFFDF9;border:1px solid var(--clay);border-radius:2px;
+           padding:26px 26px 20px;cursor:pointer;transition:transform .15s ease}
+  .reqcard::after{content:"";position:absolute;inset:5px -6px -6px 5px;border:1px solid var(--rule);z-index:-1;border-radius:2px}
+  .reqcard:hover{transform:translateY(-1px)}
+  .cardtag{position:absolute;top:-11px;left:-1px;background:var(--terra);color:#fff;
+           font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;padding:4px 10px;text-transform:uppercase;border-radius:2px}
+  .reqcard h3{font-family:var(--serif);font-size:26px;font-weight:500;margin-top:8px}
+  .reqcard .sub{font-size:12.5px;color:var(--mocha);margin-top:4px}
+  .reqcard .ask{font-family:var(--serif);font-style:italic;font-size:14.5px;color:var(--mocha);
+                border-top:1px solid var(--rule-soft);margin-top:14px;padding-top:12px}
+  .reqcard .meta{display:flex;justify-content:space-between;align-items:center;margin-top:16px}
+  .reqcard .meta .m{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--oak);text-transform:uppercase}
+  .reqcard .open{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--ink);text-transform:uppercase}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:9px;vertical-align:1px}
+
+  .chiprow{display:flex;align-items:baseline;gap:10px;padding:7px 0;font-size:14px}
+  .chiprow .who{font-family:var(--serif);font-size:15.5px}
+  .chiprow .dash{color:var(--rule);}
+  .chiprow .act{color:var(--oak);font-size:13px}
+  .chiprow .act a{color:var(--oak)}
+  .muted{opacity:.45}
+
+  /* ————— request detail ————— */
+  .twocol{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:start}
+  @media(max-width:900px){.twocol{grid-template-columns:1fr}}
+  .scanframe{border:1px solid var(--rule);background:#FFFDF9;border-radius:2px;padding:10px}
+  .scanframe svg{display:block;width:100%;height:auto}
+  .scancap{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--oak);text-transform:uppercase;
+           display:flex;justify-content:space-between;padding:8px 4px 2px}
+  .facts{margin-top:26px;border-top:1px solid var(--rule)}
+  .fact{display:flex;justify-content:space-between;align-items:baseline;padding:12px 2px;border-bottom:1px solid var(--rule-soft)}
+  .fact .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--oak);text-transform:uppercase}
+  .fact .v{font-size:14px}
+  .tagchip{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+           border:1px solid var(--clay);color:var(--mocha);border-radius:999px;padding:3px 11px;margin-left:6px}
+  .pull{font-family:var(--serif);font-style:italic;font-size:21px;line-height:1.5;color:var(--ink);
+        border-left:2px solid var(--clay);padding-left:20px;margin:8px 0 4px}
+  .attrib{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--oak);text-transform:uppercase;margin-top:10px}
+
+  .btn{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+       border-radius:3px;padding:13px 26px;cursor:pointer;border:1px solid transparent}
+  .btn.primary{background:var(--ink);color:var(--offwhite)}
+  .btn.primary:hover{background:#403B36}
+  .btn.primary:disabled{background:rgba(44,41,38,.25);cursor:not-allowed}
+  .btn.ghost{background:none;border-color:var(--rule);color:var(--mocha)}
+  .btn.ghost:hover{border-color:var(--oak);color:var(--ink)}
+  .btnrow{display:flex;gap:14px;align-items:center;margin-top:34px;flex-wrap:wrap}
+  .btnrow .quiet{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--oak);text-transform:uppercase;background:none;border:none;cursor:pointer}
+  .btnrow .quiet:hover{color:var(--ink)}
+
+  /* ————— ceremony ————— */
+  .claimline{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--mocha);
+             border:1px solid var(--rule);border-radius:3px;padding:10px 16px;display:inline-flex;gap:10px;align-items:center;margin-bottom:36px}
+  .claimline .cdot{width:7px;height:7px;border-radius:50%;background:var(--sage)}
+  .contextline{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--oak);
+               border-bottom:1px solid var(--rule);padding-bottom:10px;margin-bottom:14px}
+  .composer{width:100%;min-height:190px;background:#FFFDF9;border:1px solid var(--rule);border-radius:2px;
+            font-family:var(--serif);font-size:17px;line-height:1.7;color:var(--ink);padding:20px 22px;resize:vertical}
+  .composer:focus{outline:none;border-color:var(--clay)}
+  .composer::placeholder{color:rgba(92,74,60,.45);font-style:italic}
+  .composerhint{font-family:var(--serif);font-style:italic;font-size:13px;color:var(--mocha);margin-top:8px}
+  .voicebtn{margin-top:14px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+            border:1px dashed var(--clay);color:var(--mocha);background:none;border-radius:999px;padding:8px 16px;cursor:pointer}
+  .voicebtn.on{border-style:solid;background:rgba(196,165,123,.12);color:var(--ink)}
+  .slots{margin-top:8px}
+  .slot{display:flex;align-items:center;gap:14px;border:1px solid var(--rule);border-radius:3px;
+        padding:13px 18px;margin-bottom:10px;cursor:pointer;background:#FFFDF9}
+  .slot .tick{width:16px;height:16px;border:1px solid var(--oak);border-radius:50%;flex:none;position:relative}
+  .slot.on{border-color:var(--oak)}
+  .slot.on .tick::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--oak)}
+  .slot .when{font-family:var(--serif);font-size:16.5px}
+  .slot .len{margin-left:auto;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--oak);text-transform:uppercase}
+  .slotcount{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--oak);text-transform:uppercase;margin-top:4px}
+  .threshold{border-top:1px solid var(--rule);margin-top:40px;padding-top:26px}
+  .threshold .fine{font-family:var(--serif);font-style:italic;font-size:13.5px;color:var(--mocha);margin-top:14px;max-width:520px}
+
+  /* ————— document / discovery ————— */
+  .docwrap{display:grid;grid-template-columns:170px 1fr;gap:44px;align-items:start}
+  @media(max-width:900px){.docwrap{grid-template-columns:1fr}}
+  .rail .phase{padding:10px 0;border-left:2px solid transparent;padding-left:16px}
+  .rail .phase .p{font-family:var(--serif);font-size:15.5px;color:var(--mocha)}
+  .rail .phase .s{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--oak);text-transform:uppercase;margin-top:2px}
+  .rail .phase.now{border-left-color:var(--clay)}
+  .rail .phase.now .p{color:var(--ink)}
+  .rail .phase.dim{opacity:.4}
+  .dochead h2{font-family:var(--serif);font-size:34px;font-weight:500}
+  .linkline{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--sage);margin-top:6px}
+  .fold{border:1px solid var(--rule);border-radius:2px;background:#FFFDF9;margin-top:28px}
+  .foldhead{display:flex;align-items:baseline;gap:14px;padding:16px 22px;border-bottom:1px solid var(--rule-soft)}
+  .foldhead .t{font-family:var(--serif);font-size:19px}
+  .foldhead .st{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;color:var(--oak);text-transform:uppercase}
+  .foldbody{padding:20px 22px}
+  .schedline{display:flex;align-items:center;gap:12px;font-family:var(--serif);font-size:17px}
+  .schedline .sdot{width:8px;height:8px;border-radius:50%;background:var(--clay)}
+  .foldgrid{display:grid;grid-template-columns:200px 1fr;gap:24px;margin-top:20px;align-items:start}
+  @media(max-width:700px){.foldgrid{grid-template-columns:1fr}}
+  .threadref{border-top:1px solid var(--rule-soft);margin-top:20px;padding-top:14px;
+             font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--oak);text-transform:uppercase}
+  .threadref a{color:var(--mocha)}
+
+  .lifecycle{margin-top:56px}
+  .lifecycle .chiprow{border-bottom:1px solid var(--rule-soft)}
+  .lifecap{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--oak);text-transform:uppercase;margin-top:4px;margin-bottom:14px}
+
+  /* ————— iOS ————— */
+  .ioswrap{display:grid;grid-template-columns:380px 1fr;gap:64px;align-items:start}
+  @media(max-width:900px){.ioswrap{grid-template-columns:1fr}}
+  .phone{width:360px;border:1.5px solid var(--ink);border-radius:38px;padding:14px 12px;background:#FFFDF9}
+  .phone .screen{border-radius:26px;overflow:hidden;background:var(--offwhite);border:1px solid var(--rule-soft)}
+  .push{margin:12px 12px 4px;background:#FFFDF9;border:1px solid var(--rule);border-radius:12px;padding:10px 14px}
+  .push .app{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;color:var(--oak);text-transform:uppercase}
+  .push .msg{font-size:12.5px;margin-top:3px;line-height:1.45}
+  .ioshead{padding:22px 20px 6px}
+  .ioshead .k{font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--clay);text-transform:uppercase}
+  .ioshead h4{font-family:var(--serif);font-size:24px;font-weight:500;margin-top:6px}
+  .dcard{margin:12px 16px;border:1px solid var(--rule);border-radius:6px;background:#FFFDF9;padding:16px}
+  .dcard .row{display:flex;gap:12px;align-items:center}
+  .dmark{width:40px;height:40px;border:1px solid var(--oak);border-radius:4px;display:flex;flex-direction:column;justify-content:center;padding:0 8px;gap:3px}
+  .dmark i{display:block;height:1.5px;background:var(--oak)}
+  .dmark i:nth-child(1){width:100%}.dmark i:nth-child(2){width:66%}.dmark i:nth-child(3){width:36%}
+  .dcard .nm{font-family:var(--serif);font-size:17px}
+  .dcard .cred{font-size:11px;color:var(--mocha)}
+  .dcard .port{margin-left:auto;font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;color:var(--oak);text-transform:uppercase}
+  .imsg{margin:10px 16px;background:rgba(196,165,123,.14);border-radius:12px 12px 12px 3px;padding:13px 15px;font-size:13.5px;line-height:1.6}
+  .imsg .vn{display:inline-flex;align-items:center;gap:8px;margin-top:10px;border:1px solid var(--oak);border-radius:999px;
+            padding:5px 13px;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--mocha)}
+  .pickhead{margin:16px 16px 6px;font-family:var(--mono);font-size:9px;letter-spacing:.15em;color:var(--oak);text-transform:uppercase}
+  .islot{margin:8px 16px;border:1px solid var(--rule);border-radius:8px;background:#FFFDF9;padding:12px 15px;
+         display:flex;align-items:center;cursor:pointer;font-family:var(--serif);font-size:14.5px}
+  .islot:hover{border-color:var(--clay)}
+  .islot .tap{margin-left:auto;font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;color:var(--clay);text-transform:uppercase}
+  .islot.booked{border-color:var(--sage);background:rgba(168,181,160,.12)}
+  .islot.booked .tap{color:var(--sage)}
+  .islot.gone{opacity:.35;pointer-events:none}
+  .escape{margin:12px 16px 22px;text-align:center;font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--oak);text-transform:uppercase}
+  .confirm{display:none;margin:10px 16px;border-left:2px solid var(--sage);padding:10px 14px;
+           font-family:var(--serif);font-style:italic;font-size:13px;color:var(--mocha);background:rgba(168,181,160,.1)}
+  .confirm.show{display:block}
+  .movements{padding-top:8px}
+  .movement{border-top:1px solid var(--rule);padding:20px 0}
+  .movement .n{font-family:var(--serif);font-style:italic;font-size:20px;color:var(--clay)}
+  .movement h5{font-family:var(--serif);font-size:19px;font-weight:500;margin:6px 0}
+  .movement p{font-size:13.5px;color:var(--mocha);max-width:480px}
+
+  .footerbar{border-top:1px solid var(--rule);margin-top:20px;padding:22px 36px;display:flex;gap:24px;align-items:center}
+  .footerbar .fm{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;color:var(--oak);text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <span class="wordmark">PATINA</span>
+  <span class="proto">The Arrival Arc · Ceremony Prototype · pairs with ruling R{next}</span>
+  <nav class="tabs">
+    <button class="tab active" data-go="scene-desk">01 · The Request</button>
+    <button class="tab" data-go="scene-detail">02 · Open</button>
+    <button class="tab" data-go="scene-ceremony">03 · The Ceremony</button>
+    <button class="tab" data-go="scene-after">04 · The Wait</button>
+    <button class="tab" data-go="scene-ios">05 · Her Side</button>
+    <button class="notes-toggle" id="notesToggle">Notes</button>
+  </nav>
+</header>
+
+<!-- ——————————————— SCENE 1 · THE DESK ——————————————— -->
+<section class="scene active" id="scene-desk">
+  <div class="greeting">Good morning.</div>
+  <div class="date">Thursday · July 16</div>
+
+  <div class="section">
+    <div class="sectionhead"><span class="strata"><i></i><i></i><i></i></span><span class="label">Needs your hand <span class="count">1</span></span></div>
+    <div class="note"><b>R§ arrival.</b> A new match lands here — a Desk folder, because an act is available (open it, decide). The card is a real anchor; the whole face is clickable. No dead surfaces.</div>
+    <div class="reqcard" data-go="scene-detail">
+      <span class="cardtag">Design request · New match</span>
+      <h3>Elena Vasquez</h3>
+      <div class="sub">Living room · warm-minimal · $25–40k</div>
+      <div class="ask">“We just moved in and the living room feels cold — I want it to feel collected, not decorated.”</div>
+      <div class="meta">
+        <span class="m"><span class="dot" style="background:var(--terra)"></span>Matched 1h ago · scan attached</span>
+        <span class="open">Open the request →</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sectionhead"><span class="strata"><i></i><i></i><i></i></span><span class="label">In motion <span class="count">2</span></span></div>
+    <div class="chiprow muted"><span class="dot" style="background:var(--gold)"></span><span class="who">Jonah &amp; Bea Feldman</span><span class="dash">—</span><span class="act">decision due · ceramic lamp</span></div>
+    <div class="chiprow muted"><span class="dot" style="background:var(--clay)"></span><span class="who">Mara Whitfield</span><span class="dash">—</span><span class="act">drafting, untouched 3d</span></div>
+  </div>
+</section>
+
+<!-- ——————————————— SCENE 2 · THE REQUEST, OPEN ——————————————— -->
+<section class="scene" id="scene-detail">
+  <div class="scenehead">
+    <div class="kicker">Design request · matched 1h ago</div>
+    <h1>Elena Vasquez <span class="thin">asks.</span></h1>
+  </div>
+
+  <div class="twocol">
+    <div>
+      <div class="pull">“We just moved in and the living room feels cold — I want it to feel collected, not decorated. Nothing precious; we actually live in our rooms.”</div>
+      <div class="attrib">Her ask, verbatim · from the iOS request</div>
+
+      <div class="facts">
+        <div class="fact"><span class="k">Room</span><span class="v">Living room · 14′ × 19′ · scanned</span></div>
+        <div class="fact"><span class="k">Style</span><span class="v"><span class="tagchip">warm-minimal</span><span class="tagchip">japandi lean</span><span class="tagchip">natural light</span></span></div>
+        <div class="fact"><span class="k">Budget band</span><span class="v">$25,000 – 40,000</span></div>
+        <div class="fact"><span class="k">Timeline</span><span class="v">Autumn, no hard date</span></div>
+      </div>
+
+      <div class="note"><b>R§6 contract.</b> Everything on this page arrives in the request payload — name, ask, scan, tags, band. Nothing here is typed twice. (Wave 1 linkage is the prerequisite.)</div>
+
+      <div class="btnrow">
+        <button class="btn primary" data-go="scene-ceremony">Accept — begin the ceremony →</button>
+        <button class="quiet">Ask a question</button>
+        <button class="quiet">Decline</button>
+      </div>
+      <div class="note"><b>R§1 accept claims immediately.</b> The moment this is pressed, Elena's phone shows the held state — <i>“Middle Studio has taken your request in hand — introduction on its way.”</i> Truth-framed: the system reports; it never speaks in the designer's voice.</div>
+    </div>
+
+    <div>
+      <div class="scanframe">
+        <svg viewBox="0 0 440 300" fill="none" stroke="#8B7355" stroke-width="1.2">
+          <polygon points="60,60 380,60 420,270 20,270" stroke-opacity=".9"/>
+          <polygon points="60,60 380,60 380,28 60,28" stroke-opacity=".45"/>
+          <line x1="60" y1="60" x2="20" y2="270"/><line x1="380" y1="60" x2="420" y2="270"/>
+          <rect x="96" y="34" width="86" height="20" stroke-opacity=".5"/>
+          <rect x="250" y="34" width="86" height="20" stroke-opacity=".5"/>
+          <polygon points="120,210 300,210 316,258 104,258" stroke-opacity=".95"/>
+          <polygon points="120,210 300,210 300,182 120,182" stroke-opacity=".95"/>
+          <polygon points="150,236 250,236 254,250 146,250" stroke-opacity=".5"/>
+          <ellipse cx="340" cy="238" rx="26" ry="10" stroke-opacity=".7"/>
+          <line x1="340" y1="228" x2="340" y2="196" stroke-opacity=".7"/>
+          <ellipse cx="340" cy="192" rx="14" ry="6" stroke-opacity=".7"/>
+        </svg>
+        <div class="scancap"><span>LiDAR scan · Jul 15</span><span>tap to walk it</span></div>
+      </div>
+      <div class="composerhint" style="margin-top:12px">The scan travels with her request — it will seed the Document's Discovery fold on send.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— SCENE 3 · THE CEREMONY ——————————————— -->
+<section class="scene" id="scene-ceremony">
+  <div class="claimline"><span class="cdot"></span>Claimed · Elena sees: “Middle Studio has taken your request in hand — introduction on its way.”</div>
+
+  <div class="scenehead">
+    <div class="kicker">The match ceremony</div>
+    <h1>Meet Elena.</h1>
+    <div class="lede">One send: your introduction and two or three times. Then the Document begins.</div>
+  </div>
+
+  <div class="note"><b>R§2 the ceremony.</b> Full-screen, typography-first, zero shadows. It hosts the whole moment — meet the client, write the introduction, offer the times — so the arrival is one gesture, not three surfaces.</div>
+
+  <div class="twocol">
+    <div>
+      <div class="contextline">Elena scanned her living room · leans warm-minimal · 25–40k</div>
+      <textarea class="composer" id="composer" placeholder="Your words, not a template. She's read your portfolio — tell her what you saw in her room…"></textarea>
+      <div class="composerhint">Nothing sends itself. The send is yours.</div>
+      <button class="voicebtn" id="voiceBtn">＋ Attach a voice note</button>
+      <div class="note"><b>R§2 the hand.</b> The context line is assembled from the payload; the words are hers alone. Send stays asleep until she's written something. Voice note optional — the old design doc's good instinct, kept.</div>
+
+      <div class="section" style="margin-top:40px">
+        <div class="sectionhead"><span class="strata"><i></i><i></i><i></i></span><span class="label">Offer times · she taps one on her phone</span></div>
+        <div class="slots" id="slots">
+          <div class="slot on"><span class="tick"></span><span class="when">Thursday, July 23 · 2:00 PM</span><span class="len">45 min</span></div>
+          <div class="slot on"><span class="tick"></span><span class="when">Friday, July 24 · 10:30 AM</span><span class="len">45 min</span></div>
+          <div class="slot"><span class="tick"></span><span class="when">Monday, July 27 · 4:00 PM</span><span class="len">45 min</span></div>
+        </div>
+        <div class="slotcount" id="slotCount">2 of 3 offered · offer two or three</div>
+        <div class="note"><b>R§2 the times.</b> Concrete slots, hand-picked, v1 needs no calendar plumbing. Scheduling rides inside the introduction — one moment, not two. Calendar-link was rejected: it bounces her out of Patina at the relationship's most fragile minute.</div>
+      </div>
+
+      <div class="threshold">
+        <div class="btnrow" style="margin-top:0">
+          <button class="btn primary" id="sendBtn" disabled>Send — and begin the Document →</button>
+          <button class="quiet" data-go="scene-parked">Put down for now</button>
+        </div>
+        <div class="fine">Send creates the Document — Elena linked, the scan into Discovery, her tags into the Brief, the band carried. The document grows from here; nothing converts.</div>
+        <div class="note"><b>R§3 put-downable.</b> Leaving parks this as a Needs Your Hand card — “Introduce yourself to Elena,” draft held. The Document is not created until the ceremony completes. Accept-and-vanish never leaves her un-greeted silently: the held state already told her the truth.</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="scanframe">
+        <svg viewBox="0 0 440 300" fill="none" stroke="#8B7355" stroke-width="1.2">
+          <polygon points="60,60 380,60 420,270 20,270" stroke-opacity=".9"/>
+          <polygon points="60,60 380,60 380,28 60,28" stroke-opacity=".45"/>
+          <line x1="60" y1="60" x2="20" y2="270"/><line x1="380" y1="60" x2="420" y2="270"/>
+          <rect x="96" y="34" width="86" height="20" stroke-opacity=".5"/>
+          <rect x="250" y="34" width="86" height="20" stroke-opacity=".5"/>
+          <polygon points="120,210 300,210 316,258 104,258" stroke-opacity=".95"/>
+          <polygon points="120,210 300,210 300,182 120,182" stroke-opacity=".95"/>
+          <polygon points="150,236 250,236 254,250 146,250" stroke-opacity=".5"/>
+          <ellipse cx="340" cy="238" rx="26" ry="10" stroke-opacity=".7"/>
+          <line x1="340" y1="228" x2="340" y2="196" stroke-opacity=".7"/>
+          <ellipse cx="340" cy="192" rx="14" ry="6" stroke-opacity=".7"/>
+        </svg>
+        <div class="scancap"><span>Her living room</span><span>14′ × 19′</span></div>
+      </div>
+      <div class="facts">
+        <div class="fact"><span class="k">Her ask</span><span class="v" style="font-family:var(--serif);font-style:italic">“collected, not decorated”</span></div>
+        <div class="fact"><span class="k">Style</span><span class="v"><span class="tagchip">warm-minimal</span><span class="tagchip">japandi lean</span></span></div>
+        <div class="fact"><span class="k">Band</span><span class="v">$25,000 – 40,000</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— SCENE 3b · PUT DOWN ——————————————— -->
+<section class="scene" id="scene-parked">
+  <div class="greeting">Good morning.</div>
+  <div class="date">Thursday · July 16</div>
+  <div class="section">
+    <div class="sectionhead"><span class="strata"><i></i><i></i><i></i></span><span class="label">Needs your hand <span class="count">1</span></span></div>
+    <div class="reqcard" data-go="scene-ceremony">
+      <span class="cardtag" style="background:var(--clay)">Claimed · Ceremony waiting</span>
+      <h3>Introduce yourself to Elena</h3>
+      <div class="sub">Living room · warm-minimal · claimed 2h ago</div>
+      <div class="ask">Your draft is held — “Elena, I keep thinking about what you said about rooms that…”</div>
+      <div class="meta">
+        <span class="m"><span class="dot" style="background:var(--gold)"></span>She was told an introduction is coming</span>
+        <span class="open">Pick it back up →</span>
+      </div>
+    </div>
+    <div class="note"><b>R§3, the action test.</b> The act available here is <b>writing</b> — so this earns a Desk folder, not a chip. Compare the wait after send (scene 04), where the only act is waiting: chip tier. This is the line R22 draws.</div>
+  </div>
+</section>
+
+<!-- ——————————————— SCENE 4 · AFTER THE SEND ——————————————— -->
+<section class="scene" id="scene-after">
+  <div class="scenehead">
+    <div class="kicker">After the send</div>
+    <h1>The Document, <span class="thin">at Discovery.</span></h1>
+    <div class="lede">Sent 10:42 AM. You landed here — not on a confirmation page.</div>
+  </div>
+
+  <div class="docwrap">
+    <div class="rail">
+      <div class="phase"><div class="p">Brief</div><div class="s">seeded · Jul 16</div></div>
+      <div class="phase now"><div class="p">Discovery</div><div class="s">introduction offered</div></div>
+      <div class="phase dim"><div class="p">Direction</div><div class="s">—</div></div>
+      <div class="phase dim"><div class="p">Proposal</div><div class="s">—</div></div>
+      <div class="phase dim"><div class="p">Project</div><div class="s">—</div></div>
+      <div class="phase dim"><div class="p">Install</div><div class="s">—</div></div>
+      <div class="phase dim"><div class="p">Care</div><div class="s">—</div></div>
+    </div>
+
+    <div>
+      <div class="dochead">
+        <h2>Elena Vasquez</h2>
+        <div class="linkline">✓ client linked · request linked · seeded from her scan</div>
+        <div class="note"><b>The contrast.</b> Today's build shows “No client linked — attach one” on this exact header, and the person record throws <b>uuid: “null”</b>. The arc cannot ship without the Wave 1 linkage fixes — the Document must know its client and its request from birth.</div>
+      </div>
+
+      <div class="fold">
+        <div class="foldhead"><span class="t">Discovery</span><span class="st">in motion · introduction offered</span></div>
+        <div class="foldbody">
+          <div class="schedline"><span class="sdot"></span>Three times offered · awaiting Elena's pick</div>
+          <div class="foldgrid">
+            <div class="scanframe" style="padding:6px">
+              <svg viewBox="0 0 440 300" fill="none" stroke="#8B7355" stroke-width="1.4">
+                <polygon points="60,60 380,60 420,270 20,270" stroke-opacity=".9"/>
+                <polygon points="120,210 300,210 316,258 104,258" stroke-opacity=".9"/>
+                <polygon points="120,210 300,210 300,182 120,182" stroke-opacity=".9"/>
+              </svg>
+              <div class="scancap"><span>Her scan</span></div>
+            </div>
+            <div>
+              <div class="fact" style="border-top:none;padding-top:0"><span class="k">Style, carried</span><span class="v"><span class="tagchip">warm-minimal</span><span class="tagchip">japandi lean</span></span></div>
+              <div class="fact"><span class="k">Band</span><span class="v">$25,000 – 40,000</span></div>
+              <div class="fact"><span class="k">Her ask</span><span class="v" style="font-family:var(--serif);font-style:italic">“collected, not decorated”</span></div>
+            </div>
+          </div>
+          <div class="threadref">Your introduction · sent 10:42 AM · <a href="#">view the thread →</a></div>
+        </div>
+      </div>
+      <div class="note"><b>R§5.</b> Discovery is no longer an empty apology — it holds the offered times, the scan pulled from the linked request (P9's display side), the carried tags, and the thread reference.</div>
+
+      <div class="lifecycle">
+        <div class="sectionhead"><span class="strata"><i></i><i></i><i></i></span><span class="label">The chip, over the days that follow</span></div>
+        <div class="lifecap">the wait is a chip, never a desk folder — R22</div>
+        <div class="chiprow"><span class="dot" style="background:var(--clay)"></span><span class="who">Elena Vasquez</span><span class="dash">—</span><span class="act">intro sent · awaiting her pick</span></div>
+        <div class="chiprow"><span class="dot" style="background:var(--sage)"></span><span class="who">Elena Vasquez</span><span class="dash">—</span><span class="act">Discovery · Thu 2:00 PM → the fold</span></div>
+        <div class="chiprow"><span class="dot" style="background:var(--gold)"></span><span class="who">Elena Vasquez</span><span class="dash">—</span><span class="act">quiet 48h — nudge, or offer fresh times</span></div>
+        <div class="note"><b>R§4.</b> Three states, one chip. When she picks, The Post letters it — <i>“Elena chose Thursday 2:00 PM”</i> — named and deep-linked, per the P3 fix. At 48 hours an act exists again, so the chip warms. Stale slots ask for fresh ones.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— SCENE 5 · HER SIDE ——————————————— -->
+<section class="scene" id="scene-ios">
+  <div class="scenehead">
+    <div class="kicker">The client's side · iOS</div>
+    <h1>Three movements, <span class="thin">in order.</span></h1>
+    <div class="lede">The card, her words, the pick. One screen — tap a time to book it.</div>
+  </div>
+
+  <div class="ioswrap">
+    <div class="phone">
+      <div class="screen">
+        <div class="push">
+          <div class="app">Patina · now</div>
+          <div class="msg">You're matched — <b>Middle Studio</b> accepted your living-room request.</div>
+        </div>
+        <div class="ioshead">
+          <div class="k">Your designer</div>
+          <h4>You're matched.</h4>
+        </div>
+        <div class="dcard">
+          <div class="row">
+            <div class="dmark"><i></i><i></i><i></i></div>
+            <div><div class="nm">Middle Studio</div><div class="cred">Residential interiors · Minneapolis</div></div>
+            <div class="port">Portfolio →</div>
+          </div>
+        </div>
+        <div class="imsg">
+          Elena — I keep thinking about what you said: collected, not decorated. Your scan shows beautiful west light we can work with. Let's talk about how the room actually lives.
+          <div><span class="vn">▶ &nbsp;Voice note · 0:42</span></div>
+        </div>
+        <div class="pickhead">Pick a time · 45 minutes, on the phone</div>
+        <div class="islot" data-when="Thursday, July 23 · 2:00 PM"><span>Thu, July 23 · 2:00 PM</span><span class="tap">Tap to book</span></div>
+        <div class="islot" data-when="Friday, July 24 · 10:30 AM"><span>Fri, July 24 · 10:30 AM</span><span class="tap">Tap to book</span></div>
+        <div class="confirm" id="iosConfirm"></div>
+        <div class="escape">None of these work? Propose another time →</div>
+      </div>
+    </div>
+
+    <div class="movements">
+      <div class="movement"><div class="n">i.</div><h5>The designer card</h5><p>A person, immediately — studio mark, name, one credential, the portfolio a tap away. She is meeting someone, not receiving a status.</p></div>
+      <div class="movement"><div class="n">ii.</div><h5>Her words</h5><p>The introduction in the designer's own voice, voice note playable inline. This message becomes the head of the client–designer thread — the same thread the portal's People room already holds.</p></div>
+      <div class="movement"><div class="n">iii.</div><h5>The pick</h5><p>Two or three concrete times. One tap books it, confirms it, offers her calendar. The escape hatch opens the thread — never a dead end.</p></div>
+      <div class="note"><b>R§6 ruled in full.</b> The companion doc owns pixel detail; this ruling owns the contract and the order of the movements. The push is always named and specific — never “someone,” never generic. That is the P3 lesson applied at the front door.</div>
+    </div>
+  </div>
+</section>
+
+<footer class="footerbar">
+  <span class="strata"><i></i><i></i><i></i></span>
+  <span class="fm">Prototype · land with ruling R{next} in docs/design/the-document/ · Claude Code ports intent, never markup</span>
+</footer>
+
+<script>
+  // scene switching
+  const tabs=[...document.querySelectorAll('.tab')];
+  function go(id){
+    document.querySelectorAll('.scene').forEach(s=>s.classList.toggle('active',s.id===id));
+    tabs.forEach(t=>t.classList.toggle('active',t.dataset.go===id));
+    window.scrollTo({top:0});
+  }
+  document.querySelectorAll('[data-go]').forEach(el=>el.addEventListener('click',e=>{go(el.dataset.go)}));
+
+  // notes layer
+  document.getElementById('notesToggle').addEventListener('click',()=>document.body.classList.toggle('notes-on'));
+
+  // composer gates the send — nothing sends itself
+  const composer=document.getElementById('composer'), sendBtn=document.getElementById('sendBtn');
+  const slotEls=[...document.querySelectorAll('#slots .slot')], slotCount=document.getElementById('slotCount');
+  function offered(){return slotEls.filter(s=>s.classList.contains('on')).length}
+  function gate(){sendBtn.disabled=!(composer.value.trim().length>0&&offered()>=2)}
+  composer.addEventListener('input',gate);
+  slotEls.forEach(s=>s.addEventListener('click',()=>{
+    s.classList.toggle('on');
+    const n=offered();
+    slotCount.textContent=n+' of 3 offered · '+(n<2?'offer at least two':'offer two or three');
+    gate();
+  }));
+  sendBtn.addEventListener('click',()=>go('scene-after'));
+
+  // voice note
+  const vb=document.getElementById('voiceBtn');
+  vb.addEventListener('click',()=>{
+    vb.classList.toggle('on');
+    vb.textContent=vb.classList.contains('on')?'Voice note attached · 0:42  ×':'＋ Attach a voice note';
+  });
+
+  // iOS pick
+  const islots=[...document.querySelectorAll('.islot')], conf=document.getElementById('iosConfirm');
+  islots.forEach(s=>s.addEventListener('click',()=>{
+    islots.forEach(o=>{o.classList.add('gone');o.querySelector('.tap').textContent=''});
+    s.classList.remove('gone');s.classList.add('booked');
+    s.querySelector('.tap').textContent='Booked ✓';
+    conf.textContent='Booked — '+s.dataset.when+'. Added to your calendar. Middle Studio has been told.';
+    conf.classList.add('show');
+  }));
+</script>
+</body>
+</html>
