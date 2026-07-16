@@ -10,20 +10,27 @@
 --   • v1  — frozen at signature (activate_proposal_as_project)
 --   • v2+ — one per committed ripple edit (commit_schedule_edit)
 --
--- 1. NEW cut_schedule_revision(p_project_id, p_reason, p_actor) RETURNS int.
+-- 1. NEW cut_schedule_revision(p_project_id, p_reason) RETURNS int.
 --    The ONE writer to schedule_revisions — SECURITY DEFINER + pinned
 --    search_path 'public'. authenticated keeps 00323's SELECT-only posture on
 --    the TABLE; it only gains EXECUTE on this guarded RPC, so the ledger is
 --    append-only BY ACL (no INSERT/UPDATE/DELETE grant exists — direct writes
 --    42501).
---    ACTOR RESOLUTION (the crux): p_actor DEFAULT auth.uid(), and the
---    ownership guard accepts the project's designer OR client. This is because
---    the v1 cut runs inside activate_proposal_as_project on the SIGNATURE
---    path, and sign_proposal (00210) runs as the CLIENT — a designer-only
---    guard would reject the client's own baseline cut. auth.uid() survives the
---    DEFINER hop (DEFINER swaps the role, not the request.jwt claims GUC that
---    auth.uid() reads), so the actor is always the real signing/editing user.
---    A non-member caller (neither designer nor client) raises.
+--    ACTOR RESOLUTION (the crux): the actor is derived INTERNALLY as
+--    auth.uid() — deliberately NOT a parameter. A caller-suppliable actor on
+--    a DEFINER function whose write-authorization is "actor is the project's
+--    designer or client" would let a designer mint a revision ATTRIBUTED TO
+--    THEIR CLIENT with an arbitrary reason (and vice versa) via a direct rpc
+--    call — attribution forgery in an append-only audit ledger. So: no
+--    parameter, forgery impossible by construction. The guard accepts the
+--    project's designer OR client because the v1 cut runs inside
+--    activate_proposal_as_project on the SIGNATURE path, and sign_proposal
+--    (00210) runs as the CLIENT — a designer-only guard would reject the
+--    client's own baseline cut. auth.uid() survives the DEFINER hop (DEFINER
+--    swaps the role, not the request.jwt claims GUC that auth.uid() reads),
+--    so the actor is always the real signing/editing user. A NULL auth.uid()
+--    (no JWT — e.g. a raw service_role session) hard-fails, as does a
+--    non-member caller (neither designer nor client).
 --    SNAPSHOT: a jsonb ARRAY (satisfies 00323's jsonb_typeof='array' CHECK) of
 --    phase objects ordered by sort_order, each carrying the RESOLVER-INPUT
 --    field set { id, name, phase_key, duration_days, duration_weeks,
@@ -62,10 +69,15 @@
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- ─── 1. cut_schedule_revision — the ONE writer to schedule_revisions ──────
+-- Fix-round: the first cut of this migration (never applied beyond local)
+-- carried a 3-param signature with a caller-suppliable p_actor — attribution
+-- forgery surface on an audit ledger (see banner §1). Guarded DROP so no
+-- stack keeps the forgeable overload alongside the 2-param function below.
+DROP FUNCTION IF EXISTS public.cut_schedule_revision(UUID, TEXT, UUID);
+
 CREATE OR REPLACE FUNCTION public.cut_schedule_revision(
   p_project_id UUID,
-  p_reason     TEXT DEFAULT NULL,
-  p_actor      UUID DEFAULT auth.uid()
+  p_reason     TEXT DEFAULT NULL
 )
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -73,19 +85,28 @@ SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE
+  v_actor    UUID := auth.uid();   -- derived HERE, never caller-supplied (banner §1)
   v_snapshot JSONB;
   v_new_v    INTEGER;
 BEGIN
+  -- NULL hard-fail: no JWT (raw service_role / anonymous session) means no
+  -- attributable actor — an append-only audit ledger never takes an
+  -- unattributed row. Real callers (sign_proposal as the client,
+  -- record_offline_signature / commit_schedule_edit as the designer) always
+  -- carry a valid auth.uid() through the DEFINER hop.
+  IF v_actor IS NULL THEN
+    RAISE EXCEPTION 'schedule revision refused: no authenticated actor (auth.uid() is NULL)';
+  END IF;
+
   -- Actor guard: designer OR client of the project (see banner §1). Neither
-  -- → raise. auth.uid() default carries through the DEFINER hop from the
-  -- activation (client) and commit (designer) call sites.
+  -- → raise.
   IF NOT EXISTS (
     SELECT 1 FROM public.projects p
     WHERE p.id = p_project_id
-      AND (p.designer_id = p_actor OR p.client_id = p_actor)
+      AND (p.designer_id = v_actor OR p.client_id = v_actor)
   ) THEN
     RAISE EXCEPTION 'schedule revision refused: actor % is neither designer nor client of project % (or the project does not exist)',
-      p_actor, p_project_id;
+      v_actor, p_project_id;
   END IF;
 
   -- Snapshot the resolver-input field set: an ARRAY of phases (ordered by
@@ -132,7 +153,7 @@ BEGIN
   INSERT INTO public.schedule_revisions (project_id, v, actor, reason, phase_snapshots)
   SELECT p_project_id,
          COALESCE(MAX(v), 0) + 1,
-         p_actor,
+         v_actor,
          COALESCE(p_reason, 'Schedule revised'),
          v_snapshot
     FROM public.schedule_revisions
@@ -143,22 +164,24 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.cut_schedule_revision(UUID, TEXT, UUID) IS
+COMMENT ON FUNCTION public.cut_schedule_revision(UUID, TEXT) IS
   'The ONE writer to schedule_revisions (R100 "Memory", Slice 05). SECURITY '
   'DEFINER so authenticated keeps 00323''s SELECT-only posture on the table '
-  '(append-only by ACL). p_actor DEFAULT auth.uid(); the ownership guard '
-  'accepts the project''s designer OR client because the v1 cut runs on the '
-  'signature path, where sign_proposal executes as the client. Snapshots the '
-  'resolver-input field set (phases + embedded milestones) as a jsonb array; '
-  'v = MAX(v)+1 per project (UNIQUE backstop on the benign race). Returns the '
-  'new revision''s v.';
+  '(append-only by ACL). Actor = auth.uid(), derived internally — NEVER a '
+  'parameter (a caller-suppliable actor would allow attribution forgery in '
+  'an append-only audit ledger); NULL auth.uid() hard-fails. The ownership '
+  'guard accepts the project''s designer OR client because the v1 cut runs '
+  'on the signature path, where sign_proposal executes as the client. '
+  'Snapshots the resolver-input field set (phases + embedded milestones) as '
+  'a jsonb array; v = MAX(v)+1 per project (UNIQUE backstop on the benign '
+  'race). Returns the new revision''s v.';
 
 -- Append-only BY ACL: authenticated gets EXECUTE on this guarded DEFINER RPC
 -- (commit_schedule_edit runs SECURITY INVOKER and PERFORMs it as the caller,
 -- so authenticated MUST hold EXECUTE) but NO table write grant — direct
 -- INSERT/UPDATE/DELETE on schedule_revisions stays 42501.
-REVOKE EXECUTE ON FUNCTION public.cut_schedule_revision(UUID, TEXT, UUID) FROM PUBLIC, anon;
-GRANT  EXECUTE ON FUNCTION public.cut_schedule_revision(UUID, TEXT, UUID) TO authenticated, service_role;
+REVOKE EXECUTE ON FUNCTION public.cut_schedule_revision(UUID, TEXT) FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.cut_schedule_revision(UUID, TEXT) TO authenticated, service_role;
 
 -- ─── 2. activate_proposal_as_project regraft (00324 body VERBATIM + 1 delta) ─
 -- Body lineage: 00274 → 00279 → 00324 → 00326. The one delta is marked
@@ -431,10 +454,11 @@ BEGIN
   -- schedule_milestones are now fully written (the two-pass follows remap
   -- above and this milestone insert are the last touches to either table),
   -- so cut the v1 revision snapshot. cut_schedule_revision is SECURITY
-  -- DEFINER with p_actor DEFAULT auth.uid(); inside this DEFINER function
-  -- auth.uid() STILL resolves to the signing session user (SECURITY DEFINER
-  -- swaps the role, never the request.jwt GUC that auth.uid() reads), and
-  -- that user is the proposal's client (sign_proposal, 00210) or designer
+  -- DEFINER and derives its actor from auth.uid() INTERNALLY (deliberately
+  -- not a parameter — banner §1); inside this DEFINER function auth.uid()
+  -- STILL resolves to the signing session user (SECURITY DEFINER swaps the
+  -- role, never the request.jwt GUC that auth.uid() reads), and that user is
+  -- the proposal's client (sign_proposal, 00210) or designer
   -- (record_offline_signature, 00254) — the cut's designer-OR-client guard
   -- accepts either. NOT wrapped in an exception block (unlike the deposit
   -- auto-draft): the baseline is a hard guarantee of activation, not a

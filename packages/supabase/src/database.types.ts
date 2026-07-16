@@ -17528,7 +17528,7 @@ export type Database = {
         }
       }
       cut_schedule_revision: {
-        Args: { p_actor?: string; p_project_id: string; p_reason?: string }
+        Args: { p_project_id: string; p_reason?: string }
         Returns: number
       }
       decline_workspace_invitation: {

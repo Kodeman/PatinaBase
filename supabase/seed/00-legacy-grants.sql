@@ -2564,13 +2564,13 @@ END $g$;
 
 -- 00326_schedule_memory.sql
 DO $g$ BEGIN
-  REVOKE EXECUTE ON FUNCTION public.cut_schedule_revision(UUID, TEXT, UUID) FROM PUBLIC, anon;
+  REVOKE EXECUTE ON FUNCTION public.cut_schedule_revision(UUID, TEXT) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
 -- 00326_schedule_memory.sql
 DO $g$ BEGIN
-  GRANT EXECUTE ON FUNCTION public.cut_schedule_revision(UUID, TEXT, UUID) TO authenticated, service_role;
+  GRANT EXECUTE ON FUNCTION public.cut_schedule_revision(UUID, TEXT) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
