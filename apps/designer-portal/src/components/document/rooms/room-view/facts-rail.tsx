@@ -2,18 +2,37 @@
  * FactsRail — the Room View's comprehension instrument (R107 §4, I73).
  * Pure-prop component: every line is derived directly from the geometry
  * (+ two scan-metadata scalars) the caller already resolved, so it stays
- * unit-testable without React Query or Supabase in the loop.
+ * unit-testable without React Query or Supabase in the loop. The optional
+ * `measure` prop follows the same rule — it's a plain callbacks-and-booleans
+ * shape the caller (room-view.tsx, wired to `useMeasure()`) resolves; this
+ * component owns no measure STATE of its own.
  *
  * Sections, per the prototype's `.facts` block and the task's ruling:
  *   Area · Walls (+ ceiling-stands-in note, + thickness-convention note when
  *   the adapter applied it) · Openings (windows/doors/openings counts) ·
  *   Detected (furniture categories) · Scan (date · quality · coverage) ·
  *   Verify — ONLY rendered when ≥1 wall reads low confidence (I73a).
+ *
+ * Below `.facts`, the prototype's `.toolrow` (W2-T4, package accept 2.3):
+ * a quiet Measure button ("the tool" treatment: 1px rule border, mocha text,
+ * no fill) that inverts to ink when armed, plus a Clear button shown ONLY
+ * once a measurement exists.
  */
 
 import type { ReactNode } from 'react';
 import { areaOf, ftIn, overallDims, type RoomGeometry } from '@/lib/room-view/geometry';
 import { fmtDay } from '@/lib/document/format';
+import { cn } from '@/lib/utils';
+
+export interface FactsRailMeasureProps {
+  /** true while the tool is capturing clicks (armed or first-point placed) —
+   *  the Measure button inverts to its "on" treatment. */
+  armed: boolean;
+  /** true once a measurement is complete — shows the Clear button. */
+  hasMeasurement: boolean;
+  onArm: () => void;
+  onClear: () => void;
+}
 
 export interface FactsRailProps {
   geometry: RoomGeometry;
@@ -25,6 +44,9 @@ export interface FactsRailProps {
   qualityGrade: string | null;
   /** 0–1 fraction, e.g. 0.91. */
   coveragePercentage: number | null;
+  /** Measure-tool toolrow — omitted entirely (no dead UI) when the caller
+   *  doesn't wire the tool up. */
+  measure?: FactsRailMeasureProps;
 }
 
 function plural(n: number, noun: string): string {
@@ -46,7 +68,14 @@ function detectedCategories(geometry: RoomGeometry): string[] {
   });
 }
 
-export function FactsRail({ geometry, thicknessConvention, scanDate, qualityGrade, coveragePercentage }: FactsRailProps) {
+export function FactsRail({
+  geometry,
+  thicknessConvention,
+  scanDate,
+  qualityGrade,
+  coveragePercentage,
+  measure,
+}: FactsRailProps) {
   const { w, d } = overallDims(geometry);
   const area = Math.round(areaOf(geometry));
   const lowConfWalls = geometry.walls.filter((wall) => wall.conf === 'low');
@@ -81,6 +110,33 @@ export function FactsRail({ geometry, thicknessConvention, scanDate, qualityGrad
         <Fact k="Verify">
           <Sub>{lowConfWalls.map((wall) => wall.name).join(' · ')} — drawn dashed; confirm on site</Sub>
         </Fact>
+      )}
+
+      {measure && (
+        <div className="mt-4 flex gap-2.5">
+          <button
+            type="button"
+            onClick={measure.onArm}
+            aria-pressed={measure.armed}
+            className={cn(
+              'rounded-[3px] border px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors',
+              measure.armed
+                ? 'border-[var(--color-charcoal)] bg-[var(--color-charcoal)] text-[var(--color-off-white)]'
+                : 'border-[var(--doc-ink-border)] bg-transparent text-[var(--color-mocha)]',
+            )}
+          >
+            Measure
+          </button>
+          {measure.hasMeasurement && (
+            <button
+              type="button"
+              onClick={measure.onClear}
+              className="rounded-[3px] border border-[var(--doc-ink-border)] bg-transparent px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-mocha)] transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
       )}
     </aside>
   );

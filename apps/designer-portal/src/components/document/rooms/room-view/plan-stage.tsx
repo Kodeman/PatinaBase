@@ -30,6 +30,9 @@ import { useCallback, useRef, useState, type FocusEvent, type MouseEvent, type R
 import { overallDims, type OrientedRect, type RoomGeometry } from '@/lib/room-view/geometry';
 import { planPrimitives, type PlanPrimitive } from '@/lib/room-view/plan-primitives';
 
+/** stagecap's default right-hand copy — overridden while the measure tool is armed. */
+const DEFAULT_STAGE_CAP_RIGHT = 'hover for dimensions';
+
 /** px per foot — matches the prototype's SCALE exactly. */
 const SCALE = 28;
 /** svg padding, px — matches the prototype's PAD exactly (applied on all
@@ -43,6 +46,9 @@ export interface PlanStageProps {
   /** Measure-tool seam (a sibling task mounts the two-point measure overlay
    *  here) — rendered as an extra SVG layer above the base primitives. */
   measureLayer?: ReactNode;
+  /** stagecap's right-hand copy — the measure tool swaps this to "click two
+   *  points" while armed; defaults to "hover for dimensions". */
+  stageCapRight?: string;
 }
 
 interface DimChipState {
@@ -51,7 +57,7 @@ interface DimChipState {
   y: number;
 }
 
-export function PlanStage({ geometry, measureLayer }: PlanStageProps) {
+export function PlanStage({ geometry, measureLayer, stageCapRight = DEFAULT_STAGE_CAP_RIGHT }: PlanStageProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [chip, setChip] = useState<DimChipState | null>(null);
 
@@ -116,7 +122,7 @@ export function PlanStage({ geometry, measureLayer }: PlanStageProps) {
       </div>
       <div className="flex items-center justify-between border-t border-[var(--doc-ink-border)] px-3.5 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
         <span>Plan · drawn from the scan</span>
-        <span>hover for dimensions</span>
+        <span>{stageCapRight}</span>
       </div>
     </div>
   );
@@ -323,3 +329,12 @@ function PrimitiveShape({ p, px, onHover, onFocusShow, onHide }: ShapeProps) {
  *  so a sibling measure-tool task can convert its own click points through the
  *  identical convention rather than re-deriving it. */
 export { SCALE as PLAN_STAGE_SCALE, PAD as PLAN_STAGE_PAD };
+
+/** The stage's viewBox size in px, from the SAME geometry→dims→SCALE/PAD
+ *  formula the component uses internally — exported so the measure tool's
+ *  pointer-events-isolation catcher (a sibling task) can size itself to
+ *  cover exactly the visible stage without duplicating this arithmetic. */
+export function planViewBox(geometry: RoomGeometry): { width: number; height: number } {
+  const { w, d } = overallDims(geometry);
+  return { width: Math.max(1, w * SCALE + PAD * 2), height: Math.max(1, d * SCALE + PAD * 2) };
+}

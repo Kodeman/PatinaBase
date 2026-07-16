@@ -32,7 +32,9 @@ import Link from 'next/link';
 import type { RoomGeometryDocument } from '@patina/supabase';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import { FactsRail } from './facts-rail';
-import { PlanStage } from './plan-stage';
+import { MeasureLayer } from './measure-layer';
+import { planViewBox, PlanStage } from './plan-stage';
+import { useMeasure } from './use-measure';
 
 /** Mirrors folder-card.tsx's SECTION_LABEL (module-private there) — the
  *  Room View doc-link needs the same human phase label as the Desk folio. */
@@ -66,6 +68,15 @@ export function RoomView({ doc, geometry, thicknessConvention, isLoading }: Room
     return { href: `/doc/${doc.engagementId}`, label: `→ the Document · ${label}` };
   }, [doc?.engagementId, doc?.activeSection]);
 
+  // Both hooks called unconditionally, ahead of the loading/not-ready early
+  // returns below (Rules of Hooks) — the measure tool's own state resets
+  // naturally whenever RoomView remounts for a different room.
+  const measure = useMeasure();
+  const viewBox = useMemo(
+    () => (geometry ? planViewBox(geometry) : { width: 1, height: 1 }),
+    [geometry],
+  );
+
   if (isLoading) return null;
 
   const ready = doc != null && doc.parseStatus === 'parsed' && geometry != null;
@@ -81,6 +92,11 @@ export function RoomView({ doc, geometry, thicknessConvention, isLoading }: Room
 
   const clientName = doc.documentClientName ?? doc.ownerClientName;
   const roomType = doc.roomType ? prettyRoomType(doc.roomType) : null;
+
+  // "armed" broadly = the tool is capturing clicks (armed or first-point
+  // placed) — both the stagecap copy and the toolrow's button treatment key
+  // off this; only 'complete' shows the Clear button.
+  const capturing = measure.state.phase === 'armed' || measure.state.phase === 'point';
 
   return (
     <div className="mx-auto max-w-[1180px] px-6 pb-20 pt-8 sm:px-8">
@@ -133,8 +149,25 @@ export function RoomView({ doc, geometry, thicknessConvention, isLoading }: Room
           scanDate={doc.scannedAt}
           qualityGrade={doc.qualityGrade}
           coveragePercentage={doc.coveragePercentage}
+          measure={{
+            armed: capturing,
+            hasMeasurement: measure.state.phase === 'complete',
+            onArm: measure.arm,
+            onClear: measure.clear,
+          }}
         />
-        <PlanStage geometry={geometry} />
+        <PlanStage
+          geometry={geometry}
+          stageCapRight={capturing ? 'click two points' : 'hover for dimensions'}
+          measureLayer={
+            <MeasureLayer
+              state={measure.state}
+              viewBoxWidth={viewBox.width}
+              viewBoxHeight={viewBox.height}
+              onPoint={measure.addPoint}
+            />
+          }
+        />
       </div>
     </div>
   );
