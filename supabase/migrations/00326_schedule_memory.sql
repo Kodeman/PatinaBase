@@ -73,10 +73,11 @@
 -- `is_studio_comember(designer_id)` (00315), matching project_phases' RLS
 -- posture from 00316; is_studio_comember's own self-branch keeps the solo-
 -- studio case behaviorally identical. cut_schedule_revision keeps its
--- designer-OR-client acceptance (the client leg is untouched). schedule_
--- milestones' own RLS (00323) stays designer-only — a comember can commit a
--- phase-duration/phase-anchor edit through commit_schedule_edit's widened
--- guard today; the milestone-offset kind is unaffected by this pass.
+-- designer-OR-client acceptance (the client leg is untouched). The table
+-- legs (schedule_milestones RLS + schedule_revisions SELECT, 00323) are
+-- widened in the same R105 pass — commit_schedule_edit is SECURITY INVOKER,
+-- so without them a comember's milestone-offset edit passed this guard then
+-- died at the table's designer-only RLS (probe-confirmed half-open door).
 -- ══════════════════════════════════════════════════════════════════════════════════
 
 -- ─── 1. cut_schedule_revision — the ONE writer to schedule_revisions ──────
@@ -704,9 +705,10 @@ BEGIN
   -- comember of the project's designer — matches project_phases' underlying
   -- RLS posture (00316) that this explicit guard exists alongside (see the
   -- migration banner's "second, independent gate" note). schedule_milestones'
-  -- own RLS (00323) stays designer-only — untouched here; only the
-  -- phase-duration/phase-anchor edit kinds (which write project_phases) are
-  -- reachable by a comember through this widening today.
+  -- RLS gains its comember leg in the same R105 pass (00323
+  -- schedule_milestones_studio_rw), so all three edit kinds — including
+  -- milestone-offset, whose UPDATE runs under this INVOKER function against
+  -- that table's RLS — are reachable by a comember.
   IF NOT EXISTS (
     SELECT 1 FROM public.projects
     WHERE id = p_project_id AND public.is_studio_comember(designer_id)
