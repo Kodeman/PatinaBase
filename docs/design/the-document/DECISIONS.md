@@ -3521,3 +3521,134 @@ permissive policy or a SECURITY DEFINER wrapper (the function itself is
 SECURITY INVOKER) before Slice 05 can land it.
 
 *Entries add: I60 · last id = I60*
+
+### I61 · Slice 05 built — Memory: the schedule earns its patina — 2026-07-15
+
+Branch `schedule/slice-05` (stacked on slice-04). Landed: migration 00326 —
+`cut_schedule_revision(p_project_id, p_reason) RETURNS int`, SECURITY
+DEFINER, the ONE writer to `schedule_revisions` (00323's RPC-only posture
+held). Review forced one fix before merge: the first cut took `p_actor
+uuid DEFAULT auth.uid()` as a caller-suppliable parameter on a DEFINER
+audit writer whose only authorization was "actor is the project's designer
+or client" — a designer could mint a revision attributed to their CLIENT
+(or vice versa) via a direct RPC call, pure attribution forgery. Fixed by
+dropping the parameter entirely: the actor is now derived internally as
+`auth.uid()` with an explicit NULL hard-fail, so forgery is impossible by
+construction, not just discouraged — re-verified with positional- and
+named-argument forgery probes, both `42883` (function does not exist).
+`activate_proposal_as_project` (chain 00274→00279→00324→00326) is
+regrafted with one delta: once every phase and anchored milestone is
+written, `PERFORM cut_schedule_revision(v_project_id, 'Baseline v1 — cut
+at signature')` freezes the baseline, never wrapped in an exception block
+(unlike the deposit auto-draft) because the baseline is a hard guarantee
+of activation, not a best-effort side effect. `commit_schedule_edit`
+(00325's body) gets the matching delta: after the edit loop,
+`cut_schedule_revision` runs and its `v` becomes the function's own return
+— a declared breaking change (UUID → INTEGER), done as a guarded
+drop-and-recreate, with `useCommitScheduleEdit` retyped to match. The
+confirm strip grew a quiet DM-mono reason field, prefilled with the
+sentence's own plain text and editable before Commit; a blank reason falls
+back to the sentence so the ledger can never record an empty row. The
+Rule grew a clay sibling ghost layer — dashed `--color-clay` ticks,
+diamonds, and "v1 · <date>" labels — resolved by running the v1 snapshot
+back through `snapshotToResolverInputs` and the same `resolveSchedule` +
+`baselineGhostDiff` engine that renders the live schedule, projected
+through the identical committed `scale`, so baseline and current share one
+source of positional truth. It sits behind a quiet "Baseline" toggle
+(default OFF) in the meta row beneath the Rule, hidden with no v1, during
+an open ripple session, or while the Rule is pinned. `<RevisionLedger/>`
+is a collapsed-by-default "Revisions · N" disclosure at the spine's foot —
+newest-first rows of `v · reason · who · when`, no edit or delete
+affordance anywhere, append-only by construction (there is no UPDATE or
+DELETE policy on the table, locally by RLS, on Strata by ACL — same
+guarantee, different SQLSTATE). `schedule_revision_cut` telemetry fires
+from the strip's commit `onSuccess`, reading the RPC's now-numeric return
+directly as `v` (trigger: `'edit'`); the `'signature'` trigger has no
+designer-portal call site (v1 is cut server-side inside the client's
+signing flow) and stays an intentionally-unwired def, per
+`docs/analytics/event-conventions.md`.
+
+**Walk results (S5-4, live, DB + driver evidence):** all five §6 checks
+pass on a fresh proposal built for the purpose (3 chained phases —
+Schematic Design → Design Development → Installation & Styling — plus one
+anchored milestone, "Install day," Oct 15) and activated directly as the
+designer session. **v1 at signature:** `schedule_revisions` holds exactly
+one row, `actor` = the designer, `reason` = "Baseline v1 — cut at
+signature," and the stored `phase_snapshots` array matches a
+freshly-rebuilt-from-live-rows snapshot field-for-field
+(`snapshot_matches = t`, psql). **v2/v3 from ripple commits:** a Rule
+duration edit (`+5d` on Schematic Design) committed with the prefilled
+sentence untouched cuts v2 with `reason` = `"Schematic Design +5d. 2
+phases follow."` exactly; a second edit (`+3d` on Design Development) with
+the reason field hand-edited to `"Pushed for fabric delay - vendor
+confirmed"` cuts v3 with that exact string — both confirmed by direct
+`schedule_revisions` SELECT, and the telemetry code path traced to source:
+`schedule-confirm-strip.tsx`'s commit `onSuccess` reads
+`useCommitScheduleEdit`'s numeric return as `newRevisionV` and passes it
+straight through to `scheduleRevisionCut({ v: newRevisionV, trigger:
+'edit' })`, so the strip's fired `v` is provably the RPC's own return, not
+a guess. **Clay ghosts match the snapshot exactly:** toggling "Baseline"
+on renders three dashed clay ticks labeled "V1 · AUG 10," "V1 · SEP 7,"
+and "V1 · SEP 21" — hand-verified against the psql v1 snapshot's
+`target_end_date` for each of the three phases (2026-08-10 / 2026-09-07 /
+2026-09-21), an exact match; toggling off clears every ghost; the toggle
+and its layer vanish entirely once a ripple session opens (a live
+duration edit was left mid-session to confirm — the whole "Baseline"
+control disappears, not just its state) and again once the Rule pins on
+scroll (scrolled past the fold — the pinned reduced-height rule shows
+only solid committed ticks, no dashed marks, no toggle anywhere in the
+sticky header). **Ledger:** the expanded "Revisions · 3" disclosure shows
+v3/v2/v1 newest-first with the exact reasons above, "you" for every row
+(actor = the walking designer), and a date per row; no edit or delete
+control anywhere in the rendered ledger; as `authenticated` in psql, a
+targeted `UPDATE` and `DELETE` against the designer's own visible v1 row
+both affect **0 rows**, and a forged direct `INSERT` is refused
+(`new row violates row-level security policy`) — post-attempt state
+unchanged, still exactly v1/v2/v3. **Regressions:** an Esc-revert
+mid-session (a `+2d` test edit on Design Development, aborted) left
+`duration_days` byte-identical (still 31) and cut no v4 — psql-confirmed
+before and after; a scratch phase added directly via the ghost-add line
+and then deleted directly via its inline confirm both opened no strip at
+any point and cut no revision (`schedule_revisions` stayed at `v=3`
+across both); gate-off (`schedule-spine:false`, dev server restarted to
+flip the env-inlined override) is byte-identical to pre-Slice-01 — the
+old "THE SCHEDULE" `PhaseTimeline` band renders in the Rule/Spine's place,
+no toggle, no ledger, no Coordination-adjacent schedule chrome, unaffected
+by every mutation this walk made.
+
+**O8 status: still open — Slice 05 shipped studio-side only per the
+package's own rule.** The ledger and the baseline ghosts render exclusively
+inside the gated, studio-only spine; no client-facing surface exposes
+either. O8's own leaning (client sees only revisions touching client-facing
+dates, full ledger studio-side) remains unruled — nothing in this slice
+resolves it, by design.
+
+Escalations (plan §8, none blocking): the S5-3 build round already flagged
+dashed-vs-solid clay ghosts (the prototype's `.bl-tick` is solid; this
+slice went dashed via ghost-layer reuse, per the orchestrator's
+direction — a design ruling on which reads as "history" vs. "preview" is
+owed); the toggle's placement in the quiet meta row beneath the Rule
+(paired left, "near the rule head" satisfied loosely, not literally);
+the ledger's collapsed-by-default disclosure (the prototype shows rows
+inline — confirm collapsed-default is wanted, not just tolerated);
+who-rendering for a non-"you" actor is the uid head (8 chars), the boring
+honest option with no profile join; a baseline entry whose current-side
+phase was deleted since v1 ghosts both its start and end boundaries
+(decided-but-unshown per the S5-2 pin, never exercised live this walk —
+no phase was deleted after a baseline existed); the `'signature'`-trigger
+telemetry stays unwired server-side (v1 is cut inside the client's signing
+RPC, no designer-portal call site exists to fire it from); and pinned
+mode hiding the baseline layer (confirmed this walk, consistent with the
+ripple-session hide, but never explicitly design-ruled as the right
+behavior vs. e.g. a reduced ghost mark in the pinned header). Carried from
+prior slices, still open: the studio-comember gap on the schedule RPCs
+(00323–00326 all guard on `designer_id = auth.uid()` / the designer-or-
+client pair directly, never a studio co-membership check — same family as
+`proposal_schedule_milestones`' RLS, flagged since I59); the thread-lane
+compose gap (I59 — thread-lane phases still expose no compose actions of
+their own); and touch treatment for the Rule's drag surfaces (flagged
+since I60 — pointer-only mechanics, still untested on touch).
+
+*Entries add: I61 · last id = I61*
+
+*Entries add: I61 · last id = I61*
