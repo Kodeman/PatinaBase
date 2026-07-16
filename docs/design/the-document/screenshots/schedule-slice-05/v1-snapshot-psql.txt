@@ -1,0 +1,103 @@
+BEGIN
+                                 set_config                                 
+----------------------------------------------------------------------------
+ {"sub" : "a0000000-0000-0000-0000-000000000004", "role" : "authenticated"}
+(1 row)
+
+=== schedule_revisions — expect exactly v1, actor=designer, reason=baseline sentence ===
+ v |                actor                 |             reason             | n_phases |            cut_at             
+---+--------------------------------------+--------------------------------+----------+-------------------------------
+ 1 | a0000000-0000-0000-0000-000000000004 | Baseline v1 — cut at signature |        3 | 2026-07-16 02:36:21.818201+00
+(1 row)
+
+=== v1 phase_snapshots (jsonb_pretty) ===
+                            jsonb_pretty                            
+--------------------------------------------------------------------
+ [                                                                 +
+     {                                                             +
+         "id": "dcfab96a-5562-42f3-aec6-5200dc07fc0e",             +
+         "lane": "main",                                           +
+         "name": "Schematic Design",                               +
+         "status": "in_progress",                                  +
+         "phase_key": "schematic_design",                          +
+         "milestones": [                                           +
+         ],                                                        +
+         "sort_order": 0,                                          +
+         "start_date": "2026-07-20",                               +
+         "anchor_date": null,                                      +
+         "duration_days": 21,                                      +
+         "duration_weeks": null,                                   +
+         "target_end_date": "2026-08-10",                          +
+         "follows_phase_id": null                                  +
+     },                                                            +
+     {                                                             +
+         "id": "95886cc2-a737-472f-bf16-bd93bc38307a",             +
+         "lane": "main",                                           +
+         "name": "Design Development",                             +
+         "status": "pending",                                      +
+         "phase_key": "design_development",                        +
+         "milestones": [                                           +
+         ],                                                        +
+         "sort_order": 1,                                          +
+         "start_date": "2026-08-10",                               +
+         "anchor_date": null,                                      +
+         "duration_days": 28,                                      +
+         "duration_weeks": null,                                   +
+         "target_end_date": "2026-09-07",                          +
+         "follows_phase_id": "dcfab96a-5562-42f3-aec6-5200dc07fc0e"+
+     },                                                            +
+     {                                                             +
+         "id": "e30a9ead-5d8a-4f04-b9cb-1c3816f067aa",             +
+         "lane": "main",                                           +
+         "name": "Installation & Styling",                         +
+         "status": "pending",                                      +
+         "phase_key": "installation",                              +
+         "milestones": [                                           +
+             {                                                     +
+                 "id": "d11116ac-0040-416c-a81a-3afb66adb1b5",     +
+                 "kind": "event",                                  +
+                 "name": "Install day",                            +
+                 "status": "upcoming",                             +
+                 "sort_order": 0,                                  +
+                 "anchor_date": "2026-10-15",                      +
+                 "offset_days": null                               +
+             }                                                     +
+         ],                                                        +
+         "sort_order": 2,                                          +
+         "start_date": "2026-09-07",                               +
+         "anchor_date": null,                                      +
+         "duration_days": 14,                                      +
+         "duration_weeks": null,                                   +
+         "target_end_date": "2026-09-21",                          +
+         "follows_phase_id": "95886cc2-a737-472f-bf16-bd93bc38307a"+
+     }                                                             +
+ ]
+(1 row)
+
+=== live project_phases the snapshot must mirror ===
+                  id                  |          name          |     phase_key      | duration_days | duration_weeks |           follows_phase_id           | anchor_date | lane | start_date | target_end_date | sort_order |   status    
+--------------------------------------+------------------------+--------------------+---------------+----------------+--------------------------------------+-------------+------+------------+-----------------+------------+-------------
+ dcfab96a-5562-42f3-aec6-5200dc07fc0e | Schematic Design       | schematic_design   |            21 |                |                                      |             | main | 2026-07-20 | 2026-08-10      |          0 | in_progress
+ 95886cc2-a737-472f-bf16-bd93bc38307a | Design Development     | design_development |            28 |                | dcfab96a-5562-42f3-aec6-5200dc07fc0e |             | main | 2026-08-10 | 2026-09-07      |          1 | pending
+ e30a9ead-5d8a-4f04-b9cb-1c3816f067aa | Installation & Styling | installation       |            14 |                | 95886cc2-a737-472f-bf16-bd93bc38307a |             | main | 2026-09-07 | 2026-09-21      |          2 | pending
+(3 rows)
+
+=== live schedule_milestones the snapshot must mirror ===
+                  id                  |               phase_id               |    name     | kind  | offset_days | anchor_date |  status  | sort_order 
+--------------------------------------+--------------------------------------+-------------+-------+-------------+-------------+----------+------------
+ d11116ac-0040-416c-a81a-3afb66adb1b5 | e30a9ead-5d8a-4f04-b9cb-1c3816f067aa | Install day | event |             | 2026-10-15  | upcoming |          0
+(1 row)
+
+=== FIELD-FOR-FIELD: stored snapshot == freshly-rebuilt-from-live-rows ? (expect t) ===
+ snapshot_matches 
+------------------
+ t
+(1 row)
+
+=== resulting project id (for the UI walk) ===
+              project_id              
+--------------------------------------
+ 5510fcd0-595d-451b-8df3-47064f937f02
+(1 row)
+
+COMMIT
