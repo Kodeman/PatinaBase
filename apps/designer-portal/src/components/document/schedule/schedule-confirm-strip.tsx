@@ -29,7 +29,7 @@
  * modal — the document stays live beneath (D1).
  */
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useCommitScheduleEdit } from '@patina/supabase';
 import { rippleSentence } from '@/lib/document/schedule-ripple-derivation';
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
@@ -42,6 +42,31 @@ export interface ScheduleConfirmStripProps {
 export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
   const { session, diff, clear } = useRippleSession();
   const commit = useCommitScheduleEdit();
+
+  // The ripple's one honest sentence — memoized so the reason field can follow
+  // `plain` across drag frames without recomputing it twice. null when no diff.
+  const sentence = useMemo(() => (diff != null ? rippleSentence(diff) : null), [diff]);
+
+  // The editable revision reason (R100 "Memory") — a quiet DM-mono echo of the
+  // sentence. Prefilled with `sentence.plain` and kept in sync with it WHILE the
+  // designer hasn't typed (the sentence changes as a drag updates the preview);
+  // the first keystroke marks it dirty and it stops following. Commit sends this
+  // value as the revision's reason (00326's cut). State PERSISTS across the
+  // strip's null renders (it stays mounted, returning null between sessions), so
+  // an ended session (commit success or Esc·Revert) resets it to "following."
+  const [reason, setReason] = useState('');
+  const [reasonDirty, setReasonDirty] = useState(false);
+
+  useEffect(() => {
+    if (!reasonDirty && sentence != null) setReason(sentence.plain);
+  }, [sentence, reasonDirty]);
+
+  useEffect(() => {
+    if (session == null) {
+      setReasonDirty(false);
+      setReason('');
+    }
+  }, [session]);
 
   // Global Esc while a session is active → revert (clear). It must NOT leak to a
   // handler that closes the document, so stopPropagation() blocks the event from
@@ -69,9 +94,8 @@ export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
     return () => document.removeEventListener('keydown', onKey);
   }, [session, clear, commit.isPending]);
 
-  if (session == null || diff == null) return null;
+  if (session == null || diff == null || sentence == null) return null;
 
-  const sentence = rippleSentence(diff);
   // The non-conflict clauses ride the charcoal ink; the conflict clause is inked
   // terracotta separately (it never joins this list).
   const clauses = [sentence.followClause, sentence.holdClause, sentence.slackClause].filter(
@@ -83,15 +107,24 @@ export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
     // button (or a stray keyboard activation) must still write nothing.
     if (diff.anchorViolation) return;
     commit.mutate(
-      { projectId, edits: [session.edit], reason: sentence.plain },
+      // The designer's edited reason; falls back to the sentence when blanked so
+      // the ledger never records an empty revision.
+      { projectId, edits: [session.edit], reason: reason.trim() || sentence.plain },
       {
-        onSuccess: () => {
+        onSuccess: (newRevisionV) => {
           scheduleEvents.scheduleEditCommitted({
             project_id: projectId,
             surface: session.origin,
             edit_kind: session.edit.kind,
             ripple_size: diff.rippleSize,
             conflict_count: diff.conflicts.length,
+          });
+          // R100 "Memory" — the numbered revision 00326 just cut. `newRevisionV`
+          // is useCommitScheduleEdit's now-numeric return (the RPC's new `v`).
+          scheduleEvents.scheduleRevisionCut({
+            project_id: projectId,
+            v: newRevisionV,
+            trigger: 'edit',
           });
           clear();
         },
@@ -135,6 +168,21 @@ export function ScheduleConfirmStrip({ projectId }: ScheduleConfirmStripProps) {
         <span className="sr-only" aria-live="polite">
           {sentence.plain}
         </span>
+        {/* The editable revision reason (R100 "Memory") — a quiet DM-mono echo
+            of the sentence, prefilled + re-synced until the designer types. Its
+            value is what the commit writes to the revision ledger. */}
+        <input
+          type="text"
+          value={reason}
+          onChange={(e) => {
+            setReason(e.target.value);
+            setReasonDirty(true);
+          }}
+          disabled={commit.isPending}
+          aria-label="Revision reason"
+          placeholder="Reason for this revision"
+          className="mt-1 w-full max-w-[32rem] border-b border-[var(--color-pearl)] bg-transparent py-0.5 font-mono text-[0.62rem] tracking-[0.02em] text-[var(--color-charcoal)] placeholder:text-[var(--text-muted)] focus:border-[var(--color-clay)] focus:outline-none disabled:opacity-50"
+        />
         {commit.isError && (
           <p className="mt-1 font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
             Commit failed — nothing was saved; your preview is kept

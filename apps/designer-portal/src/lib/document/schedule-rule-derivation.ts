@@ -20,6 +20,9 @@ import { phaseState } from './schedule-spine-derivation';
 // Type-only — the ghost projector reads a `RippleDiff` (schedule-ripple-
 // derivation imports NOTHING from this file, so this stays acyclic).
 import type { RippleDiff } from './schedule-ripple-derivation';
+// Type-only — the baseline projector reads a `BaselineGhostDiff` (schedule-
+// baseline-derivation imports ONLY from @patina/utils, so this stays acyclic).
+import type { BaselineGhostDiff } from './schedule-baseline-derivation';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // buildTimeScale — the date→x proportional scale, spanning today
@@ -321,6 +324,66 @@ export function projectGhosts(diff: RippleDiff, scale: TimeScale): RuleGhosts {
   }
 
   return { ticks, diamonds, arrow };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// projectBaselineGhosts — the baseline diff → the Rule's faint CLAY ghost layer
+// (R100 "Memory", Slice 05). The clay sibling of projectGhosts: same committed
+// scale, same honest-overflow rule (the POSITION clamps to [0,100] while the
+// label reads the TRUE baseline date), but sourced from a `baselineGhostDiff`
+// (schedule-baseline-derivation) instead of a live `RippleDiff` — it marks
+// "where the promise stood," not a pending preview. No arrow (a baseline is a
+// standing mark, not a from→to vector).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** One clay ghost mark at a baseline boundary/milestone date — position already
+ *  projected + clamped to [0,100]; `date` carries the TRUE baseline ISO so the
+ *  label reads honestly even when the mark clamps at the scale's edge. */
+export interface BaselineGhostMark {
+  id: string;
+  xPct: number;
+  date: string;
+}
+export interface RuleBaselineGhosts {
+  ticks: BaselineGhostMark[];
+  diamonds: BaselineGhostMark[];
+}
+
+/**
+ * Project a `BaselineGhostDiff` onto the Rule's clay ghost layer (S5-3).
+ * `baselineGhostDiff` already emits only the phases/milestones whose current
+ * dates differ from the baseline; this places each MOVED boundary/date on the
+ * SAME committed `scale` the solid layers use:
+ *   - ticks    — one per baseline BOUNDARY that actually moved. A phase whose
+ *                end shifted but whose start held ghosts only its end; a
+ *                deleted-in-current entry (null current dates) has BOTH
+ *                boundaries differ, so both ghost — the promise that vanished.
+ *                A boundary with a null baseline date has no promise to mark.
+ *   - diamonds — one per milestone whose date moved, at its baseline date.
+ * Pure + total: a null/unplaceable baseline date drops that one ghost, never a
+ * ghost at x:0/NaN. Positions clamp; dates stay raw for the label.
+ */
+export function projectBaselineGhosts(diff: BaselineGhostDiff, scale: TimeScale): RuleBaselineGhosts {
+  const ticks: BaselineGhostMark[] = [];
+  for (const p of diff.phases) {
+    if (p.baselineStart != null && p.baselineStart !== p.currentStart) {
+      const x = scale.toX(p.baselineStart);
+      if (x != null) ticks.push({ id: `${p.id}:start`, xPct: clampPct(x), date: p.baselineStart });
+    }
+    if (p.baselineEnd != null && p.baselineEnd !== p.currentEnd) {
+      const x = scale.toX(p.baselineEnd);
+      if (x != null) ticks.push({ id: `${p.id}:end`, xPct: clampPct(x), date: p.baselineEnd });
+    }
+  }
+
+  const diamonds: BaselineGhostMark[] = [];
+  for (const m of diff.milestones) {
+    if (m.baselineDate == null || m.baselineDate === m.currentDate) continue;
+    const x = scale.toX(m.baselineDate);
+    if (x != null) diamonds.push({ id: m.id, xPct: clampPct(x), date: m.baselineDate });
+  }
+
+  return { ticks, diamonds };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

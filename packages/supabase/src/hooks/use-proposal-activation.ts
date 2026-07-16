@@ -45,6 +45,11 @@ export function useActivateProposal() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['project-v2', projectId] });
       queryClient.invalidateQueries({ queryKey: ['clients'] });
+      // R100 "Memory" (Slice 05): activate_proposal_as_project (00326) cuts
+      // baseline v1 at signature. Invalidate the ledger so a designer-triggered
+      // activation surfaces v1 immediately (the Rule's Baseline toggle + the
+      // spine's RevisionLedger both read this key).
+      queryClient.invalidateQueries({ queryKey: ['schedule-revisions', projectId] });
     },
   });
 }

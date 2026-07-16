@@ -13,11 +13,13 @@ import {
   boundaryDurationDays,
   milestoneOffsetDays,
   projectGhosts,
+  projectBaselineGhosts,
   unplacedPhases,
   foldedLayers,
   type TimeScale,
   type LabelInput,
 } from '../schedule-rule-derivation';
+import type { BaselineGhostDiff } from '../schedule-baseline-derivation';
 import type {
   RippleDiff,
   RipplePendingEdit,
@@ -759,5 +761,61 @@ describe('projectGhosts', () => {
     expect(g.ticks).toHaveLength(1);
     expect(g.ticks[0].xPct).toBeGreaterThan(100); // raw overflow — the component clamps position
     expect(g.ticks[0].date).toBe('2026-08-01'); // the true date is preserved for the label
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// projectBaselineGhosts — the clay v1-baseline ghost layer (R100 "Memory", S5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('projectBaselineGhosts', () => {
+  // A scale over a single dated phase spanning Jun 1 → Sep 1, today mid-range.
+  const scale = buildTimeScale([{ start: '2026-06-01', end: '2026-09-01' }], '2026-07-01')!;
+
+  it('ghosts only the boundary that moved — the held boundary makes no mark', () => {
+    const diff: BaselineGhostDiff = {
+      phases: [
+        // end moved (Jul 10 → Jul 20); start held (Jun 15)
+        { id: 'p1', baselineStart: '2026-06-15', currentStart: '2026-06-15', baselineEnd: '2026-07-10', currentEnd: '2026-07-20' },
+      ],
+      milestones: [],
+    };
+    const g = projectBaselineGhosts(diff, scale);
+    expect(g.ticks).toHaveLength(1);
+    expect(g.ticks[0]).toMatchObject({ id: 'p1:end', date: '2026-07-10' });
+    expect(g.ticks[0].xPct).toBeGreaterThanOrEqual(0);
+    expect(g.ticks[0].xPct).toBeLessThanOrEqual(100);
+  });
+
+  it('ghosts BOTH boundaries of a deleted-in-current entry (null current dates)', () => {
+    const diff: BaselineGhostDiff = {
+      phases: [
+        { id: 'gone', baselineStart: '2026-06-15', currentStart: null, baselineEnd: '2026-07-10', currentEnd: null },
+      ],
+      milestones: [],
+    };
+    const g = projectBaselineGhosts(diff, scale);
+    expect(g.ticks.map((t) => t.id).sort()).toEqual(['gone:end', 'gone:start']);
+  });
+
+  it('ghosts a moved milestone and CLAMPS an out-of-range position while keeping the true date', () => {
+    const diff: BaselineGhostDiff = {
+      phases: [],
+      milestones: [{ id: 'm1', baselineDate: '2027-01-01', currentDate: '2026-08-01' }],
+    };
+    const g = projectBaselineGhosts(diff, scale);
+    expect(g.diamonds).toHaveLength(1);
+    expect(g.diamonds[0]).toMatchObject({ id: 'm1', date: '2027-01-01' });
+    expect(g.diamonds[0].xPct).toBe(100); // clamped to the scale's edge
+  });
+
+  it('skips a boundary/milestone with a null baseline date — no promise to mark', () => {
+    const diff: BaselineGhostDiff = {
+      phases: [{ id: 'p', baselineStart: null, currentStart: '2026-06-20', baselineEnd: null, currentEnd: '2026-07-20' }],
+      milestones: [{ id: 'm', baselineDate: null, currentDate: '2026-07-01' }],
+    };
+    const g = projectBaselineGhosts(diff, scale);
+    expect(g.ticks).toHaveLength(0);
+    expect(g.diamonds).toHaveLength(0);
   });
 });

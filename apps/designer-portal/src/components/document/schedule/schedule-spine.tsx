@@ -84,6 +84,7 @@ import { PhaseComposeActions } from './phase-compose-actions';
 import { PhaseDeleteConfirm } from './phase-delete-confirm';
 import { MilestoneComposer, type MilestoneDraft } from './milestone-composer';
 import { ScheduleEntryField } from './schedule-entry-field';
+import { RevisionLedger } from './revision-ledger';
 import type { PastProjectOption } from './past-project-picker';
 
 /** Best-effort phase_key from a free-typed name (phase_key is nullable + not
@@ -855,6 +856,12 @@ export function ScheduleSpine({
           {/* The work + the dependency web — lives here pending a design
               ruling; a blocked ⊘ tick opens its blocker's sheet. */}
           <CoordinationWork projectId={projectId} items={allItems} onOpenItem={openItem} />
+
+          {/* R100 "Memory" — the schedule's own append-only ledger at the
+              spine's foot: v · reason · who · when, newest first, no actions.
+              Studio-only by construction (inside the gated spine); renders
+              nothing until a baseline is cut. */}
+          <RevisionLedger projectId={projectId} />
         </>
       )}
 

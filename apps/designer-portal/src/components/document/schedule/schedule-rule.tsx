@@ -67,9 +67,9 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useResolvedSchedule } from '@patina/supabase';
+import { useResolvedSchedule, useScheduleRevisions } from '@patina/supabase';
 import type { ResolvedPhase } from '@patina/utils';
-import { epochDayFromISO } from '@patina/utils';
+import { epochDayFromISO, resolveSchedule } from '@patina/utils';
 import {
   buildTimeScale,
   ruleSegments,
@@ -85,6 +85,7 @@ import {
   type RuleBoundary,
 } from '@/lib/document/schedule-rule-derivation';
 import { fmtDay } from '@/lib/document/format';
+import { snapshotToResolverInputs, baselineGhostDiff } from '@/lib/document/schedule-baseline-derivation';
 import { scheduleEvents } from '@/lib/analytics/schedule-events';
 import { useScheduleNav } from './schedule-nav-context';
 import { useRippleSession } from './schedule-ripple-context';
@@ -95,6 +96,7 @@ import { RuleThread, THREAD_LANE_PITCH } from './rule-thread';
 import { RuleLabelRow, type RuleLabelItem } from './rule-label-row';
 import { RuleBoundaryHandle } from './rule-boundary-handle';
 import { RuleGhostLayer } from './rule-ghost-layer';
+import { RuleBaselineLayer } from './rule-baseline-layer';
 
 export interface ScheduleRuleProps {
   projectId: string;
@@ -154,6 +156,30 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
     () => buildTimeScale(resolvedPhases.map((p) => ({ start: p.start, end: p.end })), today),
     [resolvedPhases, today],
   );
+
+  // ── R100 "Memory" (Slice 05) — the signed v1 baseline. Derived client-side
+  //    from the revisions ledger (no query beyond useScheduleRevisions); if the
+  //    schedule was never signed there is no v1, and the whole baseline
+  //    affordance — the toggle AND the ghosts — never appears. ──
+  const revisions = useScheduleRevisions(projectId);
+  const baselineV1 = useMemo(
+    () => (revisions.data ?? []).find((r) => r.v === 1) ?? null,
+    [revisions.data],
+  );
+  // The v1 promise RE-RESOLVED through the same one engine (R100) and diffed
+  // against the current resolution. baselineGhostDiff emits only entries whose
+  // dates moved (a deleted-in-current entry carries null current dates — the
+  // promise that vanished). null until a v1 exists AND the current schedule has
+  // resolved; positions are projected later through the SAME committed `scale`.
+  const baselineDiff = useMemo(() => {
+    if (baselineV1 == null || schedule.resolved == null) return null;
+    const inputs = snapshotToResolverInputs(baselineV1.phase_snapshots);
+    const baselineResolved = resolveSchedule(inputs.phases, inputs.milestones, {
+      projectStartDate: undefined,
+      today,
+    });
+    return baselineGhostDiff(schedule.resolved, baselineResolved);
+  }, [baselineV1, schedule.resolved, today]);
 
   // All projections are pure + null-safe; they resolve to [] when scale is
   // null so the hook order stays fixed (the empty-state return is below).
@@ -239,6 +265,9 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   // A bare useRef + []-deps effect fired during the loading render, found no
   // sentinel, and never re-attached — the pin silently never engaged cold.
   const [pinned, setPinned] = useState(false);
+  // R100 "Memory" — the Baseline toggle (default OFF). State persists across
+  // pin/unpin; the ghosts render only unpinned + off-ripple (see gates below).
+  const [showBaseline, setShowBaseline] = useState(false);
   const [sentinelEl, setSentinelEl] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!sentinelEl || typeof IntersectionObserver === 'undefined') return;
@@ -251,6 +280,13 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
   }, [sentinelEl]);
 
   const layers = foldedLayers(pinned);
+
+  // Baseline affordance gates (R100): a v1 must exist; the toggle + ghosts hide
+  // while a ripple session is active (terracotta preview ghosts take
+  // precedence) and while pinned (the fold shows committed truth only). The
+  // ghost layer additionally requires the toggle ON and a computed diff.
+  const baselineToggleVisible = baselineV1 != null && !ripple.isActive && !pinned;
+  const showBaselineLayer = baselineToggleVisible && showBaseline && baselineDiff != null;
 
   // Canvas height: base + one lane pitch per EXTRA thread (D-4 — every
   // thread gets its own lane row). Data-derived, so it is constant across
@@ -440,6 +476,15 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
               </div>
             )}
 
+            {/* clay baseline ghosts (R100 "Memory") — the v1 promise where
+                current dates diverge, in the SAME committed scale. Unpinned +
+                off-ripple only (gated above); pointer-events-none. Sits behind
+                the terracotta preview by mutual exclusion — the two never
+                render together. */}
+            {showBaselineLayer && baselineDiff && (
+              <RuleBaselineLayer diff={baselineDiff} scale={scale} />
+            )}
+
             {/* ghost layer — LAST, over the solid committed layers, in the same
                 TimeScale; pointer-events-none; draws for BOTH edit origins. */}
             {ripple.diff && <RuleGhostLayer diff={ripple.diff} scale={scale} pinned={false} />}
@@ -447,21 +492,44 @@ export function ScheduleRule({ projectId, projectTitle }: ScheduleRuleProps) {
         )}
       </section>
 
-      {/* Unplaced phases — never drawn on the line; a quiet right-aligned mono
-          control that still routes reveal → spine (§3.3). Always rendered
-          (both modes) so toggling the pin never shifts what follows. */}
-      {unplaced.length > 0 && (
-        <div className="mt-1 flex justify-end">
-          <button
-            type="button"
-            onClick={() => revealPhase(unplaced[0].id)}
-            aria-label={`${unplaced.length} unplaced ${
-              unplaced.length === 1 ? 'phase' : 'phases'
-            } — reveal the first in the schedule`}
-            className="font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
-          >
-            Unplaced · {unplaced.length}
-          </button>
+      {/* Quiet meta controls beneath the rule — the Baseline (v1) toggle at
+          left (R100 "Memory"; hidden with no v1, mid-ripple, or pinned) and the
+          Unplaced fallback at right (a phase never drawn on the line, its reveal
+          still routed → spine, §3.3). Rendered together so the row's presence
+          never shifts what follows; empty placeholders keep each side anchored. */}
+      {(baselineToggleVisible || unplaced.length > 0) && (
+        <div className="mt-1 flex items-center justify-between gap-3">
+          {baselineToggleVisible ? (
+            <button
+              type="button"
+              aria-pressed={showBaseline}
+              onClick={() => setShowBaseline((v) => !v)}
+              aria-label="Toggle the v1 baseline ghosts"
+              className={`font-mono text-[0.56rem] uppercase tracking-[0.07em] ${
+                showBaseline
+                  ? 'text-[var(--color-clay)]'
+                  : 'text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]'
+              }`}
+            >
+              Baseline{showBaseline ? ' · on' : ''}
+            </button>
+          ) : (
+            <span aria-hidden />
+          )}
+          {unplaced.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => revealPhase(unplaced[0].id)}
+              aria-label={`${unplaced.length} unplaced ${
+                unplaced.length === 1 ? 'phase' : 'phases'
+              } — reveal the first in the schedule`}
+              className="font-mono text-[0.56rem] uppercase tracking-[0.07em] text-[var(--color-aged-oak)] hover:text-[var(--color-charcoal)]"
+            >
+              Unplaced · {unplaced.length}
+            </button>
+          ) : (
+            <span aria-hidden />
+          )}
         </div>
       )}
     </>
