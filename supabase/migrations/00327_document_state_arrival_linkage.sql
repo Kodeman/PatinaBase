@@ -13,9 +13,15 @@
 --       designer already named in designer_clients (I62). Additive, nullable,
 --       ON DELETE SET NULL.
 --   (2) Shape B (proposal) client_name is RESCUED via designer_clients.client_name
---       through the new link — when client_id is NULL the profile name is NULL,
---       so we fall back to the household label instead of the 'Client' literal
+--       through the new link. The household label wins FIRST (matching Shape D's
+--       precedence so the displayed name never flips at the D→B transition),
+--       then display_name, then full_name, then the 'Client' literal
 --       (I62; the prod repro is Elena — proposal f9970369…, dc 5eed0104…).
+--       Shape D's proposal-chain exclusion is correspondingly WIDENED with a
+--       `pp.designer_client_id = dc.id` leg — the legacy pair join is never true
+--       when dc.client_id is NULL, so a linked no-login household would
+--       otherwise emit BOTH a Shape D and a Shape B doc (one household, two
+--       Desk documents — the Elena duplicate).
 --   (3) Shape C (lead) and Shape D (relationship) name coalesces now prefer
 --       profiles.display_name over full_name (00289's precedent:
 --       coalesce(nullif(btrim(display_name),''), full_name, …)). display_name is
@@ -41,6 +47,10 @@
 --   00219 → 00230 → 00236 → 00327 (this).
 -- Lineage (begin_direction_from_discovery): 00224 → 00327 (this) — one added
 --   INSERT column so a Discovery-seeded draft stamps designer_client_id.
+-- Lineage (clone_proposal): 00176 → 00260 → 00264 → 00269 → 00327 (this) — one
+--   added header-INSERT column so revising/duplicating a no-login household's
+--   proposal carries designer_client_id (otherwise the revision's Desk doc
+--   silently regresses to the 'Client' literal).
 --
 -- Additive only (D7). No destructive change; old zones keep functioning.
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -236,9 +246,13 @@ select
   null::uuid                               as lead_id,
   pr.designer_id                           as designer_id,
   pr.client_id                             as client_profile_id,
-  -- I62 (Arrival Arc, delta 2): rescue no-login households — when client_id is
-  -- NULL the profile name is NULL, so fall back to the linked household label.
-  coalesce(cp.full_name, dcb.client_name, 'Client') as client_name,
+  -- I62 (Arrival Arc, delta 2): the designer's household label wins FIRST —
+  -- matching Shape D's precedence, so a household's displayed name does NOT
+  -- flip from dc.client_name to the profile name at the D→B transition. Then
+  -- display_name over full_name (00289 precedent), then the literal.
+  coalesce(dcb.client_name,
+           nullif(btrim(cp.display_name), ''),
+           cp.full_name, 'Client')       as client_name,
   coalesce(pr.title, 'Untitled proposal')  as title,
   null::text                               as project_status,
   null::text                               as current_phase,
@@ -418,12 +432,16 @@ select
 from designer_clients dc
 left join profiles cp on cp.id = dc.client_id
 where dc.status = 'lead'
-  -- not already represented by a live proposal chain (shape B)
+  -- not already represented by a live proposal chain (shape B). Matched EITHER
+  -- by the direct household link (I62 — a no-login household has client_id
+  -- NULL, so the pair join below is never true for it; without this leg the
+  -- household emits BOTH a Shape D and a Shape B doc) OR by the legacy
+  -- designer/client profile pair.
   and not exists (
     select 1 from proposals pp
-    where pp.designer_id = dc.designer_id
-      and pp.client_id = dc.client_id
-      and pp.status in ('draft', 'sent', 'viewed', 'accepted', 'declined', 'expired')
+    where pp.status in ('draft', 'sent', 'viewed', 'accepted', 'declined', 'expired')
+      and (pp.designer_client_id = dc.id
+           or (pp.designer_id = dc.designer_id and pp.client_id = dc.client_id))
   )
   -- not already represented by an open lead (shape C)
   and not exists (
@@ -441,11 +459,14 @@ where dc.status = 'lead'
 comment on view document_state is
   'The Document read model (R1 shapes A-D). v11 (00327, Arrival Arc): '
   'shape B client_name rescues no-login households via the new '
-  'proposals.designer_client_id → designer_clients.client_name link (I62); '
-  'shapes C and D prefer profiles.display_name over full_name (00289 precedent); '
-  'shape D emits dc.lead_id and no longer excludes designer/client pairs that '
-  'already have a project (I65 repeat-client 404 fix, Kody-ruled — status=lead '
-  'always emits). Otherwise the 00236 v10 body verbatim (columns/order unchanged).';
+  'proposals.designer_client_id → designer_clients.client_name link, household '
+  'label FIRST to match shape D precedence (I62); shape D''s proposal-chain '
+  'exclusion gains a designer_client_id leg so a linked household emits ONE doc, '
+  'not a D+B pair; shapes C and D prefer profiles.display_name over full_name '
+  '(00289 precedent); shape D emits dc.lead_id and no longer excludes '
+  'designer/client pairs that already have a project (I65 repeat-client 404 fix, '
+  'Kody-ruled — status=lead always emits). Otherwise the 00236 v10 body verbatim '
+  '(columns/order unchanged).';
 
 -- Re-issue grants explicitly (idempotent; defends any column/owner edge case).
 grant select on document_state to authenticated;
@@ -561,3 +582,295 @@ grant execute on function begin_direction_from_discovery(uuid) to authenticated;
 
 comment on function begin_direction_from_discovery(uuid) is
   'R66 readiness act: validates the five Discovery essentials, creates a seeded DRAFT proposal (scope rooms + style vision + budget), stamps the discovery row. Re-derives the engagement Discovery→Direction (document_state Shape D→B). Arrival Arc (I62): stamps proposals.designer_client_id so Shape B rescues no-login households. Idempotent.';
+
+-- ── clone_proposal: carry the household link across revise/supersede ─────────
+-- 00269 body VERBATIM (live head; lineage 00176 → 00260 → 00264 → 00269) except
+-- ONE added header-INSERT column: designer_client_id rides along with the other
+-- header fields, so revising or duplicating a no-login household's proposal
+-- keeps the linkage — without it the new draft's document_state row would
+-- silently regress from the household name to the 'Client' literal (I62).
+CREATE OR REPLACE FUNCTION clone_proposal(
+  p_source_id UUID,
+  p_mode TEXT DEFAULT 'revision',
+  p_revision_summary TEXT DEFAULT NULL
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_source       proposals%ROWTYPE;
+  v_new_id       UUID;
+  v_root_id      UUID;
+  v_room_map     JSONB := '{}'::jsonb;
+  v_phase_map    JSONB := '{}'::jsonb;
+  v_palette_map  JSONB := '{}'::jsonb;
+  v_board_map    JSONB := '{}'::jsonb;
+  v_room         RECORD;
+  v_phase        RECORD;
+  v_palette      RECORD;
+  v_board        RECORD;
+  v_new_child_id UUID;
+BEGIN
+  IF p_mode NOT IN ('revision', 'duplicate') THEN
+    RAISE EXCEPTION 'clone_proposal: invalid mode %, expected revision|duplicate', p_mode;
+  END IF;
+
+  -- RLS-filtered read: returns nothing unless the caller can see the proposal.
+  SELECT * INTO v_source FROM proposals WHERE id = p_source_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'clone_proposal: proposal % not found or access denied', p_source_id;
+  END IF;
+
+  v_root_id := COALESCE(v_source.parent_proposal_id, v_source.id);
+
+  -- ── Header row (explicit columns; status/signing/sending state reset) ──
+  -- Arrival Arc (I62): designer_client_id added to the carried columns.
+  INSERT INTO proposals (
+    designer_id, client_id, designer_client_id, project_id, template_id,
+    title, description, project_address, cover_image,
+    client_visibility_tier,
+    subtotal, tax_rate, tax_amount, total_amount,
+    discount_percent, discount_amount, deposit_percent,
+    payment_terms, payment_notes,
+    personal_message, cc_email, valid_until,
+    status, version, parent_proposal_id,
+    revision_summary, client_feedback,
+    sent_at, viewed_at, accepted_at, declined_at, decline_reason,
+    signed_at, signed_by_name, signed_ip
+  )
+  VALUES (
+    v_source.designer_id,
+    v_source.client_id,
+    v_source.designer_client_id,
+    NULL,                                  -- a fresh draft is never pre-linked to a project
+    v_source.template_id,
+    CASE WHEN p_mode = 'duplicate' THEN v_source.title || ' (Copy)' ELSE v_source.title END,
+    v_source.description,
+    v_source.project_address,
+    v_source.cover_image,
+    v_source.client_visibility_tier,
+    v_source.subtotal, v_source.tax_rate, v_source.tax_amount, v_source.total_amount,
+    v_source.discount_percent, v_source.discount_amount, v_source.deposit_percent,
+    v_source.payment_terms, v_source.payment_notes,
+    v_source.personal_message, v_source.cc_email, v_source.valid_until,
+    'draft',
+    CASE WHEN p_mode = 'revision' THEN COALESCE(v_source.version, 1) + 1 ELSE 1 END,
+    CASE WHEN p_mode = 'revision' THEN v_root_id ELSE NULL END,
+    CASE WHEN p_mode = 'revision' THEN p_revision_summary ELSE NULL END,
+    CASE WHEN p_mode = 'revision' THEN v_source.client_feedback ELSE NULL END,
+    NULL, NULL, NULL, NULL, NULL,          -- sent/viewed/accepted/declined/decline_reason
+    NULL, NULL, NULL                       -- signed_at/signed_by_name/signed_ip
+  )
+  RETURNING id INTO v_new_id;
+
+  -- ── Scope rooms (build old→new id map for items/palettes/boards remap) ──
+  FOR v_room IN
+    SELECT * FROM proposal_scope_rooms WHERE proposal_id = p_source_id ORDER BY sort_order
+  LOOP
+    INSERT INTO proposal_scope_rooms (
+      proposal_id, room_id, name, room_type, dimensions, floor_area_sqft,
+      budget_cents, ffe_categories, notes, sort_order
+    )
+    VALUES (
+      v_new_id, v_room.room_id, v_room.name, v_room.room_type, v_room.dimensions,
+      v_room.floor_area_sqft, v_room.budget_cents, v_room.ffe_categories,
+      v_room.notes, v_room.sort_order
+    )
+    RETURNING id INTO v_new_child_id;
+    v_room_map := v_room_map || jsonb_build_object(v_room.id::text, v_new_child_id::text);
+  END LOOP;
+
+  -- ── Phases (build old→new id map for deliverables/gates/milestones remap) ──
+  FOR v_phase IN
+    SELECT * FROM proposal_phases WHERE proposal_id = p_source_id ORDER BY sort_order
+  LOOP
+    INSERT INTO proposal_phases (
+      proposal_id, name, phase_key, duration_weeks, fee_cents,
+      revision_limit, gate_condition, deliverables, sort_order
+    )
+    VALUES (
+      v_new_id, v_phase.name, v_phase.phase_key, v_phase.duration_weeks,
+      v_phase.fee_cents, v_phase.revision_limit, v_phase.gate_condition,
+      v_phase.deliverables, v_phase.sort_order
+    )
+    RETURNING id INTO v_new_child_id;
+    v_phase_map := v_phase_map || jsonb_build_object(v_phase.id::text, v_new_child_id::text);
+  END LOOP;
+
+  -- ── Sections ──
+  INSERT INTO proposal_sections (proposal_id, type, title, body, metadata, sort_order)
+  SELECT v_new_id, type, title, body, metadata, sort_order
+  FROM proposal_sections
+  WHERE proposal_id = p_source_id;
+
+  -- ── Items (remap scope_room_id) ──
+  INSERT INTO proposal_items (
+    proposal_id, product_id, name, description, image_url, room, category,
+    quantity, unit_price, markup_percent, unit_sell_price, line_total_cents,
+    vendor_id, vendor_name, lead_time_weeks, notes, internal_notes, position,
+    item_type, scope_room_id, budget_min_cents, budget_max_cents, ffe_category, custom_fields
+  )
+  SELECT
+    v_new_id, product_id, name, description, image_url, room, category,
+    quantity, unit_price, markup_percent, unit_sell_price, line_total_cents,
+    vendor_id, vendor_name, lead_time_weeks, notes, internal_notes, position,
+    item_type,
+    CASE WHEN scope_room_id IS NOT NULL AND v_room_map ? scope_room_id::text
+         THEN (v_room_map ->> scope_room_id::text)::uuid
+         ELSE NULL END,
+    budget_min_cents, budget_max_cents, ffe_category, custom_fields
+  FROM proposal_items
+  WHERE proposal_id = p_source_id;
+
+  -- ── Custom field DEFS (S6, 00268): deep-copy the source's schedule columns
+  -- onto the new proposal (same field_key/name/kind/sort). The per-line VALUES
+  -- ride along in proposal_items.custom_fields above, keyed by field_key —
+  -- verbatim, no id remap. ──
+  INSERT INTO spec_field_defs (proposal_id, field_key, name, kind, sort_order)
+  SELECT v_new_id, field_key, name, kind, sort_order
+  FROM spec_field_defs
+  WHERE proposal_id = p_source_id;
+
+  -- ── Phase deliverables (remap phase_id, reset completion) ──
+  INSERT INTO proposal_phase_deliverables (
+    phase_id, label, description, is_required, completed_at, completed_by, sort_order
+  )
+  SELECT
+    (v_phase_map ->> d.phase_id::text)::uuid,
+    d.label, d.description, d.is_required, NULL, NULL, d.sort_order
+  FROM proposal_phase_deliverables d
+  JOIN proposal_phases ph ON ph.id = d.phase_id
+  WHERE ph.proposal_id = p_source_id
+    AND v_phase_map ? d.phase_id::text;
+
+  -- ── Phase gates (remap phase_id, reset satisfaction) ──
+  INSERT INTO proposal_phase_gates (
+    phase_id, gate_kind, payload, satisfied_at, satisfied_by, override_reason, sort_order
+  )
+  SELECT
+    (v_phase_map ->> g.phase_id::text)::uuid,
+    g.gate_kind, g.payload, NULL, NULL, NULL, g.sort_order
+  FROM proposal_phase_gates g
+  JOIN proposal_phases ph ON ph.id = g.phase_id
+  WHERE ph.proposal_id = p_source_id
+    AND v_phase_map ? g.phase_id::text;
+
+  -- ── Payment milestones (remap phase_id; phase_id is nullable) ──
+  INSERT INTO proposal_payment_milestones (
+    proposal_id, phase_id, label, percentage, amount_cents, trigger_condition, sort_order
+  )
+  SELECT
+    v_new_id,
+    CASE WHEN phase_id IS NOT NULL AND v_phase_map ? phase_id::text
+         THEN (v_phase_map ->> phase_id::text)::uuid
+         ELSE NULL END,
+    label, percentage, amount_cents, trigger_condition, sort_order
+  FROM proposal_payment_milestones
+  WHERE proposal_id = p_source_id;
+
+  -- ── Exclusions ──
+  INSERT INTO proposal_exclusions (proposal_id, description, category, sort_order)
+  SELECT v_new_id, description, category, sort_order
+  FROM proposal_exclusions
+  WHERE proposal_id = p_source_id;
+
+  -- ── Change order terms (UNIQUE(proposal_id) — at most one row) ──
+  INSERT INTO proposal_change_order_terms (
+    proposal_id, process_description, hourly_rate_cents, minimum_fee_cents, approval_required
+  )
+  SELECT v_new_id, process_description, hourly_rate_cents, minimum_fee_cents, approval_required
+  FROM proposal_change_order_terms
+  WHERE proposal_id = p_source_id;
+
+  -- ── Team members ──
+  INSERT INTO proposal_team_members (proposal_id, user_id, role, permissions, sort_order)
+  SELECT v_new_id, user_id, role, permissions, sort_order
+  FROM proposal_team_members
+  WHERE proposal_id = p_source_id
+  ON CONFLICT (proposal_id, user_id, role) DO NOTHING;
+
+  -- ── Palettes (build map, remap scope_room_id) then swatches ──
+  FOR v_palette IN
+    SELECT * FROM proposal_palettes WHERE proposal_id = p_source_id ORDER BY sort_order
+  LOOP
+    INSERT INTO proposal_palettes (
+      proposal_id, name, scope_room_id, is_primary, source_image_url, notes, sort_order
+    )
+    VALUES (
+      v_new_id, v_palette.name,
+      CASE WHEN v_palette.scope_room_id IS NOT NULL AND v_room_map ? v_palette.scope_room_id::text
+           THEN (v_room_map ->> v_palette.scope_room_id::text)::uuid
+           ELSE NULL END,
+      v_palette.is_primary, v_palette.source_image_url, v_palette.notes, v_palette.sort_order
+    )
+    RETURNING id INTO v_new_child_id;
+    v_palette_map := v_palette_map || jsonb_build_object(v_palette.id::text, v_new_child_id::text);
+  END LOOP;
+
+  INSERT INTO palette_swatches (
+    palette_id, hex, name, role, paint_color_id, brand, brand_code, source_pixel, sort_order
+  )
+  SELECT
+    (v_palette_map ->> s.palette_id::text)::uuid,
+    s.hex, s.name, s.role, s.paint_color_id, s.brand, s.brand_code, s.source_pixel, s.sort_order
+  FROM palette_swatches s
+  JOIN proposal_palettes pal ON pal.id = s.palette_id
+  WHERE pal.proposal_id = p_source_id
+    AND v_palette_map ? s.palette_id::text;
+
+  -- ── Boards (build old→new id map, remap scope_room_id) then board items ──
+  -- New in 00260. Ordered by (sort_order, created_at) to match useBoards.
+  FOR v_board IN
+    SELECT * FROM proposal_boards WHERE proposal_id = p_source_id ORDER BY sort_order, created_at
+  LOOP
+    INSERT INTO proposal_boards (
+      proposal_id, name, scope_room_id, cover_image_url,
+      canvas_width, canvas_height, background_color, sort_order,
+      sections, status
+    )
+    VALUES (
+      v_new_id, v_board.name,
+      CASE WHEN v_board.scope_room_id IS NOT NULL AND v_room_map ? v_board.scope_room_id::text
+           THEN (v_room_map ->> v_board.scope_room_id::text)::uuid
+           ELSE NULL END,
+      v_board.cover_image_url,
+      v_board.canvas_width, v_board.canvas_height, v_board.background_color, v_board.sort_order,
+      v_board.sections, v_board.status
+    )
+    RETURNING id INTO v_new_child_id;
+    v_board_map := v_board_map || jsonb_build_object(v_board.id::text, v_new_child_id::text);
+  END LOOP;
+
+  -- Board items — copy geometry + snapshot verbatim; remap board_id (new board)
+  -- and palette_id (cloned palettes). product_id and capture_id are kept (see
+  -- the header note): the render uses the `data` snapshot, not those FKs. The
+  -- item's data.section_id needs NO remap — the whole sections array is carried
+  -- verbatim onto the new board, so its ids stay internally consistent.
+  INSERT INTO proposal_board_items (
+    board_id, type, x, y, width, height, z_index, rotation, locked,
+    product_id, capture_id, palette_id, image_url, content, data
+  )
+  SELECT
+    (v_board_map ->> bi.board_id::text)::uuid,
+    bi.type, bi.x, bi.y, bi.width, bi.height, bi.z_index, bi.rotation, bi.locked,
+    bi.product_id, bi.capture_id,
+    CASE WHEN bi.palette_id IS NOT NULL AND v_palette_map ? bi.palette_id::text
+         THEN (v_palette_map ->> bi.palette_id::text)::uuid
+         ELSE NULL END,
+    bi.image_url, bi.content, bi.data
+  FROM proposal_board_items bi
+  JOIN proposal_boards pb ON pb.id = bi.board_id
+  WHERE pb.proposal_id = p_source_id
+    AND v_board_map ? bi.board_id::text;
+
+  -- NOT cloned (deliberate): proposal_captures (designer inbox tied to the
+  -- original), proposal_engagement (per-version audit trail).
+
+  RETURN v_new_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION clone_proposal(UUID, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION clone_proposal(UUID, TEXT, TEXT) TO authenticated;
