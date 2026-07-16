@@ -8,20 +8,20 @@
  *   · Send a note — the Pulse's ad-hoc sibling: compose → comms post →
  *     letterhead-anchored message item. No new schema (00193 anchors:
  *     NULL = letterhead).
- *   · The scan — Discovery artifact (iOS RoomPlan capture), opening the
- *     interactive 3D scan sheet (R90). The first physical iOS↔portal handshake.
+ *   · The scan — Discovery artifact (iOS RoomPlan capture), opening the Room
+ *     View (I74a — `/room/[id]`, the first physical iOS↔portal handshake).
  *   · Sharing tier (R79) — the old wizard's Step06 visibility choice, now a
  *     letterhead instrument on project documents: what the client's mirror
  *     shows (full / milestone / curated) is set where the mirror is opened.
  */
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient, useProjectV2 } from '@patina/supabase';
 import { invalidateMarginSurfaces } from '@/hooks/use-margin-items';
 import { useSaveProjectVitals } from '@/hooks/use-project-lifecycle';
 import { familyLabel } from '@/lib/document/family-label';
-import { ScanViewerSheet } from './overlays/scan-viewer-sheet';
 import { ClientMirror } from './client-mirror';
 import { ProposalPreview } from './proposal-preview';
 
@@ -126,10 +126,10 @@ export function LetterheadInstruments({
   clientProfileId: string | null;
   clientName: string;
 }) {
+  const router = useRouter();
   const [mirrorOpen, setMirrorOpen] = useState(false);
   const [composing, setComposing] = useState(false);
   const [noteBody, setNoteBody] = useState('');
-  const [viewingScan, setViewingScan] = useState<ScanArtifact | null>(null);
   const sendNote = useSendDocumentNote(projectId, clientProfileId);
   const { data: scans } = useClientScans(clientProfileId);
 
@@ -168,7 +168,7 @@ export function LetterheadInstruments({
         {scan && (
           <button
             type="button"
-            onClick={() => setViewingScan(scan)}
+            onClick={() => router.push(`/room/${scan.id}?from=document`)}
             className="font-mono text-[9px] uppercase tracking-[0.08em] text-[var(--text-muted)] hover:text-[var(--color-clay)]"
           >
             The scan
@@ -240,13 +240,6 @@ export function LetterheadInstruments({
             onClose={() => setMirrorOpen(false)}
           />
         ) : null)}
-
-      {/* R90 — "The scan" now opens the interactive 3D viewer (a doc-file-viewer
-          sibling), not the static hero image. The sheet fetches the RoomScan by
-          id; we already hold it from useClientScans. */}
-      {viewingScan && (
-        <ScanViewerSheet scanId={viewingScan.id} onClose={() => setViewingScan(null)} />
-      )}
     </>
   );
 }

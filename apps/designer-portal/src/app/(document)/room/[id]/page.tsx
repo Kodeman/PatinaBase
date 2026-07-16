@@ -18,13 +18,23 @@
  *   · Rooms roster → RoomShell's normal origin-stash (rememberRoomOrigin at
  *     the card's click site / readRoomOrigin here) — same as Library/People.
  *     No wiring needed here; the mechanic is already generic.
- *   · A Document reference → `?from=document&doc=<documentId>` is the
- *     minimal signal: it feeds RoomShell an explicit backTo/backLabel,
- *     mirroring the exact phrasing room-origin's `originLabel` already uses
- *     for a `/doc/` origin ("the document") — no new state, the same
- *     backTo/backLabel mechanism piece-room.tsx uses for its own hardcoded
- *     back-reference to the Library. Real entry links land with Phase 2.4's
- *     entry paths (a later task); this route only honors the param shape.
+ *   · A Document scan door (W2-T5, I74a) → `?from=document` is the minimal
+ *     signal. Unlike the roster's origin-stash, the doors don't carry a
+ *     document/engagement id of their own to pass along — so rather than
+ *     round-trip one through the URL, the scoped-back reads it off the SAME
+ *     `useRoomGeometry` fetch this page already makes for the Plan
+ *     (`data.document.engagementId` / `.activeSection`, room_scan_documents
+ *     — 00339). That produces the phase-qualified leave affordance
+ *     ("← the Document · Brief") the doc-link at the top of RoomView already
+ *     renders forward ("→ the Document · Brief", room-view.tsx) — one
+ *     resolved Document, read twice, same label vocabulary both directions.
+ *     `?from=document` doubles as the room_opened origin=document
+ *     telemetry-attribution marker (events wired later, W3-T7) — do not
+ *     repurpose or drop it once telemetry lands.
+ *     When the fetch resolves without a Document (an orphan scan, or the
+ *     scan simply hasn't parsed yet), the scoped-back label/target is
+ *     skipped and RoomShell falls back to its normal origin-stash — a
+ *     roster-style leave rather than a broken/blank document link.
  *
  * KNOWN GAP (I74b): the A3 deep-link fix has NOT landed. DocumentGate
  * (client-side, fail-closed on `the-document-pilot`) can bounce a
@@ -39,18 +49,30 @@ import { RoomShell } from '@/components/document/rooms/room-shell';
 import { RoomView } from '@/components/document/rooms/room-view/room-view';
 import { roomGeometryFromRows } from '@/lib/room-view/from-rows';
 
+/** Mirrors room-view.tsx's own SECTION_LABEL (itself mirroring folder-card.tsx,
+ *  module-private in both) — the leave affordance needs the same human phase
+ *  label as the doc-link this page's RoomView already renders. */
+const SECTION_LABEL: Record<string, string> = {
+  brief: 'Brief',
+  discovery: 'Discovery',
+  direction: 'Direction',
+  proposal: 'Proposal',
+  project: 'Project',
+  install: 'Install',
+  care: 'Care',
+};
+
 export default function RoomViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
   // Read client-side (no useSearchParams → no Suspense boundary needed),
-  // matching drafting-room.tsx's `arrivingFlagged` pattern.
-  const [back, setBack] = useState<{ to: string; label: string } | null>(null);
+  // matching drafting-room.tsx's `arrivingFlagged` pattern. `from=document`
+  // is also the future telemetry-attribution marker (see file header) — read
+  // once at mount, same as the marker itself never changes after arrival.
+  const [fromDocument, setFromDocument] = useState(false);
   useEffect(() => {
     const qs = new URLSearchParams(window.location.search);
-    const doc = qs.get('doc');
-    if (qs.get('from') === 'document' && doc) {
-      setBack({ to: `/doc/${doc}`, label: 'the document' });
-    }
+    setFromDocument(qs.get('from') === 'document');
   }, []);
 
   const { data, isLoading } = useRoomGeometry(id);
@@ -61,6 +83,18 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
     if (!data) return null;
     return roomGeometryFromRows(data.header, data.elements);
   }, [data]);
+
+  // Scoped-back (I74a, package accept 2.4): only when the door arrived
+  // `?from=document` AND the scan's Document actually resolves — an orphan
+  // scan or a not-yet-parsed row degrades to RoomShell's generic origin-stash
+  // leave instead of a dead/blank "the Document" link.
+  const back = useMemo(() => {
+    if (!fromDocument) return null;
+    const doc = data?.document;
+    if (!doc?.engagementId || !doc.activeSection) return null;
+    const label = SECTION_LABEL[doc.activeSection] ?? doc.activeSection;
+    return { to: `/doc/${doc.engagementId}`, label: `the Document · ${label}` };
+  }, [fromDocument, data?.document]);
 
   return (
     <RoomShell title="A room" backTo={back?.to} backLabel={back?.label}>

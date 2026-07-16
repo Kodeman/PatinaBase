@@ -45,7 +45,6 @@ import {
   type DiscoveryDraft,
 } from './editors';
 import { DiscoveryCallSheet } from './discovery-call-sheet';
-import { ScanViewerSheet } from '../overlays/scan-viewer-sheet';
 import { DiscoveryScheduleLine } from './discovery-schedule-line';
 
 const EMPTY_DRAFT: DiscoveryDraft = {
@@ -144,8 +143,6 @@ export function DiscoverySection({
   // R83 (F2, walk 2026-07): a failed Begin-the-Direction explains itself in a
   // quiet inline band AT the act — never a toast.
   const [beginError, setBeginError] = useState<string | null>(null);
-  // R90 — open the attached room scan in the interactive 3D sheet.
-  const [scanSheetOpen, setScanSheetOpen] = useState(false);
   const hydrated = useRef(false);
 
   // Debounced, SERIALIZED self-persist (no Save button) — F3/F4 (walk 2026-07).
@@ -392,11 +389,13 @@ export function DiscoverySection({
         >
           ＋ Attach the room scan
         </button>
-        {/* R90 — once a scan is attached, open it in the interactive 3D sheet. */}
+        {/* I74a — the scan door opens the Room View (`/room/[id]`), not the
+            in-page 3D sheet; ?from=document is the room-origin/telemetry-attribution
+            marker (room_opened origin=document lands with W3-T7). */}
         {draft.room_scan_id && (
           <button
             type="button"
-            onClick={() => setScanSheetOpen(true)}
+            onClick={() => router.push(`/room/${draft.room_scan_id}?from=document`)}
             className="rounded-[3px] border border-[var(--color-clay)] px-3 py-1.5 font-mono text-[11px] text-[var(--color-clay)] transition-colors hover:bg-[rgba(196,165,123,0.08)]"
           >
             View the scan →
@@ -456,14 +455,6 @@ export function DiscoverySection({
         }}
         designerClientId={engagementId}
       />
-
-      {/* R90 — the attached room scan, opened interactively. */}
-      {scanSheetOpen && draft.room_scan_id && (
-        <ScanViewerSheet
-          scanId={draft.room_scan_id}
-          onClose={() => setScanSheetOpen(false)}
-        />
-      )}
     </section>
   );
 }
