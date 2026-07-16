@@ -355,6 +355,17 @@ verify_jwt = true
 [functions.catalog-normalizer]
 verify_jwt = true
 
+# Room View parser (Phase 1.1, 00337). Invoked as a SWEEP via
+# pg_cron -> invoke_edge_function (service-role bearer, same cron->edge bridge
+# as catalog-normalizer/morning-brief; the schedule is authored in 00338), and
+# for TARGETED re-parses by a server-to-server service-role call. No browser
+# calls it — and the function additionally decodes the JWT and requires
+# role == 'service_role' in-code before touching storage. verify_jwt = true is
+# the platform default; explicit here for intent, matching the other
+# cron-invoked functions.
+[functions.parse-room-scan]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
