@@ -5,7 +5,10 @@
  * "Room Scans" section.
  */
 
-function qualityGradeColor(grade: string | null): string {
+/** excellent -> sage, good -> dusty-blue, fair -> golden-hour, everything else
+ *  (acceptable, poor, low, null) -> the muted treatment. Exported so other
+ *  quality-grade surfaces (e.g. The Rooms roster) share one mapping. */
+export function qualityGradeColor(grade: string | null): string {
   if (grade === 'excellent') return 'var(--color-sage)';
   if (grade === 'good') return 'var(--color-dusty-blue)';
   if (grade === 'fair') return 'var(--color-golden-hour)';

@@ -1383,3 +1383,8 @@ export {
   serializeRippleEditForRpc,
 } from './use-schedule-compose';
 export type { PhaseRelinkUpdate, RipplePendingEditInput, SerializedRippleEdit } from './use-schedule-compose';
+
+// The Room View (W2-T2) — The Rooms roster's data hook: room_scan_documents
+// rows + their geometry elements, one query per scan set.
+export { useRoomRoster } from './use-room-roster';
+export type { RoomRosterScan, RoomRosterScanRow, RoomRosterGeometryElementRow } from './use-room-roster';
