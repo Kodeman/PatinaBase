@@ -3652,3 +3652,55 @@ since I60 — pointer-only mechanics, still untested on touch).
 *Entries add: I61 · last id = I61*
 
 *Entries add: I61 · last id = I61*
+
+### R105 · The consolidated review — slices 03–05 accepted; O8 and O9 ruled in direction — 2026-07-15
+
+**Ruled (design authority, interviewed on the full escalation ledger).**
+Slices 03 (Compose), 04 (Adjust), and 05 (Memory) are accepted. The
+individual calls:
+
+**O9 — resolved in direction: tasks fold into items.** The spine keeps
+its three row types; `project_tasks` semantics migrate into
+coordination items as a follow-on workstream (not a retrofit of these
+slices). Until that migration lands, the shipped separate band beneath
+the spine stays as the interim rendering.
+
+**O8 — resolved: the middle path.** Clients see revisions that touched
+client-facing dates — anchored milestones and install — as a follow-on
+client-portal projection; the full ledger stays studio-side. The
+shipped studio-only Slice 05 is the correct first cut.
+
+**The Rule's line ink — hybrid.** The active phase splits at today:
+elapsed draws bold, remaining draws light — honoring both R99's
+status-weight sentence and the prototype's past/future truth. To land
+in the polish pass.
+
+**Clay baseline ghosts — solid thin clay,** per the prototype's Ledger
+slide: dashes mean "not yet true"; the baseline was true. To land in
+the polish pass.
+
+**Ratified as shipped:** the confirm strip's clause sentence (also the
+default revision reason); anchored milestones rendering as "Key dates"
+in the client-facing readonly proposal (R101.3 — the client signs
+against them); the Patina Six as minted (names, 1/3/4/8/3/1-week
+durations, sequential main-lane default); the grammar's ambiguity
+defaults (bare number = weeks on phases, days on offsets; month-day
+dates infer the next occurrence); and the fourteen-item detail ledger
+across slices 01–04 (persistent unfold marks, pin strip with inline
+title, N-row stagger, Unplaced · N, minimal mobile fold, minimap no-op
+without the spine, delayed-reads-ahead weight, 20px thread-lane pitch,
+ghost overflow clamp, boundary refuse on anchored downstream,
+root-start and touch deferred, collapsed ledger disclosure, uid-head
+who-rendering).
+
+**Ship posture:** merge `schedule/slice-05` to main now (gate off);
+polish pass lands the ink and ghost rulings plus the studio-comember
+widening of the schedule RPCs' ownership guards (00323–00326, still
+unshipped — free to fix in place); then the full chain to Strata —
+migrations, designer-portal deploy, the `schedule-spine` flag created
+disabled and enabled for the design authority alone as pilot.
+Backlogged with owners noted: thread-lane compose actions, the
+`designer_clients` multi-row ambiguity, the draft-proposal modal bug,
+the O9 migration workstream, the O8 client projection.
+
+*Entries add: R105 · last id = R105*
