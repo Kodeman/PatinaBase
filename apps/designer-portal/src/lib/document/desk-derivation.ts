@@ -385,8 +385,8 @@ const daysBetween = (earlierIso: string, now: Date) =>
   Math.floor((now.getTime() - new Date(earlierIso).getTime()) / DAY_MS);
 
 // R106 — the Arrival Arc's small text helpers. Kept local (not folder-tab's
-// last-name convention): the arc's copy is first-name, conversational
-// ("Introduce yourself to Elena", "Elena — intro sent...").
+// last-name convention): the parked card's copy is first-name, conversational
+// ("Introduce yourself to Elena").
 function firstName(name: string | null | undefined, fallback = 'them'): string {
   const first = (name ?? '').trim().split(/\s+/)[0];
   return first || fallback;
@@ -778,7 +778,7 @@ export function deriveMotion(
   // R106 §4: once the Arrival Arc ceremony has actually sent, that static
   // line is replaced by the real state of the introduction — in priority
   // order: picked (the discovery is scheduled) → stale offered slots → a
-  // quiet-48h nudge → a fresh "awaiting her pick". A relationship with no
+  // quiet-48h nudge → a fresh "awaiting their pick". A relationship with no
   // ceremony row (pre-arc, or a flag-off designer) falls straight through to
   // the byte-identical default below.
   if (row.engagement_kind === 'relationship') {
@@ -791,6 +791,11 @@ export function deriveMotion(
           ceremonyId: ceremony.id,
         };
       }
+      // Chip texts are NAMELESS by ruling: the InMotionChip wrapper already
+      // renders "{row.title} — {chip.text}", so R106 §4's example line
+      // ("Elena Vasquez — intro sent, awaiting her pick") is achieved by the
+      // wrapper + a name-free text. Pronoun-neutral ("their") — the ruling's
+      // "her" was Elena-specific.
       if (ceremony.state === 'sent') {
         const slots = ceremony.offeredSlots ?? [];
         const allStale =
@@ -798,7 +803,7 @@ export function deriveMotion(
         if (allStale) {
           return {
             kind: 'slots_stale',
-            text: `${firstName(row.client_name, 'She')} — offered times went by · offer fresh ones`,
+            text: 'offered times went by — offer fresh ones',
             href: `/doc/${row.engagement_id}#discovery`,
             ceremonyId: ceremony.id,
           };
@@ -810,14 +815,14 @@ export function deriveMotion(
             kind: 'intro_nudge',
             // Scene 04's exact register: "quiet 48h — nudge, or offer fresh
             // times". State carried, but an act exists again at 48h (R22).
-            text: `${firstName(row.client_name, 'She')} — quiet 48h — nudge, or offer fresh times`,
+            text: 'quiet 48h — nudge, or offer fresh times',
             href: ceremony.threadId ? `/people?thread=${ceremony.threadId}` : `/doc/${row.engagement_id}`,
             ceremonyId: ceremony.id,
           };
         }
         return {
           kind: 'intro_sent',
-          text: `${firstName(row.client_name, 'She')} — intro sent, awaiting her pick`,
+          text: 'intro sent, awaiting their pick',
           href: `/doc/${row.engagement_id}`,
           ceremonyId: ceremony.id,
         };

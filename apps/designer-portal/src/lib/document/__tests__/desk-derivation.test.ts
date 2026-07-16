@@ -1008,7 +1008,8 @@ describe('deriveMotion — the four ceremony chip states (R106 §4)', () => {
       }),
     );
     expect(motion!.kind).toBe('slots_stale');
-    expect(motion!.text).toBe('Elena — offered times went by · offer fresh ones');
+    // Nameless by ruling — the InMotionChip wrapper prefixes "{title} — ".
+    expect(motion!.text).toBe('offered times went by — offer fresh ones');
     expect(motion!.href).toBe('/doc/dc-1#discovery');
   });
 
@@ -1042,7 +1043,8 @@ describe('deriveMotion — the four ceremony chip states (R106 §4)', () => {
       }),
     );
     expect(motion!.kind).toBe('intro_nudge');
-    expect(motion!.text).toBe('Elena — quiet 48h — nudge, or offer fresh times');
+    // Nameless by ruling — scene 04's own register verbatim.
+    expect(motion!.text).toBe('quiet 48h — nudge, or offer fresh times');
     expect(motion!.href).toBe('/people?thread=thread-9');
   });
 
@@ -1060,7 +1062,7 @@ describe('deriveMotion — the four ceremony chip states (R106 §4)', () => {
     expect(motion!.kind).toBe('intro_sent');
   });
 
-  it('sent, fresh (well under 48h) → "intro sent, awaiting her pick"', () => {
+  it('sent, fresh (well under 48h) → "intro sent, awaiting their pick"', () => {
     const motion = deriveMotion(
       relationshipRow(),
       NOW,
@@ -1072,7 +1074,8 @@ describe('deriveMotion — the four ceremony chip states (R106 §4)', () => {
       }),
     );
     expect(motion!.kind).toBe('intro_sent');
-    expect(motion!.text).toBe('Elena — intro sent, awaiting her pick');
+    // Nameless + pronoun-neutral by ruling — the wrapper carries the name.
+    expect(motion!.text).toBe('intro sent, awaiting their pick');
     expect(motion!.href).toBe('/doc/dc-1');
   });
 
