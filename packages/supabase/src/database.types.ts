@@ -12806,6 +12806,212 @@ export type Database = {
           },
         ]
       }
+      room_scan_geometry: {
+        Row: {
+          confidence_summary: Json | null
+          created_at: string
+          depth_ft: number | null
+          floor_area_sqft: number | null
+          floor_polygon: Json | null
+          origin_offset_m: Json | null
+          origin_yaw_deg: number | null
+          parse_attempts: number
+          parse_error: string | null
+          parse_status: string
+          parsed_at: string | null
+          parser_version: number
+          scan_id: string
+          source_etag: string | null
+          source_schema_version: string | null
+          units: string
+          updated_at: string
+          wall_height_ft: number | null
+          wall_thickness_ft: number | null
+          width_ft: number | null
+        }
+        Insert: {
+          confidence_summary?: Json | null
+          created_at?: string
+          depth_ft?: number | null
+          floor_area_sqft?: number | null
+          floor_polygon?: Json | null
+          origin_offset_m?: Json | null
+          origin_yaw_deg?: number | null
+          parse_attempts?: number
+          parse_error?: string | null
+          parse_status?: string
+          parsed_at?: string | null
+          parser_version?: number
+          scan_id: string
+          source_etag?: string | null
+          source_schema_version?: string | null
+          units?: string
+          updated_at?: string
+          wall_height_ft?: number | null
+          wall_thickness_ft?: number | null
+          width_ft?: number | null
+        }
+        Update: {
+          confidence_summary?: Json | null
+          created_at?: string
+          depth_ft?: number | null
+          floor_area_sqft?: number | null
+          floor_polygon?: Json | null
+          origin_offset_m?: Json | null
+          origin_yaw_deg?: number | null
+          parse_attempts?: number
+          parse_error?: string | null
+          parse_status?: string
+          parsed_at?: string | null
+          parser_version?: number
+          scan_id?: string
+          source_etag?: string | null
+          source_schema_version?: string | null
+          units?: string
+          updated_at?: string
+          wall_height_ft?: number | null
+          wall_thickness_ft?: number | null
+          width_ft?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_scan_geometry_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: true
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scan_geometry_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: true
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_scan_geometry_elements: {
+        Row: {
+          apple_id: string | null
+          cat: string | null
+          center_x_ft: number | null
+          center_z_ft: number | null
+          confidence: string | null
+          created_at: string
+          depth_ft: number | null
+          extras: Json
+          from_ft: number | null
+          head_ft: number | null
+          height_ft: number | null
+          id: string
+          kind: string
+          label: string | null
+          position: number | null
+          rotation_deg: number | null
+          scan_id: string
+          sill_ft: number | null
+          swing: string | null
+          swing_inward: boolean | null
+          thickness_ft: number | null
+          to_ft: number | null
+          wall_element_id: string | null
+          width_ft: number | null
+          x1_ft: number | null
+          x2_ft: number | null
+          z1_ft: number | null
+          z2_ft: number | null
+        }
+        Insert: {
+          apple_id?: string | null
+          cat?: string | null
+          center_x_ft?: number | null
+          center_z_ft?: number | null
+          confidence?: string | null
+          created_at?: string
+          depth_ft?: number | null
+          extras?: Json
+          from_ft?: number | null
+          head_ft?: number | null
+          height_ft?: number | null
+          id?: string
+          kind: string
+          label?: string | null
+          position?: number | null
+          rotation_deg?: number | null
+          scan_id: string
+          sill_ft?: number | null
+          swing?: string | null
+          swing_inward?: boolean | null
+          thickness_ft?: number | null
+          to_ft?: number | null
+          wall_element_id?: string | null
+          width_ft?: number | null
+          x1_ft?: number | null
+          x2_ft?: number | null
+          z1_ft?: number | null
+          z2_ft?: number | null
+        }
+        Update: {
+          apple_id?: string | null
+          cat?: string | null
+          center_x_ft?: number | null
+          center_z_ft?: number | null
+          confidence?: string | null
+          created_at?: string
+          depth_ft?: number | null
+          extras?: Json
+          from_ft?: number | null
+          head_ft?: number | null
+          height_ft?: number | null
+          id?: string
+          kind?: string
+          label?: string | null
+          position?: number | null
+          rotation_deg?: number | null
+          scan_id?: string
+          sill_ft?: number | null
+          swing?: string | null
+          swing_inward?: boolean | null
+          thickness_ft?: number | null
+          to_ft?: number | null
+          wall_element_id?: string | null
+          width_ft?: number | null
+          x1_ft?: number | null
+          x2_ft?: number | null
+          z1_ft?: number | null
+          z2_ft?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_scan_geometry_elements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scan_geometry_elements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scan_geometry_elements_wall_element_id_fkey"
+            columns: ["wall_element_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_geometry_elements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rsge_header_fk"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_geometry"
+            referencedColumns: ["scan_id"]
+          },
+        ]
+      }
       room_scan_images: {
         Row: {
           associated_feature_id: string | null
@@ -18284,6 +18490,10 @@ export type Database = {
         Returns: undefined
       }
       mark_feedback_seen: { Args: { p_id: string }; Returns: undefined }
+      mark_room_scan_geometry_error: {
+        Args: { p_error: string; p_scan_id: string }
+        Returns: undefined
+      }
       mark_scan_upload_complete: {
         Args: { p_scan_id: string }
         Returns: undefined
@@ -18485,6 +18695,10 @@ export type Database = {
       }
       reorder_proposal_scope_rooms: {
         Args: { p_ordered_ids: string[]; p_proposal_id: string }
+        Returns: undefined
+      }
+      replace_room_scan_geometry: {
+        Args: { p_elements: Json; p_header: Json; p_scan_id: string }
         Returns: undefined
       }
       reply_to_feedback: {
