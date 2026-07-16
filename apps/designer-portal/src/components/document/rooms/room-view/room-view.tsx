@@ -1,0 +1,141 @@
+'use client';
+
+/**
+ * RoomView — the Room View shell (Room View program, W2-T3; R107, package
+ * accept line 2.2). Mounts inside `RoomShell` at `/room/[id]`. Owns the
+ * rv-head (client + room type, the Document doc-link), the Plan · Orbit ·
+ * Walk mode row (a Strata rule per the prototype's R§3 note — NOT tabs, D1),
+ * and the facts-rail + Plan stage body. Orbit and Walk are inert in v1
+ * (R107 §3: "V1 is Plan + Orbit, one toggle apart" — Orbit itself lands in
+ * W3-T6; Walk is ruled into the arc but built last, after Place).
+ *
+ * A room whose scan hasn't parsed (or errored) renders a quiet placeholder
+ * rather than a broken Plan — geometry only ever comes from a `parsed`
+ * `room_scan_geometry` row.
+ *
+ * Look/feel authority: docs/design/the-document/room-view-prototype.html
+ * scene 02 (`#scene-room`). Ported as intent (Playfair rv-head, mono
+ * doc-link/mode-row/stagecap, 230px facts rail + stage grid collapsing under
+ * ~900px), never as markup.
+ *
+ * Design judgment call (flagged for review — see task report): the
+ * prototype's doc-link and stagecap use a gendered possessive ("→ her
+ * Document", "drawn from her scan") that reads as prototype voice, not a
+ * house convention — no pronoun field exists anywhere in the schema, and
+ * the shipped app copy elsewhere always says "the document" (neutral, no
+ * possessive). This shell follows the app's existing neutral voice:
+ * "→ the Document · <phase>" / "drawn from the scan".
+ */
+
+import { useMemo } from 'react';
+import Link from 'next/link';
+import type { RoomGeometryDocument } from '@patina/supabase';
+import type { RoomGeometry } from '@/lib/room-view/geometry';
+import { FactsRail } from './facts-rail';
+import { PlanStage } from './plan-stage';
+
+/** Mirrors folder-card.tsx's SECTION_LABEL (module-private there) — the
+ *  Room View doc-link needs the same human phase label as the Desk folio. */
+const SECTION_LABEL: Record<string, string> = {
+  brief: 'Brief',
+  discovery: 'Discovery',
+  direction: 'Direction',
+  proposal: 'Proposal',
+  project: 'Project',
+  install: 'Install',
+  care: 'Care',
+};
+
+function prettyRoomType(roomType: string): string {
+  return roomType.replace(/_/g, ' ').trim();
+}
+
+export interface RoomViewProps {
+  /** null while loading, or when the scan doesn't resolve at all. */
+  doc: RoomGeometryDocument | null;
+  /** null until parsed (from-rows.ts only ever runs against a parsed header). */
+  geometry: RoomGeometry | null;
+  thicknessConvention: boolean;
+  isLoading: boolean;
+}
+
+export function RoomView({ doc, geometry, thicknessConvention, isLoading }: RoomViewProps) {
+  const docLink = useMemo(() => {
+    if (!doc?.engagementId || !doc.activeSection) return null;
+    const label = SECTION_LABEL[doc.activeSection] ?? doc.activeSection;
+    return { href: `/doc/${doc.engagementId}`, label: `→ the Document · ${label}` };
+  }, [doc?.engagementId, doc?.activeSection]);
+
+  if (isLoading) return null;
+
+  const ready = doc != null && doc.parseStatus === 'parsed' && geometry != null;
+  if (!ready || doc == null || geometry == null) {
+    return (
+      <div className="mx-auto max-w-[520px] px-6 pt-24 text-center">
+        <p className="font-heading text-[1.3rem] italic text-[var(--color-charcoal)]">
+          This room is still being drawn.
+        </p>
+      </div>
+    );
+  }
+
+  const clientName = doc.documentClientName ?? doc.ownerClientName;
+  const roomType = doc.roomType ? prettyRoomType(doc.roomType) : null;
+
+  return (
+    <div className="mx-auto max-w-[1180px] px-6 pb-20 pt-8 sm:px-8">
+      {/* rv-head */}
+      <div className="mb-1.5 flex flex-wrap items-baseline gap-4">
+        <h1 className="font-heading text-[28px] font-medium text-[var(--color-charcoal)] sm:text-[34px]">
+          {clientName ?? 'Untitled room'}
+          {roomType && <span className="italic text-[var(--color-mocha)]"> · {roomType}.</span>}
+        </h1>
+        {docLink && (
+          <Link
+            href={docLink.href}
+            className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] transition-colors hover:text-[var(--color-charcoal)]"
+          >
+            {docLink.label}
+          </Link>
+        )}
+      </div>
+
+      {/* mode row — Plan · Orbit · Walk. A text row under a hairline, not
+          tabs (D1) — the prototype's R§3 note: "No tabs in the product; a
+          Strata rule carries the toggle." Plan is the only live mode in v1. */}
+      <div className="my-5 flex border-b border-[var(--doc-ink-border)]">
+        <span className="border-b-2 border-[var(--color-clay)] px-0 pb-3 pt-2.5 pr-5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-charcoal)]">
+          Plan
+        </span>
+        {/* W3-T6 mounts Orbit here — same geometry, three.js one-room dollhouse. */}
+        <span
+          aria-disabled="true"
+          className="cursor-not-allowed px-5 pb-3 pt-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-mocha)] opacity-35"
+        >
+          Orbit
+        </span>
+        <span
+          aria-disabled="true"
+          className="cursor-not-allowed px-5 pb-3 pt-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-mocha)] opacity-35"
+        >
+          Walk
+          <span className="mt-0.5 block text-[8px] tracking-[0.1em] text-[var(--color-clay)] opacity-100">
+            arrives with Place
+          </span>
+        </span>
+      </div>
+
+      {/* rv-body: 230px facts rail + stage, collapsing under ~900px */}
+      <div className="grid grid-cols-1 items-start gap-9 min-[900px]:grid-cols-[230px_1fr]">
+        <FactsRail
+          geometry={geometry}
+          thicknessConvention={thicknessConvention}
+          scanDate={doc.scannedAt}
+          qualityGrade={doc.qualityGrade}
+          coveragePercentage={doc.coveragePercentage}
+        />
+        <PlanStage geometry={geometry} />
+      </div>
+    </div>
+  );
+}
