@@ -99,3 +99,43 @@ BEGIN
   ON CONFLICT DO NOTHING;
 END;
 $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- SEED: Arrival Arc (Wave 1) no-login-household DRAFT proposal — I62.
+-- The local Elena analog: a DRAFT proposal for a no-login household (client_id
+-- NULL) linked to designer_clients d0c10000…b1 via proposals.designer_client_id
+-- (seeded in designer-clients.sql). Exercises document_state Shape B's client_name
+-- rescue — the row must read 'Elena Marlowe (no-login household)', NOT 'Client'.
+-- Idempotent via fixed UUID + ON CONFLICT (id) DO NOTHING.
+-- Prerequisite: designer-clients.sql (runs earlier in config.toml [db.seed]).
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  uid_designer  UUID := 'a0000000-0000-0000-0000-000000000004';
+  dc_direction  UUID := 'd0c10000-0000-0000-0000-0000000000b1';  -- Elena-analog relationship
+  v_elena       UUID := 'd0c10000-0000-0000-0000-0000000000b2';  -- the draft proposal
+BEGIN
+  -- Skip cleanly if prerequisites are missing (dev designer or the linked dc).
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = uid_designer) THEN
+    RAISE NOTICE 'proposals.sql: dev designer missing - run dev-accounts.sql first';
+    RETURN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.designer_clients WHERE id = dc_direction) THEN
+    RAISE NOTICE 'proposals.sql: Elena-analog relationship missing - run designer-clients.sql first';
+    RETURN;
+  END IF;
+
+  INSERT INTO public.proposals (
+    id, designer_id, client_id, designer_client_id, title, description, status,
+    subtotal, total_amount, created_at, updated_at, version
+  ) VALUES (
+    v_elena, uid_designer, NULL, dc_direction,
+    'Elena Marlowe — Living Room Direction',
+    'Draft fixture for a no-login household: proposals.designer_client_id links '
+      || 'to the household so document_state Shape B rescues the client_name.',
+    'draft', 0, 0,
+    now() - interval '10 days', now() - interval '10 days', 1
+  )
+  ON CONFLICT (id) DO NOTHING;
+END;
+$$;
