@@ -118,6 +118,14 @@ function FolderFace({
             {row.title}
           </h3>
           <p className="mt-1 text-[12px] text-[var(--text-muted)]">{stageLine}</p>
+          {/* R106 §3: the parked-ceremony card's held-draft preview. Renders
+              ONLY for that one NeedKind — every other folder face stays
+              byte-identical (the flag-off safety net at this layer). */}
+          {need.kind === 'ceremony_pending' && need.sub && (
+            <p className="mt-2 font-heading text-[14px] italic leading-snug text-[var(--text-body)]">
+              {need.sub}
+            </p>
+          )}
           <div className="mt-4 flex items-start justify-between gap-3 border-t border-[var(--border-default)] pt-3.5">
             <p className="flex-1 text-[13px] leading-relaxed text-[var(--text-body)]">
               {need.text}

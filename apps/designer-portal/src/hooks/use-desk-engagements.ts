@@ -39,6 +39,11 @@ import {
   buildDeskFlaggedLines,
   type FlaggedLineRow,
 } from '@/lib/document/desk-flagged-lines';
+import {
+  buildDeskCeremoniesByLead,
+  buildDeskCeremoniesByDesignerClient,
+  type CeremonyRow,
+} from '@/lib/document/desk-ceremonies';
 import { documentEvents } from '@/lib/analytics/document-events';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -120,6 +125,7 @@ export function useDeskEngagements() {
         { data: invoices, error: invoicesError },
         { data: flaggedFeedback, error: flaggedError },
         { data: boardFlagged, error: boardFlaggedError },
+        { data: ceremonies, error: ceremoniesError },
       ] = await Promise.all([
         supabase.from('document_state').select('*').order('updated_at', { ascending: false }),
         supabase
@@ -153,6 +159,17 @@ export function useDeskEngagements() {
           .select('proposal_board_items!inner(proposal_boards!inner(proposal_id, proposals!inner(title)))')
           .eq('verdict', 'rejected')
           .is('resolved_at', null),
+        // R106 (the Arrival Arc): the designer's own match_ceremonies rows —
+        // the parked-card need (draft, keyed by lead_id) and the in-motion
+        // chip states (sent/picked, keyed by designer_client_id). RLS already
+        // scopes this to the designer's own rows (match_ceremonies_designer_all);
+        // a flag-off designer simply has none, so this feed is empty and every
+        // ceremony-derived branch downstream never fires.
+        supabase
+          .from('match_ceremonies')
+          .select(
+            'id, lead_id, designer_client_id, state, intro_text, offered_slots, offered_at, picked_slot_starts_at, timezone, thread_id, created_at',
+          ),
       ]);
       if (error) throw error;
       const rows = (data ?? []) as DocumentStateRow[];
@@ -206,7 +223,23 @@ export function useDeskEngagements() {
               ...(flaggedError ? [] : flattenFlaggedRows(flaggedFeedback)),
               ...(boardFlaggedError ? [] : flattenBoardFlaggedRows(boardFlagged)),
             ]);
-      const result = partitionDesk(rows, now, conflicts, receivables, flaggedLines);
+      // R106: the ceremonies feed degrades the same way — a query error never
+      // takes the whole Desk down, it just means no ceremony-derived need/chip
+      // fires this read (identical in effect to the flag-off path).
+      const ceremonyRows = ceremoniesError ? [] : ((ceremonies ?? []) as CeremonyRow[]);
+      const ceremoniesByLeadId = ceremoniesError ? undefined : buildDeskCeremoniesByLead(ceremonyRows);
+      const ceremoniesByDesignerClientId = ceremoniesError
+        ? undefined
+        : buildDeskCeremoniesByDesignerClient(ceremonyRows);
+      const result = partitionDesk(
+        rows,
+        now,
+        conflicts,
+        receivables,
+        flaggedLines,
+        ceremoniesByLeadId,
+        ceremoniesByDesignerClientId,
+      );
       previousResultRef.current = result;
       return result;
     },

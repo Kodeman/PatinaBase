@@ -33,6 +33,13 @@ const LAST_DOC_KEY = 'patina:last-document-in-hand';
 const RECENT_DOCS_KEY = 'patina:recent-documents-in-hand';
 const RECENT_DOCS_MAX = 5;
 
+// R106 (the Arrival Arc) — the nudge/fresh-times chip states should fire once
+// per ceremony per session, not once per render (a Desk re-sort or the 60s
+// refetch would otherwise re-fire on every tick). Module-level Sets, the same
+// "seen" shape as the rest of this file's session-scoped dedup.
+const nudgeFiredSeen = new Set<string>();
+const freshTimesRequestedSeen = new Set<string>();
+
 /** One entry in the recent-documents-in-hand MRU (command bar). */
 export interface RecentDocumentInHand {
   id: string;
@@ -193,6 +200,24 @@ export const documentEvents = {
     project_type: string | null;
     scan_count: number;
   }) => track('design_request_claimed', props),
+
+  /** R106 §4 (the Arrival Arc) — the quiet-48h nudge chip actually rendered.
+   *  Fires once per ceremony per session (first render only). Unprefixed
+   *  (not `document_*`), matching the `design_request_claimed` precedent for
+   *  a cross-cutting arc signal rather than a Document-internal UI event. */
+  nudgeFired: (props: { ceremony_id: string; lead_id: string | null }) => {
+    if (nudgeFiredSeen.has(props.ceremony_id)) return;
+    nudgeFiredSeen.add(props.ceremony_id);
+    track('nudge_fired', props);
+  },
+
+  /** R106 §4 — the stale-offered-slots chip actually rendered ("offered times
+   *  went by · offer fresh ones"). Same once-per-ceremony-per-session dedup. */
+  freshTimesRequested: (props: { ceremony_id: string; lead_id: string | null }) => {
+    if (freshTimesRequestedSeen.has(props.ceremony_id)) return;
+    freshTimesRequestedSeen.add(props.ceremony_id);
+    track('fresh_times_requested', props);
+  },
 
   commandBar,
   wayfinding,
