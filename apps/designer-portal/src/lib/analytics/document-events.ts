@@ -165,6 +165,21 @@ export const documentEvents = {
     need_kinds: Record<string, number>;
   }) => track('document_desk_rendered', props),
 
+  /** Arrival Arc Phase 0 (DECISIONS.md I64) — a document_state read came back
+   *  with 0 rows right after a cached read that had folders/chips in it. The
+   *  session-valid flag distinguishes a genuinely-just-went-quiet desk from
+   *  the case useDeskEngagements already caught and threw on (no session) —
+   *  this event only fires on the survives-the-guard path, so `session_valid`
+   *  here is always true; it's carried anyway so this event's shape doesn't
+   *  quietly change meaning if the guard's ordering ever moves. Unprefixed
+   *  (not `document_*`) to match `design_request_claimed`'s precedent for a
+   *  cross-cutting reliability signal, not a Document-internal UI event. */
+  deskZeroRowRead: (props: {
+    previous_folder_count: number;
+    previous_chip_count: number;
+    session_valid: boolean;
+  }) => track('desk_zero_row_read', props),
+
   /** Log-strip engagement (R20/D10): logged or discarded, adjusted, idle. */
   logStripActed: (props: { action: 'log' | 'discard'; adjusted: boolean; had_idle: boolean }) =>
     track('document_log_strip_acted', props),
