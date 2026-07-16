@@ -2651,3 +2651,51 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.refresh_offered_slots(uuid, jsonb) TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00337_room_scan_geometry.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.room_scan_geometry TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00337_room_scan_geometry.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.room_scan_geometry_elements TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00337_room_scan_geometry.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.room_scan_geometry TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00337_room_scan_geometry.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.room_scan_geometry_elements TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00337_room_scan_geometry.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.replace_room_scan_geometry(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00337_room_scan_geometry.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.replace_room_scan_geometry(uuid, jsonb, jsonb) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00337_room_scan_geometry.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.mark_room_scan_geometry_error(uuid, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00337_room_scan_geometry.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.mark_room_scan_geometry_error(uuid, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
