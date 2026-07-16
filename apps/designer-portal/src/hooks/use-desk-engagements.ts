@@ -10,9 +10,22 @@
  * schedule conflicts client-side (the Wave 2.1 precedent) — collisions rise
  * as need lines, drift rides the in-motion chips. One derivation cycle: the
  * next 60s tick re-reads both sources together.
+ *
+ * Arrival Arc Phase 0 (DECISIONS.md I64): a token-refresh failure makes the
+ * client go sessionless — `document_state` then returns HTTP 200 with ZERO
+ * rows, no error. Left unguarded, `partitionDesk([])` reads as a legitimate
+ * quiet desk, indistinguishable from a truly empty one. The fix stack lives
+ * here: `placeholderData: keepPreviousData` so a background refetch never
+ * flashes an empty desk over good data; a suspicious-empty guard that
+ * verifies the session before trusting a 0-row read and throws when the
+ * session is invalid (surfacing the truth — an auth-degraded read — as an
+ * error, which desk/page.tsx now has a coherent whole-desk state for); and a
+ * fire-and-forget zero-row telemetry breadcrumb when a 0-row read follows a
+ * non-zero cached result, for the week-one watch.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useRef } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { createBrowserClient, type Invoice } from '@patina/supabase';
 import {
   partitionDesk,
@@ -26,6 +39,7 @@ import {
   buildDeskFlaggedLines,
   type FlaggedLineRow,
 } from '@/lib/document/desk-flagged-lines';
+import { documentEvents } from '@/lib/analytics/document-events';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getSupabase = () => createBrowserClient() as any;
@@ -80,9 +94,20 @@ function flattenBoardFlaggedRows(rows: any): FlaggedLineRow[] {
 }
 
 export function useDeskEngagements() {
+  // Arrival Arc Phase 0 (I64): tracks the last successfully computed Desk so
+  // the zero-row breadcrumb can tell "went quiet after real work" apart from
+  // "was already quiet" — a fresh mount has nothing to compare against, so it
+  // never breadcrumbs on first load. Lives outside TanStack's own cache
+  // because the queryFn needs it read-and-write on every call, synchronously.
+  const previousResultRef = useRef<DeskData | null>(null);
+
   return useQuery<DeskData>({
     queryKey: ['document-state', 'desk'],
     refetchInterval: 60_000,
+    // A background refetch (the 60s tick) never flashes an empty desk over
+    // good data while the request is in flight — the prior result stays on
+    // screen until the new one resolves (or errors, see the guard below).
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const supabase = getSupabase();
       const today = new Date().toISOString().slice(0, 10);
@@ -130,6 +155,42 @@ export function useDeskEngagements() {
           .is('resolved_at', null),
       ]);
       if (error) throw error;
+      const rows = (data ?? []) as DocumentStateRow[];
+
+      // I64 suspicious-empty guard: a 0-row document_state read is exactly
+      // what an auth-degraded (token-refresh-failed) request looks like —
+      // Postgres/PostgREST returns HTTP 200 with no rows and RLS admits
+      // nothing, not an error. Verify the session before trusting a 0-row
+      // read as a genuinely quiet desk.
+      if (rows.length === 0) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const sessionValid = !!sessionData?.session;
+        const previous = previousResultRef.current;
+        const previousWasNonEmpty =
+          !!previous && (previous.folders.length > 0 || previous.chips.length > 0);
+
+        if (!sessionValid) {
+          // No session to back up an empty read — surface this as an error
+          // (the truth: an auth-degraded read) instead of a false-empty Desk.
+          // desk/page.tsx's whole-desk error state is what catches this.
+          throw new Error(
+            'desk_session_degraded: document_state returned 0 rows with no valid session',
+          );
+        }
+
+        // Session is valid — 0 rows really is a quiet desk. Still, if the
+        // designer's last cached read had work in it, that transition is
+        // worth a breadcrumb for the week-one watch (fire-and-forget, never
+        // blocks the render either way).
+        if (previousWasNonEmpty) {
+          documentEvents.deskZeroRowRead({
+            previous_folder_count: previous!.folders.length,
+            previous_chip_count: previous!.chips.length,
+            session_valid: sessionValid,
+          });
+        }
+      }
+
       const now = new Date();
       // The Desk never dies on a side feed — conflicts/receivables/flags stay quiet.
       const conflicts = eventsError ? undefined : buildDeskConflicts(events ?? []);
@@ -145,13 +206,9 @@ export function useDeskEngagements() {
               ...(flaggedError ? [] : flattenFlaggedRows(flaggedFeedback)),
               ...(boardFlaggedError ? [] : flattenBoardFlaggedRows(boardFlagged)),
             ]);
-      return partitionDesk(
-        (data ?? []) as DocumentStateRow[],
-        now,
-        conflicts,
-        receivables,
-        flaggedLines,
-      );
+      const result = partitionDesk(rows, now, conflicts, receivables, flaggedLines);
+      previousResultRef.current = result;
+      return result;
     },
   });
 }

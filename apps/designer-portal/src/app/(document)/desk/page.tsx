@@ -39,7 +39,7 @@ import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 
 export default function DeskPage() {
   useDocumentSurface(DOCUMENT_SURFACE_KEYS.desk); // R89 — scope help to the Desk
-  const { data, isLoading, isError } = useDeskEngagements();
+  const { data, isLoading, isError, refetch } = useDeskEngagements();
   const { user } = useAuth();
   const { data: profile } = useProfile();
   const hydrated = useHydrated();
@@ -176,133 +176,158 @@ export default function DeskPage() {
         </div>
       </header>
 
-      {/* R94 — the one first-touch note: what the Desk is, and the ⌘K move.
-          Recedes forever on the first ⌘K open or the × (never a tour). R97 —
-          held while the walkthrough modal/tour is on screen, and retired on tour
-          completion (the tour teaches ⌘K itself). */}
-      <MarginNote
-        noteKey="desk-first-touch"
-        commandBar
-        suppressed={suppressFirstTouch}
-        className="mb-10"
-      >
-        This is your Desk. Folders that need you gather here; the rest stays quiet.{' '}
-        <span className="font-mono text-[12px] not-italic tracking-[0.02em] text-[var(--text-muted)]">
-          ⌘K
-        </span>{' '}
-        finds anything by name — try “invoice”.
-      </MarginNote>
-
-      {/* R97 — existing designers (created before the ship date) get a quiet
-          one-time offer instead of the auto-modal. The inline link starts the
-          walkthrough; the note recedes on that same event (actionEvents) or the
-          ×. The Desk Walkthrough gates eligibility; the primitive gates once-only. */}
-      {showWalkthroughOffer && (
-        <MarginNote
-          noteKey="desk-walkthrough-offer"
-          actionEvents={[START_DESK_WALKTHROUGH_EVENT]}
-          className="mb-10"
-        >
-          New desk, same studio — your projects are all here as documents now.{' '}
+      {isError ? (
+        // I64 whole-desk error state: one coherent surface, not a half-desk.
+        // A 0-row auth-degraded read now throws (use-desk-engagements.ts), so
+        // this branch means a genuine read failure — never mix it with the
+        // Needs-your-hand / In-motion / Contents populations below, which
+        // would otherwise render past it independently and produce exactly
+        // the incoherent half-desk this replaces. Everything past the
+        // greeting is replaced, including the first-touch note (it describes
+        // desk contents that did not load) and the open-requests/Contents/
+        // reconnect/field populations (each fetches its own data and would
+        // otherwise float, working, beside a "could not be read" message).
+        <div role="alert" data-testid="desk-error-state" className="mt-16 max-w-[440px]">
+          <p className="font-heading text-[15px] italic text-[var(--text-muted)]">
+            The desk could not be read.
+          </p>
+          <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-body)]">
+            Something interrupted the read — often a session that needs
+            refreshing. Try again, or reload the page.
+          </p>
           <button
             type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent(START_DESK_WALKTHROUGH_EVENT))}
-            className="font-heading text-[15px] italic text-[var(--color-aged-oak)] underline decoration-[var(--color-aged-oak)] decoration-1 underline-offset-2 transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+            onClick={() => void refetch()}
+            className="mt-4 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--color-clay)] transition-colors hover:text-[var(--text-primary)]"
           >
-            The walkthrough is six quick stops
-          </button>{' '}
-          if you&apos;d like the lay of it.
-        </MarginNote>
-      )}
-
-      <section aria-labelledby="needs-your-hand" data-tour-anchor="desk-needs-your-hand">
-        <SectionEyebrow count={data?.folders.length}>
-          <span id="needs-your-hand">Needs your hand</span>
-        </SectionEyebrow>
-
-        {isLoading && (
-          <div className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2" aria-hidden>
-            {[0, 1].map((i) => (
-              <div
-                key={i}
-                className="mt-[26px] h-32 rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--bg-surface)]"
-              />
-            ))}
-          </div>
-        )}
-
-        {isError && (
-          <p className="text-[13px] text-[var(--text-body)]">
-            The desk could not be read. Refresh, or check your connection.
-          </p>
-        )}
-
-        {data && data.folders.length === 0 && (
-          // R97 desk-folio anchor (empty-state placement) — exactly one of this
-          // element and the first FolderCard exists post-load.
-          <p
-            data-tour-anchor="desk-folio"
-            className="font-heading text-[15px] italic text-[var(--text-muted)]"
+            Try again
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* R94 — the one first-touch note: what the Desk is, and the ⌘K move.
+              Recedes forever on the first ⌘K open or the × (never a tour). R97 —
+              held while the walkthrough modal/tour is on screen, and retired on tour
+              completion (the tour teaches ⌘K itself). */}
+          <MarginNote
+            noteKey="desk-first-touch"
+            commandBar
+            suppressed={suppressFirstTouch}
+            className="mb-10"
           >
-            Nothing needs your hand. The work is in motion.
-          </p>
-        )}
+            This is your Desk. Folders that need you gather here; the rest stays quiet.{' '}
+            <span className="font-mono text-[12px] not-italic tracking-[0.02em] text-[var(--text-muted)]">
+              ⌘K
+            </span>{' '}
+            finds anything by name — try “invoice”.
+          </MarginNote>
 
-        {data && data.folders.length > 0 && (
-          <div className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2">
-            {data.folders.map((folder, index) =>
-              index === 0 ? (
-                // R97 desk-folio anchor (first-folder placement) — a transparent
-                // wrapper so the coachmark can point at the first real folder.
-                <div key={folder.row.engagement_id} data-tour-anchor="desk-folio">
-                  <FolderCard folder={folder} />
-                </div>
-              ) : (
-                <FolderCard key={folder.row.engagement_id} folder={folder} />
-              ),
+          {/* R97 — existing designers (created before the ship date) get a quiet
+              one-time offer instead of the auto-modal. The inline link starts the
+              walkthrough; the note recedes on that same event (actionEvents) or the
+              ×. The Desk Walkthrough gates eligibility; the primitive gates once-only. */}
+          {showWalkthroughOffer && (
+            <MarginNote
+              noteKey="desk-walkthrough-offer"
+              actionEvents={[START_DESK_WALKTHROUGH_EVENT]}
+              className="mb-10"
+            >
+              New desk, same studio — your projects are all here as documents now.{' '}
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent(START_DESK_WALKTHROUGH_EVENT))}
+                className="font-heading text-[15px] italic text-[var(--color-aged-oak)] underline decoration-[var(--color-aged-oak)] decoration-1 underline-offset-2 transition-colors hover:text-[var(--color-clay)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
+              >
+                The walkthrough is six quick stops
+              </button>{' '}
+              if you&apos;d like the lay of it.
+            </MarginNote>
+          )}
+
+          <section aria-labelledby="needs-your-hand" data-tour-anchor="desk-needs-your-hand">
+            <SectionEyebrow count={data?.folders.length}>
+              <span id="needs-your-hand">Needs your hand</span>
+            </SectionEyebrow>
+
+            {isLoading && (
+              <div className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2" aria-hidden>
+                {[0, 1].map((i) => (
+                  <div
+                    key={i}
+                    className="mt-[26px] h-32 rounded-[0_8px_8px_8px] border border-[var(--border-default)] bg-[var(--bg-surface)]"
+                  />
+                ))}
+              </div>
             )}
-          </div>
-        )}
-      </section>
 
-      {/* Designer Handoff (Wave 1B) — the open request pool, between the
-          needs-hand stack and in-motion. Its own population; renders nothing
-          off-flag or when the pool is empty. */}
-      <OpenRequestsStrip />
+            {data && data.folders.length === 0 && (
+              // R97 desk-folio anchor (empty-state placement) — exactly one of this
+              // element and the first FolderCard exists post-load.
+              <p
+                data-tour-anchor="desk-folio"
+                className="font-heading text-[15px] italic text-[var(--text-muted)]"
+              >
+                Nothing needs your hand. The work is in motion.
+              </p>
+            )}
 
-      {/* R95 — on a quiet Desk the Studio index rises here, at full weight, to
-          fill the space the folders would occupy. */}
-      {deskEmpty && <DeskContents prominent />}
+            {data && data.folders.length > 0 && (
+              <div className="grid grid-cols-1 gap-x-10 gap-y-[46px] xl:grid-cols-2">
+                {data.folders.map((folder, index) =>
+                  index === 0 ? (
+                    // R97 desk-folio anchor (first-folder placement) — a transparent
+                    // wrapper so the coachmark can point at the first real folder.
+                    <div key={folder.row.engagement_id} data-tour-anchor="desk-folio">
+                      <FolderCard folder={folder} />
+                    </div>
+                  ) : (
+                    <FolderCard key={folder.row.engagement_id} folder={folder} />
+                  ),
+                )}
+              </div>
+            )}
+          </section>
 
-      {data && data.chips.length > 0 && (
-        <section aria-labelledby="in-motion" className="mt-14">
-          <SectionEyebrow count={data.chips.length}>
-            <span id="in-motion">In motion</span>
-          </SectionEyebrow>
-          <ul className="space-y-2.5">
-            {data.chips.map((chip) => (
-              <InMotionChip key={chip.row.engagement_id} chip={chip} />
-            ))}
-          </ul>
-        </section>
+          {/* Designer Handoff (Wave 1B) — the open request pool, between the
+              needs-hand stack and in-motion. Its own population; renders nothing
+              off-flag or when the pool is empty. */}
+          <OpenRequestsStrip />
+
+          {/* R95 — on a quiet Desk the Studio index rises here, at full weight, to
+              fill the space the folders would occupy. */}
+          {deskEmpty && <DeskContents prominent />}
+
+          {data && data.chips.length > 0 && (
+            <section aria-labelledby="in-motion" className="mt-14">
+              <SectionEyebrow count={data.chips.length}>
+                <span id="in-motion">In motion</span>
+              </SectionEyebrow>
+              <ul className="space-y-2.5">
+                {data.chips.map((chip) => (
+                  <InMotionChip key={chip.row.engagement_id} chip={chip} />
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* R53 — People on the Desk: the quiet reconnect surface. Its own
+              population over the unified directory; renders nothing when no tie is
+              due, so it never adds noise to a clean Desk. */}
+          <DeskReconnect />
+
+          {/* Field Coordination — "In the field": needs-review text triage + the
+              softer field need-lines (opt-ins owed, field tasks overdue). Its own
+              populations over the SMS/field read models; when there is no field work
+              it teaches in the pencil idiom rather than vanishing (R94). */}
+          <FieldDesk />
+
+          {/* R95 — the Studio Contents page: book-style front matter (Rooms /
+              Ledgers / Begin), labels + doorways only. On a working Desk it sits
+              here as quiet front matter after the field rollup; on a quiet Desk it
+              has already risen above (deskEmpty), so it renders in exactly one place. */}
+          {!deskEmpty && <DeskContents />}
+        </>
       )}
-
-      {/* R53 — People on the Desk: the quiet reconnect surface. Its own
-          population over the unified directory; renders nothing when no tie is
-          due, so it never adds noise to a clean Desk. */}
-      <DeskReconnect />
-
-      {/* Field Coordination — "In the field": needs-review text triage + the
-          softer field need-lines (opt-ins owed, field tasks overdue). Its own
-          populations over the SMS/field read models; when there is no field work
-          it teaches in the pencil idiom rather than vanishing (R94). */}
-      <FieldDesk />
-
-      {/* R95 — the Studio Contents page: book-style front matter (Rooms /
-          Ledgers / Begin), labels + doorways only. On a working Desk it sits
-          here as quiet front matter after the field rollup; on a quiet Desk it
-          has already risen above (deskEmpty), so it renders in exactly one place. */}
-      {!deskEmpty && <DeskContents />}
 
       {/* The capture front door (G1 · R62) — an overlay over the Desk, never a
           route; the Desk beneath does not unmount (D1). */}
