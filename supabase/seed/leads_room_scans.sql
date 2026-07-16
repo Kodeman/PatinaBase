@@ -196,6 +196,24 @@ ON CONFLICT (scan_id, designer_id) DO UPDATE SET
   revoked_reason = NULL,
   updated_at = NOW();
 
+-- ─── Attach each scan to its lead via the lead_room_scans junction ──────
+-- lead_room_scans (00285) carries the ordered scan set for a design request;
+-- leads.room_scan_id is the PRIMARY scan and is_primary flags it here too. In
+-- prod, submit_design_request() writes this junction; this seed inserts the
+-- leads directly and so must mint the junction itself. Without a row here the
+-- Brief scan strip door (entry-paths) has nothing to render, since it reads
+-- the scan set from this table (not from leads.room_scan_id alone). Each seeded
+-- lead has exactly one scan, so that scan is is_primary=true at position 0.
+INSERT INTO lead_room_scans (lead_id, scan_id, is_primary, position)
+VALUES
+  (l1, rs1, true, 0),
+  (l2, rs2, true, 0),
+  (l3, rs3, true, 0),
+  (l4, rs4, true, 0),
+  (l5, rs5, true, 0),
+  (l6, rs6, true, 0)
+ON CONFLICT (lead_id, scan_id) DO NOTHING;
+
 END $$;
 
 -- Re-enable lead notification triggers
