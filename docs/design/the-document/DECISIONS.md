@@ -2996,3 +2996,709 @@ The open Brief also gains a **scan strip** (`BriefScanStrip`, between the facts 
 **Gate:** behind the PostHog flag `design-request-pool`, fail-closed while loading (mirrors `procurement-workspace-pilot`'s gate). **Pending a Leah walk before flag-enable** — this is a new Leah-facing surface on the Desk, and per the program's own risk log it needs her eyeball before it goes live for real designers, same bar as any other Desk-population change.
 
 *Entries add: R98 · last id = R98*
+
+## The Document — the Schedule package: the Spine & the Rule (R99–R101 · O8) — 2026-07-15
+
+### R99 · The Schedule master direction — the Spine and the Rule — 2026-07-15
+
+**Ruled.** From the four-directions review (Jul 14–15): the Ledger Spine (B)
+becomes the project page's architecture, and the Ruled Line (A) becomes its
+collapsed header. The Loom (C, lead-time Gantt) and the Almanac (D, the
+client-facing commitment ledger) are deferred with their roles reserved: the
+spine's procurement thread is the Loom's future front door, and the spine's
+milestone rows are the Almanac's future entries. Nothing built now is thrown
+away later — we are building the trunk; C and D are branches.
+
+**The core architectural call: A and B are not two components.** They are one
+schedule with a folded and an unfolded state, both rendered from one resolved
+chain (see R100). There is nothing to sync because there is only one schedule.
+
+**The Rule (folded state).** Sits where the current phase bar sits; pins
+beneath the project title on scroll at reduced height (labels fold into the
+line; diamonds and the today rule remain). It is three things at once:
+
+- *The glance* — a full-width drawn rule. Phase labels sit above the line at
+  natural width, staggered to a second row when they would collide; **nothing
+  ever truncates.** Weight encodes status: light for closed, bold for active,
+  muted Aged Oak for ahead. Today is a strong vertical Charcoal rule with its
+  date in DM Mono. Milestones are diamonds on the line wearing stamp colors.
+  Overlapping phases (procurement is the canonical case) render as a parallel
+  hairline beneath the main rule, spanning their true dates — the component
+  stops lying about sequence.
+- *The minimap* — click a phase label and the spine scrolls there and unfolds
+  it; click a diamond and the spine opens that milestone's phase with the row
+  highlighted.
+- *The time surface* — phase boundaries are drag handles; milestones slide
+  along the line. All time edits pass the ripple (R100). Anchored entries
+  refuse the drag with a firm nudge ("Install is anchored — unpin to move
+  it").
+
+**The Spine (unfolded state).** Replaces the Coordination and The Work
+sections — they dissolve into it. Each phase is a Playfair heading on a
+vertical spine (solid above today, dashed below; the today rule crosses the
+spine between rows). Closed phases compress to a single light line with meta
+(dates, item count, key signatures). The active phase opens fully. Future
+phases show heading, target, and dependency meta in muted weight.
+
+A phase holds three row types: **milestones** (diamonds — sign-off, decision,
+delivery, event — with the stamp vocabulary upcoming/due/signed/slipped),
+**items** (the existing chips: sign-off, punch — ball-in-court rendered as a
+chip on the row), and **threads** (parallel work like procurement, drawn as a
+running stitch, never forced into sequence). Hovering a phase heading reveals
+three quiet mono actions — + Item, + Milestone, Edit dates; long-press on
+touch. **Any phase or milestone can be anchored** — pinned to a hard date,
+wearing a charcoal chip, holding its ground when upstream moves.
+
+**Rationale.** The old bar's five failures (truncation, false sequence,
+whispered today, withheld dates, and total disconnection from the work) are
+all versions of one failure: the schedule and the work were different
+objects. The spine makes them the same object — every open question lives
+inside the chapter where it belongs — and the rule keeps the glance that the
+spine alone would lose. Division of labor: **words in the spine, time on the
+rule.**
+
+Prototype: `the-document-schedule-master-direction.html` (all states,
+including the interactive ripple and baseline specimens). The rejected
+options' full reasoning: `the-document-schedule-four-directions.html`.
+
+### R100 · The chain model — durations and links; dates are derived — 2026-07-15
+
+**Ruled.** A phase is a **duration plus a link** ("4 weeks, following
+Schematic Design") or an **anchor** (a pinned hard date). Dates are never
+stored as primary truth on unanchored entries — they are computed by one pure
+resolver, `resolve()`: chain in; dates, slack, and conflicts out. Both
+surfaces render from its output; **nothing else in the app computes time.**
+This is what makes the schedule adaptable — a 3-phase refresh and a 7-phase
+renovation are the same machine with different links.
+
+**Birth.** The schedule is born in the proposal (proposals and projects are
+already the same structure in two views) and is never rebuilt — the client's
+signature cuts baseline v1. Three starting points, typographic, no modals:
+(i) **the Patina Six** — Consultation · Schematic Design · Design Development
+· Procurement & Orders · Installation & Styling · Completion, pre-chained
+with studio-standard durations; (ii) **from a past project** — the phase
+chain with as-built durations, your history as your estimate; (iii) **blank**
+— a ghost line reading "Name a phase…". With an anchored install date the
+chain computes **backward** and renders slack (or a Terracotta warning that
+the chain doesn't fit); otherwise forward from signature.
+
+**Entry grammar.** Duration fields accept how people talk: `3w`, `10d`,
+`Sep 21`. Typing a hard date anchors the entry automatically (chip appears;
+one click unpins). Milestones live inside phases as offsets ("3 days before
+phase end") or anchored dates, four kinds (sign-off, decision, delivery,
+event), and ride their phase when it moves — anchored ones hold.
+
+**Overlap is legal.** Linking a phase to an earlier predecessor — or dragging
+its start before the predecessor's end — does not snap back or error. The
+phase drops to a parallel thread lane. The schedule permits what reality
+insists on.
+
+**Editing: the ripple.** Every time edit previews before it takes: ghost
+consequences render in dashed Terracotta (new dates, sliding milestones,
+shrinking slack) over the still-solid committed schedule, then a confirm
+strip states the change in one honest sentence — what moved, what follows,
+what holds, the slack delta, any conflicts — with **Commit** and **Esc ·
+Revert**. Nothing moves silently, ever. The ripple flows around anchors; a
+drag that would break one names the conflict instead of moving the anchor.
+In the spine, any date in a meta line becomes an inline field accepting the
+same grammar (`+5d`, `Jul 29`) with the ripple previewed in downstream meta
+lines. One grammar, two surfaces.
+
+**Memory.** The signature freezes baseline v1 (phase snapshots). Every
+committed change cuts a numbered revision — who, what, why (the reason
+defaults to the confirm strip's sentence, editable). Where current dates
+differ from baseline, faint **Clay ghosts** mark where the promise stood,
+with a toggle. The brand is "Where Time Adds Value" — the schedule earns a
+patina: it doesn't hide its history, it numbers it, names it, and holds the
+line anyway.
+
+### R101 · Slice-gating rulings: client visibility · item sort · proposal granularity — 2026-07-15
+
+Three calls that gate the build, interviewed and ruled 2026-07-15.
+
+**1 · The client does not see the spine in Slice 01.** Studio-only first; the
+client-facing schedule arrives later as the Almanac projection (a filtered
+view of the same milestones and stamps). *Rejected:* a filtered spine from
+day one — real earlier client value, but it roughly doubles Slice 01's
+surface (auth scoping, row filtering, a second audience to QA) and delivers
+the client a diluted studio tool instead of the view built for them; a
+read-only "peek" link — a third artifact to maintain for marginal value.
+
+**2 · Inside an open phase, items sort blocking-first, then due date.** The
+thing holding the line surfaces first — the exception-first instinct that
+runs Mission Control runs here too. Ball-in-court survives as a chip on
+every row, but it is no longer the grouping. *Rejected:* court groups
+(continuity with the old Coordination section, but they bury a blocker in
+whosever court it happens to sit); straight due-date order (simplest, but it
+hides blockage semantics entirely). The old Coordination grouping dies
+consciously here, not by accident.
+
+**3 · The proposal carries phases plus anchored milestones only.** The
+client signs against commitments — install day, the sign-off gates — not
+against working scaffolding; working milestones are composed after
+signature. The baseline therefore freezes exactly what was promised.
+*Rejected:* the full chain with all milestones (strongest baseline, but
+every working milestone becomes a "promise" and proposals get heavy);
+phases only (cleanest proposal, but the baseline can't hold the schedule
+accountable for the dates that matter most).
+
+### O8 · Open — do clients see the ghosts and the revision ledger? — 2026-07-15
+
+Unresolved; resolve before Slice 05 cuts. The brand case says full
+transparency — the 25% Pledge runs on a public ledger because transparency
+is the credibility engine, and a designer who shows her schedule's history
+is a designer a client trusts with the next date. The comfort case says
+studio eyes only — not every slip needs a client-facing scar. **Leaning
+(design authority):** the middle path — clients see revisions that touched
+client-facing dates (anchored milestones, install); the full ledger stays
+studio-side. Slice 05 builds studio-side only until this is ruled.
+
+*Entries add: R99–R101 · O8 · last id = O8*
+
+### I55 · Schedule package landed — ids substituted, landing scripts authored — 2026-07-15
+
+The Schedule package (the Spine & the Rule) is landed. Three files in
+`docs/design/the-document/`: `the-document-schedule-package.md` (Part A +
+build plan), `the-document-schedule-master-direction.html` (look/feel
+authority), `the-document-schedule-four-directions.html` (rejected options,
+for the record). Part A placeholder ids substituted from real workstream
+state: R(a)→R99, R(b)→R100, R(c)→R101, O(d)→O8, appended above with the
+integrity footer recomputed from the file's real contents.
+
+**Finding (logged, not worked around):** the handoff's landing note names
+`scripts/workstream_state.py` and `scripts/append_entry.py` as if they
+existed. They existed nowhere in the repo — the package was cut in a
+session without repo access. Both were authored this session (stdlib-only,
+`--check` dry-run, `--selftest`): the state scanner reads heading lines
+only and handles `##`/`###` levels, sub-ids (R68.1), range headings
+(R10–R12), and the historical duplicate O7; the appender refuses
+non-consecutive ids, never rewrites historical trailers, and recomputes
+each batch's footer from the post-append contents — the corruption alarm
+the package specifies.
+
+*Entries add: I55 · last id = I55*
+
+### I56 · §0 audit — the schedule builds on what exists — 2026-07-15
+
+The audit-before-building the package mandates, run against main @ 156f6b13.
+Findings by the package's own checklist:
+
+**A0.1 · Phases.** `project_phases` (00066) is the table behind "tap a
+phase to set dates": `start_date` / `target_end_date` DATE columns,
+`duration_weeks`, `sort_order`, status CHECK
+(pending/in_progress/completed/delayed), designer-ALL / client-SELECT RLS.
+The chain model **extends** it — `duration_days`, `follows_phase_id`,
+`anchor_date`, `lane` land as additive columns (migration 00323); nothing
+is superseded. Precedence: `duration_days` when set, else
+`duration_weeks × 7`, else the stored legacy dates. Live rows carry dates
+with no chain — the resolver renders them as-is (source `legacy-dates`)
+and never infers order from `sort_order`.
+
+**A0.2 · Items.** Open items are `client_decisions`, widened by 00213
+(`coordination_kind` incl. signoff/punch, `court`, `blocks_kind`).
+`phase_id` already exists (00084) and is reused; FF&E blocking is already
+modeled (`project_ffe_items.blocked_by_decision_id` + `blocks_kind='ffe'`).
+The only schema addition is `blocks_milestone_id`. Items with no inferable
+phase render in the active phase — a read-time rule, not a backfill.
+
+**A0.3 · Milestones.** No schedule-milestone table exists under any name.
+`project_payment_milestones` / `proposal_payment_milestones` are PAYMENT
+milestones — a live semantic collision — so the new table is named
+`schedule_milestones`.
+
+**A0.4 · The signature event.** A real event surface exists — not a bare
+status column: `sign_proposal` (00210) and `record_offline_signature`
+(00254) both settle `proposals.status='accepted'` and call
+`activate_proposal_as_project` (head body **00279** — not 00274; 00279
+reconciles an FF&E dual-pricing regression onto 00274's body and is the
+last `CREATE OR REPLACE`, confirmed by grepping every migration for the
+function name — the only place `project_phases` rows are created), and
+00291's `ae_proposal_signed_dispatch` trigger fires on the accepted
+transition. The Slice 05 baseline cut hooks the activation RPC. Nothing to
+work around.
+
+**A0.5 · The dissolving sections.** `CoordinationBand` (which renders
+`CoordinationWork` inside itself, coordination-band.tsx:153) mounts at
+doc/[id]/page.tsx:533 — one subtree, one flip-gate point. `PhaseTimeline`
+(the current bar, "tap a phase to set dates") is a separate sibling at
+page.tsx:448, untouched in Slice 01; the Rule replaces it in Slice 02.
+The spine reuses the band's queries verbatim (useCoordinationItems,
+useSectionTasks, useProjectParties, the coordination realtime channel).
+
+**Ruling (code-only): no chain backfill migration.** A0.1 demands
+unparseable chains be flagged for manual review, never guessed — a
+migration UPDATE cannot flag-and-wait, and the live data is known-dirty
+(phases drawn out of order). Slice 01 reads legacy dates through the
+resolver's fallback; chain adoption becomes a Slice 03 compose-time human
+act, assisted, confirmed, never silent.
+
+*Entries add: I56 · last id = I56*
+
+### O9 · Open — where do The Work's task rows live in the spine grammar? — 2026-07-15
+
+R99 gives the spine three row types — milestones, items, threads. Project
+tasks (The Work, `project_tasks` via useSectionTasks) are none of the
+three, yet §2 dissolves The Work into the spine. Slice 01 mounts
+`CoordinationWork` verbatim beneath the phase list — zero regression:
+tasks keep their CRUD and their ⊘ blocked-ticks, which open the blocking
+item's sheet through the spine's sheet state — pending a ruling: do task
+rows become a fourth row type inside phases, stay a separate band beneath
+the spine, or fold into items? Resolve at the Slice 01 review.
+
+*Entries add: O9 · last id = O9*
+
+### I57 · Slice 01 built — the Spine renders behind the gate — 2026-07-15
+
+Branch `schedule/slice-01`. Landed this slice: the chain schema (00323,
+additive — chain columns on project_phases, `schedule_milestones`,
+`schedule_revisions` with RPC-only writes, `blocks_milestone_id`); the
+pure resolver (`resolveSchedule` in @patina/utils — chain in; dates,
+slack, conflicts out; forward/backward/anchors/threads/legacy fallback;
+19-case jest matrix); the schedule hooks (`useResolvedSchedule`, the
+single impure door — nothing else in the app computes time); the
+specimen seed (Aspen Loft: five chained phases, thread-lane Procurement,
+anchored install +40d carrying 12 days slack, an overdue blocking
+sign-off); and `<ScheduleSpine/>` replacing `CoordinationBand` behind the
+PostHog flag **`schedule-spine`** (fail-closed; while the flag loads the
+old band renders — zero flash for the non-pilot cohort). `PhaseTimeline`
+is untouched — the Rule is Slice 02. Items sort blocking-first then due
+(R101.2); court survives as a chip via an additive OpenItemRow prop;
+court grouping dies only behind the gate-on branch. OpenItemSheet and
+ItemComposer mount byte-identical to the band's — item CRUD preserved by
+construction. Telemetry: `spine_phase_unfolded` (§7 name-contract) fires
+on fold→unfold only.
+
+Code-only blesses: `schedule_milestones` named against the
+payment-milestone collision; no chain backfill (I56's ruling); `+ New
+open item` moves to the spine's section head (hidden until the
+designer-client resolves — the court bar's entry point dissolves with the
+band); items on thread-lane phases render no main-phase row (the thread
+is the stitch; their room is the Loom) while null/deleted-phase items
+land in the active phase (A0.2).
+
+Escalations for the Slice 01 review (designer-visible): the unfold/fold
+affordance is a persistent quiet mono mark, not the prototype's
+hover-reveal (hover actions are banned in a read slice; touch has no
+hover); the thread stitch omits the FF&E "N of M lines ordered" meta;
+and O9 — the task rows' place in the spine grammar. The screenshot drop
+follows as the FIRST REVIEW MILESTONE; the flip gate stays off until the
+ruling blesses the dissolve.
+
+*Entries add: I57 · last id = I57*
+
+### R102 · Slice 01 review — good to go; Slice 02 (the Rule) begins — 2026-07-15
+
+**Ruled (design authority, on the Slice 01 screenshot drop).** Proceed to
+Slice 02 — the Ruled Line, §3 of the package. Conservative readings of
+the ruling, stated so nothing is assumed: the flip gate stays **off** —
+enabling `schedule-spine` for pilots is a separate, explicit act this
+ruling does not grant; the four escalations shipped with the drop ride
+as-implemented unless separately overruled (the persistent quiet
+unfold/fold mark; the thread stitch without FF&E order meta; thread-lane
+items rendering no main-phase row — their room is the Loom); and **O9
+remains open** — CoordinationWork stays mounted verbatim beneath the
+spine through Slice 02. Slice 02 builds on the branch stacked over
+slice-01 (`schedule/slice-02`); the Rule replaces the old phase bar
+behind the same gate, and its review milestone gates Slice 03.
+
+*Entries add: R102 · last id = R102*
+
+### I58 · Slice 02 built — the Rule renders behind the gate — 2026-07-15
+
+Branch `schedule/slice-02` (stacked on slice-01). Landed: the pure rule
+derivation lib (time scale, greedy N-row label stagger — truncation is
+structurally impossible; `overflowBeyondTwo` flags the >2-row case),
+`epochDayFromISO` shared from @patina/utils (one day-math door), two
+phase-count-extreme specimen projects (Birch Hollow · 3 long-named
+phases; Marrow & Vale Residence · 7 phases, 2 threads, anchored install
+with 12 days slack), and `<ScheduleRule/>` — staggered natural-width
+labels, status-weight track segments, milestone diamonds in stamp
+colors, the charcoal today rule, thread hairlines beneath the line, and
+pin-on-scroll as a self-sticky wrapper (permanent-height, zero layout
+shift, folds to line + diamonds + today at ~22px with the project title
+inline). The Rule replaces `PhaseTimeline` at the top of the document
+behind the same `schedule-spine` flag (loading renders the old bar);
+mobile (<980px) folds to line + diamonds + today. Minimap: labels and
+diamonds are buttons that reveal through a page-level
+`ScheduleNavProvider` — the spine unfolds the phase, scrolls to it, and
+transiently highlights the milestone row. Telemetry:
+`rule_minimap_jump` (§7 name-contract) with target kind and pinned
+state. Time-surface drag is Slice 04; nothing on the rule edits.
+
+Escalations for the Slice 02 review (designer-visible): pin-strip height
+and the inline project title; the stagger's N-row growth when two rows
+can't fit (design says two; we never truncate); the `Unplaced · N`
+treatment for undated phases and the render-nothing empty state; the
+full mobile rule treatment (this slice ships the minimal fold); minimap
+clicks when the spine section isn't mounted (silent no-op today —
+should it switch sections?); the active phase's segment ink (per-phase
+status weight per R99's words vs the prototype's past/future ink split
+— both readings are defensible, the authority should pick); and
+`delayed` phases reading as `ahead` weight on the rule.
+
+*Entries add: I58 · last id = I58*
+
+### R103 · Slice 02 review — accepted; Slice 03 (Compose) begins — 2026-07-15
+
+**Ruled (design authority, on the Slice 02 screenshot drop): accepted.**
+Slice 03 — Compose, §4 of the package — begins. Conservative readings,
+stated so nothing is assumed: the flip gate stays **off**; the Slice 02
+escalations ride as-implemented unless separately overruled (the
+pin-strip height with its inline title; the stagger's N-row growth
+beyond two rows; the `Unplaced · N` and render-nothing empty
+treatments; the minimal mobile fold; the minimap's silent no-op when
+the spine section isn't mounted; the active segment's per-phase status
+ink; `delayed` reading as `ahead` weight; the 20px thread-lane pitch).
+O9 remains open. Slice 03 builds on `schedule/slice-03`, stacked on
+slice-02; its review milestone gates Slice 04 (Adjust).
+
+*Entries add: R103 · last id = R103*
+
+### R104 · Process ruling — continuous execution through Slice 05 — 2026-07-15
+
+**Ruled (design authority, mid-Slice 03):** "I want you to continue
+through all the slices before I review again." The package's per-slice
+review gates are superseded for Slices 03–05: the build proceeds
+continuously; each slice still produces its screenshot drop, its
+DECISIONS entries, and its escalation list; the design authority
+reviews all three in one consolidated pass at the end. The flip gate
+stays off throughout; nothing ships to production.
+
+*Entries add: R104 · last id = R104*
+
+### I59 · Slice 03 built — Compose: the schedule is born and grows inline — 2026-07-15
+
+Branch `schedule/slice-03` (stacked on slice-02). Landed: migration 00324
+(proposal chain columns, anchored-only `proposal_schedule_milestones`,
+the `patina_six` template, `apply_phase_template` regrafted for
+linear-chain insertion, two birth RPCs — `seed_project_schedule_from_
+template` and `copy_schedule_as_built` — and `activate_proposal_as_
+project` regrafted to carry chain columns and milestones through a
+two-pass follows remap); `parseScheduleEntry`, the one grammar durations,
+anchors, and offsets all speak; the compose UI — ghost add-line, the
+grammar-driven entry field, the milestone composer, delete-with-relink,
+and the three-starting-points birth surface — on both the project spine
+and the proposal composer; `PhaseBuilder`'s grammar field, its anchored-
+milestones mini-list, and the readonly proposal's "Key dates"; telemetry
+`schedule_born`, `schedule_phase_added`, `schedule_anchor_set`. The
+hardening the reviews forced: mutation error surfaces inline (never a
+toast) and the negative-duration CRITICAL closed three levels deep — the
+field's own inline reject plus `duration_days > 0` CHECKs on both
+`project_phases` and `proposal_phases`.
+
+**Walk results (S3-7, live, DB + driver evidence):** all nine §9 checks
+run end to end. Clean: proposal Patina-Six birth (4.3s), blank birth +
+<5s single add, past-project as-built copy, proposal readonly Key-dates
+with zero unanchored milestones, activation (chain cols + remapped
+follows + milestones landed offset-NULL/upcoming + legacy cascade + zero
+`schedule_revisions` rows, all psql-asserted), spine add/edit/delete-
+relink (confirm wording and the psql-verified relink both correct), the
+chain-doesn't-fit terracotta, the negative-duration guard on both
+surfaces, and gate-off (old band byte-identical; the proposal composer's
+grammar field un-gated as designed). **One confirmed defect:** the
+resolver's per-phase `slackDays` (`schedule.ts:620`) reads
+`downstreamSlack(id)` — a phase's followers' slack — instead of its own
+`anchorSlack` entry, so "N days slack" never renders on the anchored
+phase itself (the chip and "Holds when upstream moves" are unaffected).
+Two structural findings: thread-lane phases expose no compose actions at
+all (confirmed, not just anticipated); and the lane packer can
+auto-promote an overrunning anchor to thread before its terracotta meta
+ever renders, so the overrun UI only reaches the main lane. One copy
+nit: the delete confirm's "1 milestone go with it" doesn't conjugate for
+singular count.
+
+Escalations (plan §10 plus this walk's carry-forwards): bare-number unit
+per surface; year inference to next on-or-after; the ghost line's compute
+text is passive, not the ripple (Slice 04); delete-relink wording;
+slack + overrun placement (sharpened by the findings above); no
+follows/lane editors in the proposal composer; anchored milestones now
+client-visible in readonly (placement); Patina Six's names/durations and
+whether Procurement defaults thread; as-built = actual-elapsed with a
+planned fallback; project-side birth shipped in scope; the composer rides
+`schedule-spine`; `proposal_schedule_milestones` RLS omits the
+studio-comember leg (deliberate); edit-dates commits once per open; a
+name-only phase needs two Enters; chip-unpin failures show no inline
+error; the weeks-mirror rounds 1–3d to 0w in summary totals; the
+accordion hosts milestones under "Deliverables, gates & key dates."
+
+*Entries add: I59 · last id = I59*
+
+### I60 · Slice 04 built — Adjust: the ripple previews before it takes — 2026-07-15
+
+Branch `schedule/slice-04` (stacked on slice-03). Landed: the ripple's pure
+core (`rippleDiff`/`rippleSentence` in schedule-ripple-derivation.ts, plus
+per-phase slack-sourcing and day/days honesty fixes so the confirm strip's
+slack clause reads the EDITED phase's own absorbed float, never a top-level
+min-across-anchors substitute) — `xToEpochDay`/`isoFromEpochDay` (the
+scale's inverse, day-snapped + clamped, and the epoch-day↔ISO round trip);
+migration 00325 (`commit_schedule_edit`, the one write door for all three
+edit kinds, whole-statement atomic, with the Slice-05 `schedule_revisions`
+hook point already commented at the return); `RippleProvider` — one
+single-edit session shared by both surfaces; the Rule's boundary-tick and
+milestone-diamond drag (pointer capture, 3px threshold, refusals on any
+anchored downstream with a firm nudge, zero session begun); the dashed-
+terracotta ghost layer (ticks, diamonds, the old→new arrow, layered over
+solid committed); the confirm strip (one honest sentence, a double
+anchor-violation guard — disabled AND handler re-guarded — and a
+pending-guarded Esc so an in-flight commit can't be silently thrown away);
+and the spine's time-edit reroute — the ruled boundary this slice draws:
+duration/anchor edits now ripple through the strip, while ghost-add,
+milestone-create, delete-with-relink, and the unpin chip all stay direct
+writes, unchanged. Review forced three fixes before merge: the Esc handler
+now guards on `commit.isPending` (an in-flight commit could otherwise be
+reverted from under itself); the milestone diamond's z-index moved above
+the boundary handle's so a coincident milestone stays tappable without
+losing the boundary's own grab; and the slack-sourcing switch described
+above (S4-1's own fix round, folded in before the confirm strip ever
+shipped a wrong number).
+
+**Walk results (S4-5, live, DB + driver evidence):** all nine §8 checks run
+end to end on Aspen. Clean: drag→preview→commit in exactly 2 interactions
+(drag, click) with dashed-terracotta ghosts rendering over solid committed
+layers and the strip's sentence matching the pinned grammar exactly
+("Schematic Design +5d · 2 phases follow · Installation & Styling holds
+Aug 25"); Esc restores the exact prior state from both the Rule drag and
+the spine's duration field, psql-confirmed unchanged both times; the
+anchor-violation path is provably uncommittable — Commit disabled, a
+force-enabled DOM click fires zero network requests (route-intercepted and
+psql-confirmed), unpinning the anchor clears the conflict and re-enables
+Commit, and a re-anchor to a date the chain actually reaches commits
+clean; the anchored diamond refuses with the nudge text and begins no
+session, no ghost; the milestone diamond drags to a new offset with
+anchor_date confirmed still NULL after commit, and a plain tap on a
+different diamond still reveals without touching the strip; the spine's
+absolute-date anchor grammar ("Aug 26") ripples a downstream ghost onto
+Completion and commits; ghost-add, milestone-create, and delete-relink all
+confirmed to stay direct (no strip, ever) on a scratch phase created and
+removed for the purpose; telemetry is a code-path read (no local PostHog
+key) — `schedule_edit_committed` has exactly one call site, inside the
+commit mutation's `onSuccess`, and the Esc handler calls only `clear()`;
+and gate-off is byte-identical — the Rule/Spine/strip sections all count
+zero, the old PhaseTimeline band renders in their place, unaffected by the
+walk's own mutations. The coincident-milestone occlusion fix was also
+spot-checked against a crafted case (a milestone SQL-repositioned onto a
+phase boundary's exact x): the diamond stayed tappable and the boundary
+stayed draggable via its un-occluded strip, one row above/below the
+diamond's own rotated footprint — confirming S4-3's z-index ordering holds
+under the exact coincidence it was written for. One tooling mistake, self-
+caught and SQL-corrected mid-walk: an "Edit dates" locator scoped to the
+whole spine instead of one phase-section grabbed Schematic Design's own
+field instead of Installation & Styling's, briefly setting the wrong
+phase's anchor — caught immediately via the committed sentence text,
+corrected via a direct UPDATE, and every subsequent step used a
+phase-scoped locator instead.
+
+Also confirmed live: the slack- and lane-resolver fixes (459883f7,
+pre-Slice-04) that closed I59's two open defects hold under this slice's
+own drags — the per-phase slack clause reads the edited phase's own
+absorbed float correctly in every ripple sentence captured, and no
+anchored phase ever lane-demoted out of the main row during any of this
+walk's overrun states.
+
+Escalations (plan §9, none blocking): the confirm strip's sentence wording
+— clause order and terminology are implementation-chosen, not
+design-ruled; the strip's placement directly under the Rule (vs. floating,
+vs. docked) is likewise unreviewed; the ghost layer clamps to the scale's
+padded edge on an overflow drag, which reads correctly but was never
+shown to the design authority; touch treatment for the drag surfaces is
+untested (pointer-only mechanics, no touch-specific affordance); the
+"boundary-refuse-in-gapped-case" — Install's own start has NO rendered
+boundary handle at all in Aspen's chain, because its upstream edge
+(Procurement→Install) is thread-lane and `ruleBoundaries` only draws a
+handle for a main-lane upstream, so the anchored-refuse check for that
+specific case has no drag target to exercise (worked around this walk by
+testing the anchored diamond instead, which is the same underlying refuse
+path); root-start drag (the very first phase's own start boundary) is
+deferred by construction — a root has no predecessor, so no boundary edge
+ever names it, and no design ruling exists on whether it should someday
+gain a different edit affordance; the studio-comember gap on the schedule
+RPCs (00323–00325 all guard on `designer_id = auth.uid()` directly, not a
+studio co-membership check) is a tracked follow-up, consistent with the
+same gap already known on `proposal_schedule_milestones`' RLS (I59); and
+the Slice-05 seam — `commit_schedule_edit`'s hook comment describes
+cutting a `schedule_revisions` row, but that INSERT will need either a
+permissive policy or a SECURITY DEFINER wrapper (the function itself is
+SECURITY INVOKER) before Slice 05 can land it.
+
+*Entries add: I60 · last id = I60*
+
+### I61 · Slice 05 built — Memory: the schedule earns its patina — 2026-07-15
+
+Branch `schedule/slice-05` (stacked on slice-04). Landed: migration 00326 —
+`cut_schedule_revision(p_project_id, p_reason) RETURNS int`, SECURITY
+DEFINER, the ONE writer to `schedule_revisions` (00323's RPC-only posture
+held). Review forced one fix before merge: the first cut took `p_actor
+uuid DEFAULT auth.uid()` as a caller-suppliable parameter on a DEFINER
+audit writer whose only authorization was "actor is the project's designer
+or client" — a designer could mint a revision attributed to their CLIENT
+(or vice versa) via a direct RPC call, pure attribution forgery. Fixed by
+dropping the parameter entirely: the actor is now derived internally as
+`auth.uid()` with an explicit NULL hard-fail, so forgery is impossible by
+construction, not just discouraged — re-verified with positional- and
+named-argument forgery probes, both `42883` (function does not exist).
+`activate_proposal_as_project` (chain 00274→00279→00324→00326) is
+regrafted with one delta: once every phase and anchored milestone is
+written, `PERFORM cut_schedule_revision(v_project_id, 'Baseline v1 — cut
+at signature')` freezes the baseline, never wrapped in an exception block
+(unlike the deposit auto-draft) because the baseline is a hard guarantee
+of activation, not a best-effort side effect. `commit_schedule_edit`
+(00325's body) gets the matching delta: after the edit loop,
+`cut_schedule_revision` runs and its `v` becomes the function's own return
+— a declared breaking change (UUID → INTEGER), done as a guarded
+drop-and-recreate, with `useCommitScheduleEdit` retyped to match. The
+confirm strip grew a quiet DM-mono reason field, prefilled with the
+sentence's own plain text and editable before Commit; a blank reason falls
+back to the sentence so the ledger can never record an empty row. The
+Rule grew a clay sibling ghost layer — dashed `--color-clay` ticks,
+diamonds, and "v1 · <date>" labels — resolved by running the v1 snapshot
+back through `snapshotToResolverInputs` and the same `resolveSchedule` +
+`baselineGhostDiff` engine that renders the live schedule, projected
+through the identical committed `scale`, so baseline and current share one
+source of positional truth. It sits behind a quiet "Baseline" toggle
+(default OFF) in the meta row beneath the Rule, hidden with no v1, during
+an open ripple session, or while the Rule is pinned. `<RevisionLedger/>`
+is a collapsed-by-default "Revisions · N" disclosure at the spine's foot —
+newest-first rows of `v · reason · who · when`, no edit or delete
+affordance anywhere, append-only by construction (there is no UPDATE or
+DELETE policy on the table, locally by RLS, on Strata by ACL — same
+guarantee, different SQLSTATE). `schedule_revision_cut` telemetry fires
+from the strip's commit `onSuccess`, reading the RPC's now-numeric return
+directly as `v` (trigger: `'edit'`); the `'signature'` trigger has no
+designer-portal call site (v1 is cut server-side inside the client's
+signing flow) and stays an intentionally-unwired def, per
+`docs/analytics/event-conventions.md`.
+
+**Walk results (S5-4, live, DB + driver evidence):** all five §6 checks
+pass on a fresh proposal built for the purpose (3 chained phases —
+Schematic Design → Design Development → Installation & Styling — plus one
+anchored milestone, "Install day," Oct 15) and activated directly as the
+designer session. **v1 at signature:** `schedule_revisions` holds exactly
+one row, `actor` = the designer, `reason` = "Baseline v1 — cut at
+signature," and the stored `phase_snapshots` array matches a
+freshly-rebuilt-from-live-rows snapshot field-for-field
+(`snapshot_matches = t`, psql). **v2/v3 from ripple commits:** a Rule
+duration edit (`+5d` on Schematic Design) committed with the prefilled
+sentence untouched cuts v2 with `reason` = `"Schematic Design +5d. 2
+phases follow."` exactly; a second edit (`+3d` on Design Development) with
+the reason field hand-edited to `"Pushed for fabric delay - vendor
+confirmed"` cuts v3 with that exact string — both confirmed by direct
+`schedule_revisions` SELECT, and the telemetry code path traced to source:
+`schedule-confirm-strip.tsx`'s commit `onSuccess` reads
+`useCommitScheduleEdit`'s numeric return as `newRevisionV` and passes it
+straight through to `scheduleRevisionCut({ v: newRevisionV, trigger:
+'edit' })`, so the strip's fired `v` is provably the RPC's own return, not
+a guess. **Clay ghosts match the snapshot exactly:** toggling "Baseline"
+on renders three dashed clay ticks labeled "V1 · AUG 10," "V1 · SEP 7,"
+and "V1 · SEP 21" — hand-verified against the psql v1 snapshot's
+`target_end_date` for each of the three phases (2026-08-10 / 2026-09-07 /
+2026-09-21), an exact match; toggling off clears every ghost; the toggle
+and its layer vanish entirely once a ripple session opens (a live
+duration edit was left mid-session to confirm — the whole "Baseline"
+control disappears, not just its state) and again once the Rule pins on
+scroll (scrolled past the fold — the pinned reduced-height rule shows
+only solid committed ticks, no dashed marks, no toggle anywhere in the
+sticky header). **Ledger:** the expanded "Revisions · 3" disclosure shows
+v3/v2/v1 newest-first with the exact reasons above, "you" for every row
+(actor = the walking designer), and a date per row; no edit or delete
+control anywhere in the rendered ledger; as `authenticated` in psql, a
+targeted `UPDATE` and `DELETE` against the designer's own visible v1 row
+both affect **0 rows**, and a forged direct `INSERT` is refused
+(`new row violates row-level security policy`) — post-attempt state
+unchanged, still exactly v1/v2/v3. **Regressions:** an Esc-revert
+mid-session (a `+2d` test edit on Design Development, aborted) left
+`duration_days` byte-identical (still 31) and cut no v4 — psql-confirmed
+before and after; a scratch phase added directly via the ghost-add line
+and then deleted directly via its inline confirm both opened no strip at
+any point and cut no revision (`schedule_revisions` stayed at `v=3`
+across both); gate-off (`schedule-spine:false`, dev server restarted to
+flip the env-inlined override) is byte-identical to pre-Slice-01 — the
+old "THE SCHEDULE" `PhaseTimeline` band renders in the Rule/Spine's place,
+no toggle, no ledger, no Coordination-adjacent schedule chrome, unaffected
+by every mutation this walk made.
+
+**O8 status: still open — Slice 05 shipped studio-side only per the
+package's own rule.** The ledger and the baseline ghosts render exclusively
+inside the gated, studio-only spine; no client-facing surface exposes
+either. O8's own leaning (client sees only revisions touching client-facing
+dates, full ledger studio-side) remains unruled — nothing in this slice
+resolves it, by design.
+
+Escalations (plan §8, none blocking): the S5-3 build round already flagged
+dashed-vs-solid clay ghosts (the prototype's `.bl-tick` is solid; this
+slice went dashed via ghost-layer reuse, per the orchestrator's
+direction — a design ruling on which reads as "history" vs. "preview" is
+owed); the toggle's placement in the quiet meta row beneath the Rule
+(paired left, "near the rule head" satisfied loosely, not literally);
+the ledger's collapsed-by-default disclosure (the prototype shows rows
+inline — confirm collapsed-default is wanted, not just tolerated);
+who-rendering for a non-"you" actor is the uid head (8 chars), the boring
+honest option with no profile join; a baseline entry whose current-side
+phase was deleted since v1 ghosts both its start and end boundaries
+(decided-but-unshown per the S5-2 pin, never exercised live this walk —
+no phase was deleted after a baseline existed); the `'signature'`-trigger
+telemetry stays unwired server-side (v1 is cut inside the client's signing
+RPC, no designer-portal call site exists to fire it from); and pinned
+mode hiding the baseline layer (confirmed this walk, consistent with the
+ripple-session hide, but never explicitly design-ruled as the right
+behavior vs. e.g. a reduced ghost mark in the pinned header). Carried from
+prior slices, still open: the studio-comember gap on the schedule RPCs
+(00323–00326 all guard on `designer_id = auth.uid()` / the designer-or-
+client pair directly, never a studio co-membership check — same family as
+`proposal_schedule_milestones`' RLS, flagged since I59); the thread-lane
+compose gap (I59 — thread-lane phases still expose no compose actions of
+their own); and touch treatment for the Rule's drag surfaces (flagged
+since I60 — pointer-only mechanics, still untested on touch).
+
+*Entries add: I61 · last id = I61*
+
+### R105 · The consolidated review — slices 03–05 accepted; O8 and O9 ruled in direction — 2026-07-15
+
+**Ruled (design authority, interviewed on the full escalation ledger).**
+Slices 03 (Compose), 04 (Adjust), and 05 (Memory) are accepted. The
+individual calls:
+
+**O9 — resolved in direction: tasks fold into items.** The spine keeps
+its three row types; `project_tasks` semantics migrate into
+coordination items as a follow-on workstream (not a retrofit of these
+slices). Until that migration lands, the shipped separate band beneath
+the spine stays as the interim rendering.
+
+**O8 — resolved: the middle path.** Clients see revisions that touched
+client-facing dates — anchored milestones and install — as a follow-on
+client-portal projection; the full ledger stays studio-side. The
+shipped studio-only Slice 05 is the correct first cut.
+
+**The Rule's line ink — hybrid.** The active phase splits at today:
+elapsed draws bold, remaining draws light — honoring both R99's
+status-weight sentence and the prototype's past/future truth. To land
+in the polish pass.
+
+**Clay baseline ghosts — solid thin clay,** per the prototype's Ledger
+slide: dashes mean "not yet true"; the baseline was true. To land in
+the polish pass.
+
+**Ratified as shipped:** the confirm strip's clause sentence (also the
+default revision reason); anchored milestones rendering as "Key dates"
+in the client-facing readonly proposal (R101.3 — the client signs
+against them); the Patina Six as minted (names, 1/3/4/8/3/1-week
+durations, sequential main-lane default); the grammar's ambiguity
+defaults (bare number = weeks on phases, days on offsets; month-day
+dates infer the next occurrence); and the fourteen-item detail ledger
+across slices 01–04 (persistent unfold marks, pin strip with inline
+title, N-row stagger, Unplaced · N, minimal mobile fold, minimap no-op
+without the spine, delayed-reads-ahead weight, 20px thread-lane pitch,
+ghost overflow clamp, boundary refuse on anchored downstream,
+root-start and touch deferred, collapsed ledger disclosure, uid-head
+who-rendering).
+
+**Ship posture:** merge `schedule/slice-05` to main now (gate off);
+polish pass lands the ink and ghost rulings plus the studio-comember
+widening of the schedule RPCs' ownership guards (00323–00326, still
+unshipped — free to fix in place); then the full chain to Strata —
+migrations, designer-portal deploy, the `schedule-spine` flag created
+disabled and enabled for the design authority alone as pilot.
+Backlogged with owners noted: thread-lane compose actions, the
+`designer_clients` multi-row ambiguity, the draft-proposal modal bug,
+the O9 migration workstream, the O8 client projection.
+
+*Entries add: R105 · last id = R105*

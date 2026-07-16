@@ -31,6 +31,7 @@ import { SettledBar } from '@/components/document/settled-bar';
 import { ProposalBlocksReadOnly } from '@/components/document/proposal-blocks-readonly';
 import { FFESection } from '@/components/document/ffe-section';
 import { CoordinationBand } from '@/components/document/coordination/coordination-band';
+import { ScheduleSpine } from '@/components/document/schedule/schedule-spine';
 import { BriefSection } from '@/components/document/brief-section';
 import { BriefRecap } from '@/components/document/brief-recap';
 import { CareBand } from '@/components/document/care-band';
@@ -43,6 +44,10 @@ import { useDocumentSurface } from '@/lib/help-system/use-document-surface';
 import { DOCUMENT_SURFACE_KEYS } from '@/lib/help-system/document-surface-keys';
 import { AccountBand } from '@/components/document/account-band';
 import { PhaseTimeline } from '@/components/document/phase-timeline';
+import { ScheduleRule } from '@/components/document/schedule/schedule-rule';
+import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
+import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
+import { ScheduleConfirmStrip } from '@/components/document/schedule/schedule-confirm-strip';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
@@ -51,6 +56,7 @@ import { DocColophon } from '@/components/document/doc-colophon';
 import { useDocumentRooms } from '@/hooks/use-document-rooms';
 import { gateState, useSectionGates } from '@/hooks/use-section-work';
 import { deriveFillState } from '@/lib/document/fill-state';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 
 const prettyPhase = (phase: string | null) =>
   phase
@@ -251,6 +257,10 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
     rememberDocumentInHand(heldEngagementId, { title: heldTitle, subtitle: heldSubtitle });
   }, [heldEngagementId, heldTitle, heldSubtitle]);
 
+  // C7 — the Schedule Spine flip gate. Rules of hooks: called unconditionally
+  // above the early returns below, alongside the page's other hooks.
+  const spineGate = useFeatureFlag('schedule-spine');
+
   if (isLoading || resolution?.kind === 'redirect') {
     return (
       <div className="min-h-screen bg-[var(--doc-paper)]" aria-busy>
@@ -439,164 +449,216 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
           <AccountBand projectId={row.project_id} clientName={row.client_name} />
         )}
 
-        {/* Field Coordination (light-PM slice): the phase schedule as a
-            horizontal band — status-tinted segments, a today line, popover date
-            editing. Project-wide (shows across project/install/care stages),
-            mounted with the AccountBand at the top of the project document so it
-            reads as a project overview above the section work. */}
-        {row.engagement_kind === 'project' && row.project_id && (
-          <PhaseTimeline projectId={row.project_id} />
-        )}
+        {/* ScheduleNavProvider wires the Rule (below) to the Spine (mounted
+            deeper, inside the active section) so a minimap click reveals
+            through to the ledger (§3.5). Context.Provider renders no wrapper
+            element — it adds nothing to the DOM, so the Rule's real parent
+            stays <main> (the mount contract in schedule-rule.tsx's header)
+            and the gate-off tree below is unaffected by its presence. */}
+        <ScheduleNavProvider>
+          {/* RippleProvider owns the ONE time-edit preview session (Slice 04
+              R100). It wraps the SAME subtree as ScheduleNavProvider so the two
+              surfaces that begin an edit — the Rule's drags and the Spine's
+              inline duration/anchor fields — share a single session, and the
+              confirm strip below reads the same diff. It renders no DOM (a
+              context provider), so the gate-off / non-project DOM stays
+              byte-identical; on a PROJECT doc with the gate off the provider
+              does add a background schedule fetch (useResolvedSchedule —
+              React-Query-deduped against the Rule/Spine's own reads, so at most
+              one extra schedule-milestones query; negligible). On an empty id
+              (a non-project document) the hook is fully inert — `??''` keeps
+              the provider total there (proposal/brief docs never begin a
+              ripple). */}
+          <RippleProvider projectId={row.project_id ?? ''}>
+            {/* Field Coordination (light-PM slice): the phase schedule as a
+                horizontal band — status-tinted segments, a today line, popover date
+                editing. Project-wide (shows across project/install/care stages),
+                mounted with the AccountBand at the top of the project document so it
+                reads as a project overview above the section work.
+                S2-4 — the Rule flip gate (same spineGate as the C7 gate below):
+                while it's loading (or resolves off) the old PhaseTimeline
+                renders — fail-closed, zero flash for the non-pilot cohort. */}
+            {row.engagement_kind === 'project' &&
+              row.project_id &&
+              (!spineGate.isLoading && spineGate.value ? (
+                <ScheduleRule projectId={row.project_id} projectTitle={row.title} />
+              ) : (
+                <PhaseTimeline projectId={row.project_id} />
+              ))}
 
-        {/* The active section — exactly one (§4). */}
-        <div
-          id={sectionAnchorId(row.active_section)}
-          data-active-section
-          className="scroll-mt-24"
-          onDragOver={(e) => {
-            if (!row.project_id || !e.dataTransfer?.types?.includes('Files')) return;
-            e.preventDefault();
-            setSectionDrag(true);
-          }}
-          onDragLeave={() => setSectionDrag(false)}
-          onDrop={(e) => {
-            if (!row.project_id) return;
-            e.preventDefault();
-            setSectionDrag(false);
-            const files = Array.from(e.dataTransfer.files ?? []);
-            if (files.length) setFolioDrop(files);
-          }}
-        >
-          {row.active_section === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
-          {row.active_section === 'discovery' && row.engagement_id && row.designer_id && (
-            <DiscoverySection
-              engagementId={row.engagement_id}
-              designerId={row.designer_id}
-              clientProfileId={row.client_profile_id}
-              clientName={row.client_name}
-            />
-          )}
-          {(row.active_section === 'direction' || row.active_section === 'proposal') &&
-            row.proposal_id && (
-              <section>
-                <div className="mb-1.5 mt-5 flex items-baseline justify-between">
-                  <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
-                    {row.active_section === 'direction' ? 'Direction' : 'Proposal'}
-                    {liveProposal?.version ? ` · v${liveProposal.version}` : ''}
-                  </h2>
-                  <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                    {sections.find((s) => s.key === row.active_section)?.sub}
-                  </span>
-                </div>
-                {/* C3 — a quiet letterhead read of where the client's verdicts
-                    stand ("4 of 12 approved · 1 flagged"). Nothing when the
-                    client hasn't weighed in yet. */}
-                {row.engagement_kind === 'proposal' && verdictSummary && (
-                  <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                    {verdictSummary}
-                  </p>
-                )}
-                {/* The proposal instruments (gated to engagement_kind
-                    ==='proposal'): the Drafting Room doorway for a draft, the
-                    Send/Preview/Revise overlay row once it's in the client's
-                    hands, and the version-history strip. Local-state overlays
-                    never unmount the document beneath (D1). */}
-                {row.engagement_kind === 'proposal' && (
-                  <ProposalInstruments
-                    proposalId={row.proposal_id}
+            {/* The confirm strip — R100's "one honest sentence" + Commit / Esc ·
+                Revert, rendered directly under the Rule. It is null unless a ripple
+                session is active, and a session only ever arises from the gated
+                Rule/Spine surfaces — so gate-off is byte-identical (no strip, no
+                DOM). Gated on project_id only for the non-null commit target. */}
+            {row.engagement_kind === 'project' && row.project_id && (
+              <ScheduleConfirmStrip projectId={row.project_id} />
+            )}
+
+          {/* The active section — exactly one (§4). */}
+          <div
+            id={sectionAnchorId(row.active_section)}
+            data-active-section
+            className="scroll-mt-24"
+            onDragOver={(e) => {
+              if (!row.project_id || !e.dataTransfer?.types?.includes('Files')) return;
+              e.preventDefault();
+              setSectionDrag(true);
+            }}
+            onDragLeave={() => setSectionDrag(false)}
+            onDrop={(e) => {
+              if (!row.project_id) return;
+              e.preventDefault();
+              setSectionDrag(false);
+              const files = Array.from(e.dataTransfer.files ?? []);
+              if (files.length) setFolioDrop(files);
+            }}
+          >
+            {row.active_section === 'brief' && row.lead_id && <BriefSection leadId={row.lead_id} />}
+            {row.active_section === 'discovery' && row.engagement_id && row.designer_id && (
+              <DiscoverySection
+                engagementId={row.engagement_id}
+                designerId={row.designer_id}
+                clientProfileId={row.client_profile_id}
+                clientName={row.client_name}
+              />
+            )}
+            {(row.active_section === 'direction' || row.active_section === 'proposal') &&
+              row.proposal_id && (
+                <section>
+                  <div className="mb-1.5 mt-5 flex items-baseline justify-between">
+                    <h2 className="font-heading text-[16px] font-medium text-[var(--color-charcoal)]">
+                      {row.active_section === 'direction' ? 'Direction' : 'Proposal'}
+                      {liveProposal?.version ? ` · v${liveProposal.version}` : ''}
+                    </h2>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      {sections.find((s) => s.key === row.active_section)?.sub}
+                    </span>
+                  </div>
+                  {/* C3 — a quiet letterhead read of where the client's verdicts
+                      stand ("4 of 12 approved · 1 flagged"). Nothing when the
+                      client hasn't weighed in yet. */}
+                  {row.engagement_kind === 'proposal' && verdictSummary && (
+                    <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                      {verdictSummary}
+                    </p>
+                  )}
+                  {/* The proposal instruments (gated to engagement_kind
+                      ==='proposal'): the Drafting Room doorway for a draft, the
+                      Send/Preview/Revise overlay row once it's in the client's
+                      hands, and the version-history strip. Local-state overlays
+                      never unmount the document beneath (D1). */}
+                  {row.engagement_kind === 'proposal' && (
+                    <ProposalInstruments
+                      proposalId={row.proposal_id}
+                      clientName={row.client_name}
+                    />
+                  )}
+                  {/* S18: name the model — what's below is a read-only preview of
+                      the proposal; the editing happens in the Drafting Room. */}
+                  {row.engagement_kind === 'proposal' && liveProposal?.status === 'draft' && (
+                    <p className="mb-2 mt-3 font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
+                      Read-only preview · edit in the Drafting Room
+                    </p>
+                  )}
+                  {/* R85 — the Folio mounts on proposal-stage documents (space
+                      plans/drawings clip here pre-project; flagged files reach the
+                      client's proposal copy via 00252's client read leg). */}
+                  {row.engagement_kind === 'proposal' && (
+                    <ProposalFolioStrip proposalId={row.proposal_id} />
+                  )}
+                  <ProposalBlocksReadOnly proposalId={row.proposal_id} />
+                </section>
+              )}
+            {row.active_section === 'project' && row.project_id && (
+              <>
+                {/* Track 5 — the coordination band (ball-in-court + dependency web).
+                    The band resolves designerClientId itself from clientUserId
+                    (work-block.tsx pattern); the page passes clientUserId, never a
+                    raw uid. Mounts ABOVE the FF&E section in the project home (D1:
+                    its sheets are band-local overlays, never a route).
+                    C7 — the schedule-spine flip gate: while the flag is loading
+                    (or resolves off), the old band renders — fail-closed default
+                    IS the accepted current page, so this is zero flash/layout
+                    shift for the non-pilot cohort (PostHog persists flags, so
+                    pilots see at most one first-visit swap). */}
+                {!spineGate.isLoading && spineGate.value ? (
+                  <ScheduleSpine
+                    projectId={row.project_id}
+                    clientUserId={row.client_profile_id}
+                    clientName={row.client_name}
+                  />
+                ) : (
+                  <CoordinationBand
+                    projectId={row.project_id}
+                    clientUserId={row.client_profile_id}
                     clientName={row.client_name}
                   />
                 )}
-                {/* S18: name the model — what's below is a read-only preview of
-                    the proposal; the editing happens in the Drafting Room. */}
-                {row.engagement_kind === 'proposal' && liveProposal?.status === 'draft' && (
-                  <p className="mb-2 mt-3 font-mono text-[8.5px] uppercase tracking-[0.07em] text-[var(--text-muted)]">
-                    Read-only preview · edit in the Drafting Room
-                  </p>
-                )}
-                {/* R85 — the Folio mounts on proposal-stage documents (space
-                    plans/drawings clip here pre-project; flagged files reach the
-                    client's proposal copy via 00252's client read leg). */}
-                {row.engagement_kind === 'proposal' && (
-                  <ProposalFolioStrip proposalId={row.proposal_id} />
-                )}
-                <ProposalBlocksReadOnly proposalId={row.proposal_id} />
-              </section>
-            )}
-          {row.active_section === 'project' && row.project_id && (
-            <>
-              {/* Track 5 — the coordination band (ball-in-court + dependency web).
-                  The band resolves designerClientId itself from clientUserId
-                  (work-block.tsx pattern); the page passes clientUserId, never a
-                  raw uid. Mounts ABOVE the FF&E section in the project home (D1:
-                  its sheets are band-local overlays, never a route). */}
-              <CoordinationBand
-                projectId={row.project_id}
-                clientUserId={row.client_profile_id}
-                clientName={row.client_name}
-              />
-              <FFESection
-                projectId={row.project_id}
-                projectName={row.title}
-                mode="project"
-                highlightId={highlightLineId}
-                onAddNote={setPendingNoteAnchor}
-                sectionKey="project"
-                clientUserId={row.client_profile_id}
-                clientName={row.client_name}
-                folioDrop={folioDrop}
-                onFolioDropConsumed={() => setFolioDrop(null)}
-                sectionDragOver={sectionDrag}
-              />
-              {/* R80: the Care band — closure stays reachable from an active
-                  project (a quiet folded line until install nears). */}
-              <CareBand projectId={row.project_id} />
-            </>
-          )}
-          {row.active_section === 'install' && row.project_id && (
-            <>
-              <FFESection
-                projectId={row.project_id}
-                projectName={row.title}
-                mode="install"
-                highlightId={highlightLineId}
-                onAddNote={setPendingNoteAnchor}
-                sectionKey="install"
-                clientUserId={row.client_profile_id}
-                clientName={row.client_name}
-                folioDrop={folioDrop}
-                onFolioDropConsumed={() => setFolioDrop(null)}
-                sectionDragOver={sectionDrag}
-              />
-              {/* R80: at install the band opens unfolded — closing out IS the
-                  work of this stage. */}
-              <CareBand projectId={row.project_id} />
-            </>
-          )}
-          {row.active_section === 'care' && (
-            <>
-              <CareSection
-                completedLabel={
-                  project?.target_completion ? fmtMonthYear(project.target_completion) : null
-                }
-                projectId={row.project_id}
-              />
-              {row.project_id && (
                 <FFESection
                   projectId={row.project_id}
-                  mode="install"
+                  projectName={row.title}
+                  mode="project"
                   highlightId={highlightLineId}
-                  sectionKey="care"
+                  onAddNote={setPendingNoteAnchor}
+                  sectionKey="project"
                   clientUserId={row.client_profile_id}
                   clientName={row.client_name}
                   folioDrop={folioDrop}
                   onFolioDropConsumed={() => setFolioDrop(null)}
                   sectionDragOver={sectionDrag}
                 />
-              )}
-            </>
-          )}
-        </div>
+                {/* R80: the Care band — closure stays reachable from an active
+                    project (a quiet folded line until install nears). */}
+                <CareBand projectId={row.project_id} />
+              </>
+            )}
+            {row.active_section === 'install' && row.project_id && (
+              <>
+                <FFESection
+                  projectId={row.project_id}
+                  projectName={row.title}
+                  mode="install"
+                  highlightId={highlightLineId}
+                  onAddNote={setPendingNoteAnchor}
+                  sectionKey="install"
+                  clientUserId={row.client_profile_id}
+                  clientName={row.client_name}
+                  folioDrop={folioDrop}
+                  onFolioDropConsumed={() => setFolioDrop(null)}
+                  sectionDragOver={sectionDrag}
+                />
+                {/* R80: at install the band opens unfolded — closing out IS the
+                    work of this stage. */}
+                <CareBand projectId={row.project_id} />
+              </>
+            )}
+            {row.active_section === 'care' && (
+              <>
+                <CareSection
+                  completedLabel={
+                    project?.target_completion ? fmtMonthYear(project.target_completion) : null
+                  }
+                  projectId={row.project_id}
+                />
+                {row.project_id && (
+                  <FFESection
+                    projectId={row.project_id}
+                    mode="install"
+                    highlightId={highlightLineId}
+                    sectionKey="care"
+                    clientUserId={row.client_profile_id}
+                    clientName={row.client_name}
+                    folioDrop={folioDrop}
+                    onFolioDropConsumed={() => setFolioDrop(null)}
+                    sectionDragOver={sectionDrag}
+                  />
+                )}
+              </>
+            )}
+          </div>
+          </RippleProvider>
+        </ScheduleNavProvider>
 
         {/* R29: the colophon — the paper's last line states its own facts. */}
         {row.engagement_kind === 'project' && row.project_id && (

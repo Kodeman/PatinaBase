@@ -93,6 +93,24 @@ in PostHog today.
   product, project, client, vendor, teaching, nav, proposal events),
   `apps/designer-portal/src/lib/analytics/document-events.ts` (Document/desk
   telemetry — command bar, wayfinding, margin items),
+  `apps/designer-portal/src/lib/analytics/schedule-events.ts` (Schedule
+  Spine telemetry — `spine_phase_unfolded` / `rule_minimap_jump` are
+  `schedule-spine`-flag-gated (the project-side Spine surface only); Slice 03
+  compose events (`schedule_born` / `schedule_phase_added` /
+  `schedule_anchor_set`, each carrying `surface: 'project' | 'proposal'`) are
+  NOT flag-gated — they fire from BOTH the Spine (project) and PhaseBuilder
+  (proposal, `apps/designer-portal/src/components/portal/scope-builder/
+  phase-builder.tsx` — designer-only already, no separate gate needed). All
+  three fire ONLY inside a mutation's `onSuccess`. Slice 04 (adjust) adds
+  `schedule_edit_committed` (`surface: 'rule' | 'spine'`, `edit_kind`,
+  `ripple_size`, `conflict_count`) — a previewed time edit committed through
+  the ripple's confirm strip, project surface only, fired ONLY inside the
+  commit mutation's `onSuccess` (a reverted/Esc edit never fires). Slice 05
+  (memory) adds `schedule_revision_cut` (`v`, `trigger: 'signature' | 'edit'`)
+  — a numbered `schedule_revisions` row was cut (00326's
+  `cut_schedule_revision`); wired for `trigger: 'edit'` in the ripple confirm
+  strip's commit mutation, only `trigger: 'signature'` is intentionally unwired
+  (server-side baseline cut in activation — no client call site)),
   `apps/designer-portal/src/lib/analytics/procurement-events.ts`,
   `apps/designer-portal/src/lib/analytics/nomination-events.ts`.
 - Client Portal: `apps/client-portal/src/lib/analytics/events.ts` (auth,
@@ -125,6 +143,12 @@ events; more remain dead by design (see below).
   `clientEvents`), admin's `adminEvents`, and `nominate.*` remain dead —
   explicitly deferred in the PostHog build-out plan's backlog, not part of
   this wave.
+- `schedule_revision_cut` (`apps/designer-portal/src/lib/analytics/schedule-events.ts`,
+  Schedule Slice 05) — `trigger: 'edit'` is wired in the ripple confirm strip's
+  commit mutation `onSuccess` (`schedule-confirm-strip.tsx`), reading `v` off
+  `useCommitScheduleEdit`'s return. Only `trigger: 'signature'` remains
+  intentionally unwired (the v1 cut happens server-side inside activation —
+  no client call site).
 
 ## Env / build-time wiring note
 

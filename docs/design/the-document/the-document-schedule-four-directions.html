@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina — The Schedule, Reconsidered · Four Directions</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   PATINA — THE SCHEDULE, RECONSIDERED
+   Four directions for the project timeline · Design review deck
+   Typography-first · Document metaphor · No shadows on content
+   ============================================================ */
+:root{
+  --off-white:#FAF7F2;
+  --soft-cream:#F5F2ED;
+  --pearl:#E5E2DD;
+  --clay:#C4A57B;
+  --aged-oak:#8B7355;
+  --mocha:#5C4A3C;
+  --charcoal:#2C2926;
+  --sage:#A8B5A0;
+  --sage-deep:#7A9B76;
+  --dusty-blue:#8B9CAD;
+  --terracotta:#C77B6E;
+  --terracotta-soft:#D4A090;
+  --golden:#E8C547;
+
+  --font-display:'Playfair Display',Georgia,serif;
+  --font-body:'Inter',-apple-system,sans-serif;
+  --font-mono:'DM Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:16px;background:var(--off-white);color:var(--charcoal)}
+body{font-family:var(--font-body);line-height:1.65;-webkit-font-smoothing:antialiased;overflow:hidden;height:100vh}
+
+h1,h2,h3{font-family:var(--font-display);font-weight:400;line-height:1.12;letter-spacing:-0.02em}
+em{font-family:var(--font-display);font-style:italic;color:var(--aged-oak)}
+p{color:var(--mocha)}
+.mono{font-family:var(--font-mono);font-size:.72rem;font-weight:400;letter-spacing:.07em;text-transform:uppercase;color:var(--aged-oak)}
+
+/* ————— THE RAIL (deck navigation as a ruled timeline) ————— */
+.rail{position:fixed;top:0;left:0;right:0;height:52px;z-index:50;background:var(--off-white)}
+.rail-line{position:absolute;top:26px;left:4%;right:4%;height:1px;background:var(--pearl)}
+.rail-elapsed{position:absolute;top:25.5px;left:4%;height:2px;background:var(--clay);width:0;transition:width .45s cubic-bezier(.4,0,.2,1)}
+.rail-tick{position:absolute;top:0;transform:translateX(-50%);background:none;border:none;cursor:pointer;padding:18px 8px 6px;font-family:var(--font-mono);font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;color:var(--clay)}
+.rail-tick::before{content:'';position:absolute;top:22px;left:50%;transform:translateX(-50%);width:1px;height:9px;background:var(--pearl)}
+.rail-tick span{position:relative;top:14px;white-space:nowrap;opacity:.75}
+.rail-tick.done{color:var(--aged-oak)}
+.rail-tick.done::before{background:var(--clay)}
+.rail-tick.now{color:var(--charcoal)}
+.rail-tick.now::before{background:var(--charcoal);height:13px;width:2px;top:20px}
+.rail-tick:focus-visible{outline:1.5px solid var(--aged-oak);outline-offset:2px;border-radius:2px}
+@media(max-width:900px){.rail-tick span{display:none}}
+
+/* ————— DECK / SLIDES ————— */
+.deck{position:fixed;inset:52px 0 56px 0}
+.slide{position:absolute;inset:0;overflow-y:auto;opacity:0;pointer-events:none;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
+.slide.active{opacity:1;pointer-events:auto;transform:none}
+.wrap{max-width:1180px;margin:0 auto;padding:2.6rem clamp(1.25rem,4vw,3rem) 4rem}
+
+/* ————— FOOTER NAV ————— */
+.foot{position:fixed;bottom:0;left:0;right:0;height:56px;z-index:50;background:var(--off-white);border-top:1px solid var(--pearl);display:flex;align-items:center;justify-content:space-between;padding:0 clamp(1.25rem,4vw,3rem)}
+.foot .counter{font-family:var(--font-mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--aged-oak)}
+.foot .counter b{color:var(--charcoal);font-weight:500}
+.foot-btns{display:flex;gap:.5rem}
+.foot-btns button{background:none;border:1px solid var(--pearl);border-radius:3px;width:42px;height:34px;font-size:1rem;color:var(--mocha);cursor:pointer;transition:all .2s}
+.foot-btns button:hover{border-color:var(--clay);color:var(--charcoal)}
+.foot-btns button:focus-visible{outline:1.5px solid var(--aged-oak);outline-offset:2px}
+.hint{font-family:var(--font-mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--clay)}
+@media(max-width:700px){.hint{display:none}}
+
+/* ————— SHARED SLIDE ELEMENTS ————— */
+.eyebrow{font-family:var(--font-mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--aged-oak);margin-bottom:1rem}
+.eyebrow .opt{color:var(--charcoal);font-weight:500}
+.slide-title{font-size:clamp(1.9rem,3.6vw,2.9rem);margin-bottom:.5rem}
+.thesis{font-family:var(--font-display);font-style:italic;font-size:clamp(1.05rem,1.9vw,1.35rem);color:var(--aged-oak);max-width:760px;margin-bottom:1.8rem}
+.strata{display:flex;flex-direction:column;gap:5px;width:74px;margin-bottom:1.6rem}
+.strata i{display:block;height:2px;background:var(--mocha);border-radius:1px}
+.strata i:nth-child(2){width:70%;background:var(--clay)}
+.strata i:nth-child(3){width:42%;background:var(--clay);opacity:.5}
+
+/* specimen frame */
+.specimen{background:var(--soft-cream);border:1px solid var(--pearl);border-radius:4px;padding:1.6rem 1.8rem 1.8rem;margin:0 0 2rem}
+.specimen-head{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap}
+.specimen-head .mono b{color:var(--charcoal);font-weight:500}
+
+/* spec grid */
+.spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.6rem 3rem;margin-bottom:1.6rem}
+.spec-cell h4{font-family:var(--font-mono);font-size:.64rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--clay);margin-bottom:.45rem}
+.spec-cell p{font-size:.9rem;line-height:1.6}
+.vision{border-top:1px solid var(--pearl);padding-top:1.3rem}
+.vision p{font-family:var(--font-display);font-style:italic;font-size:1.12rem;color:var(--charcoal);max-width:820px}
+.vision .mono{display:block;margin-bottom:.4rem;color:var(--clay)}
+@media(max-width:760px){.spec-grid{grid-template-columns:1fr}}
+
+/* chips + stamps (shared vocabulary with the portal) */
+.chip{font-family:var(--font-mono);font-size:.58rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase;border:1px solid;border-radius:2px;padding:.18rem .5rem;white-space:nowrap}
+.chip.signoff{border-color:var(--golden);color:#8a7420;background:rgba(232,197,71,.14)}
+.chip.punch{border-color:var(--terracotta-soft);color:var(--terracotta);background:rgba(212,160,144,.1)}
+.chip.studio{border-color:var(--dusty-blue);color:#5f7488;background:rgba(139,156,173,.1)}
+.stamp{font-family:var(--font-mono);font-size:.62rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase;border:1.5px solid;border-radius:3px;padding:.32rem .7rem;white-space:nowrap}
+.stamp.signed{border-color:var(--sage);color:var(--sage-deep)}
+.stamp.slipped{border-color:var(--terracotta);color:var(--terracotta)}
+.stamp.risk{border-color:var(--golden);color:#8a7420}
+.stamp.upcoming{border-color:var(--pearl);color:var(--aged-oak)}
+
+/* ————— SLIDE 2 · DIAGNOSIS ————— */
+.current-bar{position:relative;display:flex;gap:4px;margin:1.4rem 0 .8rem}
+.current-bar .seg{font-family:var(--font-mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;padding:.85rem .8rem;border-radius:4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.seg.filled{background:var(--clay);color:#fff}
+.seg.dashed{border:1.5px dashed var(--aged-oak);color:var(--mocha);background:rgba(229,226,221,.4)}
+.today-tick{position:absolute;top:-6px;bottom:-6px;width:1px;background:var(--charcoal);opacity:.65}
+.flaw-pin{position:absolute;top:-11px;width:20px;height:20px;border-radius:50%;background:var(--terracotta);color:#fff;font-family:var(--font-mono);font-size:.62rem;display:flex;align-items:center;justify-content:center}
+.flaws{list-style:none;margin:1.8rem 0 0}
+.flaws li{display:grid;grid-template-columns:26px 1fr;gap:.9rem;padding:.7rem 0;border-bottom:1px solid var(--pearl);font-size:.92rem;color:var(--mocha);align-items:baseline}
+.flaws li:first-child{border-top:1px solid var(--pearl)}
+.flaws .n{font-family:var(--font-mono);font-size:.7rem;color:var(--terracotta)}
+.flaws b{color:var(--charcoal);font-weight:600}
+.three-q{margin-top:2.6rem}
+.three-q h3{font-size:clamp(1.3rem,2.6vw,1.9rem);padding:.55rem 0;color:var(--charcoal)}
+.three-q h3 span{color:var(--clay);font-size:.85em}
+
+/* ————— MOCKUP A · THE RULED LINE ————— */
+.ma-canvas{position:relative;height:132px;margin:.6rem 0 0}
+.ma-label{position:absolute;font-family:var(--font-body);font-size:.78rem;letter-spacing:.02em;white-space:nowrap;color:var(--aged-oak)}
+.ma-label small{display:block;font-family:var(--font-mono);font-size:.56rem;letter-spacing:.07em;text-transform:uppercase;color:var(--clay);margin-top:1px}
+.ma-label.closed{font-weight:300;color:var(--aged-oak)}
+.ma-label.live{font-weight:600;color:var(--charcoal);cursor:pointer}
+.ma-label.ahead{font-weight:400;color:var(--clay)}
+.ma-rule-past{position:absolute;top:69px;left:0;height:2px;background:var(--mocha)}
+.ma-rule-future{position:absolute;top:69.5px;height:1px;background:var(--pearl);right:0}
+.ma-tick{position:absolute;top:64px;width:1px;height:12px;background:var(--aged-oak);opacity:.55}
+.ma-today{position:absolute;top:40px;height:62px;width:1.5px;background:var(--charcoal)}
+.ma-today span{position:absolute;top:-16px;left:6px;font-family:var(--font-mono);font-size:.58rem;font-weight:500;letter-spacing:.08em;color:var(--charcoal);white-space:nowrap}
+.ma-di{position:absolute;top:65px;width:8px;height:8px;transform:rotate(45deg);margin-left:-4px}
+.ma-di.signed{background:var(--sage)}
+.ma-di.due{background:var(--golden);outline:1.5px solid var(--terracotta);outline-offset:1px}
+.ma-di.ahead{background:var(--off-white);border:1.5px solid var(--aged-oak)}
+.ma-di-label{position:absolute;top:82px;font-family:var(--font-mono);font-size:.56rem;letter-spacing:.06em;text-transform:uppercase;color:var(--terracotta);white-space:nowrap}
+.ma-proc{position:absolute;top:112px;height:1px;background:var(--aged-oak);opacity:.7}
+.ma-proc::before,.ma-proc::after{content:'';position:absolute;top:-2.5px;width:1px;height:6px;background:var(--aged-oak)}
+.ma-proc::after{right:0}
+.ma-proc span{position:absolute;top:-15px;left:0;font-family:var(--font-mono);font-size:.56rem;letter-spacing:.07em;text-transform:uppercase;color:var(--aged-oak);white-space:nowrap}
+.ma-unfold{border-left:2px solid var(--clay);margin-top:1.4rem;padding:.9rem 0 .9rem 1.4rem;max-width:680px}
+.ma-unfold.folded{display:none}
+.ma-unfold .uh{font-family:var(--font-mono);font-size:.62rem;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--charcoal);margin-bottom:.7rem}
+.ma-item{display:flex;align-items:center;gap:.8rem;padding:.5rem 0;border-top:1px solid var(--pearl);font-size:.86rem}
+.ma-item .t{color:var(--charcoal);font-weight:500}
+.ma-item .m{color:var(--aged-oak);font-size:.78rem}
+.ma-item .due-late{margin-left:auto;font-family:var(--font-mono);font-size:.62rem;letter-spacing:.07em;color:var(--terracotta)}
+.ma-fold-hint{font-family:var(--font-mono);font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;color:var(--clay);margin-top:.5rem}
+
+/* ————— MOCKUP B · THE LEDGER SPINE ————— */
+.mb-entry{display:grid;grid-template-columns:30px 1fr;column-gap:1.1rem}
+.mb-spinecell{position:relative}
+.mb-spinecell::before{content:'';position:absolute;left:6px;top:0;bottom:0;width:2px;background:var(--mocha)}
+.mb-entry.future .mb-spinecell::before{background:repeating-linear-gradient(to bottom,var(--pearl) 0 5px,transparent 5px 10px);width:1.5px}
+.mb-node{position:absolute;left:0;top:8px;width:14px;height:14px;border-radius:50%;background:var(--off-white)}
+.mb-node.done{background:var(--mocha);width:10px;height:10px;left:2px;top:10px}
+.mb-node.live{border:2.5px solid var(--clay);background:var(--off-white)}
+.mb-node.ahead{border:1.5px solid var(--pearl)}
+.mb-body{padding:0 0 1.6rem}
+.mb-entry h3{font-size:1.28rem}
+.mb-entry.closed h3{font-weight:400;font-size:1.02rem;color:var(--aged-oak)}
+.mb-entry.live h3{font-weight:600}
+.mb-entry.future h3{color:var(--aged-oak);font-weight:400;font-size:1.1rem}
+.mb-meta{font-family:var(--font-mono);font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;color:var(--clay);margin:.15rem 0 .2rem}
+.mb-item{display:flex;align-items:center;gap:.8rem;padding:.55rem 0;border-bottom:1px solid var(--pearl);font-size:.86rem;max-width:640px}
+.mb-item:first-of-type{border-top:1px solid var(--pearl);margin-top:.6rem}
+.mb-item .t{color:var(--charcoal);font-weight:500}
+.mb-item .m{color:var(--aged-oak);font-size:.76rem}
+.mb-item .r{margin-left:auto;font-family:var(--font-mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--aged-oak);white-space:nowrap}
+.mb-item .r.late{color:var(--terracotta)}
+.mb-thread{display:inline-flex;align-items:center;gap:.5rem;margin-top:.55rem;font-family:var(--font-mono);font-size:.6rem;letter-spacing:.07em;text-transform:uppercase;color:#5f7488}
+.mb-thread::before{content:'';width:22px;height:1px;background:repeating-linear-gradient(to right,var(--dusty-blue) 0 4px,transparent 4px 8px)}
+.mb-today{position:relative;display:grid;grid-template-columns:30px 1fr;column-gap:1.1rem;margin:.2rem 0 1.4rem}
+.mb-today .line{grid-column:1/3;height:1.5px;background:var(--charcoal);position:relative}
+.mb-today .line span{position:absolute;right:0;top:-17px;font-family:var(--font-mono);font-size:.58rem;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--charcoal)}
+
+/* ————— MOCKUP C · THE LOOM ————— */
+.mc{display:grid;grid-template-columns:150px 1fr;column-gap:1rem}
+.mc-side{display:flex;flex-direction:column}
+.mc-side .lbl{height:30px;display:flex;align-items:center;font-family:var(--font-mono);font-size:.6rem;letter-spacing:.07em;text-transform:uppercase;color:var(--aged-oak)}
+.mc-side .lbl.axis{height:24px}
+.mc-side .lbl.strong{color:var(--charcoal);font-weight:500}
+.mc-side .divider{height:22px;display:flex;align-items:center;font-family:var(--font-mono);font-size:.54rem;letter-spacing:.1em;text-transform:uppercase;color:var(--clay)}
+.mc-canvas{position:relative}
+.mc-grid{position:absolute;top:24px;bottom:0;width:1px;background:var(--pearl)}
+.mc-month{position:absolute;top:0;height:24px;font-family:var(--font-mono);font-size:.58rem;letter-spacing:.1em;color:var(--clay);transform:translateX(4px)}
+.mc-row{position:relative;height:30px}
+.mc-row.axis{height:24px}
+.mc-row.divider{height:22px}
+.mc-bar{position:absolute;top:8px;height:13px;border-radius:2px}
+.mc-bar.done{background:var(--clay);opacity:.4}
+.mc-bar.live{background:var(--clay)}
+.mc-bar.run{background:var(--aged-oak);opacity:.45;height:9px;top:10px}
+.mc-bar.ahead{background:var(--off-white);border:1px solid var(--aged-oak)}
+.mc-thread{position:absolute;top:14px;height:2px;border-radius:1px}
+.mc-thread.safe{background:var(--sage-deep)}
+.mc-thread.late{background:repeating-linear-gradient(to right,var(--terracotta) 0 5px,transparent 5px 9px)}
+.mc-thread.tbd{background:repeating-linear-gradient(to right,var(--pearl) 0 4px,transparent 4px 8px);height:1.5px}
+.mc-dot{position:absolute;top:11px;width:8px;height:8px;border-radius:50%}
+.mc-dot.safe{background:var(--sage-deep)}
+.mc-dot.late{background:var(--terracotta)}
+.mc-dot.blocked{background:var(--golden);outline:1.5px solid #8a7420;outline-offset:1px;top:10.5px;width:9px;height:9px}
+.mc-vline{position:absolute;top:24px;bottom:0;width:1.5px}
+.mc-vline.today{background:var(--charcoal)}
+.mc-vline.install{background:repeating-linear-gradient(to bottom,var(--terracotta) 0 5px,transparent 5px 9px)}
+.mc-vline span{position:absolute;top:-20px;left:4px;font-family:var(--font-mono);font-size:.56rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.mc-vline.today span{color:var(--charcoal)}
+.mc-vline.install span{color:var(--terracotta);left:auto;right:4px}
+.mc-legend{display:flex;gap:1.6rem;flex-wrap:wrap;margin-top:1.1rem;padding-top:.9rem;border-top:1px solid var(--pearl)}
+.mc-legend .li{display:flex;align-items:center;gap:.5rem;font-family:var(--font-mono);font-size:.58rem;letter-spacing:.07em;text-transform:uppercase;color:var(--aged-oak)}
+.mc-legend .sw{width:16px;height:2px}
+.mc-legend .sw.safe{background:var(--sage-deep)}
+.mc-legend .sw.late{background:repeating-linear-gradient(to right,var(--terracotta) 0 5px,transparent 5px 9px)}
+.mc-legend .sw.blocked{width:8px;height:8px;border-radius:50%;background:var(--golden);outline:1.5px solid #8a7420;outline-offset:1px}
+.mc-note{margin-top:1.1rem;font-size:.88rem;color:var(--mocha);max-width:640px}
+.mc-note b{color:var(--terracotta);font-weight:600}
+@media(max-width:700px){.mc{grid-template-columns:96px 1fr}.mc-side .lbl{font-size:.52rem}}
+
+/* ————— MOCKUP D · THE ALMANAC ————— */
+.md-toggle{display:inline-flex;border:1px solid var(--pearl);border-radius:3px;overflow:hidden}
+.md-toggle button{background:none;border:none;font-family:var(--font-mono);font-size:.6rem;font-weight:500;letter-spacing:.09em;text-transform:uppercase;padding:.42rem .9rem;color:var(--aged-oak);cursor:pointer}
+.md-toggle button.on{background:var(--charcoal);color:var(--off-white)}
+.md-toggle button:focus-visible{outline:1.5px solid var(--aged-oak);outline-offset:-3px}
+.md-phasestrip{display:flex;gap:2px;margin:.4rem 0 1.4rem}
+.md-phasestrip .b{height:22px;background:var(--pearl);opacity:.55;border-radius:2px;display:flex;align-items:center;padding:0 .5rem;font-family:var(--font-mono);font-size:.5rem;letter-spacing:.06em;text-transform:uppercase;color:var(--mocha);white-space:nowrap;overflow:hidden}
+.md-phasestrip .b.past{background:var(--clay);opacity:.35}
+.md-row{display:grid;grid-template-columns:86px 1fr auto;gap:1.1rem;align-items:center;padding:.85rem 0;border-bottom:1px solid var(--pearl)}
+.md-row:first-of-type{border-top:1px solid var(--pearl)}
+.md-row .d{font-family:var(--font-mono);font-size:.68rem;letter-spacing:.08em;color:var(--aged-oak)}
+.md-row .d.past{color:var(--clay)}
+.md-row .n{font-family:var(--font-display);font-size:1.12rem;color:var(--charcoal)}
+.md-row .n small{display:block;font-family:var(--font-body);font-size:.76rem;color:var(--aged-oak);margin-top:.1rem}
+.md-row.hidden-row{display:none}
+.md-clientnote{font-family:var(--font-mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase;color:var(--dusty-blue);margin-top:.8rem;display:none}
+.md-wrap.client .studio-only{display:none}
+.md-wrap.client .md-clientnote{display:block}
+
+/* ————— SLIDE 7 · MATRIX ————— */
+.matrix{width:100%;border-collapse:collapse;margin-top:.6rem}
+.matrix th,.matrix td{padding:.85rem .8rem;text-align:left;border-bottom:1px solid var(--pearl);vertical-align:top}
+.matrix thead th{font-family:var(--font-mono);font-size:.62rem;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--aged-oak);border-bottom:1.5px solid var(--mocha)}
+.matrix thead th:first-child{width:26%}
+.matrix .crit{font-size:.9rem;color:var(--charcoal);font-weight:500}
+.matrix td .dot{font-size:.95rem;color:var(--mocha);display:block;line-height:1}
+.matrix td .w{font-family:var(--font-mono);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;color:var(--aged-oak);display:block;margin-top:.3rem}
+.matrix-legend{display:flex;gap:1.6rem;margin-top:1rem}
+.matrix-legend span{font-family:var(--font-mono);font-size:.6rem;letter-spacing:.07em;text-transform:uppercase;color:var(--aged-oak)}
+@media(max-width:760px){.matrix td .w{display:none}}
+
+/* ————— SLIDE 8 · COMPOSITION ————— */
+.compose{margin:1.6rem 0 2rem;max-width:820px}
+.compose .layer{display:grid;grid-template-columns:44px 1fr auto;gap:1.1rem;align-items:center;border:1px solid var(--pearl);border-radius:3px;background:var(--soft-cream);padding:.9rem 1.2rem;margin-bottom:.5rem}
+.compose .layer:nth-child(1){width:100%}
+.compose .layer:nth-child(2){width:92%}
+.compose .layer:nth-child(3){width:84%}
+.compose .layer:nth-child(4){width:76%}
+.compose .big{font-family:var(--font-display);font-size:1.7rem;color:var(--clay)}
+.compose .role{font-size:.92rem;color:var(--charcoal);font-weight:500}
+.compose .role small{display:block;font-weight:400;font-size:.8rem;color:var(--aged-oak)}
+.compose .tag{font-family:var(--font-mono);font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;color:var(--clay);white-space:nowrap}
+.qs{counter-reset:q;margin:1.4rem 0 0;max-width:820px}
+.qs .q{display:grid;grid-template-columns:52px 1fr;gap:1.2rem;padding:1.05rem 0;border-bottom:1px solid var(--pearl);align-items:baseline}
+.qs .q:first-child{border-top:1px solid var(--pearl)}
+.qs .qn{font-family:var(--font-display);font-size:2rem;font-weight:300;color:var(--clay);line-height:1}
+.qs .q h3{font-size:1.15rem;margin-bottom:.2rem}
+.qs .q p{font-size:.88rem}
+.closing{margin-top:2.4rem}
+.closing p{font-family:var(--font-display);font-style:italic;font-size:1.25rem;color:var(--charcoal)}
+.closing .mono{display:block;margin-top:.7rem;color:var(--clay)}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ————— NAVIGATION RAIL ————— -->
+<div class="rail" aria-label="Deck navigation">
+  <div class="rail-line"></div>
+  <div class="rail-elapsed" id="railElapsed"></div>
+  <div id="railTicks"></div>
+</div>
+
+<div class="deck" id="deck">
+
+<!-- ============ SLIDE 1 · COVER ============ -->
+<section class="slide" data-title="Cover">
+  <div class="wrap" style="padding-top:9vh">
+    <div class="strata"><i></i><i></i><i></i></div>
+    <div class="eyebrow">Patina · Designer Portal · Design Review · Jul 14 2026</div>
+    <h1 style="font-size:clamp(2.6rem,6vw,4.6rem);max-width:900px">The Schedule, <em>Reconsidered.</em></h1>
+    <p style="max-width:620px;margin-top:1.4rem;font-size:1.08rem">Four directions for the project timeline — each a different answer to what a schedule owes the person reading it. Presented for review. No ruling has been cut; this deck exists to earn one.</p>
+    <p class="mono" style="margin-top:2.6rem">Four options · One specimen project · ← → to navigate</p>
+  </div>
+</section>
+
+<!-- ============ SLIDE 2 · DIAGNOSIS ============ -->
+<section class="slide" data-title="Diagnosis">
+  <div class="wrap">
+    <div class="eyebrow">The Diagnosis · What the current rail gets wrong</div>
+    <h2 class="slide-title">A schedule that can't show what's threatening the install date is <em>decoration.</em></h2>
+
+    <div class="specimen" style="margin-top:1.6rem">
+      <div class="specimen-head"><span class="mono"><b>Exhibit</b> · The rail as it ships today</span><span class="mono">Recreated from the live portal</span></div>
+      <div class="current-bar">
+        <div class="seg filled" style="width:15%">Schematic Design</div>
+        <div class="seg filled" style="width:19%">Design Development</div>
+        <div class="seg dashed" style="width:17%">Installation &amp; Styli…</div>
+        <div class="seg dashed" style="width:7%">Com…</div>
+        <div class="seg dashed" style="width:42%">Procurement &amp; Order Management</div>
+        <i class="today-tick" style="left:15.2%"></i>
+        <span class="flaw-pin" style="left:35%;top:auto;bottom:-11px">1</span>
+        <span class="flaw-pin" style="left:59%;top:-11px">2</span>
+        <span class="flaw-pin" style="left:14%;top:-11px">3</span>
+        <span class="flaw-pin" style="right:1.5%;top:auto;bottom:-11px">4</span>
+      </div>
+      <p class="mono" style="margin-top:1.2rem">5 · And nothing above connects to the sign-off below it that "blocks an FF&amp;E line"</p>
+    </div>
+
+    <ol class="flaws">
+      <li><span class="n">01</span><span><b>Labels truncate</b> the moment a phase compresses. "Installation &amp; Styli…" is not a label.</span></li>
+      <li><span class="n">02</span><span><b>Phases render out of sequence</b> — Procurement drawn after Completion, because the component can't express overlap, so it lies instead.</span></li>
+      <li><span class="n">03</span><span><b>Today is a hairline tick.</b> The single most important fact on a schedule, whispered.</span></li>
+      <li><span class="n">04</span><span><b>No dates, durations, or milestones</b> without tapping. The schedule withholds the schedule.</span></li>
+      <li><span class="n">05</span><span><b>Zero connection to the work.</b> A sign-off directly below reads "blocks an FF&amp;E line" — and the bar doesn't flinch.</span></li>
+    </ol>
+
+    <div class="three-q">
+      <div class="eyebrow">The three questions a timeline must answer at a glance</div>
+      <h3><span>i.</span> Where are we?</h3>
+      <h3><span>ii.</span> What's slipping?</h3>
+      <h3><span>iii.</span> Whose decision is holding the line?</h3>
+    </div>
+
+    <p class="mono" style="margin-top:2.4rem">All four specimens ahead render the same project — Hoyt House · Living + Dining · Jun 8 – Oct 9 · Today Jul 14 — so the comparison is apples to apples.</p>
+  </div>
+</section>
+
+<!-- ============ SLIDE 3 · OPTION A ============ -->
+<section class="slide" data-title="A · Ruled Line">
+  <div class="wrap">
+    <div class="eyebrow"><span class="opt">Option A · The Ruled Line</span> · Evolution of the strip, typography-first</div>
+    <h2 class="slide-title">Kill the boxes. The schedule becomes a <em>drawn line</em> — and stops lying about sequence.</h2>
+
+    <div class="specimen">
+      <div class="specimen-head"><span class="mono"><b>Rendered specimen</b> · Hoyt House · Jun 8 – Oct 9</span><span class="mono">Click "Design Development" to fold / unfold</span></div>
+      <div class="ma-canvas">
+        <div class="ma-label closed" style="left:0;top:0">Schematic Design<small>Closed Jun 26</small></div>
+        <div class="ma-label live" style="left:14.6%;top:0" id="maToggle">Design Development<small>Jun 26 – Jul 24 · 2 open</small></div>
+        <div class="ma-label ahead" style="left:85.4%;top:0">Installation &amp; Styling<small>Sep 21</small></div>
+        <div class="ma-label ahead" style="right:0;top:26px;text-align:right">Completion<small>Oct 5 – Oct 9</small></div>
+
+        <div class="ma-rule-past" style="width:29.3%"></div>
+        <div class="ma-rule-future" style="left:29.3%"></div>
+        <div class="ma-tick" style="left:14.6%"></div>
+        <div class="ma-tick" style="left:37.4%"></div>
+        <div class="ma-tick" style="left:85.4%"></div>
+        <div class="ma-tick" style="left:94.3%"></div>
+        <div class="ma-tick" style="left:96.7%"></div>
+
+        <div class="ma-di signed" style="left:13%" title="Concept sign-off · signed Jun 24"></div>
+        <div class="ma-di due" style="left:25.2%" title="FF&E schedule sign-off · due Jul 9"></div>
+        <div class="ma-di-label" style="left:19.5%">FF&amp;E sign-off · due Jul 9</div>
+        <div class="ma-di ahead" style="left:31.7%" title="Sofa order deadline · Jul 17"></div>
+        <div class="ma-di ahead" style="left:85.4%" title="Install day · Sep 21"></div>
+
+        <div class="ma-today" style="left:29.3%"><span>Today · Jul 14</span></div>
+
+        <div class="ma-proc" style="left:26%;width:56.9%"><span>Procurement &amp; Orders · runs Jul 10 – Sep 18</span></div>
+      </div>
+
+      <div class="ma-unfold" id="maUnfold">
+        <div class="uh">Design Development · Jun 26 – Jul 24 · Unfolded</div>
+        <div class="ma-item"><span class="chip signoff">Sign-off</span><span class="t">Do it</span><span class="m">blocks an FF&amp;E line · ball: you</span><span class="due-late">Due Jul 9 · 5 days over</span></div>
+        <div class="ma-item" style="border-bottom:1px solid var(--pearl)"><span class="chip punch">Punch</span><span class="t">test</span><span class="m">ball: sub</span></div>
+        <div class="ma-fold-hint">Fold ↑</div>
+      </div>
+    </div>
+
+    <div class="spec-grid">
+      <div class="spec-cell"><h4>The problem it solves</h4><p>Truncated labels, an invisible today, a dishonest sequence — fixed in place, without asking the page to change around it.</p></div>
+      <div class="spec-cell"><h4>How it works</h4><p>One full-width rule. Labels sit above at natural width, staggered when they'd collide — nothing ever truncates. Weight encodes status: light for closed, bold for active, muted for ahead. Milestones are diamonds on the line. Procurement — the perpetual overlapper — runs as its own hairline beneath, spanning its true dates. Click any phase and it unfolds inline.</p></div>
+      <div class="spec-cell"><h4>Where it lives</h4><p>Drop-in replacement for the current bar. Same position, same footprint, same "unfold" language as the rest of the Document.</p></div>
+      <div class="spec-cell"><h4>The tradeoff</h4><p>Still a summary strip. It points at problems; it doesn't hold them. The work stays estranged from the schedule, just better introduced.</p></div>
+    </div>
+    <div class="vision"><span class="mono">The vision</span><p>The schedule as a ruled line in a ledger — the one instrument on the page that behaves like it was drawn by hand.</p></div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 4 · OPTION B ============ -->
+<section class="slide" data-title="B · Ledger Spine">
+  <div class="wrap">
+    <div class="eyebrow"><span class="opt">Option B · The Ledger Spine</span> · The timeline becomes the page</div>
+    <h2 class="slide-title">The schedule stops being a widget and becomes the <em>bones</em> of the project.</h2>
+
+    <div class="specimen">
+      <div class="specimen-head"><span class="mono"><b>Rendered specimen</b> · The project page itself, restructured</span><span class="mono">Scrolling the page is scrolling through time</span></div>
+
+      <div class="mb-entry closed">
+        <div class="mb-spinecell"><div class="mb-node done"></div></div>
+        <div class="mb-body">
+          <h3>Schematic Design</h3>
+          <div class="mb-meta">Closed Jun 26 · 4 items · Concept signed Jun 24</div>
+        </div>
+      </div>
+
+      <div class="mb-entry live">
+        <div class="mb-spinecell"><div class="mb-node live"></div></div>
+        <div class="mb-body" style="padding-bottom:.9rem">
+          <h3>Design Development</h3>
+          <div class="mb-meta">Jun 26 – Jul 24 · 2 open · 1 blocking</div>
+          <div class="mb-item"><span class="chip signoff">Sign-off</span><span class="t">Do it</span><span class="m">blocks an FF&amp;E line</span><span class="r late">Ball: you · Due Jul 9</span></div>
+          <div class="mb-item"><span class="chip punch">Punch</span><span class="t">test</span><span class="r">Ball: sub</span></div>
+          <div class="mb-thread">Procurement runs alongside · 2 of 4 lines ordered</div>
+        </div>
+      </div>
+
+      <div class="mb-today"><div class="line"><span>Today · Jul 14</span></div></div>
+
+      <div class="mb-entry future">
+        <div class="mb-spinecell"><div class="mb-node ahead"></div></div>
+        <div class="mb-body" style="padding-bottom:1.1rem">
+          <h3>Installation &amp; Styling</h3>
+          <div class="mb-meta">Targets Sep 21 – Oct 2 · Waits on 4 deliveries</div>
+        </div>
+      </div>
+
+      <div class="mb-entry future">
+        <div class="mb-spinecell" style="min-height:34px"><div class="mb-node ahead"></div></div>
+        <div class="mb-body" style="padding-bottom:0">
+          <h3>Completion</h3>
+          <div class="mb-meta">Targets Oct 5 – Oct 9 · Walkthrough · Close-out</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec-grid">
+      <div class="spec-cell"><h4>The problem it solves</h4><p>The disconnection problem — schedule up top, work down below, nothing between them. Here they become the same object: the sign-off holding the line lives inside the phase it's holding.</p></div>
+      <div class="spec-cell"><h4>How it works</h4><p>A vertical spine down the left margin. Each phase is a heading; Coordination and The Work dissolve into it — sign-offs, punch items, FF&amp;E lines each under the phase they belong to, ball-in-court chip inline. Closed phases compress to one light line. Today is a rule that crosses the spine. Procurement travels as a running thread rather than pretending to be sequential.</p></div>
+      <div class="spec-cell"><h4>Where it lives</h4><p>This is the project page's architecture, not its header. The most Document-native option — the project reads top to bottom like a story.</p></div>
+      <div class="spec-cell"><h4>The tradeoff</h4><p>You lose the compact glance strip — though Option A can serve as its collapsed header state — and the page gets longer.</p></div>
+    </div>
+    <div class="vision"><span class="mono">The vision</span><p>The project reads top to bottom like a story — and the schedule is the spine of the book.</p></div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 5 · OPTION C ============ -->
+<section class="slide" data-title="C · The Loom">
+  <div class="wrap">
+    <div class="eyebrow"><span class="opt">Option C · The Loom</span> · Lead times as first-class citizens</div>
+    <h2 class="slide-title">A designer-grade Gantt that answers the only question that matters: <em>will the sofa land before install week?</em></h2>
+
+    <div class="specimen">
+      <div class="specimen-head"><span class="mono"><b>Rendered specimen</b> · Phase bars above, FF&amp;E threads beneath</span><span class="mono">Studio eyes only · Unfolds on demand</span></div>
+      <div class="mc">
+        <div class="mc-side">
+          <div class="lbl axis"></div>
+          <div class="lbl">Schematic</div>
+          <div class="lbl strong">Design Dev</div>
+          <div class="lbl">Procurement</div>
+          <div class="lbl">Install &amp; Style</div>
+          <div class="lbl">Completion</div>
+          <div class="divider">— The threads</div>
+          <div class="lbl">Dining table</div>
+          <div class="lbl">Lighting</div>
+          <div class="lbl strong">Sofa</div>
+          <div class="lbl">Rug</div>
+        </div>
+        <div class="mc-canvas">
+          <div class="mc-grid" style="left:18.7%"></div><div class="mc-month" style="left:18.7%">Jul</div>
+          <div class="mc-grid" style="left:43.9%"></div><div class="mc-month" style="left:43.9%">Aug</div>
+          <div class="mc-grid" style="left:69.1%"></div><div class="mc-month" style="left:69.1%">Sep</div>
+          <div class="mc-grid" style="left:93.5%"></div><div class="mc-month" style="left:93.5%">Oct</div>
+
+          <div class="mc-row axis"></div>
+          <div class="mc-row"><div class="mc-bar done" style="left:0;width:14.6%"></div></div>
+          <div class="mc-row"><div class="mc-bar live" style="left:14.6%;width:22.8%"></div></div>
+          <div class="mc-row"><div class="mc-bar run" style="left:26%;width:56.9%"></div></div>
+          <div class="mc-row"><div class="mc-bar ahead" style="left:85.4%;width:8.9%"></div></div>
+          <div class="mc-row"><div class="mc-bar ahead" style="left:96.7%;width:3.3%"></div></div>
+          <div class="mc-row divider"></div>
+          <div class="mc-row"><div class="mc-thread safe" style="left:26%;width:51.2%"></div><div class="mc-dot safe" style="left:76.6%" title="Delivers Sep 11"></div></div>
+          <div class="mc-row"><div class="mc-thread safe" style="left:27.6%;width:34.2%"></div><div class="mc-dot safe" style="left:61.2%" title="Delivers Aug 23"></div></div>
+          <div class="mc-row"><div class="mc-dot blocked" style="left:28.6%" title="Awaiting FF&E sign-off"></div><div class="mc-thread late" style="left:31%;width:66.6%"></div><div class="mc-dot late" style="left:96.9%" title="Projected Oct 6 — 15 days after install begins"></div></div>
+          <div class="mc-row"><div class="mc-thread tbd" style="left:31.7%;width:12%" title="Not ordered"></div></div>
+
+          <div class="mc-vline install" style="left:85.4%"><span>Install · Sep 21</span></div>
+          <div class="mc-vline today" style="left:29.3%"><span>Today · Jul 14</span></div>
+        </div>
+      </div>
+      <div class="mc-legend">
+        <div class="li"><span class="sw safe"></span>Lands before install</div>
+        <div class="li"><span class="sw late"></span>Lands after install begins</div>
+        <div class="li"><span class="sw blocked"></span>Blocked by a decision</div>
+      </div>
+      <p class="mc-note">The blocked sign-off, made visible: order the sofa today and its 12-week lead still delivers it <b>15 days after install begins.</b> That golden dot is your "Do it" sign-off — physically holding the schedule hostage.</p>
+    </div>
+
+    <div class="spec-grid">
+      <div class="spec-cell"><h4>The problem it solves</h4><p>The question every design-build project turns on — will the pieces land before install week — is invisible in every tool on the market. Lead times ARE the schedule; this is the first view that treats them that way.</p></div>
+      <div class="spec-cell"><h4>How it works</h4><p>A quiet time axis, one row per phase, bars in warm neutrals. Beneath: the thread layer — every FF&amp;E line drawn from order to delivery. A thread landing after install begins turns Terracotta. A decision blocking an order is a Golden Hour dot. Drag a phase edge and the downstream ripple previews before you commit.</p></div>
+      <div class="spec-cell"><h4>Where it lives</h4><p>A Studio Eyes Only layer that unfolds on demand — you and the GC need the loom; the client doesn't. Pairs naturally under Option A or B.</p></div>
+      <div class="spec-cell"><h4>The tradeoff</h4><p>Densest option, wants horizontal room, biggest build. Highest payoff, highest cost — and it must be styled ruthlessly or it reads as engineering software.</p></div>
+    </div>
+    <div class="vision"><span class="mono">The vision</span><p>Studio Designer and Houzz Pro both punt on this view. Built beautifully, it's a reason to switch.</p></div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 6 · OPTION D ============ -->
+<section class="slide" data-title="D · Almanac">
+  <div class="wrap">
+    <div class="eyebrow"><span class="opt">Option D · The Almanac</span> · Commitments over durations</div>
+    <h2 class="slide-title">Clients don't experience phases. They experience <em>dates and signatures.</em></h2>
+
+    <div class="specimen">
+      <div class="md-wrap" id="mdWrap">
+        <div class="specimen-head">
+          <span class="mono"><b>Rendered specimen</b> · One component, two audiences</span>
+          <div class="md-toggle" role="group" aria-label="Audience view">
+            <button class="on" id="mdStudio">Studio</button><button id="mdClient">Client</button>
+          </div>
+        </div>
+        <div class="md-phasestrip">
+          <div class="b past" style="width:15%">Schematic</div>
+          <div class="b past" style="width:23%">Design Dev</div>
+          <div class="b" style="width:45%">Procurement</div>
+          <div class="b" style="width:9%">Install</div>
+          <div class="b" style="width:8%">Close</div>
+        </div>
+        <div class="md-row"><span class="d past">Jun 24</span><span class="n">Concept sign-off</span><span class="stamp signed">Signed · Jun 24</span></div>
+        <div class="md-row"><span class="d">Jul 9</span><span class="n">FF&amp;E schedule sign-off<small class="studio-only">Blocks the sofa order · yours to sign</small></span><span class="stamp slipped">Slipped · 5 days</span></div>
+        <div class="md-row"><span class="d">Jul 17</span><span class="n">Sofa order deadline<small>Waits on the FF&amp;E sign-off</small></span><span class="stamp risk">At risk</span></div>
+        <div class="md-row studio-only"><span class="d">Aug 1</span><span class="n">Maker deposits released <span class="chip studio" style="margin-left:.5rem">Studio</span></span><span class="stamp upcoming">Upcoming</span></div>
+        <div class="md-row"><span class="d">Sep 21</span><span class="n">Installation begins</span><span class="stamp upcoming">Upcoming</span></div>
+        <div class="md-row"><span class="d">Oct 8</span><span class="n">Final walkthrough</span><span class="stamp upcoming">Upcoming</span></div>
+        <div class="md-clientnote">Client view · Studio-only entries hidden · Same component, same data</div>
+      </div>
+    </div>
+
+    <div class="spec-grid">
+      <div class="spec-cell"><h4>The problem it solves</h4><p>Duration bars answer questions clients never ask. What they ask is: what's the next date, and whose signature does it need? The almanac is honest to how designers actually communicate.</p></div>
+      <div class="spec-cell"><h4>How it works</h4><p>Phases recede to muted context. The foreground is a curated ledger of commitments — decision points, sign-offs, deliveries, install day — each with a date, a name, and a stamp borrowed from the proposal's own language: Signed, Due, Slipped, Upcoming. The client view simply hides studio-only rows.</p></div>
+      <div class="spec-cell"><h4>Where it lives</h4><p>The client-facing projection of whatever runs the studio side. It can also headline the proposal — the timeline a client signs against.</p></div>
+      <div class="spec-cell"><h4>The tradeoff</h4><p>Weak at duration and overlap reasoning. Lives or dies on milestone curation — six entries is a story, twenty is clutter.</p></div>
+    </div>
+    <div class="vision"><span class="mono">The vision</span><p>"Here are the six dates that matter — and whose signature each one needs."</p></div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 7 · THE FIELD COMPARED ============ -->
+<section class="slide" data-title="Compared">
+  <div class="wrap">
+    <div class="eyebrow">The Field, Compared · Same criteria, four answers</div>
+    <h2 class="slide-title">No option wins every column. <em>That's the point.</em></h2>
+    <div style="overflow-x:auto"><table class="matrix" style="min-width:760px">
+      <thead><tr><th>Criterion</th><th>A · Ruled Line</th><th>B · Ledger Spine</th><th>C · The Loom</th><th>D · Almanac</th></tr></thead>
+      <tbody>
+        <tr><td class="crit">Where are we? — at a glance</td><td><span class="dot">●</span><span class="w">One look</span></td><td><span class="dot">◐</span><span class="w">One scroll</span></td><td><span class="dot">●</span><span class="w">One look</span></td><td><span class="dot">◐</span><span class="w">Next date</span></td></tr>
+        <tr><td class="crit">What's slipping?</td><td><span class="dot">◐</span><span class="w">Points at it</span></td><td><span class="dot">●</span><span class="w">Holds it</span></td><td><span class="dot">●</span><span class="w">Shows why</span></td><td><span class="dot">●</span><span class="w">Stamps it</span></td></tr>
+        <tr><td class="crit">Whose decision holds the line?</td><td><span class="dot">◐</span><span class="w">On unfold</span></td><td><span class="dot">●</span><span class="w">Inline chip</span></td><td><span class="dot">●</span><span class="w">Drawn</span></td><td><span class="dot">●</span><span class="w">Named</span></td></tr>
+        <tr><td class="crit">Honest about overlap</td><td><span class="dot">●</span><span class="w">Parallel rule</span></td><td><span class="dot">◐</span><span class="w">Thread badge</span></td><td><span class="dot">●</span><span class="w">Native</span></td><td><span class="dot">○</span><span class="w">Hidden</span></td></tr>
+        <tr><td class="crit">Client-ready as-is</td><td><span class="dot">◐</span><span class="w">Passable</span></td><td><span class="dot">○</span><span class="w">Studio tool</span></td><td><span class="dot">○</span><span class="w">Studio tool</span></td><td><span class="dot">●</span><span class="w">Built for it</span></td></tr>
+        <tr><td class="crit">Adapts — 3-phase refresh to 7-phase build</td><td><span class="dot">●</span><span class="w">Scales</span></td><td><span class="dot">●</span><span class="w">Scales</span></td><td><span class="dot">◐</span><span class="w">Wants width</span></td><td><span class="dot">●</span><span class="w">Curated</span></td></tr>
+        <tr><td class="crit">Page impact</td><td><span class="dot">●</span><span class="w">None</span></td><td><span class="dot">○</span><span class="w">Restructures</span></td><td><span class="dot">◐</span><span class="w">New layer</span></td><td><span class="dot">●</span><span class="w">None</span></td></tr>
+        <tr><td class="crit">Build cost</td><td><span class="dot">●</span><span class="w">Low</span></td><td><span class="dot">◐</span><span class="w">Medium</span></td><td><span class="dot">○</span><span class="w">High</span></td><td><span class="dot">●</span><span class="w">Low</span></td></tr>
+      </tbody>
+    </table></div>
+    <div class="matrix-legend"><span>● Strong</span><span>◐ Partial</span><span>○ Weak</span></div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 8 · COMPOSITION + YOUR RULING ============ -->
+<section class="slide" data-title="Ruling">
+  <div class="wrap">
+    <div class="eyebrow">A Possible Composition · These aren't mutually exclusive</div>
+    <h2 class="slide-title">Four options, <em>four roles.</em></h2>
+    <p style="max-width:700px;margin-top:.6rem;font-size:.95rem">The strongest read of the field is a composition, echoing the strata themselves — but that's a roadmap, not a v1. V1 should be one thing, done completely.</p>
+
+    <div class="compose">
+      <div class="layer"><span class="big">D</span><span class="role">The client projection<small>What the client sees — and signs against</small></span><span class="tag">Outward</span></div>
+      <div class="layer"><span class="big">A</span><span class="role">The collapsed header<small>The glance — the strip, fixed and honest</small></span><span class="tag">Surface</span></div>
+      <div class="layer"><span class="big">B</span><span class="role">The bones<small>The page architecture — work dissolved into time</small></span><span class="tag">Structure</span></div>
+      <div class="layer"><span class="big">C</span><span class="role">The studio layer<small>The loom — unfolds on demand, studio eyes only</small></span><span class="tag">Depth</span></div>
+    </div>
+
+    <p style="max-width:760px;font-size:.95rem;margin-bottom:.4rem"><b style="color:var(--charcoal)">If v1 must be one thing:</b> B if you're ready to restructure the project page around it. A if you want the strip fixed this sprint and the restructure earned later.</p>
+
+    <div class="eyebrow" style="margin-top:2.4rem">Three questions to shape your ruling</div>
+    <div class="qs">
+      <div class="q"><span class="qn">1</span><div><h3>Whose instrument is v1?</h3><p>Is the schedule primarily your instrument, or the client's window? The answer picks between the studio options (A, B, C) and the projection (D).</p></div></div>
+      <div class="q"><span class="qn">2</span><div><h3>How much page are you willing to move?</h3><p>Upgrade the strip in place, or restructure the project page around time? A is a component swap; B is an architecture ruling.</p></div></div>
+      <div class="q"><span class="qn">3</span><div><h3>Do lead times need to be visible in v1?</h3><p>Or is phase-and-milestone honesty enough for now, with the loom earned once real FF&amp;E data flows?</p></div></div>
+    </div>
+
+    <div class="closing">
+      <p>Awaiting your ruling.</p>
+      <span class="mono">No R-number has been cut · This deck exists to earn one · Patina · Jul 14 2026</span>
+    </div>
+  </div>
+</section>
+
+</div><!-- /deck -->
+
+<!-- ————— FOOTER ————— -->
+<div class="foot">
+  <span class="counter" id="counter"></span>
+  <span class="hint">← → arrow keys · Click the rail to jump</span>
+  <div class="foot-btns">
+    <button id="prevBtn" aria-label="Previous slide">‹</button>
+    <button id="nextBtn" aria-label="Next slide">›</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var slides=[].slice.call(document.querySelectorAll('.slide'));
+  var ticksWrap=document.getElementById('railTicks');
+  var elapsed=document.getElementById('railElapsed');
+  var counter=document.getElementById('counter');
+  var n=slides.length, idx=0, ticks=[];
+
+  // Build rail ticks — the deck's own timeline
+  for(var i=0;i<n;i++){
+    (function(i){
+      var pct=4+(92*(i/(n-1)));
+      var b=document.createElement('button');
+      b.className='rail-tick';
+      b.style.left=pct+'%';
+      b.innerHTML='<span>'+slides[i].getAttribute('data-title')+'</span>';
+      b.setAttribute('aria-label','Go to: '+slides[i].getAttribute('data-title'));
+      b.addEventListener('click',function(){go(i);});
+      ticksWrap.appendChild(b); ticks.push(b);
+    })(i);
+  }
+
+  function go(i){
+    if(i<0||i>=n)return;
+    idx=i;
+    slides.forEach(function(s,k){s.classList.toggle('active',k===i);if(k===i)s.scrollTop=0;});
+    ticks.forEach(function(t,k){t.classList.toggle('done',k<i);t.classList.toggle('now',k===i);});
+    elapsed.style.width=(92*(i/(n-1)))+'%';
+    var t=slides[i].getAttribute('data-title');
+    counter.innerHTML='<b>0'+(i+1)+'</b> / 0'+n+' — '+t.toUpperCase();
+  }
+
+  document.getElementById('prevBtn').addEventListener('click',function(){go(idx-1);});
+  document.getElementById('nextBtn').addEventListener('click',function(){go(idx+1);});
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' '&&!e.shiftKey){e.preventDefault();go(idx+1);}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'||e.key===' '&&e.shiftKey){e.preventDefault();go(idx-1);}
+    else if(e.key==='Home'){go(0);}
+    else if(e.key==='End'){go(n-1);}
+  });
+
+  // Option A — fold/unfold
+  var maT=document.getElementById('maToggle'), maU=document.getElementById('maUnfold');
+  if(maT&&maU){maT.addEventListener('click',function(){maU.classList.toggle('folded');});}
+
+  // Option D — studio/client toggle
+  var mdWrap=document.getElementById('mdWrap');
+  var bS=document.getElementById('mdStudio'), bC=document.getElementById('mdClient');
+  if(bS&&bC&&mdWrap){
+    bS.addEventListener('click',function(){mdWrap.classList.remove('client');bS.classList.add('on');bC.classList.remove('on');});
+    bC.addEventListener('click',function(){mdWrap.classList.add('client');bC.classList.add('on');bS.classList.remove('on');});
+  }
+
+  go(0);
+})();
+</script>
+</body>
+</html>

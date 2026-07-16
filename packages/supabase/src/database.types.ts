@@ -1461,6 +1461,7 @@ export type Database = {
           answered_by: string | null
           blocking_status: string
           blocks_kind: string
+          blocks_milestone_id: string | null
           client_consent_method: string | null
           client_consented_at: string | null
           client_signature: string | null
@@ -1497,6 +1498,7 @@ export type Database = {
           answered_by?: string | null
           blocking_status?: string
           blocks_kind?: string
+          blocks_milestone_id?: string | null
           client_consent_method?: string | null
           client_consented_at?: string | null
           client_signature?: string | null
@@ -1533,6 +1535,7 @@ export type Database = {
           answered_by?: string | null
           blocking_status?: string
           blocks_kind?: string
+          blocks_milestone_id?: string | null
           client_consent_method?: string | null
           client_consented_at?: string | null
           client_signature?: string | null
@@ -1564,6 +1567,13 @@ export type Database = {
           viewed_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "client_decisions_blocks_milestone_id_fkey"
+            columns: ["blocks_milestone_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_milestones"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "client_decisions_court_party_id_fkey"
             columns: ["court_party_id"]
@@ -9761,14 +9771,18 @@ export type Database = {
       }
       project_phases: {
         Row: {
+          anchor_date: string | null
           completed_at: string | null
           created_at: string
           deliverables: Json | null
+          duration_days: number | null
           duration_weeks: number | null
           estimated_hours: number | null
           fee_cents: number | null
+          follows_phase_id: string | null
           gate_condition: string | null
           id: string
+          lane: string
           name: string
           phase_key: string | null
           progress: number | null
@@ -9783,14 +9797,18 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          anchor_date?: string | null
           completed_at?: string | null
           created_at?: string
           deliverables?: Json | null
+          duration_days?: number | null
           duration_weeks?: number | null
           estimated_hours?: number | null
           fee_cents?: number | null
+          follows_phase_id?: string | null
           gate_condition?: string | null
           id?: string
+          lane?: string
           name: string
           phase_key?: string | null
           progress?: number | null
@@ -9805,14 +9823,18 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          anchor_date?: string | null
           completed_at?: string | null
           created_at?: string
           deliverables?: Json | null
+          duration_days?: number | null
           duration_weeks?: number | null
           estimated_hours?: number | null
           fee_cents?: number | null
+          follows_phase_id?: string | null
           gate_condition?: string | null
           id?: string
+          lane?: string
           name?: string
           phase_key?: string | null
           progress?: number | null
@@ -9827,6 +9849,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_phases_follows_phase_id_fkey"
+            columns: ["follows_phase_id"]
+            isOneToOne: false
+            referencedRelation: "project_phases"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_phases_project_id_fkey"
             columns: ["project_id"]
@@ -11529,12 +11558,16 @@ export type Database = {
       }
       proposal_phases: {
         Row: {
+          anchor_date: string | null
           created_at: string
           deliverables: Json | null
+          duration_days: number | null
           duration_weeks: number | null
           fee_cents: number
+          follows_phase_id: string | null
           gate_condition: string | null
           id: string
+          lane: string
           name: string
           phase_key: string | null
           proposal_id: string
@@ -11543,12 +11576,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          anchor_date?: string | null
           created_at?: string
           deliverables?: Json | null
+          duration_days?: number | null
           duration_weeks?: number | null
           fee_cents?: number
+          follows_phase_id?: string | null
           gate_condition?: string | null
           id?: string
+          lane?: string
           name: string
           phase_key?: string | null
           proposal_id: string
@@ -11557,12 +11594,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          anchor_date?: string | null
           created_at?: string
           deliverables?: Json | null
+          duration_days?: number | null
           duration_weeks?: number | null
           fee_cents?: number
+          follows_phase_id?: string | null
           gate_condition?: string | null
           id?: string
+          lane?: string
           name?: string
           phase_key?: string | null
           proposal_id?: string
@@ -11572,10 +11613,58 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "proposal_phases_follows_phase_id_fkey"
+            columns: ["follows_phase_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_phases"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "proposal_phases_proposal_id_fkey"
             columns: ["proposal_id"]
             isOneToOne: false
             referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_schedule_milestones: {
+        Row: {
+          anchor_date: string
+          created_at: string
+          id: string
+          kind: string
+          name: string
+          phase_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          anchor_date: string
+          created_at?: string
+          id?: string
+          kind?: string
+          name: string
+          phase_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          anchor_date?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          name?: string
+          phase_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_schedule_milestones_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_phases"
             referencedColumns: ["id"]
           },
         ]
@@ -13112,6 +13201,101 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_milestones: {
+        Row: {
+          anchor_date: string | null
+          created_at: string
+          id: string
+          kind: string
+          name: string
+          offset_days: number | null
+          phase_id: string
+          sort_order: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          anchor_date?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          name: string
+          offset_days?: number | null
+          phase_id: string
+          sort_order?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          anchor_date?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          name?: string
+          offset_days?: number | null
+          phase_id?: string
+          sort_order?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_milestones_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "project_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_revisions: {
+        Row: {
+          actor: string | null
+          created_at: string
+          cut_at: string
+          id: string
+          phase_snapshots: Json
+          project_id: string
+          reason: string | null
+          v: number
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          cut_at?: string
+          id?: string
+          phase_snapshots?: Json
+          project_id: string
+          reason?: string | null
+          v: number
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          cut_at?: string
+          id?: string
+          phase_snapshots?: Json
+          project_id?: string
+          reason?: string | null
+          v?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_revisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "schedule_revisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -17179,6 +17363,10 @@ export type Database = {
         }
         Returns: Json
       }
+      commit_schedule_edit: {
+        Args: { p_edits: Json; p_project_id: string; p_reason?: string }
+        Returns: number
+      }
       comms_resolve_role: { Args: { p_user_id: string }; Returns: string }
       complete_aesthete_job: {
         Args: { p_error?: string; p_id: number; p_status: string }
@@ -17212,6 +17400,14 @@ export type Database = {
       continue_board_in_project: {
         Args: { p_project_board_id: string }
         Returns: string
+      }
+      copy_schedule_as_built: {
+        Args: {
+          p_source_project_id: string
+          p_target_project_id?: string
+          p_target_proposal_id?: string
+        }
+        Returns: string[]
       }
       create_direct_order: {
         Args: { p_product_id: string; p_quantity?: number }
@@ -17330,6 +17526,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      cut_schedule_revision: {
+        Args: { p_project_id: string; p_reason?: string }
+        Returns: number
       }
       decline_workspace_invitation: {
         Args: { p_token: string }
@@ -18182,6 +18382,7 @@ export type Database = {
           answered_by: string | null
           blocking_status: string
           blocks_kind: string
+          blocks_milestone_id: string | null
           client_consent_method: string | null
           client_consented_at: string | null
           client_signature: string | null
@@ -18410,6 +18611,10 @@ export type Database = {
         }[]
       }
       seed_house_from_validated_catalog: { Args: never; Returns: string }
+      seed_project_schedule_from_template: {
+        Args: { p_project_id: string; p_template_slug: string }
+        Returns: string[]
+      }
       send_proposal: {
         Args: {
           p_cc_email?: string

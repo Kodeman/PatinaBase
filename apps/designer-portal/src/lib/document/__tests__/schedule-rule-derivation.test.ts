@@ -1,0 +1,821 @@
+import type { ResolvedPhase, ResolvedMilestone } from '@patina/utils';
+import { epochDayFromISO, isoFromEpochDay } from '@patina/utils';
+import {
+  buildTimeScale,
+  xToEpochDay,
+  clientXToPct,
+  assignLabelRows,
+  ruleWeightForStatus,
+  ruleSegments,
+  ruleDiamonds,
+  ruleThreads,
+  ruleBoundaries,
+  boundaryDurationDays,
+  milestoneOffsetDays,
+  projectGhosts,
+  projectBaselineGhosts,
+  unplacedPhases,
+  foldedLayers,
+  type TimeScale,
+  type LabelInput,
+} from '../schedule-rule-derivation';
+import type { BaselineGhostDiff } from '../schedule-baseline-derivation';
+import type {
+  RippleDiff,
+  RipplePendingEdit,
+  RipplePhaseChange,
+  RippleMilestoneMove,
+} from '../schedule-ripple-derivation';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Factories — every field defaulted so a case declares only what it exercises.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function rphase(over: Partial<ResolvedPhase> & { id: string }): ResolvedPhase {
+  return {
+    id: over.id,
+    start: over.start ?? null,
+    end: over.end ?? null,
+    lane: over.lane ?? 'main',
+    anchored: over.anchored ?? false,
+    source: over.source ?? 'chain',
+    slackDays: over.slackDays ?? null,
+  };
+}
+
+function rmilestone(over: Partial<ResolvedMilestone> & { id: string; phaseId: string }): ResolvedMilestone {
+  return {
+    id: over.id,
+    phaseId: over.phaseId,
+    date: over.date ?? null,
+    anchored: over.anchored ?? false,
+    derivedStatus: over.derivedStatus ?? 'upcoming',
+  };
+}
+
+function label(over: Partial<LabelInput> & { id: string }): LabelInput {
+  return {
+    id: over.id,
+    xPct: over.xPct ?? 0,
+    widthPx: over.widthPx ?? 50,
+    anchor: over.anchor ?? 'start',
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// buildTimeScale
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('buildTimeScale', () => {
+  it('proportional midpoint: the raw range midpoint lands at 50% (pad is symmetric)', () => {
+    const scale = buildTimeScale(
+      [{ start: '2026-01-01', end: '2026-04-11' }], // day 0..100
+      '2026-02-20', // today inside the range — doesn't move the midpoint
+    )!;
+    expect(scale).not.toBeNull();
+    expect(scale.toX('2026-02-20')).toBeCloseTo(50, 5); // day 50 = midpoint of day0..day100
+  });
+
+  it('today before all phase dates still lands in-span (never negative, never clipped to the edge)', () => {
+    const scale = buildTimeScale([{ start: '2026-06-01', end: '2026-09-01' }], '2026-01-01')!;
+    expect(scale).not.toBeNull();
+    const x = scale.toX('2026-01-01')!;
+    expect(x).toBeGreaterThanOrEqual(0);
+    expect(x).toBeLessThan(5); // near the padded left edge, not past it
+  });
+
+  it('today after all phase dates still lands in-span (never over 100, never clipped to the edge)', () => {
+    const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-03-01' }], '2026-12-01')!;
+    expect(scale).not.toBeNull();
+    const x = scale.toX('2026-12-01')!;
+    expect(x).toBeLessThanOrEqual(100);
+    expect(x).toBeGreaterThan(95); // near the padded right edge, not past it
+  });
+
+  it('applies ~4% pad on both sides of the raw dated range', () => {
+    // Raw range is exactly 100 days (2026-01-01..2026-04-11), today inside it
+    // so it doesn't perturb the domain. pad = 100 * 0.04 = 4 epoch days on
+    // each side → span 108; the raw start lands at 4/108 ≈ 3.70%, the raw
+    // end at 104/108 ≈ 96.30%.
+    const rawMin = epochDayFromISO('2026-01-01')!;
+    const rawMax = epochDayFromISO('2026-04-11')!;
+    expect(rawMax - rawMin).toBe(100);
+
+    const scale: TimeScale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+    expect(scale.minEpoch).toBeCloseTo(rawMin - 4, 5);
+    expect(scale.maxEpoch).toBeCloseTo(rawMax + 4, 5);
+    expect(scale.toX('2026-01-01')).toBeCloseTo((4 / 108) * 100, 5); // ≈ 3.70%
+    expect(scale.toX('2026-04-11')).toBeCloseTo((104 / 108) * 100, 5); // ≈ 96.30%
+  });
+
+  it('a single-day span (one dated phase, today the same day) never produces NaN', () => {
+    const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-01-01' }], '2026-01-01')!;
+    expect(scale).not.toBeNull();
+    const x = scale.toX('2026-01-01')!;
+    expect(Number.isNaN(x)).toBe(false);
+    expect(Number.isFinite(x)).toBe(true);
+  });
+
+  it('returns null when nothing in the phase list is dated, regardless of today', () => {
+    expect(buildTimeScale([{ start: null, end: null }, { start: null, end: null }], '2026-01-01')).toBeNull();
+    expect(buildTimeScale([], '2026-01-01')).toBeNull();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// assignLabelRows
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('assignLabelRows', () => {
+  it('no collisions: three widely spaced labels all land on row 0', () => {
+    const labels = [
+      label({ id: 'a', xPct: 0, widthPx: 50 }),
+      label({ id: 'b', xPct: 50, widthPx: 50 }),
+      label({ id: 'c', xPct: 100, widthPx: 50 }),
+    ];
+    const { rows, rowCount, overflowBeyondTwo } = assignLabelRows(labels, 1000);
+    expect(rows.get('a')).toBe(0);
+    expect(rows.get('b')).toBe(0);
+    expect(rows.get('c')).toBe(0);
+    expect(rowCount).toBe(1);
+    expect(overflowBeyondTwo).toBe(false);
+  });
+
+  it('one collision: two overlapping labels split into row 0 / row 1', () => {
+    const labels = [label({ id: 'a', xPct: 0, widthPx: 200 }), label({ id: 'b', xPct: 1, widthPx: 200 })];
+    const { rows, rowCount } = assignLabelRows(labels, 1000);
+    expect(rows.get('a')).toBe(0);
+    expect(rows.get('b')).toBe(1);
+    expect(rowCount).toBe(2);
+  });
+
+  it('chained across 3: three labels all at the same x force three separate rows', () => {
+    const labels = [
+      label({ id: 'a', xPct: 0, widthPx: 100 }),
+      label({ id: 'b', xPct: 0, widthPx: 100 }),
+      label({ id: 'c', xPct: 0, widthPx: 100 }),
+    ];
+    const { rows, rowCount, overflowBeyondTwo } = assignLabelRows(labels, 1000);
+    expect(rows.get('a')).toBe(0);
+    expect(rows.get('b')).toBe(1);
+    expect(rows.get('c')).toBe(2);
+    expect(rowCount).toBe(3);
+    expect(overflowBeyondTwo).toBe(true);
+  });
+
+  it('7 long-named labels, evenly spaced, width 200px on a 1000px container: fits exactly 2 rows', () => {
+    // 7 points at i/6*100%, container 1000px → spacing ≈166.67px. width 200px
+    // collides with the immediate neighbor but not the one two over, so the
+    // greedy lowest-free-row packing alternates cleanly into 2 rows.
+    const labels = Array.from({ length: 7 }, (_, i) => label({ id: `p${i}`, xPct: (i * 100) / 6, widthPx: 200 }));
+    const { rowCount, overflowBeyondTwo } = assignLabelRows(labels, 1000);
+    expect(rowCount).toBe(2);
+    expect(overflowBeyondTwo).toBe(false);
+  });
+
+  it('7 long-named labels, evenly spaced, width 340px on a 1000px container: needs a 3rd row', () => {
+    // Same 7 points, wider labels (340px > 2×spacing − gap) — the 2-row
+    // alternating pattern can no longer absorb every label; a 3rd row opens.
+    const labels = Array.from({ length: 7 }, (_, i) => label({ id: `p${i}`, xPct: (i * 100) / 6, widthPx: 340 }));
+    const { rowCount, overflowBeyondTwo } = assignLabelRows(labels, 1000);
+    expect(rowCount).toBe(3);
+    expect(overflowBeyondTwo).toBe(true);
+  });
+
+  it('end-anchored label grows LEFTWARD from its x — correctly detects a collision an anchor-point read would miss', () => {
+    // A spans px 600..900 (start-anchored at 60%, width 300, container 1000).
+    // B is the rule's last label, end-anchored at 100% (px 1000), width 300
+    // → its true span is 700..1000, which genuinely overlaps A (600..900).
+    // A buggy implementation using the anchor point (1000) as B's left edge
+    // would miss this collision and wrongly co-place both on row 0.
+    const labels = [
+      label({ id: 'a', xPct: 60, widthPx: 300, anchor: 'start' }),
+      label({ id: 'last', xPct: 100, widthPx: 300, anchor: 'end' }),
+    ];
+    const { rows } = assignLabelRows(labels, 1000);
+    expect(rows.get('a')).toBe(0);
+    expect(rows.get('last')).toBe(1);
+  });
+
+  it('gap is respected at the exact boundary: right+gap<=left shares a row, right+gap>left does not', () => {
+    const gapPx = 8;
+    // label 'a': px 0..100. A follower whose left edge is exactly 108 shares row 0.
+    const sharesRow = assignLabelRows(
+      [label({ id: 'a', xPct: 0, widthPx: 100 }), label({ id: 'b', xPct: 10.8, widthPx: 50 })],
+      1000,
+      gapPx,
+    );
+    expect(sharesRow.rows.get('b')).toBe(0);
+
+    // A follower one pixel short of the gap (left edge 107) must NOT share.
+    const doesNotShare = assignLabelRows(
+      [label({ id: 'a', xPct: 0, widthPx: 100 }), label({ id: 'b', xPct: 10.7, widthPx: 50 })],
+      1000,
+      gapPx,
+    );
+    expect(doesNotShare.rows.get('b')).toBe(1);
+  });
+
+  it('deterministic x-order: input order never changes the assignment, only x position does', () => {
+    const inOrder = [
+      label({ id: 'a', xPct: 0, widthPx: 200 }),
+      label({ id: 'b', xPct: 10, widthPx: 200 }),
+      label({ id: 'c', xPct: 80, widthPx: 200 }),
+    ];
+    const shuffled = [inOrder[2], inOrder[0], inOrder[1]];
+
+    const r1 = assignLabelRows(inOrder, 1000);
+    const r2 = assignLabelRows(shuffled, 1000);
+    expect(Object.fromEntries(r2.rows)).toEqual(Object.fromEntries(r1.rows));
+    expect(r2.rowCount).toBe(r1.rowCount);
+  });
+
+  it('empty input never throws — zero rows, no overflow', () => {
+    const { rows, rowCount, overflowBeyondTwo } = assignLabelRows([], 1000);
+    expect(rows.size).toBe(0);
+    expect(rowCount).toBe(0);
+    expect(overflowBeyondTwo).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ruleWeightForStatus (the RuleWeight adapter over schedule-spine's phaseState)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ruleWeightForStatus', () => {
+  it('completed → closed (reuses phaseState)', () => {
+    expect(ruleWeightForStatus('completed')).toBe('closed');
+  });
+  it('in_progress/active → active (reuses phaseState)', () => {
+    expect(ruleWeightForStatus('in_progress')).toBe('active');
+    expect(ruleWeightForStatus('active')).toBe('active');
+  });
+  it('pending/delayed/unknown/null → ahead (the Rule’s remap of phaseState’s "future")', () => {
+    expect(ruleWeightForStatus('pending')).toBe('ahead');
+    expect(ruleWeightForStatus('delayed')).toBe('ahead');
+    expect(ruleWeightForStatus('something-unexpected')).toBe('ahead');
+    expect(ruleWeightForStatus(null)).toBe('ahead');
+    expect(ruleWeightForStatus(undefined)).toBe('ahead');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ruleSegments
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ruleSegments', () => {
+  // Shared scale: day0..day100, ~4% pad → domain -4..104, span 108.
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+  const statusById = (id: string) => (({ a: 'closed', b: 'active' })[id] ?? 'ahead') as ReturnType<
+    typeof ruleWeightForStatus
+  >;
+
+  it('weight is supplied by statusById (built from phaseState), not recomputed here', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-15', lane: 'main' }),
+      rphase({ id: 'b', start: '2026-01-15', end: '2026-02-01', lane: 'main' }),
+    ];
+    const segs = ruleSegments(phases, statusById, scale);
+    expect(segs.find((s) => s.id === 'a')?.weight).toBe('closed');
+    expect(segs.find((s) => s.id === 'b')?.weight).toBe('active');
+  });
+
+  it('thread-lane phases are excluded from the main-lane rule segments', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-15', lane: 'main' }),
+      rphase({ id: 't', start: '2026-01-01', end: '2026-02-01', lane: 'thread' }),
+    ];
+    const segs = ruleSegments(phases, statusById, scale);
+    expect(segs.map((s) => s.id)).toEqual(['a']);
+  });
+
+  it('computes leftPct/widthPct proportionally from the scale', () => {
+    const phases = [rphase({ id: 'a', start: '2026-01-15', end: '2026-02-01', lane: 'main' })];
+    const segs = ruleSegments(phases, statusById, scale);
+    expect(segs[0].leftPct).toBeCloseTo(scale.toX('2026-01-15')!, 10);
+    expect(segs[0].widthPct).toBeCloseTo(scale.toX('2026-02-01')! - scale.toX('2026-01-15')!, 10);
+  });
+
+  it('a main-lane phase missing a start or end is excluded (unplaced, not a zero-width segment)', () => {
+    const phases = [
+      rphase({ id: 'a', start: null, end: '2026-01-15', lane: 'main' }),
+      rphase({ id: 'b', start: '2026-01-01', end: null, lane: 'main' }),
+      rphase({ id: 'c', start: null, end: null, lane: 'main', source: 'unresolved' }),
+    ];
+    expect(ruleSegments(phases, statusById, scale)).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ruleDiamonds
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ruleDiamonds', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('all 4 MilestoneStatus values pass through unchanged', () => {
+    const ms = [
+      rmilestone({ id: 'm1', phaseId: 'a', date: '2026-01-10', derivedStatus: 'signed' }),
+      rmilestone({ id: 'm2', phaseId: 'a', date: '2026-01-20', derivedStatus: 'due' }),
+      rmilestone({ id: 'm3', phaseId: 'a', date: '2026-02-01', derivedStatus: 'upcoming' }),
+      rmilestone({ id: 'm4', phaseId: 'a', date: '2026-02-10', derivedStatus: 'slipped' }),
+    ];
+    const diamonds = ruleDiamonds(ms, scale);
+    expect(diamonds.map((d) => d.status)).toEqual(['signed', 'due', 'upcoming', 'slipped']);
+  });
+
+  it('a null-date milestone is omitted — no diamond at x:0 or NaN', () => {
+    const ms = [
+      rmilestone({ id: 'm1', phaseId: 'a', date: '2026-01-10', derivedStatus: 'due' }),
+      rmilestone({ id: 'm2', phaseId: 'a', date: null, derivedStatus: 'upcoming' }),
+    ];
+    const diamonds = ruleDiamonds(ms, scale);
+    expect(diamonds.map((d) => d.id)).toEqual(['m1']);
+  });
+
+  it('an anchored milestone and a phase-end-derived milestone both project onto x correctly (no special-casing)', () => {
+    const ms = [
+      rmilestone({ id: 'anchored', phaseId: 'a', date: '2026-01-10', anchored: true, derivedStatus: 'signed' }),
+      rmilestone({ id: 'derived', phaseId: 'a', date: '2026-01-10', anchored: false, derivedStatus: 'signed' }),
+    ];
+    const diamonds = ruleDiamonds(ms, scale);
+    // Same date → same x, regardless of anchored — status/anchored are not
+    // consulted for positioning, only `date` is.
+    expect(diamonds[0].xPct).toBeCloseTo(diamonds[1].xPct, 10);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ruleThreads
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ruleThreads', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('a thread-lane phase with both dates gets a true start→end span', () => {
+    const phases = [rphase({ id: 't', start: '2026-01-01', end: '2026-02-01', lane: 'thread' })];
+    const threads = ruleThreads(phases, scale);
+    expect(threads).toHaveLength(1);
+    expect(threads[0].leftPct).toBeCloseTo(scale.toX('2026-01-01')!, 10);
+    expect(threads[0].widthPct).toBeCloseTo(scale.toX('2026-02-01')! - scale.toX('2026-01-01')!, 10);
+  });
+
+  it('a thread-lane phase missing either date is omitted', () => {
+    const phases = [
+      rphase({ id: 't1', start: null, end: '2026-02-01', lane: 'thread' }),
+      rphase({ id: 't2', start: '2026-01-01', end: null, lane: 'thread' }),
+    ];
+    expect(ruleThreads(phases, scale)).toEqual([]);
+  });
+
+  it('main-lane phases are excluded from thread hairlines', () => {
+    const phases = [rphase({ id: 'a', start: '2026-01-01', end: '2026-02-01', lane: 'main' })];
+    expect(ruleThreads(phases, scale)).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// unplacedPhases
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('unplacedPhases', () => {
+  it('captures an unresolved phase (both dates null) and a legacy-partial phase (one date null)', () => {
+    const phases = [
+      rphase({ id: 'unresolved', start: null, end: null, source: 'unresolved' }),
+      rphase({ id: 'half', start: '2026-01-01', end: null, source: 'legacy-dates' }),
+      rphase({ id: 'half2', start: null, end: '2026-01-01', source: 'legacy-dates' }),
+    ];
+    expect(unplacedPhases(phases).map((p) => p.id)).toEqual(['unresolved', 'half', 'half2']);
+  });
+
+  it('excludes fully-dated phases regardless of lane', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-15', lane: 'main' }),
+      rphase({ id: 't', start: '2026-01-01', end: '2026-01-15', lane: 'thread' }),
+    ];
+    expect(unplacedPhases(phases)).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// foldedLayers
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('foldedLayers', () => {
+  it('pinned: labels and thread fold away; diamonds/today/line stay', () => {
+    expect(foldedLayers(true)).toEqual({
+      labels: false,
+      thread: false,
+      diamonds: true,
+      today: true,
+      line: true,
+    });
+  });
+
+  it('unpinned: everything renders', () => {
+    expect(foldedLayers(false)).toEqual({
+      labels: true,
+      thread: true,
+      diamonds: true,
+      today: true,
+      line: true,
+    });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// xToEpochDay — the INVERSE of buildTimeScale.toX (day-snapped, clamped)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('xToEpochDay', () => {
+  // A scale over day 0..100 (2026-01-01 .. 2026-04-11), today inside the range.
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('round-trips every dated point in range: xToEpochDay(scale, toX(iso)) === epochDayFromISO(iso)', () => {
+    const base = epochDayFromISO('2026-01-01')!;
+    for (let d = 0; d <= 100; d++) {
+      const iso = isoFromEpochDay(base + d)!;
+      const x = scale.toX(iso)!;
+      expect(xToEpochDay(scale, x)).toBe(base + d);
+    }
+  });
+
+  it('round-trips through toX for every whole-day x it produces (toX ∘ xToEpochDay stable on days)', () => {
+    const base = epochDayFromISO('2026-01-01')!;
+    for (let d = 0; d <= 100; d += 7) {
+      const iso = isoFromEpochDay(base + d)!;
+      const x = scale.toX(iso)!;
+      // The snapped epoch feeds back through toX to (approximately) the same x,
+      // and re-snaps to the identical day — the inverse is stable.
+      const epoch = xToEpochDay(scale, x);
+      const x2 = scale.toX(isoFromEpochDay(epoch))!;
+      expect(xToEpochDay(scale, x2)).toBe(epoch);
+    }
+  });
+
+  it('clamps at both ends: x below 0 → the min day, x above 100 → the max day', () => {
+    const loEpoch = xToEpochDay(scale, -50);
+    const hiEpoch = xToEpochDay(scale, 150);
+    expect(loEpoch).toBe(Math.round(scale.minEpoch));
+    expect(hiEpoch).toBe(Math.round(scale.maxEpoch));
+    // And they bracket the whole dated range.
+    expect(loEpoch).toBeLessThanOrEqual(epochDayFromISO('2026-01-01')!);
+    expect(hiEpoch).toBeGreaterThanOrEqual(epochDayFromISO('2026-04-11')!);
+  });
+
+  it('x=0 and x=100 land on the padded domain edges (rounded to whole days)', () => {
+    expect(xToEpochDay(scale, 0)).toBe(Math.round(scale.minEpoch));
+    expect(xToEpochDay(scale, 100)).toBe(Math.round(scale.maxEpoch));
+  });
+
+  it('snaps a fractional x to the nearest whole day', () => {
+    const base = epochDayFromISO('2026-01-01')!;
+    const dayX = scale.toX('2026-02-15')!;
+    const nextX = scale.toX('2026-02-16')!;
+    const target = epochDayFromISO('2026-02-15')!;
+    // A point 40% of the way from one day to the next snaps back to the day.
+    expect(xToEpochDay(scale, dayX + (nextX - dayX) * 0.4)).toBe(target);
+    // 60% of the way snaps forward to the next day.
+    expect(xToEpochDay(scale, dayX + (nextX - dayX) * 0.6)).toBe(target + 1);
+    expect(target).toBe(base + 45);
+  });
+
+  it('single-day scale never divides by zero (span guard mirrors buildTimeScale)', () => {
+    const oneDay = buildTimeScale([{ start: '2026-05-01', end: '2026-05-01' }], '2026-05-01')!;
+    const epoch = xToEpochDay(oneDay, 50);
+    expect(Number.isFinite(epoch)).toBe(true);
+    expect(epoch).toBe(epochDayFromISO('2026-05-01')!);
+  });
+
+  it('non-finite x reads as the left edge; never NaN', () => {
+    expect(xToEpochDay(scale, Number.NaN)).toBe(Math.round(scale.minEpoch));
+    expect(Number.isFinite(xToEpochDay(scale, Number.POSITIVE_INFINITY))).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ruleDiamonds — anchored flag pass-through (Slice 04 T7)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ruleDiamonds — anchored flag', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('carries the resolver anchored flag onto each diamond (drag-refuse source)', () => {
+    const ms = [
+      rmilestone({ id: 'held', phaseId: 'a', date: '2026-01-10', anchored: true, derivedStatus: 'signed' }),
+      rmilestone({ id: 'rides', phaseId: 'a', date: '2026-01-20', anchored: false, derivedStatus: 'due' }),
+    ];
+    const diamonds = ruleDiamonds(ms, scale);
+    expect(diamonds.map((d) => [d.id, d.anchored])).toEqual([
+      ['held', true],
+      ['rides', false],
+    ]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// clientXToPct — pointer clientX → x% within a track rect
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('clientXToPct', () => {
+  it('maps clientX to a proportional percentage of the rect width', () => {
+    const rect = { left: 100, width: 400 };
+    expect(clientXToPct(100, rect)).toBe(0);
+    expect(clientXToPct(300, rect)).toBe(50);
+    expect(clientXToPct(500, rect)).toBe(100);
+  });
+
+  it('is NOT clamped (a drag past the edge overflows; xToEpochDay does the clamp)', () => {
+    const rect = { left: 0, width: 100 };
+    expect(clientXToPct(-20, rect)).toBe(-20);
+    expect(clientXToPct(150, rect)).toBe(150);
+  });
+
+  it('a zero/negative-width rect reads as the left edge (0), never NaN/Infinity', () => {
+    expect(clientXToPct(500, { left: 0, width: 0 })).toBe(0);
+    expect(clientXToPct(500, { left: 0, width: -10 })).toBe(0);
+    // composed with a real rect, x=left always reads 0.
+    expect(Number.isFinite(clientXToPct(42, { left: 42, width: 1 }))).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// boundaryDurationDays / milestoneOffsetDays — pure drag→edit mappers
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('boundaryDurationDays', () => {
+  it('duration = dragged day − upstream start', () => {
+    const start = epochDayFromISO('2026-01-01')!;
+    const dragged = epochDayFromISO('2026-01-15')!;
+    expect(boundaryDurationDays(start, dragged)).toBe(14);
+  });
+
+  it('clamps to ≥ 1 — a boundary dragged to/behind the start is a one-day phase', () => {
+    const start = epochDayFromISO('2026-01-10')!;
+    expect(boundaryDurationDays(start, start)).toBe(1); // onto the start
+    expect(boundaryDurationDays(start, start - 5)).toBe(1); // behind the start
+    expect(boundaryDurationDays(start, start + 1)).toBe(1); // exactly one day
+  });
+});
+
+describe('milestoneOffsetDays', () => {
+  it('offset = dragged day − host phase end (sign convention: negative = before)', () => {
+    const end = epochDayFromISO('2026-03-01')!;
+    expect(milestoneOffsetDays(end, epochDayFromISO('2026-03-11')!)).toBe(10);
+    expect(milestoneOffsetDays(end, epochDayFromISO('2026-02-19')!)).toBe(-10);
+    expect(milestoneOffsetDays(end, end)).toBe(0); // exactly at the end
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ruleBoundaries — internal-boundary drag handles
+// ═══════════════════════════════════════════════════════════════════════════
+
+function link(id: string, followsPhaseId: string | null, name = id) {
+  return { id, followsPhaseId, name };
+}
+
+describe('ruleBoundaries', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('one boundary per chain edge, at the UPSTREAM end, editing the upstream duration', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'b', start: '2026-01-31', end: '2026-02-28' }),
+      rphase({ id: 'c', start: '2026-02-28', end: '2026-03-31' }),
+    ];
+    const chain = [link('a', null), link('b', 'a'), link('c', 'b')];
+    const bounds = ruleBoundaries(phases, chain, scale);
+    // Two internal boundaries (a→b at a.end, b→c at b.end); root 'a' start absent.
+    expect(bounds.map((x) => x.upstreamPhaseId)).toEqual(['a', 'b']);
+    const ab = bounds.find((x) => x.upstreamPhaseId === 'a')!;
+    expect(ab.xPct).toBeCloseTo(scale.toX('2026-01-31')!, 10);
+    expect(ab.upstreamStartEpoch).toBe(epochDayFromISO('2026-01-01')!);
+    expect(ab.downstreamPhaseId).toBe('b');
+    expect(ab.locked).toBe(false);
+  });
+
+  it('root start is never a boundary (the root has no predecessor)', () => {
+    const phases = [rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' })];
+    // 'a' follows nobody → no boundary at its start; no successor → none at its end.
+    expect(ruleBoundaries(phases, [link('a', null)], scale)).toEqual([]);
+  });
+
+  it('locks the boundary when the DOWNSTREAM phase is anchored (refuse source)', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'install', start: '2026-02-15', end: '2026-03-15', anchored: true }),
+    ];
+    const bounds = ruleBoundaries(phases, [link('a', null), link('install', 'a', 'Installation')], scale);
+    expect(bounds).toHaveLength(1);
+    expect(bounds[0].locked).toBe(true);
+    expect(bounds[0].downstreamName).toBe('Installation');
+  });
+
+  it('omits a boundary whose upstream is not placed (no end on the scale)', () => {
+    const phases = [
+      rphase({ id: 'a', start: null, end: null, source: 'unresolved' }),
+      rphase({ id: 'b', start: '2026-02-01', end: '2026-03-01' }),
+    ];
+    expect(ruleBoundaries(phases, [link('a', null), link('b', 'a')], scale)).toEqual([]);
+  });
+
+  it('a fork collapses to one handle; locks if ANY successor is anchored and names it', () => {
+    const phases = [
+      rphase({ id: 'a', start: '2026-01-01', end: '2026-01-31' }),
+      rphase({ id: 'b', start: '2026-01-31', end: '2026-02-15' }),
+      rphase({ id: 'c', start: '2026-02-20', end: '2026-03-10', anchored: true }),
+    ];
+    const chain = [link('a', null), link('b', 'a', 'B'), link('c', 'a', 'C-anchored')];
+    const bounds = ruleBoundaries(phases, chain, scale);
+    expect(bounds.map((x) => x.upstreamPhaseId)).toEqual(['a']);
+    expect(bounds[0].locked).toBe(true);
+    expect(bounds[0].downstreamName).toBe('C-anchored');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// projectGhosts — ripple diff → dashed-terracotta ghost layer
+// ═══════════════════════════════════════════════════════════════════════════
+
+function pchange(over: Partial<RipplePhaseChange> & { phaseId: string }): RipplePhaseChange {
+  return {
+    phaseId: over.phaseId,
+    name: over.name ?? over.phaseId,
+    fromStart: over.fromStart ?? null,
+    toStart: over.toStart ?? null,
+    fromEnd: over.fromEnd ?? null,
+    toEnd: over.toEnd ?? null,
+    moved: over.moved ?? false,
+    anchored: over.anchored ?? false,
+    holds: over.holds ?? false,
+  };
+}
+
+function mmove(over: Partial<RippleMilestoneMove> & { milestoneId: string; phaseId: string }): RippleMilestoneMove {
+  return {
+    milestoneId: over.milestoneId,
+    phaseId: over.phaseId,
+    name: over.name ?? over.milestoneId,
+    fromDate: over.fromDate ?? null,
+    toDate: over.toDate ?? null,
+    moved: over.moved ?? false,
+    anchored: over.anchored ?? false,
+  };
+}
+
+function rdiff(over: Partial<RippleDiff> & { edit: RipplePendingEdit }): RippleDiff {
+  return {
+    edit: over.edit,
+    editedName: over.editedName ?? '',
+    phaseChanges: over.phaseChanges ?? [],
+    milestoneMoves: over.milestoneMoves ?? [],
+    followerCount: over.followerCount ?? 0,
+    heldAnchors: over.heldAnchors ?? [],
+    slackBefore: over.slackBefore ?? null,
+    slackAfter: over.slackAfter ?? null,
+    slackDelta: over.slackDelta ?? null,
+    conflicts: over.conflicts ?? [],
+    anchorViolation: over.anchorViolation ?? false,
+    rippleSize: over.rippleSize ?? 0,
+    durationDelta: over.durationDelta ?? null,
+  };
+}
+
+describe('projectGhosts', () => {
+  const scale = buildTimeScale([{ start: '2026-01-01', end: '2026-04-11' }], '2026-02-20')!;
+
+  it('phase-duration: edited tick at the new END, arrow old→new END, ticks for followers at their new START', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 40 },
+      phaseChanges: [
+        pchange({ phaseId: 'a', fromEnd: '2026-01-31', toEnd: '2026-02-10', moved: true }),
+        pchange({ phaseId: 'b', fromStart: '2026-01-31', toStart: '2026-02-10', toEnd: '2026-03-01', moved: true }),
+      ],
+    });
+    const g = projectGhosts(diff, scale);
+    // edited 'a' tick at its new END; follower 'b' tick at its new START.
+    const tickA = g.ticks.find((t) => t.id === 'a')!;
+    const tickB = g.ticks.find((t) => t.id === 'b')!;
+    expect(tickA.date).toBe('2026-02-10');
+    expect(tickA.xPct).toBeCloseTo(scale.toX('2026-02-10')!, 10);
+    expect(tickB.date).toBe('2026-02-10'); // b's new start
+    // arrow spans old end (Jan 31) → new end (Feb 10).
+    expect(g.arrow).not.toBeNull();
+    expect(g.arrow!.leftPct).toBeCloseTo(scale.toX('2026-01-31')!, 10);
+    expect(g.arrow!.widthPct).toBeCloseTo(scale.toX('2026-02-10')! - scale.toX('2026-01-31')!, 10);
+  });
+
+  it('phase-anchor: the edited tick sits at the new START (not the end)', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-anchor', phaseId: 'a', anchorDate: '2026-02-05' },
+      phaseChanges: [pchange({ phaseId: 'a', fromStart: '2026-01-01', toStart: '2026-02-05', toEnd: '2026-03-01', moved: true, anchored: true })],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks).toHaveLength(1);
+    expect(g.ticks[0].date).toBe('2026-02-05');
+  });
+
+  it('milestone-offset: a dashed diamond at the new date + an arrow old→new; no phase tick', () => {
+    const diff = rdiff({
+      edit: { kind: 'milestone-offset', milestoneId: 'm', phaseId: 'a', offsetDays: 3 },
+      milestoneMoves: [mmove({ milestoneId: 'm', phaseId: 'a', name: 'Sofa', fromDate: '2026-02-01', toDate: '2026-02-14', moved: true })],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks).toEqual([]);
+    expect(g.diamonds).toHaveLength(1);
+    expect(g.diamonds[0]).toMatchObject({ id: 'm', name: 'Sofa', date: '2026-02-14' });
+    expect(g.arrow).not.toBeNull();
+  });
+
+  it('an unmoved phase/milestone contributes no ghost', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 30 },
+      phaseChanges: [
+        pchange({ phaseId: 'a', fromEnd: '2026-01-31', toEnd: '2026-01-31', moved: false }),
+        pchange({ phaseId: 'held', toStart: '2026-03-01', moved: false, anchored: true, holds: true }),
+      ],
+      milestoneMoves: [mmove({ milestoneId: 'm', phaseId: 'a', fromDate: '2026-02-01', toDate: '2026-02-01', moved: false })],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks).toEqual([]);
+    expect(g.diamonds).toEqual([]);
+  });
+
+  it('a null/unplaceable to-date drops that ghost — never a ghost at x:0/NaN', () => {
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 30 },
+      phaseChanges: [pchange({ phaseId: 'a', fromEnd: '2026-01-31', toEnd: null, moved: true })],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks).toEqual([]);
+  });
+
+  it('a ghost past the scale edge overflows in x but keeps the TRUE date on the spec (label clamp)', () => {
+    // toEnd is far past the committed scale's max (2026-04-11) → toX > 100.
+    const diff = rdiff({
+      edit: { kind: 'phase-duration', phaseId: 'a', durationDays: 400 },
+      phaseChanges: [pchange({ phaseId: 'a', fromEnd: '2026-01-31', toEnd: '2026-08-01', moved: true })],
+    });
+    const g = projectGhosts(diff, scale);
+    expect(g.ticks).toHaveLength(1);
+    expect(g.ticks[0].xPct).toBeGreaterThan(100); // raw overflow — the component clamps position
+    expect(g.ticks[0].date).toBe('2026-08-01'); // the true date is preserved for the label
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// projectBaselineGhosts — the clay v1-baseline ghost layer (R100 "Memory", S5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('projectBaselineGhosts', () => {
+  // A scale over a single dated phase spanning Jun 1 → Sep 1, today mid-range.
+  const scale = buildTimeScale([{ start: '2026-06-01', end: '2026-09-01' }], '2026-07-01')!;
+
+  it('ghosts only the boundary that moved — the held boundary makes no mark', () => {
+    const diff: BaselineGhostDiff = {
+      phases: [
+        // end moved (Jul 10 → Jul 20); start held (Jun 15)
+        { id: 'p1', baselineStart: '2026-06-15', currentStart: '2026-06-15', baselineEnd: '2026-07-10', currentEnd: '2026-07-20' },
+      ],
+      milestones: [],
+    };
+    const g = projectBaselineGhosts(diff, scale);
+    expect(g.ticks).toHaveLength(1);
+    expect(g.ticks[0]).toMatchObject({ id: 'p1:end', date: '2026-07-10' });
+    expect(g.ticks[0].xPct).toBeGreaterThanOrEqual(0);
+    expect(g.ticks[0].xPct).toBeLessThanOrEqual(100);
+  });
+
+  it('ghosts BOTH boundaries of a deleted-in-current entry (null current dates)', () => {
+    const diff: BaselineGhostDiff = {
+      phases: [
+        { id: 'gone', baselineStart: '2026-06-15', currentStart: null, baselineEnd: '2026-07-10', currentEnd: null },
+      ],
+      milestones: [],
+    };
+    const g = projectBaselineGhosts(diff, scale);
+    expect(g.ticks.map((t) => t.id).sort()).toEqual(['gone:end', 'gone:start']);
+  });
+
+  it('ghosts a moved milestone and CLAMPS an out-of-range position while keeping the true date', () => {
+    const diff: BaselineGhostDiff = {
+      phases: [],
+      milestones: [{ id: 'm1', baselineDate: '2027-01-01', currentDate: '2026-08-01' }],
+    };
+    const g = projectBaselineGhosts(diff, scale);
+    expect(g.diamonds).toHaveLength(1);
+    expect(g.diamonds[0]).toMatchObject({ id: 'm1', date: '2027-01-01' });
+    expect(g.diamonds[0].xPct).toBe(100); // clamped to the scale's edge
+  });
+
+  it('skips a boundary/milestone with a null baseline date — no promise to mark', () => {
+    const diff: BaselineGhostDiff = {
+      phases: [{ id: 'p', baselineStart: null, currentStart: '2026-06-20', baselineEnd: null, currentEnd: '2026-07-20' }],
+      milestones: [{ id: 'm', baselineDate: null, currentDate: '2026-07-01' }],
+    };
+    const g = projectBaselineGhosts(diff, scale);
+    expect(g.ticks).toHaveLength(0);
+    expect(g.diamonds).toHaveLength(0);
+  });
+});
