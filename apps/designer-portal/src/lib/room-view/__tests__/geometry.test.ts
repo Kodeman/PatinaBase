@@ -45,6 +45,7 @@ describe('areaOf', () => {
     walls: [],
     windows: [],
     doors: [],
+    openings: [],
     objects: [],
     floor: [],
   });
@@ -95,6 +96,7 @@ describe('overallDims', () => {
     walls: [],
     windows: [],
     doors: [],
+    openings: [],
     objects: [],
     floor: [],
   });

@@ -195,6 +195,19 @@ exports[`planPrimitives — deterministic / stable output (regression) is a stab
     "wallIndex": 3,
   },
   {
+    "kind": "openingClear",
+    "openingIndex": 0,
+    "rect": {
+      "angleDeg": 90,
+      "cx": 19.225,
+      "cz": 5.5,
+      "d": 0.45,
+      "w": 3,
+    },
+    "tip": "opening — 3′ 0″ wide",
+    "wallIndex": 2,
+  },
+  {
     "cat": "sofa",
     "kind": "ghostObject",
     "label": "sofa · 84″ × 36″",

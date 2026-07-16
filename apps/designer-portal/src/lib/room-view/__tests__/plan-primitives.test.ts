@@ -40,6 +40,10 @@ describe('planPrimitives — counts per kind on the prototype room', () => {
     expect(counts.doorSwingArc ?? 0).toBe(0);
   });
 
+  it('emits one clear for the pass-through opening (no leaf/arc/lines)', () => {
+    expect(counts.openingClear).toBe(1);
+  });
+
   it('emits 5 furniture ghosts', () => {
     expect(counts.ghostObject).toBe(5);
   });
@@ -48,8 +52,8 @@ describe('planPrimitives — counts per kind on the prototype room', () => {
     expect(counts.dimLabel).toBe(2);
   });
 
-  it('emits 19 primitives total in a fixed order', () => {
-    expect(prims).toHaveLength(19);
+  it('emits 20 primitives total in a fixed order', () => {
+    expect(prims).toHaveLength(20);
     expect(prims.map((p) => p.kind)).toEqual([
       'floor',
       'wallStrip',
@@ -63,6 +67,7 @@ describe('planPrimitives — counts per kind on the prototype room', () => {
       'windowLines',
       'doorClear',
       'doorLeaf',
+      'openingClear',
       'ghostObject',
       'ghostObject',
       'ghostObject',
@@ -71,6 +76,48 @@ describe('planPrimitives — counts per kind on the prototype room', () => {
       'dimLabel',
       'dimLabel',
     ]);
+  });
+});
+
+describe('planPrimitives — pass-through openings render as a plain wall gap', () => {
+  const prims = planPrimitives(prototypeRoom());
+
+  it('emits exactly one openingClear, on the opening’s wall (index 2)', () => {
+    const clears = prims.filter((p) => p.kind === 'openingClear');
+    expect(clears).toHaveLength(1);
+    if (clears[0].kind === 'openingClear') {
+      expect(clears[0].wallIndex).toBe(2);
+      expect(clears[0].openingIndex).toBe(0);
+    }
+  });
+
+  it('tips the opening with its width via ftIn', () => {
+    const clear = prims.find((p) => p.kind === 'openingClear');
+    if (clear?.kind === 'openingClear') {
+      expect(clear.tip).toBe('opening — 3′ 0″ wide');
+    }
+  });
+
+  it('draws NO leaf, NO swing arc, and NO glass lines for the opening (wall 2)', () => {
+    // the door (wall 3) and windows (wall 4) own the only leaf/lines; wall 2 stays a bare gap
+    const onOpeningWall = (p: PlanPrimitive): boolean =>
+      (p.kind === 'doorLeaf' || p.kind === 'doorSwingArc' || p.kind === 'windowLines') &&
+      p.wallIndex === 2;
+    expect(prims.some(onOpeningWall)).toBe(false);
+    // and no leaf/arc/lines kinds gained a count from the opening at all
+    const counts = countByKind(prims);
+    expect(counts.doorLeaf).toBe(1); // door only
+    expect(counts.doorSwingArc ?? 0).toBe(0);
+    expect(counts.windowLines).toBe(2); // windows only
+  });
+
+  it('clears the east wall strip zone at 4–7 ft along the wall (centre z = 5.5)', () => {
+    const clear = prims.find((p) => p.kind === 'openingClear');
+    if (clear?.kind === 'openingClear') {
+      // east wall runs (19,0)→(19,14); opening 4–7 ft → z-midpoint 5.5, width 3
+      expect(clear.rect.cz).toBeCloseTo(5.5, 6);
+      expect(clear.rect.w).toBeCloseTo(3, 6);
+    }
   });
 });
 

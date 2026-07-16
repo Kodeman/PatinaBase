@@ -32,6 +32,8 @@ export function prototypeRoom(): RoomGeometry {
     ],
     // one door on the south wall (index 3) — swing unknown → NO arc (I73b)
     doors: [{ wall: 3, from: 15.5, to: 18.5, h: 7 }],
+    // one cased pass-through opening on the east wall (index 2) — a plain wall gap
+    openings: [{ wall: 2, from: 4, to: 7, h: null }],
     // detected furniture — x,z are the top-left corners (as in the prototype)
     objects: [
       { x: 15.6, z: 3.5, w: 3.0, d: 7.0, h: 2.6, cat: 'sofa', label: 'sofa · 84″ × 36″' },

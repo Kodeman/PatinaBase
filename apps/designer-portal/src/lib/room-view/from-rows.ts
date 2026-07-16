@@ -19,13 +19,14 @@
  * Responsibilities: order walls by `position`; resolve wall_element_id → wall index;
  * default wall thickness to 0.45 ft when null (I73d, flagged as convention);
  * convert object centre → corner (x = center_x − w/2) while preserving rotation;
- * and drop/flag incomplete or unbucketable rows defensively — this NEVER throws on
- * partial data. It returns the geometry plus a `warnings: string[]`.
+ * bucket 'opening'-kind rows (cased/pass-through doorways) into openings[]; and
+ * drop/flag only truly malformed rows defensively — this NEVER throws on partial
+ * data. It returns the geometry plus a `warnings: string[]`.
  *
  * Pure: no React, no IO, no DOM.
  */
 
-import type { Confidence, RoomDoor, RoomGeometry, RoomWindow } from './geometry';
+import type { Confidence, RoomDoor, RoomGeometry, RoomOpening, RoomWindow } from './geometry';
 
 /** Default wall thickness drawing convention (RoomPlan walls are planes) — I73(d). */
 export const THICKNESS_CONVENTION_FT = 0.45;
@@ -197,11 +198,24 @@ export function roomGeometryFromRows(
     });
   }
 
-  // ——— openings: no bucket in the v1 contract (see report / DECISIONS feed) ———
-  for (const row of elements.filter((e) => e.kind === 'opening')) {
-    warnings.push(
-      `opening element ${row.id} dropped — RoomGeometry v1 has no openings[] bucket; parser/portal contract gap`,
-    );
+  // ——— openings: cased/pass-through doorways (no leaf) — a real wall gap ———
+  const openings: RoomOpening[] = [];
+  for (const row of elements.filter((e) => e.kind === 'opening').sort(byPosition)) {
+    const wall = resolveWall(row);
+    if (wall == null) {
+      warnings.push(`opening element ${row.id} dropped — wall_element_id '${row.wall_element_id ?? ''}' unresolved`);
+      continue;
+    }
+    if (!isNum(row.from_ft) || !isNum(row.to_ft)) {
+      warnings.push(`opening element ${row.id} dropped — missing from_ft/to_ft`);
+      continue;
+    }
+    openings.push({
+      wall,
+      from: row.from_ft as number,
+      to: row.to_ft as number,
+      h: isNum(row.head_ft) ? (row.head_ft as number) : null,
+    });
   }
 
   // ——— objects: centre → corner, preserve rotation ———
@@ -253,6 +267,7 @@ export function roomGeometryFromRows(
     walls,
     windows,
     doors,
+    openings,
     objects,
     floor,
   };

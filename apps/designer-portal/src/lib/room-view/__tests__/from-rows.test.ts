@@ -172,21 +172,57 @@ describe('roomGeometryFromRows — defensive handling of partial rows (never thr
     expect(warnings.some((w) => w.includes('obj-bad'))).toBe(true);
   });
 
-  it('drops opening-kind elements (no v1 bucket) and warns about the contract gap', () => {
-    const elements = [
-      el({ id: 'wall-A', kind: 'wall', position: 0, x1_ft: 0, z1_ft: 0, x2_ft: 10, z2_ft: 0 }),
-      el({ id: 'open-1', kind: 'opening', wall_element_id: 'wall-A', from_ft: 2, to_ft: 5 }),
-    ];
-    const { warnings } = roomGeometryFromRows(geoRow(), elements);
-    expect(warnings.some((w) => w.includes('open-1') && w.includes('openings[]'))).toBe(true);
-  });
-
   it('does not throw when given a null geometry row and empty elements', () => {
     expect(() => roomGeometryFromRows(null, [])).not.toThrow();
     const { geometry, thicknessConvention } = roomGeometryFromRows(null, []);
     expect(geometry.thick).toBe(THICKNESS_CONVENTION_FT);
     expect(thicknessConvention).toBe(true);
     expect(geometry.walls).toEqual([]);
+  });
+});
+
+describe('roomGeometryFromRows — pass-through openings buckets', () => {
+  it('buckets a well-formed opening into openings[] resolved to its wall index', () => {
+    const elements = [
+      el({ id: 'wall-A', kind: 'wall', position: 0, x1_ft: 0, z1_ft: 0, x2_ft: 10, z2_ft: 0 }),
+      el({ id: 'wall-B', kind: 'wall', position: 1, x1_ft: 10, z1_ft: 0, x2_ft: 10, z2_ft: 8 }),
+      el({ id: 'open-1', kind: 'opening', wall_element_id: 'wall-B', from_ft: 2, to_ft: 5, head_ft: 7 }),
+    ];
+    const { geometry } = roomGeometryFromRows(geoRow(), elements);
+    expect(geometry.openings).toHaveLength(1);
+    expect(geometry.openings[0]).toMatchObject({ wall: 1, from: 2, to: 5, h: 7 });
+    // an opening is NOT a door and NOT a window
+    expect(geometry.doors).toHaveLength(0);
+    expect(geometry.windows).toHaveLength(0);
+  });
+
+  it('defaults opening head to null when absent (cased openings often omit it)', () => {
+    const elements = [
+      el({ id: 'wall-A', kind: 'wall', position: 0, x1_ft: 0, z1_ft: 0, x2_ft: 10, z2_ft: 0 }),
+      el({ id: 'open-1', kind: 'opening', wall_element_id: 'wall-A', from_ft: 2, to_ft: 5 }),
+    ];
+    const { geometry } = roomGeometryFromRows(geoRow(), elements);
+    expect(geometry.openings[0].h).toBeNull();
+  });
+
+  it('drops an opening with an unresolvable wall and warns (malformed only)', () => {
+    const elements = [
+      el({ id: 'wall-A', kind: 'wall', position: 0, x1_ft: 0, z1_ft: 0, x2_ft: 10, z2_ft: 0 }),
+      el({ id: 'open-x', kind: 'opening', wall_element_id: 'nope', from_ft: 2, to_ft: 5 }),
+    ];
+    const { geometry, warnings } = roomGeometryFromRows(geoRow(), elements);
+    expect(geometry.openings).toHaveLength(0);
+    expect(warnings.some((w) => w.includes('open-x') && w.includes('unresolved'))).toBe(true);
+  });
+
+  it('drops an opening missing from_ft/to_ft and warns', () => {
+    const elements = [
+      el({ id: 'wall-A', kind: 'wall', position: 0, x1_ft: 0, z1_ft: 0, x2_ft: 10, z2_ft: 0 }),
+      el({ id: 'open-y', kind: 'opening', wall_element_id: 'wall-A', from_ft: 2, to_ft: null }),
+    ];
+    const { geometry, warnings } = roomGeometryFromRows(geoRow(), elements);
+    expect(geometry.openings).toHaveLength(0);
+    expect(warnings.some((w) => w.includes('open-y') && w.includes('from_ft/to_ft'))).toBe(true);
   });
 });
 

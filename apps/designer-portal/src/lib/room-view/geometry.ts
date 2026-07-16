@@ -71,6 +71,21 @@ export interface RoomDoor {
   swingInward?: boolean | null;
 }
 
+/**
+ * A pass-through / cased opening in a wall — a doorway WITHOUT a door leaf.
+ * Rendered as a clear gap in the wall run (no leaf, no swing arc, no glass lines).
+ * Common in real rooms; a wall gap a designer must see (fidelity, not decoration).
+ */
+export interface RoomOpening {
+  /** index into RoomGeometry.walls */
+  wall: number;
+  /** distance along the wall from its start point (x1,z1), feet */
+  from: number;
+  to: number;
+  /** head (opening top) height above floor, feet — often unknown for cased openings */
+  h?: number | null;
+}
+
 export interface RoomObject {
   /** top-left CORNER of the axis-aligned footprint, feet (adapter converts center→corner) */
   x: number;
@@ -103,6 +118,8 @@ export interface RoomGeometry {
   walls: RoomWall[];
   windows: RoomWindow[];
   doors: RoomDoor[];
+  /** cased/pass-through openings (doorways without a leaf) — rendered as plain wall gaps */
+  openings: RoomOpening[];
   objects: RoomObject[];
   /** floor polygon, feet; empty when the scan carried none (renderers fall back to the bounding rect) */
   floor: Array<{ x: number; z: number }>;

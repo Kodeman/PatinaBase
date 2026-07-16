@@ -15,7 +15,7 @@
  *
  * Output order is fixed and deterministic (no randomness, no sorting on identity):
  *   floor · wallStrips · (windowClear, windowLines)* · (doorClear, doorLeaf, doorSwingArc?)* ·
- *   ghostObject* · dimLabel×2
+ *   openingClear* · ghostObject* · dimLabel×2
  *
  * Wall handling: the prototype is axis-aligned and hardcodes strip rects. Here every wall
  * strip is emitted as an OrientedRect (center + size + yaw), so slightly-off-axis walls
@@ -116,6 +116,16 @@ export interface DoorSwingArcPrimitive {
   sweepFlag: 0 | 1;
 }
 
+export interface OpeningClearPrimitive {
+  kind: 'openingClear';
+  openingIndex: number;
+  wallIndex: number;
+  /** the wall-strip zone to paint in the background colour — a plain gap, no leaf/arc/lines */
+  rect: OrientedRect;
+  /** hover tip built via ftIn (the opening's hover target) */
+  tip: string;
+}
+
 export interface GhostObjectPrimitive {
   kind: 'ghostObject';
   objectIndex: number;
@@ -147,6 +157,7 @@ export type PlanPrimitive =
   | DoorClearPrimitive
   | DoorLeafPrimitive
   | DoorSwingArcPrimitive
+  | OpeningClearPrimitive
   | GhostObjectPrimitive
   | DimLabelPrimitive;
 
@@ -223,6 +234,22 @@ export function planPrimitives(g: RoomGeometry, opts: PlanPrimitivesOptions = {}
     if (door.swing === 'left' || door.swing === 'right') {
       out.push(doorSwingArc(di, door.wall, leaf, width));
     }
+  });
+
+  // ——— pass-through openings: a plain wall gap (no leaf, no arc, no glass lines) ———
+  (g.openings ?? []).forEach((op, oi) => {
+    const wall = walls[op.wall];
+    if (!wall) return; // bad ref — adapter should have dropped it; stay silent + deterministic
+    const geom = openingGeom(wall, op.from, op.to, thick, centroid);
+    if (!geom) return;
+    const width = Math.abs(op.to - op.from);
+    out.push({
+      kind: 'openingClear',
+      openingIndex: oi,
+      wallIndex: op.wall,
+      rect: geom.zone,
+      tip: `opening — ${ftIn(width)} wide`,
+    });
   });
 
   // ——— detected furniture ghosts ———
