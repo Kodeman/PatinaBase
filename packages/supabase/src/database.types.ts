@@ -1737,6 +1737,13 @@ export type Database = {
             foreignKeyName: "client_discovery_room_scan_id_fkey"
             columns: ["room_scan_id"]
             isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "client_discovery_room_scan_id_fkey"
+            columns: ["room_scan_id"]
+            isOneToOne: false
             referencedRelation: "room_scans"
             referencedColumns: ["id"]
           },
@@ -6118,6 +6125,13 @@ export type Database = {
             foreignKeyName: "lead_room_scans_scan_id_fkey"
             columns: ["scan_id"]
             isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "lead_room_scans_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
             referencedRelation: "room_scans"
             referencedColumns: ["id"]
           },
@@ -6237,6 +6251,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_room_scan_id_fkey"
+            columns: ["room_scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
           },
           {
             foreignKeyName: "leads_room_scan_id_fkey"
@@ -12663,6 +12684,13 @@ export type Database = {
             foreignKeyName: "room_features_scan_id_fkey"
             columns: ["scan_id"]
             isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "room_features_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
             referencedRelation: "room_scans"
             referencedColumns: ["id"]
           },
@@ -12794,6 +12822,13 @@ export type Database = {
             foreignKeyName: "room_scan_associations_scan_id_fkey"
             columns: ["scan_id"]
             isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "room_scan_associations_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
             referencedRelation: "room_scans"
             referencedColumns: ["id"]
           },
@@ -12874,6 +12909,13 @@ export type Database = {
           width_ft?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "room_scan_geometry_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: true
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
           {
             foreignKeyName: "room_scan_geometry_scan_id_fkey"
             columns: ["scan_id"]
@@ -12982,6 +13024,13 @@ export type Database = {
           z2_ft?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "room_scan_geometry_elements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
           {
             foreignKeyName: "room_scan_geometry_elements_scan_id_fkey"
             columns: ["scan_id"]
@@ -13136,6 +13185,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "rooms_with_hero_frames"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scan_images_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
           },
           {
             foreignKeyName: "room_scan_images_scan_id_fkey"
@@ -16736,6 +16792,45 @@ export type Database = {
           },
           {
             foreignKeyName: "project_time_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_scan_documents: {
+        Row: {
+          active_section: string | null
+          coverage_percentage: number | null
+          created_at: string | null
+          depth_ft: number | null
+          document_client_name: string | null
+          engagement_id: string | null
+          engagement_kind: string | null
+          floor_area_sqft: number | null
+          name: string | null
+          owner_client_name: string | null
+          parse_status: string | null
+          quality_grade: string | null
+          room_type: string | null
+          scan_id: string | null
+          scanned_at: string | null
+          status: string | null
+          user_id: string | null
+          wall_height_ft: number | null
+          width_ft: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_scans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scans_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
