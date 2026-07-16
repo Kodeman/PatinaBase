@@ -7,7 +7,7 @@
  * component and the doors that display it.
  *
  * Sequence: press `g`, then within ~1.2s one of the registry's chord keys
- * (l/p/o/a/h/t today). Rooms navigate (`router.push`); ledgers dispatch the
+ * (l/p/o/a/h/t/r today). Rooms navigate (`router.push`); ledgers dispatch the
  * same `document:open-ledger` event the Studio Drawer and ⌘K already use;
  * The Post dispatches the existing `openPost`. Renders nothing — no new UI.
  *
@@ -34,6 +34,7 @@ const CHORD_WINDOW_MS = 1200;
 const ROOM_HREF: Partial<Record<string, string>> = {
   library: '/library',
   people: '/people',
+  rooms: '/rooms',
 };
 
 // Only surfaces that declare a two-key "g then X" chord are reachable this

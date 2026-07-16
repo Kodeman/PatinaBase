@@ -2,9 +2,10 @@
 
 /**
  * The D13 bottom sheets. Paper sheets are document parts (spine, margin item,
- * timer); the drawer is the desk's book list (its five books open the
- * existing charcoal DocSheet ledgers via the open-ledger event). One scrim,
- * scrim-tap dismiss; no shadows (D4). Shown below 980px only.
+ * timer); the drawer is the desk's book list (its six books open the
+ * existing charcoal DocSheet ledgers via the open-ledger event — Library,
+ * People, and Rooms are Rooms, so the same event walks them in instead). One
+ * scrim, scrim-tap dismiss; no shadows (D4). Shown below 980px only.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -33,11 +34,14 @@ const LEDGERS: {
   count: string;
   weight: 'room' | 'sheet';
 }[] = [
-  // D14: the Library is a Room (walk in); the rest are Sheets (pulled over).
+  // D14: Library, People, and Rooms are Rooms (walk in); the rest are Sheets
+  // (pulled over). `name` must lowercase to the registry key — openLedger()
+  // dispatches `name.toLowerCase()` and the drawer matches on `key`.
   { key: 'library', name: 'Library', spine: 'var(--color-clay)', count: 'a room · walk in', weight: 'room' },
   { key: 'orders', name: 'Orders', spine: 'var(--color-dusty-blue)', count: 'cross-engagement POs', weight: 'sheet' },
   { key: 'accounts', name: 'Accounts', spine: 'var(--color-sage)', count: 'revenue · A/R', weight: 'sheet' },
   { key: 'people', name: 'People', spine: 'var(--color-terracotta)', count: 'a room · walk in', weight: 'room' },
+  { key: 'rooms', name: 'Rooms', spine: 'var(--color-aged-oak)', count: 'a room · walk in', weight: 'room' },
   { key: 'hours', name: 'Hours', spine: 'var(--color-mocha)', count: 'this week', weight: 'sheet' },
 ];
 
@@ -91,7 +95,7 @@ export function MobileSheets() {
 
   if (!sheet) return null;
 
-  // ── Drawer: the five books ──
+  // ── Drawer: the six books ──
   if (sheet.kind === 'drawer') {
     return (
       <Sheet tone="dark" onClose={closeSheet}>
@@ -105,7 +109,7 @@ export function MobileSheets() {
           }}
         />
         <h2 className="mt-3 font-heading text-[1.05rem] text-[var(--color-pearl)]">
-          The drawer <em className="italic text-[var(--color-clay)]">· five books</em>
+          The drawer <em className="italic text-[var(--color-clay)]">· six books</em>
         </h2>
         <p className="mt-0.5 text-[11.5px] text-[rgba(250,247,242,0.45)]">
           Pulled over whatever you&apos;re holding. Put back when done.

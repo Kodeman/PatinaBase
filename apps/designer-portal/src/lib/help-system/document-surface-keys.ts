@@ -17,6 +17,7 @@ export const DOCUMENT_SURFACE_KEYS = {
   doc:      'designer-portal/document/doc',
   library:  'designer-portal/document/library',
   people:   'designer-portal/document/people',
+  rooms:    'designer-portal/document/rooms',
   drafting: 'designer-portal/document/drafting',
   compose:  'designer-portal/document/compose',
   // ─── Desk-era additions (help-desk Wave 0) — mirror of the canonical

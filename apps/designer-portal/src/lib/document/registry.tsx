@@ -23,6 +23,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BookOpen,
   Users,
+  Scan,
   PenTool,
   Package,
   Receipt,
@@ -64,13 +65,13 @@ export interface StudioSurface {
 }
 
 /**
- * The two Rooms (D14/R39/R50) — places you walk into — plus the Drafting
- * Room, which is room-weight but document-scoped: it only exists once a
- * proposal is in hand, so it never appears as a standalone doorway from the
- * Desk the way Library and People do.
+ * The three Rooms (D14/R39/R50/R107) — places you walk into — plus the
+ * Drafting Room, which is room-weight but document-scoped: it only exists
+ * once a proposal is in hand, so it never appears as a standalone doorway
+ * from the Desk the way Library, People, and The Rooms do.
  *
- * Ground truth: these exact icons (BookOpen, Users) are what the Studio
- * Drawer already imports from lucide-react — do not substitute.
+ * Ground truth: these exact icons (BookOpen, Users, Scan) are what the
+ * Studio Drawer already imports from lucide-react — do not substitute.
  */
 export const STUDIO_ROOMS: StudioSurface[] = [
   {
@@ -99,6 +100,20 @@ export const STUDIO_ROOMS: StudioSurface[] = [
     help: {
       surfaceKey: 'designer-portal/document/people',
       blurb: 'Everyone the studio works with — clients, makers, trades, the field.',
+    },
+  },
+  {
+    key: 'rooms',
+    kind: 'room',
+    label: 'The Rooms',
+    aliases: ['rooms', 'scans', 'room view'],
+    icon: Scan,
+    weight: 'room',
+    shortcut: ['g', 'r'],
+    scope: 'global',
+    help: {
+      surfaceKey: 'designer-portal/document/rooms',
+      blurb: 'Every scanned room, redrawn in the studio\'s hand.',
     },
   },
   {

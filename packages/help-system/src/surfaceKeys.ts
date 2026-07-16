@@ -597,6 +597,7 @@ export const SurfaceKeys = {
       Doc:      'designer-portal/document/doc',
       Library:  'designer-portal/document/library',
       People:   'designer-portal/document/people',
+      Rooms:    'designer-portal/document/rooms',
       Drafting: 'designer-portal/document/drafting',
       Compose:  'designer-portal/document/compose',
       // ─── Desk-era additions (help-desk Wave 0 · R97 The Walkthrough) ─────────
