@@ -174,10 +174,15 @@ export function RuleDiamond({
       onPointerUp={draggable ? endDrag : undefined}
       onPointerCancel={draggable ? endDrag : undefined}
       aria-label={`${label} — reveal in the schedule`}
-      // z-[1]: interactive controls sit above the decorative layers (track /
-      // today / thread — all z-auto AND pointer-events-none) in both paint
-      // and hit-test order (D-2).
-      className="absolute z-[1] rotate-45 cursor-pointer p-0"
+      // z-[3]: interactive controls sit above the decorative layers (track /
+      // today / thread — all z-auto AND pointer-events-none; ghost layer z-[1],
+      // pointer-events-none). ABOVE the boundary handle (z-[2]) specifically so
+      // a milestone sitting EXACTLY at a phase boundary (offset 0, at the phase
+      // end) isn't occluded by the handle's 12px hit area — the diamond stays
+      // tappable (reveal) and draggable (slide). The handle's wider hit area
+      // still overhangs the ±4px diamond on both sides, so the boundary itself
+      // stays grabbable too (S4-3 carried-forward fix).
+      className="absolute z-[3] rotate-45 cursor-pointer p-0"
       style={{
         left: `${xPct}%`,
         top,

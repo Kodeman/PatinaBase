@@ -55,6 +55,7 @@ import {
   itemsForPhase,
   todayIndex,
   phaseMeta,
+  phaseGhostLine,
   threadsFor,
   type SpinePhaseState,
 } from '@/lib/document/schedule-spine-derivation';
@@ -65,6 +66,7 @@ import {
 } from '@/lib/document/coordination-derivation';
 import { phaseAnchorId } from '@/lib/document/phase-anchor';
 import { useScheduleNav, type ScheduleRevealTarget } from './schedule-nav-context';
+import { useRippleSession } from './schedule-ripple-context';
 import { StrataMiniRule } from '../strata-mini-rule';
 import { DocSheet } from '../overlays/doc-sheet';
 import { OpenItemSheet } from '../coordination/open-item-sheet';
@@ -153,6 +155,13 @@ export function ScheduleSpine({
   // The Rule (the minimap) reveals phases/milestones here through the nav
   // context. Inert when no provider is above (the spine works standalone).
   const { registerRevealHandler } = useScheduleNav();
+
+  // The single ripple session (Slice 04). A time edit (duration/anchor) begins
+  // a preview here; every consumer — this spine's downstream ghost meta, the
+  // Rule's ghost layer, the confirm strip — reads the SAME `diff`. INERT
+  // (providerPresent=false, no-op begin) when no RippleProvider is above, so
+  // the spine still works standalone (batch 4 mounts the provider on the page).
+  const ripple = useRippleSession();
 
   const allItems = useMemo(() => items ?? [], [items]);
   const allTasks = useMemo(() => tasks ?? [], [tasks]);
@@ -327,6 +336,24 @@ export function ScheduleSpine({
     ],
   );
 
+  // Downstream ghost meta (Slice 04 T11) — while a ripple is in flight, every
+  // MOVED phase wears a dashed-terracotta preview of its new range under the
+  // meta line. Keyed by phaseId; phaseGhostLine returns null for the unmoved,
+  // so this map holds only movers (the edited phase included). The map is empty
+  // whenever no session is active → PhaseSection renders byte-identically.
+  const ghostLineByPhase = useMemo(() => {
+    const map = new Map<string, string>();
+    if (ripple.diff == null) return map;
+    for (const pc of ripple.diff.phaseChanges) {
+      const line = phaseGhostLine(
+        { start: pc.fromStart, end: pc.fromEnd },
+        { start: pc.toStart, end: pc.toEnd },
+      );
+      if (line) map.set(pc.phaseId, line);
+    }
+    return map;
+  }, [ripple.diff]);
+
   // ═══════════════════════════════════════════════════════════════════════
   // Compose (Slice 03) — birth + write paths. The entry grammar's parsed
   // output is persisted here; resolveSchedule stays the only engine (R100).
@@ -409,19 +436,23 @@ export function ScheduleSpine({
     ? 'Add failed — nothing was saved; your entry is kept'
     : null;
 
+  // ── The ruled boundary (Slice 04 R100) ────────────────────────────────────
+  // A TIME edit — a phase's duration or a hard anchor date — never writes
+  // directly from the spine anymore: it BEGINS a ripple preview (origin
+  // 'spine'), and the confirm strip commits or reverts it. Nothing moves until
+  // Commit. So these two close the inline compose panel and hand off to the
+  // strip. Everything ELSE the spine writes stays DIRECT — the unpin chip,
+  // the ghost-add line, and milestone/phase create+delete are not time-shifting
+  // ripples (they add/remove entities or clear a pin), so they persist
+  // immediately as before. (Rule-side drags begin the same ripple with origin
+  // 'rule'; both surfaces share one session.)
   const handleEditDuration = (phaseId: string, days: number) => {
-    updateChain.mutate({ phaseId, projectId, durationDays: days }, { onSuccess: closeCompose });
+    ripple.begin({ kind: 'phase-duration', phaseId, durationDays: days }, 'spine');
+    closeCompose(); // the strip takes over the preview + commit
   };
   const handleSetAnchor = (phaseId: string, date: string) => {
-    updateChain.mutate(
-      { phaseId, projectId, anchorDate: date },
-      {
-        onSuccess: () => {
-          scheduleEvents.scheduleAnchorSet({ surface: 'project', project_id: projectId, target: 'phase', set: true });
-          closeCompose();
-        },
-      },
-    );
+    ripple.begin({ kind: 'phase-anchor', phaseId, anchorDate: date }, 'spine');
+    closeCompose(); // the strip takes over the preview + commit
   };
   const handleUnpinPhase = (phaseId: string) => {
     updateChain.mutate(
@@ -696,11 +727,9 @@ export function ScheduleSpine({
                         }
                         onCancel={closeCompose}
                       />
-                      {updateChain.isError && (
-                        <span className="font-mono text-[0.58rem] uppercase tracking-[0.06em] text-[var(--color-terracotta)]">
-                          Change failed — nothing was saved
-                        </span>
-                      )}
+                      {/* No inline error surface here: a duration/anchor entry
+                          now begins a ripple preview (it never writes), and the
+                          confirm strip owns commit + its failure line. */}
                     </div>
                   ) : composeKind === 'milestone' ? (
                     <MilestoneComposer
@@ -752,6 +781,7 @@ export function ScheduleSpine({
                       }
                       metaLine={entry.metaLine}
                       overrunText={entry.overrunText}
+                      ghostLine={ghostLineByPhase.get(entry.phase.id) ?? null}
                       milestones={entry.milestones}
                       items={entry.items}
                       tasks={allTasks}
@@ -770,10 +800,10 @@ export function ScheduleSpine({
                             addMilestone.reset();
                             setCompose({ phaseId: entry.phase.id, kind: 'milestone' });
                           }}
-                          onEditDates={() => {
-                            updateChain.reset();
-                            setCompose({ phaseId: entry.phase.id, kind: 'edit' });
-                          }}
+                          // Opens the duration/anchor entry panel. No mutation
+                          // reset needed — the panel begins a ripple preview, it
+                          // never carries a stale write error (the strip does).
+                          onEditDates={() => setCompose({ phaseId: entry.phase.id, kind: 'edit' })}
                           onDelete={() => {
                             deletePhaseWithRelink.reset();
                             setCompose({ phaseId: entry.phase.id, kind: 'delete' });

@@ -261,6 +261,35 @@ export function phaseMeta(input: {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// phaseGhostLine — the Spine's downstream ghost meta (Slice 04 T11)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * The dashed-terracotta preview line under a moved phase's meta while a ripple
+ * is in flight (R100 — "Every time edit previews before it takes"). The Rule
+ * ghosts the whole chain graphically; this is its inline twin on the Spine —
+ * one honest new range per moved phase.
+ *
+ *   phaseGhostLine({start:'2026-06-01',end:'2026-06-30'},
+ *                  {start:'2026-06-26',end:'2026-07-29'})  →  '→ Jun 26 – Jul 29'
+ *
+ * Returns null when the phase is UNMOVED (from equals to — nothing to preview)
+ * or when the pending range has no dates at all (`→ — – —` would be noise, not
+ * a preview). A single null endpoint renders as '—' (matches dateRange). Pure,
+ * reuses the same `fmtDay` the committed meta line uses — never a second
+ * formatter, never any date arithmetic (the resolver already moved the phase).
+ */
+export function phaseGhostLine(
+  from: { start: string | null; end: string | null },
+  to: { start: string | null; end: string | null },
+): string | null {
+  if (from.start === to.start && from.end === to.end) return null;
+  if (to.start == null && to.end == null) return null;
+  const fmt = (d: string | null) => (d ? fmtDay(d) : '—');
+  return `→ ${fmt(to.start)} – ${fmt(to.end)}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // threadsFor — thread-lane phases hosted on the main lane they stitch into
 // ═══════════════════════════════════════════════════════════════════════════
 

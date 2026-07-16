@@ -46,6 +46,8 @@ import { AccountBand } from '@/components/document/account-band';
 import { PhaseTimeline } from '@/components/document/phase-timeline';
 import { ScheduleRule } from '@/components/document/schedule/schedule-rule';
 import { ScheduleNavProvider } from '@/components/document/schedule/schedule-nav-context';
+import { RippleProvider } from '@/components/document/schedule/schedule-ripple-context';
+import { ScheduleConfirmStrip } from '@/components/document/schedule/schedule-confirm-strip';
 import { LetterheadInstruments } from '@/components/document/letterhead-instruments';
 import { HouseholdChip } from '@/components/document/household-chip';
 import { ProposalInstruments } from '@/components/document/proposal-instruments';
@@ -454,21 +456,44 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
             stays <main> (the mount contract in schedule-rule.tsx's header)
             and the gate-off tree below is unaffected by its presence. */}
         <ScheduleNavProvider>
-          {/* Field Coordination (light-PM slice): the phase schedule as a
-              horizontal band — status-tinted segments, a today line, popover date
-              editing. Project-wide (shows across project/install/care stages),
-              mounted with the AccountBand at the top of the project document so it
-              reads as a project overview above the section work.
-              S2-4 — the Rule flip gate (same spineGate as the C7 gate below):
-              while it's loading (or resolves off) the old PhaseTimeline
-              renders — fail-closed, zero flash for the non-pilot cohort. */}
-          {row.engagement_kind === 'project' &&
-            row.project_id &&
-            (!spineGate.isLoading && spineGate.value ? (
-              <ScheduleRule projectId={row.project_id} projectTitle={row.title} />
-            ) : (
-              <PhaseTimeline projectId={row.project_id} />
-            ))}
+          {/* RippleProvider owns the ONE time-edit preview session (Slice 04
+              R100). It wraps the SAME subtree as ScheduleNavProvider so the two
+              surfaces that begin an edit — the Rule's drags and the Spine's
+              inline duration/anchor fields — share a single session, and the
+              confirm strip below reads the same diff. It renders no DOM (a
+              context provider), so the gate-off / non-project DOM stays
+              byte-identical; on a PROJECT doc with the gate off the provider
+              does add a background schedule fetch (useResolvedSchedule —
+              React-Query-deduped against the Rule/Spine's own reads, so at most
+              one extra schedule-milestones query; negligible). On an empty id
+              (a non-project document) the hook is fully inert — `??''` keeps
+              the provider total there (proposal/brief docs never begin a
+              ripple). */}
+          <RippleProvider projectId={row.project_id ?? ''}>
+            {/* Field Coordination (light-PM slice): the phase schedule as a
+                horizontal band — status-tinted segments, a today line, popover date
+                editing. Project-wide (shows across project/install/care stages),
+                mounted with the AccountBand at the top of the project document so it
+                reads as a project overview above the section work.
+                S2-4 — the Rule flip gate (same spineGate as the C7 gate below):
+                while it's loading (or resolves off) the old PhaseTimeline
+                renders — fail-closed, zero flash for the non-pilot cohort. */}
+            {row.engagement_kind === 'project' &&
+              row.project_id &&
+              (!spineGate.isLoading && spineGate.value ? (
+                <ScheduleRule projectId={row.project_id} projectTitle={row.title} />
+              ) : (
+                <PhaseTimeline projectId={row.project_id} />
+              ))}
+
+            {/* The confirm strip — R100's "one honest sentence" + Commit / Esc ·
+                Revert, rendered directly under the Rule. It is null unless a ripple
+                session is active, and a session only ever arises from the gated
+                Rule/Spine surfaces — so gate-off is byte-identical (no strip, no
+                DOM). Gated on project_id only for the non-null commit target. */}
+            {row.engagement_kind === 'project' && row.project_id && (
+              <ScheduleConfirmStrip projectId={row.project_id} />
+            )}
 
           {/* The active section — exactly one (§4). */}
           <div
@@ -632,6 +657,7 @@ export default function DocumentPage({ params }: { params: Promise<{ id: string 
               </>
             )}
           </div>
+          </RippleProvider>
         </ScheduleNavProvider>
 
         {/* R29: the colophon — the paper's last line states its own facts. */}

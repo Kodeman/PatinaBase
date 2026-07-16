@@ -4,6 +4,7 @@ import {
   todayIndex,
   milestoneStamp,
   phaseMeta,
+  phaseGhostLine,
   threadsFor,
   type SpinePhaseState,
 } from '../schedule-spine-derivation';
@@ -526,5 +527,50 @@ describe('threadsFor', () => {
     const resolved: P[] = [{ id: 'thread-1', start: '2026-06-10', end: '2026-06-11', lane: 'thread' }];
     expect(() => threadsFor(resolved, null)).not.toThrow();
     expect(threadsFor(resolved, null).size).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// phaseGhostLine
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('phaseGhostLine', () => {
+  it('renders the pending range with an arrow lead when the phase moved', () => {
+    expect(
+      phaseGhostLine(
+        { start: '2026-06-01', end: '2026-06-30' },
+        { start: '2026-06-26', end: '2026-07-29' },
+      ),
+    ).toBe('→ Jun 26 – Jul 29');
+  });
+
+  it('null when the phase is unmoved (from equals to)', () => {
+    expect(
+      phaseGhostLine(
+        { start: '2026-06-01', end: '2026-06-30' },
+        { start: '2026-06-01', end: '2026-06-30' },
+      ),
+    ).toBeNull();
+  });
+
+  it('null when the pending range has no dates at all', () => {
+    expect(
+      phaseGhostLine({ start: '2026-06-01', end: '2026-06-30' }, { start: null, end: null }),
+    ).toBeNull();
+  });
+
+  it('a single null endpoint renders as an em-dash', () => {
+    expect(
+      phaseGhostLine({ start: null, end: '2026-06-30' }, { start: '2026-06-26', end: null }),
+    ).toBe('→ Jun 26 – —');
+  });
+
+  it('detects a move even when only the end shifts', () => {
+    expect(
+      phaseGhostLine(
+        { start: '2026-06-01', end: '2026-06-30' },
+        { start: '2026-06-01', end: '2026-07-10' },
+      ),
+    ).toBe('→ Jun 1 – Jul 10');
   });
 });

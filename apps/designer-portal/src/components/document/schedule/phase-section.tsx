@@ -50,6 +50,11 @@ export interface PhaseSectionProps {
    *  conflict naming THIS phase as its anchor). null/undefined → the entry
    *  renders byte-identically to Slice 01/02 (no extra line, no extra DOM). */
   overrunText?: string | null;
+  /** Slice 04 — the ripple's downstream preview for this phase (phaseGhostLine:
+   *  '→ Jun 26 – Jul 29'), shown while a time edit is in flight. Rendered as a
+   *  dashed-terracotta mono span. null/undefined (no active ripple, or this
+   *  phase didn't move) → no extra DOM, byte-identical to before. */
+  ghostLine?: string | null;
   /** This phase's resolved milestones, augmented with display names. */
   milestones: Array<ResolvedMilestone & { name: string }>;
   /** Already filtered (itemsForPhase) + sorted blocking-first by the caller. */
@@ -101,6 +106,7 @@ export function PhaseSection({
   onToggle,
   metaLine,
   overrunText,
+  ghostLine,
   milestones,
   items,
   tasks,
@@ -239,6 +245,18 @@ export function PhaseSection({
         {overrunText && (
           <div className="mb-[0.2rem] font-mono text-[0.6rem] uppercase tracking-[0.08em] text-[var(--color-terracotta)]">
             {overrunText}
+          </div>
+        )}
+
+        {/* Slice 04 — the ripple's downstream preview: this phase's new range
+            while a time edit is in flight. A dashed-terracotta mono span (the
+            dashed underline reads it as provisional — nothing has moved yet).
+            Absent when no ripple touches this phase → byte-identical to before. */}
+        {ghostLine && (
+          <div className="mb-[0.2rem] font-mono text-[0.6rem] uppercase tracking-[0.08em]">
+            <span className="border-b border-dashed border-[var(--color-terracotta)] text-[var(--color-terracotta)]">
+              {ghostLine}
+            </span>
           </div>
         )}
 
