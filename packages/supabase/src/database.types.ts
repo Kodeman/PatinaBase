@@ -11899,6 +11899,7 @@ export type Database = {
           declined_at: string | null
           deposit_percent: number | null
           description: string | null
+          designer_client_id: string | null
           designer_id: string
           discount_amount: number | null
           discount_percent: number | null
@@ -11941,6 +11942,7 @@ export type Database = {
           declined_at?: string | null
           deposit_percent?: number | null
           description?: string | null
+          designer_client_id?: string | null
           designer_id: string
           discount_amount?: number | null
           discount_percent?: number | null
@@ -11983,6 +11985,7 @@ export type Database = {
           declined_at?: string | null
           deposit_percent?: number | null
           description?: string | null
+          designer_client_id?: string | null
           designer_id?: string
           discount_amount?: number | null
           discount_percent?: number | null
@@ -12026,6 +12029,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_designer_client_id_fkey"
+            columns: ["designer_client_id"]
+            isOneToOne: false
+            referencedRelation: "designer_clients"
             referencedColumns: ["id"]
           },
           {
@@ -18634,6 +18644,7 @@ export type Database = {
           declined_at: string | null
           deposit_percent: number | null
           description: string | null
+          designer_client_id: string | null
           designer_id: string
           discount_amount: number | null
           discount_percent: number | null
@@ -18780,6 +18791,7 @@ export type Database = {
           declined_at: string | null
           deposit_percent: number | null
           description: string | null
+          designer_client_id: string | null
           designer_id: string
           discount_amount: number | null
           discount_percent: number | null
