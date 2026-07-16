@@ -46,6 +46,7 @@ import {
 } from './editors';
 import { DiscoveryCallSheet } from './discovery-call-sheet';
 import { ScanViewerSheet } from '../overlays/scan-viewer-sheet';
+import { DiscoveryScheduleLine } from './discovery-schedule-line';
 
 const EMPTY_DRAFT: DiscoveryDraft = {
   project_type: null,
@@ -308,6 +309,11 @@ export function DiscoverySection({
           {ready ? 'ready' : 'in progress'}
         </span>
       </div>
+
+      {/* Arrival Arc (R106 §5 / build-plan 2.5): the arc-born engagement's
+          first honest fact — what was offered, or what was booked — plus the
+          intro-thread reference. Renders nothing for a non-arc engagement. */}
+      <DiscoveryScheduleLine designerClientId={engagementId} clientName={clientName} />
 
       {/* Readiness header — the Strata Mark fills toward Ready (R66). */}
       <div

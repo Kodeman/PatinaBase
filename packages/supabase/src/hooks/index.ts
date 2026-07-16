@@ -193,6 +193,15 @@ export {
 } from './use-leads';
 export type { Lead, LeadFilters } from './use-leads';
 export { useDiscovery, useUpsertDiscovery, useBeginDirection } from './use-discovery';
+export {
+  useCeremonyForRelationship,
+  useRefreshOfferedSlots,
+} from './use-match-ceremony';
+export type {
+  CeremonyForRelationship,
+  CeremonyOfferedSlot,
+  RefreshOfferedSlotsInput,
+} from './use-match-ceremony';
 export type {
   ClientDiscovery,
   DiscoveryRead,
