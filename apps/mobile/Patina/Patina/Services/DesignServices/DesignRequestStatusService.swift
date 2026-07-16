@@ -473,6 +473,30 @@ public final class DesignRequestStatusService {
         }
     }
 
+    // MARK: - Optimistic pick (Arrival Arc, R106 §6)
+
+    /// Stamp a booked discovery pick into the in-memory status so the stage
+    /// flips `.introduced` → `.booked` instantly, before the `client_pick` RPC
+    /// round-trips. The caller follows with `refreshSoon()` on success (server
+    /// reconcile) — or `revertPick(leadId:)` if the RPC fails. In-memory only;
+    /// the server reconcile is what persists the receipt's booked fields.
+    public func applyPick(leadId: UUID, slotId: UUID, startsAt: Date) {
+        requests = requests.map { status in
+            guard status.leadId == leadId, let intro = status.introduction else { return status }
+            return status.withIntroduction(intro.picking(slotId: slotId, startsAt: startsAt))
+        }
+    }
+
+    /// Roll back an optimistic pick — restore the delivered-but-unpicked
+    /// (`.introduced`) shape. Used when the RPC fails with a stale slot or a
+    /// network error; the next refresh (server still `sent`) is then a no-op.
+    public func revertPick(leadId: UUID) {
+        requests = requests.map { status in
+            guard status.leadId == leadId, let intro = status.introduction else { return status }
+            return status.withIntroduction(intro.unpicked())
+        }
+    }
+
     // MARK: - Local hydration
 
     /// Build `requests` from the local `SubmittedDesignRequest` receipts (no
