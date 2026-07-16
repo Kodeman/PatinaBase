@@ -506,6 +506,13 @@ export {
   useSaveAnnotations,
   useSaveRoomScanData,
 } from './use-room-scan-data';
+export { useRoomGeometry } from './use-room-geometry';
+export type {
+  RoomGeometryDocument,
+  RoomGeometryHeader,
+  RoomGeometryElement,
+  RoomGeometryData,
+} from './use-room-geometry';
 export {
   useOrganizations,
   useOrganization,

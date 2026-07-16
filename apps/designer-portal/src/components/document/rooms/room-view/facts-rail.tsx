@@ -1,0 +1,156 @@
+/**
+ * FactsRail — the Room View's comprehension instrument (R107 §4, I73).
+ * Pure-prop component: every line is derived directly from the geometry
+ * (+ two scan-metadata scalars) the caller already resolved, so it stays
+ * unit-testable without React Query or Supabase in the loop. The optional
+ * `measure` prop follows the same rule — it's a plain callbacks-and-booleans
+ * shape the caller (room-view.tsx, wired to `useMeasure()`) resolves; this
+ * component owns no measure STATE of its own.
+ *
+ * Sections, per the prototype's `.facts` block and the task's ruling:
+ *   Area · Walls (+ ceiling-stands-in note, + thickness-convention note when
+ *   the adapter applied it) · Openings (windows/doors/openings counts) ·
+ *   Detected (furniture categories) · Scan (date · quality · coverage) ·
+ *   Verify — ONLY rendered when ≥1 wall reads low confidence (I73a).
+ *
+ * Below `.facts`, the prototype's `.toolrow` (W2-T4, package accept 2.3):
+ * a quiet Measure button ("the tool" treatment: 1px rule border, mocha text,
+ * no fill) that inverts to ink when armed, plus a Clear button shown ONLY
+ * once a measurement exists.
+ */
+
+import type { ReactNode } from 'react';
+import { areaOf, ftIn, overallDims, type RoomGeometry } from '@/lib/room-view/geometry';
+import { fmtDay } from '@/lib/document/format';
+import { cn } from '@/lib/utils';
+
+export interface FactsRailMeasureProps {
+  /** true while the tool is capturing clicks (armed or first-point placed) —
+   *  the Measure button inverts to its "on" treatment. */
+  armed: boolean;
+  /** true once a measurement is complete — shows the Clear button. */
+  hasMeasurement: boolean;
+  onArm: () => void;
+  onClear: () => void;
+}
+
+export interface FactsRailProps {
+  geometry: RoomGeometry;
+  /** true when from-rows.ts applied the 0.45ft thickness convention (no
+   *  captured wall thickness — I73d). */
+  thicknessConvention: boolean;
+  /** `room_scan_documents.scanned_at` (ISO timestamp), or null. */
+  scanDate: string | null;
+  qualityGrade: string | null;
+  /** 0–1 fraction, e.g. 0.91. */
+  coveragePercentage: number | null;
+  /** Measure-tool toolrow — omitted entirely (no dead UI) when the caller
+   *  doesn't wire the tool up. */
+  measure?: FactsRailMeasureProps;
+}
+
+function plural(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? '' : 's'}`;
+}
+
+/** Groups detected objects by category, preserving first-appearance order
+ *  (the scan's own detection order) — e.g. ["3 chairs", "table", "storage"]. */
+function detectedCategories(geometry: RoomGeometry): string[] {
+  const counts = new Map<string, number>();
+  const order: string[] = [];
+  for (const obj of geometry.objects) {
+    if (!counts.has(obj.cat)) order.push(obj.cat);
+    counts.set(obj.cat, (counts.get(obj.cat) ?? 0) + 1);
+  }
+  return order.map((cat) => {
+    const n = counts.get(cat) ?? 0;
+    return n > 1 ? `${n} ${cat}s` : cat;
+  });
+}
+
+export function FactsRail({
+  geometry,
+  thicknessConvention,
+  scanDate,
+  qualityGrade,
+  coveragePercentage,
+  measure,
+}: FactsRailProps) {
+  const { w, d } = overallDims(geometry);
+  const area = Math.round(areaOf(geometry));
+  const lowConfWalls = geometry.walls.filter((wall) => wall.conf === 'low');
+  const detected = detectedCategories(geometry);
+
+  return (
+    <aside className="border-t border-[var(--doc-ink-border)]">
+      <Fact k="Area">
+        {area} sq ft · {ftIn(w)} × {ftIn(d)}
+      </Fact>
+
+      <Fact k="Walls">
+        {plural(geometry.walls.length, 'wall')} · {ftIn(geometry.wallH)}
+        <Sub>stands in for ceiling — RoomPlan captures none</Sub>
+        {thicknessConvention && <Sub>wall thickness drawn by convention</Sub>}
+      </Fact>
+
+      <Fact k="Openings">
+        {plural(geometry.windows.length, 'window')} · {plural(geometry.doors.length, 'door')} ·{' '}
+        {plural(geometry.openings.length, 'opening')}
+      </Fact>
+
+      <Fact k="Detected">{detected.length > 0 ? detected.join(' · ') : 'nothing detected'}</Fact>
+
+      <Fact k="Scan">
+        {scanDate ? fmtDay(scanDate) : '—'}
+        {qualityGrade ? ` · quality ${qualityGrade}` : ''}
+        {coveragePercentage != null ? ` · ${coveragePercentage.toFixed(2)}` : ''}
+      </Fact>
+
+      {lowConfWalls.length > 0 && (
+        <Fact k="Verify">
+          <Sub>{lowConfWalls.map((wall) => wall.name).join(' · ')} — drawn dashed; confirm on site</Sub>
+        </Fact>
+      )}
+
+      {measure && (
+        <div className="mt-4 flex gap-2.5">
+          <button
+            type="button"
+            onClick={measure.onArm}
+            aria-pressed={measure.armed}
+            className={cn(
+              'rounded-[3px] border px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors',
+              measure.armed
+                ? 'border-[var(--color-charcoal)] bg-[var(--color-charcoal)] text-[var(--color-off-white)]'
+                : 'border-[var(--doc-ink-border)] bg-transparent text-[var(--color-mocha)]',
+            )}
+          >
+            Measure
+          </button>
+          {measure.hasMeasurement && (
+            <button
+              type="button"
+              onClick={measure.onClear}
+              className="rounded-[3px] border border-[var(--doc-ink-border)] bg-transparent px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--color-mocha)] transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function Fact({ k, children }: { k: string; children: ReactNode }) {
+  return (
+    <div className="border-b border-[var(--doc-ink-border)] py-[11px]">
+      <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-aged-oak)]">{k}</div>
+      <div className="mt-0.5 text-[14px] text-[var(--color-charcoal)]">{children}</div>
+    </div>
+  );
+}
+
+function Sub({ children }: { children: ReactNode }) {
+  return <span className="mt-1 block font-heading text-[12px] italic text-[var(--color-mocha)]">{children}</span>;
+}
