@@ -3422,3 +3422,102 @@ error; the weeks-mirror rounds 1–3d to 0w in summary totals; the
 accordion hosts milestones under "Deliverables, gates & key dates."
 
 *Entries add: I59 · last id = I59*
+
+### I60 · Slice 04 built — Adjust: the ripple previews before it takes — 2026-07-15
+
+Branch `schedule/slice-04` (stacked on slice-03). Landed: the ripple's pure
+core (`rippleDiff`/`rippleSentence` in schedule-ripple-derivation.ts, plus
+per-phase slack-sourcing and day/days honesty fixes so the confirm strip's
+slack clause reads the EDITED phase's own absorbed float, never a top-level
+min-across-anchors substitute) — `xToEpochDay`/`isoFromEpochDay` (the
+scale's inverse, day-snapped + clamped, and the epoch-day↔ISO round trip);
+migration 00325 (`commit_schedule_edit`, the one write door for all three
+edit kinds, whole-statement atomic, with the Slice-05 `schedule_revisions`
+hook point already commented at the return); `RippleProvider` — one
+single-edit session shared by both surfaces; the Rule's boundary-tick and
+milestone-diamond drag (pointer capture, 3px threshold, refusals on any
+anchored downstream with a firm nudge, zero session begun); the dashed-
+terracotta ghost layer (ticks, diamonds, the old→new arrow, layered over
+solid committed); the confirm strip (one honest sentence, a double
+anchor-violation guard — disabled AND handler re-guarded — and a
+pending-guarded Esc so an in-flight commit can't be silently thrown away);
+and the spine's time-edit reroute — the ruled boundary this slice draws:
+duration/anchor edits now ripple through the strip, while ghost-add,
+milestone-create, delete-with-relink, and the unpin chip all stay direct
+writes, unchanged. Review forced three fixes before merge: the Esc handler
+now guards on `commit.isPending` (an in-flight commit could otherwise be
+reverted from under itself); the milestone diamond's z-index moved above
+the boundary handle's so a coincident milestone stays tappable without
+losing the boundary's own grab; and the slack-sourcing switch described
+above (S4-1's own fix round, folded in before the confirm strip ever
+shipped a wrong number).
+
+**Walk results (S4-5, live, DB + driver evidence):** all nine §8 checks run
+end to end on Aspen. Clean: drag→preview→commit in exactly 2 interactions
+(drag, click) with dashed-terracotta ghosts rendering over solid committed
+layers and the strip's sentence matching the pinned grammar exactly
+("Schematic Design +5d · 2 phases follow · Installation & Styling holds
+Aug 25"); Esc restores the exact prior state from both the Rule drag and
+the spine's duration field, psql-confirmed unchanged both times; the
+anchor-violation path is provably uncommittable — Commit disabled, a
+force-enabled DOM click fires zero network requests (route-intercepted and
+psql-confirmed), unpinning the anchor clears the conflict and re-enables
+Commit, and a re-anchor to a date the chain actually reaches commits
+clean; the anchored diamond refuses with the nudge text and begins no
+session, no ghost; the milestone diamond drags to a new offset with
+anchor_date confirmed still NULL after commit, and a plain tap on a
+different diamond still reveals without touching the strip; the spine's
+absolute-date anchor grammar ("Aug 26") ripples a downstream ghost onto
+Completion and commits; ghost-add, milestone-create, and delete-relink all
+confirmed to stay direct (no strip, ever) on a scratch phase created and
+removed for the purpose; telemetry is a code-path read (no local PostHog
+key) — `schedule_edit_committed` has exactly one call site, inside the
+commit mutation's `onSuccess`, and the Esc handler calls only `clear()`;
+and gate-off is byte-identical — the Rule/Spine/strip sections all count
+zero, the old PhaseTimeline band renders in their place, unaffected by the
+walk's own mutations. The coincident-milestone occlusion fix was also
+spot-checked against a crafted case (a milestone SQL-repositioned onto a
+phase boundary's exact x): the diamond stayed tappable and the boundary
+stayed draggable via its un-occluded strip, one row above/below the
+diamond's own rotated footprint — confirming S4-3's z-index ordering holds
+under the exact coincidence it was written for. One tooling mistake, self-
+caught and SQL-corrected mid-walk: an "Edit dates" locator scoped to the
+whole spine instead of one phase-section grabbed Schematic Design's own
+field instead of Installation & Styling's, briefly setting the wrong
+phase's anchor — caught immediately via the committed sentence text,
+corrected via a direct UPDATE, and every subsequent step used a
+phase-scoped locator instead.
+
+Also confirmed live: the slack- and lane-resolver fixes (459883f7,
+pre-Slice-04) that closed I59's two open defects hold under this slice's
+own drags — the per-phase slack clause reads the edited phase's own
+absorbed float correctly in every ripple sentence captured, and no
+anchored phase ever lane-demoted out of the main row during any of this
+walk's overrun states.
+
+Escalations (plan §9, none blocking): the confirm strip's sentence wording
+— clause order and terminology are implementation-chosen, not
+design-ruled; the strip's placement directly under the Rule (vs. floating,
+vs. docked) is likewise unreviewed; the ghost layer clamps to the scale's
+padded edge on an overflow drag, which reads correctly but was never
+shown to the design authority; touch treatment for the drag surfaces is
+untested (pointer-only mechanics, no touch-specific affordance); the
+"boundary-refuse-in-gapped-case" — Install's own start has NO rendered
+boundary handle at all in Aspen's chain, because its upstream edge
+(Procurement→Install) is thread-lane and `ruleBoundaries` only draws a
+handle for a main-lane upstream, so the anchored-refuse check for that
+specific case has no drag target to exercise (worked around this walk by
+testing the anchored diamond instead, which is the same underlying refuse
+path); root-start drag (the very first phase's own start boundary) is
+deferred by construction — a root has no predecessor, so no boundary edge
+ever names it, and no design ruling exists on whether it should someday
+gain a different edit affordance; the studio-comember gap on the schedule
+RPCs (00323–00325 all guard on `designer_id = auth.uid()` directly, not a
+studio co-membership check) is a tracked follow-up, consistent with the
+same gap already known on `proposal_schedule_milestones`' RLS (I59); and
+the Slice-05 seam — `commit_schedule_edit`'s hook comment describes
+cutting a `schedule_revisions` row, but that INSERT will need either a
+permissive policy or a SECURITY DEFINER wrapper (the function itself is
+SECURITY INVOKER) before Slice 05 can land it.
+
+*Entries add: I60 · last id = I60*
