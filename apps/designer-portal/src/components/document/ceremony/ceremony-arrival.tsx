@@ -3,15 +3,15 @@
 /**
  * The arrival (Match Ceremony, R106 §2 — "what it presents: meet the client").
  * The request payload honored as an arrival, not a form: the ask verbatim as a
- * pull quote, the scan in a quiet frame (the existing ScanViewerSheet door,
- * R90 — no new viewer plumbing), then the facts as a hairline ledger — room,
- * style tags, budget band, timeline. Renders what exists and stays quiet about
- * what doesn't (a roomless request simply has no frame). D4: zero shadows.
+ * pull quote, the scan in a quiet frame (I74a — the scan frame opens the Room
+ * View, `/room/[id]`, not an in-page sheet), then the facts as a hairline
+ * ledger — room, style tags, budget band, timeline. Renders what exists and
+ * stays quiet about what doesn't (a roomless request simply has no frame).
+ * D4: zero shadows.
  */
 
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Lead, LeadRoomScan } from '@patina/supabase';
-import { ScanViewerSheet } from '../overlays/scan-viewer-sheet';
 import { formatBudgetBand } from '@/lib/document/ceremony-context';
 
 const pretty = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -36,7 +36,7 @@ export function CeremonyArrival({
   scans: LeadRoomScan[];
   tags: string[];
 }) {
-  const [viewingScanId, setViewingScanId] = useState<string | null>(null);
+  const router = useRouter();
 
   const rows = scans.filter((row) => row.scan);
   const primary = rows[0] ?? null;
@@ -68,7 +68,7 @@ export function CeremonyArrival({
         <div className="mt-7">
           <button
             type="button"
-            onClick={() => setViewingScanId(primary.scan_id)}
+            onClick={() => router.push(`/room/${primary.scan_id}?from=document`)}
             className="block w-full rounded-[2px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] p-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
             {primary.scan.thumbnail_url ? (
@@ -103,7 +103,7 @@ export function CeremonyArrival({
                 <button
                   key={row.id}
                   type="button"
-                  onClick={() => setViewingScanId(row.scan_id)}
+                  onClick={() => router.push(`/room/${row.scan_id}?from=document`)}
                   title={row.scan?.name ?? 'Room scan'}
                   className="h-16 w-16 shrink-0 overflow-hidden rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
                 >
@@ -151,10 +151,6 @@ export function CeremonyArrival({
           </Fact>
         )}
       </div>
-
-      {viewingScanId && (
-        <ScanViewerSheet scanId={viewingScanId} onClose={() => setViewingScanId(null)} />
-      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   buildChains,
   matchesAnchor,
@@ -24,7 +25,6 @@ import {
   type FolioFile,
 } from '@/hooks/use-folio';
 import { DocFileViewer } from './overlays/doc-file-viewer';
-import { ScanViewerSheet } from './overlays/scan-viewer-sheet';
 import { fmtDay } from '@/lib/document/format';
 
 const SECTION_LABELS: Record<string, string> = {
@@ -131,19 +131,22 @@ export function FolioStrip({
   onDropConsumed?: () => void;
   sectionDragOver?: boolean;
 }) {
+  const router = useRouter();
   const { data: files } = useFolioFiles(projectId);
   const upload = useUploadFolioFile(projectId);
   const setVisibility = useSetFolioVisibility(projectId);
   const [dragOver, setDragOver] = useState(false);
   const [viewing, setViewing] = useState<FolioFile | null>(null);
-  // R90 — a scan clipped into the folio opens the interactive 3D sheet, not the
-  // paper file viewer. No producer writes scan chips yet (doc_type is
+  // I74a — a scan clipped into the folio opens the Room View (`/room/[id]`),
+  // not the paper file viewer. No producer writes scan chips yet (doc_type is
   // img/pdf/…), so this door is dormant today; a scan chip would carry the
   // room_scan id in storage_path. Real files keep the DocFileViewer door.
-  const [viewingScanId, setViewingScanId] = useState<string | null>(null);
   const openFolioFile = (f: FolioFile) => {
-    if (f.doc_type === 'scan' && f.storage_path) setViewingScanId(f.storage_path);
-    else setViewing(f);
+    if (f.doc_type === 'scan' && f.storage_path) {
+      router.push(`/room/${f.storage_path}?from=document`);
+    } else {
+      setViewing(f);
+    }
   };
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -214,10 +217,6 @@ export function FolioStrip({
         />
       </div>
       {viewing && <DocFileViewer file={viewing} onClose={() => setViewing(null)} />}
-      {/* R90 — the interactive scan door (see openFolioFile above). */}
-      {viewingScanId && (
-        <ScanViewerSheet scanId={viewingScanId} onClose={() => setViewingScanId(null)} />
-      )}
     </>
   );
 }
@@ -300,16 +299,19 @@ export function ProposalFolioStrip({ proposalId }: { proposalId: string }) {
 
 /** Letterhead unfold (R24): “The folio · N files”, grouped by section. */
 export function FolioLetterhead({ projectId }: { projectId: string }) {
+  const router = useRouter();
   const { data: files } = useFolioFiles(projectId);
   const setVisibility = useSetFolioVisibility(projectId);
   const [open, setOpen] = useState(false);
   const [viewing, setViewing] = useState<FolioFile | null>(null);
-  // R90 — same interactive scan door as FolioStrip (dormant until a scan chip
+  // I74a — same Room View scan door as FolioStrip (dormant until a scan chip
   // exists; real files keep the DocFileViewer door).
-  const [viewingScanId, setViewingScanId] = useState<string | null>(null);
   const openFolioFile = (f: FolioFile) => {
-    if (f.doc_type === 'scan' && f.storage_path) setViewingScanId(f.storage_path);
-    else setViewing(f);
+    if (f.doc_type === 'scan' && f.storage_path) {
+      router.push(`/room/${f.storage_path}?from=document`);
+    } else {
+      setViewing(f);
+    }
   };
 
   const all = files ?? [];
@@ -361,10 +363,6 @@ export function FolioLetterhead({ projectId }: { projectId: string }) {
         </div>
       )}
       {viewing && <DocFileViewer file={viewing} onClose={() => setViewing(null)} />}
-      {/* R90 — the interactive scan door (see openFolioFile above). */}
-      {viewingScanId && (
-        <ScanViewerSheet scanId={viewingScanId} onClose={() => setViewingScanId(null)} />
-      )}
     </div>
   );
 }

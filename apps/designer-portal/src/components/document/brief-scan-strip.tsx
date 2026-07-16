@@ -3,9 +3,8 @@
 /**
  * Brief scan strip (Designer Handoff, Wave 1B) — the room scans attached to a
  * design request, as a small thumbnail grid between the Brief's facts block
- * and the TriageBar. Each tile opens the existing interactive viewer
- * (`ScanViewerSheet`) — the same door Discovery/Folio/Letterhead already use
- * (R90); this strip adds no new viewer plumbing. The primary scan
+ * and the TriageBar. Each tile opens the Room View (`/room/[id]`, I74a) — the
+ * same door Discovery/Folio/Letterhead/Ceremony already use. The primary scan
  * (`lead_room_scans.is_primary`) carries a quiet corner marker, not a badge.
  *
  * Renders nothing when the lead has no scans (designer-captured prospects,
@@ -13,13 +12,12 @@
  * Brief's original shape is otherwise untouched.
  */
 
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useLeadScans } from '@patina/supabase';
-import { ScanViewerSheet } from './overlays/scan-viewer-sheet';
 
 export function BriefScanStrip({ leadId }: { leadId: string }) {
+  const router = useRouter();
   const { data: junctions } = useLeadScans(leadId);
-  const [viewingScanId, setViewingScanId] = useState<string | null>(null);
 
   const rows = (junctions ?? []).filter((row) => row.scan);
   if (rows.length === 0) return null;
@@ -34,7 +32,7 @@ export function BriefScanStrip({ leadId }: { leadId: string }) {
           <button
             key={row.id}
             type="button"
-            onClick={() => setViewingScanId(row.scan_id)}
+            onClick={() => router.push(`/room/${row.scan_id}?from=document`)}
             title={row.scan?.name ?? 'Room scan'}
             className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-[4px] border border-[var(--color-pearl)] bg-[var(--doc-paper)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-clay)]"
           >
@@ -61,10 +59,6 @@ export function BriefScanStrip({ leadId }: { leadId: string }) {
           </button>
         ))}
       </div>
-
-      {viewingScanId && (
-        <ScanViewerSheet scanId={viewingScanId} onClose={() => setViewingScanId(null)} />
-      )}
     </div>
   );
 }
