@@ -515,6 +515,86 @@ export function ruleSegments(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// splitActiveSegmentAtToday / ruleTrackPaintSegments — the R105 ink hybrid
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * R105 "ink hybrid": the ACTIVE phase's segment splits at today into an
+ * elapsed portion (drawn `active` — the heaviest ink, unchanged) and a
+ * remaining portion (drawn `ahead` — the light forward-leaning weight,
+ * matching every other not-yet-arrived phase). `closed`/`ahead` segments are
+ * returned untouched — the split only ever applies to the single `active`
+ * segment, by construction (the resolver never marks two phases active at
+ * once, but this is pure per-segment regardless).
+ *
+ * The cut point is `todayXPct` CLAMPED to the segment's own [left, right]
+ * span (never widened past it) — this single clamp, with no extra branching,
+ * produces the three honest readings the design calls for:
+ *   - today strictly inside the span → elapsed `active` + remaining `ahead`,
+ *     split exactly at today.
+ *   - today AT OR BEFORE the span's start (the phase is active by status, but
+ *     its own start hasn't arrived yet — e.g. a status flip that outran the
+ *     dates) → the clamp pins the cut to `left`, so the elapsed slice is
+ *     zero-width and is dropped; the WHOLE span draws `ahead` (light) even
+ *     though the phase reads "active" in its label — a light bar under an
+ *     active label is the honest picture of "not actually under way yet."
+ *   - today AT OR AFTER the span's end (the phase slipped past its own
+ *     resolved end while still open) → the clamp pins the cut to `right`, so
+ *     the remaining slice is zero-width and is dropped; the WHOLE span stays
+ *     `active` (bold) — still "in progress," now overdue.
+ *
+ * `todayXPct == null` (defensive only — the Rule never mounts without a
+ * scale, and a scale always seeds its domain with `today`) returns the
+ * segment unsplit, so a caller missing today's x degrades to the pre-R105
+ * solid-active treatment rather than silently drawing nothing.
+ *
+ * The elapsed piece keeps the segment's original `id` (it is the same
+ * segment, merely shortened) so callers keying off `segments[].id` for
+ * anything OTHER than paint (there are none today, but the invariant holds)
+ * still find it; the remaining piece gets an `:ahead`-suffixed id — React
+ * key uniqueness, never surfaced.
+ */
+export function splitActiveSegmentAtToday(
+  segment: RuleSegment,
+  todayXPct: number | null,
+): RuleSegment[] {
+  if (segment.weight !== 'active' || todayXPct == null) return [segment];
+
+  const left = segment.leftPct;
+  const right = segment.leftPct + segment.widthPct;
+  const cut = Math.max(left, Math.min(right, todayXPct));
+
+  const out: RuleSegment[] = [];
+  const elapsedWidth = cut - left;
+  if (elapsedWidth > 0) {
+    out.push({ id: segment.id, leftPct: left, widthPct: elapsedWidth, weight: 'active' });
+  }
+  const aheadWidth = right - cut;
+  if (aheadWidth > 0) {
+    out.push({ id: `${segment.id}:ahead`, leftPct: cut, widthPct: aheadWidth, weight: 'ahead' });
+  }
+  // A degenerate zero-width segment (left === right) produces neither piece —
+  // preserve the original so nothing silently vanishes from the paint list.
+  return out.length > 0 ? out : [segment];
+}
+
+/**
+ * Apply `splitActiveSegmentAtToday` across a full segment list — the Rule
+ * track's paint-time projection (ticks/labels stay keyed off the ORIGINAL
+ * `segments`, only the drawn ink spans go through this). `todayXPct` is the
+ * SAME committed scale's `toX(today)` every other layer on the Rule reads —
+ * pinned and unpinned tracks call this with the identical value, so the split
+ * lands at the identical proportional point regardless of the track's height
+ * (D-4: percentages are resolution-independent).
+ */
+export function ruleTrackPaintSegments(
+  segments: ReadonlyArray<RuleSegment>,
+  todayXPct: number | null,
+): RuleSegment[] {
+  return segments.flatMap((s) => splitActiveSegmentAtToday(s, todayXPct));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ruleDiamonds — milestone diamonds
 // ═══════════════════════════════════════════════════════════════════════════
 

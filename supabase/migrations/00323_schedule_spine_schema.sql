@@ -61,6 +61,22 @@
 -- their legacy stored dates — the resolver's `legacy-dates` fallback path
 -- (packages/utils resolveSchedule) — exactly as they do today. No UPDATE
 -- statement appears anywhere in this file.
+--
+-- R105 IN-PLACE WIDENING (pre-ship — this migration has never applied beyond
+-- local/main): schedule_milestones gains a schedule_milestones_studio_rw
+-- policy and schedule_revisions a schedule_revisions_studio_select policy —
+-- both through the phase→project (resp. project) join to
+-- is_studio_comember(p.designer_id) (00315), mirroring 00316's
+-- project_phases_studio_rw shape/naming. Completes the R105 comember
+-- widening of the schedule RPC guards (00324–00326): commit_schedule_edit
+-- is SECURITY INVOKER, so without the table leg a comember's
+-- milestone-offset edit passed the widened RPC guard then died at this
+-- table's designer-only RLS (probe-confirmed half-open door); and comembers
+-- can cut into the revisions ledger via the widened RPC, so they can read
+-- it. The original designer/client policies stay untouched (permissive-OR);
+-- proposal-side tables are NOT widened, consistent with proposal_phases'
+-- no-comember posture. No client SELECT on schedule_revisions still (O8
+-- remains open).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ─── 1. project_phases — chain columns ───────────────────────────────────────
@@ -167,6 +183,28 @@ CREATE POLICY schedule_milestones_client_select
     )
   );
 
+-- R105: studio-comember leg, mirroring 00316's project_phases_studio_rw
+-- (same shape/naming, through the phase→project join). TO authenticated is
+-- load-bearing: is_studio_comember is REVOKEd from anon (00315), so an
+-- unscoped policy would 42501 for anon (the 00321→00322 regression).
+DROP POLICY IF EXISTS schedule_milestones_studio_rw ON public.schedule_milestones;
+CREATE POLICY schedule_milestones_studio_rw
+  ON public.schedule_milestones FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.project_phases ph
+      JOIN public.projects p ON p.id = ph.project_id
+      WHERE ph.id = schedule_milestones.phase_id AND is_studio_comember(p.designer_id)
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.project_phases ph
+      JOIN public.projects p ON p.id = ph.project_id
+      WHERE ph.id = schedule_milestones.phase_id AND is_studio_comember(p.designer_id)
+    )
+  );
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.schedule_milestones TO authenticated;
 GRANT ALL ON public.schedule_milestones TO service_role;
 
@@ -216,6 +254,21 @@ CREATE POLICY schedule_revisions_designer_select
     EXISTS (
       SELECT 1 FROM public.projects p
       WHERE p.id = schedule_revisions.project_id AND p.designer_id = auth.uid()
+    )
+  );
+
+-- R105: studio-comember read leg (naming per 00316's *_studio_* convention).
+-- Comembers can already CUT into this ledger via the widened
+-- cut_schedule_revision / commit_schedule_edit (00326), so they can read it.
+-- SELECT only — writes stay RPC-only by ACL. TO authenticated: same
+-- anon-REVOKEd-helper rule as schedule_milestones_studio_rw above.
+DROP POLICY IF EXISTS schedule_revisions_studio_select ON public.schedule_revisions;
+CREATE POLICY schedule_revisions_studio_select
+  ON public.schedule_revisions FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.projects p
+      WHERE p.id = schedule_revisions.project_id AND is_studio_comember(p.designer_id)
     )
   );
 
