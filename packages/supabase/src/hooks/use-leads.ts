@@ -50,6 +50,71 @@ export interface LeadFilters {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// I65 bug 2 ripple (Arrival Arc Phase 0) — the designer_clients unique index
+// now permits multiple status='lead' rows per (designer, client) pair (the
+// re-scope that lets ceremony_complete insert a fresh engagement row beside
+// an existing active/proposal relationship — see 00332-era). A bare
+// pair-scoped `.maybeSingle()` — `.eq('designer_id', d).eq('client_id', c)`
+// with no further predicate — ERRORS ("multiple rows returned") the moment a
+// pair carries a second row. `useAcceptLead` and `useBeginDiscovery` both do
+// this read; both are hardened here via the same shared, ordered
+// `.limit(1)` selection so `.maybeSingle()` never sees more than one row.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Resolve the ONE designer_clients row a pair-scoped act (accept a lead,
+ * begin Discovery) should touch, now that a pair can carry more than one row.
+ * Three ordered `.limit(1)` reads, each capped so `.maybeSingle()` is safe by
+ * construction — priority, not a single query, because PostgREST has no
+ * portable "prefer X else Y else Z" ordering expression:
+ *   1. a row already linked to THIS lead — idempotent re-run of the same act.
+ *   2. an engaged (status <> 'lead') row for the pair — detected, never
+ *      written here; callers use this to REFUSE to downgrade it (I65 bug 2).
+ *   3. else the newest row for the pair, whatever its status (today's
+ *      single-row behavior, preserved).
+ * Returns null when the pair has no row at all.
+ */
+async function resolvePairDesignerClient(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  designerId: string,
+  clientId: string,
+  leadId: string,
+): Promise<{ id: string; lead_id: string | null; status: string } | null> {
+  const { data: byLead } = await supabase
+    .from('designer_clients')
+    .select('id, lead_id, status')
+    .eq('designer_id', designerId)
+    .eq('client_id', clientId)
+    .eq('lead_id', leadId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (byLead) return byLead;
+
+  const { data: engaged } = await supabase
+    .from('designer_clients')
+    .select('id, lead_id, status')
+    .eq('designer_id', designerId)
+    .eq('client_id', clientId)
+    .neq('status', 'lead')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (engaged) return engaged;
+
+  const { data: newest } = await supabase
+    .from('designer_clients')
+    .select('id, lead_id, status')
+    .eq('designer_id', designerId)
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return newest ?? null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // HOOKS
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -360,13 +425,15 @@ export function useAcceptLead() {
 
       // Create designer_client relationship
       if (lead.homeowner_id) {
-        // Check if relationship already exists (partial unique index doesn't support onConflict)
-        const { data: existing } = await supabase
-          .from('designer_clients')
-          .select('id')
-          .eq('designer_id', lead.designer_id)
-          .eq('client_id', lead.homeowner_id)
-          .maybeSingle();
+        // I65 bug 2 ripple: a pair can now carry >1 row — resolve the right
+        // one via the shared ordered-limit(1) selection instead of a bare
+        // pair-scoped `.maybeSingle()` (which errors past one row).
+        const existing = await resolvePairDesignerClient(
+          supabase,
+          lead.designer_id,
+          lead.homeowner_id,
+          leadId,
+        );
 
         if (existing) {
           const { error: clientError } = await supabase
@@ -518,23 +585,36 @@ export function useBeginDiscovery() {
       if (updateError) throw updateError;
 
       // Upsert the designer_clients relationship at status='lead' (Discovery).
-      // Mirrors useAcceptLead's partial-unique-index handling exactly; the ONLY
-      // difference is the target status ('lead', not 'active').
+      // Mirrors useAcceptLead's partial-unique-index handling; the target
+      // status is 'lead' (not 'active') — EXCEPT I65 bug 2 (proven): this
+      // must never downgrade an existing active/proposal relationship to
+      // 'lead'. I65 bug 2 ripple: a pair can now carry >1 row, so the read
+      // goes through the same shared ordered-limit(1) selection as
+      // useAcceptLead.
       if (lead.homeowner_id) {
-        const { data: existing } = await supabase
-          .from('designer_clients')
-          .select('id')
-          .eq('designer_id', lead.designer_id)
-          .eq('client_id', lead.homeowner_id)
-          .maybeSingle();
+        const existing = await resolvePairDesignerClient(
+          supabase,
+          lead.designer_id,
+          lead.homeowner_id,
+          leadId,
+        );
 
-        if (existing) {
+        if (existing && existing.status === 'lead') {
+          // The pair's existing row is already at the Discovery stage (or a
+          // virgin lead-status row not yet linked to any lead) — attach this
+          // lead to it in place.
           const { error: clientError } = await supabase
             .from('designer_clients')
             .update({ source: 'lead', lead_id: leadId, status: 'lead' })
             .eq('id', existing.id);
           if (clientError) throw clientError;
         } else {
+          // I65 bug 2: `existing` here is either absent, or an ENGAGED
+          // (active/proposal) row — never downgrade it. The re-scoped unique
+          // index now permits a second, engagement-scoped 'lead' row for the
+          // same pair, so insert a fresh one instead — mirrors
+          // ceremony_complete's server-side semantics (create fresh or
+          // refuse, never downgrade).
           const { error: clientError } = await supabase
             .from('designer_clients')
             .insert({
