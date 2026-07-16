@@ -17365,7 +17365,7 @@ export type Database = {
       }
       commit_schedule_edit: {
         Args: { p_edits: Json; p_project_id: string; p_reason?: string }
-        Returns: string
+        Returns: number
       }
       comms_resolve_role: { Args: { p_user_id: string }; Returns: string }
       complete_aesthete_job: {
@@ -17526,6 +17526,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      cut_schedule_revision: {
+        Args: { p_actor?: string; p_project_id: string; p_reason?: string }
+        Returns: number
       }
       decline_workspace_invitation: {
         Args: { p_token: string }
