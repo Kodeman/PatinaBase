@@ -16,6 +16,7 @@
 import dynamic from 'next/dynamic';
 import { ErrorBoundary } from '@patina/design-system';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
+import type { OrbitPhotoPose } from './photo-marker-objects';
 
 const OrbitCanvas = dynamic(() => import('./orbit-canvas'), {
   ssr: false,
@@ -36,11 +37,21 @@ const ORBIT_FALLBACK = (
   </div>
 );
 
-export function OrbitStage({ geometry }: { geometry: RoomGeometry }) {
+export interface OrbitStageProps {
+  geometry: RoomGeometry;
+  /** Clustered photo poses (photo-marker-objects.ts contract) — one frustum
+   *  wedge each. Omitted / empty → no marker group is built. */
+  photoPoses?: OrbitPhotoPose[];
+  /** Opens the photo viewer at the given ORIGINAL-array index when a wedge is
+   *  clicked (distinguished from an orbit-drag inside the canvas). */
+  onPhotoClick?: (index: number) => void;
+}
+
+export function OrbitStage({ geometry, photoPoses, onPhotoClick }: OrbitStageProps) {
   return (
     <div className="overflow-hidden rounded-[2px] border border-[var(--doc-ink-border)] bg-[var(--doc-sheet-front)]">
       <ErrorBoundary fallback={ORBIT_FALLBACK}>
-        <OrbitCanvas geometry={geometry} />
+        <OrbitCanvas geometry={geometry} photoPoses={photoPoses} onPhotoClick={onPhotoClick} />
       </ErrorBoundary>
       <div className="flex items-center justify-between border-t border-[var(--doc-ink-border)] px-3.5 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)]">
         <span>Orbit · the room as a volume</span>

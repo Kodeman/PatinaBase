@@ -29,15 +29,20 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import type { RoomGeometryDocument } from '@patina/supabase';
+import type { RoomGeometryDocument, RoomScanPhoto } from '@patina/supabase';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import type { PhotoProvenance } from '@/lib/room-view/photo-poses';
 import { roomEvents } from '@/lib/analytics';
 import { FactsRail } from './facts-rail';
 import { MeasureLayer } from './measure-layer';
+import type { OrbitPhotoPose } from './orbit/photo-marker-objects';
 import { OrbitStage } from './orbit/orbit-stage';
+import { buildPhotoMarkers, planBounds, PhotoMarkers } from './photo-markers';
+import { PhotoStrip } from './photo-strip';
+import { PhotoViewer } from './photo-viewer';
 import { planViewBox, PlanStage } from './plan-stage';
 import { useMeasure } from './use-measure';
+import { usePhotoViewer } from './use-photo-viewer';
 
 /** The room's two live projections. Walk is ruled into the arc but built after Place. */
 type ViewMode = 'plan' | 'orbit';
@@ -77,14 +82,24 @@ export interface RoomViewProps {
   geometry: RoomGeometry | null;
   thicknessConvention: boolean;
   isLoading: boolean;
-  /** Plan-frame provenance (00337, from-rows.ts) — carried through so the
-   *  Wave-2 photo layer can mount here and project camera transforms into the
-   *  Plan/Orbit frame (photo-poses.ts). null until parsed with provenance;
-   *  no consumer in v1 yet. */
+  /** Plan-frame provenance (00337, from-rows.ts) — projects photo camera
+   *  transforms into the Plan frame for the marker layer (photo-poses.ts).
+   *  null until parsed with provenance; the marker layer degrades silently. */
   provenance?: PhotoProvenance | null;
+  /** The scan's photo set (useRoomScanPhotos), deduped + signed. `[]` for a
+   *  Field scan with no photos — the strip, rail line, and markers all absent. */
+  photos?: RoomScanPhoto[];
 }
 
-export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading }: RoomViewProps) {
+export function RoomView({
+  roomId,
+  doc,
+  geometry,
+  thicknessConvention,
+  isLoading,
+  provenance = null,
+  photos = [],
+}: RoomViewProps) {
   const docLink = useMemo(() => {
     if (!doc?.engagementId || !doc.activeSection) return null;
     const label = SECTION_LABEL[doc.activeSection] ?? doc.activeSection;
@@ -95,10 +110,29 @@ export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading
   // returns below (Rules of Hooks) — the measure tool's own state resets
   // naturally whenever RoomView remounts for a different room.
   const measure = useMeasure();
+  const viewer = usePhotoViewer(photos.length, roomId);
   const viewBox = useMemo(
     () => (geometry ? planViewBox(geometry) : { width: 1, height: 1 }),
     [geometry],
   );
+
+  // The SAME proximity clusters the Plan camera-ticks draw (buildPhotoMarkers is
+  // pure + deterministic), projected into the Orbit frustum layer's plain-number
+  // pose contract: one wedge per cluster, carrying the representative's height +
+  // heading and the photo index its click opens. No `three` here — the shape stays
+  // JSON so the dynamic three boundary lives entirely under orbit/. Empty (photos
+  // absent / provenance null) → no poses → OrbitCanvas builds no marker group.
+  const orbitPhotoPoses = useMemo<OrbitPhotoPose[]>(() => {
+    if (!geometry || photos.length === 0 || !provenance) return [];
+    return buildPhotoMarkers(photos, provenance, planBounds(geometry)).map((m) => ({
+      x: m.x,
+      z: m.z,
+      y: m.y,
+      headingDeg: m.headingDeg,
+      count: m.count,
+      photoIndex: m.representativeIndex,
+    }));
+  }, [geometry, photos, provenance]);
 
   // Plan is the landing mode. Orbit stays UNMOUNTED (zero three.js cost) until the first
   // Orbit switch — `orbitMounted` latches true then and never resets, so once its lazy
@@ -202,6 +236,11 @@ export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading
           scanDate={doc.scannedAt}
           qualityGrade={doc.qualityGrade}
           coveragePercentage={doc.coveragePercentage}
+          photos={
+            photos.length > 0
+              ? { count: photos.length, onOpen: () => viewer.openAtIndex(0, 'rail') }
+              : undefined
+          }
           measure={{
             armed: capturing,
             hasMeasurement: measure.state.phase === 'complete',
@@ -216,6 +255,14 @@ export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading
             <PlanStage
               geometry={geometry}
               stageCapRight={capturing ? 'click two points' : 'hover for dimensions'}
+              photoLayer={
+                <PhotoMarkers
+                  geometry={geometry}
+                  photos={photos}
+                  provenance={provenance}
+                  onOpen={(index) => viewer.openAtIndex(index, 'plan')}
+                />
+              }
               measureLayer={
                 <MeasureLayer
                   state={measure.state}
@@ -228,11 +275,28 @@ export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading
           </div>
           {orbitMounted && (
             <div className={mode === 'orbit' ? undefined : 'hidden'}>
-              <OrbitStage geometry={geometry} />
+              <OrbitStage
+                geometry={geometry}
+                photoPoses={orbitPhotoPoses}
+                onPhotoClick={(index) => viewer.openAtIndex(index, 'orbit')}
+              />
             </div>
           )}
+          {/* The contact strip lives under the stage, inside the stage cell. */}
+          <PhotoStrip photos={photos} onOpen={(index) => viewer.openAtIndex(index, 'strip')} />
         </div>
       </div>
+
+      {/* Full-bleed photo viewer — mounted over the still-mounted Plan/facts
+          rail (D1: the surface beneath never unmounts). */}
+      {viewer.openIndex != null && (
+        <PhotoViewer
+          photos={photos}
+          index={viewer.openIndex}
+          onIndexChange={viewer.openAtIndex}
+          onClose={viewer.close}
+        />
+      )}
     </div>
   );
 }
