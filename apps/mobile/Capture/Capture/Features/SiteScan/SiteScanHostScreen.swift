@@ -43,9 +43,25 @@ final class SiteScanHostModel {
     private let siteScan: any SiteScanService
     private var eventTask: Task<Void, Never>?
 
-    init(siteScan: any SiteScanService, name: String) {
+    // Item-7 context capture (mid-scan photo + voice → Capture Inbox).
+    private let store: CaptureStore
+    private let projectID: String?
+    private let projectRoomID: String?
+    private let voiceService: any VoiceNoteService
+
+    @ObservationIgnored lazy var contextModel = SiteScanContextModel(
+        store: store, projectID: projectID, projectRoomID: projectRoomID, voice: voiceService,
+        scanSessionIdProvider: { [weak self] in (self?.session as? ContextCapturing)?.scanSessionId },
+        frameProvider: { [weak self] in (self?.session as? ContextCapturing)?.captureContextFrame() })
+
+    init(siteScan: any SiteScanService, name: String, store: CaptureStore,
+         projectID: String?, projectRoomID: String?, voice: any VoiceNoteService) {
         self.siteScan = siteScan
         self.name = name
+        self.store = store
+        self.projectID = projectID
+        self.projectRoomID = projectRoomID
+        self.voiceService = voice
     }
 
     func startScan() async {
@@ -129,7 +145,10 @@ struct SiteScanHostScreen: View {
         self.projectRoomID = projectRoomID
         self.handoffProjectName = handoff.projectName
         let name = handoff.name.isEmpty ? SiteScanSetupModel.defaultName() : handoff.name
-        _model = State(wrappedValue: SiteScanHostModel(siteScan: container.siteScan, name: name))
+        _model = State(wrappedValue: SiteScanHostModel(
+            siteScan: container.siteScan, name: name, store: container.store,
+            projectID: projectID, projectRoomID: projectRoomID,
+            voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory())))
     }
 
     var body: some View {
@@ -194,6 +213,8 @@ struct SiteScanScanStep: View {
                         .padding(.top, 10)
                 }
                 Spacer()
+                SiteScanContextControls(model: model.contextModel)   // item 7 — photo/voice → Inbox
+                    .padding(.bottom, 8)
                 if let scanError = model.scanError { errorBanner(scanError) }
                 controls
             }

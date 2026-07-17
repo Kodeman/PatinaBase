@@ -264,8 +264,15 @@ public struct MockPortalAuthApprovalService: PortalAuthApprovalService {
 /// Always-supported scan session with a scripted coverage ramp, so F2–F4 render
 /// on the simulator (where real RoomPlan/LiDAR is unavailable).
 @MainActor
-public final class MockScanSession: FieldScanSession, AnchorCapturing {
+public final class MockScanSession: FieldScanSession, AnchorCapturing, ContextCapturing {
     public init() {}
+
+    // Item-7 context capture (scripted — a placeholder frame so the sim flow enqueues).
+    public let scanSessionId = UUID().uuidString.lowercased()
+    public func captureContextFrame() -> ContextFrameSnapshot? {
+        ContextFrameSnapshot(imageData: Data([0xFF, 0xD8, 0xFF, 0xD9]), width: 4, height: 3,
+                             poseRowMajor: nil, filenameExtension: "jpg")
+    }
 
     public var events: AsyncStream<FieldScanEvent> {
         AsyncStream { continuation in

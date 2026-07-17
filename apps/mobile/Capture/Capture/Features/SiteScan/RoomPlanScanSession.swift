@@ -39,6 +39,10 @@ import ARKit
 import UIKit
 import simd
 import os.log
+import CoreImage
+import CoreVideo
+import ImageIO
+import UniformTypeIdentifiers
 
 @MainActor
 final class RoomPlanScanSession: NSObject, FieldScanSession {
@@ -46,6 +50,10 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
     /// The shared-ARSession capture core (item 3). Owns + configures + runs the
     /// `ARSession`; is its delegate; fans frames/mesh out to the recorders.
     private let rig = SharedARCaptureRig()
+
+    /// Stable client scan-session id for context-capture provenance correlation
+    /// (item 7) — the remote scan id isn't minted until upload.
+    let scanSessionId = UUID().uuidString.lowercased()
 
     /// The RoomPlan view F2 embeds. Built on the rig's running session in `start()`
     /// (RoomCaptureView requires an already-running ARSession), so it is nil until
@@ -435,6 +443,42 @@ extension RoomPlanScanSession: AnchorCapturing {
         let farWorld = SIMD3<Float>(far.x, far.y, far.z) / far.w
         let direction = simd_normalize(farWorld - nearWorld)
         return ARRaycastQuery(origin: nearWorld, direction: direction, allowing: .estimatedPlane, alignment: .any)
+    }
+}
+
+// MARK: - ContextCapturing (item 7 — detail photo + pose from the live session)
+
+extension RoomPlanScanSession: ContextCapturing {
+
+    func captureContextFrame() -> ContextFrameSnapshot? {
+        guard let frame = rig.arSession.currentFrame else { return nil }
+        let ciImage = CIImage(cvPixelBuffer: frame.capturedImage).oriented(.right)
+        guard let cgImage = Self.contextCIContext.createCGImage(ciImage, from: ciImage.extent),
+              let data = Self.encodeContextJPEG(cgImage) else { return nil }
+        return ContextFrameSnapshot(imageData: data, width: cgImage.width, height: cgImage.height,
+                                    poseRowMajor: Self.rowMajorDouble(frame.camera.transform),
+                                    filenameExtension: "jpg")
+    }
+
+    private static let contextCIContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    private static func encodeContextJPEG(_ cgImage: CGImage) -> Data? {
+        let mutable = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            mutable, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, cgImage,
+                                   [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return mutable as Data
+    }
+
+    private static func rowMajorDouble(_ m: simd_float4x4) -> [Double] {
+        [
+            Double(m.columns.0.x), Double(m.columns.1.x), Double(m.columns.2.x), Double(m.columns.3.x),
+            Double(m.columns.0.y), Double(m.columns.1.y), Double(m.columns.2.y), Double(m.columns.3.y),
+            Double(m.columns.0.z), Double(m.columns.1.z), Double(m.columns.2.z), Double(m.columns.3.z),
+            Double(m.columns.0.w), Double(m.columns.1.w), Double(m.columns.2.w), Double(m.columns.3.w)
+        ]
     }
 }
 
