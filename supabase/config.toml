@@ -376,6 +376,23 @@ verify_jwt = true
 [functions.convert-room-scan-glb]
 verify_jwt = true
 
+# BOH fulfillment intake worker (S0, 00354). Cron-invoked every minute via
+# pg_cron -> invoke_edge_function (service-role Bearer, same cron->edge bridge
+# as the other Agent OS crons); also callable directly with { seed_pi, actor? }
+# for local dev seeding (scripts/seed-fulfillment-orders.ts, task C2). No
+# browser calls it. verify_jwt = true is the platform default; explicit here
+# for intent, matching the other cron-invoked functions.
+[functions.fulfillment-intake]
+verify_jwt = true
+
+# BOH fulfillment events → PostHog mirror (S0, 00354). Cron-invoked every 5 min
+# via pg_cron -> invoke_edge_function (service-role Bearer, same cron->edge
+# bridge as the other Agent OS crons). No browser calls it. verify_jwt = true
+# is the platform default; explicit here for intent, matching the other
+# cron-invoked functions.
+[functions.fulfillment-events-mirror]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

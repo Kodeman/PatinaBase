@@ -1,9 +1,10 @@
-// A tiny in-memory Supabase client stand-in for the Field Coordination edge-fn
-// unit tests. It models tables as arrays and supports the exact query surface
-// the field code uses: select/eq/neq/in/lt/gte/lte/is/order/limit +
-// maybeSingle/single, insert/update/upsert(onConflict,ignoreDuplicates), rpc,
-// storage.from().upload(), and functions.invoke(). Not a Postgres — just enough
-// to exercise the send/parse/dispatch logic deterministically and offline.
+// A tiny in-memory Supabase client stand-in for edge-fn unit tests (grown
+// beyond its original Field Coordination scope — now shared across suites).
+// It models tables as arrays and supports the exact query surface callers
+// use: select/eq/neq/in/lt/gt/gte/lte/is/order/limit + maybeSingle/single,
+// insert/update/upsert(onConflict,ignoreDuplicates), rpc, storage.from().upload(),
+// and functions.invoke(). Not a Postgres — just enough to exercise
+// send/parse/dispatch logic deterministically and offline.
 
 type Row = Record<string, unknown>;
 type Predicate = (r: Row) => boolean;
@@ -29,6 +30,7 @@ class Builder {
   neq(col: string, val: unknown): this { this.filters.push((r) => r[col] !== val); return this; }
   in(col: string, arr: unknown[]): this { this.filters.push((r) => arr.includes(r[col])); return this; }
   lt(col: string, val: unknown): this { this.filters.push((r) => r[col] != null && (r[col] as never) < (val as never)); return this; }
+  gt(col: string, val: unknown): this { this.filters.push((r) => r[col] != null && (r[col] as never) > (val as never)); return this; }
   gte(col: string, val: unknown): this { this.filters.push((r) => r[col] != null && (r[col] as never) >= (val as never)); return this; }
   lte(col: string, val: unknown): this { this.filters.push((r) => r[col] != null && (r[col] as never) <= (val as never)); return this; }
   is(col: string, val: unknown): this {
