@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patina · Field Capture Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,560;9..144,640&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#262219;
+    --ink-soft:#544d40;
+    --paper:#F4EFE4;
+    --paper-deep:#EBE4D2;
+    --verdigris:#3F7568;
+    --verdigris-deep:#2C564C;
+    --brass:#95762C;
+    --rust:#A6491F;
+    --line:rgba(38,34,25,.24);
+    --line-soft:rgba(38,34,25,.13);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Hanken Grotesk',system-ui,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    overflow:hidden;
+    font-size:16px;
+    line-height:1.55;
+  }
+  /* ---------- deck engine ---------- */
+  .deck{position:fixed;inset:0}
+  .sheet{
+    position:absolute;inset:0;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    opacity:0;visibility:hidden;
+    transform:translateX(24px);
+    transition:opacity .35s ease, transform .35s ease, visibility 0s linear .35s;
+    padding:clamp(20px,4.5vw,64px) clamp(18px,5vw,72px) 118px;
+  }
+  .sheet.active{
+    opacity:1;visibility:visible;transform:translateX(0);
+    transition:opacity .35s ease, transform .35s ease;
+  }
+  @media (prefers-reduced-motion: reduce){
+    .sheet{transition:none;transform:none}
+  }
+  .frame{max-width:1060px;margin:0 auto}
+  /* ---------- type ---------- */
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--brass);margin-bottom:14px;
+  }
+  h2{
+    font-family:'Fraunces',serif;
+    font-weight:560;
+    font-size:clamp(27px,4.2vw,44px);
+    line-height:1.08;letter-spacing:-.01em;
+    margin-bottom:18px;max-width:19ch;
+  }
+  .lede{
+    font-size:clamp(16px,1.6vw,18.5px);
+    color:var(--ink-soft);max-width:62ch;margin-bottom:26px;
+  }
+  .kicker{
+    font-family:'Fraunces',serif;font-weight:560;
+    font-size:clamp(17px,1.9vw,21px);line-height:1.35;
+    color:var(--verdigris-deep);
+    border-left:3px solid var(--verdigris);
+    padding-left:16px;margin-top:30px;max-width:56ch;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace}
+  .small{font-size:13px;color:var(--ink-soft)}
+  strong{font-weight:600}
+  /* ---------- dimension-line signature ---------- */
+  .dim{
+    display:flex;align-items:center;gap:14px;
+    margin:26px 0 6px;color:var(--verdigris-deep);
+  }
+  .dim::before,.dim::after{
+    content:"";flex:1;height:1px;background:var(--verdigris);
+    position:relative;
+  }
+  .dim span{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+    white-space:nowrap;
+  }
+  .tick{display:inline-block;width:1px;height:12px;background:var(--verdigris);flex:0 0 1px}
+  /* ---------- layout blocks ---------- */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:clamp(18px,3vw,40px);align-items:start}
+  .cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:clamp(14px,2.4vw,28px);align-items:stretch}
+  @media (max-width:820px){
+    .cols,.cols3{grid-template-columns:1fr}
+  }
+  .panel{
+    background:var(--paper-deep);
+    border:1px solid var(--line-soft);
+    padding:20px 22px;
+  }
+  .panel h3{
+    font-family:'Fraunces',serif;font-weight:560;
+    font-size:19px;margin-bottom:8px;
+  }
+  .panel .tag{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--verdigris-deep);
+    display:block;margin-bottom:10px;
+  }
+  ul.list{list-style:none;margin-top:6px}
+  ul.list li{
+    padding:9px 0 9px 22px;position:relative;
+    border-bottom:1px solid var(--line-soft);
+    font-size:15.5px;
+  }
+  ul.list li:last-child{border-bottom:none}
+  ul.list li::before{
+    content:"—";position:absolute;left:0;color:var(--verdigris);
+    font-family:'IBM Plex Mono',monospace;
+  }
+  ul.list.rust li::before{content:"!";color:var(--rust);font-weight:500}
+  ol.steps{list-style:none;counter-reset:s;margin-top:10px}
+  ol.steps li{
+    counter-increment:s;position:relative;
+    padding:12px 0 12px 52px;border-bottom:1px solid var(--line-soft);
+    font-size:15.5px;
+  }
+  ol.steps li:last-child{border-bottom:none}
+  ol.steps li::before{
+    content:counter(s,decimal-leading-zero);
+    position:absolute;left:0;top:12px;
+    font-family:'IBM Plex Mono',monospace;font-size:13px;
+    color:var(--verdigris-deep);
+    border:1px solid var(--verdigris);padding:2px 7px;
+  }
+  ol.steps b{font-weight:600}
+  /* ---------- tables ---------- */
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14.5px}
+  th{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+    letter-spacing:.14em;text-transform:uppercase;text-align:left;
+    color:var(--ink-soft);padding:8px 12px 8px 0;
+    border-bottom:1px solid var(--ink);
+  }
+  td{padding:11px 12px 11px 0;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  td.mono{font-size:13px;white-space:nowrap}
+  /* ---------- badges ---------- */
+  .badge{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;
+    letter-spacing:.12em;text-transform:uppercase;
+    border:1px solid currentColor;padding:2px 8px;
+    display:inline-block;white-space:nowrap;
+  }
+  .b-ver{color:var(--verdigris-deep)}
+  .b-mea{color:var(--ink-soft)}
+  .b-est{color:var(--brass)}
+  .b-risk{color:var(--rust)}
+  /* ---------- flow diagram ---------- */
+  .flow{display:flex;gap:0;margin:26px 0 8px;flex-wrap:wrap}
+  .node{
+    flex:1 1 150px;min-width:150px;
+    border:1px solid var(--ink);
+    background:var(--paper);
+    padding:14px 14px 12px;position:relative;
+    margin:0 26px 26px 0;
+  }
+  .node:last-child{margin-right:0}
+  .node::after{
+    content:"";position:absolute;right:-27px;top:50%;
+    width:26px;height:1px;background:var(--verdigris);
+  }
+  .node:last-child::after{display:none}
+  .node .n{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;
+    color:var(--verdigris-deep);letter-spacing:.14em;display:block;margin-bottom:6px;
+  }
+  .node .t{font-family:'Fraunces',serif;font-weight:560;font-size:16.5px;display:block;margin-bottom:5px}
+  .node .d{font-size:12.5px;color:var(--ink-soft);line-height:1.45;display:block}
+  @media (max-width:820px){
+    .flow{flex-direction:column}
+    .node{margin:0 0 26px 0}
+    .node::after{
+      right:auto;left:24px;top:auto;bottom:-27px;
+      width:1px;height:26px;
+    }
+  }
+  /* ---------- big numbers ---------- */
+  .figs{display:flex;gap:clamp(18px,4vw,52px);flex-wrap:wrap;margin:22px 0 6px}
+  .fig .v{
+    font-family:'Fraunces',serif;font-weight:640;
+    font-size:clamp(30px,4.4vw,46px);line-height:1;color:var(--verdigris-deep);
+  }
+  .fig .l{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);
+    margin-top:7px;max-width:22ch;
+  }
+  /* ---------- cover / closer ---------- */
+  .sheet.ink{background:var(--ink);color:var(--paper)}
+  .sheet.ink .eyebrow{color:var(--brass)}
+  .sheet.ink .lede{color:rgba(244,239,228,.72)}
+  .sheet.ink h1{
+    font-family:'Fraunces',serif;font-weight:560;
+    font-size:clamp(38px,7vw,76px);line-height:1.03;letter-spacing:-.015em;
+    max-width:16ch;margin-bottom:24px;
+  }
+  .sheet.ink .dim{color:var(--paper)}
+  .sheet.ink .dim::before,.sheet.ink .dim::after,.sheet.ink .tick{background:var(--verdigris)}
+  .sheet.ink .dim span{color:#8FBDB0}
+  .cover-meta{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;
+    letter-spacing:.14em;text-transform:uppercase;
+    color:rgba(244,239,228,.55);margin-top:36px;line-height:2.1;
+  }
+  .cover-meta em{font-style:normal;color:var(--paper)}
+  /* ---------- title block (fixed) ---------- */
+  .titleblock{
+    position:fixed;left:0;right:0;bottom:0;z-index:40;
+    background:var(--paper);
+    border-top:1px solid var(--ink);
+    display:flex;align-items:stretch;
+    font-family:'IBM Plex Mono',monospace;
+    height:56px;
+  }
+  .tb-cell{
+    display:flex;flex-direction:column;justify-content:center;
+    padding:0 16px;border-right:1px solid var(--line);
+    min-width:0;
+  }
+  .tb-label{font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft)}
+  .tb-val{font-size:12px;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tb-proj{flex:0 0 auto}
+  .tb-no{flex:0 0 auto;background:var(--ink);color:var(--paper);border-right:none}
+  .tb-no .tb-label{color:rgba(244,239,228,.55)}
+  .tb-no .tb-val{font-size:15px;letter-spacing:.1em}
+  .tb-title{flex:1 1 auto}
+  .tb-date{flex:0 0 auto}
+  @media (max-width:640px){
+    .tb-date{display:none}
+    .tb-proj .tb-val{max-width:34vw}
+  }
+  /* ---------- nav ---------- */
+  .nav{
+    position:fixed;right:14px;bottom:70px;z-index:50;
+    display:flex;gap:8px;
+  }
+  .nav button{
+    width:46px;height:46px;
+    background:var(--paper);
+    border:1px solid var(--ink);
+    color:var(--ink);
+    font-family:'IBM Plex Mono',monospace;font-size:17px;
+    cursor:pointer;
+  }
+  .nav button:hover{background:var(--verdigris);border-color:var(--verdigris);color:var(--paper)}
+  .nav button:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+  .progress{
+    position:fixed;top:0;left:0;height:3px;z-index:60;
+    background:var(--verdigris);width:0;transition:width .3s ease;
+  }
+  /* small helpers */
+  .mt0{margin-top:0}.mt18{margin-top:18px}.mt28{margin-top:28px}
+  .two-tone{color:var(--verdigris-deep)}
+  .src{font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:2;color:var(--ink-soft);margin-top:14px}
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<div class="deck" id="deck">
+
+  <!-- SC-00 · COVER -->
+  <section class="sheet ink" data-no="SC-00" data-title="Cover">
+    <div class="frame">
+      <div class="eyebrow">Patina · T-03 Field Capture · Architecture Brief</div>
+      <h1>The room, brought back whole.</h1>
+      <p class="lede" style="max-width:56ch">An architecture for high&#8209;fidelity iOS room scanning — measurement a designer can trust, accuracy she can verify, and clarity she can step into. From gimmick to instrument.</p>
+      <div class="dim" style="max-width:420px"><span class="tick"></span><span>± 1 cm · the whole point</span><span class="tick"></span></div>
+      <div class="cover-meta">
+        Status <em>Draft</em> · Owner <em>Kody</em> · <em>17 Jul 2026</em><br>
+        Sheets <em>SC&#8209;00 – SC&#8209;17</em> · Series <em>Scan Capture</em>
+      </div>
+    </div>
+  </section>
+
+  <!-- SC-01 · PROBLEM -->
+  <section class="sheet" data-no="SC-01" data-title="Why the scans feel like a toy">
+    <div class="frame">
+      <div class="eyebrow">The problem</div>
+      <h2>Why the current scans feel like a toy</h2>
+      <p class="lede">A RoomPlan-only pipeline produces a dollhouse, not a document. The failures are structural, not cosmetic — they're documented properties of the framework.</p>
+      <div class="cols">
+        <ul class="list">
+          <li>Walls drift up to <strong>±5 cm each</strong>; whole-room spans wander further as tracking accumulates error.</li>
+          <li>Every wall is rendered a uniform <strong>~16 cm thick</strong> — invented geometry presented as fact.</li>
+          <li><strong>No ceiling data.</strong> Sloped ceilings, arches, soffits, and trim are flattened into boxes or dropped entirely.</li>
+          <li>Furniture reduced to a <strong>fixed taxonomy</strong> of bounding boxes — sconces, radiators, built-ins simply don't exist.</li>
+        </ul>
+        <ul class="list">
+          <li>Output is <strong>one USDZ file</strong> — a dead end in a drawing-and-photo based design workflow.</li>
+          <li>Session limits: <strong>~9×9 m, ~5 minutes</strong> — one pass, no recovery path when coverage is missed.</li>
+          <li>The framework has sat <strong>essentially unchanged since iOS&nbsp;17</strong>, with new capture regressions reported on iOS&nbsp;26.</li>
+        </ul>
+      </div>
+      <p class="kicker">A designer checks one dimension against her tape, finds it off by an inch, and never trusts the scan again. Fidelity is a trust problem before it is a rendering problem.</p>
+    </div>
+  </section>
+
+  <!-- SC-02 · THE BAR -->
+  <section class="sheet" data-no="SC-02" data-title="The bar">
+    <div class="frame">
+      <div class="eyebrow">The bar</div>
+      <h2>What "step into the room" actually requires</h2>
+      <p class="lede">Three pillars. Miss any one and the scan is decoration.</p>
+      <div class="cols3">
+        <div class="panel">
+          <span class="tag">Pillar 01</span>
+          <h3>Measurement</h3>
+          <p class="small" style="font-size:14.5px">Capture what a real site measure records: plan dimensions, ceiling heights <em>including slopes</em>, window &amp; door sizes with sill and head heights, outlet / switch / register locations, plumbing centers, trim conditions.</p>
+        </div>
+        <div class="panel">
+          <span class="tag">Pillar 02</span>
+          <h3>Accuracy</h3>
+          <p class="small" style="font-size:14.5px">Every number carries a known, published tolerance. Critical spans are verified against ground truth — laser or tape — not hoped for. No silent precision.</p>
+        </div>
+        <div class="panel">
+          <span class="tag">Pillar 03</span>
+          <h3>Clarity</h3>
+          <p class="small" style="font-size:14.5px">Two readable forms: drawings that slot into her existing workflow, and a photoreal walkthrough for sightlines, light, and finishes when she's back at the desk.</p>
+        </div>
+      </div>
+      <div class="dim mt28"><span class="tick"></span><span>fidelity = geometry × tolerance × presence</span><span class="tick"></span></div>
+    </div>
+  </section>
+
+  <!-- SC-03 · RESEARCH: SENSOR -->
+  <section class="sheet" data-no="SC-03" data-title="Research · the sensor">
+    <div class="frame">
+      <div class="eyebrow">Research · 01</div>
+      <h2>The sensor is honest. The walk is not.</h2>
+      <p class="lede">What the peer-reviewed studies and Apple's own numbers establish about iPhone LiDAR.</p>
+      <div class="figs">
+        <div class="fig"><div class="v">1–3 cm</div><div class="l">depth accuracy inside 3 m</div></div>
+        <div class="fig"><div class="v">5–10 cm</div><div class="l">beyond 4 m — range falls off hard</div></div>
+        <div class="fig"><div class="v">1–2 %</div><div class="l">drift over a room loop — the real killer</div></div>
+      </div>
+      <div class="cols mt18">
+        <ul class="list">
+          <li>Direct time-of-flight sensor, <strong>256 × 192</strong> depth map, ~5 m rated range (newest Pros reach ~10 m indoors).</li>
+          <li>Sub-centimeter agreement with terrestrial laser scanners at close range on fixed targets — the raw physics is good.</li>
+        </ul>
+        <ul class="list">
+          <li>The error that ruins rooms isn't sensor noise — it's <strong>tracking drift</strong> as you walk. Live poses wander; long spans and loops pay the price.</li>
+          <li>Direct sun saturates the IR return; rooms under <strong>~50 lux</strong> starve visual tracking.</li>
+        </ul>
+      </div>
+      <p class="kicker">Implication: treat live capture as evidence collection, never as the deliverable. Accuracy is manufactured afterward, in reconstruction.</p>
+    </div>
+  </section>
+
+  <!-- SC-04 · RESEARCH: FIELD -->
+  <section class="sheet" data-no="SC-04" data-title="Research · the field">
+    <div class="frame">
+      <div class="eyebrow">Research · 02</div>
+      <h2>What the field proves — and leaves open</h2>
+      <table>
+        <thead><tr><th style="width:17%">Tool</th><th>What it proves</th><th>What it misses</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Canvas</strong><br><span class="small">Trimble</span></td>
+            <td>1–2&#8202;% tolerance is a sellable product. Their <em>manual critical-dimension override</em> — verified numbers beat scanned ones — is the right instinct.</td>
+            <td>Human CAD conversion, ~2-day turnaround, per-scan fees. No presence layer. The scan itself stays raw.</td>
+          </tr>
+          <tr>
+            <td><strong>Polycam</strong></td>
+            <td>On-device global pose optimization (loop closure, up to ~1,400 frames) proves drift is fixable. Exports ARKit poses for downstream pipelines.</td>
+            <td>Generic 3D output. No designer semantics, no drawings, no tolerance story.</td>
+          </tr>
+          <tr>
+            <td><strong>Scaniverse</strong><br><span class="small">Niantic</span></td>
+            <td>On-device Gaussian splatting in ~1 minute proves <em>presence is phone-viable</em>. Compact SPZ export, browser-shareable.</td>
+            <td>Zero measurement story. Beautiful, unmeasurable rooms.</td>
+          </tr>
+          <tr>
+            <td><strong>Matterport / BLK-class</strong></td>
+            <td>The fidelity ceiling exists.</td>
+            <td>At a hardware cost and workflow weight Patina exists to avoid.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="kicker">The opening: nobody pairs verified drawings, a walkable room, and pinned field context in one ten-minute visit that feeds a designer's actual workflow. That seam is Patina's.</p>
+    </div>
+  </section>
+
+  <!-- SC-05 · THESIS -->
+  <section class="sheet" data-no="SC-05" data-title="The thesis">
+    <div class="frame">
+      <div class="eyebrow">The thesis</div>
+      <h2>One walk, every signal. Then reconstruct.</h2>
+      <div class="cols3 mt18">
+        <div class="panel">
+          <span class="tag">Phone</span>
+          <h3>A sensor rig and a coach</h3>
+          <p class="small" style="font-size:14.5px">One guided walk records four synchronized streams. The app's job is to make a bad scan nearly impossible — not to render a pretty one.</p>
+        </div>
+        <div class="panel">
+          <span class="tag">Server</span>
+          <h3>The instrument</h3>
+          <p class="small" style="font-size:14.5px">Reconstruction — not live AR — produces accuracy: refined poses, anchored scale, geometry re-measured against dense evidence.</p>
+        </div>
+        <div class="panel">
+          <span class="tag">Portal</span>
+          <h3>The Room File</h3>
+          <p class="small" style="font-size:14.5px">Two layers, one truth. The <strong>True Layer</strong>: parametric as-built + dense mesh, every dimension queryable with tolerance. The <strong>Present Layer</strong>: a splat walkthrough for presence.</p>
+        </div>
+      </div>
+      <div class="dim mt28"><span class="tick"></span><span>the splat is what she sees · the mesh is what she measures</span><span class="tick"></span></div>
+    </div>
+  </section>
+
+  <!-- SC-06 · ARCHITECTURE -->
+  <section class="sheet" data-no="SC-06" data-title="Architecture at a glance">
+    <div class="frame">
+      <div class="eyebrow">Architecture</div>
+      <h2>Five stages, one chain of custody</h2>
+      <div class="flow">
+        <div class="node"><span class="n">01</span><span class="t">Capture</span><span class="d">iOS · guided multi&#8209;stream session, anchors included</span></div>
+        <div class="node"><span class="n">02</span><span class="t">QA Gate</span><span class="d">on&#8209;device · scorecard, guided re&#8209;scan loop</span></div>
+        <div class="node"><span class="n">03</span><span class="t">Bundle</span><span class="d">checksummed, resumable background upload</span></div>
+        <div class="node"><span class="n">04</span><span class="t">Reconstruct</span><span class="d">server GPU · refine → anchor → fuse → train</span></div>
+        <div class="node"><span class="n">05</span><span class="t">Room File</span><span class="d">portal · drawings, walkthrough, registry</span></div>
+      </div>
+      <p class="small mono" style="letter-spacing:.06em">AUTHORITY ORDER: dense evidence → parametric model → live preview. When they disagree, evidence wins.</p>
+      <p class="kicker">Nothing the designer sees comes straight off the phone. Everything she sees can be traced back to it.</p>
+    </div>
+  </section>
+
+  <!-- SC-07 · STAGE 1 -->
+  <section class="sheet" data-no="SC-07" data-title="Stage 1 · capture session">
+    <div class="frame">
+      <div class="eyebrow">Stage 01 · iOS</div>
+      <h2>The capture session: four streams, one clock</h2>
+      <p class="lede">One custom <span class="mono" style="font-size:.9em">ARSession</span> (the iOS&nbsp;17 shared-session pattern) feeds parallel recorders. Everything shares one coordinate frame and one timeline — nothing needs aligning later that wasn't aligned at birth.</p>
+      <div class="cols">
+        <ul class="list">
+          <li><strong>Parametric</strong> — RoomCaptureSession rides the shared session. Its live wall / opening graph drives the coaching UI; its geometry is treated as a hypothesis, not an answer.</li>
+          <li><strong>Depth &amp; mesh</strong> — LiDAR scene mesh plus smoothed per-frame depth maps with confidence, streamed to disk.</li>
+        </ul>
+        <ul class="list">
+          <li><strong>Keyframes</strong> — auto-fired every ~0.5 m or 15° of motion: full-res HEIC + depth + intrinsics + pose. Target 200–400 per room; sharpness-gated.</li>
+          <li><strong>Context</strong> — lux sampling, voice notes and detail photos pinned to pose. Each lands in the Capture Inbox with a spatial address.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SC-08 · ANCHORS -->
+  <section class="sheet" data-no="SC-08" data-title="Ground-truth anchors">
+    <div class="frame">
+      <div class="eyebrow">Stage 01 · the accuracy contract</div>
+      <h2>Three verified spans, or it doesn't ship</h2>
+      <p class="lede">Before a session can close, the app requires ground truth: two long spans (walls or diagonals) plus one ceiling height, entered against taps on the live model.</p>
+      <div class="cols">
+        <ul class="list">
+          <li><strong>Entry paths</strong> — a Bluetooth laser meter (DISTO-class) or typed from tape. Thirty seconds, not a ceremony.</li>
+          <li><strong>What it buys</strong> — reconstruction solves scale against the anchors and publishes per-anchor residuals. Anchored spans become exact; everything else inherits a computed tolerance.</li>
+        </ul>
+        <ul class="list">
+          <li><strong>Designer override</strong> — any dimension she later re-measures wins, permanently, and is recorded as verified. Field truth always outranks reconstruction.</li>
+          <li><strong>The receipt</strong> — every Room File ships with an accuracy certificate: anchors used, residuals, resulting tolerance class.</li>
+        </ul>
+      </div>
+      <p class="kicker">This is the line between "the scan says" and "the site says." Patina ships what the site says.</p>
+    </div>
+  </section>
+
+  <!-- SC-09 · COACH & GATE -->
+  <section class="sheet" data-no="SC-09" data-title="Stage 2 · coach + gate">
+    <div class="frame">
+      <div class="eyebrow">Stage 02 · on-device</div>
+      <h2>The coach and the gate</h2>
+      <p class="lede">Canvas's own field data says most bad scans are technique, not hardware. So the app teaches technique in the moment — while two more steps can still fix it.</p>
+      <div class="cols">
+        <div class="panel">
+          <span class="tag">While scanning</span>
+          <ul class="list" style="margin-top:0">
+            <li>Coverage shading painted onto the live mesh — unseen surfaces stay visibly unpainted.</li>
+            <li>Motion-speed and blur warnings; exposure guidance; distance nudges when past ~4 m.</li>
+            <li>Per-surface checklist: walls, ceiling, floor, each opening.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <span class="tag">At the end</span>
+          <ul class="list" style="margin-top:0">
+            <li>Scorecard: coverage %, sharp-frame ratio, tracking health, anchor count.</li>
+            <li>Verdict: <span class="badge b-ver">green</span> <span class="badge b-est">amber</span> <span class="badge b-risk">red</span> — red doesn't fail the upload; it walks the user back to the exact gap.</li>
+            <li>Nothing ambiguous leaves the room.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="kicker">The anti-gimmick layer. Fidelity is won or lost on site, not in the cloud.</p>
+    </div>
+  </section>
+
+  <!-- SC-10 · RECONSTRUCTION -->
+  <section class="sheet" data-no="SC-10" data-title="Stage 4 · reconstruction">
+    <div class="frame">
+      <div class="eyebrow">Stage 04 · server</div>
+      <h2>Reconstruction: where accuracy is made</h2>
+      <ol class="steps">
+        <li><b>Pose refinement</b> — structure-from-motion / bundle adjustment seeded with the ARKit trajectory (COLMAP-class, fast because it starts warm). This is the drift killer.</li>
+        <li><b>Anchor solve</b> — fit global scale to the verified spans; publish residuals into the accuracy certificate.</li>
+        <li><b>Dense fusion</b> — TSDF over refined depth → a dense, measurable mesh of the actual room.</li>
+        <li><b>Parametric re-fit</b> — re-measure walls, openings, and <em>true ceiling planes, slopes included</em>, against the dense evidence. Keep RoomPlan's semantics; replace its geometry.</li>
+        <li><b>Splat training</b> — 3D Gaussian splatting (splatfacto / gsplat), ~10–20 GPU-minutes per room → compact SPZ for the browser.</li>
+        <li><b>Derivatives</b> — dimensioned plan (SVG / DXF / PDF), per-wall elevations, photo-registry map, measurement index.</li>
+      </ol>
+      <p class="small mono mt18" style="letter-spacing:.05em">INFRA · queue worker on Coolify · state in Postgres / Supabase · homelab RTX first, cloud burst when volume demands.</p>
+    </div>
+  </section>
+
+  <!-- SC-11 · ROOM FILE -->
+  <section class="sheet" data-no="SC-11" data-title="Stage 5 · the Room File">
+    <div class="frame">
+      <div class="eyebrow">Stage 05 · portal</div>
+      <h2>The Room File: what she opens Monday</h2>
+      <div class="cols3 mt18">
+        <div class="panel">
+          <span class="tag">Drawings</span>
+          <h3>Plan + elevations</h3>
+          <p class="small" style="font-size:14px">Floor plan and four elevations per room, dimensioned. Every number badged:</p>
+          <p style="margin-top:10px;line-height:2.2"><span class="badge b-ver">verified</span> <span class="badge b-mea">measured ± x</span> <span class="badge b-est">estimated</span></p>
+        </div>
+        <div class="panel">
+          <span class="tag">Walkthrough</span>
+          <h3>Splat viewer</h3>
+          <p class="small" style="font-size:14px">Browser-native (Spark / Three.js — WebGL2, runs on her phone). Click-to-measure rays hit the <em>hidden dense mesh</em>, so the pretty view and the true numbers come from the right layers, always.</p>
+        </div>
+        <div class="panel">
+          <span class="tag">Registry</span>
+          <h3>Pinned context</h3>
+          <p class="small" style="font-size:14px">Every keyframe, detail photo, and voice note addressable from the plan. Tap a wall — see its photos, hear the note about the radiator behind the drapes.</p>
+        </div>
+      </div>
+      <p class="kicker">Not a scan she watches. A room she works in.</p>
+    </div>
+  </section>
+
+  <!-- SC-12 · DATA MODEL -->
+  <section class="sheet" data-no="SC-12" data-title="Bundle + data model">
+    <div class="frame">
+      <div class="eyebrow">Data</div>
+      <h2>The capture bundle and its ledger</h2>
+      <div class="cols">
+        <div>
+          <div class="panel">
+            <span class="tag">Bundle · ~300–600 MB / room</span>
+            <p class="mono small" style="line-height:2;font-size:12.5px">
+              manifest.json&nbsp;&nbsp;<span class="two-tone">· device, session, anchors, pose graph</span><br>
+              room.param.json + room.usdz<br>
+              mesh/ &nbsp;depth/ &nbsp;<span class="two-tone">· LiDAR evidence</span><br>
+              keyframes/ &nbsp;<span class="two-tone">· HEIC + depth + pose</span><br>
+              notes/ &nbsp;<span class="two-tone">· pinned audio + photos</span><br>
+              checksums · resumable background upload
+            </p>
+          </div>
+        </div>
+        <div>
+          <ul class="list">
+            <li><strong>Blobs</strong> in Supabase storage; <strong>rows</strong> in Postgres: rooms, scans, anchors, measurements, assets, statuses.</li>
+            <li>Every measurement is a row with provenance: source (<span class="mono" style="font-size:.85em">anchor | mesh | parametric</span>), tolerance, verifier, timestamp.</li>
+            <li>The Room File is a <strong>versioned entity</strong> attached to the project — re-scans append, never overwrite.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SC-13 · ACCURACY BUDGET -->
+  <section class="sheet" data-no="SC-13" data-title="Accuracy budget">
+    <div class="frame">
+      <div class="eyebrow">Accuracy</div>
+      <h2>The error budget, itemized</h2>
+      <table>
+        <thead><tr><th>Error source</th><th>Countermeasure</th><th style="width:24%">Residual</th></tr></thead>
+        <tbody>
+          <tr><td>Sensor noise · 1–3 cm per frame</td><td>Multi-frame depth fusion</td><td class="mono">sub-cm on surfaces</td></tr>
+          <tr><td>Tracking drift · 1–2&#8202;% per loop</td><td>Offline bundle adjustment, warm-started</td><td class="mono">~0.2–0.5&#8202;%</td></tr>
+          <tr><td>Scale uncertainty</td><td>Laser-anchored spans</td><td class="mono">exact at anchors</td></tr>
+          <tr><td>Human technique</td><td>Coach + QA gate</td><td class="mono">caught on site</td></tr>
+          <tr><td>Residual unknowns</td><td>Published tolerance per dimension</td><td class="mono">honesty</td></tr>
+        </tbody>
+      </table>
+      <div class="figs mt28">
+        <div class="fig"><div class="v">±1 cm</div><div class="l">or 0.5&#8202;% target on verified spans</div></div>
+        <div class="fig"><div class="v">100&#8202;%</div><div class="l">of shipped numbers carry a stated tolerance</div></div>
+      </div>
+      <p class="kicker">We don't promise magic. We publish the error — and that is the trust product.</p>
+    </div>
+  </section>
+
+  <!-- SC-14 · DEVICES & RISKS -->
+  <section class="sheet" data-no="SC-14" data-title="Devices + risks">
+    <div class="frame">
+      <div class="eyebrow">Constraints</div>
+      <h2>Devices, and where rooms fight back</h2>
+      <p class="lede">LiDAR is Pro-only (iPhone 12&nbsp;Pro → 17&nbsp;Pro, iPad&nbsp;Pro). The field kit standardizes on a Pro device; a photo-only fallback can exist later, with wider — and honestly labeled — tolerances.</p>
+      <ul class="list rust">
+        <li><strong>Mirrors &amp; glass</strong> — IR lies through them → detect, mask, and flag the surface for the designer's eye.</li>
+        <li><strong>Sunlit rooms</strong> — direct sun saturates the return → coach warns; prefer shades drawn during capture.</li>
+        <li><strong>Dark rooms</strong> — under ~50 lux tracking starves → torch prompt, exposure guidance.</li>
+        <li><strong>Large / open plans</strong> — past ~9×9 m the parametric layer degrades → sector scans, merged in reconstruction where drift is already being solved.</li>
+        <li><strong>OS churn</strong> — iOS 26 shipped RoomCaptureView regressions → pinned OS support matrix + capture-rig integration tests in CI.</li>
+        <li><strong>People &amp; pets</strong> — transient masking during splat training; frames flagged, never silently used.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SC-15 · ROADMAP -->
+  <section class="sheet" data-no="SC-15" data-title="Roadmap">
+    <div class="frame">
+      <div class="eyebrow">Roadmap</div>
+      <h2>Three phases, each with a gate</h2>
+      <div class="cols3 mt18">
+        <div class="panel">
+          <span class="tag">P1 · wks 1–6 · the instrument</span>
+          <h3>Capture + drawings</h3>
+          <p class="small" style="font-size:14px">Custom-ARSession rig, keyframes, anchors, coach + QA gate, bundle upload. Server: plan + elevations + tolerance report.</p>
+          <p class="small mono mt18" style="font-size:11px;letter-spacing:.08em">GATE · Leah retires the tape measure for one real project's drawings.</p>
+        </div>
+        <div class="panel">
+          <span class="tag">P2 · wks 7–12 · presence</span>
+          <h3>Walkable rooms</h3>
+          <p class="small" style="font-size:14px">Pose refinement, dense fusion, splat training. Portal viewer with measure tool and pinned photo registry.</p>
+          <p class="small mono mt18" style="font-size:11px;letter-spacing:.08em">GATE · a maker quotes from the Room File without a site visit.</p>
+        </div>
+        <div class="panel">
+          <span class="tag">P3 · designer-taught intelligence</span>
+          <h3>The learning loop</h3>
+          <p class="small" style="font-size:14px">Finish and fixture tagging seeded by designer corrections; multi-room structures; capture-to-spec continuity. Her overrides teach the system.</p>
+          <p class="small mono mt18" style="font-size:11px;letter-spacing:.08em">GATE · corrections measurably improve the next scan's first pass.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SC-16 · SUCCESS + OPEN -->
+  <section class="sheet" data-no="SC-16" data-title="Success criteria + open questions">
+    <div class="frame">
+      <div class="eyebrow">Measures &amp; unknowns</div>
+      <h2>How we'll know — and what's unruled</h2>
+      <div class="cols">
+        <div>
+          <div class="dim" style="margin-top:6px"><span class="tick"></span><span>success criteria</span><span class="tick"></span></div>
+          <ul class="list">
+            <li>≥95&#8202;% of coached scans pass the gate first try.</li>
+            <li>≤12 minutes per room, anchors included.</li>
+            <li>100&#8202;% of shipped dimensions inside their published tolerance.</li>
+            <li>Zero site re-visits caused by missing information.</li>
+          </ul>
+        </div>
+        <div>
+          <div class="dim" style="margin-top:6px"><span class="tick"></span><span>open questions</span><span class="tick"></span></div>
+          <ul class="list">
+            <li>DISTO Bluetooth in P1, or typed anchors first?</li>
+            <li>On-device splat preview (Scaniverse proves it's possible) vs server-only quality?</li>
+            <li>Homelab GPU vs cloud burst from day one?</li>
+            <li>Does a photo-only fallback ever meet the bar — or is Pro-only the product?</li>
+          </ul>
+        </div>
+      </div>
+      <p class="src">SOURCES · Apple RoomPlan / ARKit docs &amp; WWDC 22–23 · Apple dev-forum RoomPlan threads (iOS 26) · Canvas accuracy FAQ (Trimble) · Polycam polyform · Niantic Scaniverse · Spreafico / Luetzenburg / Tavani LiDAR studies · nerfstudio splatfacto · Spark renderer</p>
+    </div>
+  </section>
+
+  <!-- SC-17 · CLOSER -->
+  <section class="sheet ink" data-no="SC-17" data-title="Close">
+    <div class="frame">
+      <div class="eyebrow">Close</div>
+      <h1>Ship the tolerance, and the trust follows.</h1>
+      <p class="lede" style="max-width:52ch">The scan stops being a gimmick the moment its numbers survive contact with a tape measure — and say so out loud.</p>
+      <div class="dim" style="max-width:520px"><span class="tick"></span><span>next · rule on the open questions → cut the P1 package</span><span class="tick"></span></div>
+      <div class="cover-meta">Patina · Field Capture · SC series · <em>Draft for ruling</em></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- fixed title block -->
+<div class="titleblock" aria-hidden="true">
+  <div class="tb-cell tb-proj"><span class="tb-label">Project</span><span class="tb-val">PATINA · FIELD CAPTURE</span></div>
+  <div class="tb-cell tb-title"><span class="tb-label">Sheet title</span><span class="tb-val" id="tb-title">Cover</span></div>
+  <div class="tb-cell tb-date"><span class="tb-label">Issued</span><span class="tb-val">17 JUL 2026</span></div>
+  <div class="tb-cell tb-no"><span class="tb-label">Sheet</span><span class="tb-val" id="tb-no">SC-00</span></div>
+</div>
+
+<div class="nav">
+  <button id="prev" aria-label="Previous sheet">←</button>
+  <button id="next" aria-label="Next sheet">→</button>
+</div>
+
+<script>
+(function(){
+  var sheets = Array.prototype.slice.call(document.querySelectorAll('.sheet'));
+  var i = 0, n = sheets.length;
+  var tbNo = document.getElementById('tb-no');
+  var tbTitle = document.getElementById('tb-title');
+  var progress = document.getElementById('progress');
+
+  function show(idx){
+    idx = Math.max(0, Math.min(n-1, idx));
+    if(idx === i && sheets[i].classList.contains('active')) return;
+    sheets.forEach(function(s,k){
+      var on = (k === idx);
+      s.classList.toggle('active', on);
+      s.setAttribute('aria-hidden', on ? 'false' : 'true');
+    });
+    i = idx;
+    sheets[i].scrollTop = 0;
+    tbNo.textContent = sheets[i].dataset.no;
+    tbTitle.textContent = sheets[i].dataset.title;
+    progress.style.width = (100 * (i+1) / n) + '%';
+    if(history.replaceState) history.replaceState(null,'','#'+(i));
+  }
+
+  document.getElementById('next').addEventListener('click', function(){ show(i+1); });
+  document.getElementById('prev').addEventListener('click', function(){ show(i-1); });
+
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown'){ e.preventDefault(); show(i+1); }
+    if(e.key === 'ArrowLeft' || e.key === 'PageUp'){ e.preventDefault(); show(i-1); }
+    if(e.key === 'Home'){ show(0); }
+    if(e.key === 'End'){ show(n-1); }
+  });
+
+  // touch swipe (horizontal only)
+  var sx=0, sy=0, tracking=false;
+  document.addEventListener('touchstart', function(e){
+    if(e.touches.length!==1) return;
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
+  }, {passive:true});
+  document.addEventListener('touchend', function(e){
+    if(!tracking) return; tracking=false;
+    var dx = e.changedTouches[0].clientX - sx;
+    var dy = e.changedTouches[0].clientY - sy;
+    if(Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)*1.4){
+      if(dx < 0) show(i+1); else show(i-1);
+    }
+  }, {passive:true});
+
+  var start = parseInt((location.hash||'').replace('#',''),10);
+  show(isNaN(start) ? 0 : start);
+})();
+</script>
+</body>
+</html>

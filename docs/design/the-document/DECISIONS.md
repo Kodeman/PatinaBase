@@ -3888,3 +3888,153 @@ Prod acceptance on the real fleet: backlog cleared 233/233 derived, 0 failed. `f
 Owed: Kody's authenticated prod walk of the photo surfaces; Field's posed-photo device pass via TestFlight. ⚠ Kody's local Capture pbxproj device-build mods were stashed (`stash@{0}`) to allow this program's fast-forward pull — reconcile in Xcode before the next device build.
 
 *Entries add: I83 · last id = I83*
+
+### R108 · Field Capture P1 boundary — six rulings — 2026-07-17
+
+Decision session against the Field Capture architecture deck (SC series,
+patina-field-capture-architecture.html). Interview format; all six ruled.
+
+**R108.1 — Anchor entry: typed only.** P1 ships typed anchor entry
+(read from tape or laser, keyed against taps on the live model). DISTO
+BLE is not scoped for P2 — it waits for field evidence of transcription
+friction. Rationale: the accuracy contract is the anchor *values*, not
+the transport; typed entry captures 100% of the benefit at zero
+integration risk.
+
+**R108.2 — Device posture: Pro scans, non-Pro context.** Scanning
+requires a LiDAR Pro device. Non-Pro iPhones get context capture —
+photos and voice notes pinned to the project via Capture Inbox — and
+the output is never labeled a scan. Rationale: the tolerance promise
+is the product; a degraded scan path muddies it in v1, but the
+context path keeps every designer in the funnel.
+
+**R108.3 — On-site preview: the gate is the preview.** The QA
+coverage mesh (painted surfaces, scorecard) is the on-site answer to
+"did I get everything." Splats are trained server-side only; on-device
+splat training is not pursued. Rationale: the on-site question is
+coverage, not beauty; Metal-based training is months of work that buys
+neither pillar.
+
+**R108.4 — Reconstruction home: homelab behind a burst-ready
+queue.** Pipeline runs on the homelab GPU (2080 Ti) from day one. The
+worker contract is designed so a cloud burst worker is a config
+change, not code. Flip trigger: the first non-Leah designer in
+production. Rationale: pilot volume is single-designer scale; zero
+marginal cost inside the existing Coolify stack; the SLA risk is
+accepted until someone outside the house depends on it.
+
+**R108.5 — Anchor gate: soft, with a loud stamp.** A session may
+close with fewer than three anchors, but the Room File is stamped
+UNVERIFIED, every dimension wears the widest badge class, and the
+stamp prints in the drawing title block. Rationale: truth-framing over
+blocking — the file states what it is; the friction teaches the habit
+without stranding a designer whose laser is in the truck.
+
+**R108.6 — Drawing formats: DXF ships in P1** alongside PDF and
+SVG. Overrules the staged recommendation (PDF/SVG first): CAD import
+is day-one workflow for the pilot, and review-only drawings would
+leave P1 half-useful. Scope cost accepted knowingly — adds a
+parametric-graph → DXF serializer (ezdxf-class, layered walls/
+openings/dims) to the P1 server work; days, not weeks.
+
+*Entries add: R108 · last id = R108*
+
+### I84 · Field Capture P1 — item-1 repo audit: found/absent + pre-emptions — 2026-07-17
+
+Item 1 of the P1 package (docs/design/field-capture/field-capture-p1-package.md),
+run before any build. Four-lane read-only audit (iOS Field app, schema ledger,
+server ingest/queue/workers, portal surface). Verdict: the package's premises
+need reconciliation before item 2 — the additive-schema list collides with live
+tables, and R108.4's infra target is retired. Pre-emptions below gate item 2+.
+
+**Found / absent by area:**
+
+- **T-03 capture flow (Patina Field, apps/mobile/Capture): FOUND, thin.** Stock
+  RoomCaptureView session (Features/SiteScan/RoomPlanScanSession.swift) — no
+  shared-ARSession core; exports scan.usdz (.parametric) + captured_room.json to
+  an OS temp dir. Posed photos: FieldPosedPhotoService + CaptureKit's
+  FieldPhotoGate (JPEG q0.8, 2 s auto-interval, 60-photo cap, pose+intrinsics in
+  photos_metadata.json) — no depth, no sharpness gating. Upload: foreground
+  supabase-swift only (SupabaseSiteScanService → room-scans bucket +
+  mark_scan_upload_complete RPC), in-memory reservation dict, no manifest, no
+  checksums, no background URLSession, no durable scan sync state (app kill
+  mid-upload orphans a processing row). Existing seams: MeasureSheet/
+  ARMeasureView tap-two-points + typed fallback (specimen-scoped, not room
+  anchors); voice notes specimen-scoped only; LiDAR gate via
+  RoomCaptureSession.isSupported with a demo-mode non-Pro fallback.
+- **Prior art in the sibling client app (apps/mobile/Patina): FOUND** — the v3
+  advanced-bundle pipeline the package re-specifies without naming it:
+  ScanManifest.swift, CoverageAnalyzer.swift, PosedPhotoService.swift,
+  ArtifactUploader.swift, BackgroundScanUploader.swift
+  (URLSessionConfiguration.background, sha256 via base64 x-metadata header,
+  408/429/5xx backoff), RoomScanSyncService+AdvancedBundle.swift (calls
+  confirm-scan-bundle fire-and-forget). Item 2/8 work is substantially a port
+  into Field, not an invention.
+- **Capture Inbox: FOUND twice.** field_captures (00233 + RPCs 00235) is the
+  Field-app inbox — client_capture_id idempotency, routing-guard trigger,
+  upload-progress/sha256 columns; portal UI unbuilt. proposal_captures (00130)
+  owns the portal "Capture Inbox" UI name (capture-inbox.tsx). Item 7 targets
+  field_captures; naming must disambiguate the two.
+- **Schema: the additive list is NOT "new tables only."** rooms EXISTS (00019,
+  homeowner-owned, iOS-consumed). scans ≙ room_scans (00014; extended by
+  00019/00020/00027/00032/00077/00082/00265/00338). Bundle state
+  (bundle_manifest_url, artifacts_sha256, upload_progress, scan_schema_version)
+  already on room_scans (00077/00082). anchors/measurements overlap the
+  room_scan_geometry(_elements) spine (00337) — but that spine is parsed
+  RoomPlan output; typed ground-truth anchors and per-dimension tolerance
+  provenance do NOT exist anywhere (genuinely new; no tolerance column in the
+  entire schema). pipeline_events would confusion-collide with
+  pipeline_stage_events (00305, different domain); assets with
+  svc_media.media_assets. House style is text + CHECK, not native enums.
+- **Storage: FOUND.** room-scans bucket (private, 500 MB, MIME list 00077, path
+  {artifactType}/{userId}/{scanId}/…, policy fix 00287, photo_derivatives/
+  family 00340); capture-media (00234); field-media (00282). Cron sweeps live:
+  parse-room-scan */10, convert-room-scan-glb */15, derive-scan-photo-media
+  */5, all via invoke_edge_function with job_runs telemetry.
+- **Ingest/validation: PARTIAL.** confirm-scan-bundle edge fn is live but thin —
+  HEAD reachability + photo-count parity only, no checksum walk; called by
+  Patina, never by Field. Item 2's manifest spec + CLI validator is genuinely
+  new work.
+- **Queue/workers: FOUND.** agent_tasks (00297, @patina/agent-queue) is the
+  mandated generic queue (CLAUDE.md: never create parallel queues) — FOR UPDATE
+  SKIP LOCKED claiming, backoff, groom cron; carries Agent-OS baggage (assignee
+  kody|leah CHECK, review states). infra/media-worker is a LIVE Cloudflare
+  Queues + Containers burst-ready worker — the literal item-9 contract shape.
+  infra/inference-worker (CPU standard-3, FastAPI) already runs the scan lanes
+  (usdz→glb, heic→jpeg) as stateless HTTP driven by edge-fn sweeps. BullMQ/
+  Redis are dead deps; no pg-boss.
+- **Portal: FOUND around the hole.** R107 Room View (/rooms, /room/[scanId];
+  SVG plan + plain-three.js orbit; FactsRail is the proto accuracy
+  certificate). NO project→room navigation exists — useProjectRoomScans has
+  zero consumers and room_scans.project_id/project_room_id (00265) are
+  unrendered; that is exactly the hole Room File v0 (item 12) fills.
+  Versioning precedent: proposal revision chain (new row per version, quiet
+  version strip). Download precedent: spec-pdf edge fn → blob → anchor click.
+  Three room models coexist (rooms / room_scans / project_rooms +
+  proposal_scope_rooms) — Room File must pick lanes explicitly.
+
+**Pre-emptions (rulings applied to item 2+):**
+
+1. **Schema redraft (blessed, code-only):** create NO rooms/scans/
+   capture_bundles/assets tables. New additive tables FK room_scans:
+   scan_anchors, room_files, room_file_measurements, scan_pipeline_events
+   (renamed from the package's anchors/measurements/pipeline_events to fit the
+   live namespace). Bundle state rides the existing room_scans columns +
+   manifest object; no modification of existing tables in P1.
+2. **Migration numbering (blessed):** mint at 00341. 00341–00349 verified free
+   across main + all 504 branches; 00350–00354 already exist as files on boh/*
+   branches — the BOH reservation is materialized, not soft.
+3. **R108.4 conflict (ESCALATED at M1):** "homelab GPU via Coolify" targets
+   retired infra (CLAUDE.md: box dead, no homelab hosts). P1 requires no GPU —
+   anchor solve + SVG/PDF/DXF generation are CPU. Proposed: P1 worker on
+   Cloudflare Containers per the media-worker/inference-worker pattern, which
+   preserves R108.4's burst-ready-contract intent; the GPU question returns at
+   P2 splat training. Needs Kody's ruling before item 9.
+4. **Bundle spec direction (blessed):** superset the existing v3
+   ScanManifest/room_scans contract (scan_schema_version bump), not a parallel
+   format; Field adopts + extends with anchors, scorecard, depth.
+5. **iOS reality check:** no shared-ARSession core exists in either app —
+   item 3 is new work even with v3 ports; background-resumable upload ports
+   from Patina's BackgroundScanUploader.
+
+*Entries add: I84 · last id = I84*
