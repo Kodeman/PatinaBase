@@ -1,15 +1,31 @@
-import { PageHeader, EmptyState } from '@/components/portal';
+'use client';
 
-// Placeholder — the Exception Desk is S7 (spec §5.5). This route exists so
-// the Fulfillment zone's sub-nav (config/navigation.ts) links to a real page
-// today rather than a typedRoutes build error, and so the `x` queue shortcut
-// has somewhere real to eventually land. Visible-not-fake.
+import { PageHeader, EmptyState, LoadingStrata } from '@/components/portal';
+import { useFulfillmentExceptions } from '@/hooks/use-fulfillment-exceptions';
+import { useFulfillmentRealtime } from '@/hooks/use-fulfillment-realtime';
+import { ExceptionsList } from '@/components/fulfillment/exceptions/exceptions-list';
+
+// The Exception Desk (S7, spec §5.5) — the case-file list, clock-urgency sorted.
+// Realtime keeps it live (an exception opened from the queue's `x`, evidence
+// added via a client link, or a Leah ruling all re-figure without a reload).
 
 export default function FulfillmentExceptionsPage() {
+  useFulfillmentRealtime();
+  const { data, isLoading, isError, error } = useFulfillmentExceptions();
+
   return (
     <div className="flex flex-col gap-2">
-      <PageHeader title="Exceptions" description="Case files for damage, delay, backorder, and substitution — clock dominant, ledger consequence shown before commit." />
-      <EmptyState label="Exception Desk" message="The Exception Desk lands in S7." />
+      <PageHeader
+        title="Exceptions"
+        description="Case files for damage, delay, backorder, and substitution — clock dominant, ledger consequence shown before commit."
+      />
+      {isLoading ? (
+        <LoadingStrata />
+      ) : isError ? (
+        <EmptyState label="Error" message={(error as Error)?.message ?? 'Failed to load exceptions'} />
+      ) : (
+        <ExceptionsList rows={data ?? []} />
+      )}
     </div>
   );
 }

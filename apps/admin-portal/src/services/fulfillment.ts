@@ -328,3 +328,120 @@ export const fulfillmentShipmentsService = {
 };
 
 export type { FulfillmentShipmentsBoardDTO };
+
+// ── S7: exception desk & settlement ──────────────────────────────────────────
+// The Exception Desk (spec §5.5) — case files with a clock, evidence to R2, and
+// resolution paths rendered as sentences whose ledger consequence is shown in
+// mono BEFORE commit (fed by fulfillment_resolve_exception(preview:=true), so
+// preview == posted). Settlement (spec §8) — three-way match with a projected
+// posting from fulfillment_settle_po_preview. Routes under
+// /api/admin/fulfillment/exceptions/*, /pos/*/settle*, /leah-reviews/*.
+import type {
+  ExceptionListRow,
+  ExceptionCaseFileDTO,
+  ConsequencePreview,
+  ExceptionResolutionPath,
+  SettlementPreview,
+} from '@patina/fulfillment';
+
+export interface ResolveInput {
+  path: ExceptionResolutionPath | string;
+  params: Record<string, unknown>;
+  preview: boolean;
+}
+
+export const fulfillmentExceptionsService = {
+  /** Every exception, clock-urgency sorted server-side (spec §5.5). */
+  async list(): Promise<ExceptionListRow[]> {
+    return request<ExceptionListRow[]>('/api/admin/fulfillment/exceptions');
+  },
+
+  /** One case file: clock, order/PO/line refs, evidence (signed URLs), the
+   *  resolution paths for its type, current close fields, Leah status. */
+  async getCaseFile(exceptionId: string): Promise<ExceptionCaseFileDTO> {
+    return request<ExceptionCaseFileDTO>(`/api/admin/fulfillment/exceptions/${exceptionId}`);
+  },
+
+  /** Open a new exception (fulfillment_open_exception). */
+  async open(input: {
+    type: string;
+    orderId?: string;
+    orderItemId?: string;
+    poId?: string;
+    shipmentId?: string;
+  }): Promise<{ exceptionId: string }> {
+    return request('/api/admin/fulfillment/exceptions', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** The dual-mode resolve: preview:true returns the would-be consequence with
+   *  NO write; preview:false posts it and closes. The SAME derivation feeds both
+   *  (preview == posted). Substitution routes to Leah instead of resolving. */
+  async resolve(exceptionId: string, input: ResolveInput): Promise<ConsequencePreview & Record<string, unknown>> {
+    return request(`/api/admin/fulfillment/exceptions/${exceptionId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Mint a tokenized client evidence-upload link (~72h). Returns the copyable
+   *  client-portal URL. */
+  async mintEvidenceLink(exceptionId: string): Promise<{ token: string; url: string; expiresAt: string }> {
+    return request(`/api/admin/fulfillment/exceptions/${exceptionId}/evidence-link`, {
+      method: 'POST',
+    });
+  },
+};
+
+export const fulfillmentSettlementService = {
+  /** Projected T3+pledge(+T6) posting for a PO at a given vendor-invoice figure
+   *  (fulfillment_settle_po_preview — read-only, preview == posted). */
+  async preview(poId: string, vendorInvoiceCents: number): Promise<SettlementPreview> {
+    return request(`/api/admin/fulfillment/pos/${poId}/settle-preview`, {
+      method: 'POST',
+      body: JSON.stringify({ vendorInvoiceCents }),
+    });
+  },
+
+  /** Commit the settlement (fulfillment_settle_po). A beyond-tolerance variance
+   *  RAISES (→ 400) unless a typed reason is supplied. */
+  async settle(
+    poId: string,
+    payload: { vendorInvoiceCents: number; varianceReason?: string },
+  ): Promise<Record<string, unknown>> {
+    return request(`/api/admin/fulfillment/pos/${poId}/settle`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
+export interface LeahSubstitutionReview {
+  id: string;
+  exceptionId: string;
+  orderId: string | null;
+  orderNo: number | null;
+  clientName: string | null;
+  itemName: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export const fulfillmentLeahService = {
+  /** Pending substitution reviews for the Leah deck (a second card source over
+   *  leah_reviews — the R1.4 contract). */
+  async listReviews(): Promise<LeahSubstitutionReview[]> {
+    return request<LeahSubstitutionReview[]>('/api/admin/fulfillment/leah-reviews');
+  },
+
+  /** Rule a substitution review → rule_leah_review writes back to the exception;
+   *  an approve also drafts the client note. */
+  async rule(id: string, status: 'approved' | 'rejected'): Promise<Record<string, unknown>> {
+    return request(`/api/admin/fulfillment/leah-reviews/${id}/rule`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    });
+  },
+};
