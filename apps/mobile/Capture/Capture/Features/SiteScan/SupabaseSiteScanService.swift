@@ -391,38 +391,11 @@ final class SupabaseSiteScanService: SiteScanService {
         tar(dir: "keyframes", extensions: ["heic", "bin"], to: "keyframes.tar")
     }
 
-    /// The full v1 bundle artifact set (stable order). `column` non-nil ⇒ the URL is
-    /// patched onto that room_scans column (confirm-scan-bundle HEAD-checks those).
-    private struct UploadDescriptor {
-        let relativePath, kind, folder, filename, contentType: String
-        let column: String?
-    }
-    private static let uploadDescriptors: [UploadDescriptor] = [
-        .init(relativePath: "scan.usdz", kind: "usdz", folder: "usdz",
-              filename: "scan.usdz", contentType: "model/vnd.usdz+zip", column: "model_url"),
-        .init(relativePath: "captured_room.json", kind: "capturedRoomJson", folder: "captured_room",
-              filename: "captured_room.json", contentType: "application/json", column: "captured_room_json_url"),
-        .init(relativePath: "mesh.ply", kind: "mesh", folder: "mesh",
-              filename: "mesh.ply", contentType: "application/octet-stream", column: "mesh_url"),
-        .init(relativePath: "manifest.json", kind: "bundleManifest", folder: "manifests",
-              filename: "manifest.json", contentType: "application/json", column: "bundle_manifest_url"),
-        .init(relativePath: "depth/depth_index.ndjson", kind: "depthIndex", folder: "depth",
-              filename: "depth_index.ndjson", contentType: "application/x-ndjson", column: nil),
-        .init(relativePath: "scorecard.json", kind: "scorecard", folder: "scorecard",
-              filename: "scorecard.json", contentType: "application/json", column: nil),
-        .init(relativePath: "anchors.json", kind: "anchors", folder: "anchors",
-              filename: "anchors.json", contentType: "application/json", column: nil),
-        .init(relativePath: "keyframes/keyframe_index.ndjson", kind: "keyframeIndex", folder: "keyframes",
-              filename: "keyframe_index.ndjson", contentType: "application/x-ndjson", column: nil),
-        .init(relativePath: "keyframes/keyframe_summary.json", kind: "keyframeSummary", folder: "keyframes",
-              filename: "keyframe_summary.json", contentType: "application/json", column: nil),
-        // Transport archives (Part 3) — the heavy streams; map to the archive columns
-        // confirm-scan-bundle HEAD-checks (depth_archive_url / scan_bundle_url).
-        .init(relativePath: "depth.tar", kind: "depthArchive", folder: "depth",
-              filename: "depth.tar", contentType: "application/x-tar", column: "depth_archive_url"),
-        .init(relativePath: "keyframes.tar", kind: "keyframesArchive", folder: "bundle",
-              filename: "keyframes.tar", contentType: "application/x-tar", column: "scan_bundle_url")
-    ]
+    /// The full v1 bundle artifact set (stable order) + the bucket MIME allow-list live
+    /// in CaptureKit (`ScanUploadDescriptor.all` / `ScanBucketMime`) so the drift-guard
+    /// test can assert every upload Content-Type is bucket-legal (the M2 MIME fix —
+    /// depthIndex had gone up as application/x-ndjson → Storage 400 invalid_mime_type).
+    private static let uploadDescriptors = ScanUploadDescriptor.all
 
     // MARK: - Helpers
 

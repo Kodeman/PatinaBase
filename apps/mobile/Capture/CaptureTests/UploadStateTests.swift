@@ -81,6 +81,23 @@ struct UploadStateTests {
         #expect(ScanConfirmPolicy.fallback(forHTTPStatus: 403) == .propagate)
     }
 
+    // MARK: - Bucket MIME drift guard (M2 upload fix)
+
+    @Test func everyUploadContentTypeIsBucketAllowed() {
+        // Storage returns 400 invalid_mime_type on any upload Content-Type outside the
+        // room-scans bucket allow-list — supabase/migrations/00077_advanced_room_scan.sql
+        // — and the retry policy treats 400 as terminal. depthIndex/keyframeIndex
+        // (semantically application/x-ndjson) and the two tars (application/x-tar) MUST
+        // therefore transport as application/octet-stream.
+        for descriptor in ScanUploadDescriptor.all {
+            #expect(ScanBucketMime.allowed.contains(descriptor.contentType),
+                    "\(descriptor.kind) uploads as \(descriptor.contentType) — not in the 00077 allow-list")
+        }
+        // The exact kind that broke the M2 walk — pin its transport type.
+        let depthIndex = ScanUploadDescriptor.all.first { $0.kind == "depthIndex" }
+        #expect(depthIndex?.contentType == "application/octet-stream")
+    }
+
     // MARK: - Durable bundle key (C2 — container-independent)
 
     @Test func relativeKeyIsContainerIndependent() {
