@@ -79,3 +79,20 @@ openings, or furniture. It exists only as a placeholder `model_url` payload
 so the loader script's optional USDZ-upload path has something to exercise;
 it is not test-critical. The GLB conversion lane is already gate/prod-verified
 elsewhere (`room-view/glb-converter`) and does not depend on this file.
+
+## Invoking parse-room-scan against this fixture, by hand
+
+`scripts/dev/seed-room-scan-fixture.mjs` uploads the JSON and attempts to
+invoke `parse-room-scan` for you, but if you need to curl the function
+directly (or debug a 401 from the script's own attempt): the bearer key
+`supabase status -o env` prints is an ES256 JWT, and the local edge
+runtime's `verify_jwt` check only validates HS256 (signed with the CLI's
+standard local JWT secret) — Kong itself accepts either, so this only bites
+function-to-function calls, not REST/Storage, and shows up as a 401 with no
+other symptom. Fetch the correct HS256 key from the local Vault seed
+(`supabase/seed/99-local-edge-settings.sql`) instead:
+
+```
+psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -tAc \
+  "select decrypted_secret from vault.decrypted_secrets where name='app.settings.service_role_key';"
+```

@@ -14,14 +14,24 @@
  * to the Document, and nesting an `<a>` inside an `<a>` is invalid HTML (React
  * warns on it — verified while building this component). Both links are real,
  * independently focusable, and never nested.
+ *
+ * The stretched link stashes the Rooms origin on click — the SAME mechanism
+ * studio-drawer.tsx's `enterRoom` uses (`rememberRoomOrigin`), so leaving a
+ * room opened from `/rooms` reads "← the Rooms" and returns here, rather
+ * than degrading to the Desk (the Phase-2 gate finding; room-origin.ts's
+ * `isRoomPath` deliberately excludes bare `/rooms` from its no-op guard so
+ * this stash actually lands).
  */
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import type { RoomRosterEntry } from '@/lib/room-view/geometry';
 import { qualityGradeColor } from '@/components/portal/scan-card';
+import { rememberRoomOrigin } from '@/lib/document/room-origin';
 import { RoomPlanThumb } from './room-plan-thumb';
 
 export function RoomCard({ entry }: { entry: RoomRosterEntry }) {
+  const pathname = usePathname();
   const displayName = entry.clientName ?? 'Unnamed room';
   const whatLine = buildWhatLine(entry);
   const metasLeft = buildMetasLeft(entry);
@@ -66,6 +76,7 @@ export function RoomCard({ entry }: { entry: RoomRosterEntry }) {
         href={`/room/${entry.roomId}`}
         aria-label={`Open the room for ${displayName}`}
         className="absolute inset-0 z-0"
+        onClick={() => rememberRoomOrigin(pathname)}
       >
         <span className="sr-only">{displayName}</span>
       </Link>

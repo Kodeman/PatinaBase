@@ -112,7 +112,10 @@ in PostHog today.
   strip's commit mutation, only `trigger: 'signature'` is intentionally unwired
   (server-side baseline cut in activation — no client call site)),
   `apps/designer-portal/src/lib/analytics/procurement-events.ts`,
-  `apps/designer-portal/src/lib/analytics/nomination-events.ts`.
+  `apps/designer-portal/src/lib/analytics/nomination-events.ts`,
+  `apps/designer-portal/src/lib/analytics/room-events.ts` (Room View
+  telemetry — see § Room View family below for the naming-convention
+  exception).
 - Client Portal: `apps/client-portal/src/lib/analytics/events.ts` (auth,
   client, nav, aesthete quiz, proposal-client events).
 - Admin Portal: `apps/admin-portal/src/lib/analytics/events.ts`.
@@ -128,6 +131,37 @@ A taxonomy module having a defined event with zero call sites ("dead
 scaffolding") is normal in this codebase — grep for the exported name before
 assuming it fires. This wave wired up several previously-dead client-portal
 events; more remain dead by design (see below).
+
+## Room View family (R107 / I74c) — a naming-convention exception
+
+The Room View program's telemetry ruling names ship **verbatim**, not in the
+`room_*` family-prefix shape § Naming shape by surface otherwise asks new web
+events to use — this is a deliberate, ruled exception (I74c, DECISIONS.md):
+"Telemetry names ship verbatim from the ruling (`room_opened`,
+`mode_switched`, `measure_used` + 5 reserved) despite the family-prefix
+convention preference — names freeze on ship, `room_id` is the family
+carrier." Taxonomy module: `apps/designer-portal/src/lib/analytics/room-events.ts`.
+
+**Shipped (W3-T7):**
+
+| Event | Properties | Fires |
+|---|---|---|
+| `room_opened` | `room_id` (string), `source: 'index' \| 'document'` | Once per Room View mount (ref-guard), `(document)/room/[id]/page.tsx`. `source` is `'document'` when arrived via a Document scan door (`?from=document`), else `'index'` (The Rooms roster). |
+| `mode_switched` | `room_id` (string), `mode: 'plan' \| 'orbit'` | The Plan/Orbit mode-row is clicked, `room-view.tsx`'s `selectMode`. Walk is inert in v1 (aria-disabled) and never fires this. |
+| `measure_used` | `room_id` (string) | The two-point measure tool completes a measurement — the SECOND point placed (armed/point → complete in `use-measure.ts`'s reducer), watched via an effect in `room-view.tsx`. Re-arming and completing again fires again; a stray idle/complete-phase click is a reducer no-op and does not. |
+
+**Reserved (named by the ruling, not yet wired to any call site — do not
+repurpose these names for something else):**
+
+- `pin_created` (stage 2)
+- `frame_saved`
+- `placement_started`
+- `clearance_flag_shown`
+- `clearance_overridden`
+
+`room_id` is the family's carrier across every event above, shipped and
+reserved alike — a future dashboard can always segment or join on it, even
+before the reserved five land.
 
 ## Known intentionally-unwired events
 

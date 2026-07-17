@@ -1,7 +1,15 @@
-import { render, screen } from '@testing-library/react';
+// The card's click site stashes the Rooms origin via usePathname() — override
+// the global jest.setup.js mock (which returns '/') so it reads as the real
+// roster route.
+jest.mock('next/navigation', () => ({
+  usePathname: () => '/rooms',
+}));
+
+import { render, screen, fireEvent } from '@testing-library/react';
 import type { RoomRosterScanRow } from '@patina/supabase';
 import type { RoomRosterEntry } from '@/lib/room-view/geometry';
 import { resolveRosterClientName, resolveRosterDocRef } from '@/lib/room-view/roster-from-rows';
+import { readRoomOrigin, clearRoomOrigin } from '@/lib/document/room-origin';
 import { RoomCard } from '../room-card';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -121,5 +129,17 @@ describe('RoomCard', () => {
     render(<RoomCard entry={BASE_ENTRY} />);
     const cardLink = screen.getByRole('link', { name: 'Open the room for Elena Ruiz' });
     expect(cardLink).toHaveAttribute('href', '/room/9ca186a1-07c8-429d-ac35-f10ba43fe187');
+  });
+
+  it('stashes /rooms as the room origin when the card is clicked (Phase-2 gate fix)', () => {
+    clearRoomOrigin();
+    render(<RoomCard entry={BASE_ENTRY} />);
+    const cardLink = screen.getByRole('link', { name: 'Open the room for Elena Ruiz' });
+    fireEvent.click(cardLink);
+    // Previously a no-op (isRoomPath('/rooms') blocked the stash) — the
+    // origin silently stayed '/desk' and the leave affordance read
+    // "← the Desk" instead of "← the Rooms".
+    expect(readRoomOrigin()).toBe('/rooms');
+    clearRoomOrigin();
   });
 });
