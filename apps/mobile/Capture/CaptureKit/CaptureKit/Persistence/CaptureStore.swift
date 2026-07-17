@@ -123,9 +123,19 @@ public final class CaptureStore {
     // ── Scan upload records (item 8 — durable resumable upload) ──
 
     /// The durable upload record for a bundle dir, if one exists (resume path).
+    /// `bundlePath` is the container-independent relative key ("SiteScans/…").
     public func scanUploadRecord(bundlePath: String) -> ScanUploadRecord? {
         let descriptor = FetchDescriptor<ScanUploadRecord>(
             predicate: #Predicate { $0.bundlePath == bundlePath })
+        return try? context.fetch(descriptor).first
+    }
+
+    /// The durable upload record for a scan id, if one exists — used to route an
+    /// orphaned background-upload completion (a task that finished while the app was
+    /// dead) back onto its record (item 8 · M3).
+    public func scanUploadRecord(scanID: String) -> ScanUploadRecord? {
+        let descriptor = FetchDescriptor<ScanUploadRecord>(
+            predicate: #Predicate { $0.scanID == scanID })
         return try? context.fetch(descriptor).first
     }
 

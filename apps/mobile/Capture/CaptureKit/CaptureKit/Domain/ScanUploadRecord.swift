@@ -16,7 +16,9 @@ import SwiftData
 @Model
 public final class ScanUploadRecord {
 
-    /// Stable key = the on-disk bundle dir path (survives relaunch; one record/scan).
+    /// Stable key = the bundle path RELATIVE to Application Support ("SiteScans/site-scan-…",
+    /// via `SiteScanBundleHome.relativeKey`). Container-independent so a resume re-resolves
+    /// the absolute URL under the CURRENT app container (C2); one record per scan.
     @Attribute(.unique) public var bundlePath: String
 
     public var scanID: String

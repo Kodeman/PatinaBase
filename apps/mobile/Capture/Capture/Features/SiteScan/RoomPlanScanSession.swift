@@ -145,10 +145,10 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
     }
 
     private func makeBundleDir() throws -> URL {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("site-scan-\(UUID().uuidString.lowercased())", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
+        // Application Support / SiteScans — durable across an app kill and a changed
+        // container path (C2). NOT NSTemporaryDirectory: iOS purges tmp exactly in the
+        // survives-kill window the resumable upload depends on.
+        try SiteScanBundleHome.makeBundleDir()
     }
 
     /// Stop scanning, let RoomPlan build the final room, export the two artifacts.
@@ -567,6 +567,10 @@ enum SiteScanError: LocalizedError {
     case notAuthenticated
     case processingFailed(String)
     case exportFailed(String)
+    /// `confirm-scan-bundle` reached the server and it REJECTED the bundle (e.g. a 409
+    /// = missing artifacts). The row stays `processing` and F4 offers retry — we never
+    /// mark a bundle the server couldn't verify as ready (item 8 · C1).
+    case bundleRejected
     /// Residual case for `SupabaseSiteScanService.upload()`: 00258's
     /// `room_scans_guard_routing` rejected the project linkage (`user_id` isn't
     /// the project's `designer_id`/`created_by`). F1 now pre-filters its picker
@@ -582,6 +586,7 @@ enum SiteScanError: LocalizedError {
         case .notAuthenticated: return "You're signed out — sign in to upload this scan."
         case .processingFailed(let m): return m
         case .exportFailed(let m):     return m
+        case .bundleRejected: return "The server couldn't verify this scan's files yet."
         case .foreignProjectOwner: return "This project belongs to another designer."
         }
     }

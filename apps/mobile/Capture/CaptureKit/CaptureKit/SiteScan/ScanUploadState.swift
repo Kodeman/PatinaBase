@@ -87,3 +87,27 @@ public enum ScanUploadPlanner {
         return remaining.isEmpty ? .confirm : .upload(remaining)
     }
 }
+
+/// Whether a failed `confirm-scan-bundle` call may be short-circuited to the
+/// `mark_scan_upload_complete` RPC (item 8 · C1). The RPC bypasses the server's
+/// artifact HEAD-verification, so it is ONLY safe when confirm was UNREACHABLE
+/// (transport down / relay / not-deployed / 5xx) — never when the server actually
+/// looked at the bundle and rejected it (a 409 = missing artifacts, or any other 4xx),
+/// which would mark a broken bundle `ready`. Pure — unit-tested.
+public enum ScanConfirmPolicy {
+
+    public enum Fallback: Equatable {
+        case markCompleteViaRPC   // confirm unreachable → the bundle is fine, the function isn't
+        case propagate            // the server rejected THIS bundle → surface retry, never mark ready
+    }
+
+    /// `status` is the HTTP status of the confirm failure, or nil when the error
+    /// wasn't an HTTP response at all (transport error / relay error → unreachable).
+    public static func fallback(forHTTPStatus status: Int?) -> Fallback {
+        guard let status else { return .markCompleteViaRPC }          // transport/relay ⇒ unreachable
+        if status == 404 || (500..<600).contains(status) {           // not deployed / server error
+            return .markCompleteViaRPC
+        }
+        return .propagate                                            // 409 + every other 4xx ⇒ real verdict
+    }
+}

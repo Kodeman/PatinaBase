@@ -139,4 +139,48 @@ struct ManifestTests {
         let out = dir.appendingPathComponent("o.tar")
         #expect(try TarArchive.write(entries: entries, to: out) == 1)   // missing skipped
     }
+
+    /// The off-the-shelf-untar contract (item 8 · M2): item 9's server untars with
+    /// standard tools, so a TarArchive-written file must extract cleanly by member name
+    /// with byte-identical contents. The gate runs on the iOS Simulator, where
+    /// `Foundation.Process`/`/usr/bin/tar` are unavailable — so this uses an INDEPENDENT
+    /// offset-based ustar reader (parsing the 512-byte header fields directly, not the
+    /// writer's helpers). System-`tar` compatibility of the same bytes is verified
+    /// out-of-band on a macOS host (see the ship report).
+    @Test func tarRoundTripsThroughIndependentUstarReader() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let payloadA = Data((0..<600).map { UInt8($0 % 251) })   // > 512 → exercises multi-block + padding
+        let payloadB = Data("hello ustar".utf8)
+        let a = dir.appendingPathComponent("depth_0001.bin"); try payloadA.write(to: a)
+        let b = dir.appendingPathComponent("depth_0002.bin"); try payloadB.write(to: b)
+        let out = dir.appendingPathComponent("depth.tar")
+        _ = try TarArchive.write(entries: [TarArchive.Entry(name: "depth_0002.bin", url: b),
+                                           TarArchive.Entry(name: "depth_0001.bin", url: a)], to: out)
+
+        let members = extractUstar(try Data(contentsOf: out))
+        #expect(members.map(\.name) == ["depth_0001.bin", "depth_0002.bin"])       // sorted member names
+        #expect(members.first { $0.name == "depth_0001.bin" }?.content == payloadA)  // byte-identical
+        #expect(members.first { $0.name == "depth_0002.bin" }?.content == payloadB)
+    }
+
+    /// Minimal independent ustar reader: walks 512-byte blocks, reading the name field
+    /// [0,100) and the octal size field [124,136), then the content padded to 512.
+    private func extractUstar(_ data: Data) -> [(name: String, content: Data)] {
+        var members: [(String, Data)] = []
+        var offset = 0
+        let block = 512
+        while offset + block <= data.count {
+            let header = data.subdata(in: offset..<offset + block)
+            if header.allSatisfy({ $0 == 0 }) { break }                       // end-of-archive zero block
+            let name = String(bytes: header.subdata(in: 0..<100).prefix { $0 != 0 }, encoding: .utf8) ?? ""
+            let sizeField = header.subdata(in: 124..<136).prefix { $0 != 0 && $0 != 0x20 }
+            let size = Int(String(bytes: sizeField, encoding: .utf8) ?? "0", radix: 8) ?? 0
+            offset += block
+            let content = size > 0 ? data.subdata(in: offset..<offset + size) : Data()
+            members.append((name, content))
+            offset += ((size + block - 1) / block) * block                   // advance past padded content
+        }
+        return members
+    }
 }

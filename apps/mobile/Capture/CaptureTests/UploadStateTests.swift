@@ -63,4 +63,32 @@ struct UploadStateTests {
         #expect(ScanUploadPlanner.nextStep(all: all, existing: full, recordComplete: false) == .confirm)   // bytes up
         #expect(ScanUploadPlanner.nextStep(all: all, existing: full, recordComplete: true) == .done)       // finished
     }
+
+    // MARK: - Confirm-fallback discrimination (C1)
+
+    @Test func confirmFallbackDiscriminatesReachability() {
+        // Unreachable — transport/relay (nil), not-deployed (404), or server error (5xx)
+        // — the bundle is fine, the function isn't ⇒ the RPC fallback is safe.
+        #expect(ScanConfirmPolicy.fallback(forHTTPStatus: nil) == .markCompleteViaRPC)
+        #expect(ScanConfirmPolicy.fallback(forHTTPStatus: 404) == .markCompleteViaRPC)
+        #expect(ScanConfirmPolicy.fallback(forHTTPStatus: 500) == .markCompleteViaRPC)
+        #expect(ScanConfirmPolicy.fallback(forHTTPStatus: 503) == .markCompleteViaRPC)
+        // The server looked at THIS bundle and rejected it (409 missing artifacts, or any
+        // other 4xx) ⇒ propagate; never mark a broken bundle ready.
+        #expect(ScanConfirmPolicy.fallback(forHTTPStatus: 409) == .propagate)
+        #expect(ScanConfirmPolicy.fallback(forHTTPStatus: 400) == .propagate)
+        #expect(ScanConfirmPolicy.fallback(forHTTPStatus: 401) == .propagate)
+        #expect(ScanConfirmPolicy.fallback(forHTTPStatus: 403) == .propagate)
+    }
+
+    // MARK: - Durable bundle key (C2 — container-independent)
+
+    @Test func relativeKeyIsContainerIndependent() {
+        let base = "/Applications/.../Library/Application Support"
+        let a = URL(fileURLWithPath: "\(base)/SiteScans/site-scan-abc")
+        // Same bundle, a DIFFERENT absolute container prefix (app data path moved).
+        let b = URL(fileURLWithPath: "/private/var/CHANGED/Application Support/SiteScans/site-scan-abc")
+        #expect(SiteScanBundleHome.relativeKey(for: a) == "SiteScans/site-scan-abc")
+        #expect(SiteScanBundleHome.relativeKey(for: a) == SiteScanBundleHome.relativeKey(for: b))
+    }
 }

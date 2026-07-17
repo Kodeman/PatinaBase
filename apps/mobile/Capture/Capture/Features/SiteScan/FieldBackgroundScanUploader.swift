@@ -17,9 +17,19 @@
 //   • POST + x-upsert:true to storage/v1/object/room-scans/<key> (Storage uses POST to
 //     create; a PUT against a missing object 400s). base64(JSON) `x-metadata` header —
 //     the channel Storage persists into user_metadata (raw x-amz-meta-* headers are DROPPED).
-//   • 3-attempt backoff (2 / 8 / 30 s) on 408/429/5xx; 401 → refresh session + retry.
+//   • Bounded retry on 408/429/5xx: 2 s then 8 s (maxAttempts = 3, so the 30 s tier is
+//     unreachable — the third failure is terminal); 401 → refresh session + retry.
 //   • Post-upload integrity: GET /object/info/authenticated → compare stored sha
 //     (present-and-differ = fail → retry; absent = accept the 2xx).
+//   • Relaunch (item 8 · M3): `reconcileExistingTasks()` adopts the background session's
+//     surviving tasks so their re-delivered completions aren't dropped, and `enqueue`
+//     dedups against a live task for the same storage path.
+//
+//  ⚠️ KNOWN LIMITATION (not built — see the M2 checklist): there is no per-artifact
+//  continuation watchdog. If an adopted/in-flight task neither completes nor re-delivers
+//  a terminal event, the awaiting `upload()` continuation for that kind never resolves.
+//  The durable record + resume path bound the damage (a fresh launch re-plans), but a
+//  timeout that fails the continuation and re-enqueues is deferred to a later cycle.
 
 import Foundation
 
@@ -46,8 +56,10 @@ final class FieldBackgroundScanUploader: NSObject {
 
     /// scanID, kind, fraction 0…1.
     var onProgress: (@MainActor (String, String, Double) -> Void)?
-    /// scanID, kind, result — fired once per artifact (success or terminal failure).
-    var onCompletion: (@MainActor (String, String, Result<Void, UploadError>) -> Void)?
+    /// descriptor, result — fired once per artifact (success or terminal failure). The
+    /// full descriptor (not just scanID/kind) lets the owner route an orphaned completion
+    /// back onto its durable record (storagePath → remote URL) — item 8 · M3.
+    var onCompletion: (@MainActor (Descriptor, Result<Void, UploadError>) -> Void)?
     /// The system's background-completion handler, parked by the app delegate on wake
     /// and invoked when the session drains (static so it survives instance churn).
     static var systemCompletionHandler: (() -> Void)?
@@ -63,10 +75,17 @@ final class FieldBackgroundScanUploader: NSObject {
     private final class Tracker {
         let descriptor: Descriptor
         var attempts: Int
+        /// Adopted on relaunch from a surviving background task (M3). Its source file
+        /// URL is unknown, so a retry can't re-enqueue it — an adopted task that fails
+        /// terminates, and the durable resume re-enqueues with the real descriptor.
+        let adopted: Bool
         var responseBody = Data()
-        init(_ descriptor: Descriptor, attempts: Int) { self.descriptor = descriptor; self.attempts = attempts }
+        init(_ descriptor: Descriptor, attempts: Int, adopted: Bool = false) {
+            self.descriptor = descriptor; self.attempts = attempts; self.adopted = adopted
+        }
     }
     private var inflight: [Int: Tracker] = [:]
+    private var didReconcile = false
 
     private static let maxAttempts = 3
 
@@ -85,14 +104,58 @@ final class FieldBackgroundScanUploader: NSObject {
 
     /// Enqueue one artifact as a background upload task (file-based — required for a
     /// background session). No-op-with-failure if there's no access token.
+    ///
+    /// Dedup (M3): if a live task already targets this storage path (e.g. one adopted on
+    /// relaunch), let it finish rather than creating a duplicate — its completion routes
+    /// to the same per-kind waiter via `onCompletion`. Returns without firing anything,
+    /// so the caller's continuation is resolved by the surviving task.
     func enqueue(_ descriptor: Descriptor) async {
+        if inflight.values.contains(where: { $0.descriptor.storagePath == descriptor.storagePath }) {
+            return
+        }
         guard let request = await buildRequest(descriptor, token: await accessTokenProvider?() ?? nil) else {
-            onCompletion?(descriptor.scanID, descriptor.kind, .failure(.missingSession))
+            onCompletion?(descriptor, .failure(.missingSession))
             return
         }
         let task = session.uploadTask(with: request, fromFile: descriptor.fileURL)
         inflight[task.taskIdentifier] = Tracker(descriptor, attempts: 1)
         task.resume()
+    }
+
+    /// Adopt the background session's surviving tasks on relaunch (M3), so their
+    /// re-delivered completions land on a tracker instead of being dropped, and so
+    /// `enqueue` can dedup against them. Idempotent per launch.
+    func reconcileExistingTasks() async {
+        guard !didReconcile else { return }
+        didReconcile = true
+        let tasks: [URLSessionTask] = await withCheckedContinuation { continuation in
+            session.getAllTasks { continuation.resume(returning: $0) }
+        }
+        for task in tasks where inflight[task.taskIdentifier] == nil {
+            guard let descriptor = Self.descriptor(from: task) else { continue }
+            inflight[task.taskIdentifier] = Tracker(descriptor, attempts: Self.maxAttempts, adopted: true)
+        }
+    }
+
+    /// Best-effort reconstruction of a Descriptor from a surviving task's request — the
+    /// storage path from the URL, and scanId/kind/sha from the persisted `x-metadata`
+    /// header. The source file URL isn't recoverable (it was the task body), so adopted
+    /// descriptors carry an empty file URL and never retry from file.
+    private static func descriptor(from task: URLSessionTask) -> Descriptor? {
+        guard let request = task.originalRequest, let path = request.url?.path,
+              let range = path.range(of: "/object/room-scans/") else { return nil }
+        let storagePath = String(path[range.upperBound...])
+        let meta = request.value(forHTTPHeaderField: "x-metadata").flatMap(decodeMetadataHeader) ?? [:]
+        guard let scanID = meta["scanId"], let kind = meta["artifactKind"] else { return nil }
+        return Descriptor(scanID: scanID, kind: kind, sha256: meta["sha256"],
+                          mimeType: request.value(forHTTPHeaderField: "Content-Type") ?? "application/octet-stream",
+                          fileURL: URL(fileURLWithPath: ""), storagePath: storagePath)
+    }
+
+    /// Inverse of `encodeMetadataHeader` — base64(JSON) → [String: String].
+    static func decodeMetadataHeader(_ header: String) -> [String: String]? {
+        guard let data = Data(base64Encoded: header) else { return nil }
+        return try? JSONDecoder().decode([String: String].self, from: data)
     }
 
     private func buildRequest(_ descriptor: Descriptor, token: String?) async -> URLRequest? {
@@ -125,16 +188,20 @@ final class FieldBackgroundScanUploader: NSObject {
 
     private func retryOrFail(_ tracker: Tracker, error: UploadError) async {
         let d = tracker.descriptor
-        guard tracker.attempts < Self.maxAttempts else {
-            onCompletion?(d.scanID, d.kind, .failure(error)); return
+        // Adopted tasks (M3) have no recoverable source file — fail terminally so the
+        // durable resume re-enqueues with the real descriptor rather than re-uploading
+        // an empty body.
+        guard !tracker.adopted, tracker.attempts < Self.maxAttempts else {
+            onCompletion?(d, .failure(error)); return
         }
         tracker.attempts += 1
+        // 2 s then 8 s; the 30 s tier is unreachable at maxAttempts = 3 (attempts 2, 3).
         let delay: Double = tracker.attempts == 2 ? 2 : (tracker.attempts == 3 ? 8 : 30)
         try? await Task.sleep(for: .seconds(delay))
         let token: String? = (error == .missingSession) ? await refreshTokenProvider?() ?? nil
                                                          : await accessTokenProvider?() ?? nil
         guard let request = await buildRequest(d, token: token) else {
-            onCompletion?(d.scanID, d.kind, .failure(.missingSession)); return
+            onCompletion?(d, .failure(.missingSession)); return
         }
         let task = session.uploadTask(with: request, fromFile: d.fileURL)
         inflight[task.taskIdentifier] = tracker
@@ -147,7 +214,7 @@ final class FieldBackgroundScanUploader: NSObject {
     private func verifyAndComplete(_ tracker: Tracker) async {
         let d = tracker.descriptor
         guard let expected = d.sha256, !expected.isEmpty else {
-            onCompletion?(d.scanID, d.kind, .success(())); return
+            onCompletion?(d, .success(())); return
         }
         let infoURL = baseURL.appendingPathComponent(
             "storage/v1/object/info/authenticated/room-scans/\(d.storagePath)")
@@ -161,7 +228,7 @@ final class FieldBackgroundScanUploader: NSObject {
             return Self.parseStoredSha(from: data)
         }()
         switch Self.verificationOutcome(expected: expected, stored: stored) {
-        case .accept: onCompletion?(d.scanID, d.kind, .success(()))
+        case .accept: onCompletion?(d, .success(()))
         case .fail:   await retryOrFail(tracker, error: .shaMismatch)
         }
     }
@@ -218,8 +285,7 @@ extension FieldBackgroundScanUploader: URLSessionDataDelegate {
             } else if let status, status == 408 || status == 429 || (500..<600).contains(status) {
                 await self.retryOrFail(tracker, error: .httpStatus(status))
             } else {
-                self.onCompletion?(tracker.descriptor.scanID, tracker.descriptor.kind,
-                                   .failure(.httpStatus(status ?? -1)))
+                self.onCompletion?(tracker.descriptor, .failure(.httpStatus(status ?? -1)))
             }
         }
     }
