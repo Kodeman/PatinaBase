@@ -8,8 +8,18 @@
 // service_role, and must never be pointed at Strata prod.
 //
 // Usage:
-//   pnpm dev:seed-room-fixture              # upload + patch + attempt parse
+//   pnpm dev:seed-room-fixture               # upload + patch + parse + photos
 //   pnpm dev:seed-room-fixture --no-parse    # skip the parse invoke step
+//   pnpm dev:seed-room-fixture --no-photos   # skip the photo seeding step
+//   pnpm dev:seed-room-fixture --photos-only # ONLY (re)seed the 6 fixture photos
+//
+// Photo step (Room View PHOTOS program, W2): uploads 6 tiny checked-in JPEGs
+// (supabase/seed/fixtures/room-scans/photos/) to the local `room-scans`
+// bucket at photos/{elenaUid}/{scanId}/auto_00000N.jpg and inserts 6
+// room_scan_images rows with camera_transform values computed to land INSIDE
+// the 14×14 fixture room under its −15° world rotation (one pair within
+// 1.5 ft → a cluster; one is_primary). Idempotent: deletes this scan's photo
+// rows, then re-inserts. LOCAL ONLY (same host guard as the rest of the file).
 //
 // Prerequisites: `pnpm supabase:start` + a `pnpm supabase:reset` that ran
 // with `./seed/leads_room_scans.sql` wired into config.toml [db.seed]
@@ -47,10 +57,13 @@ const SCAN_NAME = 'Formal Dining Room';
 const BUCKET = 'room-scans';
 
 function parseArgs(argv) {
-  const opts = { parse: true };
+  const opts = { parse: true, photos: true, photosOnly: false };
   for (const a of argv.slice(2)) {
     if (a === '--parse') opts.parse = true;
     else if (a === '--no-parse') opts.parse = false;
+    else if (a === '--photos') opts.photos = true;
+    else if (a === '--no-photos') opts.photos = false;
+    else if (a === '--photos-only') opts.photosOnly = true;
     else {
       console.error(`unknown option: ${a}`);
       process.exit(2);
@@ -172,6 +185,38 @@ async function storageList(env, bucket, prefix) {
   return res.json();
 }
 
+async function restPost(env, table, body) {
+  const res = await fetch(`${env.url}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      apikey: env.serviceRoleKey,
+      Authorization: `Bearer ${env.serviceRoleKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`POST ${table} -> HTTP ${res.status}: ${await res.text()}`);
+  }
+  return res.json();
+}
+
+async function restDelete(env, table, query) {
+  const res = await fetch(`${env.url}/rest/v1/${table}?${query}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: env.serviceRoleKey,
+      Authorization: `Bearer ${env.serviceRoleKey}`,
+      Prefer: 'return=representation',
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`DELETE ${table}?${query} -> HTTP ${res.status}: ${await res.text()}`);
+  }
+  return res.json();
+}
+
 function publicUrl(env, bucket, objectPath) {
   // Same URL shape the iOS uploader writes via
   // `client.storage.from(bucket).getPublicURL(path:)` — a fixed string form,
@@ -179,6 +224,134 @@ function publicUrl(env, bucket, objectPath) {
   // private; downstream readers use this same path with an authenticated
   // request, exactly as existing rows already do).
   return `${env.url}/storage/v1/object/public/${bucket}/${objectPath}`;
+}
+
+// ---- photo fixtures ---------------------------------------------------------
+//
+// Camera-transform math mirrors apps/designer-portal/src/lib/room-view/
+// photo-poses.ts + its test's `planToWorld`/`yawCam` helpers EXACTLY, so a
+// pose computed here lands where photo-markers.tsx will draw it. Elena's
+// parser provenance: θ=-15°, offset {x:6.2374, z:-1.6416} (from the fixture's
+// own parse — see photo-poses.test.ts). Room is 14.0092 × 14.0092 ft; the
+// table sits dead-centre at plan (7.0046, 7.0046). Every photo faces the room
+// centre so the heading strokes point inward.
+
+const PHOTOS_DIR = path.join(FIXTURE_DIR, 'photos');
+const M_TO_FT = 3.28084;
+const PROV = { yawDeg: -15, off: { x: 6.2374, z: -1.6416 } };
+const ROOM_CENTRE = { x: 7.0046, z: 7.0046 };
+
+// plan feet (NW origin, x→east, z→south) → the world XZ (metres) that lands
+// there — inverse of photo-poses.ts's mapping (rotate by +θ).
+function planToWorld(px, pz) {
+  const t = (PROV.yawDeg * Math.PI) / 180;
+  const c = Math.cos(t);
+  const s = Math.sin(t);
+  const rx = px / M_TO_FT + PROV.off.x;
+  const rz = pz / M_TO_FT + PROV.off.z;
+  return { x: rx * c - rz * s, z: rx * s + rz * c };
+}
+
+// A row-major camera_transform standing at plan `at`, facing plan `faceTo`.
+function cameraTransformFacing(at, faceTo, eyeM = 1.45) {
+  const w = planToWorld(at.x, at.z);
+  // desired PLAN heading (photo-poses convention: 0°=+x, 90°=+z, CW)
+  const planHeadingDeg = (Math.atan2(faceTo.z - at.z, faceTo.x - at.x) * 180) / Math.PI;
+  // headingDeg = worldHeadingDeg − originYawDeg  ⇒  worldHeadingDeg = H + yaw
+  const whRad = ((planHeadingDeg + PROV.yawDeg) * Math.PI) / 180;
+  const fwX = Math.cos(whRad);
+  const fwZ = Math.sin(whRad);
+  // yawCam forward = (−sinφ, 0, −cosφ); solve φ so forward = (fwX, fwZ)
+  const phi = Math.atan2(-fwX, -fwZ);
+  const c = Math.cos(phi);
+  const s = Math.sin(phi);
+  // row-major [ c 0 s tx ; 0 1 0 ty ; −s 0 c tz ; 0 0 0 1 ]
+  return [c, 0, s, w.x, 0, 1, 0, eyeM, -s, 0, c, w.z, 0, 0, 0, 1];
+}
+
+// Verification replica of photo-poses.ts's photoPlanPose — prints where each
+// seeded transform actually lands, so the seed log is its own proof.
+function poseCheck(t) {
+  const theta = (PROV.yawDeg * Math.PI) / 180;
+  const c = Math.cos(theta);
+  const s = Math.sin(theta);
+  const rx = t[3] * c + t[11] * s;
+  const rz = -t[3] * s + t[11] * c;
+  let hd = (Math.atan2(-t[10], -t[2]) * 180) / Math.PI - PROV.yawDeg;
+  hd = ((hd % 360) + 360) % 360;
+  return {
+    x: (rx - PROV.off.x) * M_TO_FT,
+    z: (rz - PROV.off.z) * M_TO_FT,
+    heading: hd,
+  };
+}
+
+// 6 photos: one is_primary, and #5/#6 sit ~0.67 ft apart (a 1.5-ft cluster).
+const FIXTURE_PHOTOS = [
+  { file: 'auto_000001.jpg', plan: { x: 2.5, z: 2.5 }, primary: true, caption: 'By the entry', role: 'coverage_early' },
+  { file: 'auto_000002.jpg', plan: { x: 11.0, z: 6.8 }, primary: false, caption: null, role: 'coverage_mid' },
+  { file: 'auto_000003.jpg', plan: { x: 11.5, z: 11.5 }, primary: false, caption: 'South-east corner', role: 'coverage_mid' },
+  { file: 'auto_000004.jpg', plan: { x: 7.0, z: 2.2 }, primary: false, caption: null, role: 'feature_window' },
+  { file: 'auto_000005.jpg', plan: { x: 3.8, z: 10.6 }, primary: false, caption: 'Sideboard wall', role: 'coverage_late' },
+  { file: 'auto_000006.jpg', plan: { x: 4.4, z: 10.9 }, primary: false, caption: null, role: 'coverage_late' },
+];
+
+async function seedPhotos(env, elena, scan) {
+  console.log('\n=== Seeding fixture photos ===');
+  if (!existsSync(PHOTOS_DIR)) {
+    console.error(`error: fixture photos dir not found at ${PHOTOS_DIR}`);
+    process.exit(1);
+  }
+
+  // Idempotent: clear this scan's existing photo rows first.
+  const removed = await restDelete(env, 'room_scan_images', `scan_id=eq.${scan.id}`);
+  console.log(`Cleared ${removed.length} existing room_scan_images row(s) for this scan.`);
+
+  const baseTime = Date.parse('2026-07-16T15:20:00Z');
+  const rows = [];
+  for (let i = 0; i < FIXTURE_PHOTOS.length; i++) {
+    const fx = FIXTURE_PHOTOS[i];
+    const filePath = path.join(PHOTOS_DIR, fx.file);
+    if (!existsSync(filePath)) {
+      console.error(`error: fixture photo missing at ${filePath}`);
+      process.exit(1);
+    }
+    const objectPath = `photos/${elena.id}/${scan.id}/${fx.file}`;
+    await storageUpload(env, BUCKET, objectPath, readFileSync(filePath), 'image/jpeg');
+    const url = publicUrl(env, BUCKET, objectPath);
+
+    const transform = cameraTransformFacing(fx.plan, ROOM_CENTRE);
+    const pose = poseCheck(transform);
+    console.log(
+      `  ${fx.file}: plan(${fx.plan.x}, ${fx.plan.z}) → pose(${pose.x.toFixed(2)}, ${pose.z.toFixed(2)}) heading ${pose.heading.toFixed(0)}°`,
+    );
+
+    rows.push({
+      scan_id: scan.id,
+      role: fx.role,
+      is_primary: fx.primary,
+      display_order: i + 1,
+      image_url: url,
+      thumbnail_url: url, // self-thumb OK locally (no derivative lane here)
+      mime_type: 'image/jpeg',
+      photo_kind: 'auto',
+      caption: fx.caption,
+      captured_at: new Date(baseTime + i * 45_000).toISOString(),
+      camera_transform: transform,
+      quality_score: 0.7 + i * 0.02,
+      width: 240,
+      height: 240,
+    });
+  }
+
+  const inserted = await restPost(env, 'room_scan_images', rows);
+  console.log(`Inserted ${inserted.length} room_scan_images row(s).`);
+
+  // Distance between the two cluster members — proof the pair is within 1.5 ft.
+  const a = FIXTURE_PHOTOS[4].plan;
+  const b = FIXTURE_PHOTOS[5].plan;
+  const d = Math.hypot(a.x - b.x, a.z - b.z);
+  console.log(`Cluster pair (#5,#6) plan distance: ${d.toFixed(2)} ft (< 1.5 ft → clusters).`);
 }
 
 // ---- main -------------------------------------------------------------
@@ -223,6 +396,13 @@ async function main() {
   }
   const scan = scans[0];
   console.log(`Elena's scan: ${scan.id} ("${scan.name}", status=${scan.status})`);
+
+  // --photos-only: skip the JSON upload / patch / parse; just (re)seed photos.
+  if (opts.photosOnly) {
+    await seedPhotos(env, elena, scan);
+    console.log('\n--photos-only passed — skipped JSON upload + parse.');
+    return;
+  }
 
   // 2. Upload the fixture(s). Path mirrors RoomScanStoragePath ordering
   //    ({folder}/{userId}/{scanId}/{filename}), scan-id as segment 3 (00287
@@ -310,6 +490,12 @@ async function main() {
     return [];
   });
   console.log('room_scan_documents row:', docs[0] ?? '(none)');
+
+  if (opts.photos) {
+    await seedPhotos(env, elena, scan);
+  } else {
+    console.log('\n--no-photos passed — skipping photo seeding step.');
+  }
 }
 
 main().catch((err) => {
