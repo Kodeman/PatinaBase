@@ -9,6 +9,7 @@ import { fulfillmentService } from '@/services/fulfillment';
 export const fulfillmentKeys = {
   all: ['fulfillment'] as const,
   queue: () => [...fulfillmentKeys.all, 'queue'] as const,
+  detail: (orderId: string) => [...fulfillmentKeys.all, 'detail', orderId] as const,
 };
 
 /**

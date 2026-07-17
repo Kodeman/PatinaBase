@@ -1,4 +1,4 @@
-import type { FulfillmentQueueRow } from '@patina/fulfillment';
+import type { FulfillmentQueueRow, FulfillmentOrderDetailDTO } from '@patina/fulfillment';
 
 // Back of House — the Fulfillment Queue's data layer (S1). Talks to
 // /api/admin/fulfillment/queue, which is a service-role SELECT of
@@ -34,6 +34,47 @@ export const fulfillmentService = {
   async listQueue(): Promise<FulfillmentQueueResponse> {
     return request<FulfillmentQueueResponse>('/api/admin/fulfillment/queue');
   },
+
+  // ─── Order Workbench (S2) ──────────────────────────────────────────────────
+
+  /** The single Workbench round-trip: order + lines + PO drafts + vendor
+   *  directory + config numbers (spec §5.2). */
+  async getOrder(orderId: string): Promise<FulfillmentOrderDetailDTO> {
+    return request<FulfillmentOrderDetailDTO>(
+      `/api/admin/fulfillment/orders/${orderId}`,
+    );
+  },
+
+  /** Assign (or reassign) a line's vendor + unit cost — clears an Unmapped
+   *  line and persists a pre-confirm drag between proposed vendor groups. */
+  async assignLine(
+    lineId: string,
+    payload: { vendorId: string; unitCostCents: number },
+  ): Promise<{ ok: true }> {
+    return request(`/api/admin/fulfillment/lines/${lineId}/assign`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Move a line's PO line into a different real PO (post-confirm reshuffle). */
+  async moveLine(
+    orderId: string,
+    payload: { itemId: string; poId: string },
+  ): Promise<{ ok: true }> {
+    return request(`/api/admin/fulfillment/orders/${orderId}/move-line`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Confirm the split into real POs — the server RAISES (→ 400 with reason) if
+   *  any line is still unmapped. Returns { pos: <count> }. */
+  async confirmSplit(orderId: string): Promise<{ pos: number }> {
+    return request(`/api/admin/fulfillment/orders/${orderId}/confirm-split`, {
+      method: 'POST',
+    });
+  },
 };
 
-export type { FulfillmentQueueRow };
+export type { FulfillmentQueueRow, FulfillmentOrderDetailDTO };
