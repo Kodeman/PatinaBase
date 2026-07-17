@@ -138,9 +138,14 @@ CREATE TABLE IF NOT EXISTS public.room_files (
   tolerance_class   text CHECK (tolerance_class IN ('verified','measured','estimated')),
 
   -- Generated deliverables (item 11 fills these; nullable until rendered).
+  -- svg_url/pdf_url/dxf_url are the CANONICAL pointers (plan SVG, plan PDF, the
+  -- DXF); `drawings` records the FULL rendered sheet set (plan + four elevations)
+  -- with each file's storage URL + sha256 (item 11 — 00341 still undeployed to
+  -- Strata, Remote head 00340, so the column is added in place, not a new file).
   svg_url           text,
   pdf_url           text,
   dxf_url           text,
+  drawings          jsonb NOT NULL DEFAULT '{}'::jsonb,
 
   -- Lifecycle: pending (ingest reserved) → solved (item-10 anchor solve wrote
   -- measurements + certificate) → generated (item-11 drawings rendered); error

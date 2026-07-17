@@ -16,6 +16,7 @@ from typing import Any
 
 from ..errors import PermanentError, TransientError, classify_failures
 from ..keys import (
+    KeyResolutionError,
     OwnershipError,
     artifact_object_key,
     assert_owner_prefix,
@@ -80,6 +81,11 @@ def plan_downloads(
             assert_owner_prefix(key, user_id, room_id)
         except OwnershipError as exc:
             raise PermanentError(str(exc), token="OWNERSHIP_VIOLATION") from exc
+        except KeyResolutionError:
+            # unresolvable kind (e.g. an orphan photosManifest the iOS assembler
+            # listed but never uploaded): skip the fetch — the validator will
+            # name the honest MISSING_FILE against the manifest, not a crash.
+            continue
         except ValueError as exc:
             raise PermanentError(str(exc), token="PATH_VIOLATION") from exc
         plan.append(DownloadItem(key, rel, kind, a.get("sha256")))

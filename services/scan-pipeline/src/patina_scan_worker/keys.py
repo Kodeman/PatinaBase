@@ -77,6 +77,14 @@ class OwnershipError(ValueError):
     OWNERSHIP_VIOLATION token."""
 
 
+class KeyResolutionError(ValueError):
+    """An artifact kind has neither a dedicated URL column nor a known B-18
+    folder — its storage key cannot be derived. Surfaced by a real M2 bundle:
+    the iOS assembler listed a ``photosManifest`` artifact it never uploaded and
+    never gave a descriptor folder. Ingest SKIPS such an artifact (rather than
+    hard-failing) so the validator returns the honest MISSING_FILE verdict."""
+
+
 def object_key_from_url(url: str | None) -> str | None:
     """Bucket-relative key from a stored artifact URL. Behavioural mirror of the
     TS ``objectKeyFromUrl``: split on the LAST ``/room-scans/``; bare key used
@@ -140,7 +148,7 @@ def artifact_object_key(
 
     folder = KIND_TO_FOLDER.get(kind or "")
     if not folder:
-        raise ValueError(
+        raise KeyResolutionError(
             f"no storage folder known for artifact kind {kind!r} "
             f"(not in the v1 B-18 layout, and no dedicated URL column set)"
         )

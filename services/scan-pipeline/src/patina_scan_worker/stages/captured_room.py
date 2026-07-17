@@ -40,6 +40,8 @@ class OpeningDim:
     width_m: float
     height_m: float
     center_y_m: float
+    center_x_m: float = 0.0    # world XZ (metres) — for plan placement
+    center_z_m: float = 0.0
 
 
 @dataclass
@@ -140,6 +142,8 @@ def parse_captured_room_meters(json: Any) -> RoomModel:
                 continue
             width, height = d[0], d[1]
             cy = t[13] if len(t) > 13 else math.nan
+            cx = t[12] if len(t) > 12 else 0.0
+            cz = t[14] if len(t) > 14 else 0.0
             if not (math.isfinite(width) and math.isfinite(height)):
                 continue
             parent = o.get("parentIdentifier")
@@ -150,6 +154,8 @@ def parse_captured_room_meters(json: Any) -> RoomModel:
                 width_m=abs(width),
                 height_m=abs(height),
                 center_y_m=cy,
+                center_x_m=cx if math.isfinite(cx) else 0.0,
+                center_z_m=cz if math.isfinite(cz) else 0.0,
             ))
 
     # ── floor polygon (rotated metres) → bbox width/depth + shoelace area ──────

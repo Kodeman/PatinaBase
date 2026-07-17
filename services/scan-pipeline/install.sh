@@ -30,6 +30,13 @@ PYTHON="${PYTHON:-python3}"
 echo "== Patina scan-pipeline worker install =="
 echo "source: $SRC_DIR"
 
+# 0. native libs — cairosvg (PDF sheets, item 11) needs libcairo2
+if command -v apt-get >/dev/null 2>&1; then
+  echo "-- ensuring libcairo2 is present (cairosvg → PDF)"
+  apt-get install -y --no-install-recommends libcairo2 >/dev/null 2>&1 || \
+    echo "   (could not apt-get libcairo2 — install it manually if PDF rendering fails)"
+fi
+
 # 1. service user + dirs
 if ! id -u "$SVC_USER" >/dev/null 2>&1; then
   echo "-- creating service user '$SVC_USER'"
@@ -42,8 +49,8 @@ install -d -m 0750 "$ETC_DIR"
 echo "-- building venv at $VENV ($($PYTHON --version 2>&1))"
 "$PYTHON" -m venv "$VENV"
 "$VENV/bin/pip" install --upgrade pip >/dev/null
-echo "-- pip install $SRC_DIR"
-"$VENV/bin/pip" install "$SRC_DIR"
+echo "-- pip install $SRC_DIR[drawings]  (ezdxf + cairosvg for item-11 renderers)"
+"$VENV/bin/pip" install "$SRC_DIR[drawings]"
 chown -R "$SVC_USER:$SVC_USER" "$APP_DIR"
 
 # 3. unit + env template

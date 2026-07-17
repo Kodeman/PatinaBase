@@ -132,6 +132,31 @@ class DbClient:
             raise PermanentError(f"room_files row not found: {room_file_id}")
         return rows[0]
 
+    def get_measurements(self, room_file_id: str) -> list[dict[str, Any]]:
+        return self._get(
+            "room_file_measurements?room_file_id=eq.{}"
+            "&select=label,element_ref,value_mm,tolerance_mm,tolerance_class,source"
+            "&order=id".format(room_file_id)
+        ) or []
+
+    def finalize_room_file_generated(
+        self, room_file_id: str, svg_url: str, pdf_url: str, dxf_url: str,
+        drawings: dict[str, Any],
+    ) -> bool:
+        """Forward-only (item 11): scoped to status in (solved, generated) so a
+        replayed drawings run is idempotent and never regresses. Returns True if
+        it wrote, False if the guard skipped (room_file not yet 'solved')."""
+        updated = self._patch(
+            "room_files?id=eq.{}&status=in.(solved,generated)".format(room_file_id),
+            {
+                "svg_url": svg_url, "pdf_url": pdf_url, "dxf_url": dxf_url,
+                "drawings": drawings, "status": "generated",
+                "generated_at": "now()", "generation_error": None,
+            },
+            prefer="return=representation",
+        )
+        return bool(updated)
+
     def upsert_anchors(self, scan_id: str, anchor_rows: list[dict[str, Any]]) -> dict[str, str]:
         """Upsert scan_anchors on (scan_id, client_anchor_id) and return a
         {client_anchor_id: id} map. Idempotent: mirrors the device owner-write
