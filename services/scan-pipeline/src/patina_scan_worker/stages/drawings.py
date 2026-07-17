@@ -134,6 +134,13 @@ class DrawingsStage(BaseStage):
         )
         svgs = svg_mod.render_set(sheet_set)  # {sheet_id: svg}
 
+        # D2 verdict (evidence: supabase/migrations/00287, "Designers can read
+        # shared scan artifacts"): the policy matches segment [2] = room_scans.user_id
+        # AND segment [3] = (rs.id::text OR rs.room_id::text). This prefix puts the
+        # SCAN id at [3], satisfying the FIRST branch (rs.id::text = [3]) — the same
+        # segment the iOS bundle uploader writes — so a designer with an active/full
+        # association can read the drawings. scanId at [3] is CORRECT; no room_id
+        # prefix needed. (00306/00320 do not override this policy.)
         prefix = f"room_file/{user_id}/{scan_id}/v{version}"
         base = f"{ctx.settings.supabase_url}/storage/v1/object/public/{ctx.settings.room_scans_bucket}"
         sheets_manifest: list[dict[str, Any]] = []

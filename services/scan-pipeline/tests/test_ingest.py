@@ -96,15 +96,20 @@ def test_plan_downloads_bad_artifacts_shape():
     assert ei.value.token == "SCHEMA_VIOLATION"
 
 
-def test_plan_downloads_skips_unresolvable_kind(tmp_path):
-    # a kind with no URL column and no B-18 folder (real M2 orphan photosManifest)
-    # is SKIPPED, not hard-failed — the validator names MISSING_FILE instead.
+def test_plan_downloads_skips_unresolvable_kind_and_records_it(tmp_path):
+    # a kind with no URL column and no B-18 folder (legacy orphan photosManifest,
+    # B-19) is SKIPPED, not hard-failed — and recorded so the stage emits
+    # ingest.kind_skipped (not a silent skip).
     manifest = _fixture_manifest(tmp_path)
     manifest["artifacts"].append(
         {"kind": "photosManifest", "relativePath": "photos_metadata.json", "sha256": "0" * 64}
     )
-    plan = plan_downloads(manifest, MANIFEST_KEY, {"user_id": UID, "room_id": ROOM})
+    skipped: list = []
+    plan = plan_downloads(manifest, MANIFEST_KEY, {"user_id": UID, "room_id": ROOM}, skipped=skipped)
     assert not any(i.kind == "photosManifest" for i in plan)   # skipped, no raise
+    assert skipped == [{"kind": "photosManifest", "relative_path": "photos_metadata.json",
+                        "reason": skipped[0]["reason"]}]
+    assert "photosManifest" in skipped[0]["reason"]
 
 
 def test_reconcile_artifacts_sha256_match_and_mismatch(tmp_path):

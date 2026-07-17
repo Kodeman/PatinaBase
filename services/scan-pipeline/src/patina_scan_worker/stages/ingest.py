@@ -48,7 +48,8 @@ class DownloadItem:
 # ── pure helpers (unit-tested without IO) ────────────────────────────────────
 
 def plan_downloads(
-    manifest: dict[str, Any], manifest_key: str, scan_row: dict[str, Any]
+    manifest: dict[str, Any], manifest_key: str, scan_row: dict[str, Any],
+    skipped: list[dict[str, Any]] | None = None,
 ) -> list[DownloadItem]:
     """Build the ordered download plan from the manifest's artifact inventory.
 
@@ -81,10 +82,14 @@ def plan_downloads(
             assert_owner_prefix(key, user_id, room_id)
         except OwnershipError as exc:
             raise PermanentError(str(exc), token="OWNERSHIP_VIOLATION") from exc
-        except KeyResolutionError:
-            # unresolvable kind (e.g. an orphan photosManifest the iOS assembler
-            # listed but never uploaded): skip the fetch — the validator will
-            # name the honest MISSING_FILE against the manifest, not a crash.
+        except KeyResolutionError as exc:
+            # unresolvable kind (e.g. a legacy bundle's orphan photosManifest —
+            # B-19): skip the fetch, but NOT silently — record it so the stage
+            # emits an ingest.kind_skipped event. The validator then names the
+            # honest MISSING_FILE against the manifest rather than the worker
+            # crashing on a PATH_VIOLATION.
+            if skipped is not None:
+                skipped.append({"kind": kind, "relative_path": rel, "reason": str(exc)})
             continue
         except ValueError as exc:
             raise PermanentError(str(exc), token="PATH_VIOLATION") from exc
@@ -257,7 +262,13 @@ class IngestStage(BaseStage):
         # (MISSING_FILE) is left for the validator to name so classification runs
         # once, over the full token set; a network/5xx blip propagates as
         # TransientError and retries the whole task.
-        plan = plan_downloads(manifest, manifest_key, scan_row)
+        skipped: list[dict[str, Any]] = []
+        plan = plan_downloads(manifest, manifest_key, scan_row, skipped=skipped)
+        for s in skipped:
+            # not silent (D1): an unresolvable artifact kind is auditable telemetry.
+            ctx.telemetry.emit(
+                scan_id, "ingest", "ingest.kind_skipped", "info", detail=s,
+            )
         for item in plan:
             dest = os.path.join(work, item.rel_path)
             try:

@@ -8,10 +8,14 @@
 //  `scripts/validate_capture_bundle.py` accepts. UNVERIFIED is derived once via
 //  `AnchorGate.isUnverified`. Pure — unit-tested against a synthetic bundle dir.
 //
-//  Artifact-path NOTE (spec-delta for item-8 sync): Field's posed-photo sidecar is
-//  `photos_metadata.json` (a top-level JSON array of FieldPhotoEntry, item 3/I76),
-//  not the spec §4 `photos/photos_metadata.ndjson`. The `photosManifest` artifact
-//  points at the real file; the validator's photos-parity check is updated to match.
+//  Photos are a SEPARATE LANE (spec B-19): posed photos ride `room_scan_images`
+//  (uploaded to the `photos/` storage folder, cross-checked by the manifest's
+//  `photos[]` metadata array). `photos_metadata.json` is a DEVICE-LOCAL sidecar
+//  (a top-level JSON array of FieldPhotoEntry, item 3/I76) — it is NEVER a bundle
+//  `artifacts[]` entry, because item-8's uploader (ScanUploadDescriptor.all) does
+//  not upload it, so listing it would fatal-fail server ingest on its MISSING_FILE.
+//  The device still writes it locally for the validator's optional photos-parity
+//  check; the `photos[]` array in the manifest is the wire contract for photos.
 
 import Foundation
 
@@ -59,7 +63,10 @@ public enum FieldManifestAssembler {
         Candidate(path: "captured_room.json", kind: "capturedRoomJson", mime: "application/json"),
         Candidate(path: "mesh.ply", kind: "mesh", mime: "application/octet-stream"),
         Candidate(path: "depth/depth_index.ndjson", kind: "depthIndex", mime: "application/x-ndjson"),
-        Candidate(path: "photos_metadata.json", kind: "photosManifest", mime: "application/json"),
+        // NOTE: photos_metadata.json is a DEVICE-LOCAL sidecar, NOT a bundle
+        // artifact (spec B-19) — item-8's uploader never uploads it, so listing
+        // it here would fatal-fail server ingest on MISSING_FILE. Photos ride
+        // room_scan_images + the manifest photos[] array.
         Candidate(path: "scorecard.json", kind: "scorecard", mime: "application/json"),
         Candidate(path: "anchors.json", kind: "anchors", mime: "application/json"),
         Candidate(path: "keyframes/keyframe_index.ndjson", kind: "keyframeIndex", mime: "application/x-ndjson"),

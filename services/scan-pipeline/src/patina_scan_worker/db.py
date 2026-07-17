@@ -47,6 +47,11 @@ class DbClient:
         if resp.status_code >= 500:
             raise TransientError(f"POST {path} -> {resp.status_code}")
         if resp.status_code >= 400:
+            # 23505 unique_violation (D3): a concurrent solve raced us on the
+            # UNIQUE(room_file_id, element_ref) guard. Benign — treat as transient
+            # so it logs as a quiet retry, not an "unexpected error".
+            if resp.status_code == 409 and '"23505"' in resp.text:
+                raise TransientError(f"POST {path} -> 23505 unique_violation (concurrent race)")
             raise RuntimeError(f"POST {path} -> {resp.status_code}: {resp.text[:300]}")
         if resp.status_code == 204 or not resp.content:
             return None
@@ -189,8 +194,10 @@ class DbClient:
         self, room_file_id: str, rows: list[dict[str, Any]]
     ) -> None:
         """Delete-then-insert the measurement set for a room_file (idempotent
-        re-run: room_file_measurements has no natural unique key, so a re-solve
-        must clear its own prior rows before writing)."""
+        re-run). UNIQUE(room_file_id, element_ref) (00341 F3) now guards against
+        doubled rows: this delete clears the prior set first, and a CONCURRENT
+        second solve that races the insert hits 23505 → TransientError (a quiet
+        retry via _post), never a silent double-write."""
         self._delete("room_file_measurements?room_file_id=eq.{}".format(room_file_id))
         if rows:
             self._post(
