@@ -177,27 +177,20 @@ private final class DepthBundleWriter: @unchecked Sendable {
     // MARK: - On the io queue
 
     private func write(_ snap: DepthSnapshot) {
-        let width = CVPixelBufferGetWidth(snap.depthMap)
-        let height = CVPixelBufferGetHeight(snap.depthMap)
-        guard width > 0, height > 0 else { return }
-
-        guard let depthPlane = Self.packDepth(snap.depthMap, width: width, height: height) else {
+        // Shared encoder (used by the keyframe lane too); `hasConfidence` comes
+        // from whether a confidence plane was actually packed, so the index field
+        // and the `.bin` header flag stay in lockstep (I2).
+        guard let encoded = DepthBinEncoder.encode(depthMap: snap.depthMap,
+                                                    confidenceMap: snap.confidenceMap,
+                                                    smoothed: snap.smoothed) else {
             logger.error("Depth frame encode failed")
             return
         }
-        // Pack the confidence plane ONCE; both the `.bin` flag bit and the index's
-        // `hasConfidence` derive from THIS result, so they can never disagree
-        // (packConfidence returns nil on a resolution mismatch → no plane, no flag,
-        // index false — all in lockstep). I2 fix.
-        let confPlane = snap.confidenceMap.flatMap { Self.packConfidence($0, width: width, height: height) }
-        let hasConfidence = confPlane != nil
-        let bin = Self.assembleBin(depthPlane: depthPlane, confPlane: confPlane,
-                                   width: width, height: height, smoothed: snap.smoothed)
 
         let tsKey = String(format: "%09.3f", snap.timestampSeconds).replacingOccurrences(of: ".", with: "_")
         let filename = "depth_\(tsKey).bin"
         do {
-            try bin.write(to: depthDir.appendingPathComponent(filename), options: .atomic)
+            try encoded.data.write(to: depthDir.appendingPathComponent(filename), options: .atomic)
         } catch {
             logger.error("Depth frame write failed: \(error.localizedDescription)")
             return
@@ -216,75 +209,12 @@ private final class DepthBundleWriter: @unchecked Sendable {
                 imageWidth: Int(snap.imageResolution.width),
                 imageHeight: Int(snap.imageResolution.height)
             ),
-            width: width, height: height,
+            width: encoded.width, height: encoded.height,
             smoothed: snap.smoothed,
-            hasConfidence: hasConfidence,
+            hasConfidence: encoded.hasConfidence,
             depthFormat: "u16mm+u8conf"
         )
         appendIndex(entry)
-    }
-
-    /// Assemble the documented `.bin` layout (header via `DepthBinFormat`) from a
-    /// packed depth plane (mm) and an optional confidence plane. The flag byte's
-    /// confidence bit comes from `confPlane != nil` — the SAME value the index's
-    /// `hasConfidence` uses at the call site (I2 lockstep).
-    private static func assembleBin(depthPlane: [UInt16], confPlane: [UInt8]?,
-                                    width: Int, height: Int, smoothed: Bool) -> Data {
-        var data = Data()
-        data.append(contentsOf: Array(DepthBinFormat.magic.utf8))
-        appendLE(&data, DepthBinFormat.version)
-        appendLE(&data, DepthBinFormat.flags(smoothed: smoothed, hasConfidence: confPlane != nil))
-        appendLE(&data, UInt32(width))
-        appendLE(&data, UInt32(height))
-        depthPlane.withUnsafeBytes { data.append(contentsOf: $0) }
-        if let confPlane { data.append(contentsOf: confPlane) }
-        return data
-    }
-
-    /// Depth plane (Float32 metres) → row-major UInt16 millimetres.
-    private static func packDepth(_ depthMap: CVPixelBuffer, width: Int, height: Int) -> [UInt16]? {
-        CVPixelBufferLockBaseAddress(depthMap, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(depthMap, .readOnly) }
-        guard let base = CVPixelBufferGetBaseAddress(depthMap) else { return nil }
-        let stride = CVPixelBufferGetBytesPerRow(depthMap)
-        var out = [UInt16](repeating: 0, count: width * height)
-        for y in 0..<height {
-            let row = base.advanced(by: y * stride).assumingMemoryBound(to: Float32.self)
-            for x in 0..<width { out[y * width + x] = millimetres(row[x]) }
-        }
-        return out
-    }
-
-    /// Metres → clamped UInt16 millimetres (0 = invalid/NaN/≤0; cap at ~65.5 m).
-    private static func millimetres(_ meters: Float) -> UInt16 {
-        let mm = meters * 1000.0
-        if mm.isNaN || mm <= 0 { return 0 }
-        if mm >= Float(UInt16.max) { return .max }
-        return UInt16(mm)
-    }
-
-    /// Confidence plane (UInt8 ARConfidenceLevel raw) → row-major UInt8, or nil if
-    /// its resolution doesn't match the depth plane.
-    private static func packConfidence(_ confidenceMap: CVPixelBuffer, width: Int, height: Int) -> [UInt8]? {
-        CVPixelBufferLockBaseAddress(confidenceMap, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(confidenceMap, .readOnly) }
-        guard let base = CVPixelBufferGetBaseAddress(confidenceMap),
-              CVPixelBufferGetWidth(confidenceMap) == width,
-              CVPixelBufferGetHeight(confidenceMap) == height else { return nil }
-        let stride = CVPixelBufferGetBytesPerRow(confidenceMap)
-        var out = [UInt8](repeating: 0, count: width * height)
-        for y in 0..<height {
-            let row = base.advanced(by: y * stride).assumingMemoryBound(to: UInt8.self)
-            for x in 0..<width { out[y * width + x] = row[x] }
-        }
-        return out
-    }
-
-    private static func appendLE(_ data: inout Data, _ value: UInt16) {
-        withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
-    }
-    private static func appendLE(_ data: inout Data, _ value: UInt32) {
-        withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
     }
 
     private func appendIndex(_ entry: DepthIndexEntry) {

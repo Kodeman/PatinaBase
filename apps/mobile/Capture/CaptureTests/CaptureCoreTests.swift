@@ -139,4 +139,87 @@ struct CaptureCoreTests {
         registry.broadcast { $0.receiveCount += 1 }
         #expect(a.receiveCount == 2)           // two broadcasts → two deliveries
     }
+
+    // MARK: - KeyframeGate (motion trigger / debounce / sharpness — item 4)
+
+    /// Row-major 4x4 identity.
+    private static let identityPose: [Float] = [
+        1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1
+    ]
+
+    /// Identity rotation translated by (x, y, z) — translation at row-major 3, 7, 11.
+    private func translated(_ x: Float, _ y: Float, _ z: Float) -> [Float] {
+        [1, 0, 0, x,  0, 1, 0, y,  0, 0, 1, z,  0, 0, 0, 1]
+    }
+
+    @Test func translationDeltaEuclidean() {
+        let d = KeyframeGate.translationDelta(Self.identityPose, translated(3, 4, 0))
+        #expect(abs(d - 5.0) < 1e-4)           // 3-4-5
+    }
+
+    @Test func rotationDelta90DegreesAboutZ() {
+        // Row-major 90° rotation about Z: [[0,-1,0],[1,0,0],[0,0,1]].
+        let pose90z: [Float] = [0, -1, 0, 0,  1, 0, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1]
+        let theta = KeyframeGate.rotationDeltaRadians(Self.identityPose, pose90z)
+        #expect(abs(theta - Float.pi / 2) < 1e-3)
+        // Identity vs identity → no rotation.
+        #expect(KeyframeGate.rotationDeltaRadians(Self.identityPose, Self.identityPose) < 1e-4)
+    }
+
+    @Test func motionTriggerFirstFrameAndThresholds() {
+        let gate = KeyframeGate.standard
+        // First keyframe (no prior pose) always fires.
+        #expect(gate.motionTriggered(from: nil, to: Self.identityPose))
+        // No motion → not triggered.
+        #expect(!gate.motionTriggered(from: Self.identityPose, to: Self.identityPose))
+        // 0.3 m (< 0.5) and no rotation → not triggered.
+        #expect(!gate.motionTriggered(from: Self.identityPose, to: translated(0.3, 0, 0)))
+        // 0.6 m (> 0.5) → triggered.
+        #expect(gate.motionTriggered(from: Self.identityPose, to: translated(0.6, 0, 0)))
+        // 90° rotation (> 15°) with no translation → triggered.
+        let pose90z: [Float] = [0, -1, 0, 0,  1, 0, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1]
+        #expect(gate.motionTriggered(from: Self.identityPose, to: pose90z))
+    }
+
+    @Test func evaluationDebounceAndSharpnessThreshold() {
+        let gate = KeyframeGate.standard
+        #expect(gate.shouldEvaluate(now: 100, lastEvaluation: nil))          // first
+        #expect(!gate.shouldEvaluate(now: 100.05, lastEvaluation: 100.0))    // < 0.1 s
+        // == interval: build the boundary from the interval itself to dodge the
+        // 100.10-100.0 float-representation trap (that difference is 0.0999…).
+        #expect(gate.shouldEvaluate(now: gate.minEvaluationInterval, lastEvaluation: 0))
+        #expect(gate.shouldEvaluate(now: 100.3, lastEvaluation: 100.0))      // > 0.1 s
+        #expect(!gate.shouldEvaluate(now: 99.0, lastEvaluation: 100.0))      // regressed
+        #expect(gate.isSharp(gate.sharpnessThreshold))                       // >= threshold
+        #expect(!gate.isSharp(gate.sharpnessThreshold - 0.001))
+    }
+
+    @Test func standardGateTuning() {
+        let gate = KeyframeGate.standard
+        #expect(gate.translationThresholdMeters == 0.5)
+        #expect(abs(gate.rotationThresholdRadians - Float(15.0 * .pi / 180.0)) < 1e-6)
+        #expect(gate.minEvaluationInterval == 0.1)
+    }
+
+    // MARK: - Sharpness (variance of Laplacian — item 4)
+
+    @Test func sharpnessFlatBufferIsZero() {
+        let flat = [UInt8](repeating: 128, count: 5 * 5)  // no high-frequency content
+        #expect(Sharpness.varianceOfLaplacian(luma: flat, width: 5, height: 5) == 0)
+    }
+
+    @Test func sharpnessCheckerboardIsHigh() {
+        // Alternating 0/255 → strong Laplacian everywhere → large variance.
+        var checker = [UInt8](repeating: 0, count: 6 * 6)
+        for y in 0..<6 { for x in 0..<6 { checker[y * 6 + x] = (x + y) % 2 == 0 ? 0 : 255 } }
+        let sharp = Sharpness.varianceOfLaplacian(luma: checker, width: 6, height: 6)
+        let flat = Sharpness.varianceOfLaplacian(luma: [UInt8](repeating: 40, count: 6 * 6), width: 6, height: 6)
+        #expect(sharp > 0)
+        #expect(sharp > flat)
+    }
+
+    @Test func sharpnessTooSmallIsZero() {
+        #expect(Sharpness.varianceOfLaplacian(luma: [1, 2, 3, 4], width: 2, height: 2) == 0)
+        #expect(Sharpness.varianceOfLaplacian(luma: [], width: 0, height: 0) == 0)
+    }
 }

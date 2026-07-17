@@ -87,9 +87,10 @@ final class SharedARCaptureRig: NSObject {
     private let roomUpdateSinks = CaptureSinkRegistry<CaptureRoomUpdateSink>()
     #endif
 
-    // Item-3 recorders (rig-owned so it can finalize them on stop).
+    // Item-3/4 recorders (rig-owned so it can finalize them on stop).
     private var depthRecorder: FieldDepthRecorder?
     private var meshRecorder: FieldSceneMeshRecorder?
+    private var keyframeRecorder: FieldKeyframeRecorder?
 
     private var isRecording = false
     private let logger = Logger(subsystem: "cloud.patina.field", category: "CaptureRig")
@@ -145,6 +146,10 @@ final class SharedARCaptureRig: NSObject {
             let mesh = FieldSceneMeshRecorder(bundleDir: bundleDir)
             meshRecorder = mesh
             meshSinks.add(mesh)
+
+            let keyframes = FieldKeyframeRecorder(bundleDir: bundleDir, timebase: timebase)
+            keyframeRecorder = keyframes
+            frameSinks.add(keyframes)
         }
 
         arSession.run(makeConfiguration())
@@ -187,6 +192,7 @@ final class SharedARCaptureRig: NSObject {
         arSession.pause()
         depthRecorder?.finish()
         meshRecorder?.finish()
+        keyframeRecorder?.finish()
     }
 
     /// Coarse capture metrics for telemetry / the manifest (item 3 surfaces
@@ -195,13 +201,19 @@ final class SharedARCaptureRig: NSObject {
         var depthFramesWritten = 0
         var meshWritten = false
         var meshVertexCount = 0
+        var keyframesFired = 0
+        var keyframesBlurRejected = 0
+        var keyframesEncodeDropped = 0
     }
 
     var metrics: Metrics {
         Metrics(
             depthFramesWritten: depthRecorder?.framesWritten ?? 0,
             meshWritten: meshRecorder?.didWriteMesh ?? false,
-            meshVertexCount: meshRecorder?.vertexCount ?? 0
+            meshVertexCount: meshRecorder?.vertexCount ?? 0,
+            keyframesFired: keyframeRecorder?.fired ?? 0,
+            keyframesBlurRejected: keyframeRecorder?.blurRejected ?? 0,
+            keyframesEncodeDropped: keyframeRecorder?.encodeDropped ?? 0
         )
     }
 }
