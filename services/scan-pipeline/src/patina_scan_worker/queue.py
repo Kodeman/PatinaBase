@@ -5,16 +5,35 @@ service_role only). This wraps the five RPCs the worker calls:
 claim / complete / enqueue (successor) / requeue / stats. It NEVER touches the
 human-review states (awaiting_review/approved/rejected) and always leaves
 ``assignee`` NULL — a scan job has no human owner (design §2.1).
+
+Lost-race guard (M1): a job whose lease expired (VISIBILITY_TIMEOUT) can be
+re-claimed and completed by a second worker while this one is still finishing.
+The completing RPC then rejects with "must be running" / "not found". That is a
+benign race, not a crash: the completion methods swallow it, log a warning
+naming both workers, and let the loop continue.
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
 
 from .config import Settings
 from .errors import TransientError
+
+log = logging.getLogger("patina_scan_worker.queue")
+
+# Substrings in a complete_agent_task rejection that mean "someone else owns this
+# task now" — a lost race, not an error (00297 §5.3 RAISE messages).
+_LOST_RACE_MARKERS = ("must be running", "not found")
+
+
+class LostRaceError(RuntimeError):
+    """A queue write was rejected because the task is no longer this worker's to
+    complete (re-claimed after a lease expiry). Benign — handled, never crashes
+    the loop."""
 
 
 class QueueClient:
@@ -30,11 +49,27 @@ class QueueClient:
         if resp.status_code >= 500:
             raise TransientError(f"rpc {name} -> {resp.status_code}: {resp.text[:300]}")
         if resp.status_code >= 400:
-            # 4xx from an RPC is a contract/permission problem — surface loudly.
-            raise RuntimeError(f"rpc {name} -> {resp.status_code}: {resp.text[:300]}")
+            text = resp.text[:400]
+            if any(m in text for m in _LOST_RACE_MARKERS):
+                raise LostRaceError(f"rpc {name}: {text}")
+            # any other 4xx is a contract/permission problem — surface loudly.
+            raise RuntimeError(f"rpc {name} -> {resp.status_code}: {text}")
         if resp.status_code == 204 or not resp.content:
             return None
         return resp.json()
+
+    def _current_holder(self, task_id: str) -> str:
+        """Best-effort: who owns the task now (for the lost-race warning)."""
+        try:
+            resp = self._s.get(
+                f"/rest/v1/agent_tasks?id=eq.{task_id}&select=locked_by,status"
+            )
+            if resp.status_code < 400 and resp.json():
+                row = resp.json()[0]
+                return f"{row.get('locked_by') or '<none>'}/{row.get('status')}"
+        except (httpx.HTTPError, ValueError, KeyError, IndexError):
+            pass
+        return "<unknown>"
 
     # ── claim ───────────────────────────────────────────────────────────────
     def claim(self) -> list[dict[str, Any]]:
@@ -52,34 +87,41 @@ class QueueClient:
         )
         return rows or []
 
-    # ── complete ──────────────────────────────────────────────────────────────
-    def complete_done(self, task_id: str, artifacts: dict[str, Any]) -> None:
-        self._rpc(
-            "complete_agent_task",
-            {
-                "p_id": task_id,
-                "p_outcome": "done",
-                "p_artifacts": artifacts,
-                "p_actor": self._cfg.worker_id,
-            },
-        )
+    # ── complete (lost-race-guarded) ──────────────────────────────────────────
+    def complete_done(self, task_id: str, artifacts: dict[str, Any]) -> bool:
+        """Returns True if we completed it, False if we lost the race."""
+        return self._guarded_complete(task_id, {
+            "p_id": task_id,
+            "p_outcome": "done",
+            "p_artifacts": artifacts,
+            "p_actor": self._cfg.worker_id,
+        })
 
     def complete_failed(
         self, task_id: str, error: str, fatal: bool, artifacts: dict[str, Any] | None = None
-    ) -> None:
-        self._rpc(
-            "complete_agent_task",
-            {
-                "p_id": task_id,
-                "p_outcome": "failed",
-                "p_error": error[:2000],
-                "p_fatal": fatal,
-                "p_artifacts": artifacts or {},
-                "p_actor": self._cfg.worker_id,
-            },
-        )
+    ) -> bool:
+        return self._guarded_complete(task_id, {
+            "p_id": task_id,
+            "p_outcome": "failed",
+            "p_error": error[:2000],
+            "p_fatal": fatal,
+            "p_artifacts": artifacts or {},
+            "p_actor": self._cfg.worker_id,
+        })
 
-    # ── enqueue successor ─────────────────────────────────────────────────────
+    def _guarded_complete(self, task_id: str, body: dict[str, Any]) -> bool:
+        try:
+            self._rpc("complete_agent_task", body)
+            return True
+        except LostRaceError as exc:
+            log.warning(
+                "worker %s lost the race completing task %s (now %s) — another "
+                "worker owns it; skipping. (%s)",
+                self._cfg.worker_id, task_id, self._current_holder(task_id), exc,
+            )
+            return False
+
+    # ── enqueue successor (lost-race-guarded) ─────────────────────────────────
     def enqueue_successor(
         self,
         task_type: str,
@@ -89,23 +131,31 @@ class QueueClient:
         parent_task_id: str,
     ) -> dict[str, Any] | None:
         """Enqueue the next stage. Idempotent on its own key; assignee stays
-        NULL; source is 'scan-pipeline'; entity_type 'room_scan' (design §2.1)."""
-        row = self._rpc(
-            "enqueue_agent_task",
-            {
-                "p_task_type": task_type,
-                "p_payload": payload,
-                "p_source": "scan-pipeline",
-                "p_entity_type": "room_scan",
-                "p_entity_id": entity_id,
-                "p_idempotency_key": idempotency_key,
-                "p_max_attempts": self._cfg.max_attempts,
-                "p_on_conflict": "ignore",
-                "p_parent_task_id": parent_task_id,
-                "p_actor": self._cfg.worker_id,
-            },
-        )
-        return row
+        NULL; source is 'scan-pipeline'; entity_type 'room_scan' (design §2.1).
+        Guarded so a concurrent completer never turns this into a crash."""
+        try:
+            return self._rpc(
+                "enqueue_agent_task",
+                {
+                    "p_task_type": task_type,
+                    "p_payload": payload,
+                    "p_source": "scan-pipeline",
+                    "p_entity_type": "room_scan",
+                    "p_entity_id": entity_id,
+                    "p_idempotency_key": idempotency_key,
+                    "p_max_attempts": self._cfg.max_attempts,
+                    "p_on_conflict": "ignore",
+                    "p_parent_task_id": parent_task_id,
+                    "p_actor": self._cfg.worker_id,
+                },
+            )
+        except LostRaceError as exc:
+            log.warning(
+                "worker %s: successor enqueue for %s hit a lost race (%s) — the "
+                "idempotency key makes this a no-op; continuing.",
+                self._cfg.worker_id, idempotency_key, exc,
+            )
+            return None
 
     # ── requeue (operator re-run of a parked failed task) ─────────────────────
     def requeue(self, task_id: str) -> dict[str, Any] | None:

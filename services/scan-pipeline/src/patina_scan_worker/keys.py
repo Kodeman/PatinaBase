@@ -1,24 +1,32 @@
-"""Object-key derivation — mirrors parse-room-scan / confirm-scan-bundle's
-``objectKeyFromUrl`` convention exactly.
+"""Object-key derivation — mirrors the SHIPPED iOS uploader layout exactly.
+
+The Field uploader (apps/mobile/Capture/.../RoomScanStoragePath.swift +
+ScanUploadDescriptor.swift) writes every artifact to a PER-KIND folder:
+
+    {folder}/{userId}/{roomId}/{filename}
+
+(00077 storage RLS: segment [2] = userId, segment [3] = roomId — 1-based). The
+manifest itself lives at ``manifests/{userId}/{roomId}/manifest.json``. This is
+pinned as a contract in capture-bundle-spec-v1.md **B-18** (storage layout); the
+map below MUST stay in lockstep with the iOS ``ScanUploadDescriptor.all`` table.
 
 Both iOS apps write PUBLIC-shaped (`/object/public/room-scans/…`) URLs into the
-room_scans artifact columns as mere path-carriers (an ecosystem convention; see
-supabase/functions/parse-room-scan/lib.ts and confirm-scan-bundle/index.ts). The
-worker derives the bucket-relative object key by splitting on the LAST
-``/room-scans/`` and keeping the tail (query string stripped).
+room_scans columns as mere path-carriers; ``object_key_from_url`` derives the
+bucket-relative key by splitting on the LAST ``/room-scans/`` (mirrors
+parse-room-scan / confirm-scan-bundle).
 
-Bundle-read contract (blessed, code-only — design §2.3 leaves the exact
-mechanism a code call):
-  * The manifest (``bundle_manifest_url``) is the authoritative artifact
-    inventory. Its object key derives via ``object_key_from_url``.
-  * The bundle prefix is that key's parent dir; each ``manifest.artifacts[]``
-    entry's ``relativePath`` resolves to ``{prefix}/{relativePath}`` — this
-    reconstructs the on-device bundle directory the reference validator expects,
-    and keeps userId/scanId in path segments [2]/[3] for EVERY nested path so
-    the 00287 designer-read RLS still resolves.
-  * When an artifact ``kind`` also has a dedicated non-null room_scans URL
-    column, that column's key is preferred (it is the exact object the uploader
-    PUT), with the prefix path as the fallback.
+Bundle-read contract (design §2.3 leaves the mechanism a code call):
+  * The manifest (``bundle_manifest_url``) is the authoritative inventory; its
+    object key derives via ``object_key_from_url`` and pins the verified
+    ``{userId}/{roomId}`` owner segments.
+  * A kind with a dedicated non-null room_scans URL column resolves to that
+    column's key (the exact object the uploader PUT).
+  * A COLUMN-LESS kind (depthIndex, scorecard, anchors, keyframeIndex,
+    keyframeSummary) resolves by PREFIX-SWAP off the manifest's verified owner
+    segments: ``{KIND_TO_FOLDER[kind]}/{userId}/{roomId}/{basename(relativePath)}``.
+  * EVERY derived key is owner-anchored (``assert_owner_prefix``) before use —
+    the worker's service key bypasses storage RLS, so this check IS the
+    RLS-equivalent (C2 / OWNERSHIP_VIOLATION).
 """
 
 from __future__ import annotations
@@ -28,8 +36,7 @@ import posixpath
 _MARKER = "/room-scans/"
 
 # manifest artifact.kind (ArtifactKind.rawValue) → dedicated room_scans URL
-# column (the item-8 URLColumnPatch set). Artifacts without a dedicated column
-# (posed photos, keyframe index/summary) resolve via the bundle-prefix path.
+# column (the item-8 URLColumnPatch / ScanUploadDescriptor `column` field).
 KIND_TO_URL_COLUMN: dict[str, str] = {
     "capturedRoomJson": "captured_room_json_url",
     "usdz": "model_url",
@@ -44,14 +51,36 @@ KIND_TO_URL_COLUMN: dict[str, str] = {
     "heroFrame": "hero_frame_url",
 }
 
+# manifest artifact.kind → storage FOLDER (segment [0], 0-based). Pinned by the
+# iOS ScanUploadDescriptor.all table and capture-bundle-spec B-18. The
+# column-backed kinds are here too so the layout is complete and testable, but
+# they normally resolve via their column; the five COLUMN-LESS kinds
+# (depthIndex, scorecard, anchors, keyframeIndex, keyframeSummary) rely on it.
+KIND_TO_FOLDER: dict[str, str] = {
+    "usdz": "usdz",
+    "capturedRoomJson": "captured_room",
+    "mesh": "mesh",
+    "bundleManifest": "manifests",
+    "depthIndex": "depth",
+    "scorecard": "scorecard",
+    "anchors": "anchors",
+    "keyframeIndex": "keyframes",
+    "keyframeSummary": "keyframes",
+    "depthArchive": "depth",
+    "keyframesArchive": "bundle",
+}
+
+
+class OwnershipError(ValueError):
+    """A derived object key is not under the scan owner's ``{uid}/{room}`` prefix
+    (C2). Raised by ``assert_owner_prefix``; ingest maps it to the permanent
+    OWNERSHIP_VIOLATION token."""
+
 
 def object_key_from_url(url: str | None) -> str | None:
-    """Bucket-relative key from a stored artifact URL. Split on the LAST
-    ``/room-scans/``; a bare key (no marker) is used as-is; query stripped;
-    leading slashes trimmed. Returns None for empty/non-string input.
-
-    Byte-for-byte behavioural mirror of the TS ``objectKeyFromUrl``.
-    """
+    """Bucket-relative key from a stored artifact URL. Behavioural mirror of the
+    TS ``objectKeyFromUrl``: split on the LAST ``/room-scans/``; bare key used
+    as-is; query stripped; leading slashes trimmed."""
     if not isinstance(url, str) or url == "":
         return None
     idx = url.rfind(_MARKER)
@@ -63,47 +92,43 @@ def object_key_from_url(url: str | None) -> str | None:
     return key if key else None
 
 
-def bundle_prefix_from_manifest_url(manifest_url: str | None) -> str | None:
-    """Parent directory of the manifest's object key — the bundle root prefix.
-
-    e.g. ``…/room-scans/uid/scan/manifest.json`` → ``uid/scan``.
-    """
-    key = object_key_from_url(manifest_url)
-    if key is None:
-        return None
-    parent = posixpath.dirname(key)
-    return parent  # '' when the manifest sits at the bucket root
+def owner_segments_from_key(key: str) -> tuple[str, str]:
+    """Extract ``(userId, roomId)`` from a bucket key ``{folder}/{uid}/{room}/…``.
+    Raises ValueError if the key has too few segments to carry them."""
+    parts = key.split("/")
+    if len(parts) < 3:
+        raise ValueError(
+            f"storage key has too few segments to carry owner/room: {key!r}"
+        )
+    return parts[1], parts[2]
 
 
 def safe_relative_path(rel: str) -> str:
-    """Validate a manifest ``relativePath`` before composing it into a storage
-    key (mirrors the validator's PATH_VIOLATION containment rules): reject
-    absolute paths and any ``..`` segment. Returns a POSIX-normalised relative
-    path. Raises ValueError on violation.
-    """
+    """Validate a manifest ``relativePath`` (mirrors the validator's
+    PATH_VIOLATION rules): reject absolute paths and any ``..`` segment. Returns
+    a POSIX-normalised relative path; raises ValueError on violation."""
     if not isinstance(rel, str) or rel == "":
         raise ValueError("empty relativePath")
     norm = rel.replace("\\", "/")
     if norm.startswith("/"):
         raise ValueError(f"relativePath is absolute: {rel!r}")
-    segments = norm.split("/")
-    if any(seg == ".." for seg in segments):
+    if any(seg == ".." for seg in norm.split("/")):
         raise ValueError(f"relativePath contains a '..' segment: {rel!r}")
     return norm
 
 
 def artifact_object_key(
-    prefix: str | None,
+    manifest_key: str,
     rel: str,
     kind: str | None,
     scan_row: dict,
 ) -> str:
     """Resolve the storage key for one manifest artifact.
 
-    Preference: a dedicated non-null room_scans URL column for the kind (the
-    exact object the uploader PUT); fallback to ``{prefix}/{relativePath}``.
-    ``rel`` is validated for containment first.
-    """
+    Preference: a dedicated non-null room_scans URL column (the exact object the
+    uploader PUT); otherwise PREFIX-SWAP off the manifest's verified owner
+    segments into the kind's per-kind folder. ``rel`` is containment-checked
+    first. Raises ValueError on an unresolvable kind or a bad relativePath."""
     safe_rel = safe_relative_path(rel)
 
     col = KIND_TO_URL_COLUMN.get(kind or "")
@@ -113,6 +138,30 @@ def artifact_object_key(
         if col_key:
             return col_key
 
-    if prefix:
-        return f"{prefix}/{safe_rel}"
-    return safe_rel
+    folder = KIND_TO_FOLDER.get(kind or "")
+    if not folder:
+        raise ValueError(
+            f"no storage folder known for artifact kind {kind!r} "
+            f"(not in the v1 B-18 layout, and no dedicated URL column set)"
+        )
+    uid, room = owner_segments_from_key(manifest_key)
+    filename = posixpath.basename(safe_rel)
+    return f"{folder}/{uid}/{room}/{filename}"
+
+
+def assert_owner_prefix(key: str, user_id: str, room_id: str | None) -> None:
+    """Owner-prefix anchoring (C2). The worker's service key bypasses storage
+    RLS, so this reproduces the 00077 RLS guard: segment [1] (0-based) MUST be
+    the scan owner's ``user_id``, and segment [2] MUST be the row's ``room_id``
+    when present (nullable). Raises ``OwnershipError`` on any mismatch."""
+    parts = key.split("/")
+    if len(parts) < 3:
+        raise OwnershipError(f"key too short to verify owner prefix: {key!r}")
+    if parts[1] != str(user_id):
+        raise OwnershipError(
+            f"key owner segment {parts[1]!r} != row user_id {user_id!r}: {key!r}"
+        )
+    if room_id and parts[2] != str(room_id):
+        raise OwnershipError(
+            f"key room segment {parts[2]!r} != row room_id {room_id!r}: {key!r}"
+        )

@@ -68,7 +68,7 @@ via `EnvironmentFile` so it never appears in `argv`. Full schema: design §3.
 | `POLL_SECONDS` | `5` | sleep between empty polls |
 | `MAX_CONCURRENT` | `2` | claim batch size / max in-flight |
 | `GPU` | `auto` | `auto` = detect+report; `off` = never touch (no P1 stage uses it) |
-| `VISIBILITY_TIMEOUT` | `15 minutes` | lease length; a dead worker's job is reclaimable after this |
+| `VISIBILITY_TIMEOUT` | `60 minutes` | lease length; a dead worker's job is reclaimable after this (a 500 MB bundle on a slow link needs the room; the lost-race guard covers overruns) |
 | `MAX_ATTEMPTS` | `5` | max attempts on enqueued successors (backoff parks here) |
 | `ROOM_SCANS_BUCKET` | `room-scans` | bucket bundles arrive in / drawings write to |
 | `WORK_DIR` | `/var/lib/patina/scan-work` | scratch root (on the `ReadWritePaths` allowlist) |

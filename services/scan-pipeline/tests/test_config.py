@@ -33,7 +33,7 @@ def test_defaults_and_task_types():
     assert s.poll_seconds == 5
     assert s.max_concurrent == 2
     assert s.gpu == "auto"
-    assert s.visibility_timeout == "15 minutes"
+    assert s.visibility_timeout == "60 minutes"
     assert s.room_scans_bucket == "room-scans"
 
 

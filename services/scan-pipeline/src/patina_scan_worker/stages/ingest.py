@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
 from typing import Any
 
 from ..errors import PermanentError, TransientError, classify_failures
 from ..keys import (
+    OwnershipError,
     artifact_object_key,
-    bundle_prefix_from_manifest_url,
+    assert_owner_prefix,
     object_key_from_url,
 )
 from ..untar import safe_extract_tar
@@ -45,21 +47,25 @@ class DownloadItem:
 # ── pure helpers (unit-tested without IO) ────────────────────────────────────
 
 def plan_downloads(
-    manifest: dict[str, Any], prefix: str | None, scan_row: dict[str, Any]
+    manifest: dict[str, Any], manifest_key: str, scan_row: dict[str, Any]
 ) -> list[DownloadItem]:
     """Build the ordered download plan from the manifest's artifact inventory.
 
     Each artifact resolves to a storage key (dedicated URL column preferred,
-    bundle-prefix fallback) and a scratch relative path (its manifest
-    relativePath, so the scratch dir reconstructs the on-device bundle the
-    validator expects). A relativePath that fails containment raises here
-    (PATH_VIOLATION) before any IO.
+    else prefix-swap into the per-kind folder off the manifest's verified owner
+    segments — B-18) and a scratch relative path (its manifest relativePath, so
+    the scratch dir reconstructs the on-device bundle the validator expects).
+    Every derived key is owner-anchored (C2). A relativePath that fails
+    containment → PATH_VIOLATION; a foreign owner prefix → OWNERSHIP_VIOLATION;
+    both permanent, raised before any IO.
     """
     artifacts = manifest.get("artifacts")
     if not isinstance(artifacts, list):
         raise PermanentError(
             "manifest.artifacts is not an array", token="SCHEMA_VIOLATION"
         )
+    user_id = scan_row.get("user_id")
+    room_id = scan_row.get("room_id")
     plan: list[DownloadItem] = []
     for a in artifacts:
         if not isinstance(a, dict):
@@ -70,7 +76,10 @@ def plan_downloads(
             # The validator will name SCHEMA_VIOLATION for this; skip the fetch.
             continue
         try:
-            key = artifact_object_key(prefix, rel, kind, scan_row)
+            key = artifact_object_key(manifest_key, rel, kind, scan_row)
+            assert_owner_prefix(key, user_id, room_id)
+        except OwnershipError as exc:
+            raise PermanentError(str(exc), token="OWNERSHIP_VIOLATION") from exc
         except ValueError as exc:
             raise PermanentError(str(exc), token="PATH_VIOLATION") from exc
         plan.append(DownloadItem(key, rel, kind, a.get("sha256")))
@@ -148,54 +157,60 @@ class IngestStage(BaseStage):
             detail={"version": version, "attempt": attempts},
         )
 
+        # M2: the per-task scratch dir is rmtree'd on EVERY exit path (success,
+        # fatal, transient); prune_work_dir remains the crash janitor.
+        work = os.path.join(ctx.settings.work_dir, scan_id, f"v{int(version)}")
         try:
-            summary = self._validate(ctx, task, scan_row, scan_id, int(version))
-        except (PermanentError, TransientError) as exc:
-            ctx.telemetry.emit(
-                scan_id, "ingest", "ingest.failed", "failed",
-                room_file_id=room_file_id,
-                duration_ms=int((time.monotonic() - t0) * 1000),
-                detail={
-                    "failure_token": getattr(exc, "token", None),
-                    "error": str(exc),
-                    "fatal": exc.fatal,
-                    "attempt": attempts,
+            try:
+                summary = self._validate(ctx, task, scan_row, scan_id, int(version), work)
+            except (PermanentError, TransientError) as exc:
+                ctx.telemetry.emit(
+                    scan_id, "ingest", "ingest.failed", "failed",
+                    room_file_id=room_file_id,
+                    duration_ms=int((time.monotonic() - t0) * 1000),
+                    detail={
+                        "failure_token": getattr(exc, "token", None),
+                        "error": str(exc),
+                        "fatal": exc.fatal,
+                        "attempt": attempts,
+                    },
+                )
+                if exc.fatal:
+                    ctx.db.mark_room_file_error(room_file_id, str(exc))
+                raise
+
+            # ── success: enqueue solve BEFORE completing done (crash-safe, §2.3) ──
+            successor_key = f"{scan_id}:solve:{version}"
+            ctx.queue.enqueue_successor(
+                task_type="scan_pipeline.solve",
+                payload={
+                    "scan_id": scan_id,
+                    "room_file_id": room_file_id,
+                    "room_file_version": version,
                 },
+                entity_id=scan_id,
+                idempotency_key=successor_key,
+                parent_task_id=task["id"],
             )
-            if exc.fatal:
-                ctx.db.mark_room_file_error(room_file_id, str(exc))
-            raise
 
-        # ── success: enqueue solve BEFORE completing done (crash-safe, §2.3) ──
-        successor_key = f"{scan_id}:solve:{version}"
-        ctx.queue.enqueue_successor(
-            task_type="scan_pipeline.solve",
-            payload={
-                "scan_id": scan_id,
-                "room_file_id": room_file_id,
-                "room_file_version": version,
-            },
-            entity_id=scan_id,
-            idempotency_key=successor_key,
-            parent_task_id=task["id"],
-        )
-
-        duration_ms = int((time.monotonic() - t0) * 1000)
-        ctx.telemetry.emit(
-            scan_id, "ingest", "ingest.succeeded", "succeeded",
-            room_file_id=room_file_id,
-            duration_ms=duration_ms,
-            detail=summary,
-        )
-        return StageOutcome(
-            artifacts={
-                "validated": True,
-                "artifact_count": summary["artifact_count"],
-                "unverified": summary["unverified"],
-                "room_file_id": room_file_id,
-                "successor_enqueued": "scan_pipeline.solve",
-            }
-        )
+            duration_ms = int((time.monotonic() - t0) * 1000)
+            ctx.telemetry.emit(
+                scan_id, "ingest", "ingest.succeeded", "succeeded",
+                room_file_id=room_file_id,
+                duration_ms=duration_ms,
+                detail=summary,
+            )
+            return StageOutcome(
+                artifacts={
+                    "validated": True,
+                    "artifact_count": summary["artifact_count"],
+                    "unverified": summary["unverified"],
+                    "room_file_id": room_file_id,
+                    "successor_enqueued": "scan_pipeline.solve",
+                }
+            )
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
 
     # ── the download → untar → validate → reconcile body ──────────────────────
     def _validate(
@@ -205,8 +220,8 @@ class IngestStage(BaseStage):
         scan_row: dict[str, Any],
         scan_id: str,
         version: int,
+        work: str,
     ) -> dict[str, Any]:
-        work = os.path.join(ctx.settings.work_dir, scan_id, f"v{version}")
         os.makedirs(work, exist_ok=True)
 
         manifest_url = scan_row.get("bundle_manifest_url")
@@ -216,7 +231,11 @@ class IngestStage(BaseStage):
                 "room_scans.bundle_manifest_url missing/unparseable",
                 token="MISSING_MANIFEST",
             )
-        prefix = bundle_prefix_from_manifest_url(manifest_url)
+        # Owner-anchor the manifest key itself before we fetch a single byte (C2).
+        try:
+            assert_owner_prefix(manifest_key, scan_row.get("user_id"), scan_row.get("room_id"))
+        except OwnershipError as exc:
+            raise PermanentError(str(exc), token="OWNERSHIP_VIOLATION") from exc
 
         manifest_path = os.path.join(work, "manifest.json")
         ctx.storage.download_to(manifest_key, manifest_path)
@@ -232,7 +251,7 @@ class IngestStage(BaseStage):
         # (MISSING_FILE) is left for the validator to name so classification runs
         # once, over the full token set; a network/5xx blip propagates as
         # TransientError and retries the whole task.
-        plan = plan_downloads(manifest, prefix, scan_row)
+        plan = plan_downloads(manifest, manifest_key, scan_row)
         for item in plan:
             dest = os.path.join(work, item.rel_path)
             try:

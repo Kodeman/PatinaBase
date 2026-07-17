@@ -41,7 +41,10 @@ class Settings:
     poll_seconds: int = 5
     max_concurrent: int = 2
     gpu: str = "auto"                       # 'auto' | 'off'
-    visibility_timeout: str = "15 minutes"  # SQL interval literal
+    # 60 min: a 500 MB bundle on a slow link can outrun a shorter lease and get
+    # re-claimed mid-download (M1). The lost-race guard (queue.py) covers the
+    # rare overrun; this default keeps it rare.
+    visibility_timeout: str = "60 minutes"  # SQL interval literal
     max_attempts: int = 5
     room_scans_bucket: str = "room-scans"
     work_dir: str = "/var/lib/patina/scan-work"
@@ -136,7 +139,7 @@ def settings_from_env(env: dict[str, str] | None = None) -> Settings:
         poll_seconds=_int_src("POLL_SECONDS", 5),
         max_concurrent=_int_src("MAX_CONCURRENT", 2),
         gpu=gpu,
-        visibility_timeout=(src.get("VISIBILITY_TIMEOUT") or "15 minutes").strip(),
+        visibility_timeout=(src.get("VISIBILITY_TIMEOUT") or "60 minutes").strip(),
         max_attempts=_int_src("MAX_ATTEMPTS", 5),
         room_scans_bucket=(src.get("ROOM_SCANS_BUCKET") or "room-scans").strip(),
         work_dir=(src.get("WORK_DIR") or "/var/lib/patina/scan-work").strip(),

@@ -65,6 +65,9 @@ PERMANENT_TOKENS: frozenset[str] = frozenset(
         "PHOTO_COUNT_MISMATCH",
         # server-side reconciliation (manifest hash vs uploader's per-PUT ledger)
         "ARTIFACTS_SHA256_MISMATCH",
+        # a derived object key is not under the scan owner's {uid}/{room} prefix
+        # (C2 — the service-key worker's RLS-equivalent guard)
+        "OWNERSHIP_VIOLATION",
     }
 )
 

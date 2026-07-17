@@ -100,6 +100,16 @@ CREATE TRIGGER trg_room_scans_enqueue_ingest
 -- that reached 'ready' before this migration. Mirrors groom_agent_tasks (00300):
 -- transaction-scoped advisory lock so a concurrent run is a no-op; job_runs
 -- bookkeeping; no re-raise on error so the 'failed' job_runs row persists.
+--
+-- Scope (M3): the sweep ONLY rescues a scan with NO ingest task at ALL. A scan
+-- whose ingest task is parked 'failed' (or 'cancelled'/'rejected') is a HUMAN's
+-- to requeue (requeue_agent_task) — the sweep is not a resurrection channel and
+-- must never re-open a parked decision. The NOT EXISTS below therefore blocks on
+-- EVERY agent_tasks status (queued/running/awaiting_review/approved/done/failed/
+-- cancelled/rejected). Version-bump behavior is separate and by design: a
+-- re-scan flips the scan to 'ready' again, the TRIGGER allocates version=MAX+1,
+-- and that fresh version mints a NEW idempotency key ('{scan}:ingest:{v+1}') —
+-- the intended re-scan path, not a resurrection of the prior version's task.
 CREATE OR REPLACE FUNCTION public.sweep_scan_pipeline_ingest()
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -131,11 +141,12 @@ BEGIN
        WHERE rs.status = 'ready'
          AND COALESCE(rs.scan_schema_version, 0) >= 3
          AND NOT EXISTS (
+           -- ANY ingest task (any status) means this scan is already accounted
+           -- for — the sweep only rescues scans with NO ingest task at all (M3).
            SELECT 1
              FROM public.agent_tasks t
             WHERE t.task_type = 'scan_pipeline.ingest'
               AND t.entity_id = rs.id
-              AND t.status IN ('queued','running','awaiting_review','approved','done')
          )
     LOOP
       SELECT COALESCE(MAX(rf.version), 0) + 1
