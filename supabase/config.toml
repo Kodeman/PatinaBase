@@ -403,6 +403,15 @@ verify_jwt = true
 [functions.derive-scan-photo-media]
 verify_jwt = true
 
+# BOH PO Composer render/transmit worker (S3, spec §5.3). Server-to-server only:
+# the admin-portal composer routes call it with a service-role Bearer. verify_jwt
+# = false so the gateway does NOT verify (sidesteps the local status-vs-vault
+# HS256/ES256 key mismatch documented in the room-scans fixtures README); the
+# function REQUIRES role == 'service_role' in-code (parse-room-scan idiom). No
+# browser calls it directly.
+[functions.fulfillment-po]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
