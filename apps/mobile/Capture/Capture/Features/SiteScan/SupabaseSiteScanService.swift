@@ -28,6 +28,7 @@
 import Foundation
 import Supabase
 import CaptureKit
+import os.log
 #if canImport(RoomPlan)
 import RoomPlan
 #endif
@@ -38,6 +39,7 @@ final class SupabaseSiteScanService: SiteScanService {
     private let client: SupabaseClient
     private let session: any SessionProviding
     private let bucket = "room-scans"
+    private let logger = Logger(subsystem: "cloud.patina.field", category: "SiteScan")
 
     /// Retained (weakly) so `upload` can read the finished scan's coarse metrics
     /// (floor area / dimensions / coverage) for the row — the frozen
@@ -153,6 +155,17 @@ final class SupabaseSiteScanService: SiteScanService {
         try await client.rpc("mark_scan_upload_complete",
                              params: ScanIDParam(p_scan_id: scanID.uuidString)).execute()
 
+        // 5. Posed photos (I76) are a SEPARATE, best-effort lane. They upload
+        //    STRICTLY AFTER the scan is marked ready, so a photo failure can never
+        //    delay or fail the core scan — the accepted degraded mode is a ready
+        //    scan with no photos. Single attempt, log-only.
+        do {
+            try await uploadScanPhotos(bundle: result.localBundleURL,
+                                       scanID: scanID, roomID: roomID, userID: userID)
+        } catch {
+            logger.error("[SiteScan] posed-photo upload failed; scan is ready without photos: \(error.localizedDescription)")
+        }
+
         // Full success — this bundle's reservation is spent; a later, unrelated
         // upload() call using the same URL (shouldn't happen, but be safe) gets a
         // fresh reservation rather than silently reusing a completed scan's ids.
@@ -218,6 +231,72 @@ final class SupabaseSiteScanService: SiteScanService {
         try await client.storage.from(bucket)
             .upload(path, data: data, options: FileOptions(contentType: artifact.contentType, upsert: true))
         return try client.storage.from(bucket).getPublicURL(path: path).absoluteString
+    }
+
+    // MARK: - Posed photos (I76)
+
+    /// Upload the scan's posed photos, then write ONE batched `room_scan_images`
+    /// insert — the SEPARATE, variable-count lane that rides the SAME storage-key
+    /// shape (`photos/{uid}/{roomId}/{filename}`) as the two core artifacts, so it
+    /// needs zero policy work (00077 owner INSERT + 00287 designer read).
+    ///
+    /// Reads the `photos_metadata.json` sidecar the session wrote; an absent or
+    /// malformed sidecar (or an empty one) is a clean no-op. Each photo is
+    /// uploaded independently — a single bad photo is logged and SKIPPED, not
+    /// fatal to the batch. `image_count` on `room_scans` is maintained by the
+    /// 00032 AFTER-INSERT trigger — NO explicit patch here (the explicit patch is
+    /// what produced the prod 40-vs-200 image_count discrepancy).
+    private func uploadScanPhotos(bundle: URL, scanID: UUID, roomID: UUID, userID: UUID) async throws {
+        let sidecarURL = bundle.appendingPathComponent(RoomScanStoragePath.Filename.photosMetadata)
+        guard let sidecarData = try? Data(contentsOf: sidecarURL) else { return } // no photos captured
+        let entries = try JSONDecoder().decode([FieldPhotoEntry].self, from: sidecarData)
+        guard !entries.isEmpty else { return }
+
+        let photosDir = bundle.appendingPathComponent(RoomScanStoragePath.Folder.photos, isDirectory: true)
+        var rows: [FieldRoomScanImageInsert] = []
+        rows.reserveCapacity(entries.count)
+
+        for (index, entry) in entries.enumerated() {
+            do {
+                // Full JPEG (required for a row).
+                let jpegData = try Data(contentsOf: photosDir.appendingPathComponent(entry.filename))
+                let jpegPath = RoomScanStoragePath.object(
+                    folder: RoomScanStoragePath.Folder.photos,
+                    userID: userID, roomID: roomID, filename: entry.filename)
+                try await client.storage.from(bucket).upload(
+                    jpegPath, data: jpegData,
+                    options: FileOptions(contentType: "image/jpeg", upsert: true))
+                let imageURL = try client.storage.from(bucket).getPublicURL(path: jpegPath).absoluteString
+
+                // 256px thumb — populated from day one. If the thumb is missing or
+                // its upload fails, fall back to the full JPEG URL so the
+                // thumbnail_url column is never null.
+                var thumbnailURL = imageURL
+                if let thumbName = entry.thumbnailFilename {
+                    do {
+                        let thumbData = try Data(contentsOf: photosDir.appendingPathComponent(thumbName))
+                        let thumbPath = RoomScanStoragePath.object(
+                            folder: RoomScanStoragePath.Folder.photos,
+                            userID: userID, roomID: roomID, filename: thumbName)
+                        try await client.storage.from(bucket).upload(
+                            thumbPath, data: thumbData,
+                            options: FileOptions(contentType: "image/jpeg", upsert: true))
+                        thumbnailURL = try client.storage.from(bucket).getPublicURL(path: thumbPath).absoluteString
+                    } catch {
+                        logger.error("[SiteScan] thumb upload failed (\(thumbName)); using full image URL: \(error.localizedDescription)")
+                    }
+                }
+
+                rows.append(FieldRoomScanImageInsert.auto(
+                    from: entry, scanID: scanID, roomID: roomID,
+                    displayOrder: index + 1, urls: (image: imageURL, thumbnail: thumbnailURL)))
+            } catch {
+                logger.error("[SiteScan] posed photo skipped (\(entry.filename)): \(error.localizedDescription)")
+            }
+        }
+
+        guard !rows.isEmpty else { return }
+        try await client.from("room_scan_images").insert(rows).execute()
     }
 
     private func scanMetrics() -> ScanMetrics {
