@@ -62,10 +62,18 @@ export function isRoomPath(pathname: string): boolean {
     pathname.startsWith('/compose/') ||
     pathname === '/drafting' ||
     pathname.startsWith('/drafting/') ||
-    // R107 — The Rooms (index) and the Room View (detail): plural prefix for
-    // the roster, singular for one room, same as library/[id] is a Room too.
-    pathname === '/rooms' ||
-    pathname.startsWith('/rooms/') ||
+    // R107 — the Room View (detail, one room) is excluded the same way
+    // library/[id] (a piece) is: nested detail-to-detail hops must not
+    // clobber a deeper origin. The Rooms roster (`/rooms`, the index) is
+    // deliberately NOT listed here, unlike Library — Library's detail pages
+    // return to `/library` via a hardcoded RoomShell `backTo` (see
+    // piece-room.tsx), never via this origin-stash, so `/library` being
+    // unstashable never bites. The Room View has no such hardcoded backTo
+    // for its roster door (only the Document scan door gets one, per
+    // (document)/room/[id]/page.tsx) — it relies on this generic stash, so
+    // `/rooms` itself MUST be stashable or leaving a room opened from the
+    // roster has nothing correct to fall back to (the Phase-2 gate found
+    // exactly this: it silently degraded to "← the Desk").
     pathname === '/room' ||
     pathname.startsWith('/room/')
   );
