@@ -301,7 +301,7 @@ BEGIN
   END IF;
 
   IF (SELECT status FROM public.fulfillment_vendor_pos WHERE id = v_po_id) = 'acknowledged' THEN
-    PERFORM public.fulfillment_record_shipment(v_po_id, 'parcel', 'FedEx Freight', 'FDXF-3391882', 'boh_s5_fixture');
+    PERFORM public.fulfillment_record_shipment(v_po_id, 'parcel', 'FedEx Ground', 'FDXG-3391882', 'boh_s5_fixture');
   END IF;
 
   SELECT id INTO v_ship_id FROM public.fulfillment_shipments WHERE po_id = v_po_id LIMIT 1;
