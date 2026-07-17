@@ -1,4 +1,8 @@
-import type { FulfillmentQueueRow, FulfillmentOrderDetailDTO } from '@patina/fulfillment';
+import type {
+  FulfillmentQueueRow,
+  FulfillmentOrderDetailDTO,
+  FulfillmentComposerDTO,
+} from '@patina/fulfillment';
 
 // Back of House — the Fulfillment Queue's data layer (S1). Talks to
 // /api/admin/fulfillment/queue, which is a service-role SELECT of
@@ -75,6 +79,68 @@ export const fulfillmentService = {
       method: 'POST',
     });
   },
+
+  // ── S3: composer/transmission ──────────────────────────────────────────────
+  // Do NOT reorder the entries above; S4 appends its own section below this one.
+
+  /** The PO Composer's one round-trip: PO + lines + vendor protocol + the
+   *  append-only transmission log (spec §5.3). */
+  async getComposer(poId: string): Promise<FulfillmentComposerDTO> {
+    return request<FulfillmentComposerDTO>(`/api/admin/fulfillment/pos/${poId}`);
+  },
+
+  /** URL of the PO preview PDF (the fn's `preview` mode, proxied). The composer
+   *  fetches this into a Blob for the <object> preview / "Open PDF" link. */
+  previewUrl(poId: string): string {
+    return `/api/admin/fulfillment/pos/${poId}/preview`;
+  },
+
+  /** Fetch the preview PDF as a Blob (for an <object type="application/pdf">). */
+  async previewBlob(poId: string): Promise<Blob> {
+    const res = await fetch(this.previewUrl(poId));
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || `Preview failed: ${res.status}`);
+    }
+    return res.blob();
+  },
+
+  /** Email transmit — the fn sends from orders@ + logs po.transmitted. */
+  async send(poId: string): Promise<{ ok: true; method: string; reference: string | null }> {
+    return request(`/api/admin/fulfillment/pos/${poId}/transmit`, {
+      method: 'POST',
+      body: JSON.stringify({ mode: 'send' }),
+    });
+  },
+
+  /** Portal/CSV transmit — archives the PDF + logs po.transmitted with the
+   *  operator-entered method + reference; no email. */
+  async markTransmitted(
+    poId: string,
+    payload: { method: 'portal' | 'csv'; reference?: string },
+  ): Promise<{ ok: true; method: string; reference: string | null }> {
+    return request(`/api/admin/fulfillment/pos/${poId}/transmit`, {
+      method: 'POST',
+      body: JSON.stringify({ mode: 'mark_transmitted', ...payload }),
+    });
+  },
+
+  /** Download URL for the vendor CSV (built to csv_column_spec). */
+  csvUrl(poId: string): string {
+    return `/api/admin/fulfillment/pos/${poId}/csv`;
+  },
+
+  /** Record a vendor ack — re-dates the committed ship (client ETA) + drafts the
+   *  client ETA-change note (spec §5.3). */
+  async ack(
+    poId: string,
+    payload: { committedShip: string; ackMethod?: string; ackRef?: string },
+  ): Promise<{ ok: true; committedShip: string; noteId: string | null }> {
+    return request(`/api/admin/fulfillment/pos/${poId}/ack`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
-export type { FulfillmentQueueRow, FulfillmentOrderDetailDTO };
+export type { FulfillmentQueueRow, FulfillmentOrderDetailDTO, FulfillmentComposerDTO };
