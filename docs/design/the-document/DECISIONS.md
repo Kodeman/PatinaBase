@@ -3874,3 +3874,17 @@ The `confirm-scan-bundle` edge function reads `body.scanId`; both iOS apps send 
 `c4485bf3` shows 200 `room_scan_images` rows against `room_scans.image_count = 40` — traced to source, not a guess. The 00032 AFTER-INSERT trigger counts truthfully (200, including retried batch inserts); the client's own explicit `image_count` patch then overwrites the trigger's count with its stale local tally (40). Rules going forward: reads dedupe defensively (by `scan_id` + `image_url`); the derivative sweep short-circuits duplicates by filename stem; Field's new upload lane relies on the trigger alone and drops the explicit patch entirely.
 
 *Entries add: I76–I82 · last id = I82*
+
+### I83 · Room View photos — built and shipped to Strata — 2026-07-17
+
+Scan photos are now Room View material per I76: plan gains camera markers plus cluster peeks, a quiet photo strip, and a full-bleed paper viewer; the facts rail carries a photo-count line; Orbit gains frustum markers; the Brief's scan tiles adopt resolved cover photos (I81's resolver); `room_photo_opened` telemetry is live. The HEIC derivative lane (I78) is live end to end: pillow-heif on the inference container, the `derive-scan-photo-media` `*/5` cron driving it, migration 00340 landing the derive-tracking columns, `preview_url`, and a partial index. New `useRoomScanPhotos`/`useRoomScanCovers` signing hooks fix the I79 defect — the letterhead instrument is un-broken. `confirm-scan-bundle` now accepts `scan_id` alongside `scanId` (I80).
+
+Patina Field now captures posed photos: JPEG with day-one thumbnails, capped at 60, auto-kind only, never blocking core artifact upload, with `image_count` left entirely to the 00032 trigger per I82's root-cause ruling.
+
+Landed main `a9ff481e`; Strata migration head 00340; designer portal deployment `ce696a04-…` (2026-07-17T07:50Z); inference container `81acccf1-…`, `heif_available`.
+
+Prod acceptance on the real fleet: backlog cleared 233/233 derived, 0 failed. `fa361ed4`'s 33 real HEIC rows produced signed, magic-verified JPEG derivatives. `c4485bf3`'s 200 duplicate rows resolved to exactly 40 derived + 160 copied. Re-invoking the sweep is a confirmed no-op. Parse and GLB lanes ran undisturbed alongside it.
+
+Owed: Kody's authenticated prod walk of the photo surfaces; Field's posed-photo device pass via TestFlight. ⚠ Kody's local Capture pbxproj device-build mods were stashed (`stash@{0}`) to allow this program's fast-forward pull — reconcile in Xcode before the next device build.
+
+*Entries add: I83 · last id = I83*
