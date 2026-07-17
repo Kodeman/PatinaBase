@@ -82,7 +82,7 @@ public final class AppContainer {
             // Phase 2 seams — each flow's own factory. The freeze leaves these
             // returning the mock conformer; a wave agent swaps in the real
             // service by editing ONLY its `<Flow>ServiceFactory` + its own files.
-            let workDeps = WorkServiceDependencies(client: client, session: session)
+            let workDeps = WorkServiceDependencies(client: client, session: session, store: store)
             self.projects = ProjectsServiceFactory.make(deps: workDeps)
             self.leads = LeadsServiceFactory.make(deps: workDeps)
             self.decisions = DecisionsServiceFactory.make(deps: workDeps)

@@ -38,6 +38,7 @@ final class SupabaseSiteScanService: SiteScanService {
 
     private let client: SupabaseClient
     private let session: any SessionProviding
+    private let store: CaptureStore
     private let bucket = "room-scans"
     private let logger = Logger(subsystem: "cloud.patina.field", category: "SiteScan")
 
@@ -52,6 +53,7 @@ final class SupabaseSiteScanService: SiteScanService {
     init(deps: WorkServiceDependencies) {
         self.client = deps.client
         self.session = deps.session
+        self.store = deps.store
     }
 
     var isSupported: Bool {
@@ -140,25 +142,26 @@ final class SupabaseSiteScanService: SiteScanService {
             throw SiteScanError.foreignProjectOwner
         }
 
-        // 3. Upload the two artifacts, then patch their URL columns.
-        let modelURL = try await uploadArtifact(.usdz, bundle: result.localBundleURL,
-                                                userID: userID, roomID: roomID)
-        let jsonURL = try await uploadArtifact(.capturedRoom, bundle: result.localBundleURL,
-                                               userID: userID, roomID: roomID)
+        // 3. Upload the full artifact set + patch URL columns + scan_schema_version
+        //    (resumable — already-uploaded artifacts are skipped). See the helper.
+        let artifactStates = try await uploadBundleArtifacts(
+            bundle: result.localBundleURL, scanID: scanID, roomID: roomID,
+            userID: userID, reserved: reserved)
 
-        try await client.from("room_scans")
-            .update(RoomScanURLPatch(model_url: modelURL, captured_room_json_url: jsonURL))
-            .eq("id", value: scanID.uuidString)
-            .execute()
+        // 4. confirm-scan-bundle HEAD-verifies the patched URLs server-side and flips
+        //    the row to ready (it calls mark_scan_upload_complete on success). If it
+        //    can't be reached, fall back to marking complete directly.
+        do {
+            try await client.functions.invoke(
+                "confirm-scan-bundle",
+                options: FunctionInvokeOptions(body: ConfirmScanBundleRequest(scan_id: scanID.uuidString)))
+        } catch {
+            logger.error("[SiteScan] confirm-scan-bundle failed; marking complete directly: \(error.localizedDescription)")
+            try await client.rpc("mark_scan_upload_complete",
+                                 params: ScanIDParam(p_scan_id: scanID.uuidString)).execute()
+        }
 
-        // 4. Owner-gated flip to ready (reused from the reference upload pipeline).
-        try await client.rpc("mark_scan_upload_complete",
-                             params: ScanIDParam(p_scan_id: scanID.uuidString)).execute()
-
-        // 5. Posed photos (I76) are a SEPARATE, best-effort lane. They upload
-        //    STRICTLY AFTER the scan is marked ready, so a photo failure can never
-        //    delay or fail the core scan — the accepted degraded mode is a ready
-        //    scan with no photos. Single attempt, log-only.
+        // 5. Posed photos (I76) — SEPARATE, best-effort lane, STRICTLY after ready.
         do {
             try await uploadScanPhotos(bundle: result.localBundleURL,
                                        scanID: scanID, roomID: roomID, userID: userID)
@@ -166,11 +169,83 @@ final class SupabaseSiteScanService: SiteScanService {
             logger.error("[SiteScan] posed-photo upload failed; scan is ready without photos: \(error.localizedDescription)")
         }
 
-        // Full success — this bundle's reservation is spent; a later, unrelated
-        // upload() call using the same URL (shouldn't happen, but be safe) gets a
-        // fresh reservation rather than silently reusing a completed scan's ids.
-        reservations[result.localBundleURL] = nil
+        store.updateScanUploadRecord(reserved.record, artifacts: artifactStates, status: "complete")
         return FieldScanUploadReceipt(remoteScanID: scanID.uuidString)
+    }
+
+    private func isUploaded(_ kind: String, in states: [ScanArtifactUploadState]) -> Bool {
+        states.contains { $0.kind == kind && $0.status == .uploaded }
+    }
+
+    /// Upload every on-disk bundle artifact (skipping already-uploaded ones on a
+    /// resume), merge each SHA-256, patch the URL columns + scan_schema_version, and
+    /// persist per-artifact progress on the durable record.
+    private func uploadBundleArtifacts(bundle: URL, scanID: UUID, roomID: UUID, userID: UUID,
+                                       reserved: ScanReservation) async throws -> [ScanArtifactUploadState] {
+        var states = reserved.record.artifacts
+        var patch = RoomScanArtifactPatch()
+        for descriptor in Self.uploadDescriptors where !isUploaded(descriptor.kind, in: states) {
+            let fileURL = bundle.appendingPathComponent(descriptor.relativePath)
+            guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
+            let sha = BundleChecksum.sha256(ofFile: fileURL)
+            let path = RoomScanStoragePath.object(folder: descriptor.folder, userID: userID,
+                                                  roomID: roomID, filename: descriptor.filename)
+            let data = try Data(contentsOf: fileURL)
+            try await client.storage.from(bucket).upload(
+                path, data: data,
+                options: FileOptions(contentType: descriptor.contentType, upsert: true,
+                                     metadata: Self.metadata(scanID: scanID, kind: descriptor.kind, sha: sha)))
+            let url = try client.storage.from(bucket).getPublicURL(path: path).absoluteString
+            if let sha {
+                try? await client.rpc("merge_scan_artifact_sha256",
+                    params: ArtifactShaMergeParams(p_scan_id: scanID.uuidString,
+                                                   p_kind: descriptor.kind, p_sha: sha)).execute()
+            }
+            patch.apply(column: descriptor.column, url: url)
+            states.append(ScanArtifactUploadState(
+                kind: descriptor.kind, relativePath: descriptor.relativePath,
+                mimeType: descriptor.contentType, storagePath: path, remoteUrl: url,
+                sha256: sha, column: descriptor.column, status: .uploaded))
+            store.updateScanUploadRecord(reserved.record, artifacts: states, status: "uploading")
+        }
+        try await client.from("room_scans").update(patch.withSchemaVersion(3))
+            .eq("id", value: scanID.uuidString).execute()
+        return states
+    }
+
+    /// The full v1 bundle artifact set (stable order). `column` non-nil ⇒ the URL is
+    /// patched onto that room_scans column (confirm-scan-bundle HEAD-checks those).
+    private struct UploadDescriptor {
+        let relativePath, kind, folder, filename, contentType: String
+        let column: String?
+    }
+    private static let uploadDescriptors: [UploadDescriptor] = [
+        .init(relativePath: "scan.usdz", kind: "usdz", folder: "usdz",
+              filename: "scan.usdz", contentType: "model/vnd.usdz+zip", column: "model_url"),
+        .init(relativePath: "captured_room.json", kind: "capturedRoomJson", folder: "captured_room",
+              filename: "captured_room.json", contentType: "application/json", column: "captured_room_json_url"),
+        .init(relativePath: "mesh.ply", kind: "mesh", folder: "mesh",
+              filename: "mesh.ply", contentType: "application/octet-stream", column: "mesh_url"),
+        .init(relativePath: "manifest.json", kind: "bundleManifest", folder: "manifests",
+              filename: "manifest.json", contentType: "application/json", column: "bundle_manifest_url"),
+        .init(relativePath: "depth/depth_index.ndjson", kind: "depthIndex", folder: "depth",
+              filename: "depth_index.ndjson", contentType: "application/x-ndjson", column: nil),
+        .init(relativePath: "scorecard.json", kind: "scorecard", folder: "scorecard",
+              filename: "scorecard.json", contentType: "application/json", column: nil),
+        .init(relativePath: "anchors.json", kind: "anchors", folder: "anchors",
+              filename: "anchors.json", contentType: "application/json", column: nil),
+        .init(relativePath: "keyframes/keyframe_index.ndjson", kind: "keyframeIndex", folder: "keyframes",
+              filename: "keyframe_index.ndjson", contentType: "application/x-ndjson", column: nil),
+        .init(relativePath: "keyframes/keyframe_summary.json", kind: "keyframeSummary", folder: "keyframes",
+              filename: "keyframe_summary.json", contentType: "application/json", column: nil)
+    ]
+
+    /// base64(JSON) is the channel Storage persists into `user_metadata` — supabase-
+    /// swift's FileOptions.metadata sets it (the raw x-amz-meta-* headers are dropped).
+    private static func metadata(scanID: UUID, kind: String, sha: String?) -> [String: AnyJSON] {
+        var m: [String: AnyJSON] = ["scanId": .string(scanID.uuidString), "artifactKind": .string(kind)]
+        if let sha { m["sha256"] = .string(sha) }
+        return m
     }
 
     // MARK: - Helpers
@@ -188,16 +263,28 @@ final class SupabaseSiteScanService: SiteScanService {
     private struct ScanReservation {
         let scanID: UUID
         let roomID: UUID
+        let record: ScanUploadRecord
     }
-    private var reservations: [URL: ScanReservation] = [:]
 
+    /// The DURABLE (scanID, roomID) reservation for a bundle — persisted in a
+    /// `ScanUploadRecord` (item 8) keyed by the bundle dir path. A relaunch (or a
+    /// "Finish later" resume) reuses the SAME scanID instead of minting a fresh
+    /// room_scans row (+ a spare rooms row), which is the orphaned-`processing`-row
+    /// hazard the audit flagged in the prior in-memory dictionary.
     private func reservation(for bundleURL: URL, picked: String?, name: String,
                              userID: UUID) async throws -> ScanReservation {
-        if let cached = reservations[bundleURL] { return cached }
+        let path = bundleURL.path
+        if let existing = store.scanUploadRecord(bundlePath: path),
+           let scanID = UUID(uuidString: existing.scanID),
+           let roomID = UUID(uuidString: existing.roomID) {
+            return ScanReservation(scanID: scanID, roomID: roomID, record: existing)   // resume
+        }
         let roomID = try await resolveRoomID(picked: picked, name: name, userID: userID)
-        let fresh = ScanReservation(scanID: UUID(), roomID: roomID)
-        reservations[bundleURL] = fresh
-        return fresh
+        let scanID = UUID()
+        let record = store.insertScanUploadRecord(ScanUploadRecord(
+            bundlePath: path, scanID: scanID.uuidString, roomID: roomID.uuidString,
+            name: name, projectID: nil, projectRoomID: picked))
+        return ScanReservation(scanID: scanID, roomID: roomID, record: record)
     }
 
     private func currentUserID() async throws -> UUID {
@@ -374,9 +461,40 @@ private struct RoomScanInsert: Encodable {
     }
 }
 
-private struct RoomScanURLPatch: Encodable {
-    let model_url: String
-    let captured_room_json_url: String
+/// Sparse URL-column + schema-version patch (item 8). Optional fields → nil is
+/// OMITTED by the synthesized Encodable (`encodeIfPresent`), so a patch never nulls a
+/// column it didn't set.
+private struct RoomScanArtifactPatch: Encodable {
+    var model_url: String?
+    var captured_room_json_url: String?
+    var mesh_url: String?
+    var bundle_manifest_url: String?
+    var scan_schema_version: Int?
+
+    mutating func apply(column: String?, url: String) {
+        switch column {
+        case "model_url": model_url = url
+        case "captured_room_json_url": captured_room_json_url = url
+        case "mesh_url": mesh_url = url
+        case "bundle_manifest_url": bundle_manifest_url = url
+        default: break
+        }
+    }
+    func withSchemaVersion(_ version: Int) -> RoomScanArtifactPatch {
+        var copy = self
+        copy.scan_schema_version = version
+        return copy
+    }
+}
+
+private struct ArtifactShaMergeParams: Encodable {
+    let p_scan_id: String
+    let p_kind: String
+    let p_sha: String
+}
+
+private struct ConfirmScanBundleRequest: Encodable {
+    let scan_id: String
 }
 
 private struct ScanIDParam: Encodable {

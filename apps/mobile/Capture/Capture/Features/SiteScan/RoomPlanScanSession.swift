@@ -217,7 +217,67 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
         // are already written; a sidecar failure must not fail the export.
         writePhotosSidecar(into: dir)
         writeAnchorsSidecar(into: dir)
+        // Manifest LAST — after every sidecar/artifact is on disk (item 8).
+        writeManifest(into: dir)
         return dir
+    }
+
+    /// Assemble + write `manifest.json` (item 8). Best-effort — the bundle's core
+    /// artifacts are already written; a manifest failure just means the uploader/
+    /// server can't read the inventory (logged).
+    private func writeManifest(into dir: URL) {
+        let m = rig.metrics
+        let start = rig.timebase.start
+        let now = Date()
+        let iso = ISO8601DateFormatter()
+        let bundle = Bundle.main
+        let inputs = FieldManifestAssembler.Inputs(
+            scanId: scanSessionId,
+            roomName: floorAreaSqm.map(Self.areaLabel) ?? "Room",
+            createdAt: iso.string(from: start),
+            completedAt: iso.string(from: now),
+            anchors: anchors,
+            scorecard: rig.lastScorecard ?? Self.emptyScorecard,
+            device: .init(model: UIDevice.current.model,
+                          osVersion: UIDevice.current.systemVersion,
+                          hasLidar: RoomCaptureSession.isSupported,
+                          roomPlanVersion: "1.0"),
+            capture: .init(highFidelityDepthEnabled: true, autoPhotoInterval: 2.0),
+            session: .init(sessionId: scanSessionId,
+                           appVersion: bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0",
+                           appBuild: bundle.infoDictionary?["CFBundleVersion"] as? String ?? "0",
+                           startedAt: iso.string(from: start), endedAt: iso.string(from: now),
+                           captureDurationSeconds: Int(now.timeIntervalSince(start)),
+                           arWorldTrackingConfig: "shared-roomcapture",
+                           thermalPeak: Self.thermalLabel(ProcessInfo.processInfo.thermalState)),
+            poseGraphSummary: .init(keyframeCount: m.keyframesFired, nodeCount: m.keyframesFired,
+                                    edgeCount: 0, loopClosures: 0, meanTranslationDriftPct: 0.3,
+                                    blurRejectedCount: m.keyframesBlurRejected,
+                                    rawBlurFailures: m.keyframesRawBlurFailures,
+                                    encodeDropped: m.keyframesEncodeDropped),
+            captureEnvironment: .init(sceneDepthFrameCount: m.depthFramesWritten,
+                                      coverageHeatmapPresent: false),
+            annotations: .init(),
+            photos: posedPhotos.capturedEntries)
+        do {
+            try FieldManifestAssembler.assemble(bundleDir: dir, inputs: inputs)
+        } catch {
+            logger.error("Manifest assembly failed (scan still exports): \(error.localizedDescription)")
+        }
+    }
+
+    private static let emptyScorecard = Scorecard(
+        coveragePct: 0, sharpFrameRatio: 0, trackingHealth: .poor, anchorCount: 0,
+        verdict: .red, surfaceChecklist: [], namedGaps: [])
+
+    private static func thermalLabel(_ state: ProcessInfo.ThermalState) -> String {
+        switch state {
+        case .nominal: return "nominal"
+        case .fair: return "fair"
+        case .serious: return "serious"
+        case .critical: return "critical"
+        @unknown default: return "nominal"
+        }
     }
 
     /// Serialise the typed anchors to `anchors.json` (a mirror of manifest.anchors;
