@@ -32,6 +32,7 @@
 
 import {
   createContext,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -227,7 +228,17 @@ export function useDeskWalkthroughOffer(): boolean {
 export function DeskWalkthrough() {
   const pathname = usePathname();
   if (pathname !== '/desk') return null;
-  return <DeskWalkthroughInner />;
+  // DeskWalkthroughInner reads useSearchParams (replay-param deep link). Without
+  // a Suspense boundary, `next build` fails to statically prerender /desk with a
+  // CSR-bailout error whenever the build env is populated enough to render the
+  // real desk tree (reproduced identically on origin/main built with a populated
+  // .env.local — pre-existing, env-triggered; surfaced at the Room View gate).
+  // Mirrors the Suspense-wrapped pattern in analytics/PostHogProvider.tsx.
+  return (
+    <Suspense fallback={null}>
+      <DeskWalkthroughInner />
+    </Suspense>
+  );
 }
 
 function DeskWalkthroughInner() {
