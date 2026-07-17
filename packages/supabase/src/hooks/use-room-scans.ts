@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrowserClient } from '../client';
+import { publicUrlToPath } from '../lib/storage-url';
 
 // Lazy client getter to avoid module-level initialization during SSR
 const getSupabase = () => createBrowserClient();
@@ -362,8 +363,6 @@ export function useAssociateRoomScanWithProject() {
  * Null-safe throughout: no scan, or a scan with neither model field set,
  * resolves to `null` without hitting storage.
  */
-const PUBLIC_ROOM_SCANS_MARKER = '/storage/v1/object/public/room-scans/';
-
 export function useSignedScanModelUrl(
   scan: Pick<RoomScan, 'id' | 'model_url' | 'model_url_gltf'> | null | undefined,
 ) {
@@ -377,13 +376,7 @@ export function useSignedScanModelUrl(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabase = getSupabase() as any;
 
-      let path: string | null = null;
-      if (rawUrl.includes(PUBLIC_ROOM_SCANS_MARKER)) {
-        path = rawUrl.split(PUBLIC_ROOM_SCANS_MARKER)[1] ?? null;
-      } else if (!/^https?:\/\//i.test(rawUrl)) {
-        // No scheme — a bare storage path. Sign it directly.
-        path = rawUrl;
-      }
+      const path = publicUrlToPath(rawUrl);
 
       // Not a recognized public-bucket URL or bare path — already a usable
       // URL (e.g. a real signed URL). Pass it through untouched.
