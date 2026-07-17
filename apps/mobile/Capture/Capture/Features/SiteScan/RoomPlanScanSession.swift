@@ -1,32 +1,34 @@
 //  RoomPlanScanSession.swift
-//  Capture · Wave F (Pro site-scan) · Room View PHOTOS (I76)
+//  Capture · Wave F (Pro site-scan) · Field Capture P1 · item 3 (shared-session core)
 //
-//  The concrete, on-device `FieldScanSession` — a thin driver over Apple's
-//  RoomPlan `RoomCaptureView` (which owns the `RoomCaptureSession` + the built-in
-//  RoomBuilder post-process pass). It exports the two ALWAYS-present artifacts the
-//  F pipeline ships — a USDZ and the CapturedRoom parametric JSON — to a temp
-//  bundle dir, PLUS a best-effort posed-photo lane (I76): while the scan runs it
-//  samples the RoomPlan `ARSession` into auto JPEG photos + 256px thumbs under
-//  `photos/`, then writes a `photos_metadata.json` sidecar at export.
+//  The concrete, on-device `FieldScanSession`. As of P1 item 3 it drives a SHARED
+//  custom `ARSession` (owned + configured by `SharedARCaptureRig`) instead of letting
+//  RoomPlan own its own session: the rig runs an `ARWorldTrackingConfiguration` with
+//  scene-mesh reconstruction + smoothed depth, then this driver builds
+//  `RoomCaptureView(frame:arSession:)` on that running session (the iOS 17 shared-
+//  session pattern — Apple docs: "RoomPlan preserves all of the AR session's
+//  settings"). RoomPlan still owns the live 3D visualization, the RoomBuilder post-
+//  process, the coverage heuristic, and the coaching instructions — all unchanged —
+//  while the rig records the parallel evidence streams (SC-07 "four streams, one
+//  clock"): scene mesh → `mesh.ply`, smoothed depth → `depth/`, and the posed-photo
+//  lane (now a `CaptureFrameSink`, migrated off the raw ARSessionDelegate).
 //
-//  Photos NEVER block the core artifacts: the two core exports always run; the
-//  photo lane is wrapped so a failure just yields a scan with no photos (an
-//  absent sidecar ⇒ the uploader sees zero photos). Still NOT ported from the
-//  client app's v3 pipeline: depth archives, world maps, NDJSON manifests, hero
-//  pickers, quality scoring and coverage heatmaps.
+//  The two ALWAYS-present core artifacts are unchanged: a USDZ and the CapturedRoom
+//  parametric JSON, exported at finish. The rig's depth/mesh land in the SAME bundle
+//  dir alongside `photos/`; assembling the full manifest + resumable upload of the
+//  new artifacts is item 8, deliberately NOT done here (item 3 records to disk only).
 //
 //  Only ever instantiated by `SupabaseSiteScanService` (real mode, LiDAR device).
 //  The simulator / preview / `-CaptureScreen` harness runs `MockScanSession`
-//  (CaptureKitMocks) instead, so this RoomPlan code never executes there — it only
-//  has to COMPILE for the simulator, which it does (the RoomPlan framework links
-//  on the sim; `RoomCaptureSession.isSupported` just returns false).
+//  (CaptureKitMocks) instead, so this RoomPlan/ARKit code never executes there — it
+//  only has to COMPILE for the simulator, which it does (RoomPlan/ARKit link on the
+//  sim; `RoomCaptureSession.isSupported` returns false so this class is never built
+//  live there).
 //
-//  Coverage heuristic (see `coverage(for:)`): RoomPlan does not vend a 0…1 room
-//  coverage, and the reference app's CoverageAnalyzer is a whole subsystem we do
-//  NOT port for v1. Instead we derive a COARSE proxy from how much *structure*
-//  RoomPlan has locked in (walls dominate; doors/windows/objects nudge it) so the
-//  F2 meter climbs sensibly as the user walks the room. It is an honest progress
-//  cue, not a true surface-area measurement — documented as such.
+//  Coverage heuristic (see `coverage(for:)`): unchanged from the pre-item-3 driver —
+//  a COARSE 0…1 proxy from how much structure RoomPlan has locked in. It keeps
+//  working because `RoomCaptureSessionDelegate` still fires `didUpdate`/`didProvide`
+//  when RoomPlan rides a shared session (device-verify — see item-3 AC).
 
 import Foundation
 import SwiftUI
@@ -41,8 +43,14 @@ import os.log
 @MainActor
 final class RoomPlanScanSession: NSObject, FieldScanSession {
 
-    /// The RoomPlan view F2 embeds. Owns the live `RoomCaptureSession`.
-    let roomCaptureView: RoomCaptureView
+    /// The shared-ARSession capture core (item 3). Owns + configures + runs the
+    /// `ARSession`; is its delegate; fans frames/mesh out to the recorders.
+    private let rig = SharedARCaptureRig()
+
+    /// The RoomPlan view F2 embeds. Built on the rig's running session in `start()`
+    /// (RoomCaptureView requires an already-running ARSession), so it is nil until
+    /// the F2 view host calls `start()`.
+    private(set) var roomCaptureView: RoomCaptureView?
 
     // Event plumbing — a single stream the F2 screen consumes.
     private let eventStream: AsyncStream<FieldScanEvent>
@@ -59,28 +67,26 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
     private(set) var floorAreaSqm: Double?
     private(set) var dimensionsMeters: SIMD3<Double>?
 
-    // Posed-photo lane (I76). The service samples the RoomPlan ARSession into
-    // JPEGs under `bundleDir/photos/` while the scan runs; the sidecar is written
-    // at export. Both are best-effort and NEVER block the two core artifacts.
+    // Posed-photo lane (I76) — now a `CaptureFrameSink` (item 3) fed by the rig,
+    // rather than tapping the ARSessionDelegate directly. Behavior unchanged.
     private let posedPhotos = FieldPosedPhotoService()
-    /// The export bundle dir — created up front (at `start()`) so posed photos
-    /// can be written live, and reused by `exportBundle` for usdz/json/sidecar.
+
+    /// The export bundle dir — created at `start()` so depth/mesh/photos stream
+    /// into it live, and reused by `exportBundle` for usdz/json/sidecar.
     private var bundleDir: URL?
     private let logger = Logger(subsystem: "cloud.patina.field", category: "SiteScan")
 
     override init() {
-        roomCaptureView = RoomCaptureView(frame: .zero)
         let made = AsyncStream.makeStream(of: FieldScanEvent.self)
         eventStream = made.stream
         eventContinuation = made.continuation
         super.init()
-        roomCaptureView.captureSession.delegate = self
-        roomCaptureView.delegate = self
+        // View + delegate wiring is deferred to `start()`: the shared session must
+        // be running before `RoomCaptureView(frame:arSession:)` is created.
     }
 
     // `RoomCaptureViewDelegate` vestigially refines `NSCoding`; this driver is
-    // never archived, so satisfy it with no-op stubs (nonisolated to match the
-    // delegate callbacks below and the protocol's nonisolated requirements).
+    // never archived, so satisfy it with no-op stubs.
     nonisolated required init?(coder: NSCoder) { nil }
     nonisolated func encode(with coder: NSCoder) {}
 
@@ -90,30 +96,38 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
         guard !started else { return }
         started = true
         eventContinuation.yield(.status("Scanning — walk the room slowly"))
-        roomCaptureView.captureSession.run(configuration: RoomCaptureSession.Configuration())
-        // RoomPlan does NOT claim `ARSessionDelegate` (it owns the RoomCapture-
-        // Session + RoomCaptureView delegates, wired in init) — so we can take
-        // the ARSession delegate for posed-photo frame taps. Set it AFTER
-        // `run(...)`, once the session's ARSession is live, mirroring the
-        // reference `RoomCaptureSessionDriver.run()`.
-        roomCaptureView.captureSession.arSession.delegate = self
-        // Best-effort: prepare the bundle + `photos/` dir and begin sampling. A
-        // failure here means no photos this scan, but the core scan proceeds.
-        startPosedPhotoCapture()
-    }
 
-    /// Create the export bundle dir + its `photos/` subdir and begin auto-
-    /// sampling. Log-only on failure — the scan must never be blocked by photos.
-    private func startPosedPhotoCapture() {
-        do {
-            let dir = try makeBundleDir()
+        // Best-effort shared bundle dir. On success the rig records depth/mesh and
+        // the posed lane samples into `photos/`; on failure the shared session
+        // still runs so RoomPlan can scan, and `exportBundle` mints a dir later.
+        let dir = try? makeBundleDir()
+        bundleDir = dir
+
+        // Run the shared ARSession (mesh + smoothed depth) + attach depth/mesh
+        // recorders. This must happen BEFORE building the RoomCaptureView.
+        rig.startRecording(bundleDir: dir, startDate: Date())
+
+        // Migrate the posed-photo lane onto the rig's frame sink (best-effort).
+        if let dir {
             let photosDir = dir.appendingPathComponent(RoomScanStoragePath.Folder.photos, isDirectory: true)
-            try FileManager.default.createDirectory(at: photosDir, withIntermediateDirectories: true)
-            bundleDir = dir
-            posedPhotos.start(photosDir: photosDir)
-        } catch {
-            logger.error("Posed-photo capture disabled for this scan: \(error.localizedDescription)")
+            if (try? FileManager.default.createDirectory(at: photosDir, withIntermediateDirectories: true)) != nil {
+                rig.addFrameSink(posedPhotos)
+                posedPhotos.start(photosDir: photosDir, at: rig.timebase.start)
+            } else {
+                logger.error("Posed-photo dir prep failed — photos disabled for this scan.")
+            }
         }
+
+        // Build the RoomCaptureView on the shared, running session and wire RoomPlan.
+        let view = RoomCaptureView(frame: .zero, arSession: rig.arSession)
+        view.captureSession.delegate = self       // RoomCaptureSessionDelegate (coverage/instructions)
+        view.delegate = self                       // RoomCaptureViewDelegate (RoomBuilder post-process)
+        roomCaptureView = view
+        view.captureSession.run(configuration: RoomCaptureSession.Configuration())
+
+        // Claim the ARSession delegate AFTER RoomPlan's run so RoomPlan can't
+        // overwrite it out from under the rig (the proven ordering).
+        rig.assumeFrameDelegate()
     }
 
     private func makeBundleDir() throws -> URL {
@@ -125,12 +139,14 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
 
     /// Stop scanning, let RoomPlan build the final room, export the two artifacts.
     func finish() async throws -> FieldScanResult {
-        // Stop sampling before we tear the session down and build the sidecar.
+        // Stop posed sampling; let RoomPlan finalize (RoomBuilder) on the shared
+        // session, THEN tear the rig down (final mesh.ply + depth drain, pause AR).
         posedPhotos.stop()
         let room = try await withCheckedThrowingContinuation { cont in
             finishContinuation = cont
-            roomCaptureView.captureSession.stop()   // → captureView(shouldPresent:) → didPresent
+            roomCaptureView?.captureSession.stop()   // → captureView(shouldPresent:) → didPresent
         }
+        rig.stopRecording()
         eventContinuation.finish()
 
         let dims = Self.estimateDimensions(from: room)
@@ -144,8 +160,11 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
     }
 
     func cancel() {
+        // Stop RoomPlan first, then tear the rig down (pause AR + finalize), so
+        // the RoomCaptureSession is never stopped on an already-paused session.
         posedPhotos.stop()
-        roomCaptureView.captureSession.stop()
+        roomCaptureView?.captureSession.stop()
+        rig.stopRecording()
         eventContinuation.finish()
         if !didResumeFinish {
             didResumeFinish = true
@@ -157,8 +176,8 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
     // MARK: - Export (USDZ + CapturedRoom JSON → temp bundle dir)
 
     private func exportBundle(_ room: CapturedRoom) throws -> URL {
-        // Reuse the dir created at `start()` (where `photos/` was written live);
-        // fall back to a fresh dir only if posed-photo setup never ran.
+        // Reuse the dir created at `start()` (where photos/depth/mesh streamed
+        // live); fall back to a fresh dir only if bundle-dir setup never ran.
         let dir = try bundleDir ?? makeBundleDir()
 
         let usdzURL = dir.appendingPathComponent(RoomScanStoragePath.Filename.usdz)
@@ -180,8 +199,7 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
         }
 
         // Posed-photo sidecar — STRICTLY best-effort. The two core artifacts above
-        // are already written; a sidecar failure must not fail the export. An
-        // absent sidecar simply means the uploader sees zero photos.
+        // are already written; a sidecar failure must not fail the export.
         writePhotosSidecar(into: dir)
         return dir
     }
@@ -241,12 +259,10 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
 // MARK: - RoomPlan delegate
 //
 // Conformance to BOTH RoomCaptureViewDelegate (the RoomBuilder post-process
-// callbacks) and RoomCaptureSessionDelegate (live coverage/coaching) — the view
-// delegate does not refine the session delegate, so both are declared here so all
-// four callbacks live under a single extension. Session-delegate methods not
-// implemented here use RoomPlan's default (empty) implementations.
-// `nonisolated` + a MainActor hop mirrors the reference RoomCaptureService (the
-// RoomPlan delegates are not MainActor-isolated).
+// callbacks) and RoomCaptureSessionDelegate (live coverage/coaching). Note the
+// ARSessionDelegate is NO LONGER here — as of item 3 the rig owns the ARSession
+// and its delegate; this driver only observes RoomPlan's own delegates. The
+// `nonisolated` + MainActor hop mirrors the reference RoomCaptureService.
 
 extension RoomPlanScanSession: RoomCaptureViewDelegate, RoomCaptureSessionDelegate {
 
@@ -256,6 +272,10 @@ extension RoomPlanScanSession: RoomCaptureViewDelegate, RoomCaptureSessionDelega
             let value = self.coverage(for: room)
             self.lastCoverage = value
             self.eventContinuation.yield(.coverage(value))
+            // Fan the live parametric graph out to the rig's room-update sinks
+            // (items 5/6 plug in here) on the shared clock. Item 3 has no consumer
+            // yet; this keeps the seam live without touching the session plumbing.
+            self.rig.deliverRoomUpdate(room)
         }
     }
 
@@ -303,23 +323,6 @@ extension RoomPlanScanSession: RoomCaptureViewDelegate, RoomCaptureSessionDelega
     }
 }
 
-// MARK: - ARSessionDelegate (posed-photo frame taps)
-//
-// RoomPlan does not implement `ARSessionDelegate` on its RoomCaptureSession, so
-// we own it for the posed-photo lane. `nonisolated` + a MainActor hop mirrors the
-// reference `RoomCaptureService`: the delegate fires off the main actor, and the
-// hop both retains the ARFrame past this callback and lets the @MainActor service
-// snapshot it. `consume(frame:)` self-gates via `FieldPhotoGate`, so feeding every
-// frame is fine — most are dropped by the 2.0s interval.
-
-extension RoomPlanScanSession: ARSessionDelegate {
-    nonisolated func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        Task { @MainActor in
-            self.posedPhotos.consume(frame: frame)
-        }
-    }
-}
-
 // MARK: - SwiftUI host for the live RoomPlan view (F2, device only)
 
 /// Embeds the session's `RoomCaptureView` and ties `start()` to view appearance.
@@ -328,8 +331,9 @@ struct RoomCaptureViewContainer: UIViewRepresentable {
 
     func makeUIView(context: Context) -> RoomCaptureView {
         // RoomPlan wants `run` when the view is on screen — start here, once.
+        // start() builds + returns the RoomCaptureView on the shared session.
         session.start()
-        return session.roomCaptureView
+        return session.roomCaptureView ?? RoomCaptureView(frame: .zero)
     }
 
     func updateUIView(_ uiView: RoomCaptureView, context: Context) {}

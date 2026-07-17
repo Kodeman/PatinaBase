@@ -37,7 +37,7 @@ import simd
 import os.log
 
 @MainActor
-final class FieldPosedPhotoService {
+final class FieldPosedPhotoService: CaptureFrameSink {
 
     // MARK: - Main-actor bookkeeping
 
@@ -114,6 +114,20 @@ final class FieldPosedPhotoService {
         encodeQueue.async { [weak self] in
             self?.encodeAndWrite(snapshot: snapshot)
         }
+    }
+
+    // MARK: - CaptureFrameSink (item 3 — migrated off the raw ARSessionDelegate)
+
+    /// Frame-sink entry point. Delegates to `consume(frame:)`, which computes its
+    /// own posed timestamp from the session start seeded in `start(photosDir:at:)`.
+    /// The migration is behavior-identical to when this lane tapped the
+    /// ARSessionDelegate directly: same frames, same gate, same on-disk shape. The
+    /// rig seeds `start(at:)` with the shared `CaptureTimebase.start`, so the lane's
+    /// self-computed `timestampSeconds` already equals the rig's shared clock — the
+    /// passed `timestampSeconds` is therefore redundant and intentionally unused
+    /// (keeps `FieldPhotoEntry.timestampSeconds` byte-identical to pre-migration).
+    func capture(frame: ARFrame, timestampSeconds: TimeInterval) {
+        consume(frame: frame)
     }
 
     // MARK: - Background encode
