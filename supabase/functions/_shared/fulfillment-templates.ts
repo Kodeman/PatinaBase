@@ -27,13 +27,14 @@ import {
   renderBrandedShell,
 } from "./branded-email.ts";
 
-// ── The five transitions (spec §6) ──────────────────────────────────────────
+// ── The six transitions (spec §6 + S7 substitution) ─────────────────────────
 export type ClientNotificationTransition =
   | "confirmed"
   | "in_production"
   | "shipped"
   | "delivered"
-  | "eta_change";
+  | "eta_change"
+  | "substitution";
 
 export const CLIENT_NOTIFICATION_TRANSITIONS: readonly ClientNotificationTransition[] = [
   "confirmed",
@@ -41,6 +42,10 @@ export const CLIENT_NOTIFICATION_TRANSITIONS: readonly ClientNotificationTransit
   "shipped",
   "delivered",
   "eta_change",
+  // S7: an approved substitution drafts its own client note — distinct from
+  // eta_change (a price-Δ-$0 finish swap is not a delay). Mirrors
+  // packages/fulfillment/src/notify.ts's CLIENT_NOTIFICATION_TRANSITIONS.
+  "substitution",
 ];
 
 export type ShippingMode = "parcel" | "ltl" | "white_glove";
@@ -67,9 +72,11 @@ export interface ClientSafeOrderProjection {
   previousEta?: string | null;
   /** shipped only — drives the freight inspection-guidance paragraph for ltl/white_glove. */
   shippingMode?: ShippingMode | null;
-  /** eta_change only — pre-approved, vendor-free copy explaining the delay in
-   *  plain terms (e.g. "a component is back-ordered"). Never raw exception
-   *  evidence/notes, which may name a vendor. */
+  /** eta_change / substitution only — pre-approved, vendor-free copy
+   *  explaining the change in plain terms (e.g. "a component is
+   *  back-ordered" for eta_change, or "we've updated the fabric to a very
+   *  similar option" for substitution). Never raw exception evidence/notes
+   *  or PO/vendor detail, which may name a vendor. */
   exceptionNote?: string | null;
 }
 
@@ -107,6 +114,8 @@ export function subjectForTransition(
       return `Your order #${orderNumber} has arrived`;
     case "eta_change":
       return `An update on your order #${orderNumber}`;
+    case "substitution":
+      return `A small update to your order #${orderNumber}`;
   }
 }
 
@@ -125,6 +134,8 @@ export function pushCopyForTransition(
       return { title: `Order #${orderNumber} delivered`, body: "Your order has arrived. Let us know how it looks." };
     case "eta_change":
       return { title: `Order #${orderNumber} update`, body: "We have an update on your order's timeline." };
+    case "substitution":
+      return { title: `Order #${orderNumber} update`, body: "A small change to your order — same price, same timeline." };
   }
 }
 
@@ -319,6 +330,35 @@ function renderEtaChange(p: ClientSafeOrderProjection): RenderedClientNote {
   };
 }
 
+/** S7 — an approved vendor substitution (e.g. a same-price, same-lead-time
+ *  fabric-lot swap) drafts its own client note, distinct from eta_change
+ *  (a substitution is not a delay). Renders ONLY items + exceptionNote —
+ *  the caller (Workbench substitution-approval flow) guarantees exceptionNote
+ *  is pre-approved, client-safe, vendor-free copy before it ever reaches this
+ *  module; this renderer never sees or emits a vendor name, PO number, or
+ *  cost figure. */
+function renderSubstitution(p: ClientSafeOrderProjection): RenderedClientNote {
+  const subject = subjectForTransition("substitution", p.orderNumber);
+  const itemsHtml = formatItemList(p.items);
+  const body =
+    kicker("Order update") +
+    heading(`A quick update, ${escapeHtml(firstName(p.clientName))}.`) +
+    paragraph(`We wanted to flag a small change on ${itemsHtml} — order #${p.orderNumber}.`) +
+    (p.exceptionNote ? paragraph(escapeHtml(p.exceptionNote)) : "") +
+    AUTOMATED_FOOTER;
+  const push = pushCopyForTransition("substitution", p.orderNumber);
+  return {
+    templateKey: templateKeyFor("substitution"),
+    transition: "substitution",
+    subject,
+    html: shellFor("Order update", body, subject, p.orderNumber),
+    text: `Update on order #${p.orderNumber} (${plainItemList(p.items)}).` +
+      (p.exceptionNote ? ` ${p.exceptionNote}` : ""),
+    pushTitle: push.title,
+    pushBody: push.body,
+  };
+}
+
 const RENDERERS: Record<
   ClientNotificationTransition,
   (p: ClientSafeOrderProjection) => RenderedClientNote
@@ -328,6 +368,7 @@ const RENDERERS: Record<
   shipped: renderShipped,
   delivered: renderDelivered,
   eta_change: renderEtaChange,
+  substitution: renderSubstitution,
 };
 
 /** The single entry point every caller uses to render a client note. */
