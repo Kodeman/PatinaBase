@@ -68,12 +68,89 @@ export interface FulfillmentOrderDTO {
   orderNo: number;
   stripePaymentIntentId: string | null;
   clientName: string;
+  clientEmail: string | null;
   clientProfileId: string | null;
+  shipTo: Record<string, unknown> | null;
+  designerAttribution: Record<string, unknown> | null;
   capturedTotalCents: number;
   productSubtotalCents: number;
   freightChargedCents: number;
   taxCents: number;
   intakeAt: string;
+}
+
+// ─── Order Workbench detail DTO (S2, spec §5.2) ──────────────────────────────
+// The single round-trip the Workbench binds to (GET /api/admin/fulfillment/
+// orders/[orderId]) — order + lines + any existing PO drafts (post-confirm) +
+// the assignable vendor directory + the three config numbers. Composed in the
+// route from base tables (no dedicated view); camelCase, unlike the queue row
+// (which is a raw view passthrough).
+
+/** A vendor selectable for line assignment — sourced from vendor_profiles ⋈
+ *  vendors (only vendors with a profile can receive a PO, R1.6). */
+export interface FulfillmentVendorOption {
+  vendorId: string;
+  vendorName: string;
+  transmissionType: TransmissionType;
+  /** Per-vendor commission override (vendor_profiles.commission_rate); null →
+   *  falls back to config commission_rate_default. Settlement input (S6). */
+  commissionRate: number | null;
+}
+
+/** A line as the Workbench sees it — the DTO line plus its resolved vendor name
+ *  (for the proposed-PO card header) and its post-confirm PO linkage. */
+export interface FulfillmentWorkbenchLine {
+  id: string;
+  orderId: string;
+  productId: string | null;
+  itemName: string;
+  vendorSku: string | null;
+  qty: number;
+  unitPriceCents: number;
+  unitCostCents: number | null;
+  vendorId: string | null;
+  vendorName: string | null;
+  mappingState: MappingState;
+  lineState: LineState;
+  lineIndex: number;
+  /** Circled-index glyph (①…) for this line — precomputed so left + right sides
+   *  thread the identical mark (spec §5.2). Mirrors circledIndex(lineIndex). */
+  circledIndex: string;
+  /** Post-confirm only: the real PO this line was grouped into. */
+  poId: string | null;
+  poLineId: string | null;
+}
+
+/** An existing (post-confirm) vendor PO draft. */
+export interface FulfillmentVendorPoDTO {
+  id: string;
+  poNumber: string | null;
+  vendorId: string;
+  vendorName: string | null;
+  transmissionType: TransmissionType | null;
+  status: PoState;
+  terms: PaymentTerms | null;
+  sideMark: string | null;
+  productCostCents: number;
+  /** order_item ids grouped into this PO (thread back to the left side). */
+  lineIds: string[];
+}
+
+export interface FulfillmentConfigNumbers {
+  marginFloorPct: number;
+  pledgeRate: number;
+  commissionRateDefault: number;
+}
+
+export interface FulfillmentOrderDetailDTO {
+  order: FulfillmentOrderDTO;
+  lines: FulfillmentWorkbenchLine[];
+  /** Existing POs — empty until the split is confirmed. */
+  pos: FulfillmentVendorPoDTO[];
+  vendors: FulfillmentVendorOption[];
+  config: FulfillmentConfigNumbers;
+  /** Derived: true once any PO exists (the split has been confirmed). */
+  confirmed: boolean;
 }
 
 /**
