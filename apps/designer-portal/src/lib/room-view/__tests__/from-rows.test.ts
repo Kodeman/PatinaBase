@@ -280,3 +280,45 @@ describe('roomGeometryFromRows — floor polygon + dims fallback', () => {
     expect(warnings.some((w) => w.includes('width_ft/depth_ft'))).toBe(true);
   });
 });
+
+describe('roomGeometryFromRows — plan-frame provenance (00337, additive)', () => {
+  it('is null when the header carries no origin fields (pre-00337 rows)', () => {
+    expect(roomGeometryFromRows(geoRow(), []).provenance).toBeNull();
+  });
+
+  it('surfaces a finite yaw + offset as provenance', () => {
+    const { provenance } = roomGeometryFromRows(
+      geoRow({ origin_yaw_deg: -15, origin_offset_m: { x: 6.2374, z: -1.6416 } }),
+      [],
+    );
+    expect(provenance).toEqual({ originYawDeg: -15, originOffsetM: { x: 6.2374, z: -1.6416 } });
+  });
+
+  it('yaw of 0 with a zero offset is still valid provenance (not treated as absent)', () => {
+    const { provenance } = roomGeometryFromRows(
+      geoRow({ origin_yaw_deg: 0, origin_offset_m: { x: 0, z: 0 } }),
+      [],
+    );
+    expect(provenance).toEqual({ originYawDeg: 0, originOffsetM: { x: 0, z: 0 } });
+  });
+
+  it('is null when only one part is present or a member is non-finite', () => {
+    expect(roomGeometryFromRows(geoRow({ origin_yaw_deg: 12 }), []).provenance).toBeNull();
+    expect(
+      roomGeometryFromRows(geoRow({ origin_offset_m: { x: 1, z: 2 } }), []).provenance,
+    ).toBeNull();
+    expect(
+      roomGeometryFromRows(
+        geoRow({ origin_yaw_deg: Number.NaN, origin_offset_m: { x: 1, z: 2 } }),
+        [],
+      ).provenance,
+    ).toBeNull();
+    expect(
+      roomGeometryFromRows(geoRow({ origin_yaw_deg: 12, origin_offset_m: null }), []).provenance,
+    ).toBeNull();
+  });
+
+  it('is null (not a throw) when the whole header is null', () => {
+    expect(roomGeometryFromRows(null, []).provenance).toBeNull();
+  });
+});

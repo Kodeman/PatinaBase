@@ -31,6 +31,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { RoomGeometryDocument } from '@patina/supabase';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
+import type { PhotoProvenance } from '@/lib/room-view/photo-poses';
 import { roomEvents } from '@/lib/analytics';
 import { FactsRail } from './facts-rail';
 import { MeasureLayer } from './measure-layer';
@@ -76,6 +77,11 @@ export interface RoomViewProps {
   geometry: RoomGeometry | null;
   thicknessConvention: boolean;
   isLoading: boolean;
+  /** Plan-frame provenance (00337, from-rows.ts) — carried through so the
+   *  Wave-2 photo layer can mount here and project camera transforms into the
+   *  Plan/Orbit frame (photo-poses.ts). null until parsed with provenance;
+   *  no consumer in v1 yet. */
+  provenance?: PhotoProvenance | null;
 }
 
 export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading }: RoomViewProps) {

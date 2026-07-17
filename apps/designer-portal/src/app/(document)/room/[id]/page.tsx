@@ -116,6 +116,7 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
         doc={data?.document ?? null}
         geometry={adapted?.geometry ?? null}
         thicknessConvention={adapted?.thicknessConvention ?? false}
+        provenance={adapted?.provenance ?? null}
         isLoading={isLoading}
       />
     </RoomShell>

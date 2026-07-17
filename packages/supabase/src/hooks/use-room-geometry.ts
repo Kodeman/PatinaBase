@@ -27,7 +27,7 @@ const DOCUMENT_COLUMNS =
   'scan_id, name, room_type, document_client_name, owner_client_name, engagement_kind, engagement_id, active_section, parse_status, quality_grade, coverage_percentage, scanned_at, status';
 
 const HEADER_COLUMNS =
-  'scan_id, parse_status, width_ft, depth_ft, wall_height_ft, wall_thickness_ft, floor_polygon, floor_area_sqft, confidence_summary';
+  'scan_id, parse_status, width_ft, depth_ft, wall_height_ft, wall_thickness_ft, floor_polygon, floor_area_sqft, confidence_summary, origin_yaw_deg, origin_offset_m';
 
 const ELEMENT_COLUMNS =
   'id, kind, position, confidence, label, apple_id, x1_ft, z1_ft, x2_ft, z2_ft, height_ft, wall_element_id, from_ft, to_ft, sill_ft, head_ft, width_ft, swing, swing_inward, cat, center_x_ft, center_z_ft, depth_ft, rotation_deg';
@@ -63,6 +63,8 @@ type RoomScanGeometryDbRow = Pick<
   | 'floor_polygon'
   | 'floor_area_sqft'
   | 'confidence_summary'
+  | 'origin_yaw_deg'
+  | 'origin_offset_m'
 >;
 
 /** Shaped to exactly `ELEMENT_COLUMNS` (`kind` narrowed at runtime below). */
@@ -130,6 +132,13 @@ export interface RoomGeometryHeader {
   floor_polygon: Array<[number, number]> | null;
   floor_area_sqft: number | null;
   confidence_summary: string | null;
+  /** Plan-frame provenance (00337): the yaw applied to de-rotate the world
+   *  frame. Feeds from-rows.ts's `provenance` so the photo layer can project
+   *  camera transforms into this same plan frame. */
+  origin_yaw_deg: number | null;
+  /** Plan-frame provenance (00337): the NW plan origin in rotated-frame
+   *  meters. Parsed off the raw jsonb `{x, z}` column (defensive). */
+  origin_offset_m: { x: number; z: number } | null;
 }
 
 /** Structurally matches from-rows.ts's `RoomScanGeometryElementRow`. */
@@ -190,6 +199,21 @@ function parseFloorPolygon(json: RoomScanGeometryDbRow['floor_polygon']): Array<
   return pts.length > 0 ? pts : null;
 }
 
+/** `room_scan_geometry.origin_offset_m` is jsonb `{x, z}` (rotated meters).
+ *  Defensive parse — null unless both members are finite numbers. */
+function parseOriginOffset(
+  json: RoomScanGeometryDbRow['origin_offset_m'],
+): { x: number; z: number } | null {
+  if (json == null || typeof json !== 'object' || Array.isArray(json)) return null;
+  const obj = json as Record<string, unknown>;
+  const x = obj.x;
+  const z = obj.z;
+  if (typeof x === 'number' && Number.isFinite(x) && typeof z === 'number' && Number.isFinite(z)) {
+    return { x, z };
+  }
+  return null;
+}
+
 function toDocument(row: RoomScanDocumentDbRow, fallbackScanId: string): RoomGeometryDocument {
   return {
     scanId: row.scan_id ?? fallbackScanId,
@@ -218,6 +242,8 @@ function toHeader(row: RoomScanGeometryDbRow | null): RoomGeometryHeader | null 
     floor_polygon: parseFloorPolygon(row.floor_polygon),
     floor_area_sqft: row.floor_area_sqft,
     confidence_summary: row.confidence_summary == null ? null : JSON.stringify(row.confidence_summary),
+    origin_yaw_deg: row.origin_yaw_deg,
+    origin_offset_m: parseOriginOffset(row.origin_offset_m),
   };
 }
 
