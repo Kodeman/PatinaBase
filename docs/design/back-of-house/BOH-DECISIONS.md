@@ -469,4 +469,19 @@ move-line reshuffle is drop-1-adjacent, not required by the four PNGs.
 
 ---
 
-*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I4 · R1–R2 · L— · last id = I4 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*
+### R3 · C1 rulings — Drop 1 review, six calls — 2026-07-17
+
+Product interview conducted against Drop 1 (Queue + Workbench on the seeded state, `drops/drop-1/`). Kody's answers with rationale:
+
+1. **R3.1 — Commission is Patina's target margin.** The per-vendor 16% (R1.12) is a quoting/settlement benchmark, not a separate money flow. The strip's "projected commission" = realized retail−trade spread, exactly as S2 built it; T3's "realized commission" at settlement = the actual spread; the Pledge accrues at 25% of that. No designer-payable or vendor-receivable leg exists on Rail A v1.
+2. **R3.2 — Seeds re-priced to realistic economics.** Varied trade ratios (~25–45% spreads) replace the uniform 80%-trade placeholder pricing; exactly one deliberately thin order stays below the floor as the warning's truthful demo. The 25% margin floor (R1.12) is untouched — the data was wrong, not the ruling.
+3. **R3.3 — Band model ratified as landed (I3).** `intake`/`split` sit unconditionally in Needs Action Now — the operator is the one being waited on, so the band IS the worklist, sorted breach-first. Watching stays pure: only orders where someone else moves next.
+4. **R3.4 — Stage dots are ORDER lifecycle dots.** Six fixed dots per row (split · transmitted · acknowledged · in production · shipped · delivered), present from intake and filling with the derived min stage. Per-PO stage detail belongs to the Workbench, not the queue row.
+5. **R3.5 — Side-marks are surname-only.** `{SURNAME}-{order#}` (`ANAND-1`), falling back to the full uppercased name when no surname parses — shorter carton marks, less client PII in transit.
+6. **R3.6 — Breadcrumb fixed now**, in the C1 batch (deduped zone segment; `Order #{n} · {client}` replaces the raw UUID), not deferred to Phase 1.
+
+Implementation record: I5.
+
+---
+
+*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I4 · R1–R3 · L— · last id = R3 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*
