@@ -127,6 +127,28 @@ function floorSurf(id: string, cornersFt: Array<[number, number]>) {
   };
 }
 
+// Phase-1 gate failure shape: polygonCorners arrive already PRE-TRANSFORMED
+// into world space (a producer bug — they should be LOCAL, per floorSurf()
+// above), but ship alongside a real (non-identity) `transform` anyway. The
+// parser applies floor0.transform to floor0.polygonCorners unconditionally
+// (lib.ts's floor-polygon step), so this double-transforms the floor: a pure
+// 90° extra rotation, zero translation, lands the true 19×14 rectangle
+// rotated a net 90° relative to the (correctly, singly-transformed) walls —
+// width_ft/depth_ft come out swapped (~14×19 instead of ~19×14).
+function malformedWorldSpaceFloorSurf(id: string, cornersFt: Array<[number, number]>) {
+  return {
+    category: { floor: {} },
+    confidence: { high: {} },
+    dimensions: [19 / M, 0.1, 14 / M],
+    identifier: id,
+    transform: mat(Math.PI / 2, 0, 0, 0), // pure 90° rotation, no translation
+    polygonCorners: cornersFt.map(([x, z]) => {
+      const w = invWorld(x, z); // already world-space — the bug
+      return [w.x, 0, w.z];
+    }),
+  };
+}
+
 // UUIDs (ARKit identifiers are Foundation UUIDs)
 const ID = {
   wNWwest: "11111111-1111-4111-8111-111111111111",
@@ -411,6 +433,32 @@ Deno.test("(c) garbage transform on one wall → skipped with warning, rest pars
   const r = parseCapturedRoom(room);
   assert(r.warnings.some((w) => /unusable transform/.test(w)));
   assert(walls(r).length === 4); // the other four still parse
+});
+
+Deno.test("(c) floor pre-transformed into world space (double-transform bug) → extent-divergence warning", () => {
+  const room = buildCapturedRoom();
+  room.floors = [
+    malformedWorldSpaceFloorSurf(
+      "d0d0d0d0-d0d0-4d0d-8d0d-d0d0d0d0d0d0",
+      [[0, 0], [19, 0], [19, 14], [0, 14]],
+    ),
+  ];
+  const r = parseCapturedRoom(room);
+  assert(
+    r.warnings.some((w) => /floor extent diverges from wall extent/.test(w)),
+    `expected a floor/wall extent-divergence warning; got: ${JSON.stringify(r.warnings)}`,
+  );
+  // A warning, not a rejection — nothing throws, and walls still parse fine
+  // (only the floor's own frame was malformed).
+  assertEquals(walls(r).length, 5);
+  // width_ft/depth_ft land roughly swapped by the extra 90° rotation.
+  assertAlmostEquals(r.header.width_ft, 14, 0.2);
+  assertAlmostEquals(r.header.depth_ft, 19, 0.2);
+});
+
+Deno.test("(c) well-formed floor never triggers the extent-divergence warning", () => {
+  const r = parseCapturedRoom(buildCapturedRoom());
+  assert(!r.warnings.some((w) => /floor extent diverges/.test(w)));
 });
 
 // ════════════════════════════════════════════════════════════════════════════

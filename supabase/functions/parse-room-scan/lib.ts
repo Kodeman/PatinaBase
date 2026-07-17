@@ -673,6 +673,38 @@ export function parseCapturedRoom(json: unknown): ParseResult {
     });
   }
 
+  // ── floor/wall extent sanity (Phase-1 gate finding) ───────────────────────
+  // A floor whose polygonCorners arrived already in WORLD space (a producer
+  // bug) gets double-transformed by the corner-projection step above (§3) —
+  // it still "parses" (nothing here throws), but lands at a materially
+  // different scale/rotation than the walls, which are always
+  // single-transformed via worldToPlanFt. width_ft/depth_ft are the floor
+  // polygon's own bbox extent (by construction anchored at (0,0), since
+  // originOffsetM is this same floor's own bbox min); compare that against
+  // the walls' own bbox extent (translation-invariant, so unaffected by a
+  // wrong origin offset — only a wrong ROTATION moves it, which is exactly
+  // what a double-transform introduces). More than ~20% divergence in either
+  // axis, either direction, is a red flag worth surfacing rather than
+  // landing silently.
+  let wMinX = Infinity, wMinZ = Infinity, wMaxX = -Infinity, wMaxZ = -Infinity;
+  for (const w of wallElems) {
+    wMinX = Math.min(wMinX, w.x1, w.x2);
+    wMaxX = Math.max(wMaxX, w.x1, w.x2);
+    wMinZ = Math.min(wMinZ, w.z1, w.z2);
+    wMaxZ = Math.max(wMaxZ, w.z1, w.z2);
+  }
+  const wallExtentX = wMaxX - wMinX;
+  const wallExtentZ = wMaxZ - wMinZ;
+  const EXTENT_DIVERGENCE_RATIO = 1.2; // ~20%
+  const extentDiverges = (floorExtent: number, wallExtent: number): boolean => {
+    if (floorExtent <= 0 || wallExtent <= 0) return false; // degenerate — other warnings already cover it
+    const ratio = floorExtent / wallExtent;
+    return ratio > EXTENT_DIVERGENCE_RATIO || ratio < 1 / EXTENT_DIVERGENCE_RATIO;
+  };
+  if (extentDiverges(widthFt, wallExtentX) || extentDiverges(depthFt, wallExtentZ)) {
+    warnings.push("floor extent diverges from wall extent — check polygonCorners space");
+  }
+
   const header: GeometryHeader = {
     parser_version: PARSER_VERSION,
     source_schema_version: sourceSchemaVersion,
