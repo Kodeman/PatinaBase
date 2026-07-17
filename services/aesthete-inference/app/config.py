@@ -38,6 +38,11 @@ class Settings:
     # holds a ConcurrencyGate slot while the CPU-bound parse runs in the threadpool.
     usdz_fetch_timeout_s: float = 30.0
     usdz_max_bytes: int = 64 * 1024 * 1024
+    # Room View HEIC→JPEG derivative lane (I78). A single iPhone HEIC is a few MB;
+    # 20 MB caps a hostile/oversized fetch. The convert route holds a
+    # ConcurrencyGate slot while the CPU-bound decode+encode runs in the threadpool.
+    photo_fetch_timeout_s: float = 15.0
+    photo_max_bytes: int = 20 * 1024 * 1024
 
 
 def settings_from_env() -> Settings:
@@ -59,4 +64,6 @@ def settings_from_env() -> Settings:
         text_max_tokens=int(os.environ.get("TEXT_MAX_TOKENS", "2048")),
         usdz_fetch_timeout_s=float(os.environ.get("USDZ_FETCH_TIMEOUT_S", "30")),
         usdz_max_bytes=int(os.environ.get("USDZ_MAX_BYTES", str(64 * 1024 * 1024))),
+        photo_fetch_timeout_s=float(os.environ.get("PHOTO_FETCH_TIMEOUT_S", "15")),
+        photo_max_bytes=int(os.environ.get("PHOTO_MAX_BYTES", str(20 * 1024 * 1024))),
     )

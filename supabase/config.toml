@@ -376,6 +376,16 @@ verify_jwt = true
 [functions.convert-room-scan-glb]
 verify_jwt = true
 
+# Room View HEIC→JPEG derivative lane (I78, 00340). Cron-invoked every 5 min via
+# pg_cron -> invoke_edge_function (service-role Bearer, same cron->edge bridge as
+# the other Room View sweeps) and also callable with { scanId | imageId, force? }.
+# It drives aesthete-inference /convert/heic-to-jpeg and stamps room_scan_images
+# thumbnail_url + preview_url. No browser calls it; the function additionally
+# requires a service_role claim in-code. verify_jwt = true is the platform
+# default; explicit here for intent, matching the other cron-invoked functions.
+[functions.derive-scan-photo-media]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
