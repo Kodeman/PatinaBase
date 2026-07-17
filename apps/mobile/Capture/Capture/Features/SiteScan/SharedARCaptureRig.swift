@@ -215,6 +215,10 @@ final class SharedARCaptureRig: NSObject {
     /// The current live coverage snapshot for the F2 coach (nil if no coach).
     func coverageSnapshot() -> CoverageSnapshot? { coverageCoach?.snapshot() }
 
+    /// Quiesce the depth lane (A4 — during anchor entry the scene is static). The
+    /// keyframe + coach lanes stay live and the ARSession keeps running for raycasts.
+    func setDepthPaused(_ paused: Bool) { depthRecorder?.setPaused(paused) }
+
     /// Coarse capture metrics for telemetry / the manifest (item 3 surfaces
     /// these; item 13 populates `scan_pipeline_events` from them).
     struct Metrics {

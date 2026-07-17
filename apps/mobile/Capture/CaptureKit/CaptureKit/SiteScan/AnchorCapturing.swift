@@ -37,4 +37,10 @@ public protocol AnchorCapturing: AnyObject {
 
     /// Discard the in-progress taps (retap).
     func clearPendingAnchor()
+
+    /// Entering the anchor-entry step: quiesce the depth + posed-photo lanes (A4 —
+    /// the scene is static and the user is typing) while keeping the ARSession +
+    /// keyframe lane live (deliberate framing near a ground-truth span is high-value
+    /// for the P2 solver). Idempotent; a no-op on the mock.
+    func beginAnchoringPhase()
 }

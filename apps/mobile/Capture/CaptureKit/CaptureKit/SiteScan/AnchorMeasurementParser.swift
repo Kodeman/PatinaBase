@@ -20,6 +20,10 @@ public enum AnchorMeasurementParser {
 
     private static let mmPerFoot = 304.8
     private static let mmPerInch = 25.4
+    /// Upper sanity bound: a single room span over 30 m is almost certainly a typo
+    /// (a missed foot mark, e.g. "120" read as 120 ft). Rejected so the UI can show
+    /// a "check the value" hint rather than storing garbage.
+    public static let maxReasonableMillimetres = 30_000
 
     /// Parse to integer millimetres, or nil if unparseable / non-positive.
     public static func parseMillimetres(_ raw: String) -> Int? {
@@ -61,7 +65,9 @@ public enum AnchorMeasurementParser {
 
         let mm = feet * mmPerFoot + inches * mmPerInch
         guard mm > 0 else { return nil }
-        return Int(mm.rounded())
+        let rounded = Int(mm.rounded())
+        guard rounded <= maxReasonableMillimetres else { return nil }   // A2: reject > 30 m
+        return rounded
     }
 
     /// "3 1/2" | "3.5" | "1/2" | "3" → inches (Double), or nil.

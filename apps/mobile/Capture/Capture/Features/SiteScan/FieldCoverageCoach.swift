@@ -235,13 +235,16 @@ extension FieldCoverageCoach: CaptureRoomUpdateSink {
                               checklistKey: key, displayLabel: key.capitalized)
     }
 
-    /// Openings (doors + windows + openings) numbered by a stable spatial sort (F4).
+    /// Openings (doors + windows + openings) numbered by a stable spatial sort (F4),
+    /// with each axis QUANTIZED to the centimetre (A5) so sub-cm float jitter between
+    /// RoomPlan updates can't renumber them.
     private static func openingSurfaces(from room: CapturedRoom) -> [CaptureSurface] {
+        func cm(_ v: Float) -> Int { Int((v * 100).rounded()) }
         let openings = (room.doors + room.windows + room.openings).sorted { lhs, rhs in
             let a = lhs.transform.columns.3, b = rhs.transform.columns.3
-            if a.x != b.x { return a.x < b.x }
-            if a.z != b.z { return a.z < b.z }
-            return a.y < b.y
+            if cm(a.x) != cm(b.x) { return cm(a.x) < cm(b.x) }
+            if cm(a.z) != cm(b.z) { return cm(a.z) < cm(b.z) }
+            return cm(a.y) < cm(b.y)
         }
         return openings.enumerated().map { index, opening in
             let c = opening.transform.columns.3

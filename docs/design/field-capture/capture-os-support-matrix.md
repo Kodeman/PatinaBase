@@ -70,3 +70,18 @@ photos *are* the keyframes, which does not hold for Field (blessable call, logge
 
 Recorder seams (`CaptureFrameSink` / `CaptureMeshSink` / `CaptureRoomUpdateSink`) let items
 4–6 (keyframe recorder, coach/QA, anchor entry) register without touching the session plumbing.
+
+## Spec-deltas for the item-8 manifest sync (blessable, consolidated)
+
+Item 8 (bundle assembly + `manifest.json`) must reconcile these device-side choices with
+`capture-bundle-spec-v1.md` — all additive/reversible:
+
+| Delta | Where | Note for item 8 |
+|---|---|---|
+| `mesh.ply` top-level | item 3 | matches spec §4 `mesh` artifact kind |
+| `depth/depth_<ts>.bin` + `depth_index.ndjson` (not PNG) | item 3 | `.bin` = `DepthBinFormat`; add a `depthIndex` artifact |
+| `keyframes/` directory (distinct from `photos/`) | item 4 | spec B-3 maps keyframes→photos (client v3); Field keeps them separate — **add a keyframe artifact kind** |
+| `keyframes/keyframe_summary.json` (fired / blurRejected / rawBlurFailures / encodeDropped / ratio) | item 4 | feeds `poseGraphSummary.keyframeCount` + `blurRejectedCount` |
+| `scorecard.json` (spec §3.4 shape) | item 5 | folds into `manifest.scorecard`; `scorecard.anchorCount` == `anchors.length` |
+| `Scorecard.namedGaps` is `[ScorecardGap]` (`{surface, phrase}`), **not `[String]`** | item 5 (F2 fix) | additive beyond spec §3.4; a `[String]` reader must be updated |
+| `anchors.json` (array of `AnchorRecord`, spec §3.3 camelCase) | item 6 | folds into `manifest.anchors`; **UNVERIFIED derived once** via `AnchorGate.isUnverified` (anchors < 3), never recomputed differently |

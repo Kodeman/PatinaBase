@@ -69,20 +69,26 @@ struct SiteScanAnchorStep: View {
     @State private var valueText = ""
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                liveSurface.ignoresSafeArea()
-                // Transparent tap layer for placing endpoints on the live model.
+        ZStack {
+            liveSurface.ignoresSafeArea()
+            // Tap layer — MUST share the RoomCaptureView's render coordinate space:
+            // both ignore the safe area, so `geo.size` == the camera render bounds and
+            // `value.location` is a render-space point. If the tap layer respected the
+            // safe area, the projection viewport would be short and taps would land
+            // vertically offset from where the user aimed (A1 invariant).
+            GeometryReader { geo in
                 Color.clear
                     .contentShape(Rectangle())
                     .gesture(SpatialTapGesture().onEnded { value in
                         anchor?.tap(at: value.location, viewport: geo.size)
                     })
-                VStack(spacing: 0) {
-                    instructionBar
-                    Spacer()
-                    entryPanel
-                }
+            }
+            .ignoresSafeArea()
+            // Chrome respects the safe area (kept out from under the notch / home bar).
+            VStack(spacing: 0) {
+                instructionBar
+                Spacer()
+                entryPanel
             }
         }
         .statusBarHidden(true)
@@ -160,6 +166,12 @@ struct SiteScanAnchorStep: View {
                         valueText = ""
                     }
                     .disabled(!(anchor?.canAdd(valueText) ?? false))
+                }
+                if !valueText.isEmpty && !(anchor?.canAdd(valueText) ?? false) {
+                    Text("Check the value")          // ESCALATE placeholder (A2 out-of-range/unparseable)
+                        .font(CaptureType.footnote)
+                        .foregroundStyle(CaptureColor.warning)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 SiteScanSecondaryButton(title: "Retap", systemImage: "arrow.counterclockwise",
                                         tint: CaptureColor.paper2) {

@@ -81,6 +81,7 @@ final class SiteScanHostModel {
     /// step then calls `finishScan()` to build the room + persist anchors.
     func beginAnchoring() {
         eventTask?.cancel()          // stop draining coverage updates; keep the session
+        (session as? AnchorCapturing)?.beginAnchoringPhase()   // A4: quiesce depth + posed
         step = .anchoring
     }
 

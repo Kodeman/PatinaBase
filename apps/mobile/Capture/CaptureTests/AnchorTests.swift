@@ -41,6 +41,20 @@ struct AnchorTests {
         #expect(AnchorMeasurementParser.parseMillimetres("12' x\"") == nil)
     }
 
+    @Test func noSpaceCompoundAndUpperBound() {
+        // No-space compound must match the spaced form (A2).
+        #expect(AnchorMeasurementParser.parseMillimetres("12'6\"") == 3810)
+        #expect(AnchorMeasurementParser.parseMillimetres("12'6\"")
+                == AnchorMeasurementParser.parseMillimetres("12' 6\""))
+        #expect(AnchorMeasurementParser.parseMillimetres("12'3.5\"")
+                == AnchorMeasurementParser.parseMillimetres("12' 3.5\""))
+        // Upper sanity bound: > 30 m rejected (A2).
+        #expect(AnchorMeasurementParser.maxReasonableMillimetres == 30_000)
+        #expect(AnchorMeasurementParser.parseMillimetres("98'") == 29870)         // ~29.9 m OK
+        #expect(AnchorMeasurementParser.parseMillimetres("99'") == nil)           // ~30.2 m rejected
+        #expect(AnchorMeasurementParser.parseMillimetres("200'") == nil)          // typo (missed foot mark)
+    }
+
     // MARK: - Soft gate + span classification
 
     @Test func unverifiedBelowThreeAnchors() {

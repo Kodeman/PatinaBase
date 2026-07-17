@@ -388,17 +388,35 @@ extension RoomPlanScanSession: AnchorCapturing {
 
     func clearPendingAnchor() { pendingAnchorEndpoints.removeAll() }
 
+    func beginAnchoringPhase() {
+        rig.setDepthPaused(true)   // static scene — stop depth waste
+        posedPhotos.stop()         // protect the 60-cap from photos of the user typing
+        // Keyframe lane stays live: deliberate framing near a span is high-value.
+    }
+
     /// Raycast the SHARED rig ARSession from a screen tap by manual unprojection —
-    /// NOT a second ARView. Assumes a portrait scan UI (the F2 chrome is portrait).
-    /// Targets estimated + existing planes (walls/floor RoomPlan detects). Failure
-    /// modes: no plane hit (textureless / low confidence / glass) → nil, user re-taps.
+    /// NOT a second ARView. Derives the interface orientation dynamically (A3) so a
+    /// rotated device projects correctly; the viewport (from the tap layer's
+    /// GeometryReader) is already in the same orientation's coordinates. Targets
+    /// estimated + existing planes (walls/floor RoomPlan detects). Failure modes: no
+    /// plane hit (textureless / low confidence / glass) → nil, user re-taps.
     private func raycastWorldPoint(screenPoint: CGPoint, viewport: CGSize) -> SIMD3<Float>? {
         guard let frame = rig.arSession.currentFrame,
               let query = Self.raycastQuery(screenPoint: screenPoint, viewport: viewport,
-                                            frame: frame, orientation: .portrait) else { return nil }
+                                            frame: frame, orientation: Self.currentInterfaceOrientation())
+        else { return nil }
         guard let result = rig.arSession.raycast(query).first else { return nil }
         let t = result.worldTransform.columns.3
         return SIMD3<Float>(t.x, t.y, t.z)
+    }
+
+    /// The active window scene's interface orientation (defaults to portrait — the
+    /// scan chrome's design orientation — if none is resolvable).
+    private static func currentInterfaceOrientation() -> UIInterfaceOrientation {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }?
+            .interfaceOrientation ?? .portrait
     }
 
     private static func raycastQuery(screenPoint: CGPoint, viewport: CGSize, frame: ARFrame,

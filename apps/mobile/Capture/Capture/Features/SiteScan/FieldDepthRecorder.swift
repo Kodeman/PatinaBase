@@ -86,6 +86,10 @@ final class FieldDepthRecorder: CaptureFrameSink {
     /// Accepted-for-persistence frame count (MainActor-only; telemetry).
     private(set) var framesWritten = 0
 
+    /// Quiesced during the anchor-entry step (A4): the scene is static, so depth
+    /// writes are pure waste (~144 KB/s). The ARSession keeps running for raycasts.
+    private var paused = false
+
     /// Throttle state — compared on the monotonic `ARFrame.timestamp`.
     private var lastSampleTimestamp: TimeInterval?
 
@@ -104,8 +108,11 @@ final class FieldDepthRecorder: CaptureFrameSink {
 
     // MARK: - CaptureFrameSink
 
+    /// Quiesce/resume depth persistence (A4 — paused during anchor entry).
+    func setPaused(_ paused: Bool) { self.paused = paused }
+
     func capture(frame: ARFrame, timestampSeconds: TimeInterval) {
-        guard let writer else { return }
+        guard let writer, !paused else { return }
         // Prefer smoothed depth (item 3); fall back to plain sceneDepth.
         let smoothed = frame.smoothedSceneDepth != nil
         guard let depth = frame.smoothedSceneDepth ?? frame.sceneDepth else { return }

@@ -343,6 +343,8 @@ public final class MockScanSession: FieldScanSession, AnchorCapturing {
 
     public func clearPendingAnchor() { pendingEndpoints.removeAll() }
 
+    public func beginAnchoringPhase() {}   // no lanes to quiesce on the mock
+
     private static func distance(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float {
         let d = a - b
         return (d.x * d.x + d.y * d.y + d.z * d.z).squareRoot()
