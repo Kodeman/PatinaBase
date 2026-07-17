@@ -2705,3 +2705,51 @@ DO $g$ BEGIN
   GRANT SELECT ON public.room_scan_documents TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00341_field_capture_p1_schema.sql
+DO $g$ BEGIN
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.scan_anchors TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00341_field_capture_p1_schema.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.room_files TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00341_field_capture_p1_schema.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.room_file_measurements TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00341_field_capture_p1_schema.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.scan_pipeline_events TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00341_field_capture_p1_schema.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.scan_anchors TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00341_field_capture_p1_schema.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.room_files TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00341_field_capture_p1_schema.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.room_file_measurements TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00341_field_capture_p1_schema.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.scan_pipeline_events TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
