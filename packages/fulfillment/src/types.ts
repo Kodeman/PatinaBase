@@ -190,3 +190,76 @@ export interface FulfillmentQueueRow {
   next_action_params: Record<string, unknown> | null;
   band: Band;
 }
+
+// ── S4: notifications / vendor directory / config (spec §6, §7, §10) ────────
+// Mirrors supabase/functions/_shared/fulfillment-templates.ts's Deno-side
+// ClientNotificationTransition (not shared by import — see notify.ts header).
+
+export type ClientNotificationChannel = 'email' | 'push';
+
+export interface FulfillmentClientNotificationDTO {
+  id: string;
+  orderId: string;
+  transition: string;
+  channel: ClientNotificationChannel;
+  templateKey: string;
+  draftedBody: string | null;
+  sentBody: string | null;
+  editDiff: { original: string; sent: string } | null;
+  sentAt: string | null;
+  resendMessageId: string | null;
+  skippedReason: string | null;
+  createdAt: string;
+}
+
+/** vendor_profiles ⋈ vendors, camelCase (spec §7 protocol sheet, R1.6). */
+export interface VendorProfileDTO {
+  vendorId: string;
+  vendorName: string;
+  transmissionType: TransmissionType;
+  contacts: Array<Record<string, unknown>>;
+  poEmail: string | null;
+  portalUrl: string | null;
+  csvColumnSpec: Record<string, unknown> | null;
+  paymentTerms: PaymentTerms;
+  depositPct: number | null;
+  leadTimeDays: number | null;
+  changeWindowDays: number | null;
+  blindShip: boolean;
+  claimsWindowDays: number | null;
+  inspectionWindowDays: { parcel?: number; ltl?: number; white_glove?: number } | null;
+  freightArrangement: string | null;
+  /** Fraction (0.16 = 16%); null falls back to config commission_rate_default. */
+  commissionRate: number | null;
+}
+
+/** A vendor list row — the directory table doesn't need the full profile. */
+export interface VendorDirectoryRow {
+  vendorId: string;
+  vendorName: string;
+  hasProfile: boolean;
+  transmissionType: TransmissionType | null;
+  paymentTerms: PaymentTerms | null;
+}
+
+/** Scorecard computed from fulfillment_events (spec §7) — trailing window,
+ *  n shown so a thin sample reads honestly rather than a misleadingly precise
+ *  rate. Null fields mean n was too small (or no matching events) to compute. */
+export interface VendorScorecard {
+  vendorId: string;
+  windowDays: number;
+  n: number;
+  medianAckHours: number | null;
+  onTimeShipRate: number | null;
+  damageRate: number | null;
+  fillRate: number | null;
+  exceptionRateByCause: Record<string, number>;
+}
+
+export interface FulfillmentConfigRow {
+  key: string;
+  value: Record<string, unknown>;
+  description: string | null;
+  updatedBy: string | null;
+  updatedAt: string;
+}
