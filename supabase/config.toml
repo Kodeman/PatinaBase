@@ -393,6 +393,25 @@ verify_jwt = true
 [functions.fulfillment-events-mirror]
 verify_jwt = true
 
+# BOH client-notification dispatcher (S4, spec §6). Service-role-invoked ONLY —
+# apps/admin-portal's notifications/{draft,[id]/send} routes call it via
+# adminClient.functions.invoke(...), which sends the service-role key as the
+# bearer. No browser calls it directly. verify_jwt = true is the platform
+# default; explicit here for intent, matching the other service-role-invoked
+# BOH functions (fulfillment-intake, apns-send).
+[functions.fulfillment-notify]
+verify_jwt = true
+
+# BOH derived-status API for iOS (S4, spec §6/§9.5). Caller-JWT-invoked — the
+# opposite posture from every other BOH function: the iOS client calls this
+# directly with ITS OWN user JWT (never service-role), which the function then
+# forwards to PostgREST so client_order_status_v's own-row auth.uid() scope
+# does the filtering (see confirm-scan-bundle for the same JWT-forwarding
+# pattern). verify_jwt = true is the platform default; explicit here because
+# the auth posture is the whole point of this function, not incidental.
+[functions.fulfillment-status]
+verify_jwt = true
+
 # Room View HEIC→JPEG derivative lane (I78, 00340). Cron-invoked every 5 min via
 # pg_cron -> invoke_edge_function (service-role Bearer, same cron->edge bridge as
 # the other Room View sweeps) and also callable with { scanId | imageId, force? }.
