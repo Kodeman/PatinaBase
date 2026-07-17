@@ -1,20 +1,26 @@
 // fulfillment-status/core.ts — the derived-status API for iOS (S4, spec §6/§9.5:
 // "vendor entities never cross it"). Pure transform from client_order_status_v
-// rows (00353's DEFINER view, own-row auth.uid()-scoped) to the wire shape.
-// No vendor/PO/cost field exists anywhere in the input this reads or the
-// output it produces — client_order_status_v itself carries only
-// {order_id, order_no, intake_at, client_status} (see its COMMENT in 00353),
-// so there is nothing wider to leak even by mistake.
+// rows (00353's DEFINER view, own-row auth.uid()-scoped, ENRICHED in 00358
+// with client-safe eta + per-stage timestamps) to the wire shape. No
+// vendor/PO/cost field exists anywhere in the input this reads or the output
+// it produces — client_order_status_v carries only order-level dates (see its
+// COMMENT), so there is nothing wider to leak even by mistake.
 //
-// ⚠ Known gap, not fixed here (S4 has no migration budget this wave — S3 is
-// the sole writer): client_order_status_v carries no ETA and no per-stage
-// timestamp beyond intake_at, so `eta` is always null in v1 and `timeline`
-// can only honestly report the ONE transition this data proves happened
-// (confirmed @ intake_at). A richer timeline (per-transition timestamps) or a
-// real ETA needs either a client-safe additive column on
-// client_order_status_v (e.g. current stage's entered-at) or a client-safe
-// shipment-ETA source — flagged in the S4 ship report as a combined-pass /
-// schema-gap item for S3 or a later slice, not invented here.
+// Wave-E fix (2026-07-17): the v1 gap this file used to document — `eta`
+// always null, `timeline` capped at one honest entry — is CLOSED.
+// client_order_status_v (00358) now carries `eta` +
+// confirmed_at/in_production_at/shipped_at/delivered_at. rowToStatusOrder
+// builds a genuine timeline: one entry per stage the order has REACHED (up
+// to and including its current status, in confirmed → in_production →
+// shipped → delivered order), each stamped with its real timestamp — or an
+// honest `at: null` if that stage is reached but its timestamp column is
+// genuinely null (e.g. `client_status` flips to 'confirmed' at intake, but
+// `confirmed_at` is sourced from the order's first PO being created, so it
+// can still be null for a freshly-intake order — never fabricate the gap).
+// No `delayed_at` column exists on the view — an exception can interrupt any
+// underlying stage, so there's no single honest timestamp to attach — so
+// 'delayed' keeps the PRE-enrichment shape: one entry stamped from
+// intake_at, then an honest `at: null` delayed entry.
 
 export type StatusKind = 'confirmed' | 'in_production' | 'shipped' | 'delivered' | 'delayed';
 
@@ -27,8 +33,8 @@ export const STATUS_KINDS: readonly StatusKind[] = [
 ];
 
 export interface TimelineEntry {
-  /** ISO timestamp, or null when no honest timestamp exists yet for this
-   *  entry (see file header — v1 only proves the intake/confirm timestamp). */
+  /** ISO timestamp, or null when the stage has been reached but its source
+   *  column is genuinely null (never a fabricated timestamp — see header). */
   at: string | null;
   kind: StatusKind;
   label: string;
@@ -51,6 +57,19 @@ export interface ClientOrderStatusRow {
   order_no: number;
   intake_at: string;
   client_status: string;
+  /** Order-level client ETA (00358) — the latest committed-ship/shipment-ETA
+   *  date across the order, or null when nothing has been committed yet. */
+  eta: string | null;
+  /** Split-confirm timestamp (00358) — when the order's first PO was
+   *  created. Can be null even when client_status is already 'confirmed'
+   *  (that status covers intake/split/transmitted — pre-PO stages too). */
+  confirmed_at: string | null;
+  /** First vendor-ack timestamp (00358) — the order's move into production. */
+  in_production_at: string | null;
+  /** Earliest shipment.shipped_at across the order (00358). */
+  shipped_at: string | null;
+  /** Latest shipment.delivered_at across the order (00358). */
+  delivered_at: string | null;
 }
 
 export function labelForStatus(kind: StatusKind): string {
@@ -80,21 +99,50 @@ export function normalizeStatusKind(clientStatus: string): StatusKind {
   return 'confirmed';
 }
 
+// The linear stage progression the enriched columns describe — confirmed
+// (split, PO created) through delivered. 'delayed' is an overlay status (an
+// open exception can interrupt ANY of these stages), not a fifth rung on
+// this ladder, so it is handled separately in rowToStatusOrder below.
+const STAGE_PROGRESSION: ReadonlyArray<{
+  kind: Exclude<StatusKind, 'delayed'>;
+  at: (row: ClientOrderStatusRow) => string | null;
+}> = [
+  { kind: 'confirmed', at: (row) => row.confirmed_at },
+  { kind: 'in_production', at: (row) => row.in_production_at },
+  { kind: 'shipped', at: (row) => row.shipped_at },
+  { kind: 'delivered', at: (row) => row.delivered_at },
+];
+
 export function rowToStatusOrder(row: ClientOrderStatusRow): StatusOrder {
   const status = normalizeStatusKind(row.client_status);
-  const timeline: TimelineEntry[] = [
-    { at: row.intake_at, kind: 'confirmed', label: labelForStatus('confirmed') },
-  ];
-  if (status !== 'confirmed') {
-    // Honest gap (see file header): we know the order reached this status,
-    // just not exactly when — `at: null` rather than a fabricated timestamp.
-    timeline.push({ at: null, kind: status, label: labelForStatus(status) });
+  let timeline: TimelineEntry[];
+
+  if (status === 'delayed') {
+    // No delayed_at column exists (see file header) — keep the
+    // pre-enrichment shape: prove only the intake timestamp, then an honest
+    // at:null delayed entry rather than fabricating one.
+    timeline = [
+      { at: row.intake_at, kind: 'confirmed', label: labelForStatus('confirmed') },
+      { at: null, kind: 'delayed', label: labelForStatus('delayed') },
+    ];
+  } else {
+    const reachedIdx = STAGE_PROGRESSION.findIndex((stage) => stage.kind === status);
+    const reached = reachedIdx === -1 ? [] : STAGE_PROGRESSION.slice(0, reachedIdx + 1);
+    timeline = reached.map((stage) => ({
+      // Honest gap (see file header): a reached stage can still have a null
+      // source column (e.g. 'confirmed' before the first PO exists) — never
+      // fabricate a timestamp for it.
+      at: stage.at(row),
+      kind: stage.kind,
+      label: labelForStatus(stage.kind),
+    }));
   }
+
   return {
     order_number: row.order_no,
     status,
     status_label: labelForStatus(status),
-    eta: null,
+    eta: row.eta,
     timeline,
   };
 }
@@ -117,7 +165,7 @@ export interface StatusSupabaseLike {
 export async function getOrderStatuses(deps: { supabase: StatusSupabaseLike }): Promise<StatusResponse> {
   const { data, error } = await deps.supabase
     .from('client_order_status_v')
-    .select('order_id, order_no, intake_at, client_status')
+    .select('order_id, order_no, intake_at, client_status, eta, confirmed_at, in_production_at, shipped_at, delivered_at')
     .order('order_no', { ascending: true });
   if (error) throw new Error(`fulfillment-status: ${error.message}`);
   return { orders: (data ?? []).map(rowToStatusOrder) };

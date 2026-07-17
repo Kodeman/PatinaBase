@@ -144,9 +144,67 @@ GRANT SELECT ON public.fulfillment_queue_v TO authenticated, agent_reader, servi
 -- own rows (auth.uid()); NO vendor / PO / cost columns cross it (§6 boundary) —
 -- only order-level dates. CREATE OR REPLACE keeps the first four columns in place
 -- and appends the new ones (Postgres view-replace rule).
+--
+-- ⚠ WAVE-E IN-PLACE AMENDMENT (2026-07-17, flagged per patina-parallel-work —
+-- 00358 is unshipped, exists only on boh/* branches, never applied to main):
+-- the S4-era cut above joined public.fulfillment_order_status_v for its
+-- derived_status column. That view is `security_invoker = true` (00353) —
+-- correct for its own direct callers, but fatal when pulled INSIDE a
+-- security_invoker=false (DEFINER) view like this one: an invoker view nested
+-- under a definer view still evaluates RLS on ITS OWN base tables
+-- (fulfillment_order_items / fulfillment_exceptions) against the actual
+-- calling role, not the definer's. Those base tables carry admin/agent_reader-
+-- only SELECT policies (00350/00351 `_select_admin` / `_select_agent_reader`),
+-- so any ordinary client role got zero rows from the nested view — and this
+-- view's outer INNER JOIN to it then zeroed the whole result for every real
+-- client, regardless of `client_profile_id = auth.uid()` matching. Fix: derive
+-- derived_status from BASE TABLES directly (item_stage/order_stage/
+-- order_mapping/order_exceptions), replicated verbatim from
+-- fulfillment_order_status_v's own CASE (00353) so the client_status
+-- vocabulary is byte-identical — no new semantics. Definer posture,
+-- own-row scoping, client-safe column set, and grants are UNCHANGED.
 CREATE OR REPLACE VIEW public.client_order_status_v
 WITH (security_invoker = false) AS
-WITH po_agg AS (
+WITH item_stage AS (
+  -- mirrors fulfillment_order_status_v's item_stage CTE (00353), base-table only
+  SELECT
+    i.order_id,
+    i.line_state,
+    i.mapping_state,
+    array_position(ARRAY['intake','split','transmitted','acknowledged','in_production','shipped','delivered','settled'], i.line_state) AS stage_idx
+  FROM public.fulfillment_order_items i
+  WHERE i.line_state <> 'cancelled'
+),
+order_stage AS (
+  SELECT order_id, MIN(stage_idx) AS min_stage_idx
+  FROM item_stage
+  GROUP BY order_id
+),
+order_mapping AS (
+  SELECT order_id, bool_or(mapping_state = 'unmapped') AS has_unmapped
+  FROM item_stage
+  GROUP BY order_id
+),
+order_exceptions AS (
+  SELECT order_id, count(*) AS open_exceptions
+  FROM public.fulfillment_exceptions
+  WHERE status <> 'resolved'
+  GROUP BY order_id
+),
+order_status AS (
+  -- same derived_status CASE as fulfillment_order_status_v (00353), inlined
+  SELECT
+    os.order_id,
+    CASE
+      WHEN COALESCE(om.has_unmapped, false) THEN 'needs_mapping'
+      WHEN COALESCE(oe.open_exceptions, 0) > 0 THEN 'exception'
+      ELSE (ARRAY['intake','split','transmitted','acknowledged','in_production','shipped','delivered','settled'])[os.min_stage_idx]
+    END AS derived_status
+  FROM order_stage os
+  LEFT JOIN order_mapping om ON om.order_id = os.order_id
+  LEFT JOIN order_exceptions oe ON oe.order_id = os.order_id
+),
+po_agg AS (
   SELECT order_id,
          min(created_at)     AS confirmed_at,     -- split-confirm (POs created)
          min(acked_at)       AS in_production_at, -- first vendor ack → production
@@ -165,7 +223,7 @@ ship_agg AS (
 )
 SELECT
   o.id AS order_id, o.order_no, o.intake_at,
-  CASE s.derived_status
+  CASE st.derived_status
     WHEN 'intake' THEN 'confirmed' WHEN 'split' THEN 'confirmed'
     WHEN 'transmitted' THEN 'confirmed' WHEN 'acknowledged' THEN 'in_production'
     WHEN 'in_production' THEN 'in_production' WHEN 'shipped' THEN 'shipped'
@@ -180,14 +238,17 @@ SELECT
   sa.shipped_at,
   sa.delivered_at
 FROM public.fulfillment_orders o
-JOIN public.fulfillment_order_status_v s ON s.order_id = o.id
+JOIN order_status st ON st.order_id = o.id
 LEFT JOIN po_agg pa ON pa.order_id = o.id
 LEFT JOIN ship_agg sa ON sa.order_id = o.id
 WHERE o.client_profile_id = auth.uid();
 COMMENT ON VIEW public.client_order_status_v IS
-  'BOH (00353→00358): client-safe order status + timeline. DEFINER view (owner '
-  'postgres) by design (D4) — bypasses admin-only base RLS; the own-row auth.uid() '
-  'scope is the boundary. Do NOT switch to security_invoker. Client-safe columns '
-  'only — order-level status/eta/stage timestamps, NEVER vendor/po/cost.';
+  'BOH (00353→00358, Wave-E RLS-gap fix): client-safe order status + timeline. '
+  'DEFINER view (owner postgres) by design (D4) — bypasses admin-only base RLS; '
+  'the own-row auth.uid() scope is the boundary. Do NOT switch to security_invoker '
+  'and do NOT re-introduce a join to any security_invoker view (nested invoker '
+  'views re-impose base-table RLS against the calling role and zero client reads '
+  '— see the Wave-E amendment comment above). Client-safe columns only — '
+  'order-level status/eta/stage timestamps, NEVER vendor/po/cost.';
 REVOKE ALL ON public.client_order_status_v FROM public, anon;
 GRANT SELECT ON public.client_order_status_v TO authenticated, service_role;
