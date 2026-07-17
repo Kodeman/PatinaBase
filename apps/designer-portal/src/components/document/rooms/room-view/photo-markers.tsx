@@ -66,6 +66,10 @@ export interface PhotoMarker {
   /** DISPLAY position, feet (clamped to the floor bbox when off-plan). */
   x: number;
   z: number;
+  /** Representative camera height, feet (world-origin-relative — see
+   *  photo-poses.ts). The Plan (2D) ignores it; the Orbit frustum layer
+   *  (orbit/photo-marker-objects.ts) reads it to place the wedge apex. */
+  y: number;
   /** Heading per photo-poses.ts's convention (0°=+x east, 90°=+z south, CW). */
   headingDeg: number;
   /** Members in this proximity cluster (≥1). */
@@ -154,6 +158,7 @@ export function buildPhotoMarkers(
     return {
       x: offPlan ? clamp(rawX, bounds.minX, bounds.maxX) : rawX,
       z: offPlan ? clamp(rawZ, bounds.minZ, bounds.maxZ) : rawZ,
+      y: rep.pose.y,
       headingDeg: rep.pose.headingDeg,
       count: cluster.count,
       offPlan,

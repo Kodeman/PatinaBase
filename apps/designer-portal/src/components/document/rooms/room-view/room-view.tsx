@@ -35,8 +35,9 @@ import type { PhotoProvenance } from '@/lib/room-view/photo-poses';
 import { roomEvents } from '@/lib/analytics';
 import { FactsRail } from './facts-rail';
 import { MeasureLayer } from './measure-layer';
+import type { OrbitPhotoPose } from './orbit/photo-marker-objects';
 import { OrbitStage } from './orbit/orbit-stage';
-import { PhotoMarkers } from './photo-markers';
+import { buildPhotoMarkers, planBounds, PhotoMarkers } from './photo-markers';
 import { PhotoStrip } from './photo-strip';
 import { PhotoViewer } from './photo-viewer';
 import { planViewBox, PlanStage } from './plan-stage';
@@ -114,6 +115,24 @@ export function RoomView({
     () => (geometry ? planViewBox(geometry) : { width: 1, height: 1 }),
     [geometry],
   );
+
+  // The SAME proximity clusters the Plan camera-ticks draw (buildPhotoMarkers is
+  // pure + deterministic), projected into the Orbit frustum layer's plain-number
+  // pose contract: one wedge per cluster, carrying the representative's height +
+  // heading and the photo index its click opens. No `three` here — the shape stays
+  // JSON so the dynamic three boundary lives entirely under orbit/. Empty (photos
+  // absent / provenance null) → no poses → OrbitCanvas builds no marker group.
+  const orbitPhotoPoses = useMemo<OrbitPhotoPose[]>(() => {
+    if (!geometry || photos.length === 0 || !provenance) return [];
+    return buildPhotoMarkers(photos, provenance, planBounds(geometry)).map((m) => ({
+      x: m.x,
+      z: m.z,
+      y: m.y,
+      headingDeg: m.headingDeg,
+      count: m.count,
+      photoIndex: m.representativeIndex,
+    }));
+  }, [geometry, photos, provenance]);
 
   // Plan is the landing mode. Orbit stays UNMOUNTED (zero three.js cost) until the first
   // Orbit switch — `orbitMounted` latches true then and never resets, so once its lazy
@@ -252,7 +271,11 @@ export function RoomView({
           </div>
           {orbitMounted && (
             <div className={mode === 'orbit' ? undefined : 'hidden'}>
-              <OrbitStage geometry={geometry} />
+              <OrbitStage
+                geometry={geometry}
+                photoPoses={orbitPhotoPoses}
+                onPhotoClick={viewer.openAtIndex}
+              />
             </div>
           )}
           {/* The contact strip lives under the stage, inside the stage cell. */}
