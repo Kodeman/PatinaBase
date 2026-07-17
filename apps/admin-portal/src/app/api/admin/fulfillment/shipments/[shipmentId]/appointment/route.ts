@@ -5,25 +5,27 @@ import { loadShipmentForGate } from '@/lib/fulfillment-shipments';
 // POST /api/admin/fulfillment/shipments/[shipmentId]/appointment — confirm the
 // LTL/white_glove delivery appointment (S5, spec §5.4: "LTL/WG require
 // appointment confirmation"). Body: { confirmedAt?: 'YYYY-MM-DDTHH:mm:ssZ' }
-// (defaults to now()).
+// (defaults to now(); validated but NOT forwarded to the RPC — see below).
 //
-// SCHEMA GAP (I10, reported for S6 - never worked around here): no RPC in
-// 00353 writes fulfillment_shipments.appointment_confirmed_at. Every
-// fulfillment_* table is writer-guarded (fulfillment_writer_guard, 00350) - a
-// write is denied unless app.fulfillment_writer is 'rpc' (set inside an RPC's
-// own transaction) or 'migration' (the seed/fixture side door). PostgREST's
-// `.update()` runs as its own transaction with no way to `set_config(...)`
-// first, so there is LITERALLY NO PATH for this route to write that column
-// today short of a new SECURITY DEFINER RPC - the guard is doing exactly what
-// section 11 says it should ("nothing mutates outside it... a review gate").
-// This route calls the RPC the naming convention implies SHOULD exist:
+// RPC: public.fulfillment_confirm_appointment(p_shipment_id uuid, p_actor
+// text) — shipped in 00363 (S6). It always stamps appointment_confirmed_at =
+// now() server-side and takes exactly those two arguments; there is no
+// p_confirmed_at parameter. Every fulfillment_* table is writer-guarded
+// (fulfillment_writer_guard, 00350) - a write is denied unless
+// app.fulfillment_writer is 'rpc' (set inside an RPC's own transaction) or
+// 'migration' (the seed/fixture side door), so this route MUST go through the
+// RPC rather than `.update()`.
 //
-//   fulfillment_confirm_appointment(p_shipment_id uuid, p_confirmed_at timestamptz, p_actor text)
-//
-// and turns Postgres's "function does not exist" (42883) into a clean, honest
-// 501 rather than a raw stack trace. Once S6 (or whichever slice owns the
-// next migration) adds that RPC with this exact name/signature, this route
-// starts working with ZERO further changes on this side.
+// I11 (Wave F integration gap): the original S5 call site here guessed at a
+// 3-arg signature (…, p_confirmed_at, p_actor) that never shipped — 00363
+// landed with 2 args. Calling with the extra arg produced PGRST202
+// ("Could not find the function ...") at runtime, a 500 that only the 42883
+// branch below was catching. Fixed by matching the call to the real
+// signature; the 42883/PGRST202 catch stays as a defensive safety net (not
+// the primary path anymore) in case this RPC is ever renamed or dropped
+// again — Postgres's "function does not exist" (42883) and PostgREST's
+// schema-cache miss for the same condition (PGRST202) both turn into a
+// clean, honest 501 rather than a raw stack trace.
 
 export async function POST(
   request: NextRequest,
@@ -52,19 +54,23 @@ export async function POST(
 
     const { error } = await db.rpc('fulfillment_confirm_appointment', {
       p_shipment_id: shipmentId,
-      p_confirmed_at: confirmedAt,
       p_actor: actor,
     });
     if (error) {
-      // 42883 = undefined_function - the schema gap documented above.
+      // 42883 = undefined_function (Postgres); PGRST202 = PostgREST's
+      // schema-cache miss for the same underlying condition ("function does
+      // not exist as far as this request could tell"). Both mean the RPC
+      // isn't reachable — see the safety-net note above.
       if (
         error.code === '42883' ||
-        /function .*fulfillment_confirm_appointment.* does not exist/i.test(error.message ?? '')
+        error.code === 'PGRST202' ||
+        /function .*fulfillment_confirm_appointment.* does not exist/i.test(error.message ?? '') ||
+        /could not find the function .*fulfillment_confirm_appointment/i.test(error.message ?? '')
       ) {
         return NextResponse.json(
           {
             error:
-              'appointment confirmation is not yet implemented at the RPC layer (schema gap - see BOH-DECISIONS I10, filed for S6)',
+              'appointment confirmation is not yet implemented at the RPC layer (schema gap - see BOH-DECISIONS I10/I11)',
             code: 'not_implemented',
           },
           { status: 501 },
