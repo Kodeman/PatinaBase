@@ -5654,6 +5654,47 @@ export type Database = {
         }
         Relationships: []
       }
+      fulfillment_evidence_upload_tokens: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          exception_id: string
+          expires_at: string
+          revoked: boolean
+          token: string
+          updated_at: string
+          used_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          exception_id: string
+          expires_at: string
+          revoked?: boolean
+          token: string
+          updated_at?: string
+          used_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          exception_id?: string
+          expires_at?: string
+          revoked?: boolean
+          token?: string
+          updated_at?: string
+          used_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fulfillment_evidence_upload_tokens_exception_id_fkey"
+            columns: ["exception_id"]
+            isOneToOne: false
+            referencedRelation: "fulfillment_exceptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fulfillment_exceptions: {
         Row: {
           cause_code: string | null
@@ -5665,6 +5706,7 @@ export type Database = {
           opened_at: string
           order_id: string | null
           order_item_id: string | null
+          outcome_memo: string | null
           po_id: string | null
           resolution_path: string | null
           resolved_at: string | null
@@ -5683,6 +5725,7 @@ export type Database = {
           opened_at?: string
           order_id?: string | null
           order_item_id?: string | null
+          outcome_memo?: string | null
           po_id?: string | null
           resolution_path?: string | null
           resolved_at?: string | null
@@ -5701,6 +5744,7 @@ export type Database = {
           opened_at?: string
           order_id?: string | null
           order_item_id?: string | null
+          outcome_memo?: string | null
           po_id?: string | null
           resolution_path?: string | null
           resolved_at?: string | null
@@ -19607,6 +19651,10 @@ export type Database = {
         Args: { p_purchase_order_id: string }
         Returns: undefined
       }
+      fulfillment_append_evidence: {
+        Args: { p_actor: string; p_keys: string[]; p_token: string }
+        Returns: Json
+      }
       fulfillment_assign_line_vendor: {
         Args: {
           p_actor: string
@@ -19628,6 +19676,18 @@ export type Database = {
         Args: { p_actor: string; p_order_id: string }
         Returns: Json
       }
+      fulfillment_enrich_ledger_lines: {
+        Args: { p_lines: Json }
+        Returns: Json
+      }
+      fulfillment_evidence_token_context: {
+        Args: { p_token: string }
+        Returns: Json
+      }
+      fulfillment_exception_consequence: {
+        Args: { p_exception_id: string; p_params: Json; p_path: string }
+        Returns: Json
+      }
       fulfillment_intake_order: {
         Args: { p_actor: string; p_payload: Json }
         Returns: string
@@ -19647,6 +19707,10 @@ export type Database = {
           p_started: string
         }
         Returns: number
+      }
+      fulfillment_mint_evidence_token: {
+        Args: { p_actor: string; p_exception_id: string; p_ttl_hours: number }
+        Returns: Json
       }
       fulfillment_move_line: {
         Args: { p_actor: string; p_item_id: string; p_po_id: string }
@@ -19709,10 +19773,10 @@ export type Database = {
       fulfillment_resolve_exception: {
         Args: {
           p_actor: string
-          p_cause_code: string
           p_exception_id: string
+          p_params: Json
+          p_path: string
           p_preview: boolean
-          p_resolution_path: string
         }
         Returns: Json
       }
@@ -19723,6 +19787,10 @@ export type Database = {
           p_variance_reason: string
           p_vendor_invoice_cents: number
         }
+        Returns: Json
+      }
+      fulfillment_settle_po_preview: {
+        Args: { p_po_id: string; p_vendor_invoice_cents: number }
         Returns: Json
       }
       fulfillment_update_config: {
@@ -20684,7 +20752,7 @@ export type Database = {
       }
       rule_leah_review: {
         Args: { p_review_id: string; p_ruled_by: string; p_status: string }
-        Returns: undefined
+        Returns: Json
       }
       run_aesthete_drift_audit: {
         Args: { p_now?: string }

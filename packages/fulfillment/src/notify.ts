@@ -17,7 +17,8 @@ export type ClientNotificationTransition =
   | 'in_production'
   | 'shipped'
   | 'delivered'
-  | 'eta_change';
+  | 'eta_change'
+  | 'substitution';
 
 export const CLIENT_NOTIFICATION_TRANSITIONS: readonly ClientNotificationTransition[] = [
   'confirmed',
@@ -25,6 +26,10 @@ export const CLIENT_NOTIFICATION_TRANSITIONS: readonly ClientNotificationTransit
   'shipped',
   'delivered',
   'eta_change',
+  // S7: an approved substitution drafts its own client note — distinct from
+  // eta_change (a price-Δ-$0 finish swap is not a delay). Mirrored in
+  // supabase/functions/_shared/fulfillment-templates.ts.
+  'substitution',
 ];
 
 /**

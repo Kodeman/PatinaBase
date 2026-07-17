@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { PageHeader, EmptyState } from '@/components/portal';
 import { useFulfillmentComposer } from '@/hooks/use-fulfillment-composer';
 import { useFulfillmentRealtime } from '@/hooks/use-fulfillment-realtime';
@@ -9,6 +9,7 @@ import { PoPaper } from '@/components/fulfillment/composer/po-paper';
 import { TransmitPanel } from '@/components/fulfillment/composer/transmit-panel';
 import { AckCaptureForm } from '@/components/fulfillment/composer/ack-capture-form';
 import { TransmissionLog } from '@/components/fulfillment/composer/transmission-log';
+import { SettleDialog } from '@/components/fulfillment/settlement/settle-dialog';
 
 // The PO Composer & Transmission Log (S3, spec §5.3). The PO rendered as real
 // paper on the left; on the right the transmit panel (branching on the vendor's
@@ -25,6 +26,7 @@ export default function FulfillmentComposerPage({
   const { poId } = use(params);
   const { data: dto, isLoading, error } = useFulfillmentComposer(poId);
   useFulfillmentRealtime();
+  const [settleOpen, setSettleOpen] = useState(false);
 
   const po = dto?.po;
   useBreadcrumbLastLabel(po ? `${po.poNumber ?? 'PO'} · ${po.clientName}` : null);
@@ -32,6 +34,7 @@ export default function FulfillmentComposerPage({
   const status = po?.status;
   const beforeSent = status === 'draft';
   const awaitingAck = status === 'sent';
+  const settleable = status === 'delivered';
 
   return (
     <div className="flex flex-col gap-2">
@@ -101,9 +104,36 @@ export default function FulfillmentComposerPage({
               </section>
             )}
 
+            {settleable && (
+              <section data-testid="composer-settle">
+                <div
+                  className="mb-2 text-[0.55rem] uppercase tracking-[0.13em] text-[var(--text-muted)]"
+                  style={{ fontFamily: 'var(--font-meta)' }}
+                >
+                  Settle · Stage 8
+                </div>
+                <p className="mb-2 text-[0.8rem] text-[var(--text-body)]">
+                  Delivered and inspected. Match the vendor invoice against the PO, then post COGS, freight,
+                  and the 25% Pledge accrual.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSettleOpen(true)}
+                  data-testid="composer-settle-open"
+                  className="type-btn-text bg-[var(--accent-primary)] px-4 py-2 text-[var(--bg-surface)] transition-colors hover:bg-[var(--accent-hover)]"
+                >
+                  Settle this PO
+                </button>
+              </section>
+            )}
+
             <TransmissionLog events={dto.events} />
           </div>
         </div>
+      )}
+
+      {po && (
+        <SettleDialog poId={po.id} poNumber={po.poNumber} open={settleOpen} onOpenChange={setSettleOpen} />
       )}
     </div>
   );

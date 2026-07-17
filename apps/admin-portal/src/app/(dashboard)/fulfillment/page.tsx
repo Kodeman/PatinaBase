@@ -3,12 +3,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader, EmptyState } from '@/components/portal';
-import { useToast } from '@/components/portal/toast-provider';
 import { useFulfillmentQueue } from '@/hooks/use-fulfillment-queue';
 import { useFulfillmentRealtime } from '@/hooks/use-fulfillment-realtime';
 import { useQueueKeyboard } from '@/hooks/use-queue-keyboard';
 import { QueueBands, flattenQueueRows } from '@/components/fulfillment/queue/queue-bands';
 import { NoteDrawer } from '@/components/fulfillment/queue/note-drawer';
+import { OpenExceptionDrawer } from '@/components/fulfillment/exceptions/open-exception-drawer';
 import type { FulfillmentQueueRow } from '@patina/fulfillment';
 
 // The Fulfillment Queue — the Back of House home screen (S1, spec §5.1).
@@ -20,7 +20,6 @@ import type { FulfillmentQueueRow } from '@patina/fulfillment';
 
 export default function FulfillmentQueuePage() {
   const router = useRouter();
-  const { toast } = useToast();
   const { data, isLoading, error } = useFulfillmentQueue();
   useFulfillmentRealtime();
 
@@ -29,6 +28,7 @@ export default function FulfillmentQueuePage() {
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [exceptionOpen, setExceptionOpen] = useState(false);
 
   const clampedIndex = orderedRows.length === 0 ? 0 : Math.min(selectedIndex, orderedRows.length - 1);
   const selectedRow: FulfillmentQueueRow | null = orderedRows[clampedIndex] ?? null;
@@ -44,7 +44,7 @@ export default function FulfillmentQueuePage() {
 
   useQueueKeyboard({
     enabled: !isLoading && orderedRows.length > 0,
-    suspended: drawerOpen,
+    suspended: drawerOpen || exceptionOpen,
     onNext: () =>
       setSelectedIndex((i) => (orderedRows.length === 0 ? 0 : Math.min(i + 1, orderedRows.length - 1))),
     onPrev: () => setSelectedIndex((i) => Math.max(i - 1, 0)),
@@ -55,7 +55,7 @@ export default function FulfillmentQueuePage() {
       if (selectedRow) setDrawerOpen(true);
     },
     onException: () => {
-      toast('Exception desk lands in S7', 'info');
+      if (selectedRow) setExceptionOpen(true);
     },
   });
 
@@ -106,6 +106,7 @@ export default function FulfillmentQueuePage() {
       )}
 
       <NoteDrawer row={selectedRow} open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <OpenExceptionDrawer row={selectedRow} open={exceptionOpen} onOpenChange={setExceptionOpen} />
     </div>
   );
 }
