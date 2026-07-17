@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { FulfillmentQueueRow } from '@patina/fulfillment';
+import type { FulfillmentQueueRow, NoteSendMode } from '@patina/fulfillment';
 import { resolveNoteDrawerSendAction, resolveNoteSendMode, transitionForDerivedStatus } from '@patina/fulfillment';
 import {
   Sheet,
@@ -33,6 +33,18 @@ import { useDraftClientNote, useOrderNotifications, useSendClientNote, findPendi
 //      (@patina/fulfillment) are the pure decision logic, unit-tested there.
 //   4. On send: POST .../notifications/[id]/send, toast the result (email +
 //      push outcome), invalidate the root fulfillment key, close the drawer.
+//
+// ⚠ Wave-E fix: `onTextareaKeyDown` resolves send mode from the LIVE textarea
+// value (`e.currentTarget.value`) at the moment of the keystroke, not from
+// the `body` React state closure. `onKeyDown` always fires before the
+// keystroke's own edit lands in state (that edit reaches `body` one render
+// later), so a stale-state read of `mode` can be an entire keystroke behind
+// the actual DOM value — reproduced live: if the operator's next keystroke
+// after an unflushed edit is a bare Enter, the stale 'fast' mode fires the
+// unedited-send shortcut and silently ships the stale server draft, discarding
+// the pending edit. Reading `e.currentTarget.value` directly removes the gap;
+// the render-time `mode`/`body` are still fine for the button's onClick path
+// (a mouse click has no keystroke-ordering race to lag behind).
 
 export interface NoteDrawerProps {
   row: FulfillmentQueueRow | null;
@@ -98,10 +110,13 @@ export function NoteDrawer({ row, open, onOpenChange }: NoteDrawerProps) {
   const mode = resolveNoteSendMode(draftedBody, body);
   const canSend = !!activeDraftId && !sendMutation.isPending && body.trim().length > 0;
 
-  const send = () => {
+  // `overrideMode`/`overrideBody` let the keydown path supply the LIVE DOM
+  // value it already resolved, rather than re-reading the (possibly stale)
+  // `mode`/`body` closures — see the Wave-E fix note above.
+  const send = (overrideMode: NoteSendMode = mode, overrideBody: string = body) => {
     if (!activeDraftId || sendMutation.isPending) return;
     sendMutation.mutate(
-      { notificationId: activeDraftId, editedBody: mode === 'edited' ? body : undefined },
+      { notificationId: activeDraftId, editedBody: overrideMode === 'edited' ? overrideBody : undefined },
       {
         onSuccess: (result) => {
           const emailOk = result.email.success !== false;
@@ -120,13 +135,19 @@ export function NoteDrawer({ row, open, onOpenChange }: NoteDrawerProps) {
   };
 
   const onTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Resolve mode from the LIVE textarea value at this exact keystroke, not
+    // the `mode` closure (which reflects `body` as of the last completed
+    // render — up to one keystroke stale, see the Wave-E fix note above).
+    const liveBody = e.currentTarget.value;
+    const liveMode = resolveNoteSendMode(draftedBody, liveBody);
     const action = resolveNoteDrawerSendAction(
       { key: e.key, metaKey: e.metaKey, ctrlKey: e.ctrlKey },
-      mode,
+      liveMode,
     );
-    if (action === 'send' && canSend) {
+    const liveCanSend = !!activeDraftId && !sendMutation.isPending && liveBody.trim().length > 0;
+    if (action === 'send' && liveCanSend) {
       e.preventDefault();
-      send();
+      send(liveMode, liveBody);
     }
   };
 
@@ -167,7 +188,7 @@ export function NoteDrawer({ row, open, onOpenChange }: NoteDrawerProps) {
             type="button"
             data-testid="note-drawer-send"
             disabled={!canSend}
-            onClick={send}
+            onClick={() => send()}
           >
             {sendMutation.isPending ? 'Sending…' : mode === 'edited' ? 'Send edited note' : 'Send'}
           </Button>

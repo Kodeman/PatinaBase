@@ -105,6 +105,37 @@ describe('NoteDrawer', () => {
     expect(screen.getByTestId('note-drawer-send')).not.toHaveTextContent('edited');
   });
 
+  it('lag case: a pending edit not yet flushed to React state still demotes a bare Enter (Wave-E fix)', () => {
+    // Reproduces the live bug: onTextareaKeyDown used to compute send mode
+    // from the `body` React-state closure, which reflects only keystrokes
+    // already flushed to a completed render — up to one keystroke stale
+    // relative to the live DOM. Simulate that lag directly: write to the
+    // textarea's native value setter (bypassing React's onChange, so `body`
+    // state stays at the original drafted text) to represent an edit that
+    // landed in the DOM but hasn't reached React state yet, then fire the
+    // very next keydown as a bare Enter — the first keystroke the component
+    // actually observes. The pre-fix code read the stale (still-unedited)
+    // `mode` and fired the fast-send path, silently shipping the stale
+    // server draft and discarding the pending edit. The fix must read
+    // e.currentTarget.value live, see the divergence, and NOT send.
+    mockUseOrderNotifications.mockReturnValue({ data: [PENDING_DRAFT], isLoading: false });
+    render(<NoteDrawer row={ROW} open onOpenChange={jest.fn()} />);
+
+    const textarea = screen.getByTestId('note-drawer-body') as HTMLTextAreaElement;
+    const nativeValueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype,
+      'value',
+    )!.set!;
+    // Desync the DOM value from React's `body` state — `body` still equals
+    // draftedBody ("Your order #1 is confirmed."); the DOM now has a pending,
+    // unflushed edit.
+    nativeValueSetter.call(textarea, 'Your order #1 is confirmed, actually.');
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    expect(mockSendMutate).not.toHaveBeenCalled();
+  });
+
   it('edited demotion: after changing the text, a bare Enter does NOT send', () => {
     mockUseOrderNotifications.mockReturnValue({ data: [PENDING_DRAFT], isLoading: false });
     render(<NoteDrawer row={ROW} open onOpenChange={jest.fn()} />);
