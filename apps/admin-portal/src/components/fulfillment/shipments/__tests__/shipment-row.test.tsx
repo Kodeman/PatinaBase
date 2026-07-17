@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import type { FulfillmentShipmentRow } from '@patina/fulfillment';
 import { ShipmentRow } from '@/components/fulfillment/shipments/shipment-row';
 
@@ -10,11 +10,17 @@ import { ShipmentRow } from '@/components/fulfillment/shipments/shipment-row';
 const mockConfirmMutate = jest.fn();
 const mockUploadMutate = jest.fn();
 const mockDeliverMutate = jest.fn();
+const mockRecordEtaChangeMutate = jest.fn();
 
 jest.mock('@/hooks/use-fulfillment-shipments', () => ({
   useConfirmAppointment: jest.fn(() => ({ mutate: mockConfirmMutate, isPending: false, isError: false })),
   useUploadShipmentPod: jest.fn(() => ({ mutate: mockUploadMutate, isPending: false, isError: false })),
   useDeliverShipment: jest.fn(() => ({ mutate: mockDeliverMutate, isPending: false, isError: false })),
+  useRecordEtaChange: jest.fn(() => ({
+    mutate: mockRecordEtaChangeMutate,
+    isPending: false,
+    isError: false,
+  })),
 }));
 
 const NOW = Date.UTC(2026, 8, 1); // 2026-09-01T00:00:00Z
@@ -165,5 +171,50 @@ describe('ShipmentRow', () => {
     render(<ShipmentRow row={makeRow({ mode: 'parcel' })} nowMs={NOW} />);
     screen.getByTestId('shipment-deliver-button').click();
     expect(mockDeliverMutate).toHaveBeenCalledTimes(1);
+  });
+
+  // ── R4.5 — Record ETA change (BOH-DECISIONS) ──────────────────────────────
+
+  it('renders the Record ETA change affordance on a non-delivered row', () => {
+    render(<ShipmentRow row={makeRow({ deliveredAt: null })} nowMs={NOW} />);
+    expect(screen.getByTestId('shipment-record-eta-change')).toBeInTheDocument();
+  });
+
+  it('hides Record ETA change once a shipment is already delivered', () => {
+    render(
+      <ShipmentRow
+        row={makeRow({ deliveredAt: '2026-08-30T00:00:00Z', inspectionClosesAt: null })}
+        nowMs={NOW}
+      />,
+    );
+    expect(screen.queryByTestId('shipment-record-eta-change')).not.toBeInTheDocument();
+  });
+
+  it('opens the ETA change dialog, pre-filled from the current slip, on click', () => {
+    render(
+      <ShipmentRow
+        row={makeRow({ committedShip: '2026-09-03', currentEta: '2026-09-10' })}
+        nowMs={NOW}
+      />,
+    );
+    expect(screen.queryByTestId('eta-change-dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('shipment-record-eta-change'));
+
+    expect(screen.getByTestId('eta-change-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('eta-change-date')).toHaveValue('2026-09-10');
+    // reason is required and starts empty — submit stays disabled until typed
+    expect(screen.getByTestId('eta-change-submit')).toBeDisabled();
+  });
+
+  it('closes the ETA change dialog on Cancel without mutating', () => {
+    render(<ShipmentRow row={makeRow()} nowMs={NOW} />);
+    fireEvent.click(screen.getByTestId('shipment-record-eta-change'));
+    expect(screen.getByTestId('eta-change-dialog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('eta-change-cancel'));
+
+    expect(screen.queryByTestId('eta-change-dialog')).not.toBeInTheDocument();
+    expect(mockRecordEtaChangeMutate).not.toHaveBeenCalled();
   });
 });

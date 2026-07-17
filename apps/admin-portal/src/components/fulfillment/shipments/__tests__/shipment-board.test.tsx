@@ -6,6 +6,7 @@ jest.mock('@/hooks/use-fulfillment-shipments', () => ({
   useConfirmAppointment: jest.fn(() => ({ mutate: jest.fn(), isPending: false, isError: false })),
   useUploadShipmentPod: jest.fn(() => ({ mutate: jest.fn(), isPending: false, isError: false })),
   useDeliverShipment: jest.fn(() => ({ mutate: jest.fn(), isPending: false, isError: false })),
+  useRecordEtaChange: jest.fn(() => ({ mutate: jest.fn(), isPending: false, isError: false })),
 }));
 
 const NOW = Date.UTC(2026, 8, 1);
