@@ -11,9 +11,13 @@ function line(qty: number, unitCostCents: number | null, lineState = 'intake'): 
   return { qty, unitCostCents, lineState };
 }
 
-describe('computeMoneyStrip — the seeded 5-vendor order', () => {
-  // Order 1 (Priya Anand): 5 lines, all 80%-trade (20% spread), + $150 freight,
-  // + $900 tax. Real values read from the local DB (see format.test.ts golden).
+describe('computeMoneyStrip — the seeded 5-vendor order (R3.2 re-priced, C1 fix)', () => {
+  // Order 1 (Priya Anand): 5 lines at varied ~25–45% trade spreads (the old
+  // uniform 80%-trade/20%-spread seed tripped the terracotta warning on every
+  // order, not just the one meant to demonstrate it — drop-1 KNOWN DEVIATION
+  // #5), + $150 freight, + $900 tax. Real values read from the local DB after
+  // reseeding (see format.test.ts golden and the C1 fix report's per-order
+  // spread table).
   const order: MoneyStripOrder = {
     capturedTotalCents: 1_309_900,
     productSubtotalCents: 1_204_900,
@@ -21,27 +25,31 @@ describe('computeMoneyStrip — the seeded 5-vendor order', () => {
     taxCents: 90_000,
   };
   const lines = [
-    line(1, 336_000),
-    line(1, 288_000),
-    line(1, 168_000),
-    line(1, 100_000),
-    line(1, 71_920),
+    line(1, 273_000), // oak dining table — 35% spread
+    line(1, 216_000), // walnut credenza — 40% spread
+    line(1, 147_000), // live-edge coffee table — 30% spread
+    line(1, 68_750), // velvet club chair — 45% spread
+    line(1, 72_819), // marble side table — ~19% spread, DELIBERATELY THIN (also order 5's sole line)
   ];
 
   it('produces the real strip figures', () => {
     const m = computeMoneyStrip(lines, order, CONFIG);
     expect(m.capturedCents).toBe(1_309_900);
-    expect(m.vendorCostCents).toBe(963_920);
+    expect(m.vendorCostCents).toBe(777_569);
     expect(m.freightEstCents).toBe(15_000);
     // revenue = 1,204,900 + 15,000 = 1,219,900; commission = revenue − cost − freight
-    expect(m.projectedCommissionCents).toBe(1_219_900 - 963_920 - 15_000); // 240,980
-    expect(m.pledgeAccrualCents).toBe(Math.round(0.25 * 240_980)); // 60,245
-    expect(m.marginPct).toBeCloseTo(240_980 / 1_219_900, 6); // 0.19754…
+    expect(m.projectedCommissionCents).toBe(1_219_900 - 777_569 - 15_000); // 427,331
+    expect(m.pledgeAccrualCents).toBe(Math.round(0.25 * 427_331)); // 106,833
+    expect(m.marginPct).toBeCloseTo(427_331 / 1_219_900, 6); // 0.35032…
   });
 
-  it('is BELOW the 25% floor (the seed 20% spread → ~19.75% margin)', () => {
-    // ⚠ C1: the uniform 20% seed trade spread sits under the 25% config floor.
-    expect(computeMoneyStrip(lines, order, CONFIG).belowFloor).toBe(true);
+  it('is ABOVE the 25% floor (blended ~35% margin — healthy, despite one thin line)', () => {
+    // ⚠ C1 fix: order 1's blended margin clears the floor even though its
+    // marble-side-table line is deliberately thin (~19%) — the other four
+    // lines pull the blend up. Order 5 (the thin line's sole occupant) is the
+    // one that now demonstrates the terracotta warning; see the C1 fix
+    // report's per-order spread table.
+    expect(computeMoneyStrip(lines, order, CONFIG).belowFloor).toBe(false);
   });
 });
 
@@ -105,8 +113,8 @@ describe('computeMoneyStrip — edge cases', () => {
       freightChargedCents: 0,
       taxCents: 0,
     };
-    // qty 2 × 71,920 = 143,840 (the seeded qty-2 order 5)
-    expect(computeMoneyStrip([line(2, 71_920)], order, CONFIG).vendorCostCents).toBe(143_840);
+    // qty 2 × 72,819 = 145,638 (the seeded qty-2 order 5 — R3.2 thin line)
+    expect(computeMoneyStrip([line(2, 72_819)], order, CONFIG).vendorCostCents).toBe(145_638);
   });
 
   it('excludes cancelled lines from vendor cost', () => {
