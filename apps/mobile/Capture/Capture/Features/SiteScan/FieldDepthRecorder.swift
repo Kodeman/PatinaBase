@@ -187,7 +187,12 @@ private final class DepthBundleWriter: @unchecked Sendable {
             return
         }
 
-        let tsKey = String(format: "%09.3f", snap.timestampSeconds).replacingOccurrences(of: ".", with: "_")
+        // Filename key from the MONOTONIC frame timestamp (not wall-clock task
+        // time) so two accepted frames can never collide to one file (K3, symmetric
+        // with the keyframe lane). At 1 Hz cadence frame timestamps are ≥1 s apart,
+        // so no sequence counter is needed here; the index body keeps the shared
+        // clock's `timestampSeconds`.
+        let tsKey = String(format: "%013.3f", snap.frameTimestamp).replacingOccurrences(of: ".", with: "_")
         let filename = "depth_\(tsKey).bin"
         do {
             try encoded.data.write(to: depthDir.appendingPathComponent(filename), options: .atomic)

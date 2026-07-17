@@ -57,11 +57,21 @@ final class FieldKeyframeRecorder: CaptureFrameSink {
     private var lastEvaluation: TimeInterval?
     private var inFlight = 0
     private(set) var fired = 0
+    /// Opportunity-based: one per DISTINCT blurry pose region (K2), not per 0.1 s
+    /// re-evaluation of the same region — this is the count the ratio uses.
     private(set) var blurRejected = 0
+    /// Every failed sharpness evaluation (diagnostic; a blurry pan inflates this).
+    private(set) var rawBlurFailures = 0
     private(set) var encodeDropped = 0
+    /// Pose at the last COUNTED blur rejection; a new rejection is counted only once
+    /// the pose has advanced past the motion threshold from here (K2 dedup).
+    private var lastBlurRejectPose: [Float]?
 
     /// Drop + count once this many keyframe encodes are queued but not yet written.
-    private let maxInFlight = 4
+    /// 2 (not 4): a serial HEIC drain vs ~10/s fire can otherwise hold several
+    /// full-res `capturedImage` buffers off ARKit's camera pool; a counted drop
+    /// beats pool pressure / a tracking hiccup.
+    private let maxInFlight = 2
     /// Budget safety valve (silent stop, like the posed 60-cap). Target is 200–400;
     /// this bounds worst-case bundle size on an unusually long/slow scan.
     private let maxKeyframes = 500
@@ -102,7 +112,14 @@ final class FieldKeyframeRecorder: CaptureFrameSink {
         guard gate.isSharp(score) else {
             // Motion-triggered but blurred — reject, DON'T advance lastFiredPose, so
             // the next frame at ~this pose is re-evaluated for a sharp capture.
-            blurRejected += 1
+            rawBlurFailures += 1
+            // Count ONE opportunity-loss per distinct blurry region (K2): only when
+            // the pose has advanced past the motion threshold since the last counted
+            // rejection — a 2 s blurry pan is one lost opportunity, not ~20.
+            if gate.motionTriggered(from: lastBlurRejectPose, to: pose) {
+                blurRejected += 1
+                lastBlurRejectPose = pose
+            }
             return
         }
 
@@ -150,6 +167,7 @@ final class FieldKeyframeRecorder: CaptureFrameSink {
         let summary = KeyframeSummary(
             fired: fired,
             blurRejected: blurRejected,
+            rawBlurFailures: rawBlurFailures,
             encodeDropped: encodeDropped,
             blurRejectionRatio: blurRejectionRatio
         )
@@ -159,9 +177,10 @@ final class FieldKeyframeRecorder: CaptureFrameSink {
 
     private struct KeyframeSummary: Codable {
         let fired: Int
-        let blurRejected: Int
+        let blurRejected: Int       // opportunity-based (distinct blurry regions)
+        let rawBlurFailures: Int    // every failed sharpness evaluation
         let encodeDropped: Int
-        let blurRejectionRatio: Double
+        let blurRejectionRatio: Double  // blurRejected / (fired + blurRejected)
     }
 
     // MARK: - Pose + luma helpers (MainActor, cheap)
@@ -259,6 +278,9 @@ private final class KeyframeBundleWriter: @unchecked Sendable {
     private let indexURL: URL
     private let ioQueue = DispatchQueue(label: "cloud.patina.field.keyframe.io", qos: .utility)
     private var indexHandle: FileHandle?
+    /// Serial write counter (queue-confined) — the collision-proof half of the K3
+    /// filename key.
+    private var sequence = 0
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
     /// HEIC quality. 0.75 — HEIC at this quality is ~half a JPEG's bytes for the
     /// same look, keeping 200–400 full-res keyframes inside the 300–600 MB budget.
@@ -299,8 +321,14 @@ private final class KeyframeBundleWriter: @unchecked Sendable {
     // MARK: - On the io queue
 
     private func write(_ snap: KeyframeSnapshot) {
-        let tsKey = String(format: "%09.3f", snap.timestampSeconds).replacingOccurrences(of: ".", with: "_")
-        let heicName = "keyframe_\(tsKey).heic"
+        // Filename key from the MONOTONIC frame timestamp + a serial sequence, NOT
+        // wall-clock task time: two fires close in frame-time could round to the
+        // same %09.3f wall-clock key under a MainActor stall and silently overwrite
+        // one file while writing two index lines (K3). `sequence` is queue-confined.
+        sequence += 1
+        let frameKey = String(format: "%013.3f", snap.frameTimestamp).replacingOccurrences(of: ".", with: "_")
+        let stem = "keyframe_\(String(format: "%06d", sequence))_\(frameKey)"
+        let heicName = "\(stem).heic"
 
         // Full-res HEIC (bin/HEIC BEFORE the index line).
         let ciImage = CIImage(cvPixelBuffer: snap.pixelBuffer).oriented(.right)
@@ -322,7 +350,7 @@ private final class KeyframeBundleWriter: @unchecked Sendable {
            let encoded = DepthBinEncoder.encode(depthMap: depthMap,
                                                  confidenceMap: snap.confidenceMap,
                                                  smoothed: snap.smoothedDepth) {
-            let binName = "keyframe_\(tsKey).bin"
+            let binName = "\(stem).bin"
             if (try? encoded.data.write(to: keyframesDir.appendingPathComponent(binName), options: .atomic)) != nil {
                 depthPath = "keyframes/\(binName)"
             }

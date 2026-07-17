@@ -203,6 +203,7 @@ final class SharedARCaptureRig: NSObject {
         var meshVertexCount = 0
         var keyframesFired = 0
         var keyframesBlurRejected = 0
+        var keyframesRawBlurFailures = 0
         var keyframesEncodeDropped = 0
     }
 
@@ -213,6 +214,7 @@ final class SharedARCaptureRig: NSObject {
             meshVertexCount: meshRecorder?.vertexCount ?? 0,
             keyframesFired: keyframeRecorder?.fired ?? 0,
             keyframesBlurRejected: keyframeRecorder?.blurRejected ?? 0,
+            keyframesRawBlurFailures: keyframeRecorder?.rawBlurFailures ?? 0,
             keyframesEncodeDropped: keyframeRecorder?.encodeDropped ?? 0
         )
     }

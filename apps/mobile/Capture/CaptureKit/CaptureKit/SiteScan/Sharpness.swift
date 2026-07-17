@@ -32,9 +32,11 @@ public enum Sharpness {
     public static func varianceOfLaplacian(luma: [UInt8], width: Int, height: Int) -> Double {
         guard width >= 3, height >= 3, luma.count >= width * height else { return 0 }
 
-        let interiorCount = (width - 2) * (height - 2)
-        var laplacians = [Double](repeating: 0, count: interiorCount)
-        var k = 0
+        // Single-pass Welford — population variance of the interior 4-neighbour
+        // Laplacian, no intermediate array.
+        var count = 0
+        var mean = 0.0
+        var m2 = 0.0
         for y in 1..<(height - 1) {
             let rowUp = (y - 1) * width
             let row = y * width
@@ -45,14 +47,13 @@ public enum Sharpness {
                 let down = Double(luma[rowDown + x])
                 let left = Double(luma[row + x - 1])
                 let right = Double(luma[row + x + 1])
-                laplacians[k] = up + down + left + right - 4 * center
-                k += 1
+                let laplacian = up + down + left + right - 4 * center
+                count += 1
+                let delta = laplacian - mean
+                mean += delta / Double(count)
+                m2 += delta * (laplacian - mean)
             }
         }
-
-        guard interiorCount > 0 else { return 0 }
-        let mean = laplacians.reduce(0, +) / Double(interiorCount)
-        let variance = laplacians.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(interiorCount)
-        return variance
+        return count > 0 ? m2 / Double(count) : 0
     }
 }
