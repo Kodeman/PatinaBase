@@ -390,4 +390,83 @@ Nav gated behind `NEXT_PUBLIC_ENABLE_FULFILLMENT`; every `/fulfillment/*` route 
 
 ---
 
-*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I3 · R1–R2 · L— · last id = I3 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*
+### I4 · S2 shipped — the Order Workbench (→ screenshot drop 1) — 2026-07-17
+
+S2 is built and pushed on branch `boh/s2-workbench` off `origin/boh/integration`:
+the real Order Workbench replaces S1's placeholder at
+`/fulfillment/orders/[orderId]` — a three-track grid (client order 5fr · a literal
+1px hairline column · vendor POs 7fr) with the ①…ⓝ mono thread on both sides, a
+live money strip, drag-to-regroup, and the unmapped→confirm gate. Gated by a
+clean admin-portal build (typedRoutes), 53 `@patina/fulfillment` vitest, 3/3
+Workbench Playwright, 3/3 S1-queue Playwright (unchanged), the W1–W3 post-confirm
+assertions, and a full `pnpm test:boh-audit` green on a clean reseed (A1–A7,
+Q1–Q7, 11 Deno).
+
+**No 00353 amendment — composed, not migrated.** The detail DTO
+(`GET /api/admin/fulfillment/orders/[orderId]`) is composed in the route from base
+tables (order + items + PO drafts + `vendor_profiles⋈vendors` + the three config
+numbers), one round trip. The three mutations bind the S0 RPCs verbatim:
+`fulfillment_assign_line_vendor`, `fulfillment_move_line`,
+`fulfillment_confirm_split`. The escape hatch went unused: nothing was genuinely
+blocked (patina-parallel-work — prefer composing over SQL changes).
+
+**Money model (`@patina/fulfillment/money.ts`) — flagged for the C1 look.**
+`projectedCommission = (product subtotal + freight) − vendor cost − freight est`
+= Patina's *realized* retail−trade spread, matching the presentation §07
+arithmetic; Pledge accrual = 25% of it (§8 T3); margin = commission/revenue,
+terracotta below the 25% config floor. Deliberate calls, each documented in the
+function header and drop-1's `index.md` KNOWN DEVIATIONS:
+- The config's per-vendor `commission_rate_default` (16%) is a *settlement* input
+  (S6) and a vendor fallback — **not** the Workbench projection basis (which uses
+  real costs). Threaded through the DTO for completeness; C1 rules.
+- v1 freight est = `freight_charged` (no independent source until S5), so freight
+  nets to zero in the margin.
+- **The seeded 5-vendor order renders terracotta at the default floor.** Every
+  seeded mapped product is priced at exactly 80% trade (uniform 20% spread) →
+  order 1's blended margin is ~19.75%, *below* the 25% floor. The signature order
+  legitimately trips the warning (the strip doing its job); the presentation's
+  healthy numbers were illustrative. **C1 owed:** revisit seed trade spreads or the
+  floor default.
+- Unmapped lines read optimistically (0 cost until priced) so margin reads high
+  until assignment, then drops — intentional ("mis-mapped cost caught before the
+  PO goes out").
+
+**Drag semantics (deviation from the literal brief, logged).** The brief said
+`onDragEnd → fulfillment_move_line`. But pre-confirm no `vendor_po_lines` rows
+exist for `move_line` to repoint, so a **pre-confirm** drop between proposed
+groups persists via `fulfillment_assign_line_vendor` (reassign the line's vendor);
+`move_line` drives the **post-confirm** reshuffle (the shot-04 cards are
+draggable). The pure `resolveDragOutcome` (drag.ts, 9 vitest) decides
+move/assign/popover/noop; the component just dispatches. dnd-kit + Playwright:
+native `dragTo` does not fire the PointerSensor — the e2e drives synthetic
+`page.mouse` motion past the 8px activation constraint (the repo's boards-QA
+precedent).
+
+**Two e2e false-positives found and fixed — the class of thing this log
+remembers.** Optimistic mutations (`setQueryData` in `onMutate`) render the moved/
+assigned state *before* the POST resolves; asserting immediately and then letting
+the next test navigate **aborted the in-flight request** — the assign/move never
+reached the server (0 `line.moved` / `line.vendor_assigned` events despite green
+tests). Fixed by `Promise.all([waitForResponse(POST 200), action()])` so the test
+asserts the **persisted** state. In real use the operator does not navigate
+mid-request, so this is a test-timing bug, not a product bug — but it would have
+shipped a test that proved nothing.
+
+**S1 Enter-path.** The only S1 edit: `boh-queue.spec.ts`'s keyboard test asserted
+the placeholder copy ("The Order Workbench lands in S2."); updated to assert the
+real `workbench-root` renders (the Enter target is now the real screen). No S1
+queue component changed.
+
+**Anti-drift tripwire.** `format.test.ts` pins the formatters to the LIVE
+`fulfillment_confirm_split` output read from the DB on the seeded 5-vendor order
+(`PO-2026-00001-A…E`, side_mark `PRIYA ANAND-1`) — captured via a rolled-back
+`BEGIN…confirm…ROLLBACK` so order 1 stayed pre-confirm for the screenshots.
+
+Owed to design authority: the **C1 look** at drop-1 (`docs/design/back-of-house/
+drops/drop-1/`) — chiefly the money model + the terracotta-at-default-floor seed
+mismatch. Deferred by design: post-confirm cards beyond `draft` are read-only;
+move-line reshuffle is drop-1-adjacent, not required by the four PNGs.
+
+---
+
+*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I4 · R1–R2 · L— · last id = I4 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*
