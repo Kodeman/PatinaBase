@@ -96,13 +96,19 @@ export async function middleware(req: NextRequest) {
   // resolve_field_link() — a contractor on a jobsite phone has no Patina
   // account and never will (R46-style tracked, login-less courts).
   const isFieldPage = req.nextUrl.pathname.startsWith('/field/');
+  // /evidence/[token] is the same login-less pattern for a client asked to
+  // photograph receiving-exception damage (Back of House S7): the token is
+  // resolved server-side via fulfillment_evidence_token_context() — a client
+  // tapping a link from a text/email has no reason to have a session.
+  const isEvidencePage = req.nextUrl.pathname.startsWith('/evidence/');
   const isPublicPage =
     req.nextUrl.pathname === '/' ||
     req.nextUrl.pathname.startsWith('/demo') ||
     isInviteLanding ||
     isQuizPage ||
     isSharePage ||
-    isFieldPage;
+    isFieldPage ||
+    isEvidencePage;
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
   // The wrong-portal interstitial is the redirect target for wrong-role users;
   // it must be exempt from the gate or a wrong-role user would loop. /unauthorized

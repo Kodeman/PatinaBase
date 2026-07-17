@@ -70,3 +70,13 @@ export {
 } from './use-fulfillment-notifications';
 export { vendorKeys, useVendorDirectory, useVendorDetail, useUpdateVendorProfile } from './use-fulfillment-vendors';
 export { configKeys, useFulfillmentConfig, useUpdateFulfillmentConfig } from './use-fulfillment-config';
+
+// ── S5: Back of House Shipment Board (spec §5.4) ────────────────────────────
+export {
+  shipmentKeys,
+  useFulfillmentShipments,
+  useCreateShipment,
+  useConfirmAppointment,
+  useUploadShipmentPod,
+  useDeliverShipment,
+} from './use-fulfillment-shipments';

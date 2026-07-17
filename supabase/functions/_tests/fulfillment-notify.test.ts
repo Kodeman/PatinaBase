@@ -82,6 +82,8 @@ Deno.test("leak test — every rendered template is free of vendor names, PO num
       exceptionNote:
         transition === "eta_change"
           ? "One of the items in your order needs a bit more time to finish — we'll keep you posted."
+          : transition === "substitution"
+          ? "We've updated the fabric on your order to a very similar option — a warmer bouclé — at no change to price or timeline."
           : undefined,
     };
     const rendered = renderClientNoteTemplate(transition, projection);
@@ -170,7 +172,11 @@ Deno.test("leak test — the draft/send orchestration's persisted bodies are als
         eta: "2026-08-14",
         previousEta: transition === "eta_change" ? "2026-08-01" : undefined,
         shippingMode: transition === "shipped" ? "white_glove" : undefined,
-        exceptionNote: transition === "eta_change" ? "A component needs additional finishing time." : undefined,
+        exceptionNote: transition === "eta_change"
+          ? "A component needs additional finishing time."
+          : transition === "substitution"
+          ? "We've updated the fabric on your order to a very similar option — a warmer bouclé — at no change to price or timeline."
+          : undefined,
       },
     });
     await sendClientNote(deps, { notification_id: draft.note_id });

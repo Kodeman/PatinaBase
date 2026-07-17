@@ -12,3 +12,7 @@ export * from './notify';
 export * from './config-form';
 export * from './vendor-form';
 export * from './scorecard';
+// ── S5: shipments ──────────────────────────────────────────────────────────
+export * from './shipments';
+// ── S7: exception desk & settlement ─────────────────────────────────────────
+export * from './exceptions';

@@ -12,6 +12,10 @@ export const fulfillmentKeys = {
   detail: (orderId: string) => [...fulfillmentKeys.all, 'detail', orderId] as const,
   // S3: the PO Composer round-trip, keyed by PO id.
   composer: (poId: string) => [...fulfillmentKeys.all, 'composer', poId] as const,
+  // S7: exception desk + Leah substitution reviews.
+  exceptions: () => [...fulfillmentKeys.all, 'exceptions'] as const,
+  exception: (id: string) => [...fulfillmentKeys.all, 'exception', id] as const,
+  leahReviews: () => [...fulfillmentKeys.all, 'leah-reviews'] as const,
 };
 
 /**

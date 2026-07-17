@@ -94,7 +94,7 @@ test.describe('Back of House — Fulfillment Queue', () => {
     await expect(unmappedRows).toHaveCount(2);
   });
 
-  test('full keyboard traversal without the mouse: j/k across all bands, Enter navigates, n opens the drawer, Escape closes, x toasts', async ({
+  test('full keyboard traversal without the mouse: j/k across all bands, Enter navigates, n opens the drawer, Escape closes, x opens the exception drawer', async ({
     page,
   }) => {
     await page.goto('/fulfillment');
@@ -159,9 +159,12 @@ test.describe('Back of House — Fulfillment Queue', () => {
     await page.keyboard.press('k');
     await expect(rows.nth(0)).toHaveAttribute('data-selected', 'true');
 
-    // x opens the Exception Desk stub toast — no fake success, names the slice.
+    // x opens the real open-exception drawer (S7 replaced the stub toast).
+    // Escape closes it and restores keyboard control.
     await page.keyboard.press('x');
-    await expect(page.getByText('Exception desk lands in S7')).toBeVisible();
+    await expect(page.getByTestId('open-exception-drawer')).toBeVisible({ timeout: 10000 });
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('open-exception-drawer')).not.toBeVisible();
 
     // Enter navigates to the Order Workbench (S2, now the real screen) for the
     // selected row's order id.

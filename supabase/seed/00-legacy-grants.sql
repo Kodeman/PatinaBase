@@ -2987,3 +2987,255 @@ DO $g$ BEGIN
   GRANT SELECT ON public.client_order_status_v TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00358_fulfillment_transmission.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.fulfillment_queue_v TO authenticated, agent_reader, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00358_fulfillment_transmission.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.client_order_status_v FROM public, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00358_fulfillment_transmission.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.client_order_status_v TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00360_fulfillment_ledger_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ledger_post_t2_deposit(uuid, bigint, text) FROM public, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00360_fulfillment_ledger_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ledger_post_t3_settle(uuid, int, bigint, text) FROM public, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00360_fulfillment_ledger_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ledger_post_t4_refund(uuid, int, int, bigint, text) FROM public, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00360_fulfillment_ledger_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ledger_post_t5_damage(text, int, jsonb, bigint, text) FROM public, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00360_fulfillment_ledger_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ledger_post_t6_freight_trueup(uuid, int, text, bigint, text) FROM public, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00360_fulfillment_ledger_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ledger_post_reversal(uuid, bigint, text, text) FROM public, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00360_fulfillment_ledger_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_record_transmission(uuid,text,text,text,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00360_fulfillment_ledger_templates.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_record_transmission(uuid,text,text,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00360_fulfillment_ledger_templates.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_settle_po(uuid, int, text, text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00360_fulfillment_ledger_templates.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_settle_po(uuid, int, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00361_fulfillment_stripe_recon.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stripe_recon_cursor_epoch() FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00361_fulfillment_stripe_recon.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stripe_recon_cursor_epoch() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00361_fulfillment_stripe_recon.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.stripe_balance_tx_ingest(jsonb, text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00361_fulfillment_stripe_recon.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.stripe_balance_tx_ingest(jsonb, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00361_fulfillment_stripe_recon.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.fulfillment_queue_v TO authenticated, agent_reader, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00361_fulfillment_stripe_recon.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.ledger_stripe_recon_v TO authenticated, agent_reader, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00363_fulfillment_shipment_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_confirm_appointment(uuid,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00363_fulfillment_shipment_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_confirm_appointment(uuid,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00363_fulfillment_shipment_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_record_delivery(uuid,text,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00363_fulfillment_shipment_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_record_delivery(uuid,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00363_fulfillment_shipment_rpcs.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_update_shipment_eta(uuid,date,text,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00363_fulfillment_shipment_rpcs.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_update_shipment_eta(uuid,date,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.fulfillment_evidence_upload_tokens FROM public, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.fulfillment_evidence_upload_tokens TO authenticated, agent_reader;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  GRANT ALL ON public.fulfillment_evidence_upload_tokens TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_enrich_ledger_lines(jsonb) FROM public, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_exception_consequence(uuid, text, jsonb) FROM public, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_resolve_exception(uuid, text, jsonb, boolean, text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_resolve_exception(uuid, text, jsonb, boolean, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.rule_leah_review(uuid,text,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.rule_leah_review(uuid,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_mint_evidence_token(uuid,int,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_mint_evidence_token(uuid,int,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_evidence_token_context(text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_evidence_token_context(text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_append_evidence(text, text[], text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_append_evidence(text, text[], text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_settle_po_preview(uuid, int) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00364_fulfillment_exceptions.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_settle_po_preview(uuid, int) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

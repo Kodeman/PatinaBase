@@ -18,6 +18,7 @@ export type NextActionKind =
   | 'in_production'
   | 'in_transit'
   | 'awaiting_settlement'
+  | 'reconcile_stripe'
   | 'review'
   | (string & {}); // unknown kinds are valid input — see fallback below
 
@@ -28,6 +29,8 @@ export interface NextActionParams {
   days_overdue?: number | null;
   /** Client surname (last name token) — threads the chase verb, spec §5.3. */
   client_surname?: string | null;
+  /** Signed ledger-vs-Stripe delta (cents) for the reconcile_stripe verb (§8). */
+  recon_delta_cents?: number | null;
   [key: string]: unknown;
 }
 
@@ -89,6 +92,21 @@ export function describeNextAction(action: NextAction | null | undefined): strin
       return 'In transit';
     case 'awaiting_settlement':
       return 'Awaiting settlement';
+    case 'reconcile_stripe': {
+      // Stripe reconciliation delta (§8, R2.3): ledger account 1000 for this
+      // order disagrees with its actual Stripe balance transactions. Show the
+      // signed dollar delta when we have it, else a neutral reconcile verb.
+      const cents = params.recon_delta_cents;
+      if (typeof cents === 'number' && cents !== 0) {
+        const sign = cents > 0 ? '+' : '−';
+        const dollars = (Math.abs(cents) / 100).toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+        return `Reconcile Stripe — ${sign}$${dollars}`;
+      }
+      return 'Reconcile Stripe';
+    }
     case 'review':
       return 'Review order';
     default:

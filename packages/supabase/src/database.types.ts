@@ -5654,6 +5654,47 @@ export type Database = {
         }
         Relationships: []
       }
+      fulfillment_evidence_upload_tokens: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          exception_id: string
+          expires_at: string
+          revoked: boolean
+          token: string
+          updated_at: string
+          used_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          exception_id: string
+          expires_at: string
+          revoked?: boolean
+          token: string
+          updated_at?: string
+          used_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          exception_id?: string
+          expires_at?: string
+          revoked?: boolean
+          token?: string
+          updated_at?: string
+          used_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fulfillment_evidence_upload_tokens_exception_id_fkey"
+            columns: ["exception_id"]
+            isOneToOne: false
+            referencedRelation: "fulfillment_exceptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fulfillment_exceptions: {
         Row: {
           cause_code: string | null
@@ -5665,6 +5706,7 @@ export type Database = {
           opened_at: string
           order_id: string | null
           order_item_id: string | null
+          outcome_memo: string | null
           po_id: string | null
           resolution_path: string | null
           resolved_at: string | null
@@ -5683,6 +5725,7 @@ export type Database = {
           opened_at?: string
           order_id?: string | null
           order_item_id?: string | null
+          outcome_memo?: string | null
           po_id?: string | null
           resolution_path?: string | null
           resolved_at?: string | null
@@ -5701,6 +5744,7 @@ export type Database = {
           opened_at?: string
           order_id?: string | null
           order_item_id?: string | null
+          outcome_memo?: string | null
           po_id?: string | null
           resolution_path?: string | null
           resolved_at?: string | null
@@ -15589,6 +15633,72 @@ export type Database = {
           },
         ]
       }
+      stripe_balance_transactions: {
+        Row: {
+          amount_cents: number
+          created: string
+          currency: string
+          fee_cents: number
+          id: string
+          net_cents: number
+          payment_intent_id: string | null
+          payout_id: string | null
+          raw: Json
+          source_id: string | null
+          synced_at: string
+          type: string
+        }
+        Insert: {
+          amount_cents: number
+          created: string
+          currency?: string
+          fee_cents?: number
+          id: string
+          net_cents?: number
+          payment_intent_id?: string | null
+          payout_id?: string | null
+          raw?: Json
+          source_id?: string | null
+          synced_at?: string
+          type: string
+        }
+        Update: {
+          amount_cents?: number
+          created?: string
+          currency?: string
+          fee_cents?: number
+          id?: string
+          net_cents?: number
+          payment_intent_id?: string | null
+          payout_id?: string | null
+          raw?: Json
+          source_id?: string | null
+          synced_at?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      stripe_recon_cursor: {
+        Row: {
+          id: boolean
+          last_created: string | null
+          last_synced_at: string
+          last_txn_id: string | null
+        }
+        Insert: {
+          id?: boolean
+          last_created?: string | null
+          last_synced_at?: string
+          last_txn_id?: string | null
+        }
+        Update: {
+          id?: boolean
+          last_created?: string | null
+          last_synced_at?: string
+          last_txn_id?: string | null
+        }
+        Relationships: []
+      }
       stripe_webhook_events: {
         Row: {
           id: string
@@ -17973,6 +18083,7 @@ export type Database = {
           client_name: string | null
           derived_status: string | null
           designer_attribution: Json | null
+          has_recon_delta: boolean | null
           has_unmapped: boolean | null
           intake_at: string | null
           min_stage_idx: number | null
@@ -17983,10 +18094,25 @@ export type Database = {
           order_no: number | null
           po_count: number | null
           po_stages: Json | null
+          recon_delta_cents: number | null
           stage_age_business_hours: number | null
           stage_entered_at: string | null
           unmapped_count: number | null
           vendor_count: number | null
+        }
+        Relationships: []
+      }
+      ledger_stripe_recon_v: {
+        Row: {
+          day: string | null
+          delta_cents: number | null
+          ledger_1000_cents: number | null
+          ledger_credit_cents: number | null
+          ledger_debit_cents: number | null
+          stripe_amount_cents: number | null
+          stripe_fee_cents: number | null
+          stripe_net_cents: number | null
+          stripe_txn_count: number | null
         }
         Relationships: []
       }
@@ -19525,6 +19651,10 @@ export type Database = {
         Args: { p_purchase_order_id: string }
         Returns: undefined
       }
+      fulfillment_append_evidence: {
+        Args: { p_actor: string; p_keys: string[]; p_token: string }
+        Returns: Json
+      }
       fulfillment_assign_line_vendor: {
         Args: {
           p_actor: string
@@ -19538,8 +19668,24 @@ export type Database = {
         Args: { p_from: string; p_to: string }
         Returns: number
       }
+      fulfillment_confirm_appointment: {
+        Args: { p_actor: string; p_shipment_id: string }
+        Returns: undefined
+      }
       fulfillment_confirm_split: {
         Args: { p_actor: string; p_order_id: string }
+        Returns: Json
+      }
+      fulfillment_enrich_ledger_lines: {
+        Args: { p_lines: Json }
+        Returns: Json
+      }
+      fulfillment_evidence_token_context: {
+        Args: { p_token: string }
+        Returns: Json
+      }
+      fulfillment_exception_consequence: {
+        Args: { p_exception_id: string; p_params: Json; p_path: string }
         Returns: Json
       }
       fulfillment_intake_order: {
@@ -19561,6 +19707,10 @@ export type Database = {
           p_started: string
         }
         Returns: number
+      }
+      fulfillment_mint_evidence_token: {
+        Args: { p_actor: string; p_exception_id: string; p_ttl_hours: number }
+        Returns: Json
       }
       fulfillment_move_line: {
         Args: { p_actor: string; p_item_id: string; p_po_id: string }
@@ -19623,19 +19773,37 @@ export type Database = {
       fulfillment_resolve_exception: {
         Args: {
           p_actor: string
-          p_cause_code: string
           p_exception_id: string
+          p_params: Json
+          p_path: string
           p_preview: boolean
-          p_resolution_path: string
         }
         Returns: Json
       }
       fulfillment_settle_po: {
-        Args: { p_actor: string; p_po_id: string }
-        Returns: undefined
+        Args: {
+          p_actor: string
+          p_po_id: string
+          p_variance_reason: string
+          p_vendor_invoice_cents: number
+        }
+        Returns: Json
+      }
+      fulfillment_settle_po_preview: {
+        Args: { p_po_id: string; p_vendor_invoice_cents: number }
+        Returns: Json
       }
       fulfillment_update_config: {
         Args: { p_actor: string; p_key: string; p_value: Json }
+        Returns: undefined
+      }
+      fulfillment_update_shipment_eta: {
+        Args: {
+          p_actor: string
+          p_current_eta: string
+          p_reason: string
+          p_shipment_id: string
+        }
         Returns: undefined
       }
       fulfillment_update_vendor_profile: {
@@ -19983,11 +20151,67 @@ export type Database = {
         }
         Returns: string
       }
+      ledger_post_reversal: {
+        Args: {
+          p_entry_id: string
+          p_memo: string
+          p_posted_by: string
+          p_source_event_id: number
+        }
+        Returns: string
+      }
       ledger_post_t1_capture: {
         Args: {
           p_order_id: string
           p_posted_by: string
           p_source_event_id: number
+        }
+        Returns: string
+      }
+      ledger_post_t2_deposit: {
+        Args: {
+          p_po_id: string
+          p_posted_by: string
+          p_source_event_id: number
+        }
+        Returns: string
+      }
+      ledger_post_t3_settle: {
+        Args: {
+          p_freight_variance_cents: number
+          p_po_id: string
+          p_posted_by: string
+          p_source_event_id: number
+        }
+        Returns: string
+      }
+      ledger_post_t4_refund: {
+        Args: {
+          p_order_id: string
+          p_posted_by: string
+          p_refund_cents: number
+          p_source_event_id: number
+          p_tax_reversal_cents: number
+        }
+        Returns: string
+      }
+      ledger_post_t5_damage: {
+        Args: {
+          p_amount_cents: number
+          p_outcome: string
+          p_posted_by: string
+          p_refs: Json
+          p_source_event_id: number
+        }
+        Returns: string
+      }
+      ledger_post_t6_freight_trueup: {
+        Args: {
+          p_po_id: string
+          p_posted_by: string
+          p_reason: string
+          p_source_event_id: number
+          p_variance_cents: number
         }
         Returns: string
       }
@@ -20528,7 +20752,7 @@ export type Database = {
       }
       rule_leah_review: {
         Args: { p_review_id: string; p_ruled_by: string; p_status: string }
-        Returns: undefined
+        Returns: Json
       }
       run_aesthete_drift_audit: {
         Args: { p_now?: string }
@@ -20787,6 +21011,11 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      stripe_balance_tx_ingest: {
+        Args: { p_cursor: string; p_txns: Json }
+        Returns: Json
+      }
+      stripe_recon_cursor_epoch: { Args: never; Returns: number }
       submit_coordination_revision: {
         Args: {
           p_attachments?: Json
