@@ -7,12 +7,13 @@ import {
   Settings,
   LogOut,
   HelpCircle,
+  Truck,
   type LucideIcon,
 } from 'lucide-react';
 
 // ─── Zone Definitions ────────────────────────────────────────────────────────
 
-export type ZoneKey = 'overview' | 'people' | 'content' | 'operations' | 'system';
+export type ZoneKey = 'overview' | 'people' | 'content' | 'operations' | 'system' | 'fulfillment';
 
 export interface ZoneConfig {
   key: ZoneKey;
@@ -22,6 +23,20 @@ export interface ZoneConfig {
   paths: string[];
   icon: LucideIcon;
 }
+
+// Back of House (S1, spec §1) — a 6th zone, gated at module level: hidden
+// from nav when the flag is unset, but its pages stay URL-routable either
+// way (a direct link/refresh to /fulfillment/* always works — only the nav
+// entry point is gated). Flip on locally with
+// NEXT_PUBLIC_ENABLE_FULFILLMENT=true in apps/admin-portal/.env.local.
+const FULFILLMENT_ZONE: ZoneConfig = {
+  key: 'fulfillment',
+  label: 'Fulfillment',
+  href: '/fulfillment',
+  paths: ['/fulfillment'],
+  icon: Truck,
+};
+const FULFILLMENT_ENABLED = process.env.NEXT_PUBLIC_ENABLE_FULFILLMENT === 'true';
 
 export const ZONES: ZoneConfig[] = [
   {
@@ -82,6 +97,7 @@ export const ZONES: ZoneConfig[] = [
     ],
     icon: ShieldCheck,
   },
+  ...(FULFILLMENT_ENABLED ? [FULFILLMENT_ZONE] : []),
 ];
 
 // ─── Sub-Navigation Items ────────────────────────────────────────────────────
@@ -128,6 +144,17 @@ export const ZONE_SUB_ITEMS: Record<ZoneKey, SubNavItem[]> = {
     { label: 'Flags', href: '/flags' },
     { label: 'Settings', href: '/settings' },
     { label: 'Demo', href: '/demo' },
+  ],
+  // Present unconditionally (ZoneKey requires it) — only reachable via nav
+  // when FULFILLMENT_ENABLED gates the zone itself into ZONES above. Every
+  // route here has a real page.tsx (S1 ships stubs for shipments/exceptions/
+  // vendors/config — see each page's header comment for which slice owns it).
+  fulfillment: [
+    { label: 'Queue', href: '/fulfillment', exact: true },
+    { label: 'Shipments', href: '/fulfillment/shipments' },
+    { label: 'Exceptions', href: '/fulfillment/exceptions' },
+    { label: 'Vendors', href: '/fulfillment/vendors' },
+    { label: 'Config', href: '/fulfillment/config' },
   ],
 };
 

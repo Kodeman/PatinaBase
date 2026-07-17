@@ -192,22 +192,34 @@ BEGIN
   END IF;
 END $$;
 
--- ── A6: 5 orders exist; every non-cancelled line sits in line_state='intake'
--- (nothing in S0 ever transitions a line past intake). ──────────────────────
+-- ── A6: the 5 pi_boh_seed_% orders exist; every non-cancelled line among
+-- THEM sits in line_state='intake' (nothing in S0 ever transitions a line
+-- past intake). Scoped to the pi_boh_seed_% naming convention (S1 amendment,
+-- flagged — see supabase/functions/_tests/fulfillment_queue_bands.assert.sql
+-- header): S1's own fixtures (scripts/seed-fulfillment-fixtures.sql,
+-- pi_boh_s1_fixture_%) legitimately advance additional orders past intake to
+-- exercise the Queue's Watching/Quiet bands, which a global unscoped count
+-- would (correctly) flag as a false regression here. Scoping to the seed
+-- script's own PI-id prefix preserves this assert's actual intent — "S0's
+-- five seeded orders are untouched at this checkpoint" — without going stale
+-- the moment a downstream slice adds its own legitimately-advanced fixtures.
 DO $$
 DECLARE
   v_order_count int;
   v_bad_lines   int;
 BEGIN
-  SELECT count(*) INTO v_order_count FROM public.fulfillment_orders;
+  SELECT count(*) INTO v_order_count
+    FROM public.fulfillment_orders WHERE stripe_payment_intent_id LIKE 'pi_boh_seed_%';
   SELECT count(*) INTO v_bad_lines
-    FROM public.fulfillment_order_items
-    WHERE line_state NOT IN ('intake', 'cancelled');
+    FROM public.fulfillment_order_items i
+    JOIN public.fulfillment_orders o ON o.id = i.order_id
+   WHERE o.stripe_payment_intent_id LIKE 'pi_boh_seed_%'
+     AND i.line_state NOT IN ('intake', 'cancelled');
 
   IF v_order_count = 5 AND v_bad_lines = 0 THEN
-    RAISE NOTICE 'A6 PASS: 5 orders exist, every non-cancelled line is in intake';
+    RAISE NOTICE 'A6 PASS: the 5 pi_boh_seed_%% orders exist, every non-cancelled line among them is in intake';
   ELSE
-    RAISE NOTICE 'A6 FAIL: order_count=% (want 5), non-intake/non-cancelled lines=% (want 0)', v_order_count, v_bad_lines;
+    RAISE NOTICE 'A6 FAIL: pi_boh_seed_%% order_count=% (want 5), non-intake/non-cancelled lines among them=% (want 0)', v_order_count, v_bad_lines;
   END IF;
 END $$;
 

@@ -17630,26 +17630,40 @@ export type Database = {
         Row: {
           client_name: string | null
           derived_status: string | null
+          designer_attribution: Json | null
           has_unmapped: boolean | null
           intake_at: string | null
           min_stage_idx: number | null
           open_exceptions: number | null
           order_id: string | null
           order_no: number | null
+          stage_entered_at: string | null
+          unmapped_count: number | null
+          vendor_count: number | null
         }
         Relationships: []
       }
       fulfillment_queue_v: {
         Row: {
           band: string | null
+          breached: boolean | null
           client_name: string | null
           derived_status: string | null
+          designer_attribution: Json | null
           has_unmapped: boolean | null
           intake_at: string | null
           min_stage_idx: number | null
+          next_action_kind: string | null
+          next_action_params: Json | null
           open_exceptions: number | null
           order_id: string | null
           order_no: number | null
+          po_count: number | null
+          po_stages: Json | null
+          stage_age_business_hours: number | null
+          stage_entered_at: string | null
+          unmapped_count: number | null
+          vendor_count: number | null
         }
         Relationships: []
       }

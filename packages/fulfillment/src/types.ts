@@ -75,3 +75,41 @@ export interface FulfillmentOrderDTO {
   taxCents: number;
   intakeAt: string;
 }
+
+/**
+ * Fulfillment Queue row (S1) — a verbatim passthrough of `fulfillment_queue_v`
+ * (00353) columns, snake_case to match the view directly (the API route DTO-
+ * passes this shape with zero client-side band/filter math, per spec §5.1's
+ * zero-invisibility invariant: the row list renders exactly what the view
+ * returns). See packages/fulfillment/src/next-action.ts for turning
+ * next_action_kind/params into display text.
+ */
+export interface FulfillmentQueuePoStage {
+  po_id: string;
+  po_number: string | null;
+  vendor_id: string;
+  vendor_name: string | null;
+  status: PoState;
+}
+
+export interface FulfillmentQueueRow {
+  order_id: string;
+  order_no: number;
+  client_name: string;
+  intake_at: string;
+  designer_attribution: Record<string, unknown> | null;
+  min_stage_idx: number | null;
+  has_unmapped: boolean;
+  unmapped_count: number;
+  vendor_count: number;
+  open_exceptions: number;
+  derived_status: string;
+  stage_entered_at: string | null;
+  po_count: number;
+  po_stages: FulfillmentQueuePoStage[];
+  breached: boolean;
+  stage_age_business_hours: number | null;
+  next_action_kind: string;
+  next_action_params: Record<string, unknown> | null;
+  band: Band;
+}

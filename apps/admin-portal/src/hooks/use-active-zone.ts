@@ -97,6 +97,11 @@ function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
       /^\/audit\/[^/]+/,
       /^\/flags\/[^/]+/,
     ],
+    // S1: the Order Workbench route (S2 builds the real page; a placeholder
+    // ships today — see app/(dashboard)/fulfillment/orders/[orderId]/page.tsx).
+    fulfillment: [
+      /^\/fulfillment\/orders\/[^/]+/,
+    ],
   };
 
   const nonDeepPaths = [
