@@ -18,6 +18,9 @@ public enum FieldScanEvent: Sendable {
     case coverage(Double)
     /// A human-readable status line (e.g. "Move closer to the far wall").
     case status(String)
+    /// Live coach detail (item 5): per-surface checklist + warnings + coverage %.
+    /// Emitted on the RoomPlan graph-update cadence; drives the F2 coach overlay.
+    case coverageUpdate(CoverageSnapshot)
 }
 
 /// The finished local scan artifact (F3 review), before upload.
@@ -26,11 +29,17 @@ public struct FieldScanResult: Sendable, Codable {
     public let localBundleURL: URL
     public let roomName: String?
     public let areaLabel: String?
+    /// End-of-scan QA scorecard (item 5). Persisted to `scorecard.json` in the
+    /// bundle; carried here so the F3 review can render the verdict without re-reading
+    /// disk. Nil only for a legacy/degenerate scan that produced none.
+    public let scorecard: Scorecard?
 
-    public init(localBundleURL: URL, roomName: String? = nil, areaLabel: String? = nil) {
+    public init(localBundleURL: URL, roomName: String? = nil, areaLabel: String? = nil,
+                scorecard: Scorecard? = nil) {
         self.localBundleURL = localBundleURL
         self.roomName = roomName
         self.areaLabel = areaLabel
+        self.scorecard = scorecard
     }
 }
 

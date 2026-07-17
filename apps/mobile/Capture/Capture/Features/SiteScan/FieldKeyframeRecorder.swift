@@ -92,6 +92,13 @@ final class FieldKeyframeRecorder: CaptureFrameSink {
         return evaluated > 0 ? Double(blurRejected) / Double(evaluated) : 0
     }
 
+    /// Sharp-frame ratio for the scorecard (fired / (fired + blurRejected)). 1.0
+    /// when nothing was evaluated (a no-op scan is gated elsewhere by coverage).
+    var sharpFrameRatio: Double {
+        let evaluated = fired + blurRejected
+        return evaluated > 0 ? Double(fired) / Double(evaluated) : 1.0
+    }
+
     // MARK: - CaptureFrameSink
 
     func capture(frame: ARFrame, timestampSeconds: TimeInterval) {
@@ -106,8 +113,8 @@ final class FieldKeyframeRecorder: CaptureFrameSink {
         guard gate.shouldEvaluate(now: frameTimestamp, lastEvaluation: lastEvaluation) else { return }
         lastEvaluation = frameTimestamp
 
-        // 3. Sharpness on a decimated luma grid (cheap, sparse).
-        guard let grid = Self.decimatedLuma(frame.capturedImage) else { return }
+        // 3. Sharpness on a decimated luma grid (cheap, sparse; shared LumaProbe).
+        guard let grid = LumaProbe.decimatedLuma(frame.capturedImage) else { return }
         let score = Sharpness.varianceOfLaplacian(luma: grid.samples, width: grid.width, height: grid.height)
         guard gate.isSharp(score) else {
             // Motion-triggered but blurred — reject, DON'T advance lastFiredPose, so
@@ -195,38 +202,6 @@ final class FieldKeyframeRecorder: CaptureFrameSink {
         ]
     }
 
-    /// A decimated single-channel luma grid.
-    private struct LumaGrid {
-        let samples: [UInt8]
-        let width: Int
-        let height: Int
-    }
-
-    /// Decimate the ARFrame's Y (luma) plane to ~`targetWidth` wide for a cheap
-    /// sharpness estimate. Nearest-sample decimation — a coarse proxy (documented),
-    /// enough to separate sharp from blurred without touching the full-res image.
-    private static func decimatedLuma(_ pixelBuffer: CVPixelBuffer, targetWidth: Int = 160) -> LumaGrid? {
-        guard CVPixelBufferGetPlaneCount(pixelBuffer) >= 1 else { return nil }
-        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
-        guard let base = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else { return nil }
-        let w = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
-        let h = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
-        let stride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
-        let step = max(1, w / targetWidth)
-        let outW = w / step
-        let outH = h / step
-        guard outW >= 3, outH >= 3 else { return nil }
-        let ptr = base.assumingMemoryBound(to: UInt8.self)
-        var samples = [UInt8](repeating: 0, count: outW * outH)
-        for oy in 0..<outH {
-            let srcRow = (oy * step) * stride
-            for ox in 0..<outW {
-                samples[oy * outW + ox] = ptr[srcRow + ox * step]
-            }
-        }
-        return LumaGrid(samples: samples, width: outW, height: outH)
-    }
 }
 
 // MARK: - Snapshot handed to the background writer

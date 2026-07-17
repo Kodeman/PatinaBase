@@ -91,6 +91,10 @@ final class SharedARCaptureRig: NSObject {
     private var depthRecorder: FieldDepthRecorder?
     private var meshRecorder: FieldSceneMeshRecorder?
     private var keyframeRecorder: FieldKeyframeRecorder?
+    // Item-5 coach + QA gate.
+    private var coverageCoach: FieldCoverageCoach?
+    /// The end-of-scan scorecard, built at `stopRecording` (nil until then).
+    private(set) var lastScorecard: Scorecard?
 
     private var isRecording = false
     private let logger = Logger(subsystem: "cloud.patina.field", category: "CaptureRig")
@@ -150,6 +154,13 @@ final class SharedARCaptureRig: NSObject {
             let keyframes = FieldKeyframeRecorder(bundleDir: bundleDir, timebase: timebase)
             keyframeRecorder = keyframes
             frameSinks.add(keyframes)
+
+            let coach = FieldCoverageCoach(bundleDir: bundleDir)
+            coverageCoach = coach
+            frameSinks.add(coach)
+            #if canImport(RoomPlan)
+            roomUpdateSinks.add(coach)
+            #endif
         }
 
         arSession.run(makeConfiguration())
@@ -193,7 +204,15 @@ final class SharedARCaptureRig: NSObject {
         depthRecorder?.finish()
         meshRecorder?.finish()
         keyframeRecorder?.finish()
+        // Build + persist the QA scorecard from the coach + keyframe metrics.
+        // anchorCount is 0 until item 6 wires typed anchor entry.
+        lastScorecard = coverageCoach?.finalize(
+            sharpFrameRatio: keyframeRecorder?.sharpFrameRatio ?? 1.0,
+            anchorCount: 0)
     }
+
+    /// The current live coverage snapshot for the F2 coach (nil if no coach).
+    func coverageSnapshot() -> CoverageSnapshot? { coverageCoach?.snapshot() }
 
     /// Coarse capture metrics for telemetry / the manifest (item 3 surfaces
     /// these; item 13 populates `scan_pipeline_events` from them).

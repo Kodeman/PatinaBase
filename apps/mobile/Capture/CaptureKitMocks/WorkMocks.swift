@@ -270,9 +270,23 @@ public final class MockScanSession: FieldScanSession {
         AsyncStream { continuation in
             continuation.yield(.status("Scanning — walk the room slowly"))
             continuation.yield(.coverage(0.15))
+            // Partial coverage + a nudge, so the F2 coach overlay renders on the sim.
+            continuation.yield(.coverageUpdate(CoverageSnapshot(
+                coveragePct: 35,
+                checklist: [
+                    SurfaceStatus(surface: "wall:north", covered: true),
+                    SurfaceStatus(surface: "wall:south", covered: false),
+                    SurfaceStatus(surface: "wall:east", covered: false),
+                    SurfaceStatus(surface: "wall:west", covered: false),
+                    SurfaceStatus(surface: "floor", covered: true),
+                    SurfaceStatus(surface: "ceiling", covered: false)
+                ],
+                warnings: [.tooFar])))
             continuation.yield(.coverage(0.4))
             continuation.yield(.status("Capture the far corner"))
             continuation.yield(.coverage(0.7))
+            continuation.yield(.coverageUpdate(CoverageSnapshot(
+                coveragePct: 100, checklist: Self.completeChecklist, warnings: [])))
             continuation.yield(.coverage(0.92))
             continuation.yield(.coverage(1.0))
             continuation.yield(.status("Room captured"))
@@ -282,10 +296,25 @@ public final class MockScanSession: FieldScanSession {
 
     public func finish() async throws -> FieldScanResult {
         FieldScanResult(localBundleURL: WorkFixtures.scanBundleURL,
-                        roomName: "Living room", areaLabel: "312 sq ft")
+                        roomName: "Living room", areaLabel: "312 sq ft",
+                        scorecard: Self.mockScorecard)
     }
 
     public func cancel() {}
+
+    private static let completeChecklist: [SurfaceStatus] = [
+        SurfaceStatus(surface: "wall:north", covered: true),
+        SurfaceStatus(surface: "wall:south", covered: true),
+        SurfaceStatus(surface: "wall:east", covered: true),
+        SurfaceStatus(surface: "wall:west", covered: true),
+        SurfaceStatus(surface: "floor", covered: true),
+        SurfaceStatus(surface: "ceiling", covered: true),
+        SurfaceStatus(surface: "opening:1", covered: true)
+    ]
+
+    private static let mockScorecard = Scorecard(
+        coveragePct: 100, sharpFrameRatio: 0.88, trackingHealth: .good,
+        anchorCount: 0, verdict: .green, surfaceChecklist: completeChecklist, namedGaps: [])
 }
 
 @MainActor

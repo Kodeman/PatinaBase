@@ -26,6 +26,9 @@ struct SiteScanReviewStep: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 header
+                if let scorecard = result.scorecard {
+                    SiteScanScorecardCard(scorecard: scorecard)
+                }
                 SiteScanSection("Room name") {
                     TextField("Room name", text: Binding(get: { model.name },
                                                          set: { model.name = $0 }))

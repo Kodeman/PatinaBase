@@ -156,7 +156,8 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
         let bundleURL = try exportBundle(room)
         return FieldScanResult(localBundleURL: bundleURL,
                                roomName: nil,
-                               areaLabel: floorAreaSqm.map(Self.areaLabel))
+                               areaLabel: floorAreaSqm.map(Self.areaLabel),
+                               scorecard: rig.lastScorecard)
     }
 
     func cancel() {
@@ -273,9 +274,12 @@ extension RoomPlanScanSession: RoomCaptureViewDelegate, RoomCaptureSessionDelega
             self.lastCoverage = value
             self.eventContinuation.yield(.coverage(value))
             // Fan the live parametric graph out to the rig's room-update sinks
-            // (items 5/6 plug in here) on the shared clock. Item 3 has no consumer
-            // yet; this keeps the seam live without touching the session plumbing.
+            // (item 5's coach rebuilds its surfaces here) on the shared clock, then
+            // surface the coach's live checklist/warnings to F2 on this cadence.
             self.rig.deliverRoomUpdate(room)
+            if let coverage = self.rig.coverageSnapshot() {
+                self.eventContinuation.yield(.coverageUpdate(coverage))
+            }
         }
     }
 

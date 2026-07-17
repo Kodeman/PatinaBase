@@ -32,6 +32,9 @@ final class SiteScanHostModel {
     var coverage: Double = 0
     var status: String = "Preparing scan…"
     var scanError: String?
+    /// Live coach detail (item 5) — per-surface checklist + warnings. Nil until the
+    /// first `.coverageUpdate` (device real mode, or the mock's scripted ramp).
+    var coverageSnapshot: CoverageSnapshot?
     var session: (any FieldScanSession)?
     /// Editable scan name — seeded from F1's handoff, tweaked in F3, sent in F4.
     var name: String
@@ -66,6 +69,7 @@ final class SiteScanHostModel {
                 switch event {
                 case .coverage(let value): self.coverage = value
                 case .status(let line): self.status = line
+                case .coverageUpdate(let snapshot): self.coverageSnapshot = snapshot
                 }
             }
         }
@@ -170,6 +174,11 @@ struct SiteScanScanStep: View {
                 SiteScanCoverageMeter(coverage: model.coverage, status: model.status)
                     .padding(.horizontal, 18)
                     .padding(.top, 8)
+                if let snapshot = model.coverageSnapshot {
+                    SiteScanCoachOverlay(snapshot: snapshot)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 10)
+                }
                 Spacer()
                 if let scanError = model.scanError { errorBanner(scanError) }
                 controls
