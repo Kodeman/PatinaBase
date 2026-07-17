@@ -253,3 +253,78 @@ export const fulfillmentConfigService = {
     });
   },
 };
+
+// ── S5: shipments ────────────────────────────────────────────────────────────
+// The Shipment Board (spec §5.4) — routes under /api/admin/fulfillment/shipments/*.
+// See hooks/use-fulfillment-shipments.ts for the React Query wiring and
+// hooks/index.ts's S5 section for the export surface.
+import type { FulfillmentShipmentsBoardDTO, ShipmentMode } from '@patina/fulfillment';
+
+export interface CreateShipmentInput {
+  poId: string;
+  mode: ShipmentMode;
+  carrier: string;
+  tracking: string;
+}
+
+export const fulfillmentShipmentsService = {
+  /** The Shipment Board's one round-trip: every shipment + the POs eligible to
+   *  become a new one (spec §5.4). */
+  async listBoard(): Promise<FulfillmentShipmentsBoardDTO> {
+    return request<FulfillmentShipmentsBoardDTO>('/api/admin/fulfillment/shipments');
+  },
+
+  /** "Tracking (manual entry v1)" — binds to fulfillment_record_shipment
+   *  (00353), which both creates the shipment row and steps the PO/lines to
+   *  shipped in one call. */
+  async createShipment(input: CreateShipmentInput): Promise<{ shipmentId: string }> {
+    return request('/api/admin/fulfillment/shipments', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Confirm the LTL/white_glove delivery appointment. ⚠ No RPC backs this yet
+   *  (schema gap I10, reported for S6) — the route 501s honestly until one
+   *  lands; see the route's header comment. */
+  async confirmAppointment(
+    shipmentId: string,
+    confirmedAt?: string,
+  ): Promise<{ ok: true; appointmentConfirmedAt: string }> {
+    return request(`/api/admin/fulfillment/shipments/${shipmentId}/appointment`, {
+      method: 'POST',
+      body: JSON.stringify(confirmedAt ? { confirmedAt } : {}),
+    });
+  },
+
+  /** Upload proof of delivery — stores to project-documents, then stamps
+   *  pod_r2_key + opens the inspection window via fulfillment_record_delivery. */
+  async uploadPod(
+    shipmentId: string,
+    file: File,
+  ): Promise<{ ok: true; podR2Key: string; inspectionClosesAt: string | null }> {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`/api/admin/fulfillment/shipments/${shipmentId}/pod`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || `Request failed: ${res.status}`);
+    }
+    const json = await res.json();
+    return json.data;
+  },
+
+  /** Mark a shipment delivered without a POD (typically parcel). Gated
+   *  identically to the pod route (LTL/white_glove requires a confirmed
+   *  appointment first). */
+  async deliver(shipmentId: string): Promise<{ ok: true }> {
+    return request(`/api/admin/fulfillment/shipments/${shipmentId}/deliver`, {
+      method: 'POST',
+    });
+  },
+};
+
+export type { FulfillmentShipmentsBoardDTO };
