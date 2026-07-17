@@ -167,7 +167,8 @@ struct SiteScanAnchorStep: View {
                     }
                     .disabled(!(anchor?.canAdd(valueText) ?? false))
                 }
-                if !valueText.isEmpty && !(anchor?.canAdd(valueText) ?? false) {
+                if anchor?.pendingCount == 2, !valueText.isEmpty,
+                   AnchorMeasurementParser.parseMillimetres(valueText) == nil {
                     Text("Check the value")          // ESCALATE placeholder (A2 out-of-range/unparseable)
                         .font(CaptureType.footnote)
                         .foregroundStyle(CaptureColor.warning)

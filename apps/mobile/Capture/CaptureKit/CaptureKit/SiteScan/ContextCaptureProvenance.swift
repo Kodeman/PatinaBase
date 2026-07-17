@@ -22,11 +22,14 @@
 //    siteScanContext.cameraPose    = "m00,m01,…,m33" row-major (absent on non-Pro)
 //    siteScanContext.capturedAt    = ISO8601
 //
-//  ROUTING NOTE: SiteScan's `projectRoomID` is a `public.rooms` id, but
-//  `field_captures.project_room_id` references `project_rooms(id)` — a different id
-//  space. So the field_capture routes on `project_id` only (projects-compatible) and
-//  carries the rooms-id + scan-id in provenance for the portal to resolve; it never
-//  writes the rooms-id into `project_room_id` (which would fail the routing guard).
+//  ROUTING NOTE: context captures land in the INBOX (destination='inbox'). The
+//  commit RPC's inbox path does NOT persist the project_id / project_room_id columns
+//  — an inbox row carries its project/room association in PROVENANCE ONLY, and item
+//  12 (the portal Inbox) must resolve it from these keys. `projectId` is still passed
+//  to the RPC (the ownership guard reads it), but the durable association lives here.
+//  (SiteScan's projectRoomID is a `public.rooms` id anyway — incompatible with
+//  `field_captures.project_room_id` → `project_rooms(id)` — so it never belongs in
+//  that column; it rides in provenance for the portal to reconcile.)
 
 import Foundation
 
