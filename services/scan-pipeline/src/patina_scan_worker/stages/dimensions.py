@@ -24,9 +24,10 @@ from .captured_room import M_TO_FT, RoomModel
 from .solve_math import (
     Anchor,
     ScaleFit,
+    estimated_tolerance_mm,
     match_height_anchor,
     match_span_anchor,
-    tolerance_mm,
+    measured_tolerance_mm,
 )
 
 _CLASS_RANK = {"verified": 0, "measured": 1, "estimated": 2}
@@ -38,11 +39,11 @@ class MeasurementSpec:
     label: str
     element_ref: dict[str, Any]
     value_mm: int
-    source: str            # 'anchor' | 'parametric'
-    tolerance_mm: int
-    tolerance_class: str    # 'verified' | 'measured' | 'estimated'
+    source: str                 # 'anchor' | 'parametric'
+    tolerance_mm: int | None     # None for RoomPlan-invented values (F2)
+    tolerance_class: str         # 'verified' | 'measured' | 'estimated'
     anchor_client_id: str | None  # resolved to scan_anchors.id by the stage
-    rollup: bool            # affects the room-level tolerance_class badge
+    rollup: bool                 # affects the room-level tolerance_class badge
 
 
 @dataclass
@@ -52,14 +53,6 @@ class BuildResult:
     dimension_counts: dict[str, int] = field(default_factory=lambda: {"verified": 0, "measured": 0, "estimated": 0})
     rollup_class: str = "estimated"
     floor_area_sqft: float = 0.0
-
-
-def _measured_or_estimated(
-    model_mm: float, scale: float, unverified: bool, pct: float
-) -> tuple[int, int, str]:
-    value = int(round(scale * model_mm))
-    cls = "estimated" if unverified else "measured"
-    return value, tolerance_mm(value, pct), cls
 
 
 def build_measurements(
@@ -90,32 +83,30 @@ def build_measurements(
 
     def emit(label, element_ref, model_mm, rollup, snap: Anchor | None = None, invented=False):
         if snap is not None:
-            spec = MeasurementSpec(
-                label=label, element_ref=element_ref,
-                value_mm=snap.measured_value_mm, source="anchor",
-                tolerance_mm=0, tolerance_class="verified",
-                anchor_client_id=snap.client_anchor_id, rollup=rollup,
-            )
-        elif invented:
-            spec = MeasurementSpec(
-                label=label, element_ref=element_ref,
-                value_mm=int(round(s * model_mm)), source="parametric",
-                tolerance_mm=tolerance_mm(int(round(s * model_mm)), pct),
-                tolerance_class="estimated", anchor_client_id=None, rollup=rollup,
-            )
+            value, tol, cls, cid = snap.measured_value_mm, 0, "verified", snap.client_anchor_id
+            source = "anchor"
         else:
-            value, tol, cls = _measured_or_estimated(model_mm, s, unverified, pct)
-            spec = MeasurementSpec(
-                label=label, element_ref=element_ref, value_mm=value,
-                source="parametric", tolerance_mm=tol, tolerance_class=cls,
-                anchor_client_id=None, rollup=rollup,
-            )
-        res.specs.append(spec)
-        res.dimension_counts[spec.tolerance_class] += 1
+            value = int(round(s * model_mm))
+            source, cid = "parametric", None
+            if invented:
+                # RoomPlan-invented (thickness): a convention, not a measurement (F2).
+                cls, tol = "estimated", None
+            elif unverified:
+                # real dim, no anchor correction → RoomPlan's native band (F2).
+                cls, tol = "estimated", estimated_tolerance_mm(value)
+            else:
+                cls, tol = "measured", measured_tolerance_mm(value, pct)
+        res.specs.append(MeasurementSpec(
+            label=label, element_ref=element_ref, value_mm=value, source=source,
+            tolerance_mm=tol, tolerance_class=cls, anchor_client_id=cid, rollup=rollup,
+        ))
+        res.dimension_counts[cls] += 1
 
     # ── walls: length + height (+ thickness, always estimated) ─────────────────
+    # element_ref carries `idx` so it is unique per element even when RoomPlan
+    # omits an identifier — the UNIQUE(room_file_id, element_ref) guard (F3).
     for i, w in enumerate(room.walls):
-        ref = {"kind": "wall", "apple_id": w.apple_id}
+        ref = {"kind": "wall", "apple_id": w.apple_id, "idx": i}
         if math.isfinite(w.length_m) and w.length_m > 0:
             emit("wall length", {**ref, "dim": "length"}, w.length_m * 1000, True,
                  snap=snapped.get((i, "length")))
@@ -128,8 +119,8 @@ def build_measurements(
 
     # ── openings: width + height (+ sill/head when the y-frame is usable) ──────
     floor_y = min((w.base_y_m for w in room.walls if math.isfinite(w.base_y_m)), default=math.nan)
-    for o in room.openings:
-        ref = {"kind": o.kind, "apple_id": o.apple_id, "parent_id": o.parent_id}
+    for oi, o in enumerate(room.openings):
+        ref = {"kind": o.kind, "apple_id": o.apple_id, "parent_id": o.parent_id, "idx": oi}
         emit(f"{o.kind} width", {**ref, "dim": "width"}, o.width_m * 1000, True)
         emit(f"{o.kind} height", {**ref, "dim": "height"}, o.height_m * 1000, True)
         if math.isfinite(o.center_y_m) and math.isfinite(floor_y):

@@ -179,9 +179,13 @@ class DbClient:
         unverified: bool,
         tolerance_class: str,
         anchor_count: int,
-    ) -> None:
-        self._patch(
-            "room_files?id=eq.{}".format(room_file_id),
+    ) -> bool:
+        """Forward-only (F1): the PATCH is scoped to status in (pending, solved),
+        so a replayed solve can NEVER regress a room_file the drawings stage
+        already advanced to 'generated'. Returns True if it wrote, False if the
+        guard skipped (the caller logs the skip)."""
+        updated = self._patch(
+            "room_files?id=eq.{}&status=in.(pending,solved)".format(room_file_id),
             {
                 "certificate": certificate,
                 "unverified": unverified,
@@ -190,5 +194,6 @@ class DbClient:
                 "status": "solved",
                 "generation_error": None,
             },
-            prefer="return=minimal",
+            prefer="return=representation",
         )
+        return bool(updated)

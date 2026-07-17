@@ -42,21 +42,36 @@ def test_class_counts_and_rollup():
     assert built.used_anchor_ids == {"a-north", "a-east", "a-height"}
 
 
-def test_thickness_is_estimated_and_not_rollup_affecting():
+def test_thickness_is_estimated_invented_null_tolerance():
+    # F2: wall thickness is a RoomPlan-invented convention → estimated, NULL tolerance
     _, _, _, built = _setup()
     thick = [s for s in built.specs if s.element_ref.get("dim") == "thickness"]
     assert len(thick) == 4
     assert all(s.tolerance_class == "estimated" for s in thick)
+    assert all(s.tolerance_mm is None for s in thick)   # invented → no tolerance
     assert all(s.rollup is False for s in thick)
 
 
-def test_unverified_propagation():
-    # < 3 anchors → UNVERIFIED: every dimension 'estimated', no verified rows
+def test_unverified_propagation_and_estimated_band():
+    # < 3 anchors → UNVERIFIED: every dimension 'estimated', no verified rows.
     _, _, _, built = _setup(unverified=True)
     assert built.dimension_counts["verified"] == 0
     assert all(s.tolerance_class == "estimated" for s in built.specs)
     assert built.used_anchor_ids == set()
     assert built.rollup_class == "estimated"
+    # F2: real estimated dims carry RoomPlan's band (>= ±5 cm), NOT the ±1 cm floor;
+    # invented thickness carries NULL.
+    real = [s for s in built.specs if s.element_ref.get("dim") != "thickness"]
+    assert all(s.tolerance_mm is not None and s.tolerance_mm >= 50 for s in real)
+    thick = [s for s in built.specs if s.element_ref.get("dim") == "thickness"]
+    assert all(s.tolerance_mm is None for s in thick)
+
+
+def test_element_ref_unique_within_a_solve():
+    # F3: element_ref (incl. idx) is unique per dimension so the DB UNIQUE holds.
+    _, _, _, built = _setup()
+    keys = [tuple(sorted(s.element_ref.items())) for s in built.specs]
+    assert len(keys) == len(set(keys))
 
 
 def test_unscaled_fixture_measures_model_values():

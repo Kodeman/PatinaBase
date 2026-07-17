@@ -31,12 +31,19 @@ from typing import Any
 
 SOLVER_VERSION = 1
 SCALE_BOUNDS = (0.8, 1.25)
-SENSOR_FLOOR_MM = 10
+SENSOR_FLOOR_MM = 10           # 'measured' floor (±1 cm, anchor-corrected)
 RESIDUAL_FLAG_MM = 25
 MATCH_TOL_M = 0.20
 MIN_VERIFIED_ANCHORS = 3
+# 'estimated' band (F2): a REAL RoomPlan dimension with no anchor correction is
+# honest about RoomPlan's native accuracy — ~±2% / ±5 cm floor (deck SC-01/SC-13),
+# NOT the ±1 cm sensor floor. RoomPlan-INVENTED values (wall thickness) get a NULL
+# tolerance — the value is a convention, not a measurement.
+ESTIMATED_FLOOR_MM = 50
+ESTIMATED_PCT = 0.02
 
-TOLERANCE_FORMULA = "max(sensor_floor_mm, round(rms_residual_pct * dimension_mm))"
+MEASURED_FORMULA = "max(sensor_floor_mm, round(rms_residual_pct * dimension_mm))"
+ESTIMATED_FORMULA = "max(floor_mm, round(pct * dimension_mm))"
 
 
 @dataclass
@@ -144,14 +151,50 @@ def fit_scale(anchors: list[Anchor]) -> ScaleFit:
     )
 
 
+def refit_at_scale(anchors: list[Anchor], scale: float) -> ScaleFit:
+    """A ScaleFit at a FIXED scale (F4: an ignored implausible fit falls back to
+    s=1). Residuals are recomputed against the forced scale."""
+    per: list[dict[str, Any]] = []
+    sq_res = 0.0
+    sq_rel = 0.0
+    n = 0
+    for a in anchors:
+        d = anchor_model_mm(a)
+        if not (math.isfinite(d) and d > 0):
+            continue
+        residual = a.measured_value_mm - scale * d
+        per.append({
+            "client_anchor_id": a.client_anchor_id,
+            "typed_mm": a.measured_value_mm,
+            "model_mm": round(d, 3),
+            "residual_mm": round(residual, 3),
+        })
+        sq_res += residual ** 2
+        sq_rel += (residual / a.measured_value_mm) ** 2
+        n += 1
+    return ScaleFit(
+        scale=scale,
+        rms_residual_mm=round(math.sqrt(sq_res / n), 3) if n else 0.0,
+        rms_residual_pct=round(math.sqrt(sq_rel / n), 6) if n else 0.0,
+        per_anchor=per,
+    )
+
+
 def scale_is_plausible(scale: float) -> bool:
     lo, hi = SCALE_BOUNDS
     return math.isfinite(scale) and lo <= scale <= hi
 
 
-def tolerance_mm(dimension_mm: float, rms_residual_pct: float) -> int:
+def measured_tolerance_mm(dimension_mm: float, rms_residual_pct: float) -> int:
+    """'measured' ± — anchor-corrected, floored at the ±1 cm sensor floor."""
     rel = rms_residual_pct * dimension_mm if math.isfinite(rms_residual_pct) else 0.0
     return int(max(SENSOR_FLOOR_MM, round(rel)))
+
+
+def estimated_tolerance_mm(dimension_mm: float) -> int:
+    """'estimated' ± for a REAL (non-invented) dimension — RoomPlan's native
+    band (F2), floored at ±5 cm, never the ±1 cm sensor floor."""
+    return int(max(ESTIMATED_FLOOR_MM, round(ESTIMATED_PCT * dimension_mm)))
 
 
 def _close(a: tuple[float, float], b: tuple[float, float], tol: float = MATCH_TOL_M) -> bool:
@@ -190,6 +233,7 @@ def build_certificate(
     dimension_counts: dict[str, int],
     floor_area_sqft: float,
     anchor_count: int,
+    scale_ignored: bool = False,
 ) -> dict[str, Any]:
     anchors = []
     for pa in fit.per_anchor:
@@ -202,14 +246,29 @@ def build_certificate(
     return {
         "solver_version": SOLVER_VERSION,
         "scale": round(fit.scale, 6),
+        "scale_ignored": scale_ignored,
         "rms_residual_mm": fit.rms_residual_mm,
         "rms_residual_pct": fit.rms_residual_pct,
         "anchors": anchors,
         "anchor_count": anchor_count,
+        # Both tolerance bases recorded (F2): 'measured' is anchor-corrected
+        # (±1 cm floor); 'estimated' is RoomPlan's native band (±5 cm / 2% floor);
+        # 'invented' values (thickness) carry no tolerance.
         "tolerance_model": {
-            "sensor_floor_mm": SENSOR_FLOOR_MM,
-            "rms_residual_pct": fit.rms_residual_pct,
-            "formula": TOLERANCE_FORMULA,
+            "measured": {
+                "sensor_floor_mm": SENSOR_FLOOR_MM,
+                "rms_residual_pct": fit.rms_residual_pct,
+                "formula": MEASURED_FORMULA,
+            },
+            "estimated": {
+                "floor_mm": ESTIMATED_FLOOR_MM,
+                "pct": ESTIMATED_PCT,
+                "formula": ESTIMATED_FORMULA,
+            },
+            "invented": {
+                "tolerance_mm": None,
+                "note": "RoomPlan-invented values (e.g. wall thickness) are a convention, not a measurement",
+            },
         },
         "scale_bounds": list(SCALE_BOUNDS),
         "unverified": unverified,
@@ -219,9 +278,9 @@ def build_certificate(
 
 
 _CERT_KEYS = {
-    "solver_version", "scale", "rms_residual_mm", "rms_residual_pct", "anchors",
-    "anchor_count", "tolerance_model", "scale_bounds", "unverified",
-    "dimension_counts", "floor_area_sqft",
+    "solver_version", "scale", "scale_ignored", "rms_residual_mm",
+    "rms_residual_pct", "anchors", "anchor_count", "tolerance_model",
+    "scale_bounds", "unverified", "dimension_counts", "floor_area_sqft",
 }
 
 
@@ -243,6 +302,14 @@ def validate_certificate(cert: Any) -> list[str]:
     scale = cert["scale"]
     if not (isinstance(scale, (int, float)) and scale_is_plausible(scale)):
         errs.append(f"scale {scale} out of plausible bounds {SCALE_BOUNDS}")
+
+    # F4: an ignored implausible fit falls back to s=1 and only ever happens on
+    # an UNVERIFIED (< 3 anchor) room.
+    if cert.get("scale_ignored"):
+        if not cert.get("unverified"):
+            errs.append("scale_ignored is only valid on an unverified room")
+        if scale != 1.0:
+            errs.append(f"scale_ignored requires scale == 1.0, got {scale}")
 
     counts = cert["dimension_counts"]
     if not isinstance(counts, dict) or set(counts) < {"verified", "measured", "estimated"}:

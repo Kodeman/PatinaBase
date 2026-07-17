@@ -210,7 +210,17 @@ CREATE TABLE IF NOT EXISTS public.room_file_measurements (
   CONSTRAINT rfm_anchor_source_shape CHECK (
     (source <> 'anchor' OR anchor_id IS NOT NULL)
     AND (tolerance_class <> 'verified' OR anchor_id IS NOT NULL)
-  )
+  ),
+
+  -- One row per (deliverable version, dimension). The solve stage writes its
+  -- measurement set delete-then-insert; this UNIQUE makes concurrent DOUBLED
+  -- rows impossible — a racing second solve's insert fails loudly (23505) into
+  -- the worker's transient/retry handling rather than silently doubling the set.
+  -- element_ref is the dimension's stable identity ({kind, apple_id, idx, dim});
+  -- jsonb keys are stored sorted, so equality is order-independent. (Added at
+  -- item-10 F3; 00341 still undeployed to Strata — `supabase migration list`
+  -- Remote head 00340 — so widening in place is sanctioned, not a new file.)
+  CONSTRAINT rfm_element_ref_uniq UNIQUE (room_file_id, element_ref)
 );
 
 COMMENT ON TABLE public.room_file_measurements IS

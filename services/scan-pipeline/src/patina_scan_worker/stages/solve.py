@@ -32,6 +32,7 @@ from .solve_math import (
     build_certificate,
     fit_scale,
     parse_anchors,
+    refit_at_scale,
     scale_is_plausible,
     validate_certificate,
 )
@@ -134,16 +135,24 @@ class SolveStage(BaseStage):
         # re-assert UNVERIFIED (never recompute differently): manifest flag OR <3.
         unverified = bool(manifest.get("unverified")) or anchor_count < MIN_VERIFIED_ANCHORS
 
-        # ── scale fit + plausibility guard ─────────────────────────────────────
+        # ── scale fit + plausibility guard (F4) ────────────────────────────────
         fit = fit_scale(anchors)
-        if anchor_count > 0 and not scale_is_plausible(fit.scale):
-            exc = PermanentError(
-                f"scale {fit.scale:.4f} outside plausible bounds — a fat-thumbed "
-                f"anchor must not silently rescale a room",
-                token="SOLVE_IMPLAUSIBLE",
-            )
-            exc.detail_extra = {"scale": fit.scale, "anchors": fit.per_anchor}
-            raise exc
+        scale_ignored = False
+        if anchor_count >= MIN_VERIFIED_ANCHORS:
+            # a verified room's implausible fit is fatal — never silently rescale
+            if not scale_is_plausible(fit.scale):
+                exc = PermanentError(
+                    f"scale {fit.scale:.4f} outside plausible bounds — a fat-thumbed "
+                    f"anchor must not silently rescale a room",
+                    token="SOLVE_IMPLAUSIBLE",
+                )
+                exc.detail_extra = {"scale": fit.scale, "anchors": fit.per_anchor}
+                raise exc
+        elif anchor_count >= 1 and not scale_is_plausible(fit.scale):
+            # UNVERIFIED room with a sloppy 1–2-anchor fit: ignore it and fall back
+            # to s=1 — a bad anchor must not produce a WORSE outcome than no anchor.
+            fit = refit_at_scale(anchors, 1.0)
+            scale_ignored = True
 
         # ── dimensions + tolerance classes ─────────────────────────────────────
         built = build_measurements(room, anchors, fit, unverified)
@@ -197,6 +206,7 @@ class SolveStage(BaseStage):
             dimension_counts=built.dimension_counts,
             floor_area_sqft=built.floor_area_sqft,
             anchor_count=anchor_count,
+            scale_ignored=scale_ignored,
         )
         cert_errors = validate_certificate(cert)
         if cert_errors:
@@ -206,20 +216,29 @@ class SolveStage(BaseStage):
             exc.detail_extra = {"certificate_errors": cert_errors}
             raise exc
 
-        # ── write measurements + finalize room_files → 'solved' ────────────────
+        # ── write measurements + finalize room_files → 'solved' (forward-only) ─
         ctx.db.replace_measurements(room_file_id, rows)
-        ctx.db.finalize_room_file_solved(
+        wrote = ctx.db.finalize_room_file_solved(
             room_file_id=room_file_id,
             certificate=cert,
             unverified=unverified,
             tolerance_class=built.rollup_class,
             anchor_count=anchor_count,
         )
+        if not wrote:
+            # F1: the room_file had already advanced past 'solved' (e.g. drawings
+            # ran); the forward-only guard skipped the regress. Record it, don't fail.
+            ctx.telemetry.emit(
+                scan_id, "solve", "solve.finalize_skipped", "info",
+                room_file_id=room_file_id,
+                detail={"reason": "room_file already past 'solved' (forward-only guard)"},
+            )
 
         ctx.telemetry.emit(
             scan_id, "solve", "solve.fit", "info", room_file_id=room_file_id,
             detail={
-                "scale": cert["scale"], "rms_residual_mm": fit.rms_residual_mm,
+                "scale": cert["scale"], "scale_ignored": scale_ignored,
+                "rms_residual_mm": fit.rms_residual_mm,
                 "anchors_used": len(built.used_anchor_ids),
             },
         )

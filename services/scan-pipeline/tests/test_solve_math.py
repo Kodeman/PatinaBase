@@ -7,15 +7,18 @@ import math
 import pytest
 
 from patina_scan_worker.stages.solve_math import (
+    ESTIMATED_FLOOR_MM,
     SCALE_BOUNDS,
     SENSOR_FLOOR_MM,
     build_certificate,
+    estimated_tolerance_mm,
     fit_scale,
     match_height_anchor,
     match_span_anchor,
+    measured_tolerance_mm,
     parse_anchors,
+    refit_at_scale,
     scale_is_plausible,
-    tolerance_mm,
     validate_certificate,
 )
 
@@ -71,11 +74,27 @@ def test_scale_plausibility():
     assert not scale_is_plausible(float("nan"))
 
 
-def test_tolerance_model_floors_at_sensor():
+def test_measured_tolerance_floors_at_sensor():
     # tiny relative residual → floored at ±1 cm
-    assert tolerance_mm(4000, 0.0001) == SENSOR_FLOOR_MM
+    assert measured_tolerance_mm(4000, 0.0001) == SENSOR_FLOOR_MM
     # a big relative residual widens proportionally
-    assert tolerance_mm(4000, 0.02) == 80  # 0.02 * 4000
+    assert measured_tolerance_mm(4000, 0.02) == 80  # 0.02 * 4000
+
+
+def test_estimated_tolerance_uses_roomplan_band_not_sensor_floor():
+    # F2: an estimated REAL dim gets RoomPlan's native band (±5 cm / 2%), never
+    # the ±1 cm sensor floor.
+    assert estimated_tolerance_mm(1000) == ESTIMATED_FLOOR_MM   # max(50, 20) = 50
+    assert estimated_tolerance_mm(4000) == 80                    # max(50, 80) = 80
+    assert estimated_tolerance_mm(1000) != SENSOR_FLOOR_MM
+
+
+def test_refit_at_scale_forces_scale():
+    anchors = parse_anchors([_anchor("a1", 4.0, 4040), _anchor("a2", 5.0, 5050)])
+    forced = refit_at_scale(anchors, 1.0)
+    assert forced.scale == 1.0
+    # residuals recomputed against s=1: 4040-4000=40, 5050-5000=50
+    assert {round(p["residual_mm"]) for p in forced.per_anchor} == {40, 50}
 
 
 def test_match_span_anchor_either_orientation():
@@ -126,3 +145,18 @@ def test_certificate_unverified_rules():
 
 def test_certificate_missing_keys():
     assert any("missing keys" in e for e in validate_certificate({"scale": 1.0}))
+
+
+def test_certificate_scale_ignored_rules():
+    # F4: an ignored implausible fit → s=1, scale_ignored=true, on an unverified room
+    anchors = parse_anchors([_anchor("a1", 4.0, 8000)])  # implausible s≈2
+    fit = refit_at_scale(anchors, 1.0)
+    cert = build_certificate(
+        fit=fit, used_anchor_ids=set(), unverified=True,
+        dimension_counts={"verified": 0, "measured": 0, "estimated": 10},
+        floor_area_sqft=100.0, anchor_count=1, scale_ignored=True,
+    )
+    assert validate_certificate(cert) == []
+    # scale_ignored on a NON-unverified room is invalid
+    cert["unverified"] = False
+    assert any("unverified" in e for e in validate_certificate(cert))
