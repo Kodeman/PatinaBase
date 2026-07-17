@@ -59,3 +59,14 @@ export {
   useUpdateMedia,
 } from './use-media-upload';
 export type { UseMediaUploadOptions } from './use-media-upload';
+
+// ── S4: Back of House notifications/directory/config (spec §6, §7, §10) ─────
+export {
+  notificationKeys,
+  useOrderNotifications,
+  findPendingDraft,
+  useDraftClientNote,
+  useSendClientNote,
+} from './use-fulfillment-notifications';
+export { vendorKeys, useVendorDirectory, useVendorDetail, useUpdateVendorProfile } from './use-fulfillment-vendors';
+export { configKeys, useFulfillmentConfig, useUpdateFulfillmentConfig } from './use-fulfillment-config';

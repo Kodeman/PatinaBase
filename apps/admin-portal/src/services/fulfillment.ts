@@ -1,4 +1,8 @@
-import type { FulfillmentQueueRow, FulfillmentOrderDetailDTO } from '@patina/fulfillment';
+import type {
+  FulfillmentQueueRow,
+  FulfillmentOrderDetailDTO,
+  FulfillmentComposerDTO,
+} from '@patina/fulfillment';
 
 // Back of House — the Fulfillment Queue's data layer (S1). Talks to
 // /api/admin/fulfillment/queue, which is a service-role SELECT of
@@ -75,6 +79,177 @@ export const fulfillmentService = {
       method: 'POST',
     });
   },
+
+  // ── S3: composer/transmission ──────────────────────────────────────────────
+  // Do NOT reorder the entries above; S4 appends its own section below this one.
+
+  /** The PO Composer's one round-trip: PO + lines + vendor protocol + the
+   *  append-only transmission log (spec §5.3). */
+  async getComposer(poId: string): Promise<FulfillmentComposerDTO> {
+    return request<FulfillmentComposerDTO>(`/api/admin/fulfillment/pos/${poId}`);
+  },
+
+  /** URL of the PO preview PDF (the fn's `preview` mode, proxied). The composer
+   *  fetches this into a Blob for the <object> preview / "Open PDF" link. */
+  previewUrl(poId: string): string {
+    return `/api/admin/fulfillment/pos/${poId}/preview`;
+  },
+
+  /** Fetch the preview PDF as a Blob (for an <object type="application/pdf">). */
+  async previewBlob(poId: string): Promise<Blob> {
+    const res = await fetch(this.previewUrl(poId));
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(body.error || `Preview failed: ${res.status}`);
+    }
+    return res.blob();
+  },
+
+  /** Email transmit — the fn sends from orders@ + logs po.transmitted. */
+  async send(poId: string): Promise<{ ok: true; method: string; reference: string | null }> {
+    return request(`/api/admin/fulfillment/pos/${poId}/transmit`, {
+      method: 'POST',
+      body: JSON.stringify({ mode: 'send' }),
+    });
+  },
+
+  /** Portal/CSV transmit — archives the PDF + logs po.transmitted with the
+   *  operator-entered method + reference; no email. */
+  async markTransmitted(
+    poId: string,
+    payload: { method: 'portal' | 'csv'; reference?: string },
+  ): Promise<{ ok: true; method: string; reference: string | null }> {
+    return request(`/api/admin/fulfillment/pos/${poId}/transmit`, {
+      method: 'POST',
+      body: JSON.stringify({ mode: 'mark_transmitted', ...payload }),
+    });
+  },
+
+  /** Download URL for the vendor CSV (built to csv_column_spec). */
+  csvUrl(poId: string): string {
+    return `/api/admin/fulfillment/pos/${poId}/csv`;
+  },
+
+  /** Record a vendor ack — re-dates the committed ship (client ETA) + drafts the
+   *  client ETA-change note (spec §5.3). */
+  async ack(
+    poId: string,
+    payload: { committedShip: string; ackMethod?: string; ackRef?: string },
+  ): Promise<{ ok: true; committedShip: string; noteId: string | null }> {
+    return request(`/api/admin/fulfillment/pos/${poId}/ack`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
-export type { FulfillmentQueueRow, FulfillmentOrderDetailDTO };
+export type { FulfillmentQueueRow, FulfillmentOrderDetailDTO, FulfillmentComposerDTO };
+
+// ── S4: notifications/directory/config ──────────────────────────────────────
+// Notification dispatcher (spec §6), vendor directory + scorecards (spec §7),
+// config editor (spec §10). Routes: /api/admin/fulfillment/notifications/*,
+// /vendors/*, /config/* — see hooks/use-fulfillment-notifications.ts,
+// use-fulfillment-vendors.ts, use-fulfillment-config.ts for the React Query
+// wiring.
+import type {
+  FulfillmentClientNotificationDTO,
+  FulfillmentConfigRow,
+  VendorDirectoryRow,
+  VendorProfileDTO,
+  VendorScorecard,
+} from '@patina/fulfillment';
+
+export interface DraftNoteInput {
+  orderId: string;
+  transition: string;
+}
+
+export interface DraftNoteResult {
+  note_id: string;
+  order_id: string;
+  transition: string;
+  template_key: string;
+  subject: string;
+  drafted_body: string;
+}
+
+export interface NotifyChannelResult {
+  success?: boolean;
+  id?: string;
+  error?: string;
+  sent?: number;
+  skipped?: string;
+  skipped_reason: string | null;
+}
+
+export interface SendNoteResult {
+  notification_id: string;
+  transition: string;
+  email: NotifyChannelResult;
+  push: NotifyChannelResult;
+  edited: boolean;
+}
+
+export const fulfillmentNotifyService = {
+  /** Renders + persists a drafted client note for the given transition (spec §6). */
+  async draftNote(input: DraftNoteInput): Promise<DraftNoteResult> {
+    return request<DraftNoteResult>('/api/admin/fulfillment/notifications/draft', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Sends the drafted (or operator-edited) note — email + a best-effort push
+   *  sibling, dispatched together server-side. `editedBody` omitted or
+   *  byte/whitespace-identical to the draft sends the fast (unedited) path. */
+  async sendNote(notificationId: string, editedBody?: string): Promise<SendNoteResult> {
+    return request<SendNoteResult>(`/api/admin/fulfillment/notifications/${notificationId}/send`, {
+      method: 'POST',
+      body: JSON.stringify(editedBody != null ? { editedBody } : {}),
+    });
+  },
+
+  /** History for the note drawer — every channel's row for an order, newest first. */
+  async listNotifications(orderId: string): Promise<FulfillmentClientNotificationDTO[]> {
+    return request<FulfillmentClientNotificationDTO[]>(
+      `/api/admin/fulfillment/notifications?orderId=${encodeURIComponent(orderId)}`,
+    );
+  },
+};
+
+export const fulfillmentVendorsService = {
+  /** Vendor Directory list (spec §7) — every vendor, profiled or not. */
+  async listVendors(): Promise<VendorDirectoryRow[]> {
+    return request<VendorDirectoryRow[]>('/api/admin/fulfillment/vendors');
+  },
+
+  /** A vendor's name + profile (null if none yet) + its trailing-90d scorecard. */
+  async getVendor(
+    vendorId: string,
+  ): Promise<{ vendorId: string; vendorName: string; profile: VendorProfileDTO | null; scorecard: VendorScorecard }> {
+    return request(`/api/admin/fulfillment/vendors/${vendorId}`);
+  },
+
+  /** Writes via fulfillment_update_vendor_profile (00353, R1.6). */
+  async updateVendorProfile(vendorId: string, patch: Record<string, unknown>): Promise<{ ok: true }> {
+    return request(`/api/admin/fulfillment/vendors/${vendorId}/profile`, {
+      method: 'POST',
+      body: JSON.stringify(patch),
+    });
+  },
+};
+
+export const fulfillmentConfigService = {
+  /** Every fulfillment_config row (spec §10). */
+  async listConfig(): Promise<FulfillmentConfigRow[]> {
+    return request<FulfillmentConfigRow[]>('/api/admin/fulfillment/config');
+  },
+
+  /** Writes via fulfillment_update_config (00353) — events config.updated. */
+  async updateConfig(key: string, value: Record<string, unknown>): Promise<{ ok: true }> {
+    return request(`/api/admin/fulfillment/config/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      body: JSON.stringify({ value }),
+    });
+  },
+};

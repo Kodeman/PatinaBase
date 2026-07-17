@@ -17794,9 +17794,14 @@ export type Database = {
       client_order_status_v: {
         Row: {
           client_status: string | null
+          confirmed_at: string | null
+          delivered_at: string | null
+          eta: string | null
+          in_production_at: string | null
           intake_at: string | null
           order_id: string | null
           order_no: number | null
+          shipped_at: string | null
         }
         Relationships: []
       }
