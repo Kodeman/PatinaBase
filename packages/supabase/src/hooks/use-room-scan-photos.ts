@@ -209,3 +209,103 @@ export function useRoomScanPhotos(scanId: string | null | undefined) {
     },
   });
 }
+
+/**
+ * Cover photo per scan, for a SET of scan ids in one round trip (Room
+ * Photos W2-T6). A strip/grid that renders a variable number of scans can't
+ * call `useRoomScanPhotos` once per tile — that's a hook call inside a loop,
+ * which breaks rules-of-hooks the moment the tile count changes between
+ * renders. This is the batch sibling: one query across every requested
+ * `scan_id`, one `resolveCoverPhoto` (I81) per scan, then ONE
+ * `createSignedUrls` call over just the resolved covers' paths — cheaper
+ * than signing every photo in every scan's set to show a single tile each.
+ *
+ * Returns a `Map<scanId, RoomScanPhoto | null>`. After a successful fetch,
+ * every requested id has an entry: the resolved+signed cover, or `null` when
+ * that scan has zero photo rows. A missing key means the query hasn't
+ * resolved yet (or was called with no ids) — callers distinguish "loading"
+ * from "confirmed empty" by key presence, not by the value under it.
+ */
+export function useRoomScanCovers(scanIds: Array<string | null | undefined>) {
+  const ids = Array.from(new Set(scanIds.filter((v): v is string => !!v))).sort();
+
+  return useQuery<Map<string, RoomScanPhoto | null>>({
+    queryKey: ['room-scan-covers', ids],
+    enabled: ids.length > 0,
+    // Mirrors useRoomScanPhotos — a scan's photo set is fixed once captured.
+    staleTime: 1000 * 60 * 30,
+    queryFn: async () => {
+      const supabase = getSupabase();
+
+      const { data, error } = await supabase
+        .from('room_scan_images')
+        .select(PHOTO_COLUMNS)
+        .in('scan_id', ids)
+        .order('display_order', { ascending: true })
+        .order('captured_at', { ascending: true });
+
+      if (error) throw error;
+
+      // Dedupe (I82) across the whole result set, then group by scan_id —
+      // equivalent to deduping per scan since `image_url` values are
+      // scan-scoped storage paths and don't collide across scans.
+      const byScan = new Map<string, RoomScanPhotoRow[]>();
+      for (const row of dedupeRoomScanPhotos((data ?? []) as RoomScanPhotoRow[])) {
+        const bucket = byScan.get(row.scan_id);
+        if (bucket) bucket.push(row);
+        else byScan.set(row.scan_id, [row]);
+      }
+
+      const covers = new Map<string, RoomScanPhotoRow | null>();
+      for (const id of ids) {
+        covers.set(id, resolveCoverPhoto(byScan.get(id) ?? []));
+      }
+
+      // Batch-sign only the resolved covers' paths — one storage round-trip
+      // no matter how many scans are in the strip.
+      const pathSet = new Set<string>();
+      for (const cover of covers.values()) {
+        if (!cover) continue;
+        const imagePath = publicUrlToPath(cover.image_url);
+        if (imagePath) pathSet.add(imagePath);
+        const thumbPath = publicUrlToPath(cover.thumbnail_url);
+        if (thumbPath) pathSet.add(thumbPath);
+      }
+
+      const signedByPath = new Map<string, string>();
+      if (pathSet.size > 0) {
+        const { data: signedData, error: signError } = await supabase.storage
+          .from('room-scans')
+          .createSignedUrls(Array.from(pathSet), 3600);
+
+        if (signError) throw signError;
+
+        for (const entry of signedData ?? []) {
+          if (entry.path && !entry.error) signedByPath.set(entry.path, entry.signedUrl);
+        }
+      }
+
+      const resolveUrl = (raw: string | null): string | null => {
+        if (!raw) return null;
+        const path = publicUrlToPath(raw);
+        if (!path) return raw;
+        return signedByPath.get(path) ?? null;
+      };
+
+      const result = new Map<string, RoomScanPhoto | null>();
+      for (const [id, cover] of covers) {
+        result.set(
+          id,
+          cover
+            ? {
+                ...cover,
+                signedImageUrl: resolveUrl(cover.image_url),
+                signedThumbUrl: resolveUrl(cover.thumbnail_url),
+              }
+            : null,
+        );
+      }
+      return result;
+    },
+  });
+}
