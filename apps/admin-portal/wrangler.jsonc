@@ -23,6 +23,7 @@
     "NEXT_PUBLIC_ENABLE_IMPERSONATION": "false",
     "NEXT_PUBLIC_ENABLE_ANALYTICS": "true",
     "NEXT_PUBLIC_ENABLE_DEBUG": "false",
+    "NEXT_PUBLIC_ENABLE_FULFILLMENT": "true",
     "NEXT_PUBLIC_ENABLED_OAUTH_PROVIDERS": "apple",
     "ORDERS_SERVICE_URL": "https://patina-orders-worker.kody-be3.workers.dev",
     "MEDIA_SERVICE_URL": "https://patina-media-svc-worker.kody-be3.workers.dev",
