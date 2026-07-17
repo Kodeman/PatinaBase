@@ -3844,3 +3844,33 @@ Fixed en route, pre-existing: /desk production build failure (useSearchParams wi
 Known gaps/owed: A3 deep-link (hard refresh of /room/[id] can bounce via DocumentGate — in-app nav is the v1 path); Kody's authenticated prod walk owed; local loader needs the HS256 vault key (documented in the fixture README); roster visible to all designers (rides the-document-pilot GA, per ruling I74e).
 
 *Entries add: I75 · last id = I75*
+
+### I76 · Scan photos — rulings (Kody) — 2026-07-17
+
+Photos enter the Room View. (a) Plan gains plan-anchored camera markers at each photo's capture position plus a quiet photo strip beneath the facts rail — "the drawing knows where you stood." (b) Orbit frustum markers ship IN v1 (not deferred behind Walk) — camera icons at capture pose, oriented to the ARFrame's forward vector. (c) The Brief-strip cover photo is in scope — the scan preview surface adopts a resolved cover photo, not a placeholder. (d) Patina Field gains posed-photo capture — this supersedes the v1-minimal "no photos" line for Field specifically (the client app's capture flow is unaffected). Ships to Strata at the program's end, alongside the six findings below.
+
+### I77 · Photo pipeline reality (audit) — 2026-07-17
+
+`room_scan_images` rows are fully posed: `camera_transform` is the ARFrame pose at capture — row-major 16-double array, position at indices [3],[7],[11], −Z forward — in the SAME ARKit world frame as the CapturedRoom geometry (no separate alignment step needed). Plan position derives from the parser's stored `origin_yaw_deg`/`origin_offset_m` de-rotation applied to the camera's XZ, the same math `worldToPlanFt` in lib.ts already uses for geometry. Prod census: `fa361ed4` (the v3 bundle) carries 33 `photo_kind='auto'` posed rows; `17c638ca` (Field v1) carries zero — the Field pipeline has never written a photo row. Writer = iOS direct batched insert (not the parser); RLS already grants associated designers read via 00032/00082, so no policy work is needed to surface them.
+
+### I78 · HEIC gotcha + derivative lane (code-only, blessed) — 2026-07-17
+
+All photo rows are `image/heic` — undecodable in Chrome and Firefox — and `thumbnail_url` is NULL on every row in prod: iOS builds a 256px JPEG thumbnail locally but never uploads it. Ruling (code-only, blessed): a server derivative lane mirrors the GLB lane. A `/convert/heic-to-jpeg` endpoint on the inference container (pillow-heif) does one decode into a 512px thumbnail and a 1600px preview, returned as JSON-b64; a `derive-scan-photo-media` edge sweep (`*/5` cron) drives it; derivatives land at `photo_derivatives/{uid}/{seg3}/{stem}_{size}.jpg`, 00287-compatible. Additive columns `derive_attempts`, `derive_error`, `preview_url` land in migration 00340. ⚠ 00350–00369 are reserved for Back of House — this program mints nothing in that range.
+
+### I79 · image_url signing defect — 2026-07-17
+
+`room_scan_images.image_url` (like the model URLs before it) is a `getPublicUrl` string against the PRIVATE `room-scans` bucket — it 400s at the storage edge. The sole existing consumer, `letterhead-instruments.tsx:52`, renders it raw today and is broken in prod right now, not hypothetically. Fix: a new `useRoomScanPhotos` signing hook, built on the `useSignedScanModelUrl` pattern already in the codebase, with letterhead converted to consume it instead of the raw column.
+
+### I80 · confirm-scan-bundle field mismatch — 2026-07-17
+
+The `confirm-scan-bundle` edge function reads `body.scanId`; both iOS apps send `scan_id` — every call has 400'd since the 00082 era. Practical effect: server-side artifact verification for scan bundles has never actually run in prod. Fix: accept both `scanId` and `scan_id` on the request body.
+
+### I81 · Hero is vestigial; cover-photo rule — 2026-07-17
+
+`hero_frame_url` has no producer — the `.heroThumbnail` artifact iOS is supposed to create is never created — and `photo_kind='hero'` is never assigned by either app; `is_primary` is set only by the client review step, well downstream of capture. Ruling: cover photo is resolved, not stored — `is_primary` first, then highest `quality_score`, then first `display_order`. The Brief scan strip moves off `room_scans.thumbnail_url` (permanently NULL) onto this resolver.
+
+### I82 · image_count discrepancy root cause — 2026-07-17
+
+`c4485bf3` shows 200 `room_scan_images` rows against `room_scans.image_count = 40` — traced to source, not a guess. The 00032 AFTER-INSERT trigger counts truthfully (200, including retried batch inserts); the client's own explicit `image_count` patch then overwrites the trigger's count with its stale local tally (40). Rules going forward: reads dedupe defensively (by `scan_id` + `image_url`); the derivative sweep short-circuits duplicates by filename stem; Field's new upload lane relies on the trigger alone and drops the explicit patch entirely.
+
+*Entries add: I76–I82 · last id = I82*
