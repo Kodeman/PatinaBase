@@ -3830,3 +3830,17 @@ No USD tooling anywhere (media 3D module is @gltf-transform GLB-only, USDZ input
 (a) Kody ruling 2026-07-16: ALL Document scan doors (Discovery fold, ceremony preview, letterhead "The scan" instrument, Folio) convert to the Room View — supersedes the package's two-door minimum; the old mesh ScanViewerSheet loses its remaining doors. (b) A3 deep-link fix NOT landed: DocumentGate (client-side fail-closed `the-document-pilot`) can bounce hard-refreshed `/room/[id]` to /portal while the flag resolves — known gap, in-app navigation is the v1 path, documented in the route header, not silently shipped. (c) Telemetry names ship verbatim from the ruling (`room_opened`, `mode_switched`, `measure_used` + 5 reserved) despite the family-prefix convention preference — names freeze on ship, `room_id` is the family carrier. (d) Ceremony door visible only to Kody until the `arrival-arc` flag widens (scoping fact). (e) No new feature flag — rides `the-document-pilot` (Kody ruling).
 
 *Entries add: R107 · I68–I74 · last id = I74*
+
+### I75 · The Room View — built and shipped to Strata — 2026-07-17
+
+V1 (R107 stage one: Plan + Orbit) built and shipped in one program: migrations 00337 (geometry schema + service-role write RPCs), 00338 (ingest crons + glb bookkeeping), 00339 (room_scan_documents view); edge functions parse-room-scan + convert-room-scan-glb; usd-core USDZ→GLB endpoint on the inference container; The Rooms Studio room + /room/[id] (Plan SVG, facts rail, two-point measure, Orbit plain-three.js lazy-mounted, Walk disabled "arrives with Place"); all five Document scan doors converted (I74a); telemetry room_opened/mode_switched/measure_used live, 5 names reserved.
+
+Main landed at 146e9af6; Strata migration head 00339; designer portal deployment 00025108-6fe9-48dc-b4e5-70f241de867b (2026-07-17T01:42Z).
+
+Prod acceptance on real scans, zero parser warnings: fa361ed4 (v3 bundle) → 35 elements, resolves Shape D via graduated relationship; 17c638ca (v1 Field) → 24 elements, resolves Shape A via project. GLB lane live — cron converted both (41,432 B and 1,556 B GLBs, valid model/gltf-binary; size asymmetry = sparser v1 USDZ, noted). Stuck scan c4485bf3 correctly untouched.
+
+Fixed en route, pre-existing: /desk production build failure (useSearchParams without Suspense, env-triggered) — proven on main via build matrix, fixed in 146e9af6. Local seed gaps closed (leads_room_scans designer uuid + wiring, room_scan_associations, lead_room_scans junctions).
+
+Known gaps/owed: A3 deep-link (hard refresh of /room/[id] can bounce via DocumentGate — in-app nav is the v1 path); Kody's authenticated prod walk owed; local loader needs the HS256 vault key (documented in the fixture README); roster visible to all designers (rides the-document-pilot GA, per ruling I74e).
+
+*Entries add: I75 · last id = I75*
