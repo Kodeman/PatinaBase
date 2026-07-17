@@ -597,4 +597,19 @@ Sweep: admin-portal build EXIT 0 (131 routes), client-portal build EXIT 0, `@pat
 
 ---
 
-*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I13 · R1–R3 · L— · last id = I13 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*
+### R4 · C2–C4 rulings — the accumulated review queue, closed — 2026-07-17
+
+Product interview conducted against Drop 2, Drop 3, the C2 PO-PDF escalation, and the I9/I11/I12 flag lists. Kody's calls:
+
+1. **R4.1 — The PO paper stays bottom-anchored.** The letterhead architecture is deliberate: header facts at the top, the money always at the foot, whitespace absorbing the middle on short POs. Against the reviewer's recommendation; no change.
+2. **R4.2 — Pledge basis: freight is pass-through.** Settled in two rounds — the first framing conflated two formulas (its "full freight expense" option's preview reduced algebraically to the as-built math), so the ruling was re-put with concrete figures: on retail $1,000 · trade $700 · freight charged $100 · actual $134, the pledge accrues on **$266** (retail − trade − freight variance), not $166 (fully-loaded). Freight charged offsets freight expense; only the true-up surprise moves the spread. S6's implementation stands unchanged, consistent with the C1-ratified money-strip projection.
+3. **R4.3 — T2 deposit basis = product trade cost only.** Freight is unknown at PO time and settles in full at T3/T6. As built.
+4. **R4.4 — Settled-order reconciliation deltas: accepted v1 limitation.** Unsettled deltas pin Needs Action Now; a delta surfacing after settlement lives in `ledger_stripe_recon_v` only, reviewed on inspection. Revisit at v1.1 with real volume.
+5. **R4.5 — The ETA-slip surface ships now.** `fulfillment_update_shipment_eta` was API-only (I11) — without an operator caller, `current_eta` could never move in production and the board's slip rendering was dead weight. A "Record ETA change" row action (date + required reason) lands in this same polish batch.
+6. **R4.6 — Seven code-level calls ratified as built**: the separate `pledge_tag:true` ledger entry (O2 tagging) · the separate read-only `fulfillment_settle_po_preview` RPC · evidence photos in `project-documents` under `fulfillment/evidence/` (no dedicated bucket) · the balance-tx mirror's resolved `payment_intent_id` column · parcel appointment-confirm as a trivial stamp · the explicit capture-identity CHECK · the dedicated `substitution` client-note transition.
+
+Implementation of R4.5 + two cosmetic fixes (case-file title spacing; the drop-2 fixture's parcel-chip/freight-carrier mismatch): this polish batch, same day.
+
+---
+
+*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I13 · R1–R4 · L— · last id = R4 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*

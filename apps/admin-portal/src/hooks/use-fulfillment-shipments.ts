@@ -67,3 +67,18 @@ export function useDeliverShipment(shipmentId: string) {
     },
   });
 }
+
+/** Record an operator-observed ETA change (R4.5) — the only caller of
+ *  fulfillment_update_shipment_eta (00363), which shipped API-only (I11)
+ *  until this landed: without it, current_eta could never move in
+ *  production and the board's slip rendering was dead weight. */
+export function useRecordEtaChange(shipmentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { currentEta: string; reason: string }) =>
+      fulfillmentShipmentsService.recordEtaChange(shipmentId, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: fulfillmentKeys.all });
+    },
+  });
+}

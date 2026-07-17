@@ -79,4 +79,5 @@ export {
   useConfirmAppointment,
   useUploadShipmentPod,
   useDeliverShipment,
+  useRecordEtaChange,
 } from './use-fulfillment-shipments';

@@ -325,6 +325,20 @@ export const fulfillmentShipmentsService = {
       method: 'POST',
     });
   },
+
+  /** Record an operator-observed ETA change (R4.5). Binds to
+   *  fulfillment_update_shipment_eta (00363), which shipped API-only (I11) —
+   *  this is the first production caller. `reason` is required by the route
+   *  (client-side too — see EtaChangeDialog), not just the RPC's audit log. */
+  async recordEtaChange(
+    shipmentId: string,
+    payload: { currentEta: string; reason: string },
+  ): Promise<{ ok: true; currentEta: string }> {
+    return request(`/api/admin/fulfillment/shipments/${shipmentId}/eta`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 export type { FulfillmentShipmentsBoardDTO };

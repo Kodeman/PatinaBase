@@ -16,17 +16,21 @@ import {
   useDeliverShipment,
   useUploadShipmentPod,
 } from '@/hooks/use-fulfillment-shipments';
+import { EtaChangeDialog } from '@/components/fulfillment/shipments/eta-change-dialog';
 
 // ShipmentRow (S5, spec §5.4) — one row per shipment. Layout: ModeChip leads,
 // then client/item/PO refs; carrier+tracking in DM Mono; a plain-language
 // status sentence; the right block carries promised-vs-current ETA (mono,
 // terracotta slip delta) and, on rows with an open inspection window, the
 // DeadlineClock — the loudest element on the board by contrast, not ornament
-// (BOH-DECISIONS I5). Action affordances (confirm appointment / upload POD /
-// mark delivered) render inline, gated by canDeliverShipment — the same pure
-// function the API routes enforce server-side, so "why is Deliver disabled"
-// and "why did the API 409" never drift apart (see the route headers under
-// api/admin/fulfillment/shipments/ for the RPC-layer gap this papers over).
+// (BOH-DECISIONS I5). Action affordances (confirm appointment / record ETA
+// change / upload POD / mark delivered) render inline, gated by
+// canDeliverShipment — the same pure function the API routes enforce
+// server-side, so "why is Deliver disabled" and "why did the API 409" never
+// drift apart (see the route headers under api/admin/fulfillment/shipments/
+// for the RPC-layer gap this papers over). Record ETA change (R4.5,
+// BOH-DECISIONS) is the first operator-facing caller of
+// fulfillment_update_shipment_eta (00363) — see eta-change-dialog.tsx.
 
 const monoCls = 'font-mono' as const;
 const monoStyle = { fontFamily: 'var(--font-meta)' } as const;
@@ -75,6 +79,30 @@ function AppointmentAction({ shipmentId }: { shipmentId: string }) {
           {(confirm.error as Error).message}
         </span>
       )}
+    </div>
+  );
+}
+
+function EtaChangeAction({ row }: { row: FulfillmentShipmentRow }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col items-end gap-1" data-testid="shipment-eta-action">
+      <button
+        type="button"
+        data-testid="shipment-record-eta-change"
+        onClick={() => setOpen(true)}
+        className="rounded-sm border px-2.5 py-1 text-[0.68rem] font-medium"
+        style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+      >
+        Record ETA change
+      </button>
+      <EtaChangeDialog
+        shipmentId={row.id}
+        currentEta={row.currentEta}
+        committedShip={row.committedShip}
+        open={open}
+        onClose={() => setOpen(false)}
+      />
     </div>
   );
 }
@@ -201,10 +229,11 @@ export function ShipmentRow({ row, nowMs }: ShipmentRowProps) {
           {statusSentence}
         </div>
 
-        <div className="mt-3">
+        <div className="mt-3 flex flex-col gap-2">
           {!row.deliveredAt &&
             (row.mode === 'ltl' || row.mode === 'white_glove') &&
             !row.appointmentConfirmedAt && <AppointmentAction shipmentId={row.id} />}
+          {!row.deliveredAt && <EtaChangeAction row={row} />}
           {!row.deliveredAt && <DeliverActions row={row} />}
         </div>
       </div>

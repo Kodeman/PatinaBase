@@ -153,8 +153,18 @@ export function ResolutionPaths({ caseFile }: { caseFile: ExceptionCaseFileDTO }
               className="w-full text-left"
               onClick={() => setSelected(isSel ? null : path)}
             >
-              <span className="text-[0.9rem] font-medium text-[var(--text-primary)]">{path.label}.</span>{' '}
-              <span className="text-[0.9rem] text-[var(--text-body)]">{path.sentence}</span>
+              {/* The button element itself carries a global `display:
+                  inline-flex; flex-direction: row` reset — a bare inline
+                  space (or even a block-display child) between two direct
+                  children still lays them out side by side, which is
+                  exactly how the title ran into the sentence with no visible
+                  gap. Wrapping both lines in a single flex-column child
+                  makes them ONE flex item to the button, immune to that
+                  reset regardless of how it's themed later. */}
+              <div className="flex w-full flex-col">
+                <div className="text-[0.9rem] font-medium text-[var(--text-primary)]">{path.label}.</div>
+                <div className="mt-0.5 text-[0.9rem] text-[var(--text-body)]">{path.sentence}</div>
+              </div>
             </button>
 
             {isSel && (
