@@ -6,41 +6,56 @@ import { ListRow } from '@/components/portal';
 
 // A single Fulfillment Queue row (S1, spec §5.1): mono order number + client
 // name, a meta line (vendor count / designer-sourced / unmapped / exception
-// counts), per-PO stage dots, and the right-edge next-action verb in clay —
-// terracotta when the row is SLA-breached. Renders whatever the queue view
-// gives it: an unrecognized next_action_kind still renders (describeNextAction
-// falls back to a neutral verb) — this row is never dropped for that reason.
+// counts), the order's six lifecycle stage dots, and the right-edge
+// next-action verb in clay — terracotta when the row is SLA-breached. Renders
+// whatever the queue view gives it: an unrecognized next_action_kind still
+// renders (describeNextAction falls back to a neutral verb) — this row is
+// never dropped for that reason.
 
-type PoStatus = FulfillmentQueueRow['po_stages'][number]['status'];
+// The order's SIX lifecycle stages (R3.4, C1 fix) — fixed dots on EVERY row
+// from intake (all empty) through delivered (all filled), replacing the old
+// per-PO dots (which rendered nothing pre-split, drop-1 KNOWN DEVIATION #1,
+// and whose count varied 1–6 with the order's vendor count). Mirrors
+// fulfillment_order_status_v / _queue_v's stage array (00353):
+// ['intake','split','transmitted','acknowledged','in_production','shipped',
+// 'delivered','settled'] — index 1 (intake) is the pre-split "nothing filled
+// yet" state and isn't itself a dot; 'settled' is excluded because
+// fulfillment_queue_v never surfaces settled orders (spec §5.1
+// zero-invisibility, scoped to non-settled).
+const LIFECYCLE_STAGES: ReadonlyArray<{ key: string; label: string }> = [
+  { key: 'split', label: 'Split' },
+  { key: 'transmitted', label: 'Transmitted' },
+  { key: 'acknowledged', label: 'Acknowledged' },
+  { key: 'in_production', label: 'In production' },
+  { key: 'shipped', label: 'Shipped' },
+  { key: 'delivered', label: 'Delivered' },
+];
 
-function stageDotVariant(status: PoStatus): 'off' | 'on' | 'bad' {
-  if (status === 'cancelled') return 'bad';
-  if (status === 'draft' || status === 'sent') return 'off';
-  return 'on'; // acknowledged, in_production, shipped, delivered, settled
+/** min_stage_idx 1 (intake) → 0 filled … 7 (delivered) → 6 filled; 8
+ *  (settled, never actually reaches this row) clamps to 6. */
+function filledStageCount(minStageIdx: number | null): number {
+  if (minStageIdx == null) return 0;
+  return Math.max(0, Math.min(LIFECYCLE_STAGES.length, minStageIdx - 1));
 }
 
-function StageDots({ poStages }: { poStages: FulfillmentQueueRow['po_stages'] }) {
-  if (!poStages || poStages.length === 0) return null;
+function StageDots({ minStageIdx }: { minStageIdx: number | null }) {
+  const filled = filledStageCount(minStageIdx);
   return (
     <span className="inline-flex items-center gap-1" data-testid="stage-dots">
-      {poStages.slice(0, 6).map((po) => {
-        const variant = stageDotVariant(po.status);
-        const color =
-          variant === 'bad'
-            ? 'var(--color-terracotta, var(--color-error))'
-            : variant === 'on'
-              ? 'var(--color-sage, var(--color-success))'
-              : 'var(--border-default)';
+      {LIFECYCLE_STAGES.map((stage, i) => {
+        const isFilled = i < filled;
+        const color = isFilled ? 'var(--color-sage, var(--color-success))' : 'var(--border-default)';
         return (
           <span
-            key={po.po_id}
+            key={stage.key}
             data-testid="stage-dot"
-            data-variant={variant}
-            title={`${po.vendor_name ?? 'Vendor'} — ${po.status}`}
+            data-stage={stage.key}
+            data-filled={isFilled}
+            title={stage.label}
             className="inline-block h-1.5 w-1.5 rounded-full border"
             style={{
               borderColor: color,
-              backgroundColor: variant === 'off' ? 'transparent' : color,
+              backgroundColor: isFilled ? color : 'transparent',
             }}
           />
         );
@@ -94,7 +109,7 @@ export function QueueRow({ row, selected, onOpen }: QueueRowProps) {
         meta={metaParts}
         right={
           <div className="flex items-center gap-4">
-            <StageDots poStages={row.po_stages} />
+            <StageDots minStageIdx={row.min_stage_idx} />
             <div className="text-right">
               <div
                 data-testid="queue-row-verb"
