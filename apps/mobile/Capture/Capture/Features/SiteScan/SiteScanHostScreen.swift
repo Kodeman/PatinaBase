@@ -24,6 +24,7 @@ final class SiteScanHostModel {
     // the current step, never compares two.
     enum Step {
         case scanning
+        case anchoring          // item 6 — typed anchor entry (session still alive)
         case review(FieldScanResult)
         case upload(FieldScanResult)
     }
@@ -32,6 +33,9 @@ final class SiteScanHostModel {
     var coverage: Double = 0
     var status: String = "Preparing scan…"
     var scanError: String?
+    /// Live coach detail (item 5) — per-surface checklist + warnings. Nil until the
+    /// first `.coverageUpdate` (device real mode, or the mock's scripted ramp).
+    var coverageSnapshot: CoverageSnapshot?
     var session: (any FieldScanSession)?
     /// Editable scan name — seeded from F1's handoff, tweaked in F3, sent in F4.
     var name: String
@@ -39,9 +43,25 @@ final class SiteScanHostModel {
     private let siteScan: any SiteScanService
     private var eventTask: Task<Void, Never>?
 
-    init(siteScan: any SiteScanService, name: String) {
+    // Item-7 context capture (mid-scan photo + voice → Capture Inbox).
+    private let store: CaptureStore
+    private let projectID: String?
+    private let projectRoomID: String?
+    private let voiceService: any VoiceNoteService
+
+    @ObservationIgnored lazy var contextModel = SiteScanContextModel(
+        store: store, projectID: projectID, projectRoomID: projectRoomID, voice: voiceService,
+        scanSessionIdProvider: { [weak self] in (self?.session as? ContextCapturing)?.scanSessionId },
+        frameProvider: { [weak self] in (self?.session as? ContextCapturing)?.captureContextFrame() })
+
+    init(siteScan: any SiteScanService, name: String, store: CaptureStore,
+         projectID: String?, projectRoomID: String?, voice: any VoiceNoteService) {
         self.siteScan = siteScan
         self.name = name
+        self.store = store
+        self.projectID = projectID
+        self.projectRoomID = projectRoomID
+        self.voiceService = voice
     }
 
     func startScan() async {
@@ -66,9 +86,19 @@ final class SiteScanHostModel {
                 switch event {
                 case .coverage(let value): self.coverage = value
                 case .status(let line): self.status = line
+                case .coverageUpdate(let snapshot): self.coverageSnapshot = snapshot
                 }
             }
         }
+    }
+
+    /// End scanning and move to the typed-anchor step WITHOUT tearing the session
+    /// down (item 6) — raycasting anchors needs the live shared session. The anchor
+    /// step then calls `finishScan()` to build the room + persist anchors.
+    func beginAnchoring() {
+        eventTask?.cancel()          // stop draining coverage updates; keep the session
+        (session as? AnchorCapturing)?.beginAnchoringPhase()   // A4: quiesce depth + posed
+        step = .anchoring
     }
 
     func finishScan() async {
@@ -115,7 +145,10 @@ struct SiteScanHostScreen: View {
         self.projectRoomID = projectRoomID
         self.handoffProjectName = handoff.projectName
         let name = handoff.name.isEmpty ? SiteScanSetupModel.defaultName() : handoff.name
-        _model = State(wrappedValue: SiteScanHostModel(siteScan: container.siteScan, name: name))
+        _model = State(wrappedValue: SiteScanHostModel(
+            siteScan: container.siteScan, name: name, store: container.store,
+            projectID: projectID, projectRoomID: projectRoomID,
+            voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory())))
     }
 
     var body: some View {
@@ -137,6 +170,10 @@ struct SiteScanHostScreen: View {
                                  model.cancelScan()
                                  coordinator.goBack()
                              })
+        case .anchoring:
+            SiteScanAnchorStep(model: model,
+                               analytics: container.analytics,
+                               onDone: { Task { await model.finishScan() } })
         case .review(let result):
             SiteScanReviewStep(
                 result: result, model: model, analytics: container.analytics,
@@ -170,7 +207,14 @@ struct SiteScanScanStep: View {
                 SiteScanCoverageMeter(coverage: model.coverage, status: model.status)
                     .padding(.horizontal, 18)
                     .padding(.top, 8)
+                if let snapshot = model.coverageSnapshot {
+                    SiteScanCoachOverlay(snapshot: snapshot)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 10)
+                }
                 Spacer()
+                SiteScanContextControls(model: model.contextModel)   // item 7 — photo/voice → Inbox
+                    .padding(.bottom, 8)
                 if let scanError = model.scanError { errorBanner(scanError) }
                 controls
             }
@@ -202,7 +246,7 @@ struct SiteScanScanStep: View {
             }
             SiteScanPrimaryButton(title: "Finish", systemImage: "checkmark") {
                 analytics.event("siteScan.finish")
-                Task { await model.finishScan() }
+                model.beginAnchoring()          // → typed anchor entry (item 6)
             }
             .disabled(model.scanError != nil)
         }

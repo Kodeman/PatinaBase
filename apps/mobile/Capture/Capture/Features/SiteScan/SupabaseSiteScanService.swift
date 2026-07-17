@@ -38,6 +38,7 @@ final class SupabaseSiteScanService: SiteScanService {
 
     private let client: SupabaseClient
     private let session: any SessionProviding
+    private let store: CaptureStore
     private let bucket = "room-scans"
     private let logger = Logger(subsystem: "cloud.patina.field", category: "SiteScan")
 
@@ -49,9 +50,77 @@ final class SupabaseSiteScanService: SiteScanService {
     private weak var lastSession: RoomPlanScanSession?
     #endif
 
+    /// Background-session artifact transport (item 8 Part 3). Uploads survive
+    /// suspension; a per-kind continuation bridges the delegate callback back into the
+    /// awaiting `upload()`, and the durable record resumes a kill mid-upload.
+    private lazy var backgroundUploader: FieldBackgroundScanUploader = {
+        let uploader = FieldBackgroundScanUploader(
+            baseURL: AppConfiguration.supabaseURL, anonKey: AppConfiguration.supabaseAnonKey)
+        uploader.accessTokenProvider = { [weak self] in try? await self?.client.auth.session.accessToken }
+        uploader.refreshTokenProvider = { [weak self] in try? await self?.client.auth.refreshSession().accessToken }
+        uploader.onCompletion = { [weak self] descriptor, result in
+            self?.handleUploadCompletion(descriptor, result)
+        }
+        return uploader
+    }()
+    private var artifactContinuations:
+        [String: CheckedContinuation<Result<Void, FieldBackgroundScanUploader.UploadError>, Never>] = [:]
+    /// Completions that arrived with no waiter yet — a task that finished (or was
+    /// re-delivered on relaunch) before `uploadViaBackground` registered its continuation.
+    /// Drained by the next matching `uploadViaBackground` (item 8 · M3).
+    private var bufferedCompletions:
+        [String: Result<Void, FieldBackgroundScanUploader.UploadError>] = [:]
+    /// Adopt the background session's surviving tasks once per launch (M3).
+    private var didReconcileUploads = false
+
     init(deps: WorkServiceDependencies) {
         self.client = deps.client
         self.session = deps.session
+        self.store = deps.store
+        // Reap abandoned bundle dirs (uploads that never finished) — best-effort, off
+        // the init path (C2 retention).
+        Task.detached { SiteScanBundleHome.sweepOrphans() }
+    }
+
+    /// Route a background-upload completion: resolve an in-process waiter if present,
+    /// else buffer it — and, for an orphaned success (a task that finished while the app
+    /// was dead), advance the durable record so the artifact isn't lost (M3).
+    private func handleUploadCompletion(
+        _ descriptor: FieldBackgroundScanUploader.Descriptor,
+        _ result: Result<Void, FieldBackgroundScanUploader.UploadError>) {
+        if let waiter = artifactContinuations.removeValue(forKey: descriptor.kind) {
+            waiter.resume(returning: result)
+            return
+        }
+        if case .success = result { persistOrphanCompletion(descriptor) }
+        bufferedCompletions[descriptor.kind] = result
+    }
+
+    /// A success with no waiter = a task that finished while the app was dead. Mark its
+    /// artifact `uploaded` on the durable record (public URL derived from the storage
+    /// path) so a later resume skips it rather than re-uploading (M3).
+    private func persistOrphanCompletion(_ descriptor: FieldBackgroundScanUploader.Descriptor) {
+        guard let record = store.scanUploadRecord(scanID: descriptor.scanID),
+              let plan = Self.uploadDescriptors.first(where: { $0.kind == descriptor.kind }) else { return }
+        var states = record.artifacts
+        if states.first(where: { $0.kind == descriptor.kind })?.status == .uploaded { return }
+        var state = states.first { $0.kind == descriptor.kind }
+            ?? ScanArtifactUploadState(kind: descriptor.kind, relativePath: plan.relativePath,
+                                       mimeType: descriptor.mimeType, column: plan.column)
+        state.status = .uploaded
+        state.storagePath = descriptor.storagePath
+        state.remoteUrl = try? client.storage.from(bucket).getPublicURL(path: descriptor.storagePath).absoluteString
+        state.sha256 = descriptor.sha256
+        upsert(&states, state)
+        store.updateScanUploadRecord(record, artifacts: states, status: "uploading")
+    }
+
+    private func upsert(_ states: inout [ScanArtifactUploadState], _ state: ScanArtifactUploadState) {
+        if let index = states.firstIndex(where: { $0.kind == state.kind }) {
+            states[index] = state
+        } else {
+            states.append(state)
+        }
     }
 
     var isSupported: Bool {
@@ -103,12 +172,23 @@ final class SupabaseSiteScanService: SiteScanService {
                 name: String) async throws -> FieldScanUploadReceipt {
         let userID = try await currentUserID()
 
+        // Adopt the background session's surviving tasks before planning this upload, so
+        // a resume dedups against them and their completions aren't dropped (M3).
+        if !didReconcileUploads {
+            didReconcileUploads = true
+            await backgroundUploader.reconcileExistingTasks()
+        }
+
         // 1. Reserve this attempt's scan/room ids — or resume a prior attempt's,
         //    if this is a retry (see `reservation(for:...)` doc below).
         let reserved = try await reservation(for: result.localBundleURL,
                                              picked: projectRoomID, name: name, userID: userID)
         let scanID = reserved.scanID
         let roomID = reserved.roomID
+        // Re-derive the bundle dir under the CURRENT container from the durable relative
+        // key (the app-container path may have moved since it was written) — C2.
+        let bundle = (try? SiteScanBundleHome.resolve(relativeKey: reserved.record.bundlePath))
+            ?? result.localBundleURL
 
         // 2. Upsert (not insert) the scan row (status=processing) with the project
         //    linkage + best-effort metrics, keyed on the reserved id. Upsert (vs.
@@ -140,38 +220,182 @@ final class SupabaseSiteScanService: SiteScanService {
             throw SiteScanError.foreignProjectOwner
         }
 
-        // 3. Upload the two artifacts, then patch their URL columns.
-        let modelURL = try await uploadArtifact(.usdz, bundle: result.localBundleURL,
-                                                userID: userID, roomID: roomID)
-        let jsonURL = try await uploadArtifact(.capturedRoom, bundle: result.localBundleURL,
-                                               userID: userID, roomID: roomID)
+        // 3. Upload the full artifact set + patch URL columns + scan_schema_version
+        //    (resumable — already-uploaded artifacts are skipped). See the helper.
+        let artifactStates = try await uploadBundleArtifacts(
+            bundle: bundle, scanID: scanID, roomID: roomID, userID: userID, reserved: reserved)
 
-        try await client.from("room_scans")
-            .update(RoomScanURLPatch(model_url: modelURL, captured_room_json_url: jsonURL))
-            .eq("id", value: scanID.uuidString)
-            .execute()
+        // 4. Never confirm a partial bundle.
+        guard ScanUploadPlanner.allDone(artifactStates) else {
+            throw SiteScanError.exportFailed("Scan upload didn't finish — retry to complete it.")
+        }
 
-        // 4. Owner-gated flip to ready (reused from the reference upload pipeline).
-        try await client.rpc("mark_scan_upload_complete",
-                             params: ScanIDParam(p_scan_id: scanID.uuidString)).execute()
+        // 5. confirm-scan-bundle (with C1 unreachable-vs-rejected discrimination).
+        try await confirmBundle(scanID: scanID, reserved: reserved, artifactStates: artifactStates)
 
-        // 5. Posed photos (I76) are a SEPARATE, best-effort lane. They upload
-        //    STRICTLY AFTER the scan is marked ready, so a photo failure can never
-        //    delay or fail the core scan — the accepted degraded mode is a ready
-        //    scan with no photos. Single attempt, log-only.
+        // 6. Posed photos (I76) — SEPARATE, best-effort lane, STRICTLY after ready.
         do {
-            try await uploadScanPhotos(bundle: result.localBundleURL,
-                                       scanID: scanID, roomID: roomID, userID: userID)
+            try await uploadScanPhotos(bundle: bundle, scanID: scanID, roomID: roomID, userID: userID)
         } catch {
             logger.error("[SiteScan] posed-photo upload failed; scan is ready without photos: \(error.localizedDescription)")
         }
 
-        // Full success — this bundle's reservation is spent; a later, unrelated
-        // upload() call using the same URL (shouldn't happen, but be safe) gets a
-        // fresh reservation rather than silently reusing a completed scan's ids.
-        reservations[result.localBundleURL] = nil
+        store.updateScanUploadRecord(reserved.record, artifacts: artifactStates, status: "complete")
+        // 7. Retention: the bytes are safely server-side — reclaim the local bundle (C2).
+        SiteScanBundleHome.remove(bundleURL: bundle)
         return FieldScanUploadReceipt(remoteScanID: scanID.uuidString)
     }
+
+    /// confirm-scan-bundle HEAD-verifies the patched URLs server-side and flips the row to
+    /// ready (it calls mark_scan_upload_complete on success). C1: only fall back to the
+    /// mark-complete RPC when confirm was UNREACHABLE (transport / relay / not-deployed /
+    /// 5xx) — a 409 (or any other 4xx) is the server rejecting THIS bundle, so we leave the
+    /// row `processing`, mark the record incomplete, and surface retry instead of marking a
+    /// broken bundle ready.
+    private func confirmBundle(scanID: UUID, reserved: ScanReservation,
+                               artifactStates: [ScanArtifactUploadState]) async throws {
+        do {
+            try await client.functions.invoke(
+                "confirm-scan-bundle",
+                options: FunctionInvokeOptions(body: ConfirmScanBundleRequest(scan_id: scanID.uuidString)))
+        } catch {
+            let status = Self.httpStatus(of: error)
+            switch ScanConfirmPolicy.fallback(forHTTPStatus: status) {
+            case .markCompleteViaRPC:
+                logger.error("[SiteScan] confirm-scan-bundle unreachable (\(status.map(String.init) ?? "transport")); marking complete via RPC: \(error.localizedDescription)")
+                try await client.rpc("mark_scan_upload_complete",
+                                     params: ScanIDParam(p_scan_id: scanID.uuidString)).execute()
+            case .propagate:
+                logger.error("[SiteScan] confirm-scan-bundle rejected the bundle (status \(status.map(String.init) ?? "?")); leaving row processing for retry")
+                store.updateScanUploadRecord(reserved.record, artifacts: artifactStates, status: "incomplete")
+                throw SiteScanError.bundleRejected
+            }
+        }
+    }
+
+    /// Upload every on-disk bundle artifact (skipping already-uploaded ones on a
+    /// resume), merge each SHA-256, patch the URL columns + scan_schema_version, and
+    /// persist per-artifact progress on the durable record. The upload PLAN and the
+    /// resume/short-circuit decisions come from `ScanUploadPlanner` (M1) — the tested
+    /// contract IS the shipped path.
+    private func uploadBundleArtifacts(bundle: URL, scanID: UUID, roomID: UUID, userID: UUID,
+                                       reserved: ScanReservation) async throws -> [ScanArtifactUploadState] {
+        // Tar the heavy streams + fold the archives into the manifest (Part 3), so a
+        // 500 MB bundle uploads as a handful of background tasks, not ~700.
+        buildTransportArchives(bundle: bundle)
+        try? FieldManifestAssembler.refreshArtifacts(bundleDir: bundle)
+
+        var states = reserved.record.artifacts
+        // Only artifacts actually on disk are in scope — optional archives may be absent
+        // on a degenerate scan, and the planner must be able to reach `.confirm`.
+        let present = Self.uploadDescriptors.filter {
+            FileManager.default.fileExists(atPath: bundle.appendingPathComponent($0.relativePath).path)
+        }
+        let allKinds = present.map(\.kind)
+
+        // Already fully uploaded + confirmed ⇒ nothing to do (planner short-circuit).
+        if case .done = ScanUploadPlanner.nextStep(all: allKinds, existing: states,
+                                                   recordComplete: reserved.record.statusRaw == "complete") {
+            return states
+        }
+        let plan = ScanUploadPlanner.kindsToUpload(all: allKinds, existing: states)
+
+        for descriptor in present where plan.contains(descriptor.kind) {
+            var working = states.first { $0.kind == descriptor.kind }
+                ?? ScanArtifactUploadState(kind: descriptor.kind, relativePath: descriptor.relativePath,
+                                           mimeType: descriptor.contentType, column: descriptor.column)
+            guard ScanUploadPlanner.canAttempt(working) else {
+                throw SiteScanError.exportFailed(
+                    "Upload of \(descriptor.kind) failed repeatedly — please try this scan again later.")
+            }
+            working.attempts += 1
+
+            let fileURL = bundle.appendingPathComponent(descriptor.relativePath)
+            let sha = BundleChecksum.sha256(ofFile: fileURL)
+            let storagePath = RoomScanStoragePath.object(folder: descriptor.folder, userID: userID,
+                                                         roomID: roomID, filename: descriptor.filename)
+            working.sha256 = sha
+            working.storagePath = storagePath
+
+            // Transport via the BACKGROUND session; await the delegate's completion.
+            let ok = await uploadViaBackground(FieldBackgroundScanUploader.Descriptor(
+                scanID: scanID.uuidString, kind: descriptor.kind, sha256: sha,
+                mimeType: descriptor.contentType, fileURL: fileURL, storagePath: storagePath))
+            guard ok else {
+                working.status = .failed
+                working.lastError = "background upload failed (attempt \(working.attempts))"
+                upsert(&states, working)
+                store.updateScanUploadRecord(reserved.record, artifacts: states, status: "failed")
+                throw SiteScanError.exportFailed("Upload of \(descriptor.kind) failed — retry resumes where it left off.")
+            }
+            if let sha {
+                try? await client.rpc("merge_scan_artifact_sha256",
+                    params: ArtifactShaMergeParams(p_scan_id: scanID.uuidString,
+                                                   p_kind: descriptor.kind, p_sha: sha)).execute()
+            }
+            working.status = .uploaded
+            working.remoteUrl = try client.storage.from(bucket).getPublicURL(path: storagePath).absoluteString
+            upsert(&states, working)
+            store.updateScanUploadRecord(reserved.record, artifacts: states, status: "uploading")
+        }
+
+        // Rebuild the URL-column patch from every uploaded artifact (covers a resume where
+        // the bytes landed but the row patch didn't) + stamp the schema version.
+        var patch = RoomScanArtifactPatch()
+        for state in states where state.status == .uploaded {
+            if let url = state.remoteUrl { patch.apply(column: state.column, url: url) }
+        }
+        try await client.from("room_scans").update(patch.withSchemaVersion(3))
+            .eq("id", value: scanID.uuidString).execute()
+        return states
+    }
+
+    /// Enqueue one artifact on the background session and await its completion via the
+    /// per-kind continuation (bridged from the uploader's delegate callback). If a
+    /// completion was already buffered (an adopted/re-delivered task finished before we
+    /// registered a waiter), drain it instead of re-enqueueing (M3).
+    private func uploadViaBackground(_ descriptor: FieldBackgroundScanUploader.Descriptor) async -> Bool {
+        if let buffered = bufferedCompletions.removeValue(forKey: descriptor.kind) {
+            if case .success = buffered { return true }
+            return false
+        }
+        let result: Result<Void, FieldBackgroundScanUploader.UploadError> =
+            await withCheckedContinuation { continuation in
+                artifactContinuations[descriptor.kind] = continuation
+                Task { await backgroundUploader.enqueue(descriptor) }
+            }
+        if case .success = result { return true }
+        return false
+    }
+
+    /// The HTTP status of a `confirm-scan-bundle` failure, or nil when it wasn't an HTTP
+    /// response (transport / relay error ⇒ unreachable) — feeds `ScanConfirmPolicy` (C1).
+    private static func httpStatus(of error: Error) -> Int? {
+        if let functionsError = error as? FunctionsError,
+           case let .httpError(code, _) = functionsError { return code }
+        return nil
+    }
+
+    /// Tar depth/*.bin → depth.tar and keyframes/*.heic+*.bin → keyframes.tar into the
+    /// bundle dir (transport archives; the per-file dirs remain the logical form).
+    private func buildTransportArchives(bundle: URL) {
+        let fm = FileManager.default
+        func tar(dir: String, extensions: Set<String>, to name: String) {
+            let src = bundle.appendingPathComponent(dir, isDirectory: true)
+            guard let files = try? fm.contentsOfDirectory(at: src, includingPropertiesForKeys: nil)
+                .filter({ extensions.contains($0.pathExtension) }), !files.isEmpty else { return }
+            try? TarArchive.write(entries: files.map { TarArchive.Entry(name: $0.lastPathComponent, url: $0) },
+                                  to: bundle.appendingPathComponent(name))
+        }
+        tar(dir: "depth", extensions: ["bin"], to: "depth.tar")
+        tar(dir: "keyframes", extensions: ["heic", "bin"], to: "keyframes.tar")
+    }
+
+    /// The full v1 bundle artifact set (stable order) + the bucket MIME allow-list live
+    /// in CaptureKit (`ScanUploadDescriptor.all` / `ScanBucketMime`) so the drift-guard
+    /// test can assert every upload Content-Type is bucket-legal (the M2 MIME fix —
+    /// depthIndex had gone up as application/x-ndjson → Storage 400 invalid_mime_type).
+    private static let uploadDescriptors = ScanUploadDescriptor.all
 
     // MARK: - Helpers
 
@@ -188,16 +412,31 @@ final class SupabaseSiteScanService: SiteScanService {
     private struct ScanReservation {
         let scanID: UUID
         let roomID: UUID
+        let record: ScanUploadRecord
     }
-    private var reservations: [URL: ScanReservation] = [:]
 
+    /// The DURABLE (scanID, roomID) reservation for a bundle — persisted in a
+    /// `ScanUploadRecord` (item 8) keyed by the bundle's container-independent relative
+    /// path (`SiteScanBundleHome.relativeKey`). A relaunch (or a "Finish later" resume)
+    /// reuses the SAME scanID instead of minting a fresh room_scans row (+ a spare rooms
+    /// row), which is the orphaned-`processing`-row hazard the audit flagged in the prior
+    /// in-memory dictionary.
     private func reservation(for bundleURL: URL, picked: String?, name: String,
                              userID: UUID) async throws -> ScanReservation {
-        if let cached = reservations[bundleURL] { return cached }
+        // Container-independent key so a resume re-finds the record after a container
+        // move (C2) — "SiteScans/site-scan-…", not the volatile absolute path.
+        let key = SiteScanBundleHome.relativeKey(for: bundleURL)
+        if let existing = store.scanUploadRecord(bundlePath: key),
+           let scanID = UUID(uuidString: existing.scanID),
+           let roomID = UUID(uuidString: existing.roomID) {
+            return ScanReservation(scanID: scanID, roomID: roomID, record: existing)   // resume
+        }
         let roomID = try await resolveRoomID(picked: picked, name: name, userID: userID)
-        let fresh = ScanReservation(scanID: UUID(), roomID: roomID)
-        reservations[bundleURL] = fresh
-        return fresh
+        let scanID = UUID()
+        let record = store.insertScanUploadRecord(ScanUploadRecord(
+            bundlePath: key, scanID: scanID.uuidString, roomID: roomID.uuidString,
+            name: name, projectID: nil, projectRoomID: picked))
+        return ScanReservation(scanID: scanID, roomID: roomID, record: record)
     }
 
     private func currentUserID() async throws -> UUID {
@@ -217,20 +456,6 @@ final class SupabaseSiteScanService: SiteScanService {
             .insert(RoomInsert(id: roomID, user_id: userID, name: name, type: "other"))
             .execute()
         return roomID
-    }
-
-    /// Upload one v1 bundle artifact → `room-scans/{folder}/{uid}/{roomId}/{filename}`,
-    /// return its public URL. Upsert makes an offline retry idempotent; the local
-    /// bundle is never deleted, so a failure here is safely retryable.
-    private func uploadArtifact(_ artifact: V1Artifact, bundle: URL,
-                                userID: UUID, roomID: UUID) async throws -> String {
-        let fileURL = bundle.appendingPathComponent(artifact.filename)
-        let data = try Data(contentsOf: fileURL)
-        let path = RoomScanStoragePath.object(
-            folder: artifact.folder, userID: userID, roomID: roomID, filename: artifact.filename)
-        try await client.storage.from(bucket)
-            .upload(path, data: data, options: FileOptions(contentType: artifact.contentType, upsert: true))
-        return try client.storage.from(bucket).getPublicURL(path: path).absoluteString
     }
 
     // MARK: - Posed photos (I76)
@@ -311,24 +536,6 @@ final class SupabaseSiteScanService: SiteScanService {
 
 // MARK: - Value types
 
-/// The v1-minimal artifact set: a USDZ model + the CapturedRoom parametric JSON.
-/// Maps each to its storage folder root, bundle filename, and MIME type — all
-/// allowed on the `room-scans` bucket (00077).
-private enum V1Artifact {
-    case usdz
-    case capturedRoom
-
-    var folder: String {
-        self == .usdz ? RoomScanStoragePath.Folder.usdz : RoomScanStoragePath.Folder.capturedRoom
-    }
-    var filename: String {
-        self == .usdz ? RoomScanStoragePath.Filename.usdz : RoomScanStoragePath.Filename.capturedRoom
-    }
-    var contentType: String {
-        self == .usdz ? "model/vnd.usdz+zip" : "application/json"
-    }
-}
-
 /// Coarse, best-effort metrics read back from the finished session for the row.
 private struct ScanMetrics {
     let area: Double?
@@ -374,9 +581,44 @@ private struct RoomScanInsert: Encodable {
     }
 }
 
-private struct RoomScanURLPatch: Encodable {
-    let model_url: String
-    let captured_room_json_url: String
+/// Sparse URL-column + schema-version patch (item 8). Optional fields → nil is
+/// OMITTED by the synthesized Encodable (`encodeIfPresent`), so a patch never nulls a
+/// column it didn't set.
+private struct RoomScanArtifactPatch: Encodable {
+    var model_url: String?
+    var captured_room_json_url: String?
+    var mesh_url: String?
+    var bundle_manifest_url: String?
+    var depth_archive_url: String?
+    var scan_bundle_url: String?
+    var scan_schema_version: Int?
+
+    mutating func apply(column: String?, url: String) {
+        switch column {
+        case "model_url": model_url = url
+        case "captured_room_json_url": captured_room_json_url = url
+        case "mesh_url": mesh_url = url
+        case "bundle_manifest_url": bundle_manifest_url = url
+        case "depth_archive_url": depth_archive_url = url
+        case "scan_bundle_url": scan_bundle_url = url
+        default: break
+        }
+    }
+    func withSchemaVersion(_ version: Int) -> RoomScanArtifactPatch {
+        var copy = self
+        copy.scan_schema_version = version
+        return copy
+    }
+}
+
+private struct ArtifactShaMergeParams: Encodable {
+    let p_scan_id: String
+    let p_kind: String
+    let p_sha: String
+}
+
+private struct ConfirmScanBundleRequest: Encodable {
+    let scan_id: String
 }
 
 private struct ScanIDParam: Encodable {

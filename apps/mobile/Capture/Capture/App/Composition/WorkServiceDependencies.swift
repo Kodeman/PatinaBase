@@ -17,4 +17,7 @@ struct WorkServiceDependencies {
     let client: SupabaseClient
     /// Identity + active workspace, for RLS-scoped reads.
     let session: any SessionProviding
+    /// Durable local store — the site-scan upload uses it for the resumable
+    /// `ScanUploadRecord` (item 8). Additive; other flows ignore it.
+    let store: CaptureStore
 }

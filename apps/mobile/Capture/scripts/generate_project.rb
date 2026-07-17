@@ -39,6 +39,7 @@ def common!(config)
   s['SUPPORTED_PLATFORMS'] = 'iphoneos iphonesimulator'
   s['SWIFT_EMIT_LOC_STRINGS'] = 'YES'
   s['CODE_SIGN_STYLE'] = 'Automatic'
+  s['DEVELOPMENT_TEAM'] = 'VP22LXHT7L'   # Kody's Apple Dev team — automatic device signing survives regen
   s['ENABLE_USER_SCRIPT_SANDBOXING'] = 'YES'
   s['ENABLE_TESTABILITY'] = config.name == 'Debug' ? 'YES' : 'NO'
 end

@@ -87,6 +87,12 @@ struct SiteScanSetupScreen: View {
     let handoff: SiteScanHandoff
 
     @State private var model: SiteScanSetupModel
+    @State private var showContextCapture = false
+
+    /// Pro (LiDAR) → instrumented scan; non-Pro → context capture only (R108.2).
+    private var entryMode: SiteScanEntryMode {
+        .forDevice(lidarSupported: container.siteScan.isSupported)
+    }
 
     init(container: AppContainer, coordinator: CaptureCoordinator, handoff: SiteScanHandoff) {
         self.container = container
@@ -110,6 +116,12 @@ struct SiteScanSetupScreen: View {
         }
         .background(CaptureColor.paper.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) { startBar }
+        .fullScreenCover(isPresented: $showContextCapture) {
+            SiteScanContextScreen(container: container,
+                                  projectID: model.selectedProjectID,
+                                  projectRoomID: model.selectedRoomID,
+                                  onDone: { showContextCapture = false })
+        }
         .navigationTitle("Site scan")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -139,7 +151,7 @@ struct SiteScanSetupScreen: View {
                 .font(CaptureType.bodyEmph)
                 .foregroundStyle(CaptureColor.terracotta)
                 .accessibilityHidden(true)
-            Text("This device has no LiDAR, so a real scan isn't available here. You can still walk the demo flow.")
+            Text("This device has no LiDAR — capture reference photos and voice notes for this room instead. They land in your Inbox.")
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.ink)
         }
@@ -188,12 +200,12 @@ struct SiteScanSetupScreen: View {
     }
 
     private var startBar: some View {
-        PatinaButton(container.siteScan.isSupported ? "Start scan" : "Start demo scan",
+        PatinaButton(entryMode == .scan ? "Start scan" : "Capture photos & notes",
                      style: .clay, action: start)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(.ultraThinMaterial)
-            .accessibilityLabel("Start scan")
+            .accessibilityLabel(entryMode == .scan ? "Start scan" : "Capture photos and notes")
     }
 
     private var selectedRoomName: String {
@@ -214,8 +226,13 @@ struct SiteScanSetupScreen: View {
             "has_project": model.selectedProjectID != nil ? "true" : "false",
             "has_room": model.selectedRoomID != nil ? "true" : "false"
         ])
-        coordinator.navigate(to: .siteScan(projectID: model.selectedProjectID,
-                                           projectRoomID: model.selectedRoomID))
+        // Pro → instrumented scan; non-Pro → context capture only (never a scan, R108.2).
+        if entryMode == .scan {
+            coordinator.navigate(to: .siteScan(projectID: model.selectedProjectID,
+                                               projectRoomID: model.selectedRoomID))
+        } else {
+            showContextCapture = true
+        }
     }
 }
 

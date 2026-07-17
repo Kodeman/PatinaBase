@@ -1,0 +1,206 @@
+//  SiteScanContextCapture.swift
+//  Capture · Wave F (Pro site-scan) · Field Capture P1 · item 7 — context capture
+//
+//  The F2 mid-scan context-capture affordance (detail photo + voice note) and its
+//  model, shared by the Pro path (photo + pose from the shared session) and the
+//  non-Pro path (photo from the regular camera, no pose). Each capture rides the
+//  EXISTING outbox → Capture Inbox via `ContextCaptureService` with the spatial
+//  address in provenance.
+//
+//  ⚠️ All user-facing strings are ESCALATE-class PLACEHOLDERS (flagged in the report).
+
+import SwiftUI
+import AVFoundation
+import CaptureKit
+
+@MainActor
+@Observable
+final class SiteScanContextModel {
+
+    private let service: ContextCaptureService
+    private let frameProvider: () async -> ContextFrameSnapshot?
+    private let scanSessionIdProvider: () -> String?
+    private let projectID: String?
+    private let projectRoomID: String?
+    private let voice: any VoiceNoteService
+
+    var toast: String?
+    var isRecordingVoice = false
+    private var partialTranscript = ""
+    private var voiceTask: Task<Void, Never>?
+
+    init(store: CaptureStore, projectID: String?, projectRoomID: String?,
+         voice: any VoiceNoteService,
+         scanSessionIdProvider: @escaping () -> String?,
+         frameProvider: @escaping () async -> ContextFrameSnapshot?) {
+        self.service = ContextCaptureService(store: store)
+        self.projectID = projectID
+        self.projectRoomID = projectRoomID
+        self.voice = voice
+        self.scanSessionIdProvider = scanSessionIdProvider
+        self.frameProvider = frameProvider
+    }
+
+    private func provenance(pose: [Double]?) -> ContextCaptureProvenance {
+        ContextCaptureProvenance(
+            scanSessionId: scanSessionIdProvider(),
+            projectId: projectID, projectRoomId: projectRoomID,
+            cameraPoseRowMajor: pose,
+            capturedAt: ISO8601DateFormatter().string(from: Date()))
+    }
+
+    func capturePhoto() async {
+        guard let snapshot = await frameProvider() else {
+            toast = "Couldn't capture — try again"
+            return
+        }
+        service.enqueuePhoto(imageData: snapshot.imageData, width: snapshot.width,
+                             height: snapshot.height, filenameExtension: snapshot.filenameExtension,
+                             provenance: provenance(pose: snapshot.poseRowMajor))
+        toast = "Photo added to Inbox"
+    }
+
+    func toggleVoice() {
+        if isRecordingVoice { stopVoice() } else { startVoice() }
+    }
+
+    private func startVoice() {
+        do {
+            let stream = try voice.startLiveTranscription()
+            isRecordingVoice = true
+            partialTranscript = ""
+            voiceTask = Task { [weak self] in
+                do { for try await chunk in stream { self?.partialTranscript = chunk.text } } catch {}
+            }
+        } catch {
+            toast = "Microphone unavailable"
+        }
+    }
+
+    private func stopVoice() {
+        voiceTask?.cancel()
+        isRecordingVoice = false
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await self.voice.finish()
+            let transcript = result.transcript.isEmpty ? self.partialTranscript : result.transcript
+            guard !transcript.isEmpty || result.audioFilename != nil else {
+                self.toast = "Nothing recorded"
+                return
+            }
+            self.service.enqueueVoice(transcript: transcript, audioFilename: result.audioFilename,
+                                      durationSeconds: result.durationSeconds,
+                                      provenance: self.provenance(pose: nil))
+            self.toast = "Voice note added to Inbox"
+        }
+    }
+}
+
+/// Compact photo + voice controls (F2 overlay / non-Pro context screen).
+struct SiteScanContextControls: View {
+    let model: SiteScanContextModel
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if let toast = model.toast {
+                Text(toast)
+                    .font(CaptureType.footnote)
+                    .foregroundStyle(CaptureColor.paper)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+            }
+            HStack(spacing: 14) {
+                pill("camera.fill", "Photo") { Task { await model.capturePhoto() } }
+                pill(model.isRecordingVoice ? "stop.circle.fill" : "mic.fill",
+                     model.isRecordingVoice ? "Stop" : "Note") { model.toggleVoice() }
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func pill(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: icon)
+                .font(CaptureType.footnote)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
+                .foregroundStyle(CaptureColor.paper)
+        }
+        .accessibilityLabel(label)
+    }
+}
+
+// MARK: - Non-Pro context-only screen (R108.2 — never labeled a scan)
+
+/// The non-LiDAR entry: reference photos + voice notes for a room, captured with the
+/// regular camera (no ARKit pose), landing in the Capture Inbox. NEVER a scan.
+struct SiteScanContextScreen: View {
+    let container: AppContainer
+    let projectID: String?
+    let projectRoomID: String?
+    let onDone: () -> Void
+
+    @State private var model: SiteScanContextModel?
+
+    var body: some View {
+        ZStack {
+            cameraPreview.ignoresSafeArea()
+            VStack(spacing: 0) {
+                header
+                Spacer()
+                if let model {
+                    SiteScanContextControls(model: model).padding(.bottom, 12)
+                }
+                SiteScanPrimaryButton(title: "Done", systemImage: "checkmark", action: onDone)
+                    .padding(.horizontal, 18).padding(.bottom, 14)
+            }
+        }
+        .statusBarHidden(true)
+        .environment(\.colorScheme, .light)
+        .accessibilityIdentifier("screen.F1.context")
+        .task {
+            container.analytics.screen("screen.F1.context")
+            await container.camera.start()
+            if model == nil {
+                model = SiteScanContextModel(
+                    store: container.store, projectID: projectID, projectRoomID: projectRoomID,
+                    voice: SpeechVoiceNoteService(mediaDirectory: container.store.mediaDirectory()),
+                    scanSessionIdProvider: { nil },      // no scan session on a non-Pro device
+                    frameProvider: { [container] in
+                        guard let frame = try? await container.camera.capture() else { return nil }
+                        return ContextFrameSnapshot(imageData: frame.data, width: frame.width,
+                                                    height: frame.height, poseRowMajor: nil,
+                                                    filenameExtension: "heic")
+                    })
+            }
+        }
+    }
+
+    /// Real camera preview on device (down-cast, the lawful in-repo pattern); a
+    /// scan backdrop on mock/sim where there's no AVFoundation session.
+    @ViewBuilder private var cameraPreview: some View {
+        if let camera = container.camera as? AVFoundationCameraService {
+            CameraPreviewView(session: camera.previewSession)
+        } else {
+            SiteScanBackdrop()
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Reference capture")               // ESCALATE placeholder
+                .font(CaptureType.eyebrow).textCase(.uppercase)
+                .foregroundStyle(CaptureColor.paper3)
+            Text("Photos & notes for this room")    // ESCALATE placeholder
+                .font(CaptureType.title2)
+                .foregroundStyle(CaptureColor.paper)
+            Text("This device has no LiDAR, so this isn't a scan — these land in your Inbox.")  // ESCALATE
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.paper2)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 18).padding(.top, 8)
+    }
+}

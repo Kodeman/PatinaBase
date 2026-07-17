@@ -26,7 +26,8 @@ public final class CaptureStore {
     public nonisolated(unsafe) static let appGroupID = "group.cloud.patina.field"
 
     public static let schema = Schema([
-        Specimen.self, CapturePhoto.self, CaptureMeasurement.self, CaptureProjectRef.self
+        Specimen.self, CapturePhoto.self, CaptureMeasurement.self, CaptureProjectRef.self,
+        ScanUploadRecord.self   // item 8 — durable resumable upload state (additive)
     ])
 
     public let container: ModelContainer
@@ -117,6 +118,41 @@ public final class CaptureStore {
     public func specimen(id: UUID) -> Specimen? {
         let descriptor = FetchDescriptor<Specimen>(predicate: #Predicate { $0.id == id })
         return try? context.fetch(descriptor).first
+    }
+
+    // ── Scan upload records (item 8 — durable resumable upload) ──
+
+    /// The durable upload record for a bundle dir, if one exists (resume path).
+    /// `bundlePath` is the container-independent relative key ("SiteScans/…").
+    public func scanUploadRecord(bundlePath: String) -> ScanUploadRecord? {
+        let descriptor = FetchDescriptor<ScanUploadRecord>(
+            predicate: #Predicate { $0.bundlePath == bundlePath })
+        return try? context.fetch(descriptor).first
+    }
+
+    /// The durable upload record for a scan id, if one exists — used to route an
+    /// orphaned background-upload completion (a task that finished while the app was
+    /// dead) back onto its record (item 8 · M3).
+    public func scanUploadRecord(scanID: String) -> ScanUploadRecord? {
+        let descriptor = FetchDescriptor<ScanUploadRecord>(
+            predicate: #Predicate { $0.scanID == scanID })
+        return try? context.fetch(descriptor).first
+    }
+
+    @discardableResult
+    public func insertScanUploadRecord(_ record: ScanUploadRecord) -> ScanUploadRecord {
+        context.insert(record)
+        try? save()
+        return record
+    }
+
+    /// Persist per-artifact progress + status on an existing record.
+    public func updateScanUploadRecord(_ record: ScanUploadRecord,
+                                       artifacts: [ScanArtifactUploadState], status: String) {
+        record.artifacts = artifacts
+        record.statusRaw = status
+        record.updatedAt = Date()
+        try? save()
     }
 
     /// This visit's captures (drafts + ready), newest first — V1 session tray.

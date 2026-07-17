@@ -23,7 +23,10 @@ Failure names (stable tokens; one line per failure on stderr):
     CHECKSUM_MISMATCH      an artifact's sha256 does not match the bytes
     SIZE_MISMATCH          an artifact's sizeBytes disagrees with the file
     ANCHOR_INCONSISTENCY   UNVERIFIED flag / anchorCount / anchor shape wrong
-    PHOTO_COUNT_MISMATCH   photos_metadata.ndjson line count != manifest.photos length
+    KEYFRAME_INCONSISTENCY keyframe_summary.fired != keyframe_index.ndjson line count
+    PHOTO_COUNT_MISMATCH   photos sidecar entry count != manifest.photos length
+                            (photos/photos_metadata.ndjson lines, or the Field
+                            top-level photos_metadata.json array length)
 """
 
 from __future__ import annotations
@@ -217,17 +220,91 @@ def validate_bundle(bundle_dir: str) -> list[str]:
                     f"ANCHOR_INCONSISTENCY: anchor[{i}].entryMethod must be 'typed' in P1 (got {anc.get('entryMethod')!r})"
                 )
 
-    # ── §10.7 photos parity ────────────────────────────────────────────────
-    ndjson = os.path.join(bundle_dir, "photos", "photos_metadata.ndjson")
-    if os.path.isfile(ndjson):
-        with open(ndjson, "r", encoding="utf-8") as fh:
-            line_count = sum(1 for ln in fh if ln.strip())
-        photos = manifest.get("photos")
-        if isinstance(photos, list) and line_count != len(photos):
-            failures.append(
-                f"PHOTO_COUNT_MISMATCH: photos_metadata.ndjson has {line_count} lines "
-                f"but manifest.photos has {len(photos)}"
-            )
+    # ── §10.8 scorecard.namedGaps shape ────────────────────────────────────
+    # Item-8 sync: namedGaps is a list of {surface, phrase} objects (was
+    # [String]). Optional — validated only when present.
+    scorecard = manifest.get("scorecard")
+    if isinstance(scorecard, dict):
+        named_gaps = scorecard.get("namedGaps")
+        if named_gaps is not None:
+            if not isinstance(named_gaps, list):
+                failures.append("SCHEMA_VIOLATION: scorecard.namedGaps must be an array")
+            else:
+                for i, gap in enumerate(named_gaps):
+                    if (
+                        not isinstance(gap, dict)
+                        or not isinstance(gap.get("surface"), str)
+                        or not isinstance(gap.get("phrase"), str)
+                    ):
+                        failures.append(
+                            f"SCHEMA_VIOLATION: scorecard.namedGaps[{i}] must be an object "
+                            "with string 'surface' and 'phrase'"
+                        )
+
+    # ── §10.9 poseGraphSummary shape ───────────────────────────────────────
+    # Item-8 sync: Field adds rawBlurFailures + encodeDropped counts. Any of the
+    # integer count fields, when present, must be an integer.
+    pgs = manifest.get("poseGraphSummary")
+    if pgs is not None:
+        if not isinstance(pgs, dict):
+            failures.append("SCHEMA_VIOLATION: 'poseGraphSummary' must be an object")
+        else:
+            for field in ("keyframeCount", "blurRejectedCount", "rawBlurFailures", "encodeDropped"):
+                val = pgs.get(field)
+                if val is not None and not (isinstance(val, int) and not isinstance(val, bool)):
+                    failures.append(
+                        f"SCHEMA_VIOLATION: poseGraphSummary.{field} must be an integer"
+                    )
+
+    # ── §10.10 keyframe index / summary consistency ────────────────────────
+    # Item-8 sync: Field writes a separate keyframes/ SfM lane. When both the
+    # index and the summary are present and the summary carries an integer
+    # `fired`, the index's non-blank line count must equal `fired`.
+    kf_index = os.path.join(bundle_dir, "keyframes", "keyframe_index.ndjson")
+    kf_summary = os.path.join(bundle_dir, "keyframes", "keyframe_summary.json")
+    if os.path.isfile(kf_index) and os.path.isfile(kf_summary):
+        with open(kf_index, "r", encoding="utf-8") as fh:
+            index_lines = sum(1 for ln in fh if ln.strip())
+        try:
+            with open(kf_summary, "r", encoding="utf-8") as fh:
+                summary = json.load(fh)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            summary = None
+        if isinstance(summary, dict):
+            fired = summary.get("fired")
+            if isinstance(fired, int) and not isinstance(fired, bool) and fired != index_lines:
+                failures.append(
+                    f"KEYFRAME_INCONSISTENCY: keyframe_summary.fired={fired} but "
+                    f"keyframe_index.ndjson has {index_lines} non-blank line(s)"
+                )
+
+    # ── §10.11 photos parity ───────────────────────────────────────────────
+    photos = manifest.get("photos")
+    photos_len = len(photos) if isinstance(photos, list) else None
+    if photos_len is not None:
+        # Legacy deck path: photos/photos_metadata.ndjson (one entry per line).
+        ndjson = os.path.join(bundle_dir, "photos", "photos_metadata.ndjson")
+        if os.path.isfile(ndjson):
+            with open(ndjson, "r", encoding="utf-8") as fh:
+                line_count = sum(1 for ln in fh if ln.strip())
+            if line_count != photos_len:
+                failures.append(
+                    f"PHOTO_COUNT_MISMATCH: photos/photos_metadata.ndjson has {line_count} lines "
+                    f"but manifest.photos has {photos_len}"
+                )
+        # Field top-level sidecar: photos_metadata.json (a JSON array).
+        sidecar = os.path.join(bundle_dir, "photos_metadata.json")
+        if os.path.isfile(sidecar):
+            try:
+                with open(sidecar, "r", encoding="utf-8") as fh:
+                    arr = json.load(fh)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                arr = None
+            if isinstance(arr, list) and len(arr) != photos_len:
+                failures.append(
+                    f"PHOTO_COUNT_MISMATCH: photos_metadata.json has {len(arr)} entries "
+                    f"but manifest.photos has {photos_len}"
+                )
 
     return failures
 
@@ -287,6 +364,56 @@ def make_fixture(dest: str) -> None:
     with open(os.path.join(dest, "photos", "photos_metadata.ndjson"), "w", encoding="utf-8") as fh:
         fh.write(json.dumps(photo_entry) + "\n")
 
+    # ── keyframes/ SfM lane (item 8) — index line count == summary.fired ────
+    os.makedirs(os.path.join(dest, "keyframes"), exist_ok=True)
+    kf_fired = 3
+    with open(os.path.join(dest, "keyframes", "keyframe_index.ndjson"), "w", encoding="utf-8") as fh:
+        for i in range(kf_fired):
+            fh.write(
+                json.dumps(
+                    {
+                        "index": i,
+                        "timestampSeconds": round(i * 2.0, 2),
+                        "relativePath": f"keyframes/keyframe_{i:03d}.heic",
+                        "sharp": True,
+                        "blurScore": 0.11,
+                    }
+                )
+                + "\n"
+            )
+    keyframe_summary = {
+        "fired": kf_fired,
+        "blurRejected": 1,
+        "rawBlurFailures": 2,
+        "encodeDropped": 0,
+        "blurRejectionRatio": 0.25,
+    }
+    with open(os.path.join(dest, "keyframes", "keyframe_summary.json"), "w", encoding="utf-8") as fh:
+        json.dump(keyframe_summary, fh)
+    # Tiny placeholder per-keyframe payloads (not listed as artifacts, not walked).
+    with open(os.path.join(dest, "keyframes", "keyframe_000.heic"), "wb") as fh:
+        fh.write(b"\xff\xd8\xff\xe0PLACEHOLDER-KEYFRAME\xff\xd9")
+    with open(os.path.join(dest, "keyframes", "keyframe_000.bin"), "wb") as fh:
+        fh.write(b"PLACEHOLDER-KEYFRAME-POSE\x00")
+    artifacts.append(artifact("keyframeIndex", "keyframes/keyframe_index.ndjson", "application/x-ndjson"))
+    artifacts.append(artifact("keyframeSummary", "keyframes/keyframe_summary.json", "application/json"))
+
+    # ── Transport archives (Part 3) — the heavy per-file streams tar'd at
+    # UPLOAD time. depth.tar (kind depthArchive) tars depth/*.bin; keyframes.tar
+    # (kind keyframesArchive) tars keyframes/*.heic + keyframes/*.bin. Both live
+    # in the bundle dir ALONGSIDE the logical per-file depth/ and keyframes/
+    # dirs, and are validated as opaque artifact files (present + sha256 + size)
+    # by the generic per-artifact integrity check above — no special-casing, no
+    # tar-internal inspection. Any small placeholder bytes suffice for the
+    # fixture. depthArchive → room_scans.depth_archive_url; keyframesArchive →
+    # room_scans.scan_bundle_url at upload. Both kinds are OPTIONAL.
+    with open(os.path.join(dest, "depth.tar"), "wb") as fh:
+        fh.write(b"PLACEHOLDER-DEPTH-TAR\x00ustar-opaque-transport-archive\x00")
+    with open(os.path.join(dest, "keyframes.tar"), "wb") as fh:
+        fh.write(b"PLACEHOLDER-KEYFRAMES-TAR\x00ustar-opaque-transport-archive\x00")
+    artifacts.append(artifact("depthArchive", "depth.tar", "application/x-tar"))
+    artifacts.append(artifact("keyframesArchive", "keyframes.tar", "application/x-tar"))
+
     anchors = [
         {
             "id": "00000000-0000-4000-8000-0000000000a1",
@@ -337,11 +464,18 @@ def make_fixture(dest: str) -> None:
                 {"surface": "floor", "covered": True},
                 {"surface": "ceiling", "covered": True},
                 {"surface": "wall:north", "covered": True},
+                {"surface": "opening:door-1", "covered": False},
+            ],
+            # Item-8 sync: namedGaps is [{surface, phrase}], not [String].
+            "namedGaps": [
+                {"surface": "opening:door-1", "phrase": "the doorway to the hall"},
             ],
         },
         "poseGraphSummary": {
             "keyframeCount": 312, "nodeCount": 312, "edgeCount": 1180,
             "loopClosures": 4, "meanTranslationDriftPct": 0.31, "blurRejectedCount": 47,
+            # Item-8 sync: Field-added counts.
+            "rawBlurFailures": 63, "encodeDropped": 2,
         },
         "captureEnvironment": {"coverageHeatmapPresent": False},
         "annotations": {"roomNotes": ""},
@@ -425,10 +559,44 @@ def selftest() -> int:
             )
             return 1
 
+        # Fourth case: bump keyframe_summary.fired past the keyframe_index.ndjson
+        # line count (re-syncing the summary artifact's checksum/size so the
+        # inconsistency is the sole failure). Must name KEYFRAME_INCONSISTENCY.
+        kf_bad = os.path.join(tmp, "bundle-keyframe")
+        make_fixture(kf_bad)
+        summary_path = os.path.join(kf_bad, "keyframes", "keyframe_summary.json")
+        with open(summary_path, "r", encoding="utf-8") as fh:
+            kf_summary = json.load(fh)
+        kf_summary["fired"] = kf_summary["fired"] + 99  # index line count unchanged
+        with open(summary_path, "w", encoding="utf-8") as fh:
+            json.dump(kf_summary, fh)
+        kf_manifest_path = os.path.join(kf_bad, "manifest.json")
+        with open(kf_manifest_path, "r", encoding="utf-8") as fh:
+            kf_manifest = json.load(fh)
+        for a in kf_manifest["artifacts"]:
+            if a.get("kind") == "keyframeSummary":
+                a["sha256"] = sha256_of(summary_path)
+                a["sizeBytes"] = os.path.getsize(summary_path)
+        with open(kf_manifest_path, "w", encoding="utf-8") as fh:
+            json.dump(kf_manifest, fh, indent=2)
+
+        failures = validate_bundle(kf_bad)
+        tokens = {f.split(":", 1)[0] for f in failures}
+        print(f"selftest: keyframe-inconsistency fixture produced failures: {sorted(tokens)}")
+        for f in failures:
+            print("  " + f)
+        if "KEYFRAME_INCONSISTENCY" not in tokens:
+            print(
+                f"SELFTEST FAIL: expected KEYFRAME_INCONSISTENCY in failures, got {sorted(tokens)}",
+                file=sys.stderr,
+            )
+            return 1
+
     print(
         "SELFTEST PASS: valid bundle accepted; corrupted bundle rejected naming "
         "CHECKSUM_MISMATCH + MISSING_FILE; path-escaping bundle rejected naming "
-        "PATH_VIOLATION."
+        "PATH_VIOLATION; keyframe-count-mismatch bundle rejected naming "
+        "KEYFRAME_INCONSISTENCY."
     )
     return 0
 

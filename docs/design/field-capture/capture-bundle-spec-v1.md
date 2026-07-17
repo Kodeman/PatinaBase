@@ -29,7 +29,7 @@ The deck (SC-12) describes the manifest only as *"device, session, anchors, pose
 | `device{model, osVersion, hasLidar, roomPlanVersion}` | **inherited** | Satisfies the deck's "device" + the package's "OS version" requirement. |
 | `capture{highFidelityDepthEnabled, autoPhotoInterval, multiRoomBuilderId}` | **inherited** | |
 | `artifacts[{kind, relativePath, sizeBytes, sha256, mimeType}]` | **extended** | `sha256` becomes **REQUIRED** for every artifact in a v1 bundle (optional in v3). `ArtifactKind` gains no new *required* kinds; `capturedRoomJson` + `usdz` are mandatory. |
-| `photos[PhotoEntry]` | **inherited** | The deck's "keyframes" = these posed photos; no rename. Field's `FieldPhotoEntry` (`photos_metadata.ndjson`) is the per-photo sidecar shape and stays 1:1 with `room_scan_images`. |
+| `photos[PhotoEntry]` | **inherited** | Posed **context** photos. Field writes the per-photo sidecar as a **top-level `photos_metadata.json`** (a JSON array of `FieldPhotoEntry`, 1:1 with `room_scan_images`) — the validator also still accepts the deck's `photos/photos_metadata.ndjson`. NB the deck's `keyframes/`→`photos/` mapping does **not** apply to Field: Field keeps a **separate `keyframes/` dir** (SfM lane, §4/§3.6) distinct from these posed photos (context lane). |
 | `captureEnvironment{…}` | **inherited** | lightEstimate, thermalState, batteryLevel, motionQuality, opticalFlowMean, sceneDepthFrameCount, coverageHeatmapPresent. |
 | `annotations{roomNotes, userProvidedRoomName, reviewCompletedAt}` | **inherited** | |
 | — | **new** `bundleSpecVersion` (Int, =1) | Distinguishes a Field instrument bundle from a plain v3 client bundle. |
@@ -39,6 +39,7 @@ The deck (SC-12) describes the manifest only as *"device, session, anchors, pose
 | — | **new** `poseGraphSummary{…}` | On-device pose-graph summary (§3.5). |
 | — | **new** `unverified` (Bool) | Session closed with < 3 anchors (§6). |
 | — | **new** `checksumAlgorithm` (String, ="sha256") | Integrity contract (§7). |
+| — | **new** `keyframes/` sidecar dir | `keyframe_index.ndjson` + `keyframe_summary.json`, listed as `keyframeIndex` / `keyframeSummary` artifacts (item 8, §3.6/§4). Field's SfM lane — **distinct** from posed `photos/`. |
 
 Backward compatibility is preserved the way v3 preserved v2: every new key is additive; a v3-only reader ignores unknown keys, and a v1 reader treats the new keys as required only when `bundleSpecVersion >= 1`.
 
@@ -127,9 +128,14 @@ The QA gate (SC-09). The verdict is advisory — red walks the user to the gap, 
     { "surface": "ceiling", "covered": true },
     { "surface": "wall:north", "covered": true },
     { "surface": "opening:door-1", "covered": false }
+  ],
+  "namedGaps": [                 // item-8 sync: [{surface, phrase}], NOT [String]
+    { "surface": "opening:door-1", "phrase": "the doorway to the hall" }
   ]
 }
 ```
+
+`namedGaps` is an **array of `{surface, phrase}` objects** (one per gap the coach can name aloud) — superseding the earlier `[String]` shape (item 8, blessed §11). It is **optional**; the validator (§10) checks the object shape only when present.
 
 ### 3.5 `poseGraphSummary`
 
@@ -142,9 +148,13 @@ The on-device pose graph the shared ARSession holds — a **summary** only (full
   "edgeCount": 1180,
   "loopClosures": 4,
   "meanTranslationDriftPct": 0.31, // ARKit drift estimate (~0.2–0.5%, SC-13)
-  "blurRejectedCount": 47          // keyframes dropped by the sharpness gate
+  "blurRejectedCount": 47,         // keyframes dropped by the sharpness gate
+  "rawBlurFailures": 63,           // NEW (item 8) — raw sharpness-gate failures before dedup
+  "encodeDropped": 2               // NEW (item 8) — keyframes lost to HEIC encode backpressure
 }
 ```
+
+`rawBlurFailures` and `encodeDropped` are Field-added instrument counts (item 8). The validator (§10) requires `keyframeCount`, `blurRejectedCount`, `rawBlurFailures`, and `encodeDropped` to be integers when present.
 
 ### 3.6 `artifacts` (v3 shape, `sha256` now required)
 
@@ -157,13 +167,15 @@ The on-device pose graph the shared ARSession holds — a **summary** only (full
 ]
 ```
 
-`capturedRoomJson` and `usdz` are **mandatory**; `mesh`, `worldMap`, `depthArchive`, `coverageHeatmap`, `annotations`, `photoThumbnails`, `depthIndex`, `photosManifest`, `bundleManifest` are optional and validated only when listed.
+`capturedRoomJson` and `usdz` are **mandatory**; `mesh`, `worldMap`, `depthArchive`, `keyframesArchive`, `coverageHeatmap`, `annotations`, `photoThumbnails`, `depthIndex`, `photosManifest`, `scorecard`, `anchors`, `keyframeIndex`, `keyframeSummary`, `bundleManifest` are optional and validated only when listed. Field's assembler emits `usdz`, `capturedRoomJson`, `mesh`, `depthIndex`, `photosManifest` (the top-level `photos_metadata.json`), `scorecard`, `anchors`, `keyframeIndex`, and `keyframeSummary` (item 8), plus the two transport archives `depthArchive` + `keyframesArchive` at upload (Part 3, below).
+
+**Transport archives (Part 3).** `depthArchive` (`depth.tar`) and `keyframesArchive` (`keyframes.tar`) are the **transport archives** of the heavy per-file streams: `depth.tar` is a tar of `depth/*.bin`; `keyframes.tar` a tar of `keyframes/*.heic` + `keyframes/*.bin`. They are written into the bundle dir at **upload** time and **coexist** with the logical per-file listing — the `depth/` and `keyframes/` dirs remain, and `depthIndex` / `keyframeIndex` / `keyframeSummary` still describe the individual files (which stay the validated form). Each archive is listed in `artifacts[]` like any other file (`kind`, `relativePath` = `depth.tar` / `keyframes.tar`, `sizeBytes`, `sha256`, `mimeType` = `application/x-tar`) and is validated as an **opaque artifact** by the generic per-file integrity check (present + sha256 + size) — the validator never inspects tar internals, so no special-casing is required. Both are **optional** kinds. At upload they map to `room_scans.depth_archive_url` (`depthArchive`) and `room_scans.scan_bundle_url` (`keyframesArchive`). See §11 B-16.
 
 ---
 
 ## 4. Directory layout
 
-Canonical on-disk layout, reconciling the live v3 bundle (`Application Support/Scans/{scanId}/`) with the deck's SC-12 section list. Live v3 filenames win over the deck's aspirational names (blessed §11). The deck's `room.param.json`→`captured_room.json`, `room.usdz`→`scan.usdz`, `keyframes/`→`photos/` mappings hold.
+Canonical on-disk layout, reconciling the live v3 bundle (`Application Support/Scans/{scanId}/`) with the deck's SC-12 section list. Live v3 filenames win over the deck's aspirational names (blessed §11). The deck's `room.param.json`→`captured_room.json` and `room.usdz`→`scan.usdz` mappings hold. The deck's `keyframes/`→`photos/` mapping does **not** apply to Field (item 8, blessed §11): Field keeps `photos/` (posed **context** photos) and a **separate `keyframes/` dir** (the SfM-lane frames) as two distinct lanes.
 
 ```
 <scanId>/
@@ -174,20 +186,30 @@ Canonical on-disk layout, reconciling the live v3 bundle (`Application Support/S
   world_map.arworldmap          # optional — relocalization
   coverage_heatmap.json         # optional — XZ coverage grid
   annotations.json              # optional — v3 review annotations
-  anchors.json                  # optional — sidecar mirror of manifest.anchors
-  scorecard.json                # optional — sidecar mirror of manifest.scorecard
-  photos/                       # posed keyframes (deck: keyframes/)
+  anchors.json                  # optional — sidecar mirror of manifest.anchors (kind: anchors)
+  scorecard.json                # optional — sidecar mirror of manifest.scorecard (kind: scorecard)
+  photos_metadata.json          # Field sidecar — JSON ARRAY of FieldPhotoEntry (len == photos.length); TOP-LEVEL, kind: photosManifest
+  depth.tar                     # optional transport (Part 3) — tar of depth/*.bin; kind depthArchive; present at UPLOAD alongside depth/ → room_scans.depth_archive_url
+  keyframes.tar                 # optional transport (Part 3) — tar of keyframes/*.heic + *.bin; kind keyframesArchive; present at UPLOAD alongside keyframes/ → room_scans.scan_bundle_url
+  photos/                       # posed CONTEXT photos (context lane — NOT the deck's keyframes/)
     auto_001.50.heic
     thumb_auto_001.50.jpg
-    photos_metadata.ndjson      # one FieldPhotoEntry per line (line count == photos.length)
+    photos_metadata.ndjson      # legacy deck path — one FieldPhotoEntry per line; still accepted, but Field writes the top-level photos_metadata.json instead
+  keyframes/                    # SfM lane (item 8) — distinct from posed photos/
+    keyframe_index.ndjson       # one JSON object per fired keyframe (non-blank line count == keyframe_summary.fired)
+    keyframe_summary.json       # { fired, blurRejected, rawBlurFailures, encodeDropped, blurRejectionRatio }
+    keyframe_<…>.heic           # per-keyframe image
+    keyframe_<…>.bin            # per-keyframe pose/telemetry sidecar
   depth/                        # optional — LiDAR evidence (deck: depth/)
-    depth_index.ndjson
-    <frame>.bin
+    depth_index.ndjson          # depth-frame index
+    <frame>.bin                 # per-frame depth payload (.bin, not PNG)
 ```
 
-Context notes (deck `notes/`) are **not** in this bundle — they route to the Capture Inbox (`field_captures`, 00233) with a spatial address (item 7).
+**Transport archives at upload (Part 3).** `depth.tar` (tar of `depth/*.bin`) and `keyframes.tar` (tar of `keyframes/*.heic` + `keyframes/*.bin`) appear in the bundle dir at **upload** time as the transport form of the heavy streams. They sit **alongside** the per-file `depth/` and `keyframes/` dirs, which remain the **logical / validated** form — the validator's subject stays the per-file listing; the archives are two more real files, validated only as opaque artifacts (present + sha256 + size, §3.6 / §11 B-16).
 
-**Storage path on upload** (unchanged from 00077/00287): `{artifactType}/{userId}/{scanId}/…` in the private `room-scans` bucket (500 MB limit; MIME list from 00077). No new bucket (R-e). Bundle budget: **300–600 MB/room** (SC-12).
+**No `notes/` directory in v1.** Context notes (deck `notes/`) are **not** in this bundle — they route to the Capture Inbox (`field_captures`, 00233) with a spatial address (item 7), a sibling stream, never a bundle dir.
+
+**Storage path on upload** (unchanged from 00077/00287): `{artifactType}/{userId}/{scanId}/…` in the private `room-scans` bucket (500 MB limit; MIME list from 00077). No new bucket (R-e). Bundle budget: **300–600 MB/room** (SC-12). The upload **Content-Type** must be in the bucket's `allowed_mime_types` — non-allowed semantic types (`.ndjson`, `.tar`) transport as `application/octet-stream` while their manifest `mimeType` stays semantic (§11 B-17).
 
 ---
 
@@ -268,9 +290,12 @@ The **accuracy certificate** (`room_files.certificate`, SC-08 "the receipt") rec
 5. **path containment** — checked BEFORE any file access for every artifact: `relativePath` must not be absolute, must not contain a `..` segment, and its resolved `os.path.realpath` must stay inside `os.path.realpath(bundle_dir)` (catches an intermediate symlinked directory routing outside the bundle); the resolved candidate itself must not be a symlink (an artifact must be a real file, never a link — even one that points back inside the bundle). (`PATH_VIOLATION`, M1 review fix)
 6. **per-artifact integrity** — for every artifact: file exists at `relativePath` (`MISSING_FILE`), `sha256` present and matches the computed SHA-256 of the bytes (`CHECKSUM_MISMATCH`), and `sizeBytes` matches actual size when present (`SIZE_MISMATCH`).
 7. **anchor / UNVERIFIED consistency** — `unverified == (len(anchors) < 3)` and `scorecard.anchorCount == len(anchors)`; each anchor has `endpointA/B` with numeric `x,y,z`, `measuredValueMm > 0`, `entryMethod == "typed"`. (`ANCHOR_INCONSISTENCY`)
-8. **photos parity** — if `photos/photos_metadata.ndjson` exists, its non-empty line count equals `len(manifest.photos)`. (`PHOTO_COUNT_MISMATCH`)
+8. **scorecard.namedGaps shape** (item 8) — if `scorecard.namedGaps` is present it must be an **array of `{surface, phrase}` objects** (both strings) — no longer `[String]`. Optional; checked only when present. (`SCHEMA_VIOLATION`)
+9. **pose-graph summary shape** (item 8) — if `poseGraphSummary` is present it must be an object; `keyframeCount`, `blurRejectedCount`, `rawBlurFailures`, `encodeDropped` must be integers when present. (`SCHEMA_VIOLATION`)
+10. **keyframe index/summary consistency** (item 8) — if both `keyframes/keyframe_index.ndjson` and `keyframes/keyframe_summary.json` exist and the summary carries an integer `fired`, the index's non-blank line count must equal `fired`. (`KEYFRAME_INCONSISTENCY`)
+11. **photos parity** — if `photos/photos_metadata.ndjson` exists, its non-empty line count equals `len(manifest.photos)`; the Field **top-level `photos_metadata.json`** (a JSON array) is **also** accepted and its length is checked the same way. (`PHOTO_COUNT_MISMATCH`)
 
-`--make-fixture <dir>` writes a minimal synthetic **valid** bundle (tiny placeholder binaries, checksums computed, `poseGraphSummary` included). `--selftest` runs three cases: (1) a fresh fixture must validate cleanly; (2) a copy with one artifact's bytes corrupted (checksum mismatch) and one file deleted must fail naming **both** `CHECKSUM_MISMATCH` and `MISSING_FILE`; (3) a copy whose manifest lists an artifact with `relativePath: "../escape.bin"` must fail naming `PATH_VIOLATION` (M1 review fix). No committed binary fixtures.
+`--make-fixture <dir>` writes a minimal synthetic **valid** bundle (tiny placeholder binaries, checksums computed, `poseGraphSummary` with `rawBlurFailures`/`encodeDropped`, a `scorecard.namedGaps` object array, and a `keyframes/` dir whose `keyframe_index.ndjson` line count matches `keyframe_summary.fired`, listed as `keyframeIndex`/`keyframeSummary` artifacts). `--selftest` runs four cases: (1) a fresh fixture must validate cleanly; (2) a copy with one artifact's bytes corrupted (checksum mismatch) and one file deleted must fail naming **both** `CHECKSUM_MISMATCH` and `MISSING_FILE`; (3) a copy whose manifest lists an artifact with `relativePath: "../escape.bin"` must fail naming `PATH_VIOLATION` (M1 review fix); (4) a copy whose `keyframe_summary.fired` is bumped past the index line count must fail naming `KEYFRAME_INCONSISTENCY` (item 8). No committed binary fixtures.
 
 ---
 
@@ -292,4 +317,9 @@ Per the package's authority note, these are code-only (I-entry class) calls made
 | B-10 | **`poseGraphSummary` is the on-device summary, not an SfM graph.** | SfM/COLMAP is P2 (SC-10). P1 carries the ARKit-held pose graph's summary stats so telemetry + the accuracy budget have inputs without building reconstruction. |
 | B-11 | **Migration minted at `00341`.** | 00341–00349 verified free on main + all branches; 00350–00369 are the materialized BOH reservation (files exist on boh/* branches). |
 | B-12 | **M1 review-pass fixes.** `rfm_anchor_source_shape` CHECK tightened so `tolerance_class = 'verified'` DB-requires `anchor_id` regardless of `source` (was convention-only, comment claimed enforcement that the CHECK didn't do); validator adds `os.path.realpath` containment + symlink refusal for every artifact `relativePath` (`PATH_VIOLATION`); `poseGraphSummary` promoted from documented-but-unchecked to a required top-level manifest key. | Review found the anchor-source CHECK's comment overclaimed what it enforced, the validator trusted manifest-supplied paths without containment checks, and `poseGraphSummary` was never actually gated despite the P1 package AC naming it. |
+| B-13 | **Item-8 sync: spec + validator + fixture track the real `FieldManifestAssembler` manifest.** `scorecard.namedGaps` is `[{surface, phrase}]` (was `[String]`); `poseGraphSummary` gains Field counts `rawBlurFailures` + `encodeDropped`. | The iOS assembler is the shipping writer; the spec/validator are the reference contract and must match it byte-for-byte or the CLI rejects real bundles. `namedGaps` carries a coach-speakable phrase per gap, not a bare surface id. |
+| B-14 | **Field keeps a separate `keyframes/` SfM lane; the deck's `keyframes/`→`photos/` mapping does not apply to Field.** `keyframes/keyframe_index.ndjson` (one object per fired keyframe) + `keyframe_summary.json` (`fired`/`blurRejected`/`rawBlurFailures`/`encodeDropped`/`blurRejectionRatio`), surfaced as `keyframeIndex`/`keyframeSummary` artifacts. Validator adds `KEYFRAME_INCONSISTENCY` (index line count == `summary.fired`). | Posed photos are the **context** lane (1:1 with `room_scan_images`); the SfM keyframes are a **distinct** lane feeding the pose graph. Collapsing them (per the deck) would conflate two streams with different downstream landings. `notes/` remains absent — context notes route to the Capture Inbox. |
+| B-15 | **Photos sidecar is a top-level `photos_metadata.json` (JSON array); the legacy `photos/photos_metadata.ndjson` stays accepted.** | Field's assembler writes the top-level array (kind `photosManifest`); the validator accepts either form so v3/deck-shaped bundles still parse. Parity check compares the sidecar length (array len or ndjson line count) to `len(manifest.photos)`. |
+| B-16 | **Part-3 transport: heavy streams tar'd at upload as uncompressed ustar.** The uploader tars the heavy per-file streams into two archives that live in the bundle dir — `depth.tar` (kind `depthArchive`, tar of `depth/*.bin`) and `keyframes.tar` (kind `keyframesArchive`, tar of `keyframes/*.heic` + `keyframes/*.bin`) — as **deterministic uncompressed ustar** (POSIX: sorted member names, mtime 0). They **coexist** with the logical per-file `depth/` / `keyframes/` listing (unchanged, still the validated form); each archive is listed in `artifacts[]` and validated as an opaque artifact (present + sha256 + size, no tar-internal walk). At upload `depthArchive` → `room_scans.depth_archive_url`, `keyframesArchive` → `room_scans.scan_bundle_url`. Both kinds optional. | Tarring the heavy streams collapses a 500 MB bundle from ~700 per-file upload tasks to a handful — far less request overhead and resume bookkeeping. **No** second compression layer: the inner artifacts (HEIC keyframes, packed depth `.bin`) are already compact, so gzip buys little and complicates range/resume — matches B-4. ustar + mtime 0 + sorted members = byte-deterministic, so each archive's own `sha256` is reproducible. |
+| B-17 | **`artifacts[].mimeType` is the SEMANTIC content type; the Storage upload Content-Type is the bucket-allowed TRANSPORT type — they may differ.** The manifest keeps the true semantic type (`application/x-ndjson` for the `.ndjson` indexes, `application/x-tar` for the two archives, `application/json`, `model/vnd.usdz+zip`, `application/octet-stream`). The uploader, however, must send a Content-Type in the `room-scans` bucket `allowed_mime_types` (00077: `model/vnd.usdz+zip`, `model/gltf+json`, `model/gltf-binary`, `model/ply`, `application/octet-stream`, `application/json`, `application/zip`, `image/heic`, `image/jpeg`, `image/png`, `image/x-exr`) — so `depthIndex`, `keyframeIndex`, `depthArchive`, and `keyframesArchive` all **transport as `application/octet-stream`** while their manifest `mimeType` stays semantic. The validator never compares `mimeType` against the bucket (it's descriptive metadata for item 9's parser), so the two stay decoupled and consistent. | Storage returns a deterministic **400 `invalid_mime_type`** on any Content-Type outside `allowed_mime_types`, which the resumable uploader's retry policy correctly treats as terminal (408/429/5xx only) — this is exactly what failed the first M2 walk on `depthIndex`. The semantic type still belongs in the manifest so the server knows a `.ndjson` is line-delimited JSON and a `.tar` is an archive without guessing from the extension. The transport allow-list is pinned in `ScanBucketMime.allowed` (CaptureKit) with a drift-guard test asserting every descriptor's upload Content-Type ∈ the set. |
 ```
