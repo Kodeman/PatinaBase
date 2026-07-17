@@ -53,9 +53,12 @@ export async function POST(
   const { shipmentId } = await params;
   const actor = auth.user.email ?? auth.user.id;
 
-  const shipment = await loadShipmentForGate(db, shipmentId).catch((e) => {
-    throw e;
-  });
+  let shipment;
+  try {
+    shipment = await loadShipmentForGate(db, shipmentId);
+  } catch (err) {
+    return serverError((err as Error).message ?? 'Failed to load the shipment');
+  }
   if (!shipment) return notFound('Shipment not found');
 
   const gate = gateForDelivery(shipment);
