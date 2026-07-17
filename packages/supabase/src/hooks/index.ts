@@ -445,6 +445,14 @@ export type {
   RoomScanFilters,
 } from './use-room-scans';
 export {
+  useRoomScanPhotos,
+  useRoomScanCovers,
+  resolveCoverPhoto,
+  dedupeRoomScanPhotos,
+  publicUrlToPath,
+} from './use-room-scan-photos';
+export type { RoomScanPhotoRow, RoomScanPhoto } from './use-room-scan-photos';
+export {
   useOpenDesignRequests,
   useClaimDesignRequest,
   useLeadScans,

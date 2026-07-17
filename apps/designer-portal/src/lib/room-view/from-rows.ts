@@ -27,6 +27,7 @@
  */
 
 import type { Confidence, RoomDoor, RoomGeometry, RoomOpening, RoomWindow } from './geometry';
+import type { PhotoProvenance } from './photo-poses';
 
 /** Default wall thickness drawing convention (RoomPlan walls are planes) — I73(d). */
 export const THICKNESS_CONVENTION_FT = 0.45;
@@ -45,6 +46,11 @@ export interface RoomScanGeometryRow {
   floor_polygon: Array<[number, number]> | null;
   floor_area_sqft: number | null;
   confidence_summary: string | null;
+  /** Plan-frame provenance (00337) — the yaw and NW origin the parser used to
+   *  de-rotate the world frame. Optional so pre-00337 rows still type-check;
+   *  surfaced as `AdapterResult.provenance` for the photo-pose layer. */
+  origin_yaw_deg?: number | null;
+  origin_offset_m?: { x: number; z: number } | null;
 }
 
 export interface RoomScanGeometryElementRow {
@@ -83,6 +89,11 @@ export interface AdapterResult {
   warnings: string[];
   /** true when wall_thickness_ft was null/absent and the 0.45 ft convention was applied (I73d) */
   thicknessConvention: boolean;
+  /** Plan-frame provenance (00337) — non-null only when the header carries a
+   *  finite yaw AND a finite `{x, z}` offset. The photo-pose layer
+   *  (photo-poses.ts) needs it to project camera transforms into this exact
+   *  plan frame; null until the scan is parsed with 00337-era provenance. */
+  provenance: PhotoProvenance | null;
 }
 
 // ————————————————————————————————————————————————————————————————
@@ -272,7 +283,15 @@ export function roomGeometryFromRows(
     floor,
   };
 
-  return { geometry, warnings, thicknessConvention };
+  // ——— plan-frame provenance (00337) — only when both parts are finite ———
+  let provenance: PhotoProvenance | null = null;
+  const yaw = geo?.origin_yaw_deg;
+  const off = geo?.origin_offset_m;
+  if (isNum(yaw) && off != null && isNum(off.x) && isNum(off.z)) {
+    provenance = { originYawDeg: yaw, originOffsetM: { x: off.x, z: off.z } };
+  }
+
+  return { geometry, warnings, thicknessConvention, provenance };
 }
 
 // ————————————————————————————————————————————————————————————————

@@ -13945,6 +13945,8 @@ export type Database = {
           captured_at: string
           composition_score: number | null
           created_at: string
+          derive_attempts: number
+          derive_error: string | null
           device_orientation: string | null
           display_order: number
           euler_angles: number[] | null
@@ -13960,6 +13962,7 @@ export type Database = {
           light_estimate_lumens: number | null
           mime_type: string | null
           photo_kind: string | null
+          preview_url: string | null
           quality_score: number | null
           role: string
           room_id: string | null
@@ -13979,6 +13982,8 @@ export type Database = {
           captured_at: string
           composition_score?: number | null
           created_at?: string
+          derive_attempts?: number
+          derive_error?: string | null
           device_orientation?: string | null
           display_order?: number
           euler_angles?: number[] | null
@@ -13994,6 +13999,7 @@ export type Database = {
           light_estimate_lumens?: number | null
           mime_type?: string | null
           photo_kind?: string | null
+          preview_url?: string | null
           quality_score?: number | null
           role: string
           room_id?: string | null
@@ -14013,6 +14019,8 @@ export type Database = {
           captured_at?: string
           composition_score?: number | null
           created_at?: string
+          derive_attempts?: number
+          derive_error?: string | null
           device_orientation?: string | null
           display_order?: number
           euler_angles?: number[] | null
@@ -14028,6 +14036,7 @@ export type Database = {
           light_estimate_lumens?: number | null
           mime_type?: string | null
           photo_kind?: string | null
+          preview_url?: string | null
           quality_score?: number | null
           role?: string
           room_id?: string | null

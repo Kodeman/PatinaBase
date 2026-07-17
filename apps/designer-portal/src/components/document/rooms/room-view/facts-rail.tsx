@@ -34,6 +34,13 @@ export interface FactsRailMeasureProps {
   onClear: () => void;
 }
 
+export interface FactsRailPhotosProps {
+  /** Deduped photo count (from useRoomScanPhotos). */
+  count: number;
+  /** Opens the viewer at the first photo. */
+  onOpen: () => void;
+}
+
 export interface FactsRailProps {
   geometry: RoomGeometry;
   /** true when from-rows.ts applied the 0.45ft thickness convention (no
@@ -44,6 +51,10 @@ export interface FactsRailProps {
   qualityGrade: string | null;
   /** 0–1 fraction, e.g. 0.91. */
   coveragePercentage: number | null;
+  /** Photos line (Room View PHOTOS, W2) — a `Photos · N` fact between Detected
+   *  and Scan, rendered ONLY when count > 0; clicking it opens the viewer.
+   *  Omitted entirely (no line) for a Field scan with no photos. */
+  photos?: FactsRailPhotosProps;
   /** Measure-tool toolrow — omitted entirely (no dead UI) when the caller
    *  doesn't wire the tool up. */
   measure?: FactsRailMeasureProps;
@@ -74,6 +85,7 @@ export function FactsRail({
   scanDate,
   qualityGrade,
   coveragePercentage,
+  photos,
   measure,
 }: FactsRailProps) {
   const { w, d } = overallDims(geometry);
@@ -99,6 +111,24 @@ export function FactsRail({
       </Fact>
 
       <Fact k="Detected">{detected.length > 0 ? detected.join(' · ') : 'nothing detected'}</Fact>
+
+      {photos && photos.count > 0 && (
+        <Fact k="Photos">
+          {/* Quiet, not button-chrome (Measure-toolrow precedent): reads like
+              any other fact value, warms to clay + reveals a mono "view" hint
+              on hover/focus. */}
+          <button
+            type="button"
+            onClick={photos.onOpen}
+            className="group inline-flex items-baseline gap-1.5 text-left text-[14px] text-[var(--color-charcoal)] outline-none transition-colors hover:text-[var(--color-clay)] focus-visible:text-[var(--color-clay)]"
+          >
+            {plural(photos.count, 'photo')}
+            <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+              view
+            </span>
+          </button>
+        </Fact>
+      )}
 
       <Fact k="Scan">
         {scanDate ? fmtDay(scanDate) : '—'}

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patina Field · P1 capture walkthrough</title>
+<style>
+  :root{
+    --chalk:#f7f4ee;--paper:#eee9df;--ink:#25231f;--muted:#716b61;
+    --clay:#b56f4f;--clay-deep:#7d402d;--sage:#789383;--brass:#b2873d;
+    --rust:#b64d38;--blueprint:#24383a;--line:rgba(37,35,31,.16);
+    --phone-w:390px;--phone-h:844px;
+  }
+  *{box-sizing:border-box}
+  html{background:var(--blueprint);scroll-behavior:smooth}
+  body{margin:0;color:var(--ink);font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;background:var(--chalk);min-height:100vh}
+  button{font:inherit}
+  button:focus-visible,[tabindex]:focus-visible{outline:3px solid #e4aa69;outline-offset:3px}
+  .shell{min-height:100vh;display:grid;grid-template-columns:minmax(300px,1fr) minmax(430px,620px);background:linear-gradient(90deg,var(--chalk) 0 52%,var(--blueprint) 52%)}
+  .brief{padding:clamp(28px,5vw,72px);display:flex;flex-direction:column;min-height:100vh}
+  .mark{font-family:Georgia,serif;font-size:16px;letter-spacing:.28em;text-transform:uppercase}
+  .edition{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--clay-deep);letter-spacing:.14em;text-transform:uppercase;margin-top:8px}
+  h1{font-family:Georgia,serif;font-weight:400;font-size:clamp(42px,6vw,74px);line-height:.98;letter-spacing:-.045em;max-width:760px;margin:12vh 0 24px}
+  h1 em{color:var(--clay-deep);font-weight:400}
+  .intro{font-family:Georgia,serif;font-size:clamp(17px,1.6vw,22px);line-height:1.5;color:#514c44;max-width:610px}
+  .rule{display:flex;align-items:center;gap:12px;margin:34px 0;color:var(--clay-deep);font:10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase}
+  .rule:before,.rule:after{content:"";height:1px;background:var(--clay);flex:1}
+  .chapters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);max-width:680px}
+  .chapter{border:0;background:var(--chalk);text-align:left;padding:15px 14px;cursor:pointer;min-height:76px;color:var(--muted);transition:background .15s,color .15s}
+  .chapter:hover{background:#fff}.chapter.active{background:var(--ink);color:var(--chalk)}
+  .chapter b{display:block;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;margin-bottom:6px;color:var(--clay)}
+  .chapter span{font-size:13px;line-height:1.25}
+  .brief-foot{margin-top:auto;padding-top:34px;display:flex;gap:22px;align-items:end;justify-content:space-between;color:var(--muted);font-size:12px;max-width:680px}
+  .keys{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.08em}
+  .keys kbd{border:1px solid var(--line);background:white;padding:3px 7px}
+
+  .demo{min-height:100vh;padding:34px 28px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .blueprint-lines{position:absolute;inset:0;opacity:.12;background-image:linear-gradient(rgba(255,255,255,.4) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.4) 1px,transparent 1px);background-size:32px 32px;pointer-events:none}
+  .phone{width:min(var(--phone-w),calc(100vw - 34px));height:min(var(--phone-h),calc(100vh - 58px));aspect-ratio:390/844;background:#0d0e0e;border:7px solid #0b0c0c;border-radius:54px;box-shadow:0 34px 80px rgba(0,0,0,.36);position:relative;overflow:hidden;z-index:1}
+  .island{position:absolute;z-index:20;top:11px;left:50%;transform:translateX(-50%);width:112px;height:31px;border-radius:20px;background:#090909}
+  .screen{position:absolute;inset:0;display:none;background:var(--chalk);overflow:hidden;border-radius:46px}.screen.active{display:flex;flex-direction:column}
+  .status{height:51px;display:flex;align-items:center;justify-content:space-between;padding:13px 24px 0;font-size:12px;font-weight:650;position:relative;z-index:3}
+  .status .icons{letter-spacing:2px;font-size:10px}
+  .navrow{display:flex;align-items:center;justify-content:space-between;padding:11px 20px;border-bottom:1px solid var(--line);min-height:52px}
+  .navrow .back{border:0;background:none;color:var(--clay-deep);font-size:14px;padding:5px;cursor:pointer}.navrow strong{font-size:14px}.step{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+  .content{padding:24px 22px;overflow:auto;flex:1}.content h2{font-family:Georgia,serif;font-size:32px;line-height:1.04;font-weight:400;letter-spacing:-.025em;margin:8px 0 10px}.content .sub{color:var(--muted);font-size:14px;line-height:1.45;margin:0 0 23px}
+  .project{border:1px solid var(--line);background:white;padding:16px;display:flex;gap:14px;align-items:center;cursor:pointer;width:100%;text-align:left;margin-bottom:10px}.project.active{border:2px solid var(--clay);padding:15px}.project .plan{width:60px;height:52px;border:2px solid var(--ink);position:relative;flex:0 0 auto}.project .plan:after{content:"";position:absolute;left:28px;top:0;bottom:18px;border-left:2px solid var(--ink)}.project b{display:block;font-family:Georgia,serif;font-size:17px;font-weight:400}.project small{color:var(--muted)}
+  .action{margin:12px 20px 18px;border:0;border-radius:999px;background:var(--clay);color:white;min-height:54px;font-weight:650;cursor:pointer;box-shadow:inset 0 -1px rgba(0,0,0,.18)}.action:hover{background:var(--clay-deep)}.action.secondary{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  .viewfinder{background:linear-gradient(155deg,#8a887d,#474c49 45%,#242928);color:white}.viewfinder .status{color:white}.viewfinder .navrow{border-color:rgba(255,255,255,.16)}
+  .room{position:relative;flex:1;overflow:hidden;background:linear-gradient(90deg,#676c67 0 14%,#a8a79d 14% 78%,#555b57 78%)}
+  .room:before{content:"";position:absolute;inset:13% 12% 19%;clip-path:polygon(0 13%,100% 0,92% 100%,8% 87%);background:linear-gradient(135deg,rgba(120,147,131,.72) 0 52%,rgba(255,255,255,.08) 52%);border:1px solid rgba(255,255,255,.42)}
+  .window{position:absolute;right:18%;top:22%;width:70px;height:120px;border:5px solid rgba(255,255,255,.6);background:#bfcbc5}.sofa{position:absolute;left:22%;bottom:20%;width:165px;height:75px;background:#65645f;border-radius:13px 13px 3px 3px;box-shadow:0 8px 18px rgba(0,0,0,.25)}
+  .reticle{position:absolute;left:50%;top:45%;width:30px;height:30px;transform:translate(-50%,-50%)}.reticle:before,.reticle:after{content:"";position:absolute;background:white;opacity:.8}.reticle:before{width:30px;height:1px;top:15px}.reticle:after{height:30px;width:1px;left:15px}
+  .coach{position:absolute;top:18px;left:18px;right:18px;background:rgba(20,23,22,.88);backdrop-filter:blur(12px);padding:13px 14px;display:flex;gap:11px;align-items:center}.coach .dot{width:10px;height:10px;border-radius:50%;background:#e3b85b;box-shadow:0 0 0 5px rgba(227,184,91,.18)}.coach b{font-size:13px}.coach small{display:block;color:rgba(255,255,255,.68);margin-top:2px}
+  .scanmeta{position:absolute;bottom:24px;left:18px;right:18px;display:grid;grid-template-columns:repeat(3,1fr);background:rgba(20,23,22,.82);backdrop-filter:blur(12px)}.metric{padding:11px;border-right:1px solid rgba(255,255,255,.16)}.metric:last-child{border:0}.metric b{display:block;font:14px ui-monospace,SFMono-Regular,Menlo,monospace}.metric span{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6)}
+  .capturebar{display:flex;align-items:center;justify-content:space-around;height:104px;background:#151817}.capturebar button{border:0;background:none;color:white;cursor:pointer}.capturebar .round{width:62px;height:62px;border:4px solid white;border-radius:50%;position:relative}.capturebar .round:after{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--clay)}.capturebar .tool{font-size:10px;text-transform:uppercase;letter-spacing:.08em;display:grid;gap:5px}.capturebar .tool i{font-style:normal;font-size:20px}
+  .anchor-canvas{height:290px;background:#d9d5ca;position:relative;overflow:hidden}.anchor-canvas:before{content:"";position:absolute;width:300px;height:210px;left:46px;top:38px;clip-path:polygon(8% 18%,92% 4%,100% 83%,0 100%);background:#aeb8b0;border:2px solid var(--sage)}.anchor-line{position:absolute;left:64px;right:68px;top:145px;height:2px;background:white;transform:rotate(-3deg);box-shadow:0 0 0 1px rgba(0,0,0,.15)}.anchor-line:before,.anchor-line:after{content:"";position:absolute;top:-7px;width:15px;height:15px;border:2px solid white;border-radius:50%;background:var(--clay)}.anchor-line:before{left:-6px}.anchor-line:after{right:-6px}.dimlabel{position:absolute;top:108px;left:50%;transform:translateX(-50%);background:var(--ink);color:white;padding:6px 10px;font:11px ui-monospace,SFMono-Regular,Menlo,monospace}
+  .field{margin-top:16px}.field label{display:block;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:7px}.input{border-bottom:1px solid var(--ink);display:flex;align-items:baseline;padding:5px 0}.input strong{font:32px ui-monospace,SFMono-Regular,Menlo,monospace}.input span{margin-left:auto;color:var(--muted)}
+  .anchor-progress{display:flex;gap:8px;margin-top:18px}.anchor-progress i{height:4px;background:var(--line);flex:1}.anchor-progress i.done{background:var(--sage)}.anchor-progress i.current{background:var(--clay)}
+  .scorehead{display:flex;align-items:flex-start;gap:16px;margin-bottom:18px}.score{width:74px;height:74px;border-radius:50%;display:grid;place-items:center;border:7px solid var(--sage);font:20px ui-monospace,SFMono-Regular,Menlo,monospace;flex:none}.verdict{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:#4b6f5a;text-transform:uppercase;letter-spacing:.12em;margin-top:7px}
+  .scorelist{border-top:1px solid var(--line)}.scoreitem{display:grid;grid-template-columns:1fr auto;gap:10px;padding:15px 2px;border-bottom:1px solid var(--line);align-items:center}.scoreitem b{font-size:14px}.scoreitem small{display:block;color:var(--muted);margin-top:3px}.chip{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;border:1px solid currentColor;padding:4px 7px;color:#4b6f5a}.chip.warn{color:#906825}
+  .stamp{border:3px double var(--rust);color:var(--rust);font:700 16px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;text-align:center;padding:10px;transform:rotate(-2deg);margin:17px 0 4px}.warning{background:#f4e6df;border-left:3px solid var(--rust);padding:12px 13px;color:#743829;font-size:12px;line-height:1.4;margin-top:12px}
+  .uploadmark{width:110px;height:110px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;margin:30px auto 20px;position:relative}.uploadmark:before{content:"";position:absolute;inset:8px;border-radius:50%;border:5px solid var(--paper);border-top-color:var(--sage);border-right-color:var(--sage);transform:rotate(35deg)}.uploadmark span{font:18px ui-monospace,SFMono-Regular,Menlo,monospace}.bundle{border:1px solid var(--line);background:white;padding:15px;margin-top:22px}.bundle div{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px}.bundle div:last-child{border:0}.bundle span{color:var(--muted)}
+  .popover{position:absolute;z-index:40;left:18px;right:18px;bottom:116px;background:var(--chalk);color:var(--ink);padding:18px;box-shadow:0 18px 60px rgba(0,0,0,.4);display:none}.popover.open{display:block}.popover h3{font-family:Georgia,serif;font-weight:400;margin:0 0 7px}.popover p{font-size:12px;color:var(--muted);margin:0 0 14px}.popover .mini-actions{display:flex;gap:8px}.popover button{border:1px solid var(--line);background:white;padding:10px;flex:1;cursor:pointer}
+  .notes-button{position:absolute;right:24px;top:24px;z-index:4;border:1px solid rgba(255,255,255,.4);background:rgba(17,25,25,.8);color:white;padding:9px 12px;font:10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+  .review{position:absolute;inset:0 0 0 auto;width:min(390px,100%);z-index:30;background:#f7f4ee;color:var(--ink);padding:56px 28px 28px;transform:translateX(105%);transition:transform .28s ease;overflow:auto;box-shadow:-20px 0 60px rgba(0,0,0,.35)}.review.open{transform:none}.review button{position:absolute;top:18px;right:18px;border:0;background:none;font-size:24px;cursor:pointer}.review h2{font-family:Georgia,serif;font-weight:400;font-size:30px;margin:8px 0}.review h3{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--clay-deep);letter-spacing:.1em;text-transform:uppercase;margin:26px 0 8px}.review p,.review li{font-size:13px;line-height:1.55;color:#514c44}.review ul{padding-left:18px}.review .conflict{border-left:3px solid var(--rust);padding-left:12px}.review .decision{border-left:3px solid var(--sage);padding-left:12px}
+  .toast{position:absolute;left:50%;bottom:25px;transform:translate(-50%,20px);background:var(--ink);color:white;padding:11px 14px;font-size:12px;opacity:0;transition:.2s;z-index:80;white-space:nowrap}.toast.show{opacity:1;transform:translate(-50%,0)}
+  @media(max-width:920px){.shell{display:block;background:var(--chalk)}.brief{min-height:auto;padding-bottom:42px}.brief h1{margin-top:70px}.demo{min-height:930px}.notes-button{position:fixed}.brief-foot{margin-top:36px}}
+  @media(max-width:560px){.chapters{grid-template-columns:1fr 1fr}.demo{padding:26px 8px}.phone{height:812px}.brief{padding:26px 20px}.brief-foot{display:block}.keys{margin-top:12px}.notes-button{right:12px;top:12px}}
+  @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <section class="brief">
+    <div><div class="mark">Patina Field</div><div class="edition">P1 interaction study · 17 July 2026</div></div>
+    <h1>Bring the room back <em>with receipts.</em></h1>
+    <p class="intro">A walkthrough of the instrument—not a beauty scan. One guided pass collects the evidence, field truth corrects it, and the app says exactly what remains uncertain.</p>
+    <div class="rule"><span>one room · one clock · six moments</span></div>
+    <nav class="chapters" aria-label="Walkthrough moments">
+      <button class="chapter active" data-screen="setup"><b>01</b><span>Choose the room</span></button>
+      <button class="chapter" data-screen="scan"><b>02</b><span>Follow the coach</span></button>
+      <button class="chapter" data-screen="context"><b>03</b><span>Pin field context</span></button>
+      <button class="chapter" data-screen="anchor"><b>04</b><span>Enter site truth</span></button>
+      <button class="chapter" data-screen="qa"><b>05</b><span>Close the gaps</span></button>
+      <button class="chapter" data-screen="upload"><b>06</b><span>Leave while it syncs</span></button>
+    </nav>
+    <div class="brief-foot"><span>Interactive HTML concept · tap the phone controls to advance.</span><span class="keys"><kbd>←</kbd> <kbd>→</kbd> navigate</span></div>
+  </section>
+
+  <section class="demo" aria-label="Interactive iPhone prototype">
+    <div class="blueprint-lines"></div>
+    <button class="notes-button" id="notesOpen">Review notes</button>
+    <div class="phone">
+      <div class="island"></div>
+
+      <section class="screen active" id="setup" aria-label="Choose the room">
+        <div class="status"><span>9:41</span><span class="icons">● ◒ ▰</span></div>
+        <div class="navrow"><span class="step">New room capture</span><strong>Cancel</strong></div>
+        <div class="content">
+          <div class="step">Step 1 of 4</div><h2>Where are you standing?</h2>
+          <p class="sub">Choose the project and room first. Every photo, note, measurement, and model update will return here.</p>
+          <button class="project active"><span class="plan"></span><span><b>Vasquez Residence</b><small>Living room · Ground floor</small></span></button>
+          <button class="project"><span class="plan"></span><span><b>Add another room</b><small>Name and locate it in this project</small></span></button>
+          <div class="warning" style="border-color:var(--sage);background:#e6ece7;color:#40574a">LiDAR available · This iPhone can create an instrumented room capture.</div>
+        </div>
+        <button class="action next" data-next="scan">Set up capture</button>
+      </section>
+
+      <section class="screen viewfinder" id="scan" aria-label="Guided room scan">
+        <div class="status"><span>9:43</span><span class="icons">● ◒ ▰</span></div>
+        <div class="navrow"><button class="back prev">‹ Setup</button><strong>Living room</strong><span class="step" style="color:#ddd">02:18</span></div>
+        <div class="room"><div class="window"></div><div class="sofa"></div><div class="reticle"></div>
+          <div class="coach"><span class="dot"></span><span><b>Finish the wall behind you</b><small>Turn slowly · keep 6–12 ft away</small></span></div>
+          <div class="scanmeta"><div class="metric"><b>78%</b><span>coverage</span></div><div class="metric"><b>146</b><span>sharp frames</span></div><div class="metric"><b>good</b><span>tracking</span></div></div>
+        </div>
+        <div class="capturebar"><button class="tool" id="contextOpen"><i>◉</i><span>Detail</span></button><button class="round next" data-next="anchor" aria-label="Finish room scan"></button><button class="tool" id="voiceOpen"><i>⌁</i><span>Voice</span></button></div>
+        <div class="popover" id="contextPop"><h3>Pin a detail here</h3><p>The photo keeps this camera position, room, and timestamp—no sorting later.</p><div class="mini-actions"><button data-context="photo">Take detail photo</button><button data-context="voice">Record voice note</button></div></div>
+      </section>
+
+      <section class="screen" id="context" aria-label="Pinned context confirmation">
+        <div class="status"><span>9:46</span><span class="icons">● ◒ ▰</span></div><div class="navrow"><button class="back" data-next="scan">‹ Scan</button><strong>Field context</strong><span class="step">Pinned</span></div>
+        <div class="content"><div class="step">At east wall · 02:21</div><h2>Radiator behind drapes.</h2><p class="sub">The note and detail photo are attached to this exact place in the room and will appear in Capture Inbox.</p>
+          <div style="height:260px;background:linear-gradient(145deg,#77736a,#aaa59a);position:relative"><div class="sofa" style="left:58px;bottom:38px"></div><div style="position:absolute;right:28px;bottom:30px;width:48px;height:112px;background:#d6d1c7;border:5px double #6c6962"></div><span style="position:absolute;right:22px;top:20px;background:var(--ink);color:white;padding:7px 9px;font-size:11px">East wall · pinned</span></div>
+        </div><button class="action" data-next="scan">Return to scan</button>
+      </section>
+
+      <section class="screen" id="anchor" aria-label="Typed anchor entry">
+        <div class="status"><span>9:49</span><span class="icons">● ◒ ▰</span></div><div class="navrow"><button class="back prev">‹ Scan</button><strong>Site truth</strong><span class="step">1 of 3</span></div>
+        <div class="anchor-canvas"><div class="anchor-line"></div><div class="dimlabel">Tap two endpoints</div></div>
+        <div class="content" style="padding-top:18px"><div class="step">Long span · north wall</div><h2 style="font-size:26px">What does the tape say?</h2><div class="field"><label>Measured length</label><div class="input"><strong>18′ 4⅜″</strong><span>typed</span></div></div><div class="anchor-progress"><i class="current"></i><i></i><i></i></div></div>
+        <button class="action next" data-next="qa">Save anchor</button>
+      </section>
+
+      <section class="screen" id="qa" aria-label="Capture quality scorecard">
+        <div class="status"><span>9:51</span><span class="icons">● ◒ ▰</span></div><div class="navrow"><button class="back prev">‹ Anchor</button><strong>Room check</strong><span class="step">Before you leave</span></div>
+        <div class="content"><div class="scorehead"><div class="score">82</div><div><div class="verdict">Amber · usable with limits</div><h2 style="font-size:27px;margin-top:5px">One gap. Two anchors.</h2></div></div><p class="sub">The room can upload now, but closing the gap and adding one ceiling height will materially tighten the drawings.</p>
+          <div class="scorelist"><div class="scoreitem"><span><b>Room coverage</b><small>East wall above radiator is thin</small></span><span class="chip warn">88%</span></div><div class="scoreitem"><span><b>Sharp frames</b><small>184 of 201 retained</small></span><span class="chip">Good</span></div><div class="scoreitem"><span><b>Tracking health</b><small>No relocalization events</small></span><span class="chip">Good</span></div><div class="scoreitem"><span><b>Site-truth anchors</b><small>Two long spans · ceiling missing</small></span><span class="chip warn">2 of 3</span></div></div>
+          <div class="stamp">UNVERIFIED · WIDE TOLERANCE</div><div class="warning">This stamp follows every drawing and dimension until a third anchor is added.</div>
+        </div><button class="action secondary" id="gapButton">Show me the gap</button><button class="action next" data-next="upload">Upload with limits</button>
+      </section>
+
+      <section class="screen" id="upload" aria-label="Resumable upload">
+        <div class="status"><span>9:53</span><span class="icons">● ◒ ▰</span></div><div class="navrow"><span class="step">Vasquez · living room</span><strong>Done</strong></div>
+        <div class="content"><div class="uploadmark"><span id="uploadPct">68%</span></div><h2 style="text-align:center">You can leave.</h2><p class="sub" style="text-align:center">The room bundle keeps uploading in the background. If service drops, it resumes from the last verified part.</p>
+          <div class="bundle"><div><b>Room evidence</b><span>382 MB</span></div><div><b>Checksums</b><span>verified</span></div><div><b>Anchors</b><span>2 · unverified</span></div><div><b>Next</b><span>anchor solve + drawings</span></div></div>
+          <div class="warning">Output will remain UNVERIFIED. Add the ceiling anchor later to issue tighter tolerance classes.</div>
+        </div><button class="action" id="restart">Walk through again</button>
+      </section>
+      <div class="toast" id="toast">Pinned to the east wall</div>
+    </div>
+
+    <aside class="review" id="review" aria-label="Review findings"><button id="notesClose" aria-label="Close review notes">×</button><div class="edition">Review of proposed update</div><h2>Clear interaction model. Two architecture corrections.</h2>
+      <h3>What the prototype retains</h3><ul><li>The app is a field instrument and coach; reconstruction is downstream.</li><li>Coverage is visible during the walk, and the final gate points to an exact gap.</li><li>Typed spans bind field truth to two model points.</li><li>Context carries a spatial address into Capture Inbox.</li><li>The upload is checksummed, backgrounded, and resumable.</li></ul>
+      <div class="decision"><h3>Scope authority applied</h3><p>The P1 package says it wins when it conflicts with the SC deck. This walkthrough therefore allows closure below three anchors, stamps the room <b>UNVERIFIED</b>, and keeps the widest tolerance class visible.</p></div>
+      <div class="conflict"><h3>Deployment conflict</h3><p>The proposal names a homelab GPU and Coolify. Repository authority says that host is retired and must never receive deployments or traffic. Before implementation, item 9 must be rewritten for the approved Cloudflare/Supabase production topology or explicitly escalated as an architecture change.</p></div>
+      <div class="conflict"><h3>P1/P2 language drift</h3><p>The deck presents pose refinement, dense fusion, and splat training as the core reconstruction chain. The build package moves all three to P2. P1 UI and status copy should name only the anchor solve, corrected parametric drawings, and published tolerances.</p></div>
+      <h3>Device boundary</h3><p>LiDAR Pro devices get this capture flow. Non‑Pro devices need a separate context-only route that never uses the word “scan.” That route is specified but not expanded in this six-moment walkthrough.</p>
+    </aside>
+  </section>
+</main>
+<script>
+  const order=['setup','scan','context','anchor','qa','upload'];
+  const screens=[...document.querySelectorAll('.screen')];
+  const chapters=[...document.querySelectorAll('.chapter')];
+  let current='setup';
+  function show(id){
+    if(!order.includes(id)) return;
+    current=id;
+    screens.forEach(s=>s.classList.toggle('active',s.id===id));
+    chapters.forEach(c=>c.classList.toggle('active',c.dataset.screen===id));
+    document.querySelectorAll('.popover').forEach(p=>p.classList.remove('open'));
+    if(innerWidth<921) document.querySelector('.demo').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  chapters.forEach(c=>c.addEventListener('click',()=>show(c.dataset.screen)));
+  document.querySelectorAll('[data-next]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.next)));
+  document.querySelectorAll('.prev').forEach(b=>b.addEventListener('click',()=>show(order[Math.max(0,order.indexOf(current)-1)])));
+  addEventListener('keydown',e=>{if(e.key==='ArrowRight')show(order[Math.min(order.length-1,order.indexOf(current)+1)]);if(e.key==='ArrowLeft')show(order[Math.max(0,order.indexOf(current)-1)])});
+  const pop=document.getElementById('contextPop');
+  document.getElementById('contextOpen').addEventListener('click',()=>pop.classList.toggle('open'));
+  document.getElementById('voiceOpen').addEventListener('click',()=>pop.classList.toggle('open'));
+  document.querySelectorAll('[data-context]').forEach(b=>b.addEventListener('click',()=>{show('context');toast('Pinned to the east wall')}));
+  document.getElementById('gapButton').addEventListener('click',()=>{show('scan');toast('Gap highlighted behind you')});
+  document.getElementById('restart').addEventListener('click',()=>show('setup'));
+  const review=document.getElementById('review');
+  document.getElementById('notesOpen').addEventListener('click',()=>review.classList.add('open'));
+  document.getElementById('notesClose').addEventListener('click',()=>review.classList.remove('open'));
+  function toast(message){const t=document.getElementById('toast');t.textContent=message;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
+  let pct=68;setInterval(()=>{if(current==='upload'&&pct<100){pct+=2;document.getElementById('uploadPct').textContent=pct+'%'}},900);
+</script>
+</body>
+</html>

@@ -18,7 +18,10 @@ const corsHeaders = {
 };
 
 interface ConfirmRequest {
-  scanId: string;
+  // Both iOS apps send snake_case `scan_id`; older callers send `scanId`. Accept
+  // either (I80 — every call had 400'd on the scanId-only read since 00082).
+  scanId?: string;
+  scan_id?: string;
 }
 
 // Columns on room_scans that, when non-null, represent an expected uploaded
@@ -64,7 +67,8 @@ serve(async (req) => {
     } catch {
       return jsonResponse({ ok: false, error: "invalid json body" }, 400);
     }
-    if (!body?.scanId || typeof body.scanId !== "string") {
+    const scanId = body?.scanId ?? body?.scan_id;
+    if (!scanId || typeof scanId !== "string") {
       return jsonResponse({ ok: false, error: "scanId required" }, 400);
     }
 
@@ -83,7 +87,7 @@ serve(async (req) => {
     const { data: scan, error: fetchError } = await supabase
       .from("room_scans")
       .select(SELECT_COLUMNS)
-      .eq("id", body.scanId)
+      .eq("id", scanId)
       .single();
 
     if (fetchError || !scan) {
@@ -141,7 +145,7 @@ serve(async (req) => {
     const { count: imageRows } = await supabase
       .from("room_scan_images")
       .select("id", { count: "exact", head: true })
-      .eq("scan_id", body.scanId);
+      .eq("scan_id", scanId);
 
     const photosRowCount = imageRows ?? 0;
 
@@ -161,7 +165,7 @@ serve(async (req) => {
     // All expected artifacts present — flip the flag via owner-scoped RPC.
     const { error: rpcError } = await supabase.rpc(
       "mark_scan_upload_complete",
-      { p_scan_id: body.scanId },
+      { p_scan_id: scanId },
     );
     if (rpcError) {
       return jsonResponse(
@@ -175,7 +179,7 @@ serve(async (req) => {
 
     return jsonResponse({
       ok: true,
-      scanId: body.scanId,
+      scanId: scanId,
       artifactsVerified: ARTIFACT_URL_COLUMNS.length - missing.length,
       photosVerified,
       photosRowCount,

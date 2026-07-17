@@ -43,6 +43,11 @@ const PAD = 54;
 
 export interface PlanStageProps {
   geometry: RoomGeometry;
+  /** Photo camera-tick seam (Room View PHOTOS, W2) — an SVG layer painted
+   *  above the base primitives but BELOW `measureLayer`, so the measure
+   *  tool's transparent catcher rect occludes marker hover/click while armed
+   *  (see photo-markers.tsx). */
+  photoLayer?: ReactNode;
   /** Measure-tool seam (a sibling task mounts the two-point measure overlay
    *  here) — rendered as an extra SVG layer above the base primitives. */
   measureLayer?: ReactNode;
@@ -57,7 +62,7 @@ interface DimChipState {
   y: number;
 }
 
-export function PlanStage({ geometry, measureLayer, stageCapRight = DEFAULT_STAGE_CAP_RIGHT }: PlanStageProps) {
+export function PlanStage({ geometry, photoLayer, measureLayer, stageCapRight = DEFAULT_STAGE_CAP_RIGHT }: PlanStageProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [chip, setChip] = useState<DimChipState | null>(null);
 
@@ -109,6 +114,7 @@ export function PlanStage({ geometry, measureLayer, stageCapRight = DEFAULT_STAG
               onHide={hideChip}
             />
           ))}
+          {photoLayer && <g data-photo-layer-seam="">{photoLayer}</g>}
           {measureLayer && <g data-measure-layer-seam="">{measureLayer}</g>}
         </svg>
         {chip && (

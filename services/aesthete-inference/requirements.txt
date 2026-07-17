@@ -12,3 +12,9 @@ numpy>=1.26,<3
 # disk (see Dockerfile stage-2 note).
 usd-core>=25.5,<27
 pygltflib>=1.16,<2
+# Room View HEIC→JPEG derivative lane (I78). pillow-heif ships prebuilt wheels
+# that BUNDLE libheif (incl. macOS arm64 + manylinux); the runtime import +
+# register_heif_opener() are lazy (app/photos.py) so /embed/* is never blocked
+# by a broken wheel. ⚠ if the wheel ever fails to bundle libheif on the target,
+# add the apt libheif runtime deps to the Dockerfile and say so.
+pillow-heif>=0.16,<1

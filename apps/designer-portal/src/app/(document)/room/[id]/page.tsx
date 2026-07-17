@@ -44,7 +44,7 @@
  */
 
 import { use, useEffect, useMemo, useRef, useState } from 'react';
-import { useRoomGeometry } from '@patina/supabase';
+import { useRoomGeometry, useRoomScanPhotos } from '@patina/supabase';
 import { RoomShell } from '@/components/document/rooms/room-shell';
 import { RoomView } from '@/components/document/rooms/room-view/room-view';
 import { roomGeometryFromRows } from '@/lib/room-view/from-rows';
@@ -90,6 +90,12 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
 
   const { data, isLoading } = useRoomGeometry(id);
 
+  // The scan's photo set, alongside the geometry fetch. `id` IS the scan id
+  // (useRoomGeometry queries room_scan_documents by scan_id) — the same key
+  // useRoomScanPhotos signs against room_scan_images. `[]` for a Field scan
+  // with no photos; the strip/markers/rail line all stay absent.
+  const { data: photos } = useRoomScanPhotos(id);
+
   // Pure adapter — header/elements are already shaped to from-rows.ts's
   // input contract by the hook (see use-room-geometry.ts's own header note).
   const adapted = useMemo(() => {
@@ -116,6 +122,8 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
         doc={data?.document ?? null}
         geometry={adapted?.geometry ?? null}
         thicknessConvention={adapted?.thicknessConvention ?? false}
+        provenance={adapted?.provenance ?? null}
+        photos={photos ?? []}
         isLoading={isLoading}
       />
     </RoomShell>

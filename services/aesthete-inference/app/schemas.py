@@ -50,6 +50,7 @@ class Healthz(BaseModel):
     image_dim: int
     warmed: bool
     usd_available: bool  # Room View USDZ→GLB toolchain importable (cheap cached probe)
+    heif_available: bool  # Room View HEIC→JPEG toolchain importable (cheap cached probe)
 
 
 # ─── /convert/usdz-to-glb (Room View archival lane — R107) ───────────────────
@@ -58,6 +59,29 @@ class Healthz(BaseModel):
 class UsdzConvertRequest(BaseModel):
     usdz_url: str
     scan_id: str
+
+
+# ─── /convert/heic-to-jpeg (Room View derivative lane — I78) ─────────────────
+
+
+class HeicConvertRequest(BaseModel):
+    image_url: str  # signed URL to the source HEIC
+    image_id: str
+    thumb_max_px: int = 512
+    preview_max_px: int = 1600
+    jpeg_quality: float = 0.8  # 0–1; mapped to Pillow's 1–95 int worker-side
+
+
+class PhotoVariant(BaseModel):
+    b64: str  # base64-encoded JPEG bytes
+    width: int
+    height: int
+    bytes: int  # decoded JPEG byte length
+
+
+class HeicConvertResponse(BaseModel):
+    thumb: PhotoVariant
+    preview: PhotoVariant
 
 
 # ─── /fit/taste (design §8.2 BT MAP refit — Wave 4A) ─────────────────────────
