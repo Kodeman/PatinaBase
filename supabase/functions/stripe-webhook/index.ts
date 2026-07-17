@@ -78,6 +78,8 @@ import {
   MONEY_PATH_TYPES,
   enqueueStripeEventTask,
 } from './reconcile-emit.ts';
+// BOH fulfillment intake emission (S0) — additive, one new call site below.
+import { enqueueAgentTask, type RpcClient } from '../_shared/agent-queue.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -1762,6 +1764,31 @@ Deno.serve(async (req: Request) => {
         }
       } else {
         await enqueueStripeEventTask(admin, event);
+      }
+    }
+
+    // ── BOH fulfillment intake emission — ADDITIVE (S0) ────────────────────
+    // A BOH order's payment_intent.succeeded (metadata.patina_order='boh_v1')
+    // mints a first-class fulfillment_intake task. The money-path handler above
+    // already no-oped for this PI (no invoice/po/direct-order payable). Log-and-
+    // swallow like the money-path reconcile emit — the capture already settled.
+    if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data.object as Stripe.PaymentIntent;
+      if (pi.metadata?.patina_order === 'boh_v1') {
+        try {
+          await enqueueAgentTask(admin as unknown as RpcClient, {
+            taskType: 'fulfillment_intake',
+            idempotencyKey: pi.id,
+            onConflict: 'ignore',
+            source: 'stripe-webhook',
+            actor: 'stripe-webhook',
+            summary: `boh intake ${pi.id}`,
+            priority: 2,
+            payload: { payment_intent_id: pi.id, livemode: event.livemode }, // identifiers only
+          });
+        } catch (bohErr) {
+          console.error('stripe-webhook: BOH fulfillment_intake enqueue failed (swallowed)', bohErr);
+        }
       }
     }
   } catch (err) {

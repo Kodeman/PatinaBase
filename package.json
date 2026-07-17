@@ -43,7 +43,9 @@
     "supabase:remote:types": "./scripts/remote-db.sh types",
     "supabase:remote:psql": "./scripts/remote-db.sh psql",
     "prisma:generate": "pnpm --filter @patina/orders exec prisma generate && pnpm --filter @patina/media exec prisma generate && pnpm --filter @patina/projects exec prisma generate",
-    "prisma:push": "pnpm --filter @patina/orders exec prisma db push && pnpm --filter @patina/media exec prisma db push && pnpm --filter @patina/projects exec prisma db push"
+    "prisma:push": "pnpm --filter @patina/orders exec prisma db push && pnpm --filter @patina/media exec prisma db push && pnpm --filter @patina/projects exec prisma db push",
+    "seed:fulfillment": "deno run -A scripts/seed-fulfillment-orders.ts",
+    "test:boh-audit": "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_foundation.assert.sql && psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/functions/_tests/fulfillment_queue_bands.assert.sql && deno test --no-check -A supabase/functions/_tests/fulfillment-intake.test.ts"
   },
   "devDependencies": {
     "@types/node": "^20.11.19",

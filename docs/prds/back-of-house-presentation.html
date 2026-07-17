@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Back of House — Patina Fulfillment Operations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --offwhite:#FAF8F5; --paper:#FFFDF9; --pearl:#E7E3DC; --rule-soft:#EFEBE4;
+    --ink:#2C2926; --mocha:#6B5D52; --oak:#9A8B7A;
+    --clay:#B56C4D; --sage:#7D8B74; --dusty:#7A8CA0; --terracotta:#C05B3E; --gold:#C9963F;
+    --serif:'Playfair Display',serif; --sans:'Inter',sans-serif; --mono:'DM Mono',monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto} *{transition:none!important;animation:none!important}}
+  body{background:var(--offwhite);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  a{color:var(--mocha)}
+  ::selection{background:var(--clay);color:var(--offwhite)}
+
+  /* ————— chrome ————— */
+  #progress{position:fixed;top:0;left:0;height:2px;background:var(--clay);width:0;z-index:50;transition:width .3s ease}
+  #counter{position:fixed;bottom:22px;right:26px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--oak);z-index:50}
+  #navhint{position:fixed;bottom:22px;left:26px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--oak);z-index:50;text-transform:uppercase}
+  @media(max-width:720px){#navhint{display:none}}
+
+  /* ————— slide scaffold ————— */
+  .slide{min-height:100vh;display:flex;align-items:center;padding:8vh 6vw;border-bottom:1px solid var(--rule-soft)}
+  .slide:focus{outline:none}
+  .slide:focus-visible{outline:2px solid var(--clay);outline-offset:-2px}
+  .inner{width:100%;max-width:1180px;margin:0 auto}
+  .kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--oak);margin-bottom:22px}
+  .kicker b{color:var(--clay);font-weight:500}
+  h1{font-family:var(--serif);font-weight:500;font-size:clamp(38px,5.2vw,64px);line-height:1.08;letter-spacing:-.01em}
+  h1 .thin{font-weight:400;font-style:italic;color:var(--mocha)}
+  h2{font-family:var(--serif);font-weight:500;font-size:clamp(30px,3.6vw,44px);line-height:1.12}
+  h2 em{font-style:italic;color:var(--mocha)}
+  .lede{font-size:clamp(16px,1.4vw,18.5px);line-height:1.65;color:var(--mocha);max-width:620px;margin-top:22px}
+  .lede b{color:var(--ink);font-weight:600}
+  .prose p{font-size:15px;line-height:1.7;color:var(--mocha);margin-top:14px;max-width:52ch}
+  .prose p b{color:var(--ink);font-weight:600}
+  .prose .accent{color:var(--clay)}
+  .smallcap{font-family:var(--mono);font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--oak)}
+
+  .strata{display:inline-block}
+  .strata span{display:block;height:2px;background:var(--ink);margin-bottom:5px}
+  .strata span:nth-child(1){width:34px}
+  .strata span:nth-child(2){width:24px}
+  .strata span:nth-child(3){width:15px;margin-bottom:0}
+
+  /* two-column feature slides */
+  .split{display:grid;grid-template-columns:minmax(300px,.85fr) 1.15fr;gap:56px;align-items:start}
+  @media(max-width:960px){.split{grid-template-columns:1fr;gap:36px}}
+
+  /* mockup frame — bordered paper, never shadowed */
+  .frame{background:var(--paper);border:1px solid var(--pearl);border-radius:2px;padding:26px 28px;font-size:13px}
+  .frame .fhead{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--pearl);padding-bottom:12px;margin-bottom:6px}
+  .frame .fhead .t{font-family:var(--serif);font-size:19px;font-weight:500}
+  .frame .fhead .meta{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;color:var(--oak);text-transform:uppercase}
+
+  /* ————— cover fan (signature) ————— */
+  .fanwrap{margin:52px 0 8px}
+  .fanlabels{display:flex;justify-content:space-between;max-width:860px}
+  .fanlabels .origin{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--ink)}
+  .fanlabels .dest{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;color:var(--oak);text-align:right;line-height:2.1;text-transform:uppercase}
+
+  /* ————— failure ledger ————— */
+  .ledgerlist{border-top:1px solid var(--pearl)}
+  .ledgerlist .row{display:grid;grid-template-columns:56px 1fr;gap:18px;padding:18px 0;border-bottom:1px solid var(--rule-soft)}
+  .ledgerlist .num{font-family:var(--mono);font-size:12px;color:var(--clay);padding-top:3px}
+  .ledgerlist .name{font-family:var(--serif);font-size:18.5px;font-weight:500}
+  .ledgerlist .desc{font-size:13.5px;line-height:1.6;color:var(--mocha);margin-top:4px;max-width:56ch}
+
+  /* ————— lifecycle rail ————— */
+  .rail8{display:grid;grid-template-columns:repeat(8,1fr);margin-top:56px;border-top:1px solid var(--pearl)}
+  @media(max-width:960px){.rail8{grid-template-columns:repeat(4,1fr)}}
+  @media(max-width:560px){.rail8{grid-template-columns:repeat(2,1fr)}}
+  .rail8 .st{padding:20px 16px 20px 0;border-right:1px solid var(--rule-soft)}
+  .rail8 .st:last-child{border-right:none}
+  .rail8 .n{font-family:var(--mono);font-size:10px;color:var(--clay);letter-spacing:.1em}
+  .rail8 .nm{font-family:var(--serif);font-size:18px;font-weight:500;margin-top:6px}
+  .rail8 .sla{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--oak);text-transform:uppercase;margin-top:8px;line-height:1.7}
+
+  /* ————— grammar diagram ————— */
+  .grammar{margin-top:48px;border-top:1px solid var(--pearl)}
+  .grammar .g{display:grid;grid-template-columns:220px 1fr;gap:26px;padding:20px 0;border-bottom:1px solid var(--rule-soft);align-items:baseline}
+  @media(max-width:720px){.grammar .g{grid-template-columns:1fr;gap:6px}}
+  .grammar .ent{font-family:var(--serif);font-size:21px;font-weight:500}
+  .grammar .ent .mono{font-family:var(--mono);font-size:10px;color:var(--oak);letter-spacing:.12em;display:block;margin-top:3px;text-transform:uppercase}
+  .grammar .def{font-size:14px;line-height:1.65;color:var(--mocha);max-width:64ch}
+  .grammar .def b{color:var(--ink)}
+
+  /* ————— queue mockup ————— */
+  .band{margin-top:16px}
+  .bandlab{font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--oak);text-transform:uppercase;padding:10px 0 6px;border-bottom:1px solid var(--pearl)}
+  .bandlab b{color:var(--terracotta);font-weight:500}
+  .qrow{display:grid;grid-template-columns:92px 1fr auto;gap:14px;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--rule-soft)}
+  .qrow .id{font-family:var(--mono);font-size:11px;color:var(--mocha)}
+  .qrow .who{font-weight:500;font-size:13.5px}
+  .qrow .sub{font-size:11.5px;color:var(--oak);margin-top:2px}
+  .dots{display:inline-flex;gap:4px;margin-left:8px;vertical-align:1px}
+  .dots i{width:6px;height:6px;border-radius:50%;border:1px solid var(--oak);display:inline-block}
+  .dots i.on{background:var(--sage);border-color:var(--sage)}
+  .dots i.hot{background:var(--clay);border-color:var(--clay)}
+  .dots i.bad{background:var(--terracotta);border-color:var(--terracotta)}
+  .qrow .act{text-align:right}
+  .qrow .verb{font-size:12.5px;font-weight:500;color:var(--clay)}
+  .qrow .verb.bad{color:var(--terracotta)}
+  .qrow .age{font-family:var(--mono);font-size:10px;color:var(--oak);margin-top:2px}
+  .qrow .age.bad{color:var(--terracotta)}
+  .qrow.dim{opacity:.55}
+
+  /* ————— workbench mockup ————— */
+  .wb{display:grid;grid-template-columns:1.05fr 1fr;gap:0}
+  @media(max-width:720px){.wb{grid-template-columns:1fr}}
+  .wb .left{padding-right:22px;border-right:1px solid var(--pearl)}
+  .wb .right{padding-left:22px}
+  @media(max-width:720px){.wb .left{border-right:none;padding-right:0}.wb .right{padding-left:0;margin-top:18px}}
+  .colcap{font-family:var(--mono);font-size:9px;letter-spacing:.15em;color:var(--oak);text-transform:uppercase;padding:10px 0 8px}
+  .item{display:grid;grid-template-columns:22px 1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid var(--rule-soft);align-items:baseline}
+  .item .ix{font-family:var(--mono);font-size:11px;color:var(--clay)}
+  .item .inm{font-family:var(--serif);font-size:15.5px}
+  .item .isub{font-size:11px;color:var(--oak);margin-top:2px}
+  .item .ipr{font-family:var(--mono);font-size:12px;color:var(--mocha)}
+  .pocard{border:1px solid var(--pearl);border-radius:2px;background:#fff;padding:12px 14px;margin-bottom:12px}
+  .pocard .pohd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+  .pocard .ponm{font-weight:600;font-size:12.5px}
+  .pocard .postat{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase}
+  .postat.draft{color:var(--oak)} .postat.sent{color:var(--dusty)} .postat.ack{color:var(--sage)} .postat.late{color:var(--terracotta)}
+  .poline{display:flex;gap:8px;font-size:12px;color:var(--mocha);padding:3px 0}
+  .poline .ix{font-family:var(--mono);font-size:10.5px;color:var(--clay)}
+  .moneystrip{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--pearl);margin-top:16px;padding-top:14px;gap:8px}
+  @media(max-width:720px){.moneystrip{grid-template-columns:repeat(3,1fr);row-gap:14px}}
+  .moneystrip .m .l{font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;color:var(--oak);text-transform:uppercase}
+  .moneystrip .m .v{font-family:var(--mono);font-size:15px;color:var(--ink);margin-top:4px}
+  .moneystrip .m .v.sage{color:var(--sage)}
+
+  /* ————— PO composer mockup ————— */
+  .popaper{border:1px solid var(--pearl);background:#fff;border-radius:2px;padding:20px 22px}
+  .popaper .mast{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--ink);padding-bottom:10px}
+  .popaper .mast .p{font-family:var(--serif);font-size:20px;font-weight:600}
+  .popaper .mast .po{font-family:var(--mono);font-size:11px;letter-spacing:.1em}
+  .popaper .fields{display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;margin:14px 0;font-size:11.5px;color:var(--mocha)}
+  .popaper .fields b{color:var(--ink);font-weight:600}
+  .pogrid{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:10.5px}
+  .pogrid th{text-align:left;font-weight:500;letter-spacing:.1em;text-transform:uppercase;font-size:8.5px;color:var(--oak);border-bottom:1px solid var(--pearl);padding:6px 4px}
+  .pogrid td{padding:7px 4px;border-bottom:1px solid var(--rule-soft);color:var(--mocha)}
+  .txlog{margin-top:18px;border-top:1px solid var(--pearl);padding-top:12px}
+  .txlog .tl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--mocha);padding:5px 0;text-transform:uppercase}
+  .txlog .tl b{color:var(--sage);font-weight:500}
+  .txlog .tl b.warn{color:var(--terracotta)}
+
+  /* ————— shipment board ————— */
+  .ship{display:grid;grid-template-columns:auto 1fr auto;gap:16px;padding:14px 0;border-bottom:1px solid var(--rule-soft);align-items:start}
+  .chip{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;border:1px solid var(--oak);color:var(--mocha);border-radius:2px;padding:3px 7px;text-transform:uppercase;white-space:nowrap}
+  .chip.ltl{border-color:var(--dusty);color:var(--dusty)}
+  .chip.wg{border-color:var(--gold);color:var(--gold)}
+  .ship .body .t{font-size:13px;font-weight:500}
+  .ship .body .track{font-family:var(--mono);font-size:10.5px;color:var(--mocha);margin-top:3px}
+  .ship .body .appt{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--sage);text-transform:uppercase;margin-top:6px}
+  .ship .body .appt.loud{color:var(--terracotta)}
+  .ship .dates{text-align:right;font-family:var(--mono);font-size:10.5px;color:var(--mocha)}
+  .ship .dates .slip{color:var(--terracotta)}
+
+  /* ————— exception case file ————— */
+  .clock{display:flex;align-items:baseline;gap:14px;margin:14px 0 6px}
+  .clock .cv{font-family:var(--mono);font-size:26px;color:var(--terracotta)}
+  .clock .cl{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--oak);text-transform:uppercase}
+  .clockbar{height:1px;background:var(--pearl);position:relative;margin-bottom:16px}
+  .clockbar i{position:absolute;left:0;top:0;height:1px;width:44%;background:var(--terracotta)}
+  .evidence{display:flex;gap:8px;margin:12px 0 16px}
+  .evidence .ph{width:64px;height:64px;border:1px solid var(--pearl);border-radius:2px;background:linear-gradient(135deg,#F1EDE6,#E7E3DC);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8px;color:var(--oak);letter-spacing:.1em}
+  .respath{padding:12px 0;border-top:1px solid var(--rule-soft);font-size:13px;line-height:1.6;color:var(--mocha)}
+  .respath b{color:var(--ink)}
+  .respath .ledg{font-family:var(--mono);font-size:10px;color:var(--oak);display:block;margin-top:5px;letter-spacing:.06em}
+  .respath.pick{border-left:2px solid var(--clay);padding-left:14px}
+
+  /* ————— leah card ————— */
+  .leahcard{max-width:330px;margin:0 auto;border:1px solid var(--pearl);border-radius:2px;background:var(--paper);padding:24px}
+  .leahcard .lt{font-family:var(--mono);font-size:9px;letter-spacing:.15em;color:var(--oak);text-transform:uppercase}
+  .leahcard .ln{font-family:var(--serif);font-size:21px;font-weight:500;margin-top:10px;line-height:1.3}
+  .leahcard .swatches{display:flex;gap:10px;margin:16px 0}
+  .leahcard .sw{flex:1;height:74px;border-radius:2px;border:1px solid var(--pearl)}
+  .leahcard .swl{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--oak);text-transform:uppercase;margin-top:5px}
+  .leahcard .delta{font-family:var(--mono);font-size:10px;color:var(--mocha);letter-spacing:.06em}
+  .leahcard .acts{display:flex;justify-content:space-between;border-top:1px solid var(--pearl);margin-top:16px;padding-top:14px;font-size:13px}
+  .leahcard .acts .ok{color:var(--sage);font-weight:600}
+  .leahcard .acts .no{color:var(--oak)}
+
+  /* ————— vendor page ————— */
+  .protocol{display:grid;grid-template-columns:1fr 1fr;gap:2px 26px;font-size:12px;margin-top:14px}
+  @media(max-width:560px){.protocol{grid-template-columns:1fr}}
+  .protocol .pv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--rule-soft)}
+  .protocol .pv .k{color:var(--oak)}
+  .protocol .pv .v{font-family:var(--mono);font-size:10.5px;color:var(--ink);text-align:right;letter-spacing:.04em}
+  .scorerow{display:grid;grid-template-columns:repeat(5,1fr);margin-top:22px;border-top:1px solid var(--pearl);padding-top:16px;gap:10px}
+  @media(max-width:560px){.scorerow{grid-template-columns:repeat(3,1fr);row-gap:16px}}
+  .scorerow .s .v{font-family:var(--mono);font-size:22px;color:var(--ink)}
+  .scorerow .s .v.warn{color:var(--terracotta)}
+  .scorerow .s .l{font-family:var(--mono);font-size:8px;letter-spacing:.13em;color:var(--oak);text-transform:uppercase;margin-top:5px;line-height:1.6}
+
+  /* ————— money slide ————— */
+  .match3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-top:1px solid var(--pearl);margin-top:8px}
+  .match3 .c{padding:16px 16px 16px 0;border-right:1px solid var(--rule-soft)}
+  .match3 .c:last-child{border-right:none;padding-right:0;padding-left:16px}
+  .match3 .c:nth-child(2){padding-left:16px}
+  .match3 .ch{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;color:var(--oak);text-transform:uppercase;margin-bottom:10px}
+  .match3 .ln{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:var(--mocha);padding:4px 0}
+  .match3 .ln.var{color:var(--terracotta)}
+  .pledgeline{border-top:1px solid var(--pearl);margin-top:16px;padding-top:14px;display:flex;justify-content:space-between;align-items:baseline}
+  .pledgeline .k{font-family:var(--serif);font-size:15px;color:var(--sage);font-style:italic}
+  .pledgeline .v{font-family:var(--mono);font-size:15px;color:var(--sage)}
+
+  /* ————— metrics & ladder ————— */
+  .mets{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--pearl);margin-top:40px}
+  @media(max-width:820px){.mets{grid-template-columns:repeat(2,1fr)}}
+  .mets .m{padding:22px 20px 22px 0;border-right:1px solid var(--rule-soft);border-bottom:1px solid var(--rule-soft)}
+  .mets .m:nth-child(4n){border-right:none}
+  @media(max-width:820px){.mets .m:nth-child(2n){border-right:none}}
+  .mets .v{font-family:var(--mono);font-size:26px;color:var(--ink)}
+  .mets .v em{font-style:normal;color:var(--clay)}
+  .mets .l{font-family:var(--mono);font-size:9px;letter-spacing:.13em;color:var(--oak);text-transform:uppercase;margin-top:8px;line-height:1.7}
+  .rungs{margin-top:34px;border-top:1px solid var(--pearl)}
+  .rung{display:grid;grid-template-columns:82px 1fr;gap:22px;padding:16px 0;border-bottom:1px solid var(--rule-soft);align-items:baseline}
+  .rung .rv{font-family:var(--mono);font-size:13px;color:var(--clay)}
+  .rung .rt{font-size:14px;line-height:1.6;color:var(--mocha)}
+  .rung .rt b{color:var(--ink)}
+
+  /* ————— build order ————— */
+  .phase3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px;margin-top:44px}
+  @media(max-width:860px){.phase3{grid-template-columns:1fr;gap:0}}
+  .phase3 .p{border-top:2px solid var(--ink);padding-top:16px;margin-bottom:26px}
+  .phase3 .pw{font-family:var(--mono);font-size:9.5px;letter-spacing:.15em;color:var(--clay);text-transform:uppercase}
+  .phase3 .pn{font-family:var(--serif);font-size:21px;font-weight:500;margin-top:8px}
+  .phase3 .pd{font-size:13px;line-height:1.65;color:var(--mocha);margin-top:8px}
+  .phase3 .px{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:var(--sage);margin-top:12px;line-height:1.7;text-transform:uppercase}
+  .accept{border-top:1px solid var(--pearl);margin-top:14px;padding-top:20px}
+  .accept .a{font-size:14px;color:var(--mocha);padding:6px 0;line-height:1.6}
+  .accept .a b{color:var(--ink)}
+  .closing{font-family:var(--serif);font-style:italic;font-size:clamp(19px,2.1vw,24px);line-height:1.5;color:var(--mocha);margin-top:44px;max-width:640px}
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div id="navhint">↑ ↓ · J / K · SPACE</div>
+<div id="counter">01 / 15</div>
+
+<!-- ——————————————— 01 · COVER ——————————————— -->
+<section class="slide" id="s1" tabindex="-1">
+  <div class="inner">
+    <div class="strata" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="kicker" style="margin-top:34px">Patina · Back of House · <b>Product Brief · v1</b></div>
+    <h1>The Back of House.</h1>
+    <p class="lede">A fulfillment operations system for <b>one operator, six workshops, and no warehouse</b>. One client order arrives from the iOS app; this is where it becomes six kept promises.</p>
+
+    <div class="fanwrap" aria-hidden="true">
+      <svg viewBox="0 0 860 190" width="100%" style="max-width:860px;display:block" preserveAspectRatio="xMidYMid meet">
+        <g stroke="#B5A794" stroke-width="1" fill="none">
+          <path d="M20,95 C 320,95 560,15  840,15"/>
+          <path d="M20,95 C 320,95 560,47  840,47"/>
+          <path d="M20,95 C 320,95 560,79  840,79"/>
+          <path d="M20,95 C 320,95 560,111 840,111"/>
+          <path d="M20,95 C 320,95 560,143 840,143"/>
+          <path d="M20,95 C 320,95 560,175 840,175"/>
+        </g>
+        <circle cx="20" cy="95" r="4" fill="#B56C4D"/>
+        <g fill="#7D8B74"><circle cx="840" cy="15" r="2.5"/><circle cx="840" cy="47" r="2.5"/><circle cx="840" cy="79" r="2.5"/><circle cx="840" cy="111" r="2.5"/><circle cx="840" cy="143" r="2.5"/><circle cx="840" cy="175" r="2.5"/></g>
+      </svg>
+      <div class="fanlabels">
+        <div class="origin">PAT-2026-0147 · one order · one client</div>
+        <div class="dest">PO-A · PO-B · PO-C · PO-D · PO-E · PO-F<br>six purchase orders · six workshops</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 02 · THE PROBLEM ——————————————— -->
+<section class="slide" id="s2" tabindex="-1">
+  <div class="inner split">
+    <div>
+      <div class="kicker">01 — The Problem</div>
+      <h2>One order. Six workshops. <em>Nothing in between.</em></h2>
+      <div class="prose">
+        <p>Patina holds no inventory and runs no warehouse. <b>Our inventory is information</b> — dated promises from six independent shops, each with its own lead time, its own way of taking a PO, its own freight arrangements.</p>
+        <p>A Patina order is a small construction project, and Patina is the general contractor. The client hired the GC precisely so they never have to talk to the subs. A GC without a system fails in five predictable ways.</p>
+        <p>Today, nothing exists between <span class="accent">“Stripe captured the money”</span> and <span class="accent">“furniture arrives.”</span> This system is that middle.</p>
+      </div>
+    </div>
+    <div>
+      <div class="ledgerlist">
+        <div class="row"><div class="num">i</div><div><div class="name">The unsent PO</div><div class="desc">Money captured, one of four POs quietly never goes out. Nobody notices for two weeks, because absence isn’t visible anywhere.</div></div></div>
+        <div class="row"><div class="num">ii</div><div><div class="name">The silent vendor</div><div class="desc">PO emailed, never confirmed. On an 8-week made-to-order lead time, a 2-week silent gap becomes a 10-week delivery — and the client learns last.</div></div></div>
+        <div class="row"><div class="num">iii</div><div><div class="name">The freight signature</div><div class="desc">The client signs a clean delivery receipt, then finds the cracked leg. Damage not noted at the door makes the carrier claim nearly unrecoverable.</div></div></div>
+        <div class="row"><div class="num">iv</div><div><div class="name">The partial-order mystery</div><div class="desc">Three of five items arrive. The client doesn’t know if the rest is coming — and without a system, neither does Patina.</div></div></div>
+        <div class="row"><div class="num">v</div><div><div class="name">The reconciliation drift</div><div class="desc">Invoices, captures, refunds, and freight true-ups pile up in an inbox. Margin per order becomes quarterly archaeology instead of a daily fact.</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 03 · THE WAGER ——————————————— -->
+<section class="slide" id="s3" tabindex="-1">
+  <div class="inner">
+    <div class="kicker">02 — The Wager</div>
+    <h2>Manual, <em>on purpose.</em></h2>
+    <p class="lede">We are not automating a process we haven’t run. In v1 the operator works every order by hand through structured tools — and the system records every action as a typed event. <b>The manual dashboard is the apprenticeship for the automated one.</b></p>
+    <div class="grammar" style="max-width:760px">
+      <div class="g"><div class="ent">Every click<span class="mono">fulfillment_events · append-only</span></div><div class="def">is training data. When the same action has been performed the same way fifty times, it’s an automation candidate <b>with its dataset already collected</b>.</div></div>
+      <div class="g"><div class="ent">Exception-first<span class="mono">one operator covers the board</span></div><div class="def">The screen surfaces what needs attention and nothing else. Solo operation isn’t a constraint we work around — it’s the design brief.</div></div>
+      <div class="g"><div class="ent">North star<span class="mono">manual touches per order</span></div><div class="def">Measured honestly in v1. <b>Halved</b> in every release after — each rung of automation justified by observed reality, not guesses.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 04 · THE LIFECYCLE ——————————————— -->
+<section class="slide" id="s4" tabindex="-1">
+  <div class="inner">
+    <div class="kicker">03 — The Lifecycle</div>
+    <h2>Eight stages, <em>per line — not per order.</em></h2>
+    <p class="lede">Line-level state is the atomic truth; order status is always derived. Exceptions — damage, delay, backorder, substitution — overlay any stage and pin the line to the top of the queue with a clock.</p>
+    <div class="rail8">
+      <div class="st"><div class="n">1</div><div class="nm">Intake</div><div class="sla">Stripe capture →<br>queue in 1 min</div></div>
+      <div class="st"><div class="n">2</div><div class="nm">Split</div><div class="sla">Confirm vendor split<br>≤ 4 bus. hours</div></div>
+      <div class="st"><div class="n">3</div><div class="nm">Transmit</div><div class="sla">Send each PO,<br>log the send</div></div>
+      <div class="st"><div class="n">4</div><div class="nm">Acknowledge</div><div class="sla">Chase at day 2<br>capture ship commit</div></div>
+      <div class="st"><div class="n">5</div><div class="nm">Produce</div><div class="sla">Watch committed dates<br>re-date client ETA</div></div>
+      <div class="st"><div class="n">6</div><div class="nm">Ship</div><div class="sla">Tracking ≤ 24 h ·<br>freight appt + guidance</div></div>
+      <div class="st"><div class="n">7</div><div class="nm">Deliver</div><div class="sla">POD · inspection<br>window opens</div></div>
+      <div class="st"><div class="n">8</div><div class="nm">Settle</div><div class="sla">3-way match ·<br>Pledge accrual posts</div></div>
+    </div>
+    <p class="prose" style="margin-top:28px"><span class="smallcap">Client communication is a stage output, not an afterthought —</span></p>
+    <p class="prose" style="margin-top:6px">transitions 1, 4, 6, 7 and any ETA-affecting exception each produce a drafted client note, sent with one keystroke. During a 10-week made-to-order wait, <b>the cadence is the product.</b></p>
+  </div>
+</section>
+
+<!-- ——————————————— 05 · THE GRAMMAR ——————————————— -->
+<section class="slide" id="s5" tabindex="-1">
+  <div class="inner">
+    <div class="kicker">04 — The Grammar</div>
+    <h2>Five nouns <em>the whole system speaks.</em></h2>
+    <div class="grammar">
+      <div class="g"><div class="ent">Order<span class="mono">PAT-2026-0147 · the client’s truth</span></div><div class="def">What the client bought, as one purchase. The client <b>never sees decomposition</b> — “your credenza,” never “PO-0147-A.”</div></div>
+      <div class="g"><div class="ent">Vendor PO<span class="mono">PO-2026-0147-A…F · the operator’s unit</span></div><div class="def">The order regrouped by workshop. Carries the vendor’s protocol, side-mark, change window, and terms. One order → up to six POs.</div></div>
+      <div class="g"><div class="ent">Shipment<span class="mono">parcel · LTL · white-glove</span></div><div class="def">Physical movement, tracked by mode — because a freight credenza and a FedEx lamp fail in <b>completely different ways</b>.</div></div>
+      <div class="g"><div class="ent">Exception<span class="mono">damage · delay · backorder · substitution…</span></div><div class="def">Not an edge case — a Tuesday. Every exception carries a playbook, a clock, evidence, and a <b>financial outcome</b> posted to the ledger.</div></div>
+      <div class="g"><div class="ent">Ledger event<span class="mono">double-entry · source of truth</span></div><div class="def">Every financial consequence posts to the internal ledger. <b>Stripe is reconciled against the ledger, never trusted as it.</b></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 06 · FULFILLMENT QUEUE ——————————————— -->
+<section class="slide" id="s6" tabindex="-1">
+  <div class="inner split">
+    <div>
+      <div class="kicker">Screen 1 of 5</div>
+      <h2>The Fulfillment <em>Queue.</em></h2>
+      <div class="prose">
+        <p>The home screen. Three bands: <b>Needs Action Now</b> (SLA breaches, exception clocks), <b>Watching</b> (in production, in transit), <b>Quiet</b> (settled).</p>
+        <p>Each row ends in a <b>next-action verb</b> set in clay — scan the right edge and the queue reads as a to-do list. Six stage dots per row show each vendor’s state at a glance.</p>
+        <p>Keyboard-first: <b>j/k</b> move, <b>Enter</b> opens the Workbench, <b>n</b> sends the suggested client note.</p>
+        <p><b>The zero-invisibility guarantee:</b> every non-settled order appears in exactly one band. There is no state in which an order exists but is not on this screen.</p>
+      </div>
+    </div>
+    <div class="frame">
+      <div class="fhead"><div class="t">Fulfillment</div><div class="meta">Thu Jul 16 · 6 vendors · 14 open orders</div></div>
+      <div class="band">
+        <div class="bandlab"><b>Needs action now — 4</b></div>
+        <div class="qrow"><div class="id">PAT-0152</div><div><span class="who">Alvarez</span><span class="dots"><i class="hot"></i><i class="hot"></i></span><div class="sub">2 vendors · designer-sourced · R. Calloway</div></div><div class="act"><div class="verb">Send 2 POs</div><div class="age">3 h</div></div></div>
+        <div class="qrow"><div class="id">PAT-0147</div><div><span class="who">Whitfield</span><span class="dots"><i class="on"></i><i class="bad"></i><i class="on"></i><i class="on"></i></span><div class="sub">4 vendors · 1 unacked</div></div><div class="act"><div class="verb bad">Chase Vandermeer — day 3</div><div class="age bad">3 d</div></div></div>
+        <div class="qrow"><div class="id">PAT-0149</div><div><span class="who">Brooks</span><span class="dots"><i class="on"></i><i class="bad"></i><i class="on"></i></span><div class="sub">3 vendors · damage exception</div></div><div class="act"><div class="verb bad">Claim window — 4 days left</div><div class="age">6 d</div></div></div>
+        <div class="qrow"><div class="id">PAT-0141</div><div><span class="who">Chen</span><span class="dots"><i class="on"></i><i class="on"></i><i class="hot"></i></span><div class="sub">3 vendors · delivered Mon</div></div><div class="act"><div class="verb">Inspection closes tomorrow</div><div class="age">11 d</div></div></div>
+      </div>
+      <div class="band">
+        <div class="bandlab">Watching — 7</div>
+        <div class="qrow dim"><div class="id">PAT-0150</div><div><span class="who">Okafor</span><div class="sub">in production · ships Aug 22 · Driftless</div></div><div class="act"><div class="age">5 d</div></div></div>
+        <div class="qrow dim"><div class="id">PAT-0146</div><div><span class="who">Lindqvist</span><div class="sub">in transit · LTL · appt confirmed</div></div><div class="act"><div class="age">8 d</div></div></div>
+      </div>
+      <div class="band">
+        <div class="bandlab">Quiet — 3</div>
+        <div class="qrow dim"><div class="id">PAT-0139</div><div><span class="who">Marsh</span><div class="sub">settled Jul 12 · margin as planned</div></div><div class="act"><div class="age">—</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 07 · ORDER WORKBENCH ——————————————— -->
+<section class="slide" id="s7" tabindex="-1">
+  <div class="inner">
+    <div class="kicker">Screen 2 of 5 · The Signature Screen</div>
+    <h2>The Order Workbench — <em>where one becomes six.</em></h2>
+    <p class="lede" style="margin-bottom:34px">The essential act of drop-ship is <b>decomposition without losing the thread</b>. Left: the order as the client sees it. Right: the same items regrouped into vendor POs. Small mono indexes carry the thread across the hairline — always visible, never a hover state.</p>
+    <div class="frame">
+      <div class="fhead"><div class="t">PAT-2026-0147 · Whitfield</div><div class="meta">Intake 10:42 AM · split & review · next: confirm split</div></div>
+      <div class="wb">
+        <div class="left">
+          <div class="colcap">The client’s order — as purchased</div>
+          <div class="item"><div class="ix">①</div><div><div class="inm">Walnut Credenza, 72″</div><div class="isub">Driftless Woodworks · made to order</div></div><div class="ipr">$4,280</div></div>
+          <div class="item"><div class="ix">②</div><div><div class="inm">Ash Dining Table</div><div class="isub">Vandermeer &amp; Sons</div></div><div class="ipr">$3,150</div></div>
+          <div class="item"><div class="ix">③</div><div><div class="inm">Lounge Chair, bouclé</div><div class="isub">Kettle Moraine Upholstery · COM lot 44</div></div><div class="ipr">$2,340</div></div>
+          <div class="item"><div class="ix">④</div><div><div class="inm">Steel-Base Side Table</div><div class="isub">North Fork Forge</div></div><div class="ipr">$860</div></div>
+          <div class="item"><div class="ix">⑤</div><div><div class="inm">Linen Drapery, 3 panels</div><div class="isub">Door County Textile Co.</div></div><div class="ipr">$1,210</div></div>
+        </div>
+        <div class="right">
+          <div class="colcap">The fulfillment ledger — proposed split, confirm or drag</div>
+          <div class="pocard"><div class="pohd"><span class="ponm">PO-0147-A · Driftless Woodworks</span><span class="postat draft">Draft</span></div><div class="poline"><span class="ix">①</span> Credenza W-72 walnut · blind ship · side-mark WHITFIELD-0147</div></div>
+          <div class="pocard"><div class="pohd"><span class="ponm">PO-0147-B · Vandermeer &amp; Sons</span><span class="postat draft">Draft · portal</span></div><div class="poline"><span class="ix">②</span> Table AD-9 ash · vendor-arranged LTL</div></div>
+          <div class="pocard"><div class="pohd"><span class="ponm">PO-0147-C · Kettle Moraine</span><span class="postat draft">Draft</span></div><div class="poline"><span class="ix">③</span> Chair LC-2 · bouclé lot 44 · confirm lot before cut</div></div>
+          <div class="pocard"><div class="pohd"><span class="ponm">PO-0147-D · North Fork · E · Door County</span><span class="postat draft">Drafts</span></div><div class="poline"><span class="ix">④⑤</span> 2 lines · parcel</div></div>
+        </div>
+      </div>
+      <div class="moneystrip">
+        <div class="m"><div class="l">Captured</div><div class="v">$11,840</div></div>
+        <div class="m"><div class="l">Vendor cost</div><div class="v">$9,472</div></div>
+        <div class="m"><div class="l">Freight est.</div><div class="v">$640</div></div>
+        <div class="m"><div class="l">Proj. commission</div><div class="v">$1,728</div></div>
+        <div class="m"><div class="l">Pledge accrual · 25%</div><div class="v sage">$432</div></div>
+      </div>
+    </div>
+    <p class="prose" style="margin-top:20px">Dragging a line across the hairline is the one animated moment in the system — the destination PO warms, and the money strip re-computes with a 200&nbsp;ms count. It turns terracotta if projected margin drops below threshold: mis-mapped cost or freight surprise, caught <b>before</b> the PO goes out.</p>
+  </div>
+</section>
+
+<!-- ——————————————— 08 · PO COMPOSER ——————————————— -->
+<section class="slide" id="s8" tabindex="-1">
+  <div class="inner split">
+    <div>
+      <div class="kicker">Screen 3 of 5</div>
+      <h2>The PO Composer &amp; <em>Transmission Log.</em></h2>
+      <div class="prose">
+        <p>Six vendors, six protocols — email with PDF, dealer portal, CSV to spec. The composer renders <b>the paper the PO will become</b>: Patina masthead, side-mark, ship-to, requested ship date, blind-ship instruction, the vendor’s change-window and claims terms.</p>
+        <p>Sending logs the transmission and <b>starts the acknowledgment clock</b>. Ack capture records method, vendor reference, and the committed ship date — which re-dates the client ETA and drafts the client note automatically.</p>
+        <p>The log below the paper is append-only. Nothing is edited after write; corrections append. <b>A PO without a logged send time has no SLA clock</b> — so every send is logged by construction.</p>
+      </div>
+    </div>
+    <div>
+      <div class="popaper">
+        <div class="mast"><div class="p">Patina</div><div class="po">PURCHASE ORDER · PO-2026-0147-A</div></div>
+        <div class="fields">
+          <div><b>Vendor</b> — Driftless Woodworks, Viroqua WI</div>
+          <div><b>Requested ship</b> — Aug 22, 2026</div>
+          <div><b>Side-mark</b> — WHITFIELD-0147</div>
+          <div><b>Ship to</b> — client residence, Madison WI</div>
+          <div><b>Instructions</b> — blind ship · Patina packing slip</div>
+          <div><b>Change window</b> — until production start</div>
+        </div>
+        <table class="pogrid">
+          <tr><th>Line</th><th>Vendor SKU</th><th>Description</th><th>Qty</th><th>Cost</th></tr>
+          <tr><td>①</td><td>DW-CR72-WAL</td><td>Credenza 72″ · walnut · oil finish</td><td>1</td><td>$3,420</td></tr>
+        </table>
+        <div class="txlog">
+          <div class="tl"><b>SENT</b> · email · Jul 16 · 10:58 · msg 8F3A· ack requested by Jul 20</div>
+          <div class="tl"><b>ACK</b> · phone · Jul 17 · 09:12 · ref DW-2214 · ships Aug 22</div>
+          <div class="tl"><b>NOTE</b> · client ETA re-dated · draft note ready — send with N</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 09 · SHIPMENT BOARD ——————————————— -->
+<section class="slide" id="s9" tabindex="-1">
+  <div class="inner split">
+    <div>
+      <div class="kicker">Screen 4 of 5</div>
+      <h2>The Shipment <em>Board.</em></h2>
+      <div class="prose">
+        <p>Rows are <b>shipments, not orders</b> — one PO can ship in waves; one delivery day can carry several POs. Mode chips lead every row, because parcel, LTL, and white-glove fail in different ways.</p>
+        <p><b>Freight discipline is built in.</b> LTL and white-glove shipments require a confirmed delivery appointment, and the client’s “shipped” note automatically carries inspection guidance: <span class="accent">open and inspect before signing; note any damage on the delivery receipt; take photos.</span></p>
+        <p>That one templated paragraph is the highest-ROI feature in the system. It is the difference between a recoverable carrier claim and an unrecoverable one.</p>
+      </div>
+    </div>
+    <div class="frame">
+      <div class="fhead"><div class="t">Shipments</div><div class="meta">9 moving · 2 windows open</div></div>
+      <div class="ship"><span class="chip ltl">LTL</span><div class="body"><div class="t">Whitfield · Credenza · PO-0147-A</div><div class="track">SAIA · PRO 8842-1163</div><div class="appt">Appt confirmed · Thu Aug 27 · AM window</div></div><div class="dates">promised AUG 25<br>current AUG 25</div></div>
+      <div class="ship"><span class="chip">Parcel</span><div class="body"><div class="t">Chen · Side Table · PO-0141-C</div><div class="track">FedEx · 7712 8845 9034</div><div class="appt loud">Delivered · inspection window · 2 days left</div></div><div class="dates">promised JUL 14<br>current JUL 14</div></div>
+      <div class="ship"><span class="chip wg">WG</span><div class="body"><div class="t">Brooks · Dining Set · PO-0149-B</div><div class="track">Metro White Glove · #M-4471</div><div class="appt">Awaiting appointment</div></div><div class="dates">promised SEP 03<br><span class="slip">current SEP 10 · +7</span></div></div>
+      <div class="ship"><span class="chip">Parcel</span><div class="body"><div class="t">Whitfield · Drapery · PO-0147-F</div><div class="track">UPS · 1Z 884 A22 03</div><div class="appt">In transit</div></div><div class="dates">promised JUL 21<br>current JUL 21</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 10 · EXCEPTION DESK ——————————————— -->
+<section class="slide" id="s10" tabindex="-1">
+  <div class="inner split">
+    <div>
+      <div class="kicker">Screen 5 of 5</div>
+      <h2>The Exception <em>Desk.</em></h2>
+      <div class="prose">
+        <p>In drop-ship furniture, exceptions aren’t edge cases — <b>damage, delay, backorder, and substitution are Tuesdays</b>. Handled in email threads, each one loses its clock, its evidence, and its financial consequence.</p>
+        <p>Here every exception is a case file: a type with a playbook, a <b>clock</b> as the dominant element, evidence photos to R2, and resolution paths written as complete sentences — each showing its ledger consequence in mono before the operator commits.</p>
+        <p>Every exception closes with a financial outcome (even “$0 — vendor absorbed”) and a cause code. That dataset drives vendor scorecards and, later, automation rules.</p>
+      </div>
+    </div>
+    <div class="frame">
+      <div class="fhead"><div class="t">DMG-0031 · Concealed damage</div><div class="meta">Brooks · PO-0149-B · line ② · LTL</div></div>
+      <div class="clock"><div class="cv">4 DAYS</div><div class="cl">carrier claim window · per carrier profile</div></div>
+      <div class="clockbar"><i></i></div>
+      <div class="evidence"><div class="ph">IMG 01</div><div class="ph">IMG 02</div><div class="ph">IMG 03</div><div class="ph">POD ✓</div></div>
+      <div class="respath pick"><b>Replace at vendor cost.</b> Vandermeer reships week of Sep 14; carrier claim filed against PRO; client ETA +11 days, note drafted.<span class="ledg">LEDGER · claim receivable $1,180 · replacement COGS $1,180 · margin Δ $0</span></div>
+      <div class="respath"><b>Repair allowance.</b> Local furniture medic, client keeps piece; $340 credit to client.<span class="ledg">LEDGER · client credit $340 · margin Δ −$340 · claim recovers $340</span></div>
+      <div class="respath"><b>Refund line.</b> Return freight on Patina; restock per vendor terms.<span class="ledg">LEDGER · refund $2,150 · return freight $310 · restock −15%</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 11 · THE LEAH RULE ——————————————— -->
+<section class="slide" id="s11" tabindex="-1">
+  <div class="inner split" style="align-items:center">
+    <div>
+      <div class="kicker">The One Exception to the Exception Desk</div>
+      <h2>The Leah rule: <em>one touchpoint, seconds long.</em></h2>
+      <div class="prose">
+        <p>Leah has <b>no surface in this system</b> — with one narrow exception. When a vendor proposes a substitution that requires aesthetic judgment — a fabric lot change, a finish variance, a discontinued line — the operator packages a comparison card.</p>
+        <p>It routes to her <b>existing</b> Mission Control swipe surface. No new tool, no new login, no new habit. She rules in seconds; her decision writes back, and the client note drafts itself.</p>
+        <p>Her time is budgeted the way it is everywhere else at Patina: <b>sacred, and spent only where her judgment is the product.</b></p>
+      </div>
+    </div>
+    <div>
+      <div class="leahcard">
+        <div class="lt">Substitution · needs your eye · PAT-0147</div>
+        <div class="ln">Bouclé lot 44 → lot 47<br><span style="font-style:italic;color:var(--mocha)">warmer undertone</span></div>
+        <div class="swatches">
+          <div><div class="sw" style="background:#E9E2D4"></div><div class="swl">Lot 44 · specified</div></div>
+          <div><div class="sw" style="background:#EADFCB"></div><div class="swl">Lot 47 · proposed</div></div>
+        </div>
+        <div class="delta">PRICE Δ $0 · LEAD TIME Δ 0 · CLIENT: WHITFIELD</div>
+        <div class="acts"><span class="no">← Pass · request lot 44</span><span class="ok">Approve →</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 12 · VENDOR DIRECTORY ——————————————— -->
+<section class="slide" id="s12" tabindex="-1">
+  <div class="inner split">
+    <div>
+      <div class="kicker">The Reference Layer</div>
+      <h2>Vendor Directory &amp; <em>Scorecards.</em></h2>
+      <div class="prose">
+        <p>Vendor protocol knowledge that lives in the operator’s head doesn’t survive a vacation. Each of the six vendors gets a <b>protocol sheet</b> — how they take POs, who arranges freight, payment terms, change windows, blind-ship capability.</p>
+        <p>Beneath it, a <b>live scorecard computed from the Run Log</b>: ack time, on-time ship against committed dates, damage rate, fill rate. Trailing 90 days, order count shown so small-n humility stays visible.</p>
+        <p>Scorecard deltas flow into the existing <b>500-point qualification rubric</b> at renewal. Slippage becomes visible per vendor before it becomes a client problem — and renewal has teeth.</p>
+      </div>
+    </div>
+    <div class="frame">
+      <div class="fhead"><div class="t">Driftless Woodworks</div><div class="meta">Viroqua WI · Patina Partner · casegoods</div></div>
+      <div class="protocol">
+        <div class="pv"><span class="k">PO channel</span><span class="v">EMAIL · PDF</span></div>
+        <div class="pv"><span class="k">Ack SLA</span><span class="v">2 BUS. DAYS</span></div>
+        <div class="pv"><span class="k">Lead time</span><span class="v">8–10 WK MTO</span></div>
+        <div class="pv"><span class="k">Freight</span><span class="v">VENDOR LTL</span></div>
+        <div class="pv"><span class="k">Terms</span><span class="v">50% PO / 50% SHIP</span></div>
+        <div class="pv"><span class="k">Change window</span><span class="v">TO PROD. START</span></div>
+        <div class="pv"><span class="k">Blind ship</span><span class="v">YES</span></div>
+        <div class="pv"><span class="k">Claims</span><span class="v">CONCEALED · 5 D</span></div>
+      </div>
+      <div class="scorerow">
+        <div class="s"><div class="v">1.2d</div><div class="l">Median ack</div></div>
+        <div class="s"><div class="v">92%</div><div class="l">On-time ship</div></div>
+        <div class="s"><div class="v warn">1.8%</div><div class="l">Damage rate</div></div>
+        <div class="s"><div class="v">98%</div><div class="l">Fill rate</div></div>
+        <div class="s"><div class="v">n=41</div><div class="l">Trailing 90 d</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 13 · THE MONEY ——————————————— -->
+<section class="slide" id="s13" tabindex="-1">
+  <div class="inner split">
+    <div>
+      <div class="kicker">Stage 8 · Settle</div>
+      <h2>Settlement — <em>where the Pledge becomes real.</em></h2>
+      <div class="prose">
+        <p>This system serves <b>Rail A only</b>: Designer Selections, Patina as merchant of record. Every financial consequence posts to the internal double-entry ledger; Stripe is reconciled against it daily, never trusted as it.</p>
+        <p>Settlement is a <b>three-way match</b> — vendor invoice against PO against proof of delivery — with variances resolved in the gutter. In-tolerance variances pre-accept; out-of-tolerance ones require a typed reason that becomes part of the record.</p>
+        <p>On settle, the system posts COGS, freight actual, realized commission — and the <b>25% Pledge accrual</b> to the designer’s teaching-royalty balance, the entry the public <span style="font-family:var(--mono);font-size:12px">/ledger</span> reads. <b>Fulfillment is the machine that makes the Pledge real.</b></p>
+      </div>
+    </div>
+    <div class="frame">
+      <div class="fhead"><div class="t">Settle · PO-0147-A</div><div class="meta">Invoice DW-INV-2214 · received Sep 02</div></div>
+      <div class="match3">
+        <div class="c"><div class="ch">Purchase order</div>
+          <div class="ln"><span>Credenza ①</span><span>3,420</span></div>
+          <div class="ln"><span>Freight</span><span>est 240</span></div>
+        </div>
+        <div class="c"><div class="ch">Vendor invoice</div>
+          <div class="ln"><span>Credenza ①</span><span>3,420</span></div>
+          <div class="ln var"><span>Freight</span><span>274 · +34</span></div>
+        </div>
+        <div class="c"><div class="ch">Receipt / POD</div>
+          <div class="ln"><span>Delivered ✓</span><span>AUG 27</span></div>
+          <div class="ln"><span>Window closed</span><span>CLEAN</span></div>
+        </div>
+      </div>
+      <div class="txlog" style="border-top:none;padding-top:6px">
+        <div class="tl"><b class="warn">VARIANCE</b> · freight +$34 · in tolerance · accepted · posts to freight-true-up</div>
+        <div class="tl"><b>POST</b> · COGS 3,420 · freight 274 · commission realized 642</div>
+        <div class="tl"><b>PAY</b> · balance scheduled per terms · Mercury operating</div>
+      </div>
+      <div class="pledgeline"><span class="k">Pledge accrual · R. Calloway · teaching royalty</span><span class="v">+ $160.50</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 14 · INSTRUMENTATION & LADDER ——————————————— -->
+<section class="slide" id="s14" tabindex="-1">
+  <div class="inner">
+    <div class="kicker">05 — Instrumentation &amp; The Ladder</div>
+    <h2>Measured honestly, <em>then automated deliberately.</em></h2>
+    <div class="mets">
+      <div class="m"><div class="v">&lt; 4 h</div><div class="l">Intake → all POs sent · p90</div></div>
+      <div class="m"><div class="v">&gt; 90%</div><div class="l">Vendor ack within SLA</div></div>
+      <div class="m"><div class="v">100%</div><div class="l">Freight deliveries with inspection guidance sent</div></div>
+      <div class="m"><div class="v">0</div><div class="l">Silent client gaps &gt; 7 days</div></div>
+      <div class="m"><div class="v">Daily</div><div class="l">Stripe ↔ ledger reconciliation</div></div>
+      <div class="m"><div class="v">100%</div><div class="l">Exceptions closed with financial outcome + cause code</div></div>
+      <div class="m"><div class="v"><em>Touches</em></div><div class="l">Manual touches per order · the north star · measured, then halved</div></div>
+      <div class="m"><div class="v">4 tiles</div><div class="l">Vitals feed Mission Control: exceptions · oldest unacked · windows closing · unsettled aging</div></div>
+    </div>
+    <div class="rungs">
+      <div class="rung"><div class="rv">v1.0</div><div class="rt"><b>Manual everything, structured capture.</b> This brief. Every action a typed event in the Run Log.</div></div>
+      <div class="rung"><div class="rv">v1.1</div><div class="rt"><b>Inbound email parsing</b> suggests status updates; bulk actions; templates refined from the operator’s edit diffs.</div></div>
+      <div class="rung"><div class="rv">v1.5</div><div class="rt"><b>Rules engine.</b> Green-path orders get one-click “send all”; client notes auto-send where templates ship unedited.</div></div>
+      <div class="rung"><div class="rv">v2.0</div><div class="rt"><b>Auto-transmission</b> for trusted vendors; carrier tracking webhooks; vendor lite-portal for ack + tracking entry only.</div></div>
+      <div class="rung"><div class="rv">v2.5</div><div class="rt"><b>The Ops Copilot works the Watching band.</b> The operator’s job narrows to exceptions and settlement approval.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ——————————————— 15 · BUILD ORDER ——————————————— -->
+<section class="slide" id="s15" tabindex="-1">
+  <div class="inner">
+    <div class="kicker">06 — Build Order</div>
+    <h2>Seven weeks, <em>three exit tests.</em></h2>
+    <div class="phase3">
+      <div class="p"><div class="pw">Phase 0 · weeks 1–2</div><div class="pn">Foundation</div><div class="pd">Schema, Stripe intake webhook, Fulfillment Queue, Order Workbench with split &amp; confirm. New zone of the Admin Portal in the strata monorepo — no new deployment surface.</div><div class="px">Exit — a real 3-vendor order decomposed and visible end-to-end</div></div>
+      <div class="p"><div class="pw">Phase 1 · weeks 3–4</div><div class="pn">Transmission</div><div class="pd">PO Composer with templates for all six vendors, transmission log, acknowledgment capture with SLA clocks, drafted client notifications.</div><div class="px">Exit — full order worked intake → acked, every event logged</div></div>
+      <div class="p"><div class="pw">Phase 2 · weeks 5–7</div><div class="pn">Movement &amp; Money</div><div class="pd">Shipment Board with freight discipline, Exception Desk with the four core playbooks and the Leah substitution route, Settlement with Pledge accrual postings.</div><div class="px">Exit — seeded damage exception resolves with correct ledger postings; substitution round-trips through Leah’s surface</div></div>
+    </div>
+    <div class="accept">
+      <div class="smallcap">v1 launch acceptance</div>
+      <div class="a">— A 3-vendor order works intake → transmit in <b>under 10 minutes</b>.</div>
+      <div class="a">— Every state change offers a client note; <b>no silent gap exceeds 7 days</b>.</div>
+      <div class="a">— Ledger reconciles to Stripe daily; the <b>zero-invisibility guarantee</b> holds under audit.</div>
+    </div>
+    <p class="closing">The back of house is where the brand promise is either kept or broken. Everything the client feels during the long wait for a made-to-order piece — the confidence, the cadence, the clean arrival — is manufactured here, by one operator, on this screen.</p>
+    <div class="strata" style="margin-top:40px" aria-hidden="true"><span></span><span></span><span></span></div>
+  </div>
+</section>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const counter=document.getElementById('counter');
+  const progress=document.getElementById('progress');
+  let current=0;
+  const pad=n=>String(n).padStart(2,'0');
+  function setChrome(i){counter.textContent=pad(i+1)+' / '+pad(slides.length);progress.style.width=(i/(slides.length-1)*100)+'%';}
+  function go(i){current=Math.max(0,Math.min(slides.length-1,i));slides[current].scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});setChrome(current);}
+  document.addEventListener('keydown',e=>{
+    if(e.target.matches('input,textarea'))return;
+    if(['ArrowDown','PageDown','j','J',' '].includes(e.key)){e.preventDefault();go(current+1);}
+    else if(['ArrowUp','PageUp','k','K'].includes(e.key)){e.preventDefault();go(current-1);}
+    else if(e.key==='Home'){e.preventDefault();go(0);}
+    else if(e.key==='End'){e.preventDefault();go(slides.length-1);}
+  });
+  const io=new IntersectionObserver(es=>{es.forEach(en=>{if(en.isIntersecting){current=slides.indexOf(en.target);setChrome(current);}})},{threshold:.55});
+  slides.forEach(s=>io.observe(s));
+  setChrome(0);
+</script>
+</body>
+</html>

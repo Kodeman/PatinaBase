@@ -26,6 +26,7 @@
     "@patina/catalog-ui": "workspace:*",
     "@patina/design-system": "workspace:^",
     "@patina/email": "workspace:*",
+    "@patina/fulfillment": "workspace:*",
     "@patina/help-system": "workspace:*",
     "@patina/notifications": "workspace:*",
     "@patina/shared": "workspace:*",

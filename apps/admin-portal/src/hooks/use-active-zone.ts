@@ -1,8 +1,9 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 import { ZONES, ZONE_SUB_ITEMS, type ZoneKey, type SubNavItem } from '@/config/navigation';
+import { BreadcrumbContext } from '@/contexts/breadcrumb-context';
 
 export interface BreadcrumbItem {
   label: string;
@@ -24,6 +25,10 @@ export interface ActiveZoneResult {
  */
 export function useActiveZone(): ActiveZoneResult {
   const pathname = usePathname();
+  // Optional: outside a BreadcrumbProvider this reads null and every deep
+  // page falls back to the plain URL-derived label (R3.6, C1 fix).
+  const breadcrumbCtx = useContext(BreadcrumbContext);
+  const lastLabelOverride = breadcrumbCtx?.lastLabel ?? null;
 
   return useMemo(() => {
     // Match zones by longest prefix to be safe if paths overlap
@@ -65,7 +70,7 @@ export function useActiveZone(): ActiveZoneResult {
     }
 
     const isDeepPage = detectDeepPage(pathname, zone.key);
-    const breadcrumbs = isDeepPage ? buildBreadcrumbs(pathname, zone) : [];
+    const breadcrumbs = isDeepPage ? buildBreadcrumbs(pathname, zone, lastLabelOverride) : [];
 
     return {
       zone: zone.key,
@@ -75,7 +80,7 @@ export function useActiveZone(): ActiveZoneResult {
       breadcrumbs,
       activeSubNavHref,
     };
-  }, [pathname]);
+  }, [pathname, lastLabelOverride]);
 }
 
 function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
@@ -97,6 +102,11 @@ function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
       /^\/audit\/[^/]+/,
       /^\/flags\/[^/]+/,
     ],
+    // S1: the Order Workbench route (S2 builds the real page; a placeholder
+    // ships today — see app/(dashboard)/fulfillment/orders/[orderId]/page.tsx).
+    fulfillment: [
+      /^\/fulfillment\/orders\/[^/]+/,
+    ],
   };
 
   const nonDeepPaths = [
@@ -113,7 +123,8 @@ function detectDeepPage(pathname: string, zoneKey: ZoneKey): boolean {
 
 function buildBreadcrumbs(
   pathname: string,
-  zone: (typeof ZONES)[number]
+  zone: (typeof ZONES)[number],
+  lastLabelOverride: string | null = null
 ): BreadcrumbItem[] {
   const crumbs: BreadcrumbItem[] = [{ label: zone.label, href: zone.href }];
 
@@ -123,15 +134,24 @@ function buildBreadcrumbs(
   for (let i = 0; i < segments.length; i++) {
     currentPath += '/' + segments[i];
     const segment = segments[i];
+    const formatted = formatSegment(segment);
 
-    if (i === 0) {
-      crumbs.push({ label: formatSegment(segment), href: currentPath });
+    // Skip a first path segment that only re-states the zone crumb already
+    // pushed above (R3.6, C1 fix) — a zone-config artifact: the fulfillment
+    // zone's label ('Fulfillment') and its own first URL segment
+    // ('/fulfillment') format to identical text, so this loop doubled it on
+    // EVERY /fulfillment/* deep page ("Fulfillment > Fulfillment > …"). No
+    // other zone's first segment collides with its label today, but the
+    // guard is zone-generic so it protects any future zone that does.
+    if (i === 0 && formatted === zone.label) {
       continue;
     }
 
     const isLast = i === segments.length - 1;
     crumbs.push({
-      label: formatSegment(segment),
+      // The last segment can be overridden by the page itself (e.g. an order
+      // UUID → "Order #1 · Priya Anand", R3.6) — see useBreadcrumbLastLabel.
+      label: isLast && lastLabelOverride ? lastLabelOverride : formatted,
       href: isLast ? undefined : currentPath,
     });
   }

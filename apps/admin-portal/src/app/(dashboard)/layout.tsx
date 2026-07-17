@@ -10,6 +10,7 @@ import { LoadingStrata } from '@/components/portal/loading-strata';
 import { ToastProvider } from '@/components/portal/toast-provider';
 import { CommandPalette } from '@/components/portal/command-palette';
 import { CommandPaletteProvider } from '@/contexts/command-palette-context';
+import { BreadcrumbProvider } from '@/contexts/breadcrumb-context';
 
 export default function DashboardLayout({
   children,
@@ -27,31 +28,33 @@ export default function DashboardLayout({
       </a>
 
       <CommandPaletteProvider>
-        <ToastProvider>
-          <div className="flex min-h-screen flex-col bg-[var(--bg-primary)]">
-            <Suspense fallback={null}>
-              <TopBar />
-              <SubNav />
-            </Suspense>
+        <BreadcrumbProvider>
+          <ToastProvider>
+            <div className="flex min-h-screen flex-col bg-[var(--bg-primary)]">
+              <Suspense fallback={null}>
+                <TopBar />
+                <SubNav />
+              </Suspense>
 
-            <main
-              id="main-content"
-              className="flex-1 pb-24 pt-8 md:pb-8"
-              tabIndex={-1}
-              role="main"
-              aria-label="Main content"
-            >
-              <PageContainer>
-                <Suspense fallback={<LoadingStrata />}>
-                  <div className="animate-page-enter">{children}</div>
-                </Suspense>
-              </PageContainer>
-            </main>
+              <main
+                id="main-content"
+                className="flex-1 pb-24 pt-8 md:pb-8"
+                tabIndex={-1}
+                role="main"
+                aria-label="Main content"
+              >
+                <PageContainer>
+                  <Suspense fallback={<LoadingStrata />}>
+                    <div className="animate-page-enter">{children}</div>
+                  </Suspense>
+                </PageContainer>
+              </main>
 
-            <MobileTabBar />
-            <CommandPalette />
-          </div>
-        </ToastProvider>
+              <MobileTabBar />
+              <CommandPalette />
+            </div>
+          </ToastProvider>
+        </BreadcrumbProvider>
       </CommandPaletteProvider>
     </ErrorBoundary>
   );
