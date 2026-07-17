@@ -47,6 +47,18 @@ public struct CoverageSnapshot: Codable, Sendable, Equatable {
     }
 }
 
+/// One named gap for the "walk me to the gap" list. Carries the UNIQUE surface
+/// checklist key so the UI keys on identity, never on the (possibly duplicate)
+/// phrase string (item-5 review F2).
+public struct ScorecardGap: Codable, Sendable, Equatable {
+    public let surface: String   // unique checklist key, e.g. "wall:north-2"
+    public let phrase: String    // ESCALATE placeholder wording
+    public init(surface: String, phrase: String) {
+        self.surface = surface
+        self.phrase = phrase
+    }
+}
+
 /// The end-of-scan QA scorecard (deck SC-09; spec §3.4 + `namedGaps`).
 public struct Scorecard: Codable, Sendable, Equatable {
 
@@ -59,13 +71,13 @@ public struct Scorecard: Codable, Sendable, Equatable {
     public let anchorCount: Int
     public let verdict: Verdict
     public let surfaceChecklist: [SurfaceStatus]
-    /// User-facing gap phrases for unobserved surfaces (ESCALATE placeholder
-    /// wording). Additive beyond spec §3.4 — logged spec-delta.
-    public let namedGaps: [String]
+    /// Unobserved-surface gaps (surface id + ESCALATE placeholder phrase). Additive
+    /// beyond spec §3.4 — logged spec-delta.
+    public let namedGaps: [ScorecardGap]
 
     public init(coveragePct: Int, sharpFrameRatio: Double, trackingHealth: TrackingHealth,
                 anchorCount: Int, verdict: Verdict, surfaceChecklist: [SurfaceStatus],
-                namedGaps: [String]) {
+                namedGaps: [ScorecardGap]) {
         self.coveragePct = coveragePct
         self.sharpFrameRatio = sharpFrameRatio
         self.trackingHealth = trackingHealth

@@ -84,9 +84,9 @@ struct SiteScanScorecardCard: View {
                     Text("Before you leave")           // ESCALATE placeholder
                         .font(CaptureType.eyebrow)
                         .foregroundStyle(CaptureColor.ink2)
-                    ForEach(scorecard.namedGaps, id: \.self) { gap in
+                    ForEach(scorecard.namedGaps, id: \.surface) { gap in
                         Label {
-                            Text(gap).font(CaptureType.footnote).foregroundStyle(CaptureColor.ink)
+                            Text(gap.phrase).font(CaptureType.footnote).foregroundStyle(CaptureColor.ink)
                         } icon: {
                             Image(systemName: "exclamationmark.circle")
                                 .foregroundStyle(CaptureColor.error)

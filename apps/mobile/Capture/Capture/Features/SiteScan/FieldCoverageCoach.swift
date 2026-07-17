@@ -182,71 +182,106 @@ extension FieldCoverageCoach: CaptureRoomUpdateSink {
         tracker.setSurfaces(Self.surfaces(from: room))
     }
 
-    /// Parametric surfaces from the RoomPlan graph: each wall, a synthesized floor +
-    /// ceiling (from the wall vertical extent at the room centroid), and each
-    /// opening (doors + windows + openings). Bearing labels are relative + ESCALATE
-    /// placeholders (`SurfaceLabeler`).
+    /// Parametric surfaces from the RoomPlan graph: each wall (with edge samples), a
+    /// synthesized floor + ceiling (footprint samples so a wall-height sweep still
+    /// sees them — F1), and each opening. Duplicate bearing keys are disambiguated
+    /// (F2); openings are numbered by a stable spatial sort (F4). Bearing labels are
+    /// relative + ESCALATE placeholders (`SurfaceLabeler`).
     private static func surfaces(from room: CapturedRoom) -> [CaptureSurface] {
         let walls = room.walls
         guard !walls.isEmpty else { return [] }
+        let bounds = RoomBounds(walls: walls)
 
-        // Room centroid + vertical extent from wall geometry.
+        var surfaces = walls.map { wallSurface($0, centroid: bounds.centroid) }
+        surfaces.append(horizontalSurface(kind: .floor, bounds: bounds))
+        surfaces.append(horizontalSurface(kind: .ceiling, bounds: bounds))
+        surfaces.append(contentsOf: openingSurfaces(from: room))
+
+        return CaptureSurface.disambiguated(surfaces)
+    }
+
+    /// A wall + its 4 edge-midpoint samples (from the surface's local width/height
+    /// axes) so a partial glance at a big wall still accrues dwell.
+    private static func wallSurface(_ wall: CapturedRoom.Surface, centroid: SIMD3<Float>) -> CaptureSurface {
+        let c = wall.transform.columns.3
+        let center = SIMD3<Float>(c.x, c.y, c.z)
+        let xAxis = wall.transform.columns.0
+        let yAxis = wall.transform.columns.1
+        let dx = SIMD3<Float>(xAxis.x, xAxis.y, xAxis.z) * (wall.dimensions.x / 2)
+        let dy = SIMD3<Float>(yAxis.x, yAxis.y, yAxis.z) * (wall.dimensions.y / 2)
+        let samples = [center, center + dx, center - dx, center + dy, center - dy]
+        let n = wall.transform.columns.2
+        let bearing = SurfaceLabeler.bearing(center: center, centroid: centroid)
+        return CaptureSurface(
+            id: wall.identifier.uuidString, kind: .wall, center: center,
+            normal: SIMD3<Float>(n.x, n.y, n.z), samplePoints: samples,
+            checklistKey: "wall:\(bearing)", displayLabel: "\(bearing.capitalized) wall")
+    }
+
+    /// A synthesized floor/ceiling with centroid + 4 footprint-edge samples. Its id,
+    /// key, label, y, and normal all derive from `kind` ("floor"/"ceiling").
+    private static func horizontalSurface(kind: CaptureSurface.Kind, bounds: RoomBounds) -> CaptureSurface {
+        let isFloor = kind == .floor
+        let y = isFloor ? bounds.minY : bounds.maxY
+        let key = kind.rawValue                     // "floor" / "ceiling"
+        let c = bounds.centroid
+        let samples = [
+            SIMD3<Float>(c.x, y, c.z),
+            SIMD3<Float>(c.x + bounds.extX, y, c.z), SIMD3<Float>(c.x - bounds.extX, y, c.z),
+            SIMD3<Float>(c.x, y, c.z + bounds.extZ), SIMD3<Float>(c.x, y, c.z - bounds.extZ)
+        ]
+        return CaptureSurface(id: key, kind: kind, center: SIMD3<Float>(c.x, y, c.z),
+                              normal: SIMD3<Float>(0, isFloor ? 1 : -1, 0), samplePoints: samples,
+                              checklistKey: key, displayLabel: key.capitalized)
+    }
+
+    /// Openings (doors + windows + openings) numbered by a stable spatial sort (F4).
+    private static func openingSurfaces(from room: CapturedRoom) -> [CaptureSurface] {
+        let openings = (room.doors + room.windows + room.openings).sorted { lhs, rhs in
+            let a = lhs.transform.columns.3, b = rhs.transform.columns.3
+            if a.x != b.x { return a.x < b.x }
+            if a.z != b.z { return a.z < b.z }
+            return a.y < b.y
+        }
+        return openings.enumerated().map { index, opening in
+            let c = opening.transform.columns.3
+            let n = opening.transform.columns.2
+            let number = index + 1
+            return CaptureSurface(
+                id: opening.identifier.uuidString, kind: .opening,
+                center: SIMD3<Float>(c.x, c.y, c.z), normal: SIMD3<Float>(n.x, n.y, n.z),
+                checklistKey: "opening:\(number)", displayLabel: "Opening \(number)")
+        }
+    }
+}
+
+/// Room bounds derived from wall geometry (centroid, vertical extent, XZ footprint
+/// half-extents) for surface synthesis.
+private struct RoomBounds {
+    let centroid: SIMD3<Float>
+    let minY: Float
+    let maxY: Float
+    let extX: Float
+    let extZ: Float
+
+    init(walls: [CapturedRoom.Surface]) {
         var sum = SIMD3<Float>(0, 0, 0)
-        var minY: Float = .greatestFiniteMagnitude
-        var maxY: Float = -.greatestFiniteMagnitude
+        var lowY: Float = .greatestFiniteMagnitude, highY: Float = -.greatestFiniteMagnitude
+        var lowX: Float = .greatestFiniteMagnitude, highX: Float = -.greatestFiniteMagnitude
+        var lowZ: Float = .greatestFiniteMagnitude, highZ: Float = -.greatestFiniteMagnitude
         for wall in walls {
             let c = wall.transform.columns.3
             sum += SIMD3<Float>(c.x, c.y, c.z)
             let halfH = wall.dimensions.y / 2
-            minY = min(minY, c.y - halfH)
-            maxY = max(maxY, c.y + halfH)
+            lowY = min(lowY, c.y - halfH); highY = max(highY, c.y + halfH)
+            lowX = min(lowX, c.x); highX = max(highX, c.x)
+            lowZ = min(lowZ, c.z); highZ = max(highZ, c.z)
         }
-        let centroid = sum / Float(walls.count)
-
-        var surfaces: [CaptureSurface] = []
-
-        for wall in walls {
-            let c = wall.transform.columns.3
-            let center = SIMD3<Float>(c.x, c.y, c.z)
-            let n = wall.transform.columns.2
-            let bearing = SurfaceLabeler.bearing(center: center, centroid: centroid)
-            surfaces.append(CaptureSurface(
-                id: wall.identifier.uuidString,
-                kind: .wall,
-                center: center,
-                normal: SIMD3<Float>(n.x, n.y, n.z),
-                checklistKey: "wall:\(bearing)",
-                displayLabel: "\(bearing.capitalized) wall"))
-        }
-
-        // Synthesized floor + ceiling.
-        surfaces.append(CaptureSurface(
-            id: "floor", kind: .floor,
-            center: SIMD3<Float>(centroid.x, minY, centroid.z),
-            normal: SIMD3<Float>(0, 1, 0),
-            checklistKey: "floor", displayLabel: "Floor"))
-        surfaces.append(CaptureSurface(
-            id: "ceiling", kind: .ceiling,
-            center: SIMD3<Float>(centroid.x, maxY, centroid.z),
-            normal: SIMD3<Float>(0, -1, 0),
-            checklistKey: "ceiling", displayLabel: "Ceiling"))
-
-        // Openings: doors + windows + openings, numbered in encounter order.
-        let openings = room.doors + room.windows + room.openings
-        for (index, opening) in openings.enumerated() {
-            let c = opening.transform.columns.3
-            let n = opening.transform.columns.2
-            let number = index + 1
-            surfaces.append(CaptureSurface(
-                id: opening.identifier.uuidString,
-                kind: .opening,
-                center: SIMD3<Float>(c.x, c.y, c.z),
-                normal: SIMD3<Float>(n.x, n.y, n.z),
-                checklistKey: "opening:\(number)",
-                displayLabel: "Opening \(number)"))
-        }
-
-        return surfaces
+        centroid = sum / Float(walls.count)
+        minY = lowY
+        maxY = highY
+        extX = max(0.1, (highX - lowX) / 2)
+        extZ = max(0.1, (highZ - lowZ) / 2)
     }
 }
 #endif

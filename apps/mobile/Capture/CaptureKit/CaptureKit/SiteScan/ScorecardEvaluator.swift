@@ -35,9 +35,10 @@ public enum ScorecardEvaluator {
         let unobserved = coverage.filter { !$0.observed }.map { $0.surface }
         let unseenStructural = unobserved.contains { $0.isStructural }
         // Structural gaps first so the "walk me to the gap" list leads with a wall.
+        // Each gap carries the UNIQUE surface key (F2), never just the phrase.
         let namedGaps = unobserved
             .sorted { ($0.isStructural ? 0 : 1) < ($1.isStructural ? 0 : 1) }
-            .map(gapPhrase)
+            .map { ScorecardGap(surface: $0.checklistKey, phrase: gapPhrase(for: $0)) }
 
         let verdict = self.verdict(coveragePct: coveragePct,
                                    sharpFrameRatio: sharpFrameRatio,
