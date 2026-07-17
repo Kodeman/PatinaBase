@@ -157,7 +157,7 @@ test.describe('Back of House — Fulfillment Queue', () => {
     await page.keyboard.press('x');
     await expect(page.getByText('Exception desk lands in S7')).toBeVisible();
 
-    // Enter navigates to the (S2-placeholder) Order Workbench for the
+    // Enter navigates to the Order Workbench (S2, now the real screen) for the
     // selected row's order id.
     const selectedOrderId = await rows.nth(0).getAttribute('data-order-id');
     expect(selectedOrderId).toBeTruthy();
@@ -165,6 +165,6 @@ test.describe('Back of House — Fulfillment Queue', () => {
     await page.waitForURL((u) => u.pathname === `/fulfillment/orders/${selectedOrderId}`, {
       timeout: 10000,
     });
-    await expect(page.getByText('The Order Workbench lands in S2.')).toBeVisible();
+    await expect(page.getByTestId('workbench-root')).toBeVisible({ timeout: 15000 });
   });
 });
