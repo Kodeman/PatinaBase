@@ -13,6 +13,7 @@ interface MockBuilder {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   select: any;
   eq: any;
+  in: any;
   order: any;
   /* eslint-enable @typescript-eslint/no-explicit-any */
   then: (resolve: (value: BuilderResult) => unknown) => Promise<unknown>;
@@ -25,6 +26,7 @@ function makeBuilder(initial: BuilderResult = { data: null, error: null }): Mock
     vi.fn(() => builder);
   builder.select = record();
   builder.eq = record();
+  builder.in = record();
   builder.order = record();
   builder.then = (resolve) => Promise.resolve(builder.__result).then(resolve);
   return builder;
@@ -53,6 +55,7 @@ vi.mock('@tanstack/react-query', () => ({
 // Import AFTER mocks are wired up.
 import {
   useRoomScanPhotos,
+  useRoomScanCovers,
   resolveCoverPhoto,
   dedupeRoomScanPhotos,
   publicUrlToPath,
@@ -267,6 +270,114 @@ describe('useRoomScanPhotos', () => {
     const result = await config.queryFn();
 
     expect(result).toEqual([]);
+    expect(storageFrom).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useRoomScanCovers — batch cover resolution across a SET of scan ids
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('useRoomScanCovers', () => {
+  it('is disabled (no query, no storage call) when given no ids', () => {
+    const config = useRoomScanCovers([]) as unknown as { enabled: boolean };
+    expect(config.enabled).toBe(false);
+    expect(supabaseClient.from).not.toHaveBeenCalled();
+  });
+
+  it('dedupes/sorts ids into the query key and filters out null/undefined entries', () => {
+    const config = useRoomScanCovers(['scan-b', null, 'scan-a', undefined, 'scan-b']) as unknown as {
+      queryKey: unknown[];
+    };
+    expect(config.queryKey).toEqual(['room-scan-covers', ['scan-a', 'scan-b']]);
+  });
+
+  it('resolves one cover per scan (I81), signs only the covers in ONE call, and reports zero-photo scans as null', async () => {
+    tableResult = {
+      data: [
+        // scan-1: two candidates — highest quality_score should win the cover.
+        row({
+          id: 's1-low',
+          scan_id: 'scan-1',
+          image_url: 'https://x.supabase.co/storage/v1/object/public/room-scans/u1/s1/low.heic',
+          thumbnail_url: null,
+          is_primary: false,
+          quality_score: 0.2,
+          display_order: 0,
+        }),
+        row({
+          id: 's1-high',
+          scan_id: 'scan-1',
+          image_url: 'https://x.supabase.co/storage/v1/object/public/room-scans/u1/s1/high.heic',
+          thumbnail_url: 'https://x.supabase.co/storage/v1/object/public/room-scans/u1/s1/high_thumb.jpg',
+          is_primary: false,
+          quality_score: 0.9,
+          display_order: 1,
+        }),
+        // scan-2: only one row, no thumbnail — cover falls back to the image.
+        row({
+          id: 's2-only',
+          scan_id: 'scan-2',
+          image_url: 'https://x.supabase.co/storage/v1/object/public/room-scans/u1/s2/only.heic',
+          thumbnail_url: null,
+          is_primary: false,
+          quality_score: null,
+          display_order: 0,
+        }),
+        // scan-3 has zero rows — never appears in `data` at all.
+      ],
+      error: null,
+    };
+    signedUrlsResult = {
+      data: [
+        { path: 'u1/s1/high.heic', signedUrl: 'https://signed/high.heic', error: null },
+        { path: 'u1/s1/high_thumb.jpg', signedUrl: 'https://signed/high_thumb.jpg', error: null },
+        { path: 'u1/s2/only.heic', signedUrl: 'https://signed/only.heic', error: null },
+      ],
+      error: null,
+    };
+
+    const config = useRoomScanCovers(['scan-1', 'scan-2', 'scan-3']) as unknown as {
+      queryFn: () => Promise<Map<string, { id: string; signedImageUrl: string | null; signedThumbUrl: string | null } | null>>;
+    };
+    const result = await config.queryFn();
+
+    expect(result.size).toBe(3);
+
+    const scan1Cover = result.get('scan-1');
+    expect(scan1Cover?.id).toBe('s1-high');
+    expect(scan1Cover?.signedThumbUrl).toBe('https://signed/high_thumb.jpg');
+    expect(scan1Cover?.signedImageUrl).toBe('https://signed/high.heic');
+
+    const scan2Cover = result.get('scan-2');
+    expect(scan2Cover?.id).toBe('s2-only');
+    expect(scan2Cover?.signedThumbUrl).toBeNull();
+    expect(scan2Cover?.signedImageUrl).toBe('https://signed/only.heic');
+
+    // scan-3 had zero rows — explicit null, distinct from an absent key.
+    expect(result.has('scan-3')).toBe(true);
+    expect(result.get('scan-3')).toBeNull();
+
+    // Exactly one signing call, over only the resolved covers' paths (the
+    // discarded s1-low candidate's path is never sent for signing).
+    expect(createSignedUrls).toHaveBeenCalledTimes(1);
+    expect(createSignedUrls.mock.calls[0][0].sort()).toEqual([
+      'u1/s1/high.heic',
+      'u1/s1/high_thumb.jpg',
+      'u1/s2/only.heic',
+    ]);
+  });
+
+  it('skips the storage call entirely when every requested scan has zero photos', async () => {
+    tableResult = { data: [], error: null };
+
+    const config = useRoomScanCovers(['scan-empty-1', 'scan-empty-2']) as unknown as {
+      queryFn: () => Promise<Map<string, unknown>>;
+    };
+    const result = await config.queryFn();
+
+    expect(result.get('scan-empty-1')).toBeNull();
+    expect(result.get('scan-empty-2')).toBeNull();
     expect(storageFrom).not.toHaveBeenCalled();
   });
 });

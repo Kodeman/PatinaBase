@@ -446,6 +446,7 @@ export type {
 } from './use-room-scans';
 export {
   useRoomScanPhotos,
+  useRoomScanCovers,
   resolveCoverPhoto,
   dedupeRoomScanPhotos,
   publicUrlToPath,
