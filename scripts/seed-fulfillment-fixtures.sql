@@ -216,7 +216,75 @@ BEGIN
     (SELECT status FROM public.fulfillment_vendor_pos WHERE id = v_po_id);
 END $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- (d) CHASE — intake -> split -> transmitted, then UNACKED with the send
+--     backdated ~2 business days -> Needs Action Now, "Chase Vandermeer — day 2"
+--     (S3, spec §5.3 / §2). The multi-token client name exercises the surname
+--     verb (matches the presentation's "Chase Vandermeer — day 3").
+-- ═══════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  v_order_id uuid;
+  v_po_id    uuid;
+  v_t        timestamptz := now();
+BEGIN
+  SELECT public.fulfillment_intake_order(
+    jsonb_build_object(
+      'payment_intent', jsonb_build_object('id', 'pi_boh_s3_fixture_chase'),
+      'client', jsonb_build_object('name', 'Camille Vandermeer', 'email', 'camille.vandermeer@example.com'),
+      'ship_to', jsonb_build_object('line1', '88 Harbor View Ln', 'city', 'Portland', 'state', 'ME', 'postal_code', '04101'),
+      'designer', jsonb_build_object('attribution', jsonb_build_object('kind', 'self_directed')),
+      'totals', jsonb_build_object(
+        'captured_total_cents', 402000,
+        'product_subtotal_cents', 360000,
+        'freight_charged_cents', 15000,
+        'tax_cents', 27000
+      ),
+      'lines', jsonb_build_array(
+        jsonb_build_object(
+          'product_id', 'a0000000-0000-0000-0000-000000000002',
+          'item_name', 'Walnut Credenza',
+          'qty', 1,
+          'unit_price_cents', 360000
+        )
+      )
+    ),
+    'boh_s3_fixture'
+  ) INTO v_order_id;
+
+  IF (SELECT line_state FROM public.fulfillment_order_items WHERE order_id = v_order_id LIMIT 1) = 'intake' THEN
+    PERFORM public.fulfillment_confirm_split(v_order_id, 'boh_s3_fixture');
+  END IF;
+
+  SELECT id INTO v_po_id FROM public.fulfillment_vendor_pos WHERE order_id = v_order_id LIMIT 1;
+
+  IF (SELECT status FROM public.fulfillment_vendor_pos WHERE id = v_po_id) = 'draft' THEN
+    PERFORM public.fulfillment_record_transmission(v_po_id, 'email', 'resend-fixture-chase', 'fulfillment/po/fixture-chase.pdf', 'boh_s3_fixture');
+  END IF;
+
+  -- Walk back to ~2 business days (18 business hours) before now(), weekend-
+  -- aware (fulfillment_business_hours_between skips Sat/Sun), so floor(bh/8) = 2
+  -- => "day 2" regardless of the weekday the reseed runs. Sanctioned side door.
+  WHILE public.fulfillment_business_hours_between(v_t, now()) < 18 LOOP
+    v_t := v_t - interval '1 hour';
+  END LOOP;
+  PERFORM set_config('app.fulfillment_writer', 'migration', true);
+  UPDATE public.fulfillment_vendor_pos
+     SET transmitted_at = v_t, status_entered_at = v_t
+   WHERE id = v_po_id;
+  UPDATE public.fulfillment_order_items
+     SET line_state_entered_at = v_t
+   WHERE order_id = v_order_id;
+
+  RAISE NOTICE 'FIXTURE CHASE: order_id=%, order_no=%, po_status=%, business_hours=%',
+    v_order_id,
+    (SELECT order_no FROM public.fulfillment_orders WHERE id = v_order_id),
+    (SELECT status FROM public.fulfillment_vendor_pos WHERE id = v_po_id),
+    round(public.fulfillment_business_hours_between(v_t, now()), 2);
+END $$;
+
 -- ─── Summary ─────────────────────────────────────────────────────────────
-SELECT order_no, client_name, derived_status, band, breached, next_action_kind
+SELECT order_no, client_name, derived_status, band, breached, next_action_kind,
+       next_action_params->>'days_overdue' AS day, next_action_params->>'client_surname' AS surname
   FROM public.fulfillment_queue_v
  ORDER BY order_no;

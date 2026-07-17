@@ -10,6 +10,8 @@ export const fulfillmentKeys = {
   all: ['fulfillment'] as const,
   queue: () => [...fulfillmentKeys.all, 'queue'] as const,
   detail: (orderId: string) => [...fulfillmentKeys.all, 'detail', orderId] as const,
+  // S3: the PO Composer round-trip, keyed by PO id.
+  composer: (poId: string) => [...fulfillmentKeys.all, 'composer', poId] as const,
 };
 
 /**

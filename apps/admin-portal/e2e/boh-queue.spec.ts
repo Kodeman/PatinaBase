@@ -129,15 +129,21 @@ test.describe('Back of House — Fulfillment Queue', () => {
     }
     await expect(rows.nth(0)).toHaveAttribute('data-selected', 'true');
 
-    // n opens the note drawer for the selected row, showing the draft stub —
-    // the send action is disabled and labeled for S4 (never fakes success).
+    // n opens the note drawer for the selected row. S4 shipped the real
+    // draft/send flow (this spec's S1 version asserted the disabled stub
+    // it replaced — updated here to the shipped surface, same coverage
+    // intent): opening drafts (or reuses) a real client note against the
+    // live stack, renders it in an editable textarea, and enables Send
+    // once the draft has loaded, unedited.
     await page.keyboard.press('n');
     const drawer = page.getByTestId('note-drawer');
     await expect(drawer).toBeVisible();
-    await expect(drawer.getByTestId('note-drawer-draft')).toBeVisible();
+    const noteBody = drawer.getByTestId('note-drawer-body');
+    await expect(noteBody).toBeVisible({ timeout: 15000 });
+    await expect(noteBody).not.toHaveValue('');
     const sendButton = drawer.getByTestId('note-drawer-send');
-    await expect(sendButton).toBeDisabled();
-    await expect(sendButton).toHaveText(/lands in S4/);
+    await expect(sendButton).toBeEnabled();
+    await expect(sendButton).toHaveText('Send');
 
     // While the drawer is open, j/k are suspended (drawer owns the keyboard).
     await page.keyboard.press('j');

@@ -190,3 +190,148 @@ export interface FulfillmentQueueRow {
   next_action_params: Record<string, unknown> | null;
   band: Band;
 }
+
+// ─── PO Composer & Transmission Log detail DTO (S3, spec §5.3) ────────────────
+// The single round-trip the composer binds to (GET /api/admin/fulfillment/pos/
+// [poId]) — one PO + its lines + the vendor's transmission protocol + the
+// append-only transmission log (fulfillment_events filtered to the PO). camelCase
+// like the workbench DTO; the log events stay snake_case (raw event rows, mapped
+// to lines by @patina/fulfillment/transmission-log).
+
+/** A PO line as the composer / PO paper sees it. */
+export interface FulfillmentComposerLine {
+  id: string;
+  orderItemId: string;
+  lineIndex: number;
+  itemName: string;
+  vendorSku: string | null;
+  qty: number;
+  unitCostCents: number;
+  lineTotalCents: number;
+}
+
+/** The vendor's transmission protocol (vendor_profiles) — drives the panel. */
+export interface FulfillmentComposerVendorProfile {
+  transmissionType: TransmissionType | null;
+  poEmail: string | null;
+  portalUrl: string | null;
+  csvColumnSpec: unknown;
+  blindShip: boolean;
+  changeWindowDays: number | null;
+  claimsWindowDays: number | null;
+  paymentTerms: PaymentTerms | null;
+}
+
+export interface FulfillmentComposerPo {
+  id: string;
+  poNumber: string | null;
+  orderId: string;
+  orderNo: number;
+  clientName: string;
+  vendorId: string;
+  vendorName: string | null;
+  status: PoState;
+  terms: PaymentTerms | null;
+  sideMark: string | null;
+  requestedShip: string | null;
+  committedShip: string | null;
+  ackMethod: string | null;
+  ackRef: string | null;
+  productCostCents: number;
+  transmittedAt: string | null;
+  ackedAt: string | null;
+  pdfR2Key: string | null;
+  shipTo: Record<string, unknown> | null;
+}
+
+/** Raw fulfillment_events row shape for the log (mirrors transmission-log.ts). */
+export interface FulfillmentComposerEvent {
+  id: number;
+  event_type: string;
+  actor: string | null;
+  refs: Record<string, unknown> | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface FulfillmentComposerDTO {
+  po: FulfillmentComposerPo;
+  vendorProfile: FulfillmentComposerVendorProfile;
+  lines: FulfillmentComposerLine[];
+  /** The append-only transmission log — fulfillment_events for this PO + the
+   *  order's notification.* events, ascending by id. */
+  events: FulfillmentComposerEvent[];
+}
+
+// ── S4: notifications / vendor directory / config (spec §6, §7, §10) ────────
+// Mirrors supabase/functions/_shared/fulfillment-templates.ts's Deno-side
+// ClientNotificationTransition (not shared by import — see notify.ts header).
+
+export type ClientNotificationChannel = 'email' | 'push';
+
+export interface FulfillmentClientNotificationDTO {
+  id: string;
+  orderId: string;
+  transition: string;
+  channel: ClientNotificationChannel;
+  templateKey: string;
+  draftedBody: string | null;
+  sentBody: string | null;
+  editDiff: { original: string; sent: string } | null;
+  sentAt: string | null;
+  resendMessageId: string | null;
+  skippedReason: string | null;
+  createdAt: string;
+}
+
+/** vendor_profiles ⋈ vendors, camelCase (spec §7 protocol sheet, R1.6). */
+export interface VendorProfileDTO {
+  vendorId: string;
+  vendorName: string;
+  transmissionType: TransmissionType;
+  contacts: Array<Record<string, unknown>>;
+  poEmail: string | null;
+  portalUrl: string | null;
+  csvColumnSpec: Record<string, unknown> | null;
+  paymentTerms: PaymentTerms;
+  depositPct: number | null;
+  leadTimeDays: number | null;
+  changeWindowDays: number | null;
+  blindShip: boolean;
+  claimsWindowDays: number | null;
+  inspectionWindowDays: { parcel?: number; ltl?: number; white_glove?: number } | null;
+  freightArrangement: string | null;
+  /** Fraction (0.16 = 16%); null falls back to config commission_rate_default. */
+  commissionRate: number | null;
+}
+
+/** A vendor list row — the directory table doesn't need the full profile. */
+export interface VendorDirectoryRow {
+  vendorId: string;
+  vendorName: string;
+  hasProfile: boolean;
+  transmissionType: TransmissionType | null;
+  paymentTerms: PaymentTerms | null;
+}
+
+/** Scorecard computed from fulfillment_events (spec §7) — trailing window,
+ *  n shown so a thin sample reads honestly rather than a misleadingly precise
+ *  rate. Null fields mean n was too small (or no matching events) to compute. */
+export interface VendorScorecard {
+  vendorId: string;
+  windowDays: number;
+  n: number;
+  medianAckHours: number | null;
+  onTimeShipRate: number | null;
+  damageRate: number | null;
+  fillRate: number | null;
+  exceptionRateByCause: Record<string, number>;
+}
+
+export interface FulfillmentConfigRow {
+  key: string;
+  value: Record<string, unknown>;
+  description: string | null;
+  updatedBy: string | null;
+  updatedAt: string;
+}

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { formatCents, type FulfillmentWorkbenchLine } from '@patina/fulfillment';
 
@@ -92,6 +93,8 @@ export function PoDraftCard({
   draggableLines = false,
 }: PoDraftCardProps) {
   const { setNodeRef, isOver } = useDroppable({ id: dropId, disabled: !droppable });
+  // Real (post-confirm) POs use dropId `po:<poId>` — those open the S3 Composer.
+  const poId = dropId.startsWith('po:') ? dropId.slice(3) : null;
 
   return (
     <div
@@ -128,6 +131,16 @@ export function PoDraftCard({
           >
             {statusLabel}
           </span>
+          {poId && (
+            <Link
+              href={`/fulfillment/pos/${poId}`}
+              data-testid="wb-po-compose"
+              className="text-[0.55rem] font-medium uppercase tracking-[0.1em]"
+              style={{ color: 'var(--color-clay)' }}
+            >
+              Compose ↗
+            </Link>
+          )}
         </span>
       </div>
 

@@ -26,6 +26,8 @@ export interface NextActionParams {
   exception_count?: number | null;
   po_count?: number | null;
   days_overdue?: number | null;
+  /** Client surname (last name token) — threads the chase verb, spec §5.3. */
+  client_surname?: string | null;
   [key: string]: unknown;
 }
 
@@ -65,10 +67,19 @@ export function describeNextAction(action: NextAction | null | undefined): strin
       return n > 0 ? `Send ${n} ${pluralize(n, 'PO')}` : 'Send POs';
     }
     case 'chase_ack': {
+      // "Chase {surname} — day N" (spec §5.3 / presentation "Chase Vandermeer
+      // — day 3"): N = business days elapsed since the send (fulfillment_queue_v
+      // days_overdue, floored, business-hours-aware). Falls back to "Chase —
+      // day N" without a surname, then to a neutral verb without a day count.
       const days = params.days_overdue;
-      return typeof days === 'number' && days > 0
-        ? `Chase ack — day ${days}`
-        : 'Chase overdue acknowledgment';
+      const surname =
+        typeof params.client_surname === 'string' && params.client_surname.trim()
+          ? params.client_surname.trim()
+          : null;
+      if (typeof days === 'number' && days > 0) {
+        return surname ? `Chase ${surname} — day ${days}` : `Chase — day ${days}`;
+      }
+      return 'Chase overdue acknowledgment';
     }
     case 'awaiting_ack':
       return 'Awaiting acknowledgment';
