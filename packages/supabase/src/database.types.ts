@@ -13577,6 +13577,180 @@ export type Database = {
           },
         ]
       }
+      room_file_measurements: {
+        Row: {
+          anchor_id: string | null
+          created_at: string
+          element_ref: Json | null
+          id: string
+          label: string | null
+          room_file_id: string
+          scan_id: string
+          source: string
+          tolerance_class: string
+          tolerance_mm: number | null
+          value_mm: number
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          anchor_id?: string | null
+          created_at?: string
+          element_ref?: Json | null
+          id?: string
+          label?: string | null
+          room_file_id: string
+          scan_id: string
+          source: string
+          tolerance_class: string
+          tolerance_mm?: number | null
+          value_mm: number
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          anchor_id?: string | null
+          created_at?: string
+          element_ref?: Json | null
+          id?: string
+          label?: string | null
+          room_file_id?: string
+          scan_id?: string
+          source?: string
+          tolerance_class?: string
+          tolerance_mm?: number | null
+          value_mm?: number
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_file_measurements_anchor_id_fkey"
+            columns: ["anchor_id"]
+            isOneToOne: false
+            referencedRelation: "scan_anchors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "room_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_files: {
+        Row: {
+          anchor_count: number
+          certificate: Json
+          created_at: string
+          dxf_url: string | null
+          generated_at: string | null
+          generation_error: string | null
+          id: string
+          pdf_url: string | null
+          scan_id: string
+          status: string
+          svg_url: string | null
+          tolerance_class: string | null
+          unverified: boolean
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          anchor_count?: number
+          certificate?: Json
+          created_at?: string
+          dxf_url?: string | null
+          generated_at?: string | null
+          generation_error?: string | null
+          id?: string
+          pdf_url?: string | null
+          scan_id: string
+          status?: string
+          svg_url?: string | null
+          tolerance_class?: string | null
+          unverified?: boolean
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          anchor_count?: number
+          certificate?: Json
+          created_at?: string
+          dxf_url?: string | null
+          generated_at?: string | null
+          generation_error?: string | null
+          id?: string
+          pdf_url?: string | null
+          scan_id?: string
+          status?: string
+          svg_url?: string | null
+          tolerance_class?: string | null
+          unverified?: boolean
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_files_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "room_files_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_files_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_scan_associations: {
         Row: {
           access_level: string
@@ -14528,6 +14702,141 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scan_anchors: {
+        Row: {
+          anchor_index: number | null
+          client_anchor_id: string
+          created_at: string
+          endpoint_a: Json
+          endpoint_b: Json
+          entry_method: string
+          id: string
+          label: string | null
+          measured_value_mm: number
+          model_span_m: number | null
+          scan_id: string
+          span_kind: string
+          updated_at: string
+        }
+        Insert: {
+          anchor_index?: number | null
+          client_anchor_id: string
+          created_at?: string
+          endpoint_a: Json
+          endpoint_b: Json
+          entry_method?: string
+          id?: string
+          label?: string | null
+          measured_value_mm: number
+          model_span_m?: number | null
+          scan_id: string
+          span_kind?: string
+          updated_at?: string
+        }
+        Update: {
+          anchor_index?: number | null
+          client_anchor_id?: string
+          created_at?: string
+          endpoint_a?: Json
+          endpoint_b?: Json
+          entry_method?: string
+          id?: string
+          label?: string | null
+          measured_value_mm?: number
+          model_span_m?: number | null
+          scan_id?: string
+          span_kind?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_anchors_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "scan_anchors_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_anchors_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scan_pipeline_events: {
+        Row: {
+          created_at: string
+          detail: Json
+          duration_ms: number | null
+          event: string
+          id: string
+          room_file_id: string | null
+          scan_id: string
+          stage: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          event: string
+          id?: string
+          room_file_id?: string | null
+          scan_id: string
+          stage: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          event?: string
+          id?: string
+          room_file_id?: string | null
+          scan_id?: string
+          stage?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scan_pipeline_events_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "room_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_pipeline_events_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "scan_pipeline_events_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_pipeline_events_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
           },
         ]

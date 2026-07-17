@@ -4038,3 +4038,25 @@ tables, and R108.4's infra target is retired. Pre-emptions below gate item 2+.
    from Patina's BackgroundScanUploader.
 
 *Entries add: I84 · last id = I84*
+
+### R109 · Field Capture M1 passed — R108.4 amended: native Linux GPU worker, no Coolify — 2026-07-17
+
+M1 (bundle spec v1 + 00341 additive schema + CLI validator, branch
+field-capture/m1-spec-schema through e1178370) blessed by Kody as
+reviewed. Items 3–8 (iOS capture) unblocked; branch merges to main.
+
+**R109.1 — Worker home, amending R108.4's transport, keeping its
+contract.** Kody stands up GPU access on a Linux box he manages;
+ingress, where any is needed, rides a Cloudflare Tunnel he operates.
+Coolify is out — too much overhead — and stays out. The reconstruction
+worker ships as a package that runs NATIVELY on the box (no container
+orchestration required to operate it). Unchanged from R108.4: the
+burst-ready contract — the worker registers against the queue by
+configuration alone, so a cloud worker remains a config change, not
+code; the flip trigger stays the first non-Leah designer in
+production. P1's stages (anchor solve, drawing generation) are
+CPU-bound and run on the same box from day one; the GPU earns its keep
+at P2 splat training. Package design lands in
+docs/design/field-capture/scan-pipeline-worker-design.md.
+
+*Entries add: R109 · last id = R109*
