@@ -29,15 +29,19 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import type { RoomGeometryDocument } from '@patina/supabase';
+import type { RoomGeometryDocument, RoomScanPhoto } from '@patina/supabase';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import type { PhotoProvenance } from '@/lib/room-view/photo-poses';
 import { roomEvents } from '@/lib/analytics';
 import { FactsRail } from './facts-rail';
 import { MeasureLayer } from './measure-layer';
 import { OrbitStage } from './orbit/orbit-stage';
+import { PhotoMarkers } from './photo-markers';
+import { PhotoStrip } from './photo-strip';
+import { PhotoViewer } from './photo-viewer';
 import { planViewBox, PlanStage } from './plan-stage';
 import { useMeasure } from './use-measure';
+import { usePhotoViewer } from './use-photo-viewer';
 
 /** The room's two live projections. Walk is ruled into the arc but built after Place. */
 type ViewMode = 'plan' | 'orbit';
@@ -77,14 +81,24 @@ export interface RoomViewProps {
   geometry: RoomGeometry | null;
   thicknessConvention: boolean;
   isLoading: boolean;
-  /** Plan-frame provenance (00337, from-rows.ts) — carried through so the
-   *  Wave-2 photo layer can mount here and project camera transforms into the
-   *  Plan/Orbit frame (photo-poses.ts). null until parsed with provenance;
-   *  no consumer in v1 yet. */
+  /** Plan-frame provenance (00337, from-rows.ts) — projects photo camera
+   *  transforms into the Plan frame for the marker layer (photo-poses.ts).
+   *  null until parsed with provenance; the marker layer degrades silently. */
   provenance?: PhotoProvenance | null;
+  /** The scan's photo set (useRoomScanPhotos), deduped + signed. `[]` for a
+   *  Field scan with no photos — the strip, rail line, and markers all absent. */
+  photos?: RoomScanPhoto[];
 }
 
-export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading }: RoomViewProps) {
+export function RoomView({
+  roomId,
+  doc,
+  geometry,
+  thicknessConvention,
+  isLoading,
+  provenance = null,
+  photos = [],
+}: RoomViewProps) {
   const docLink = useMemo(() => {
     if (!doc?.engagementId || !doc.activeSection) return null;
     const label = SECTION_LABEL[doc.activeSection] ?? doc.activeSection;
@@ -95,6 +109,7 @@ export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading
   // returns below (Rules of Hooks) — the measure tool's own state resets
   // naturally whenever RoomView remounts for a different room.
   const measure = useMeasure();
+  const viewer = usePhotoViewer(photos.length);
   const viewBox = useMemo(
     () => (geometry ? planViewBox(geometry) : { width: 1, height: 1 }),
     [geometry],
@@ -202,6 +217,7 @@ export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading
           scanDate={doc.scannedAt}
           qualityGrade={doc.qualityGrade}
           coveragePercentage={doc.coveragePercentage}
+          photos={photos.length > 0 ? { count: photos.length, onOpen: () => viewer.openAtIndex(0) } : undefined}
           measure={{
             armed: capturing,
             hasMeasurement: measure.state.phase === 'complete',
@@ -216,6 +232,14 @@ export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading
             <PlanStage
               geometry={geometry}
               stageCapRight={capturing ? 'click two points' : 'hover for dimensions'}
+              photoLayer={
+                <PhotoMarkers
+                  geometry={geometry}
+                  photos={photos}
+                  provenance={provenance}
+                  onOpen={viewer.openAtIndex}
+                />
+              }
               measureLayer={
                 <MeasureLayer
                   state={measure.state}
@@ -231,8 +255,21 @@ export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading
               <OrbitStage geometry={geometry} />
             </div>
           )}
+          {/* The contact strip lives under the stage, inside the stage cell. */}
+          <PhotoStrip photos={photos} onOpen={viewer.openAtIndex} />
         </div>
       </div>
+
+      {/* Full-bleed photo viewer — mounted over the still-mounted Plan/facts
+          rail (D1: the surface beneath never unmounts). */}
+      {viewer.openIndex != null && (
+        <PhotoViewer
+          photos={photos}
+          index={viewer.openIndex}
+          onIndexChange={viewer.openAtIndex}
+          onClose={viewer.close}
+        />
+      )}
     </div>
   );
 }

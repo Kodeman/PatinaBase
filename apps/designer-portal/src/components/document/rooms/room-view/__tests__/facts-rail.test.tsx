@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { prototypeRoom } from '@/lib/room-view/__fixtures__/room-fixture';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import { FactsRail } from '../facts-rail';
@@ -136,5 +136,49 @@ describe('FactsRail — pure-prop content given geometry fixtures', () => {
     );
     expect(screen.queryByText('Verify')).not.toBeInTheDocument();
     expect(screen.queryByText(/drawn dashed; confirm on site/)).not.toBeInTheDocument();
+  });
+
+  it('omits the Photos line when no photos prop is passed (Field scan)', () => {
+    render(
+      <FactsRail
+        geometry={prototypeRoom()}
+        thicknessConvention={false}
+        scanDate={null}
+        qualityGrade={null}
+        coveragePercentage={null}
+      />,
+    );
+    expect(screen.queryByText('Photos')).not.toBeInTheDocument();
+  });
+
+  it('omits the Photos line when the count is 0', () => {
+    render(
+      <FactsRail
+        geometry={prototypeRoom()}
+        thicknessConvention={false}
+        scanDate={null}
+        qualityGrade={null}
+        coveragePercentage={null}
+        photos={{ count: 0, onOpen: () => {} }}
+      />,
+    );
+    expect(screen.queryByText('Photos')).not.toBeInTheDocument();
+  });
+
+  it('renders the Photos line and opens the viewer on click when count > 0', () => {
+    const onOpen = jest.fn();
+    render(
+      <FactsRail
+        geometry={prototypeRoom()}
+        thicknessConvention={false}
+        scanDate={null}
+        qualityGrade={null}
+        coveragePercentage={null}
+        photos={{ count: 6, onOpen }}
+      />,
+    );
+    expect(screen.getByText('Photos')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /6 photos/ }));
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 });
