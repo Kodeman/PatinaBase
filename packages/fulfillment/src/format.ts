@@ -6,12 +6,18 @@
 //
 //   po_number  = 'PO-' || to_char(now(),'YYYY') || '-' ||
 //                lpad(order_no::text, 5, '0') || '-' || chr(64 + seq)
-//   side_mark  = upper(client_name) || '-' || order_no
+//   side_mark  = upper(surname) || '-' || order_no
+//                where surname = the LAST whitespace-separated token of
+//                client_name when it has more than one token, else the full
+//                (single-token) name unchanged (R3.5, C1 fix) — a blind-ship
+//                label the vendor sees; the full client name overexposes the
+//                relationship for a multi-word name, and a bare surname is
+//                what a delivery crew actually reads off a shipping label.
 //
 // The anti-drift tripwire lives in __tests__/format.test.ts: it asserts these
 // formatters produce exactly the strings fulfillment_confirm_split stored on
-// the seeded 5-vendor order (PO-2026-00001-A … -E, side_mark 'PRIYA ANAND-1').
-// If either side changes the format, that golden test goes red.
+// the seeded 5-vendor order (PO-2026-00001-A … -E, side_mark 'ANAND-1'). If
+// either side changes the format, that golden test goes red.
 
 /**
  * A vendor PO number, matching fulfillment_confirm_split's stored value:
@@ -32,14 +38,21 @@ export function formatPoNumber(year: number, orderNo: number, seq: number): stri
 
 /**
  * The side-mark stamped on every PO of an order, matching
- * fulfillment_confirm_split: `{CLIENT NAME UPPERCASED}-{orderNo}`. The blind-
- * ship label the vendor sees — it identifies the destination without exposing
- * Patina's client relationship or the other vendors in the order.
+ * fulfillment_confirm_split: `{SURNAME}-{orderNo}`. Surname = the last
+ * whitespace-separated token of `clientName` when it has more than one
+ * token; a single-token name (no space) falls back to the full name
+ * unchanged. Both cases are uppercased. The blind-ship label the vendor
+ * sees — a bare surname identifies the destination without exposing Patina's
+ * full client relationship or the other vendors in the order (R3.5).
  *
- * @example formatSideMark('Priya Anand', 1) → 'PRIYA ANAND-1'
+ * @example formatSideMark('Priya Anand', 1) → 'ANAND-1'
+ * @example formatSideMark('Whitfield', 147) → 'WHITFIELD-147'
  */
 export function formatSideMark(clientName: string, orderNo: number): string {
-  return `${clientName.toUpperCase()}-${orderNo}`;
+  const trimmed = clientName.trim();
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  const surname = parts.length > 1 ? parts[parts.length - 1] : trimmed;
+  return `${surname.toUpperCase()}-${orderNo}`;
 }
 
 // Circled-number glyphs ①…⑳ (U+2460 … U+2473). The "thread" that ties a client

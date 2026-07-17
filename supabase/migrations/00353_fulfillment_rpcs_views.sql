@@ -13,6 +13,13 @@
 -- (base RLS admin/agent_reader-gated). client_order_status_v is a DEFINER view
 -- owned by postgres (own-row auth.uid() scope; client-safe columns only) — see
 -- its COMMENT; do NOT convert it to invoker.
+--
+-- ⚠ C1 FIX AMENDMENT (2026-07-17, in-place — unshipped to prod, boh/* branch
+-- only, sanctioned escape hatch per patina-parallel-work): fulfillment_confirm
+-- _split's side_mark computation changed from `upper(client_name)` to a
+-- SURNAME-only mark (R3.5) — see the function body for the parsing rule.
+-- Mirrored in @patina/fulfillment/format.ts#formatSideMark; the anti-drift
+-- golden in format.test.ts was re-pinned against a live re-run.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ─── 0. Event logging helper ───────────────────────────────────────────────
@@ -180,6 +187,7 @@ DECLARE
   v_po uuid;
   v_po_number text;
   v_side_mark text;
+  v_name_parts text[];
   r record;
   v_po_line uuid;
 BEGIN
@@ -193,7 +201,18 @@ BEGIN
     RAISE EXCEPTION 'fulfillment_confirm_split: % unmapped line(s) block confirm', v_unmapped;
   END IF;
 
-  v_side_mark := upper(o.client_name) || '-' || o.order_no;
+  -- side_mark = SURNAME-{order_no} (R3.5, C1 fix — was upper(client_name)):
+  -- the last whitespace-separated token of client_name when it has more than
+  -- one token, else the full (single-token) name unchanged. Mirrored
+  -- byte-for-byte in @patina/fulfillment/format.ts#formatSideMark — the
+  -- format.test.ts golden pins this against a live confirm_split run.
+  v_name_parts := regexp_split_to_array(btrim(o.client_name), '\s+');
+  v_side_mark := upper(
+    CASE WHEN array_length(v_name_parts, 1) > 1
+         THEN v_name_parts[array_length(v_name_parts, 1)]
+         ELSE btrim(o.client_name)
+    END
+  ) || '-' || o.order_no;
 
   FOR v_vendor IN
     SELECT DISTINCT vendor_id FROM public.fulfillment_order_items

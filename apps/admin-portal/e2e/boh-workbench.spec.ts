@@ -5,8 +5,8 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
 //
 // Chromium-only (repo e2e trap: run with --project=chromium). SERIAL + single
 // worker: the tests share the seeded 5-vendor order (order_no 1, Priya Anand),
-// and Test 1 confirms it — so Test 2 depends on that confirmed state. Declared
-// in execution order; do not parallelize.
+// and the first test confirms it — the final (drag) test depends on that
+// confirmed state. Declared in execution order; do not parallelize.
 //
 // dnd-kit + Playwright drag: native `dragTo` does NOT fire dnd-kit's
 // PointerSensor (repo history — boards QA). The dragLine() helper below drives
@@ -62,7 +62,7 @@ test.beforeEach(async ({ page }) => {
   await signInAsAdmin(page);
 });
 
-test('5-vendor order decomposes to 5 PO drafts on confirm; every ① threads both sides; strip warns below floor', async ({
+test('5-vendor order decomposes to 5 PO drafts on confirm; every ① threads both sides; strip reads healthy (R3.2 re-price)', async ({
   page,
 }) => {
   await openOrder(page, 'Priya Anand');
@@ -81,8 +81,12 @@ test('5-vendor order decomposes to 5 PO drafts on confirm; every ① threads bot
     ).toBeVisible();
   }
 
-  // Strip warns terracotta: the seeded order's ~20% blended margin < 25% floor.
-  await expect(page.getByTestId('money-strip')).toHaveAttribute('data-below-floor', 'true');
+  // Strip reads healthy: R3.2 (C1 fix) re-priced the seed to varied ~25–45%
+  // spreads, so order 1's blended margin (~35%) clears the 25% floor — the
+  // old uniform-20%-spread seed tripped this warning on EVERY order, not
+  // just the one meant to demonstrate it. See the order-5 test below for the
+  // terracotta path.
+  await expect(page.getByTestId('money-strip')).toHaveAttribute('data-below-floor', 'false');
 
   // Confirm → 5 real POs, numbered A…E.
   const confirmBtn = page.getByTestId('wb-confirm-button');
@@ -95,6 +99,15 @@ test('5-vendor order decomposes to 5 PO drafts on confirm; every ① threads bot
   for (const letter of ['A', 'B', 'C', 'D', 'E']) {
     await expect(page.getByText(new RegExp(`PO-\\d{4}-\\d{5}-${letter}`)).first()).toBeVisible();
   }
+});
+
+test('single-line order 5 renders terracotta: its sole product is deliberately thin (~19% spread, R3.2)', async ({
+  page,
+}) => {
+  await openOrder(page, 'Nora Lindqvist');
+
+  await expect(page.getByTestId('wb-po-card')).toHaveCount(1);
+  await expect(page.getByTestId('money-strip')).toHaveAttribute('data-below-floor', 'true');
 });
 
 test('an unmapped line blocks confirm and unblocks on vendor + cost assignment; the strip re-figures', async ({
