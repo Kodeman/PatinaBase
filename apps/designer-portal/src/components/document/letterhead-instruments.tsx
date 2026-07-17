@@ -18,7 +18,13 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createBrowserClient, useProjectV2 } from '@patina/supabase';
+import {
+  createBrowserClient,
+  useProjectV2,
+  resolveCoverPhoto,
+  publicUrlToPath,
+  type RoomScanPhotoRow,
+} from '@patina/supabase';
 import { invalidateMarginSurfaces } from '@/hooks/use-margin-items';
 import { useSaveProjectVitals } from '@/hooks/use-project-lifecycle';
 import { familyLabel } from '@/lib/document/family-label';
@@ -39,28 +45,78 @@ interface ScanArtifact {
   id: string;
   name: string | null;
   created_at: string;
+  /** The resolved cover photo's SIGNED url (I79/I81) — null when the scan
+   *  has no photos, or (defensively) when signing a resolved photo failed. */
   image_url: string | null;
 }
+
+/** The `room_scan_images` columns `resolveCoverPhoto` needs (I81) — embedded
+ *  per-scan below. Only ONE photo per scan ever needs signing here (the
+ *  resolved cover), so this stays a light multi-scan preview query rather
+ *  than pulling in the full per-scan `useRoomScanPhotos` (which fetches
+ *  every photo for a single open scan — Room View's job, not this row's). */
+type HeroCandidate = Pick<
+  RoomScanPhotoRow,
+  'image_url' | 'is_primary' | 'quality_score' | 'display_order'
+>;
 
 function useClientScans(clientProfileId: string | null) {
   return useQuery<ScanArtifact[]>({
     queryKey: ['document-client-scans', clientProfileId],
     enabled: Boolean(clientProfileId),
     queryFn: async () => {
-      const { data, error } = await getSupabase()
+      const supabase = getSupabase();
+      const { data, error } = await supabase
         .from('room_scans')
-        .select('id, name, created_at, images:room_scan_images(image_url, is_primary, quality_score)')
+        .select(
+          'id, name, created_at, images:room_scan_images(image_url, is_primary, quality_score, display_order)',
+        )
         .eq('user_id', clientProfileId)
         .order('created_at', { ascending: false })
         .limit(5);
       if (error) throw error;
-      return (data ?? []).map((s: any) => {
-        const hero = (s.images ?? []).find((i: any) => i.is_primary) ?? (s.images ?? [])[0];
+
+      const scans = (data ?? []) as Array<{
+        id: string;
+        name: string | null;
+        created_at: string;
+        images: HeroCandidate[] | null;
+      }>;
+
+      // Resolve one cover photo per scan (I81's is_primary → quality →
+      // display_order rule — NOT the old ad-hoc "first is_primary or first
+      // row" pick), then batch-sign every distinct storage path across all
+      // up-to-5 scans in ONE call instead of up to 5 round-trips (I79).
+      const heroes = scans.map((s) => resolveCoverPhoto(s.images ?? []));
+      const heroPaths = heroes.map((h) => (h ? publicUrlToPath(h.image_url) : null));
+      const pathsToSign = Array.from(
+        new Set(heroPaths.filter((p): p is string => Boolean(p))),
+      );
+
+      const signedByPath = new Map<string, string>();
+      if (pathsToSign.length > 0) {
+        const { data: signedData, error: signError } = await supabase.storage
+          .from('room-scans')
+          .createSignedUrls(pathsToSign, 3600);
+        if (signError) throw signError;
+        for (const entry of signedData ?? []) {
+          if (entry.path && !entry.error) signedByPath.set(entry.path, entry.signedUrl);
+        }
+      }
+
+      return scans.map((s, i) => {
+        const hero = heroes[i];
+        const path = heroPaths[i];
+        // No hero → no photo. A path that needed signing but isn't in the
+        // signed map means that one signing call failed — unresolved, not a
+        // throw. No path (but a hero exists) means the raw value was
+        // already a usable URL — pass it through unchanged.
+        const image_url = !hero ? null : path ? (signedByPath.get(path) ?? null) : hero.image_url;
         return {
           id: s.id,
           name: s.name,
           created_at: s.created_at,
-          image_url: hero?.image_url ?? null,
+          image_url,
         };
       });
     },
