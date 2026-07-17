@@ -17,6 +17,19 @@
 //
 // Reads connection info from `supabase status -o env` (run from supabase/),
 // falling back to SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars.
+//
+// The parse-invoke step (§4) sends this SAME `supabase status` service_role
+// key as the Authorization bearer — which is an ES256 JWT and 401s against
+// the local edge runtime's verify_jwt check (it only validates HS256, signed
+// with the CLI's standard local JWT secret; Kong itself accepts either, so
+// this only bites function-to-function calls, not REST/Storage). The script
+// treats a non-2xx parse response as "not available on this branch" and
+// moves on, so a 401 here reads as a skip, not a loud failure — if you need
+// to invoke parse-room-scan by hand (curl) instead of through this script,
+// fetch the correct HS256 key from the local Vault seed
+// (supabase/seed/99-local-edge-settings.sql) with:
+//   psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -tAc \
+//     "select decrypted_secret from vault.decrypted_secrets where name='app.settings.service_role_key';"
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
