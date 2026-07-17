@@ -548,4 +548,14 @@ Accepts-when verified: `test:boh-audit` fully green (A1–A7 / Q1–Q7 / T1–T5
 
 ---
 
-*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I9 · R1–R3 · L— · last id = I9 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*
+### I10 · S5 shipped — Shipment Board (→ screenshot drop 2) — 2026-07-17
+
+S5 built and pushed on `boh/s5-shipments`, 4 commits off `origin/boh/integration`. Board at `/fulfillment/shipments` replaces the S1 placeholder: `ModeChip`/`DeadlineClock` (new `components/fulfillment/shared/`), rows sorted open-inspection-windows-first then by current ETA (`sortShipmentBoard`), promised-vs-current ETA slip in mono with a terracotta delta (`formatSlip`), the countdown as the board's loudest element (I5, terracotta ≤2 days).
+
+**Schema gap found, reported, not worked around (S5 built stackless — S6 owned all migrations this wave).** `fulfillment_record_delivery` (00353) stamps `pod_r2_key`/`inspection_closes_at` correctly (no gap there) but never checked `mode`/`appointment_confirmed_at` — the LTL/white_glove deliver gate was enforced at the application layer only (`canDeliverShipment`, `@patina/fulfillment`, called by both the `pod` and `deliver` routes before the RPC, so the UI reason and the API error cannot drift). Two further gaps: no RPC wrote `appointment_confirmed_at` at all (the `appointment` route calls `fulfillment_confirm_appointment` by name and returned an honest 501 until it landed), and no RPC wrote `current_eta`/`eta_history` post-creation (the fixture script used the sanctioned `app.fulfillment_writer='migration'` side door, documented inline). All three were relayed to S6 mid-wave and landed as 00363 — the 501 path is now live with zero portal changes.
+
+Accepts-when (stackless — verified by fixture SQL + jest/vitest; live e2e + the drop-2 capture deferred to the Wave F combined pass): parcel/LTL chips render correctly; an LTL shipment is blocked from delivered both in the UI (disabled affordance + visible reason) and via the API (409 `appointment_required`); a slipped ETA renders `SEP 10 · +7` terracotta; a POD upload opens the countdown; open-window rows pin to the top. 151/151 `@patina/fulfillment` vitest (32 new), 38/38 admin-portal fulfillment jest (15 new), admin-portal build green.
+
+---
+
+*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I10 · R1–R3 · L— · last id = I10 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*
