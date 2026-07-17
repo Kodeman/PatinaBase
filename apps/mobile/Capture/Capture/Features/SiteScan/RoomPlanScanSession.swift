@@ -74,6 +74,12 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
     /// The export bundle dir — created at `start()` so depth/mesh/photos stream
     /// into it live, and reused by `exportBundle` for usdz/json/sidecar.
     private var bundleDir: URL?
+
+    // Typed anchors (item 6). Collected during the anchor-entry step (session still
+    // alive) and persisted to `anchors.json` at finish; the count drives UNVERIFIED.
+    private(set) var anchors: [AnchorRecord] = []
+    private var pendingAnchorEndpoints: [SIMD3<Float>] = []
+
     private let logger = Logger(subsystem: "cloud.patina.field", category: "SiteScan")
 
     override init() {
@@ -146,7 +152,7 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
             finishContinuation = cont
             roomCaptureView?.captureSession.stop()   // → captureView(shouldPresent:) → didPresent
         }
-        rig.stopRecording()
+        rig.stopRecording(anchorCount: anchors.count)
         eventContinuation.finish()
 
         let dims = Self.estimateDimensions(from: room)
@@ -202,7 +208,21 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
         // Posed-photo sidecar — STRICTLY best-effort. The two core artifacts above
         // are already written; a sidecar failure must not fail the export.
         writePhotosSidecar(into: dir)
+        writeAnchorsSidecar(into: dir)
         return dir
+    }
+
+    /// Serialise the typed anchors to `anchors.json` (a mirror of manifest.anchors;
+    /// item 8 folds it in + derives UNVERIFIED via `AnchorGate.isUnverified`).
+    /// No-op when no anchors were entered. Log-only on failure.
+    private func writeAnchorsSidecar(into dir: URL) {
+        guard !anchors.isEmpty else { return }
+        do {
+            let data = try JSONEncoder().encode(anchors)
+            try data.write(to: dir.appendingPathComponent("anchors.json"), options: .atomic)
+        } catch {
+            logger.error("Anchors sidecar write failed (scan still exports): \(error.localizedDescription)")
+        }
     }
 
     /// Serialise the captured `[FieldPhotoEntry]` to `photos_metadata.json`
@@ -324,6 +344,79 @@ extension RoomPlanScanSession: RoomCaptureViewDelegate, RoomCaptureSessionDelega
             }
             self.finishContinuation = nil
         }
+    }
+}
+
+// MARK: - AnchorCapturing (item 6 — raycast the SHARED session, no second ARView)
+
+extension RoomPlanScanSession: AnchorCapturing {
+
+    var capturedAnchors: [AnchorRecord] { anchors }
+    var pendingEndpoints: [SIMD3<Float>] { pendingAnchorEndpoints }
+
+    var pendingSpanMeters: Double? {
+        guard pendingAnchorEndpoints.count == 2 else { return nil }
+        return Double(simd_distance(pendingAnchorEndpoints[0], pendingAnchorEndpoints[1]))
+    }
+
+    @discardableResult
+    func tapAnchorPoint(screenPoint: CGPoint, viewport: CGSize) -> Bool {
+        guard let point = raycastWorldPoint(screenPoint: screenPoint, viewport: viewport) else { return false }
+        if pendingAnchorEndpoints.count >= 2 { pendingAnchorEndpoints.removeAll() }
+        pendingAnchorEndpoints.append(point)
+        return true
+    }
+
+    @discardableResult
+    func commitAnchor(measuredValueMillimetres: Int, label: String) -> AnchorRecord? {
+        guard pendingAnchorEndpoints.count == 2, measuredValueMillimetres > 0 else { return nil }
+        let a = pendingAnchorEndpoints[0], b = pendingAnchorEndpoints[1]
+        let record = AnchorRecord(
+            id: UUID().uuidString.lowercased(),
+            index: anchors.count,
+            label: label,
+            spanKind: AnchorGate.autoSpanKind(dx: Double(b.x - a.x), dy: Double(b.y - a.y), dz: Double(b.z - a.z)),
+            entryMethod: .typed,
+            endpointA: .init(x: Double(a.x), y: Double(a.y), z: Double(a.z)),
+            endpointB: .init(x: Double(b.x), y: Double(b.y), z: Double(b.z)),
+            modelSpanMeters: Double(simd_distance(a, b)),
+            measuredValueMm: measuredValueMillimetres)
+        anchors.append(record)
+        pendingAnchorEndpoints.removeAll()
+        return record
+    }
+
+    func clearPendingAnchor() { pendingAnchorEndpoints.removeAll() }
+
+    /// Raycast the SHARED rig ARSession from a screen tap by manual unprojection —
+    /// NOT a second ARView. Assumes a portrait scan UI (the F2 chrome is portrait).
+    /// Targets estimated + existing planes (walls/floor RoomPlan detects). Failure
+    /// modes: no plane hit (textureless / low confidence / glass) → nil, user re-taps.
+    private func raycastWorldPoint(screenPoint: CGPoint, viewport: CGSize) -> SIMD3<Float>? {
+        guard let frame = rig.arSession.currentFrame,
+              let query = Self.raycastQuery(screenPoint: screenPoint, viewport: viewport,
+                                            frame: frame, orientation: .portrait) else { return nil }
+        guard let result = rig.arSession.raycast(query).first else { return nil }
+        let t = result.worldTransform.columns.3
+        return SIMD3<Float>(t.x, t.y, t.z)
+    }
+
+    private static func raycastQuery(screenPoint: CGPoint, viewport: CGSize, frame: ARFrame,
+                                     orientation: UIInterfaceOrientation) -> ARRaycastQuery? {
+        guard viewport.width > 0, viewport.height > 0 else { return nil }
+        let camera = frame.camera
+        let view = camera.viewMatrix(for: orientation)
+        let projection = camera.projectionMatrix(for: orientation, viewportSize: viewport, zNear: 0.001, zFar: 1000)
+        let inverseVP = simd_inverse(projection * view)
+        let clipX = Float(2 * screenPoint.x / viewport.width - 1)
+        let clipY = Float(1 - 2 * screenPoint.y / viewport.height)   // flip Y (UIKit → NDC)
+        let near = inverseVP * SIMD4<Float>(clipX, clipY, 0, 1)
+        let far = inverseVP * SIMD4<Float>(clipX, clipY, 1, 1)
+        guard near.w != 0, far.w != 0 else { return nil }
+        let nearWorld = SIMD3<Float>(near.x, near.y, near.z) / near.w
+        let farWorld = SIMD3<Float>(far.x, far.y, far.z) / far.w
+        let direction = simd_normalize(farWorld - nearWorld)
+        return ARRaycastQuery(origin: nearWorld, direction: direction, allowing: .estimatedPlane, alignment: .any)
     }
 }
 

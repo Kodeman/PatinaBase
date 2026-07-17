@@ -9,6 +9,7 @@
 //  wave agents also use these behind their factories until the real services land.
 
 import Foundation
+import CoreGraphics
 import CaptureKit
 
 // MARK: - Forced-failure injection (Simulator error-state walk)
@@ -263,7 +264,7 @@ public struct MockPortalAuthApprovalService: PortalAuthApprovalService {
 /// Always-supported scan session with a scripted coverage ramp, so F2–F4 render
 /// on the simulator (where real RoomPlan/LiDAR is unavailable).
 @MainActor
-public final class MockScanSession: FieldScanSession {
+public final class MockScanSession: FieldScanSession, AnchorCapturing {
     public init() {}
 
     public var events: AsyncStream<FieldScanEvent> {
@@ -295,12 +296,57 @@ public final class MockScanSession: FieldScanSession {
     }
 
     public func finish() async throws -> FieldScanResult {
+        // Scorecard reflects the anchors the sim user entered (drives UNVERIFIED).
         FieldScanResult(localBundleURL: WorkFixtures.scanBundleURL,
                         roomName: "Living room", areaLabel: "312 sq ft",
-                        scorecard: Self.mockScorecard)
+                        scorecard: Scorecard(
+                            coveragePct: 100, sharpFrameRatio: 0.88, trackingHealth: .good,
+                            anchorCount: capturedAnchors.count, verdict: .green,
+                            surfaceChecklist: Self.completeChecklist, namedGaps: []))
     }
 
     public func cancel() {}
+
+    // MARK: - AnchorCapturing (scripted — no raycast on the sim, but the F-flow
+    // anchor step stays walkable: taps drop scripted endpoints ~4 m apart).
+
+    public private(set) var capturedAnchors: [AnchorRecord] = []
+    public private(set) var pendingEndpoints: [SIMD3<Float>] = []
+
+    public var pendingSpanMeters: Double? {
+        guard pendingEndpoints.count == 2 else { return nil }
+        return Double(Self.distance(pendingEndpoints[0], pendingEndpoints[1]))
+    }
+
+    @discardableResult
+    public func tapAnchorPoint(screenPoint: CGPoint, viewport: CGSize) -> Bool {
+        if pendingEndpoints.count >= 2 { pendingEndpoints.removeAll() }
+        pendingEndpoints.append(pendingEndpoints.isEmpty ? SIMD3<Float>(0, 0, -2) : SIMD3<Float>(4, 0, -2))
+        return true
+    }
+
+    @discardableResult
+    public func commitAnchor(measuredValueMillimetres: Int, label: String) -> AnchorRecord? {
+        guard pendingEndpoints.count == 2, measuredValueMillimetres > 0 else { return nil }
+        let a = pendingEndpoints[0], b = pendingEndpoints[1]
+        let record = AnchorRecord(
+            id: UUID().uuidString.lowercased(), index: capturedAnchors.count, label: label,
+            spanKind: AnchorGate.autoSpanKind(dx: Double(b.x - a.x), dy: Double(b.y - a.y), dz: Double(b.z - a.z)),
+            entryMethod: .typed,
+            endpointA: .init(x: Double(a.x), y: Double(a.y), z: Double(a.z)),
+            endpointB: .init(x: Double(b.x), y: Double(b.y), z: Double(b.z)),
+            modelSpanMeters: Double(Self.distance(a, b)), measuredValueMm: measuredValueMillimetres)
+        capturedAnchors.append(record)
+        pendingEndpoints.removeAll()
+        return record
+    }
+
+    public func clearPendingAnchor() { pendingEndpoints.removeAll() }
+
+    private static func distance(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float {
+        let d = a - b
+        return (d.x * d.x + d.y * d.y + d.z * d.z).squareRoot()
+    }
 
     private static let completeChecklist: [SurfaceStatus] = [
         SurfaceStatus(surface: "wall:north", covered: true),
@@ -311,10 +357,6 @@ public final class MockScanSession: FieldScanSession {
         SurfaceStatus(surface: "ceiling", covered: true),
         SurfaceStatus(surface: "opening:1", covered: true)
     ]
-
-    private static let mockScorecard = Scorecard(
-        coveragePct: 100, sharpFrameRatio: 0.88, trackingHealth: .good,
-        anchorCount: 0, verdict: .green, surfaceChecklist: completeChecklist, namedGaps: [])
 }
 
 @MainActor

@@ -197,18 +197,19 @@ final class SharedARCaptureRig: NSObject {
 
     /// Finalize recording: flush + finalize the depth and mesh recorders (final
     /// `mesh.ply`, drain pending depth writes) and pause the ARSession. Idempotent.
-    func stopRecording() {
+    /// `anchorCount` (item 6) feeds the scorecard's UNVERIFIED framing.
+    func stopRecording(anchorCount: Int = 0) {
         guard isRecording else { return }
         isRecording = false
         arSession.pause()
         depthRecorder?.finish()
         meshRecorder?.finish()
         keyframeRecorder?.finish()
-        // Build + persist the QA scorecard from the coach + keyframe metrics.
-        // anchorCount is 0 until item 6 wires typed anchor entry.
+        // Build + persist the QA scorecard from the coach + keyframe metrics + the
+        // real anchor count (item 6 — drives the UNVERIFIED framing on the card).
         lastScorecard = coverageCoach?.finalize(
             sharpFrameRatio: keyframeRecorder?.sharpFrameRatio ?? 1.0,
-            anchorCount: 0)
+            anchorCount: anchorCount)
     }
 
     /// The current live coverage snapshot for the F2 coach (nil if no coach).

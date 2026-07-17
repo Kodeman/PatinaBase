@@ -70,6 +70,14 @@ struct SiteScanScorecardCard: View {
                 Text(SiteScanCoachCopy.verdictTitle(scorecard.verdict))
                     .font(CaptureType.title2)
                     .foregroundStyle(CaptureColor.ink)
+                Spacer()
+                if AnchorGate.isUnverified(anchorCount: scorecard.anchorCount) {
+                    Text("UNVERIFIED")                 // ESCALATE placeholder (R108.5 stamp)
+                        .font(CaptureType.monoSmall)
+                        .foregroundStyle(CaptureColor.paper)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(CaptureColor.error, in: Capsule())
+                }
             }
 
             HStack(spacing: 20) {

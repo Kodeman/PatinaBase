@@ -24,6 +24,7 @@ final class SiteScanHostModel {
     // the current step, never compares two.
     enum Step {
         case scanning
+        case anchoring          // item 6 — typed anchor entry (session still alive)
         case review(FieldScanResult)
         case upload(FieldScanResult)
     }
@@ -73,6 +74,14 @@ final class SiteScanHostModel {
                 }
             }
         }
+    }
+
+    /// End scanning and move to the typed-anchor step WITHOUT tearing the session
+    /// down (item 6) — raycasting anchors needs the live shared session. The anchor
+    /// step then calls `finishScan()` to build the room + persist anchors.
+    func beginAnchoring() {
+        eventTask?.cancel()          // stop draining coverage updates; keep the session
+        step = .anchoring
     }
 
     func finishScan() async {
@@ -141,6 +150,10 @@ struct SiteScanHostScreen: View {
                                  model.cancelScan()
                                  coordinator.goBack()
                              })
+        case .anchoring:
+            SiteScanAnchorStep(model: model,
+                               analytics: container.analytics,
+                               onDone: { Task { await model.finishScan() } })
         case .review(let result):
             SiteScanReviewStep(
                 result: result, model: model, analytics: container.analytics,
@@ -211,7 +224,7 @@ struct SiteScanScanStep: View {
             }
             SiteScanPrimaryButton(title: "Finish", systemImage: "checkmark") {
                 analytics.event("siteScan.finish")
-                Task { await model.finishScan() }
+                model.beginAnchoring()          // → typed anchor entry (item 6)
             }
             .disabled(model.scanError != nil)
         }
