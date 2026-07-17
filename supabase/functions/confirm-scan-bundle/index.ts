@@ -99,15 +99,15 @@ serve(async (req) => {
 
     const scanRow = scan as Record<string, unknown>;
 
-    // HEAD every expected artifact URL. A null column is treated as "not yet
-    // patched" rather than missing — the uploader fills columns as each PUT
+    // Verify every expected artifact exists. A null column is treated as "not
+    // yet patched" rather than missing — the uploader fills columns as each PUT
     // completes, and this endpoint only cares about URLs that ARE set.
     const missing: string[] = [];
     const headChecks = await Promise.all(
       ARTIFACT_URL_COLUMNS.map(async (col) => {
         const url = scanRow[col];
         if (typeof url !== "string" || url.length === 0) return null;
-        const ok = await headOK(url, authHeader);
+        const ok = await headOK(url, authHeader, supabaseUrl, anonKey);
         return ok ? null : col;
       }),
     );
@@ -116,7 +116,7 @@ serve(async (req) => {
     // Optional depth archive — validated only if present.
     const depthUrl = scanRow.depth_archive_url;
     if (typeof depthUrl === "string" && depthUrl.length > 0) {
-      if (!(await headOK(depthUrl, authHeader))) {
+      if (!(await headOK(depthUrl, authHeader, supabaseUrl, anonKey))) {
         missing.push("depth_archive_url");
       }
     }
@@ -193,12 +193,53 @@ serve(async (req) => {
   }
 });
 
-async function headOK(url: string, authHeader: string): Promise<boolean> {
+/**
+ * Derive the bucket-relative object key from a stored artifact URL. Mirrors
+ * parse-room-scan's objectKeyFromUrl: split on the LAST `/room-scans/`, keep the
+ * tail, strip any query string. A value that is already a bare key (no marker)
+ * is used as-is.
+ */
+function objectKeyFromUrl(url: string): string | null {
+  if (typeof url !== "string" || url.length === 0) return null;
+  const marker = "/room-scans/";
+  const idx = url.lastIndexOf(marker);
+  let key = idx >= 0 ? url.slice(idx + marker.length) : url;
+  const q = key.indexOf("?");
+  if (q >= 0) key = key.slice(0, q);
+  key = key.replace(/^\/+/, "");
+  return key.length > 0 ? key : null;
+}
+
+/**
+ * Confirm an artifact object exists AND is readable by the caller.
+ *
+ * `room-scans` is a PRIVATE bucket, but both iOS apps write PUBLIC-shaped
+ * (`/object/public/room-scans/...`) URLs into the artifact columns as mere
+ * path-carriers — an ecosystem convention (see
+ * packages/supabase/src/hooks/use-room-scans.ts and parse-room-scan's
+ * objectKeyFromUrl). A raw HEAD against that public path 400s "Bucket not found"
+ * for a private bucket, so every artifact would read as missing and the function
+ * would 409 even when all objects are present.
+ *
+ * Instead we derive the bucket key and probe the RLS-gated info endpoint
+ * (`/object/info/authenticated/...`) with the caller's JWT + apikey, so RLS runs
+ * as the caller. It returns 200 only when the object exists AND the caller may
+ * read it — keeping the verdict honest: a truly-missing (or unauthorized) object
+ * still fails, so the 409 semantics are unchanged.
+ */
+async function headOK(
+  url: string,
+  authHeader: string,
+  supabaseUrl: string,
+  anonKey: string,
+): Promise<boolean> {
+  const key = objectKeyFromUrl(url);
+  if (!key) return false;
   try {
-    const res = await fetch(url, {
-      method: "HEAD",
-      headers: { Authorization: authHeader },
-    });
+    const res = await fetch(
+      `${supabaseUrl}/storage/v1/object/info/authenticated/room-scans/${key}`,
+      { headers: { Authorization: authHeader, apikey: anonKey } },
+    );
     return res.ok;
   } catch {
     return false;
