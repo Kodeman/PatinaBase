@@ -110,7 +110,7 @@ export function RoomView({
   // returns below (Rules of Hooks) — the measure tool's own state resets
   // naturally whenever RoomView remounts for a different room.
   const measure = useMeasure();
-  const viewer = usePhotoViewer(photos.length);
+  const viewer = usePhotoViewer(photos.length, roomId);
   const viewBox = useMemo(
     () => (geometry ? planViewBox(geometry) : { width: 1, height: 1 }),
     [geometry],
@@ -236,7 +236,11 @@ export function RoomView({
           scanDate={doc.scannedAt}
           qualityGrade={doc.qualityGrade}
           coveragePercentage={doc.coveragePercentage}
-          photos={photos.length > 0 ? { count: photos.length, onOpen: () => viewer.openAtIndex(0) } : undefined}
+          photos={
+            photos.length > 0
+              ? { count: photos.length, onOpen: () => viewer.openAtIndex(0, 'rail') }
+              : undefined
+          }
           measure={{
             armed: capturing,
             hasMeasurement: measure.state.phase === 'complete',
@@ -256,7 +260,7 @@ export function RoomView({
                   geometry={geometry}
                   photos={photos}
                   provenance={provenance}
-                  onOpen={viewer.openAtIndex}
+                  onOpen={(index) => viewer.openAtIndex(index, 'plan')}
                 />
               }
               measureLayer={
@@ -274,12 +278,12 @@ export function RoomView({
               <OrbitStage
                 geometry={geometry}
                 photoPoses={orbitPhotoPoses}
-                onPhotoClick={viewer.openAtIndex}
+                onPhotoClick={(index) => viewer.openAtIndex(index, 'orbit')}
               />
             </div>
           )}
           {/* The contact strip lives under the stage, inside the stage cell. */}
-          <PhotoStrip photos={photos} onOpen={viewer.openAtIndex} />
+          <PhotoStrip photos={photos} onOpen={(index) => viewer.openAtIndex(index, 'strip')} />
         </div>
       </div>
 

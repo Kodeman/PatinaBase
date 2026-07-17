@@ -12,4 +12,4 @@ export {
 } from './events';
 export { procurementEvents } from './procurement-events';
 export { studioEvents } from './studio-events';
-export { roomEvents } from './room-events';
+export { roomEvents, type RoomPhotoOpenSource } from './room-events';

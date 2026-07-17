@@ -37,4 +37,23 @@ describe('roomEvents', () => {
     roomEvents.measureUsed({ room_id: 'room-1' });
     expect(captureMock).toHaveBeenCalledWith('measure_used', { room_id: 'room-1' });
   });
+
+  it('roomPhotoOpened fires room_photo_opened with room_id + source=strip', () => {
+    roomEvents.roomPhotoOpened({ room_id: 'room-1', source: 'strip' });
+    expect(captureMock).toHaveBeenCalledWith('room_photo_opened', {
+      room_id: 'room-1',
+      source: 'strip',
+    });
+  });
+
+  it.each(['strip', 'plan', 'orbit', 'rail'] as const)(
+    'roomPhotoOpened fires room_photo_opened with source=%s',
+    (source) => {
+      roomEvents.roomPhotoOpened({ room_id: 'room-2', source });
+      expect(captureMock).toHaveBeenCalledWith('room_photo_opened', {
+        room_id: 'room-2',
+        source,
+      });
+    },
+  );
 });

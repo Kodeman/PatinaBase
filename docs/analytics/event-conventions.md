@@ -142,13 +142,19 @@ events to use — this is a deliberate, ruled exception (I74c, DECISIONS.md):
 convention preference — names freeze on ship, `room_id` is the family
 carrier." Taxonomy module: `apps/designer-portal/src/lib/analytics/room-events.ts`.
 
-**Shipped (W3-T7):**
+**Shipped (W3-T7, + `room_photo_opened` in W3-T8/I76):**
 
 | Event | Properties | Fires |
 |---|---|---|
 | `room_opened` | `room_id` (string), `source: 'index' \| 'document'` | Once per Room View mount (ref-guard), `(document)/room/[id]/page.tsx`. `source` is `'document'` when arrived via a Document scan door (`?from=document`), else `'index'` (The Rooms roster). |
 | `mode_switched` | `room_id` (string), `mode: 'plan' \| 'orbit'` | The Plan/Orbit mode-row is clicked, `room-view.tsx`'s `selectMode`. Walk is inert in v1 (aria-disabled) and never fires this. |
 | `measure_used` | `room_id` (string) | The two-point measure tool completes a measurement — the SECOND point placed (armed/point → complete in `use-measure.ts`'s reducer), watched via an effect in `room-view.tsx`. Re-arming and completing again fires again; a stray idle/complete-phase click is a reducer no-op and does not. |
+| `room_photo_opened` | `room_id` (string), `source: 'strip' \| 'plan' \| 'orbit' \| 'rail'` | The photo viewer opens, fired from `use-photo-viewer.ts`'s `openAtIndex` — the single seam every door funnels through — on the CLOSED → OPEN transition only. `source` is `'strip'` (the contact strip under the Plan/Orbit stage), `'plan'` (a Plan camera-tick marker), `'orbit'` (an Orbit frustum marker), or `'rail'` (the facts-rail "N photos" line, which always opens index 0). Fires once per open, never per prev/next inside an already-open viewer (those calls omit `source`, so the closed→open guard never re-fires). |
+
+`room_photo_opened` is a new event added in I76 (not one of the three names
+I74c's ruling froze verbatim) — it already reads as `room_*`-prefixed, so it
+needs no naming exception of its own, but is equally frozen once shipped per
+the house rule (see § Naming is frozen once shipped).
 
 **Reserved (named by the ruling, not yet wired to any call site — do not
 repurpose these names for something else):**
