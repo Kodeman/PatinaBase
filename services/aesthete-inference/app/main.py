@@ -33,9 +33,18 @@ from .config import Settings, settings_from_env
 from .embedder import EmbedderLike
 from .fit import FitInputError, backtest, fit_bt_map
 from .images import ImageFetchError, fetch_image
+from .photos import (
+    PhotoDecodeError,
+    PhotoFetchError,
+    convert_heic_to_jpeg,
+    fetch_photo,
+    heif_available,
+)
 from .schemas import (
     EmbedResponse,
     Healthz,
+    HeicConvertRequest,
+    HeicConvertResponse,
     ImageEmbedRequest,
     ItemError,
     TasteBacktestRequest,
@@ -147,6 +156,7 @@ def create_app(
             image_dim=eng.image_dim if eng is not None else 768,
             warmed=bool(eng is not None and eng.warmed),
             usd_available=usd_available(),
+            heif_available=heif_available(),
         )
 
     @app.post("/embed/text", response_model=EmbedResponse, dependencies=[Depends(require_token)])
@@ -336,5 +346,48 @@ def create_app(
             gate.leave()
 
         return Response(content=glb, media_type="model/gltf-binary")
+
+    # ── Room View HEIC→JPEG (derivative lane — I78) ──────────────────────────
+    # Fetch the (signed) HEIC, decode it ONCE into a 512px thumb + 1600px
+    # preview, both returned as base64 JPEG. pillow-heif is imported + registered
+    # lazily (app.photos), so a broken libheif wheel can never take down
+    # /embed/*. The CPU-bound decode+encode runs in the threadpool while a gate
+    # slot is held, exactly like the embed + USDZ routes.
+    #   200                    → {thumb:{b64,width,height,bytes}, preview:{…}}
+    #   422                    → undecodable (not an image / broken HEIC)
+    #   429                    → at capacity (gate full)
+    #   502                    → upstream fetch failure
+    @app.post(
+        "/convert/heic-to-jpeg",
+        response_model=HeicConvertResponse,
+        dependencies=[Depends(require_token)],
+    )
+    async def convert_heic(req: HeicConvertRequest) -> HeicConvertResponse:
+        client: httpx.AsyncClient = app.state.http_client
+        try:
+            data = await fetch_photo(
+                client,
+                req.image_url,
+                timeout_s=settings.photo_fetch_timeout_s,
+                max_bytes=settings.photo_max_bytes,
+            )
+        except PhotoFetchError as err:
+            raise HTTPException(status_code=502, detail=f"photo fetch failed: {err}")
+
+        enter_gate()
+        try:
+            result = await run_in_threadpool(
+                convert_heic_to_jpeg,
+                data,
+                thumb_max_px=req.thumb_max_px,
+                preview_max_px=req.preview_max_px,
+                jpeg_quality=req.jpeg_quality,
+            )
+        except PhotoDecodeError as err:
+            raise HTTPException(status_code=422, detail=str(err))
+        finally:
+            gate.leave()
+
+        return HeicConvertResponse(**result)
 
     return app

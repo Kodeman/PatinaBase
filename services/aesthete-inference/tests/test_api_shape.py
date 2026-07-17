@@ -20,10 +20,11 @@ def test_healthz_is_open_and_shaped(client):
     res = client.get("/healthz")  # no auth header — healthz is open
     assert res.status_code == 200
     body = res.json()
-    # usd_available is environment-dependent (the Room View USDZ→GLB toolchain
-    # may or may not be installed on this machine) — assert it's a bool and
-    # pin the rest of the shape.
+    # usd_available / heif_available are environment-dependent (the Room View
+    # USDZ→GLB and HEIC→JPEG toolchains may or may not be installed on this
+    # machine) — assert each is a bool and pin the rest of the shape.
     assert isinstance(body.pop("usd_available"), bool)
+    assert isinstance(body.pop("heif_available"), bool)
     assert body == {
         "status": "ok",
         "model_version": "fake-embedder-r0",
