@@ -228,8 +228,16 @@ export function RoomView({
         </span>
       </div>
 
-      {/* rv-body: 230px facts rail + stage, collapsing under ~900px */}
-      <div className="grid grid-cols-1 items-start gap-9 min-[900px]:grid-cols-[230px_1fr]">
+      {/* rv-body: 230px facts rail + stage, collapsing under ~900px.
+          The stage track is minmax(0,1fr), NOT a bare 1fr (= minmax(auto,1fr)):
+          the stage children fill their track width via `w-full` (Plan's
+          aspect-ratio SVG with h-auto; Orbit's canvas, which carries an
+          intrinsic `width` attribute from renderer.setSize). Under a content-
+          based `auto` track minimum, either child's min-content inflates the
+          track far past the viewport — both projections then render massively
+          oversized. Pinning the minimum to 0 lets the flexible track bound the
+          content instead of the content sizing the track. */}
+      <div className="grid grid-cols-1 items-start gap-9 min-[900px]:grid-cols-[230px_minmax(0,1fr)]">
         <FactsRail
           geometry={geometry}
           thicknessConvention={thicknessConvention}
