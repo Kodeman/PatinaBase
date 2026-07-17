@@ -1,0 +1,30 @@
+# /etc/systemd/system/patina-scan-worker.service
+# Patina Field Capture scan-pipeline worker (design §5.1).
+# Native systemd unit — no container orchestration required to operate it (R109.1).
+# Install via ./install.sh; edit /etc/patina/scan-worker.env before enabling.
+[Unit]
+Description=Patina Field Capture scan-pipeline worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=patina
+Group=patina
+EnvironmentFile=/etc/patina/scan-worker.env
+ExecStart=/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker run
+Restart=always
+RestartSec=5
+# hardening — an outbound-only worker needs no privilege and no host write beyond scratch
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/patina/scan-work
+# logs to journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=patina-scan-worker
+
+[Install]
+WantedBy=multi-user.target

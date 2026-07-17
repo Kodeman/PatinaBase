@@ -21133,6 +21133,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      sweep_scan_pipeline_ingest: { Args: never; Returns: Json }
       toggle_concierge_checklist_item: {
         Args: {
           p_actor: string

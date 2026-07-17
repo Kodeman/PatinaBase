@@ -1,0 +1,119 @@
+"""PostgREST RPC client for the ``agent_tasks`` queue (00297).
+
+The worker holds a service-role client (the queue RPCs are granted to
+service_role only). This wraps the five RPCs the worker calls:
+claim / complete / enqueue (successor) / requeue / stats. It NEVER touches the
+human-review states (awaiting_review/approved/rejected) and always leaves
+``assignee`` NULL — a scan job has no human owner (design §2.1).
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import httpx
+
+from .config import Settings
+from .errors import TransientError
+
+
+class QueueClient:
+    def __init__(self, session: httpx.Client, settings: Settings):
+        self._s = session
+        self._cfg = settings
+
+    def _rpc(self, name: str, body: dict[str, Any]) -> Any:
+        try:
+            resp = self._s.post(f"/rest/v1/rpc/{name}", json=body)
+        except httpx.HTTPError as exc:  # network blip → transient
+            raise TransientError(f"rpc {name}: {exc}") from exc
+        if resp.status_code >= 500:
+            raise TransientError(f"rpc {name} -> {resp.status_code}: {resp.text[:300]}")
+        if resp.status_code >= 400:
+            # 4xx from an RPC is a contract/permission problem — surface loudly.
+            raise RuntimeError(f"rpc {name} -> {resp.status_code}: {resp.text[:300]}")
+        if resp.status_code == 204 or not resp.content:
+            return None
+        return resp.json()
+
+    # ── claim ───────────────────────────────────────────────────────────────
+    def claim(self) -> list[dict[str, Any]]:
+        """Atomically lease up to MAX_CONCURRENT queued/stale-running tasks whose
+        task_type is in this worker's STAGES. FOR UPDATE SKIP LOCKED in the RPC
+        makes a second worker's claims disjoint with zero coordination."""
+        rows = self._rpc(
+            "claim_agent_tasks",
+            {
+                "p_task_types": list(self._cfg.task_types),
+                "p_batch": self._cfg.max_concurrent,
+                "p_worker": self._cfg.worker_id,
+                "p_visibility_timeout": self._cfg.visibility_timeout,
+            },
+        )
+        return rows or []
+
+    # ── complete ──────────────────────────────────────────────────────────────
+    def complete_done(self, task_id: str, artifacts: dict[str, Any]) -> None:
+        self._rpc(
+            "complete_agent_task",
+            {
+                "p_id": task_id,
+                "p_outcome": "done",
+                "p_artifacts": artifacts,
+                "p_actor": self._cfg.worker_id,
+            },
+        )
+
+    def complete_failed(
+        self, task_id: str, error: str, fatal: bool, artifacts: dict[str, Any] | None = None
+    ) -> None:
+        self._rpc(
+            "complete_agent_task",
+            {
+                "p_id": task_id,
+                "p_outcome": "failed",
+                "p_error": error[:2000],
+                "p_fatal": fatal,
+                "p_artifacts": artifacts or {},
+                "p_actor": self._cfg.worker_id,
+            },
+        )
+
+    # ── enqueue successor ─────────────────────────────────────────────────────
+    def enqueue_successor(
+        self,
+        task_type: str,
+        payload: dict[str, Any],
+        entity_id: str,
+        idempotency_key: str,
+        parent_task_id: str,
+    ) -> dict[str, Any] | None:
+        """Enqueue the next stage. Idempotent on its own key; assignee stays
+        NULL; source is 'scan-pipeline'; entity_type 'room_scan' (design §2.1)."""
+        row = self._rpc(
+            "enqueue_agent_task",
+            {
+                "p_task_type": task_type,
+                "p_payload": payload,
+                "p_source": "scan-pipeline",
+                "p_entity_type": "room_scan",
+                "p_entity_id": entity_id,
+                "p_idempotency_key": idempotency_key,
+                "p_max_attempts": self._cfg.max_attempts,
+                "p_on_conflict": "ignore",
+                "p_parent_task_id": parent_task_id,
+                "p_actor": self._cfg.worker_id,
+            },
+        )
+        return row
+
+    # ── requeue (operator re-run of a parked failed task) ─────────────────────
+    def requeue(self, task_id: str) -> dict[str, Any] | None:
+        return self._rpc(
+            "requeue_agent_task",
+            {"p_id": task_id, "p_actor": self._cfg.worker_id},
+        )
+
+    # ── stats (doctor DB-reachability probe) ──────────────────────────────────
+    def stats(self) -> Any:
+        return self._rpc("agent_queue_stats", {})

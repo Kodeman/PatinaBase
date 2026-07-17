@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "patina-scan-worker"
+version = "0.1.0"
+description = "Patina Field Capture scan-pipeline reconstruction worker (ingest → solve → drawings)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "UNLICENSED" }
+authors = [{ name = "Patina" }]
+
+# ── Runtime dependencies ────────────────────────────────────────────────────
+# P1 item 9 (this build) implements ONLY the ingest stage; its sole runtime
+# dependency is an HTTP client (PostgREST RPCs + Storage REST), exactly as
+# services/aesthete-inference does. numpy/scipy (least-squares solve, item 10)
+# and ezdxf/cairosvg (layered DXF + PDF, item 11) are NOT pulled in yet — they
+# are declared as optional extras below so a box that will run those stages
+# installs `.[solve]` / `.[drawings]`, and an ingest-only worker stays lean.
+dependencies = [
+  "httpx>=0.24,<1.0",
+]
+
+[project.optional-dependencies]
+# Item 10 — anchor least-squares scale fit lands here.
+solve = ["numpy>=1.26", "scipy>=1.11"]
+# Item 11 — layered DXF (ezdxf) + PDF (cairosvg, per design §9 open question 1).
+drawings = ["ezdxf>=1.1", "cairosvg>=2.7"]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+patina-scan-worker = "patina_scan_worker.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# The vendored validator is a byte-identical copy of scripts/validate_capture_bundle.py
+# (single canonical source stays scripts/); ship it verbatim.
+patina_scan_worker = ["stages/validator.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

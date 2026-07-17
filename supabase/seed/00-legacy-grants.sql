@@ -3239,3 +3239,15 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.fulfillment_settle_po_preview(uuid, int) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00370_scan_pipeline_ingest_trigger.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.sweep_scan_pipeline_ingest() FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00370_scan_pipeline_ingest_trigger.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.sweep_scan_pipeline_ingest() TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
