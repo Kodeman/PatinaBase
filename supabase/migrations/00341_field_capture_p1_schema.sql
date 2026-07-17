@@ -142,8 +142,13 @@ CREATE TABLE IF NOT EXISTS public.room_files (
   pdf_url           text,
   dxf_url           text,
 
+  -- Lifecycle: pending (ingest reserved) → solved (item-10 anchor solve wrote
+  -- measurements + certificate) → generated (item-11 drawings rendered); error
+  -- on a fatal stage failure. 'solved' added at item 10 (00341 still undeployed
+  -- to Strata — verified via `supabase migration list`, Remote head 00340 — so
+  -- widening the CHECK in place is the sanctioned remediation, not a new file).
   status            text NOT NULL DEFAULT 'pending'
-                      CHECK (status IN ('pending','generated','error')),
+                      CHECK (status IN ('pending','solved','generated','error')),
   generation_error  text,
   generated_at      timestamptz,
 

@@ -33,20 +33,17 @@ def test_get_handler_unknown_returns_none():
     assert get_handler("something.else") is None
 
 
-def test_ingest_handler_registered():
-    h = get_handler("scan_pipeline.ingest")
-    assert h is not None and h.stage == "ingest"
+def test_ingest_and_solve_handlers_registered():
+    assert get_handler("scan_pipeline.ingest").stage == "ingest"      # item 9
+    assert get_handler("scan_pipeline.solve").stage == "solve"        # item 10
 
 
-@pytest.mark.parametrize(
-    "task_type,stage",
-    [("scan_pipeline.solve", "solve"), ("scan_pipeline.drawings", "drawing")],
-)
-def test_stub_stages_park_fatally(task_type, stage):
+@pytest.mark.parametrize("task_type", ["scan_pipeline.drawings"])
+def test_stub_stages_park_fatally(task_type):
+    # drawings (item 11) is still a NOT-IMPLEMENTED stub that parks fatally.
     h = get_handler(task_type)
     assert h is not None
     task = {"id": "t1", "task_type": task_type, "payload": {"scan_id": "s1"}}
     with pytest.raises(StageNotImplemented) as ei:
         h.run(_ctx(), task)
-    # StageNotImplemented is fatal → the worker parks it (no retry loop).
     assert ei.value.fatal is True

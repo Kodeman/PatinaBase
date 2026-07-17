@@ -112,3 +112,83 @@ class DbClient:
             {"status": "error", "generation_error": error[:2000]},
             prefer="return=minimal",
         )
+
+    # ── solve-stage writes (item 10) ──────────────────────────────────────────
+    def _delete(self, path: str) -> None:
+        try:
+            resp = self._s.delete(
+                f"/rest/v1/{path}", headers={"Prefer": "return=minimal"}
+            )
+        except httpx.HTTPError as exc:
+            raise TransientError(f"DELETE {path}: {exc}") from exc
+        if resp.status_code >= 500:
+            raise TransientError(f"DELETE {path} -> {resp.status_code}")
+        if resp.status_code >= 400:
+            raise RuntimeError(f"DELETE {path} -> {resp.status_code}: {resp.text[:300]}")
+
+    def get_room_file(self, room_file_id: str) -> dict[str, Any]:
+        rows = self._get("room_files?id=eq.{}&select=*".format(room_file_id))
+        if not rows:
+            raise PermanentError(f"room_files row not found: {room_file_id}")
+        return rows[0]
+
+    def upsert_anchors(self, scan_id: str, anchor_rows: list[dict[str, Any]]) -> dict[str, str]:
+        """Upsert scan_anchors on (scan_id, client_anchor_id) and return a
+        {client_anchor_id: id} map. Idempotent: mirrors the device owner-write
+        (bundle spec §8) so a verified measurement can FK a real anchor row."""
+        if not anchor_rows:
+            return {}
+        created = self._post(
+            "scan_anchors?on_conflict=scan_id,client_anchor_id",
+            anchor_rows,
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        out: dict[str, str] = {}
+        for r in created or []:
+            cid = r.get("client_anchor_id")
+            if isinstance(cid, str):
+                out[cid] = r["id"]
+        # merge-duplicates may omit unchanged rows; backfill via a read.
+        missing = {r["client_anchor_id"] for r in anchor_rows} - set(out)
+        if missing:
+            existing = self._get(
+                "scan_anchors?scan_id=eq.{}&select=id,client_anchor_id".format(scan_id)
+            )
+            for r in existing or []:
+                cid = r.get("client_anchor_id")
+                if isinstance(cid, str):
+                    out[cid] = r["id"]
+        return out
+
+    def replace_measurements(
+        self, room_file_id: str, rows: list[dict[str, Any]]
+    ) -> None:
+        """Delete-then-insert the measurement set for a room_file (idempotent
+        re-run: room_file_measurements has no natural unique key, so a re-solve
+        must clear its own prior rows before writing)."""
+        self._delete("room_file_measurements?room_file_id=eq.{}".format(room_file_id))
+        if rows:
+            self._post(
+                "room_file_measurements", rows, prefer="return=minimal"
+            )
+
+    def finalize_room_file_solved(
+        self,
+        room_file_id: str,
+        certificate: dict[str, Any],
+        unverified: bool,
+        tolerance_class: str,
+        anchor_count: int,
+    ) -> None:
+        self._patch(
+            "room_files?id=eq.{}".format(room_file_id),
+            {
+                "certificate": certificate,
+                "unverified": unverified,
+                "tolerance_class": tolerance_class,
+                "anchor_count": anchor_count,
+                "status": "solved",
+                "generation_error": None,
+            },
+            prefer="return=minimal",
+        )

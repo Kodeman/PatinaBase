@@ -42,4 +42,4 @@ patina_scan_worker = ["stages/validator.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
