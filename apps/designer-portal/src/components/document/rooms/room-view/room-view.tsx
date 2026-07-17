@@ -27,14 +27,18 @@
  * "→ the Document · <phase>" / "drawn from the scan".
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { RoomGeometryDocument } from '@patina/supabase';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import { FactsRail } from './facts-rail';
 import { MeasureLayer } from './measure-layer';
+import { OrbitStage } from './orbit/orbit-stage';
 import { planViewBox, PlanStage } from './plan-stage';
 import { useMeasure } from './use-measure';
+
+/** The room's two live projections. Walk is ruled into the arc but built after Place. */
+type ViewMode = 'plan' | 'orbit';
 
 /** Mirrors folder-card.tsx's SECTION_LABEL (module-private there) — the
  *  Room View doc-link needs the same human phase label as the Desk folio. */
@@ -50,6 +54,15 @@ const SECTION_LABEL: Record<string, string> = {
 
 function prettyRoomType(roomType: string): string {
   return roomType.replace(/_/g, ' ').trim();
+}
+
+/** Mode-row button styling — active carries the clay underline + charcoal ink; inactive
+ *  is quiet mocha that warms to charcoal on hover (matches the prototype's mode toggle). */
+function modeClass(active: boolean, pad: string): string {
+  const base = `${pad} pb-3 pt-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] transition-colors`;
+  return active
+    ? `${base} border-b-2 border-[var(--color-clay)] text-[var(--color-charcoal)]`
+    : `${base} text-[var(--color-mocha)] hover:text-[var(--color-charcoal)]`;
 }
 
 export interface RoomViewProps {
@@ -76,6 +89,19 @@ export function RoomView({ doc, geometry, thicknessConvention, isLoading }: Room
     () => (geometry ? planViewBox(geometry) : { width: 1, height: 1 }),
     [geometry],
   );
+
+  // Plan is the landing mode. Orbit stays UNMOUNTED (zero three.js cost) until the first
+  // Orbit switch — `orbitMounted` latches true then and never resets, so once its lazy
+  // chunk has loaded, Plan ↔ Orbit is a display toggle (both stay mounted → instant).
+  const [mode, setMode] = useState<ViewMode>('plan');
+  const [orbitMounted, setOrbitMounted] = useState(false);
+
+  const selectMode = (next: ViewMode) => {
+    if (next === 'orbit') setOrbitMounted(true);
+    setMode(next);
+    // Telemetry seam (W3-T7 wires this): emit `mode_switched` here — R107 §7 reserves
+    // the name; `room_id` is the event family's carrier (I73c).
+  };
 
   if (isLoading) return null;
 
@@ -118,18 +144,23 @@ export function RoomView({ doc, geometry, thicknessConvention, isLoading }: Room
 
       {/* mode row — Plan · Orbit · Walk. A text row under a hairline, not
           tabs (D1) — the prototype's R§3 note: "No tabs in the product; a
-          Strata rule carries the toggle." Plan is the only live mode in v1. */}
+          Strata rule carries the toggle." Plan + Orbit are live (V1 is one
+          toggle apart, R107 §3); Walk arrives after Place. */}
       <div className="my-5 flex border-b border-[var(--doc-ink-border)]">
-        <span className="border-b-2 border-[var(--color-clay)] px-0 pb-3 pt-2.5 pr-5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-charcoal)]">
+        <button
+          type="button"
+          onClick={() => selectMode('plan')}
+          className={modeClass(mode === 'plan', 'pr-5')}
+        >
           Plan
-        </span>
-        {/* W3-T6 mounts Orbit here — same geometry, three.js one-room dollhouse. */}
-        <span
-          aria-disabled="true"
-          className="cursor-not-allowed px-5 pb-3 pt-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-mocha)] opacity-35"
+        </button>
+        <button
+          type="button"
+          onClick={() => selectMode('orbit')}
+          className={modeClass(mode === 'orbit', 'px-5')}
         >
           Orbit
-        </span>
+        </button>
         <span
           aria-disabled="true"
           className="cursor-not-allowed px-5 pb-3 pt-2.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-[var(--color-mocha)] opacity-35"
@@ -156,18 +187,29 @@ export function RoomView({ doc, geometry, thicknessConvention, isLoading }: Room
             onClear: measure.clear,
           }}
         />
-        <PlanStage
-          geometry={geometry}
-          stageCapRight={capturing ? 'click two points' : 'hover for dimensions'}
-          measureLayer={
-            <MeasureLayer
-              state={measure.state}
-              viewBoxWidth={viewBox.width}
-              viewBoxHeight={viewBox.height}
-              onPoint={measure.addPoint}
+        {/* Both stages hold the same grid cell; the inactive one is display-hidden
+            (never unmounted once Orbit is up) so re-switching is instant. */}
+        <div>
+          <div className={mode === 'plan' ? undefined : 'hidden'}>
+            <PlanStage
+              geometry={geometry}
+              stageCapRight={capturing ? 'click two points' : 'hover for dimensions'}
+              measureLayer={
+                <MeasureLayer
+                  state={measure.state}
+                  viewBoxWidth={viewBox.width}
+                  viewBoxHeight={viewBox.height}
+                  onPoint={measure.addPoint}
+                />
+              }
             />
-          }
-        />
+          </div>
+          {orbitMounted && (
+            <div className={mode === 'orbit' ? undefined : 'hidden'}>
+              <OrbitStage geometry={geometry} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
