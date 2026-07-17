@@ -190,3 +190,75 @@ export interface FulfillmentQueueRow {
   next_action_params: Record<string, unknown> | null;
   band: Band;
 }
+
+// ─── PO Composer & Transmission Log detail DTO (S3, spec §5.3) ────────────────
+// The single round-trip the composer binds to (GET /api/admin/fulfillment/pos/
+// [poId]) — one PO + its lines + the vendor's transmission protocol + the
+// append-only transmission log (fulfillment_events filtered to the PO). camelCase
+// like the workbench DTO; the log events stay snake_case (raw event rows, mapped
+// to lines by @patina/fulfillment/transmission-log).
+
+/** A PO line as the composer / PO paper sees it. */
+export interface FulfillmentComposerLine {
+  id: string;
+  orderItemId: string;
+  lineIndex: number;
+  itemName: string;
+  vendorSku: string | null;
+  qty: number;
+  unitCostCents: number;
+  lineTotalCents: number;
+}
+
+/** The vendor's transmission protocol (vendor_profiles) — drives the panel. */
+export interface FulfillmentComposerVendorProfile {
+  transmissionType: TransmissionType | null;
+  poEmail: string | null;
+  portalUrl: string | null;
+  csvColumnSpec: unknown;
+  blindShip: boolean;
+  changeWindowDays: number | null;
+  claimsWindowDays: number | null;
+  paymentTerms: PaymentTerms | null;
+}
+
+export interface FulfillmentComposerPo {
+  id: string;
+  poNumber: string | null;
+  orderId: string;
+  orderNo: number;
+  clientName: string;
+  vendorId: string;
+  vendorName: string | null;
+  status: PoState;
+  terms: PaymentTerms | null;
+  sideMark: string | null;
+  requestedShip: string | null;
+  committedShip: string | null;
+  ackMethod: string | null;
+  ackRef: string | null;
+  productCostCents: number;
+  transmittedAt: string | null;
+  ackedAt: string | null;
+  pdfR2Key: string | null;
+  shipTo: Record<string, unknown> | null;
+}
+
+/** Raw fulfillment_events row shape for the log (mirrors transmission-log.ts). */
+export interface FulfillmentComposerEvent {
+  id: number;
+  event_type: string;
+  actor: string | null;
+  refs: Record<string, unknown> | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface FulfillmentComposerDTO {
+  po: FulfillmentComposerPo;
+  vendorProfile: FulfillmentComposerVendorProfile;
+  lines: FulfillmentComposerLine[];
+  /** The append-only transmission log — fulfillment_events for this PO + the
+   *  order's notification.* events, ascending by id. */
+  events: FulfillmentComposerEvent[];
+}
