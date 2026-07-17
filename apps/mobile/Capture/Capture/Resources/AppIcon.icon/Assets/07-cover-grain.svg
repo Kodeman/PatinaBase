@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="cover-clip">
+      <rect x="76" y="56" width="826" height="864" rx="76"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#cover-clip)" stroke="#DCE6E0" stroke-linecap="round" opacity="0.12">
+    <path d="M250 72V904M292 72V904M334 72V904M376 72V904M418 72V904M460 72V904M502 72V904M544 72V904M586 72V904M628 72V904M670 72V904M712 72V904M754 72V904M796 72V904M838 72V904M880 72V904" stroke-width="2"/>
+    <path d="M238 94H888M238 136H888M238 178H888M238 220H888M238 262H888M238 304H888M238 346H888M238 388H888M238 430H888M238 472H888M238 514H888M238 556H888M238 598H888M238 640H888M238 682H888M238 724H888M238 766H888M238 808H888M238 850H888M238 892H888" stroke-width="2"/>
+  </g>
+  <path d="M863 778C850 817 828 845 794 863" stroke="#E5ECE8" stroke-width="5" stroke-linecap="round" opacity="0.13"/>
+</svg>

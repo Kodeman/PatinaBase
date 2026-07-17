@@ -116,12 +116,13 @@ app_group = add_sources(project, app, 'Capture', File.join(ROOT, 'Capture'),
 
 # Non-Swift app files the glob above doesn't see: the URL-scheme partial
 # Info.plist and entitlements (referenced only via build settings, no build
-# phase needed) and the app-icon asset catalog (needs the Resources phase so
-# actool compiles it).
+# phase needed), the asset catalog, and the layered Icon Composer source
+# (both need the Resources phase so actool can resolve `AppIcon`).
 app_group.new_file(File.join(ROOT, 'Capture', 'Info.plist'))
 app_group.new_file(File.join(ROOT, 'Capture', 'Capture.entitlements'))
 assets_ref = app_group.new_file(File.join(ROOT, 'Capture', 'Assets.xcassets'))
-app.add_resources([assets_ref])
+icon_ref = app_group.new_file(File.join(ROOT, 'Capture', 'Resources', 'AppIcon.icon'))
+app.add_resources([assets_ref, icon_ref])
 
 # Unit tests (logic tests linking CaptureKit; no app host).
 tests = project.new_target(:unit_test_bundle, 'CaptureTests', :ios, DEPLOYMENT)

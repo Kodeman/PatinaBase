@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "6476F85DA2DFBF332E00058ABD18F8F1"
+               BlueprintIdentifier = "DE986521731F0BD088A106532F33FFA0"
                BuildableName = "Capture.app"
                BlueprintName = "Capture"
                ReferencedContainer = "container:Capture.xcodeproj">
@@ -30,7 +30,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "6476F85DA2DFBF332E00058ABD18F8F1"
+            BlueprintIdentifier = "DE986521731F0BD088A106532F33FFA0"
             BuildableName = "Capture.app"
             BlueprintName = "Capture"
             ReferencedContainer = "container:Capture.xcodeproj">
@@ -63,7 +63,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "6476F85DA2DFBF332E00058ABD18F8F1"
+            BlueprintIdentifier = "DE986521731F0BD088A106532F33FFA0"
             BuildableName = "Capture.app"
             BlueprintName = "Capture"
             ReferencedContainer = "container:Capture.xcodeproj">
@@ -80,7 +80,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "6476F85DA2DFBF332E00058ABD18F8F1"
+            BlueprintIdentifier = "DE986521731F0BD088A106532F33FFA0"
             BuildableName = "Capture.app"
             BlueprintName = "Capture"
             ReferencedContainer = "container:Capture.xcodeproj">

@@ -1,0 +1,267 @@
+{
+  "fill" : {
+    "solid" : "display-p3:0.96863,0.94902,0.91373,1.00000"
+  },
+  "groups" : [
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "08-patina-mark.svg",
+          "name" : "Patina P — pressed pigment",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "name" : "Group 7: Patina Mark",
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.12
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.08
+      }
+    },
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "07-cover-grain.svg",
+          "name" : "Quiet woven grain",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "name" : "Group 6: Cover Grain"
+    },
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.04314,0.09020,0.07843,1.00000"
+              }
+            }
+          ],
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "06-spine.svg",
+          "name" : "Near-ink bound spine",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "name" : "Group 5: Binding",
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.16
+      }
+    },
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "linear-gradient" : [
+                  "display-p3:0.24314,0.41569,0.36863,1.00000",
+                  "display-p3:0.14118,0.29412,0.25490,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.12,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.88,
+                    "y" : 1
+                  }
+                }
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "linear-gradient" : [
+                  "display-p3:0.11765,0.20000,0.17647,1.00000",
+                  "display-p3:0.06275,0.13333,0.11765,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.12,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.88,
+                    "y" : 1
+                  }
+                }
+              }
+            }
+          ],
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "05-cover.svg",
+          "name" : "Deep sage cloth cover",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "name" : "Group 4: Field Book Cover",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.24
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.1
+      }
+    },
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.59608,0.37647,0.32157,1.00000"
+              }
+            }
+          ],
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "04-field-tab.svg",
+          "name" : "Terracotta room tab",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "name" : "Group 3: Field Tab",
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.18
+      }
+    },
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.84706,0.80000,0.73725,1.00000"
+              }
+            }
+          ],
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "03-page-block.svg",
+          "name" : "Warm page block",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "name" : "Group 2: Page Block",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.22
+      }
+    },
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "02-book-shadow.svg",
+          "name" : "Book grounding shadow",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.08235,0.12157,0.10588,1.00000"
+              }
+            }
+          ],
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "01-background.svg",
+          "name" : "Warm off-white field",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "name" : "Group 1: Background"
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
