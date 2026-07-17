@@ -431,6 +431,17 @@ verify_jwt = true
 [functions.fulfillment-po]
 verify_jwt = false
 
+# BOH daily Stripe balance-transaction reconciliation (S6, R2.3, spec §8).
+# Cron-invoked once a day via pg_cron -> invoke_edge_function (00362,
+# service-role Bearer) — pulls balance transactions since the cursor into the
+# append-only stripe_balance_transactions mirror; ledger_stripe_recon_v then
+# reconciles account 1000 and fulfillment_queue_v pins deltas. Also callable
+# with { fixture_transactions: [...] } for the local test/assert path (no live
+# key). With STRIPE_SECRET_KEY unset it skips gracefully. No browser calls it.
+# verify_jwt = true is the platform default; explicit here for intent.
+[functions.fulfillment-stripe-recon]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
