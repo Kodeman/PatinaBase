@@ -431,6 +431,16 @@ verify_jwt = true
 [functions.fulfillment-po]
 verify_jwt = false
 
+# BOH client evidence-upload flow (S7). Public, token-gated in-code: the
+# client-portal /evidence/[token] page calls this directly with the anon key
+# (no session — the 64-hex-char token minted by fulfillment_mint_evidence_token
+# IS the authority, checked inside fulfillment_evidence_token_context /
+# fulfillment_append_evidence, both SECURITY DEFINER + service_role-only,
+# 00364). verify_jwt = false so the gateway does not demand a caller JWT; CORS
+# is wired in-code the same way create-checkout-session/fulfillment-po do.
+[functions.fulfillment-evidence]
+verify_jwt = false
+
 # BOH daily Stripe balance-transaction reconciliation (S6, R2.3, spec §8).
 # Cron-invoked once a day via pg_cron -> invoke_edge_function (00362,
 # service-role Bearer) — pulls balance transactions since the cursor into the
