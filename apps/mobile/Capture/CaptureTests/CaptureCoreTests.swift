@@ -63,8 +63,26 @@ struct CaptureCoreTests {
     }
 
     @Test func lockedCadenceConstants() {
+        // Depth throttles at ~1 Hz. There is deliberately NO mesh cadence — the
+        // scene mesh is serialized once at finish() (after ARSession pause), not
+        // streamed mid-scan, so no mesh interval constant exists.
         #expect(CaptureCadence.depth.minimumInterval == 1.0)
-        #expect(CaptureCadence.meshSnapshot.minimumInterval == 10.0)
+    }
+
+    // MARK: - DepthBinFormat (the `.bin` header flag lockstep — I2)
+
+    @Test func depthBinFlagsBitLayout() {
+        // bit0 = smoothed, bit1 = confidence present. The recorder derives the
+        // confidence bit from the SAME packed-plane result the index's
+        // `hasConfidence` uses, so the two can never disagree.
+        #expect(DepthBinFormat.flags(smoothed: false, hasConfidence: false) == 0x0000)
+        #expect(DepthBinFormat.flags(smoothed: true,  hasConfidence: false) == 0x0001)
+        #expect(DepthBinFormat.flags(smoothed: false, hasConfidence: true)  == 0x0002)
+        #expect(DepthBinFormat.flags(smoothed: true,  hasConfidence: true)  == 0x0003)
+        #expect(DepthBinFormat.smoothedFlag == 0x0001)
+        #expect(DepthBinFormat.confidenceFlag == 0x0002)
+        #expect(DepthBinFormat.version == 1)
+        #expect(DepthBinFormat.magic == "PFD1")
     }
 
     // MARK: - CaptureSinkRegistry (seam fan-out)

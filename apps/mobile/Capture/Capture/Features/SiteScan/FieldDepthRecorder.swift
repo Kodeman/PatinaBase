@@ -181,14 +181,18 @@ private final class DepthBundleWriter: @unchecked Sendable {
         let height = CVPixelBufferGetHeight(snap.depthMap)
         guard width > 0, height > 0 else { return }
 
-        let hasConfidence = snap.confidenceMap != nil
-        guard let bin = Self.encodeBin(depthMap: snap.depthMap,
-                                       confidenceMap: snap.confidenceMap,
-                                       width: width, height: height,
-                                       smoothed: snap.smoothed) else {
+        guard let depthPlane = Self.packDepth(snap.depthMap, width: width, height: height) else {
             logger.error("Depth frame encode failed")
             return
         }
+        // Pack the confidence plane ONCE; both the `.bin` flag bit and the index's
+        // `hasConfidence` derive from THIS result, so they can never disagree
+        // (packConfidence returns nil on a resolution mismatch → no plane, no flag,
+        // index false — all in lockstep). I2 fix.
+        let confPlane = snap.confidenceMap.flatMap { Self.packConfidence($0, width: width, height: height) }
+        let hasConfidence = confPlane != nil
+        let bin = Self.assembleBin(depthPlane: depthPlane, confPlane: confPlane,
+                                   width: width, height: height, smoothed: snap.smoothed)
 
         let tsKey = String(format: "%09.3f", snap.timestampSeconds).replacingOccurrences(of: ".", with: "_")
         let filename = "depth_\(tsKey).bin"
@@ -220,23 +224,16 @@ private final class DepthBundleWriter: @unchecked Sendable {
         appendIndex(entry)
     }
 
-    /// Assemble the documented `.bin` layout from a packed depth plane (mm) and an
-    /// optional confidence plane. Split into `packDepth`/`packConfidence` so each
-    /// piece stays simple (and lint-clean).
-    private static func encodeBin(depthMap: CVPixelBuffer,
-                                  confidenceMap: CVPixelBuffer?,
-                                  width: Int, height: Int,
-                                  smoothed: Bool) -> Data? {
-        guard let depthPlane = packDepth(depthMap, width: width, height: height) else { return nil }
-        let confPlane = confidenceMap.flatMap { packConfidence($0, width: width, height: height) }
-
+    /// Assemble the documented `.bin` layout (header via `DepthBinFormat`) from a
+    /// packed depth plane (mm) and an optional confidence plane. The flag byte's
+    /// confidence bit comes from `confPlane != nil` — the SAME value the index's
+    /// `hasConfidence` uses at the call site (I2 lockstep).
+    private static func assembleBin(depthPlane: [UInt16], confPlane: [UInt8]?,
+                                    width: Int, height: Int, smoothed: Bool) -> Data {
         var data = Data()
-        data.append(contentsOf: Array("PFD1".utf8))
-        appendLE(&data, UInt16(1))
-        var flags: UInt16 = 0
-        if smoothed { flags |= 0x0001 }
-        if confPlane != nil { flags |= 0x0002 }
-        appendLE(&data, flags)
+        data.append(contentsOf: Array(DepthBinFormat.magic.utf8))
+        appendLE(&data, DepthBinFormat.version)
+        appendLE(&data, DepthBinFormat.flags(smoothed: smoothed, hasConfidence: confPlane != nil))
         appendLE(&data, UInt32(width))
         appendLE(&data, UInt32(height))
         depthPlane.withUnsafeBytes { data.append(contentsOf: $0) }

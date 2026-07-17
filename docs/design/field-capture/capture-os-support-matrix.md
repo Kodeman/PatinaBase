@@ -56,7 +56,7 @@ All streams share one coordinate frame (the shared ARSession world frame) and on
 | Stream | Recorder | On disk (bundle spec §4) | Cadence |
 |---|---|---|---|
 | Parametric graph | RoomPlan `RoomCaptureSessionDelegate` (coverage/instructions inline) | `captured_room.json`, `scan.usdz` | live |
-| Scene mesh | `FieldSceneMeshRecorder` (`CaptureMeshSink`) | `mesh.ply` | ~10 s snapshot + final |
+| Scene mesh | `FieldSceneMeshRecorder` (`CaptureMeshSink`) | `mesh.ply` | once at finish (after AR pause; buffers stable) |
 | Smoothed depth + confidence | `FieldDepthRecorder` (`CaptureFrameSink`) | `depth/depth_<ts>.bin` + `depth/depth_index.ndjson` | ~1 Hz |
 | Posed photos | `FieldPosedPhotoService` (`CaptureFrameSink`, migrated) | `photos/` + `photos_metadata.json` | 2 s (unchanged) |
 

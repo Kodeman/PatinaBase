@@ -54,12 +54,10 @@ public struct CaptureCadence: Sendable, Equatable {
     /// motion; this fixed cadence is the item-3 depth-evidence floor.
     public static let depth = CaptureCadence(minimumInterval: 1.0)
 
-    /// Scene-mesh snapshot to `mesh.ply`: every 10 s. The full accumulated mesh
-    /// is rewritten each snapshot (overwrite, not append) as a crash-resilience
-    /// checkpoint, plus a forced authoritative final write at session end — so the
-    /// on-disk `mesh.ply` is bounded in size (it tracks the room, not the session
-    /// length) and the AR frame pump is never blocked (writes hop to a background
-    /// queue). A slower cadence than depth because a full-mesh rewrite is far more
-    /// expensive than one depth frame.
-    public static let meshSnapshot = CaptureCadence(minimumInterval: 10.0)
+    // NOTE: there is deliberately NO mesh cadence. The scene mesh is NOT throttled
+    // /streamed mid-scan — `FieldSceneMeshRecorder` serializes `mesh.ply` exactly
+    // once, at finish(), after the ARSession is paused, because ARKit recycles the
+    // mesh anchors' GPU buffers while the session runs (reading them mid-scan risks
+    // torn data / crashes; see SceneMeshExporter's "call after the scan has ended"
+    // discipline). Per-frame mesh work is anchor-dictionary accumulation only.
 }

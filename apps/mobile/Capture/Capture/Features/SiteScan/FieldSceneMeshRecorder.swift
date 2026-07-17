@@ -1,25 +1,30 @@
 //  FieldSceneMeshRecorder.swift
 //  Capture · Wave F (Pro site-scan) · Field Capture P1 · item 3
 //
-//  Streams the LiDAR scene mesh (`ARMeshAnchor`s, produced because the shared rig
-//  runs `sceneReconstruction = .mesh`) to the capture bundle's top-level `mesh.ply`
-//  (capture-bundle spec §4, artifact kind `mesh`). A `CaptureMeshSink` fed by
-//  `SharedARCaptureRig`.
+//  Accumulates the LiDAR scene mesh (`ARMeshAnchor`s, produced because the shared
+//  rig runs `sceneReconstruction = .mesh`) during the scan and serializes the
+//  combined world-space geometry to the capture bundle's top-level `mesh.ply`
+//  (capture-bundle spec §4, artifact kind `mesh`) EXACTLY ONCE, at `finish()`.
+//  A `CaptureMeshSink` fed by `SharedARCaptureRig`.
 //
-//  Streaming, not once-at-end: the accumulated world-space mesh is rewritten on a
-//  throttle (`CaptureCadence.meshSnapshot`, ~10 s) as crash-resilience checkpoints,
-//  and an authoritative final write is forced at `finish()`. Overwrite (not append)
-//  keeps `mesh.ply` bounded — its size tracks the room, not the session length.
-//
-//  Budget + frame-pump discipline (item 3, point 6): the mesh sink callbacks do
-//  cheap bookkeeping on the MainActor (dictionary upsert + a count); the whole PLY
-//  serialize + write hops to a background queue and writes atomically, so the AR
-//  frame pump is never blocked and a reader never sees a half-written mesh.
+//  WHY once-at-finish, on the calling thread (NOT throttled mid-scan): an
+//  `ARMeshAnchor`'s geometry is backed by pooled Metal buffers that ARKit RECYCLES
+//  while the session is running, so reading `geometry.vertices.buffer.contents()`
+//  mid-scan — even off a background queue with the anchor retained — risks torn PLY
+//  data or intermittent crashes. This matches the client reference discipline
+//  exactly (`apps/mobile/Patina/.../Walk/Services/SceneMeshExporter.swift`: "reads
+//  the geometry's GPU buffers on the calling thread; call it after the scan has
+//  ended … rather than per-frame"). `finish()` runs after `SharedARCaptureRig`
+//  pauses the ARSession, the only point the buffers are stable — and it runs on the
+//  MainActor (the calling context), so no `@unchecked Sendable` anchor snapshot and
+//  no background IO for the geometry read. A single serialize also avoids the
+//  O(snapshots × mesh) CPU/disk churn a mid-scan re-write would spend on the
+//  session's thermal budget.
 //
 //  Each `ARMeshAnchor.geometry` is anchor-local; vertices are transformed by
 //  `anchor.transform` into the shared ARKit world frame before serialization, so
 //  the mesh shares the SAME coordinate frame as depth, poses, and the parametric
-//  graph (SC-07 "one coordinate frame").
+//  graph (SC-07 "one coordinate frame"). Per-frame work is a dictionary upsert only.
 
 import Foundation
 import CaptureKit
@@ -33,28 +38,22 @@ import simd
 final class FieldSceneMeshRecorder: CaptureMeshSink {
 
     private let meshURL: URL
-    private let timebase: CaptureTimebase
-    private let cadence: CaptureCadence
     private let enabled: Bool
 
-    /// Live anchor set (MainActor-only).
+    /// Live anchor set (MainActor-only). Accumulated during the scan; geometry
+    /// buffers are only ever read in `finish()`, after the session is paused.
     private var anchors: [UUID: ARMeshAnchor] = [:]
-    private var lastSnapshotAt: TimeInterval?
 
-    /// Telemetry (MainActor-only). `vertexCount` is the cheap sum of anchor
-    /// vertex counts (no buffer reads); `snapshotsWritten` counts dispatched
-    /// PLY writes (snapshots + final).
-    private(set) var snapshotsWritten = 0
+    /// Telemetry: whether the final `mesh.ply` was written, and the (cheap) sum of
+    /// anchor vertex counts (no buffer reads).
+    private(set) var didWriteMesh = false
     var vertexCount: Int { anchors.values.reduce(0) { $0 + $1.geometry.vertices.count } }
 
-    private let ioQueue = DispatchQueue(label: "cloud.patina.field.mesh.io", qos: .utility)
     private let logger = Logger(subsystem: "cloud.patina.field", category: "MeshRecorder")
 
     /// Best-effort: a failure to prepare the bundle dir disables the mesh stream
     /// (callbacks no-op) — the core scan is never blocked.
-    init(bundleDir: URL, timebase: CaptureTimebase, cadence: CaptureCadence = .meshSnapshot) {
-        self.timebase = timebase
-        self.cadence = cadence
+    init(bundleDir: URL) {
         self.meshURL = bundleDir.appendingPathComponent("mesh.ply", isDirectory: false)
         self.enabled = FileManager.default.fileExists(atPath: bundleDir.path)
         if !enabled { logger.error("Mesh recording disabled: bundle dir missing.") }
@@ -64,50 +63,38 @@ final class FieldSceneMeshRecorder: CaptureMeshSink {
 
     func capture(meshAnchors: [ARMeshAnchor], change: CaptureMeshChange, timestampSeconds: TimeInterval) {
         guard enabled else { return }
+        // Accumulation ONLY — no geometry buffer reads and no disk IO per frame.
+        // The GPU mesh buffers are read exactly once, in finish(), after pause.
         switch change {
         case .added, .updated:
             for anchor in meshAnchors { anchors[anchor.identifier] = anchor }
         case .removed:
             for anchor in meshAnchors { anchors.removeValue(forKey: anchor.identifier) }
         }
-        // Throttled crash-resilience snapshot on the shared clock.
-        if cadence.shouldSample(now: timestampSeconds, last: lastSnapshotAt) {
-            lastSnapshotAt = timestampSeconds
-            writeSnapshot()
-        }
     }
 
-    /// Force the authoritative final mesh write and drain pending writes.
+    /// Serialize the accumulated scene mesh to `mesh.ply` EXACTLY ONCE, on the
+    /// calling thread (MainActor), AFTER the ARSession has been paused
+    /// (`SharedARCaptureRig.stopRecording` pauses before calling this) — the only
+    /// point the anchors' GPU buffers are stable. Idempotent.
     func finish() {
-        guard enabled else { return }
-        writeSnapshot()
-        ioQueue.sync {}
+        guard enabled, !didWriteMesh else { return }
+        didWriteMesh = true
+        serialize(Array(anchors.values))
     }
 
-    // MARK: - Snapshot → PLY (background)
+    // MARK: - Serialize → PLY (once, buffers stable)
 
-    private func writeSnapshot() {
-        // Snapshot the current anchors (retained) so the bg queue can read their
-        // Metal buffers safely; PLY serialize + atomic write happen off-actor.
-        let snapshot = MeshSnapshot(anchors: Array(anchors.values), url: meshURL)
-        guard !snapshot.anchors.isEmpty else { return }
-        snapshotsWritten += 1
-        ioQueue.async { [weak self] in self?.serialize(snapshot) }
-    }
+    private func serialize(_ anchors: [ARMeshAnchor]) {
+        guard !anchors.isEmpty else { return }
 
-    private struct MeshSnapshot: @unchecked Sendable {
-        let anchors: [ARMeshAnchor]
-        let url: URL
-    }
-
-    private nonisolated func serialize(_ snap: MeshSnapshot) {
         var vertexLines = ""
         var faceLines = ""
         var vertexBase = 0
         var totalVertices = 0
         var totalFaces = 0
 
-        for anchor in snap.anchors {
+        for anchor in anchors {
             let geometry = anchor.geometry
             let verts = geometry.vertices
             let faces = geometry.faces
@@ -128,8 +115,7 @@ final class FieldSceneMeshRecorder: CaptureMeshSink {
 
             // Faces → triangle index lists, offset into the concatenated vertex
             // array. Guard on the expected 3-index/4-byte layout.
-            let iperf = faces.indexCountPerPrimitive
-            if iperf == 3, faces.bytesPerIndex == MemoryLayout<UInt32>.size {
+            if faces.indexCountPerPrimitive == 3, faces.bytesPerIndex == MemoryLayout<UInt32>.size {
                 let iptr = faces.buffer.contents()
                 for f in 0..<faces.count {
                     let a = iptr.advanced(by: (f * 3 + 0) * 4).assumingMemoryBound(to: UInt32.self).pointee
@@ -146,7 +132,7 @@ final class FieldSceneMeshRecorder: CaptureMeshSink {
 
         guard totalVertices > 0 else { return }
         var ply = "ply\nformat ascii 1.0\n"
-        ply += "comment Patina Field scene mesh (world frame, metres); snapshot streamed by FieldSceneMeshRecorder\n"
+        ply += "comment Patina Field scene mesh (world frame, metres); FieldSceneMeshRecorder, end-of-session\n"
         ply += "element vertex \(totalVertices)\n"
         ply += "property float x\nproperty float y\nproperty float z\n"
         ply += "element face \(totalFaces)\n"
@@ -156,7 +142,7 @@ final class FieldSceneMeshRecorder: CaptureMeshSink {
         ply += faceLines
 
         do {
-            try ply.data(using: .utf8)?.write(to: snap.url, options: .atomic)
+            try ply.data(using: .utf8)?.write(to: meshURL, options: .atomic)
         } catch {
             logger.error("Mesh PLY write failed: \(error.localizedDescription)")
         }

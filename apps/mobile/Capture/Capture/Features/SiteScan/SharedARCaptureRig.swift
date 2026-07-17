@@ -142,7 +142,7 @@ final class SharedARCaptureRig: NSObject {
             depthRecorder = depth
             frameSinks.add(depth)
 
-            let mesh = FieldSceneMeshRecorder(bundleDir: bundleDir, timebase: timebase)
+            let mesh = FieldSceneMeshRecorder(bundleDir: bundleDir)
             meshRecorder = mesh
             meshSinks.add(mesh)
         }
@@ -193,14 +193,14 @@ final class SharedARCaptureRig: NSObject {
     /// these; item 13 populates `scan_pipeline_events` from them).
     struct Metrics {
         var depthFramesWritten = 0
-        var meshSnapshotsWritten = 0
+        var meshWritten = false
         var meshVertexCount = 0
     }
 
     var metrics: Metrics {
         Metrics(
             depthFramesWritten: depthRecorder?.framesWritten ?? 0,
-            meshSnapshotsWritten: meshRecorder?.snapshotsWritten ?? 0,
+            meshWritten: meshRecorder?.didWriteMesh ?? false,
             meshVertexCount: meshRecorder?.vertexCount ?? 0
         )
     }
