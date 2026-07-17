@@ -80,6 +80,31 @@ so the loader script's optional USDZ-upload path has something to exercise;
 it is not test-critical. The GLB conversion lane is already gate/prod-verified
 elsewhere (`room-view/glb-converter`) and does not depend on this file.
 
+## `photos/` (Room View PHOTOS program, W2/W3-T8; I76)
+
+Six tiny checked-in JPEGs (`auto_000001.jpg`–`auto_000006.jpg`, ~5KB each,
+posed placeholders — not real photographs of a dining room) that
+`scripts/dev/seed-room-scan-fixture.mjs`'s `seedPhotos()` step uploads to the
+local `room-scans` bucket and rows into `room_scan_images`, one per file, so
+Elena's scan carries a posed photo set end-to-end (facts-rail count, contact
+strip, Plan camera ticks, Orbit frustum markers, and the full-bleed viewer)
+without a real device capture. Each row's `camera_transform` is not
+arbitrary: the script picks a PLAN position for each photo (spread around
+the 14.0092×14.0092 ft room for coverage, with #5/#6 deliberately ~0.67 ft
+apart — inside the 1.5 ft cluster radius, so they collapse into one marker),
+converts it into this scan's WORLD frame via the inverse of the SAME
+de-rotation math `photo-poses.ts` uses to read it back out (θ=-15°, offset
+`{x: 6.2374, z: -1.6416}` — this fixture's real parsed provenance, not a
+placeholder), and orients every camera to face the room's plan centre at a
+fixed 1.45 m eye height. The script's own console log doubles as a
+correctness check: it recomputes each pose from the transform it just wrote
+and prints the round-tripped plan position/heading next to the position it
+started from, plus the #5/#6 cluster distance. The step is idempotent — it
+deletes this scan's existing `room_scan_images` rows before re-inserting all
+6, so re-running it (`--photos-only` to skip the JSON/parse steps) is always
+safe. `pnpm dev:seed-room-fixture` runs this by default; `--no-photos` skips
+it.
+
 ## Invoking parse-room-scan against this fixture, by hand
 
 `scripts/dev/seed-room-scan-fixture.mjs` uploads the JSON and attempts to

@@ -13,13 +13,24 @@
 //   pnpm dev:seed-room-fixture --no-photos   # skip the photo seeding step
 //   pnpm dev:seed-room-fixture --photos-only # ONLY (re)seed the 6 fixture photos
 //
-// Photo step (Room View PHOTOS program, W2): uploads 6 tiny checked-in JPEGs
-// (supabase/seed/fixtures/room-scans/photos/) to the local `room-scans`
-// bucket at photos/{elenaUid}/{scanId}/auto_00000N.jpg and inserts 6
-// room_scan_images rows with camera_transform values computed to land INSIDE
-// the 14×14 fixture room under its −15° world rotation (one pair within
-// 1.5 ft → a cluster; one is_primary). Idempotent: deletes this scan's photo
-// rows, then re-inserts. LOCAL ONLY (same host guard as the rest of the file).
+// Photo step (Room View PHOTOS program, W2/W3-T8; I76): uploads 6 tiny
+// checked-in JPEGs (supabase/seed/fixtures/room-scans/photos/) to the local
+// `room-scans` bucket at photos/{elenaUid}/{scanId}/auto_00000N.jpg and
+// inserts 6 room_scan_images rows carrying a computed camera_transform each
+// — a synthetic row-major ARFrame pose (cameraTransformFacing(), below) built
+// by taking a hand-picked PLAN position, converting it to this scan's WORLD
+// frame via the INVERSE of photo-poses.ts's own de-rotation math
+// (planToWorld(), θ=-15°, offset {x:6.2374, z:-1.6416} — the real values
+// parse-room-scan produced for this fixture), and orienting every camera to
+// face the room's plan centre (7.0046, 7.0046) at a fixed 1.45 m eye height —
+// so `photoPlanPose()` recovers EXACTLY the intended plan position/heading
+// back out, and photo-markers.tsx/photo-marker-objects.ts draw a Plan tick +
+// Orbit frustum at that same spot. Five poses spread around the 14×14 ft
+// room for coverage; #5/#6 sit ~0.67 ft apart (< the 1.5 ft cluster radius),
+// deliberately forming one 2-photo cluster; #1 is `is_primary`. Idempotent:
+// deletes this scan's existing `room_scan_images` rows first, then
+// re-inserts all 6 — safe to re-run (`--photos-only`) after any other
+// re-seed. LOCAL ONLY (same host guard as the rest of the file).
 //
 // Prerequisites: `pnpm supabase:start` + a `pnpm supabase:reset` that ran
 // with `./seed/leads_room_scans.sql` wired into config.toml [db.seed]
