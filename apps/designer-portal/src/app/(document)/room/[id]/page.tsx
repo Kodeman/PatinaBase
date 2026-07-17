@@ -11,8 +11,8 @@
  * `useRoomGeometry` hook (packages/supabase) + the `roomGeometryFromRows`
  * adapter (lib/room-view/from-rows.ts) feed `<RoomView>`, which owns every
  * rendering state (loading, still-being-drawn, the full Plan + facts rail).
- * This page itself does nothing but wire hook → adapter → shell — no
- * telemetry yet (W3-T7 wires `room_opened` etc., per R107 §7 / I74c).
+ * This page itself wires hook → adapter → shell, plus the `room_opened`
+ * mount telemetry (W3-T7, per R107 §7 / I74c — see lib/analytics/room-events.ts).
  *
  * Two doors, one mechanic:
  *   · Rooms roster → RoomShell's normal origin-stash (rememberRoomOrigin at
@@ -28,9 +28,9 @@
  *     ("← the Document · Brief") the doc-link at the top of RoomView already
  *     renders forward ("→ the Document · Brief", room-view.tsx) — one
  *     resolved Document, read twice, same label vocabulary both directions.
- *     `?from=document` doubles as the room_opened origin=document
- *     telemetry-attribution marker (events wired later, W3-T7) — do not
- *     repurpose or drop it once telemetry lands.
+ *     `?from=document` doubles as the room_opened source=document
+ *     telemetry-attribution marker (wired below) — do not repurpose or drop
+ *     it.
  *     When the fetch resolves without a Document (an orphan scan, or the
  *     scan simply hasn't parsed yet), the scoped-back label/target is
  *     skipped and RoomShell falls back to its normal origin-stash — a
@@ -43,11 +43,12 @@
  * do not "fix" DocumentGate to work around it here.
  */
 
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useRoomGeometry } from '@patina/supabase';
 import { RoomShell } from '@/components/document/rooms/room-shell';
 import { RoomView } from '@/components/document/rooms/room-view/room-view';
 import { roomGeometryFromRows } from '@/lib/room-view/from-rows';
+import { roomEvents } from '@/lib/analytics';
 
 /** Mirrors room-view.tsx's own SECTION_LABEL (itself mirroring folder-card.tsx,
  *  module-private in both) — the leave affordance needs the same human phase
@@ -67,13 +68,25 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
 
   // Read client-side (no useSearchParams → no Suspense boundary needed),
   // matching drafting-room.tsx's `arrivingFlagged` pattern. `from=document`
-  // is also the future telemetry-attribution marker (see file header) — read
-  // once at mount, same as the marker itself never changes after arrival.
+  // is also the room_opened source attribution marker (see file header) —
+  // read once at mount, same as the marker itself never changes after
+  // arrival.
   const [fromDocument, setFromDocument] = useState(false);
+
+  // room_opened — fires exactly once per mount (ref-guard, not just the
+  // effect's `[id]` deps: React Strict Mode double-invokes effects in dev,
+  // and this event must never double-fire the way ceremony-surface.tsx's
+  // `openedRef` guards ceremonyOpened).
+  const openedRef = useRef(false);
   useEffect(() => {
     const qs = new URLSearchParams(window.location.search);
-    setFromDocument(qs.get('from') === 'document');
-  }, []);
+    const isFromDocument = qs.get('from') === 'document';
+    setFromDocument(isFromDocument);
+    if (!openedRef.current) {
+      openedRef.current = true;
+      roomEvents.roomOpened({ room_id: id, source: isFromDocument ? 'document' : 'index' });
+    }
+  }, [id]);
 
   const { data, isLoading } = useRoomGeometry(id);
 
@@ -99,6 +112,7 @@ export default function RoomViewPage({ params }: { params: Promise<{ id: string 
   return (
     <RoomShell title="A room" backTo={back?.to} backLabel={back?.label}>
       <RoomView
+        roomId={id}
         doc={data?.document ?? null}
         geometry={adapted?.geometry ?? null}
         thicknessConvention={adapted?.thicknessConvention ?? false}

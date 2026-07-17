@@ -27,10 +27,11 @@
  * "→ the Document · <phase>" / "drawn from the scan".
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { RoomGeometryDocument } from '@patina/supabase';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
+import { roomEvents } from '@/lib/analytics';
 import { FactsRail } from './facts-rail';
 import { MeasureLayer } from './measure-layer';
 import { OrbitStage } from './orbit/orbit-stage';
@@ -66,6 +67,9 @@ function modeClass(active: boolean, pad: string): string {
 }
 
 export interface RoomViewProps {
+  /** The room's id — the telemetry family's carrier (I74c); the page's
+   *  route param, passed straight through unmodified. */
+  roomId: string;
   /** null while loading, or when the scan doesn't resolve at all. */
   doc: RoomGeometryDocument | null;
   /** null until parsed (from-rows.ts only ever runs against a parsed header). */
@@ -74,7 +78,7 @@ export interface RoomViewProps {
   isLoading: boolean;
 }
 
-export function RoomView({ doc, geometry, thicknessConvention, isLoading }: RoomViewProps) {
+export function RoomView({ roomId, doc, geometry, thicknessConvention, isLoading }: RoomViewProps) {
   const docLink = useMemo(() => {
     if (!doc?.engagementId || !doc.activeSection) return null;
     const label = SECTION_LABEL[doc.activeSection] ?? doc.activeSection;
@@ -99,9 +103,21 @@ export function RoomView({ doc, geometry, thicknessConvention, isLoading }: Room
   const selectMode = (next: ViewMode) => {
     if (next === 'orbit') setOrbitMounted(true);
     setMode(next);
-    // Telemetry seam (W3-T7 wires this): emit `mode_switched` here — R107 §7 reserves
-    // the name; `room_id` is the event family's carrier (I73c).
+    roomEvents.modeSwitched({ room_id: roomId, mode: next });
   };
+
+  // measure_used — fires once per completed measurement (the SECOND point,
+  // armed/point → complete in use-measure's reducer), not on every re-render
+  // while the phase stays 'complete'. Re-arming (any phase → armed) resets
+  // the guard, so completing a second measurement fires again.
+  const prevMeasurePhaseRef = useRef(measure.state.phase);
+  useEffect(() => {
+    const prevPhase = prevMeasurePhaseRef.current;
+    prevMeasurePhaseRef.current = measure.state.phase;
+    if (measure.state.phase === 'complete' && prevPhase !== 'complete') {
+      roomEvents.measureUsed({ room_id: roomId });
+    }
+  }, [measure.state.phase, roomId]);
 
   if (isLoading) return null;
 
