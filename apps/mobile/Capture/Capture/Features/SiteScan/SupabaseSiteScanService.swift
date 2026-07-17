@@ -301,14 +301,6 @@ final class SupabaseSiteScanService: SiteScanService {
               filename: "keyframes.tar", contentType: "application/x-tar", column: "scan_bundle_url")
     ]
 
-    /// base64(JSON) is the channel Storage persists into `user_metadata` — supabase-
-    /// swift's FileOptions.metadata sets it (the raw x-amz-meta-* headers are dropped).
-    private static func metadata(scanID: UUID, kind: String, sha: String?) -> [String: AnyJSON] {
-        var m: [String: AnyJSON] = ["scanId": .string(scanID.uuidString), "artifactKind": .string(kind)]
-        if let sha { m["sha256"] = .string(sha) }
-        return m
-    }
-
     // MARK: - Helpers
 
     /// This attempt's reserved (scanID, roomID) pair, keyed by the finished
@@ -365,20 +357,6 @@ final class SupabaseSiteScanService: SiteScanService {
             .insert(RoomInsert(id: roomID, user_id: userID, name: name, type: "other"))
             .execute()
         return roomID
-    }
-
-    /// Upload one v1 bundle artifact → `room-scans/{folder}/{uid}/{roomId}/{filename}`,
-    /// return its public URL. Upsert makes an offline retry idempotent; the local
-    /// bundle is never deleted, so a failure here is safely retryable.
-    private func uploadArtifact(_ artifact: V1Artifact, bundle: URL,
-                                userID: UUID, roomID: UUID) async throws -> String {
-        let fileURL = bundle.appendingPathComponent(artifact.filename)
-        let data = try Data(contentsOf: fileURL)
-        let path = RoomScanStoragePath.object(
-            folder: artifact.folder, userID: userID, roomID: roomID, filename: artifact.filename)
-        try await client.storage.from(bucket)
-            .upload(path, data: data, options: FileOptions(contentType: artifact.contentType, upsert: true))
-        return try client.storage.from(bucket).getPublicURL(path: path).absoluteString
     }
 
     // MARK: - Posed photos (I76)
@@ -458,24 +436,6 @@ final class SupabaseSiteScanService: SiteScanService {
 }
 
 // MARK: - Value types
-
-/// The v1-minimal artifact set: a USDZ model + the CapturedRoom parametric JSON.
-/// Maps each to its storage folder root, bundle filename, and MIME type — all
-/// allowed on the `room-scans` bucket (00077).
-private enum V1Artifact {
-    case usdz
-    case capturedRoom
-
-    var folder: String {
-        self == .usdz ? RoomScanStoragePath.Folder.usdz : RoomScanStoragePath.Folder.capturedRoom
-    }
-    var filename: String {
-        self == .usdz ? RoomScanStoragePath.Filename.usdz : RoomScanStoragePath.Filename.capturedRoom
-    }
-    var contentType: String {
-        self == .usdz ? "model/vnd.usdz+zip" : "application/json"
-    }
-}
 
 /// Coarse, best-effort metrics read back from the finished session for the row.
 private struct ScanMetrics {
