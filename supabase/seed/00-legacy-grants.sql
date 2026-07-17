@@ -2705,3 +2705,237 @@ DO $g$ BEGIN
   GRANT SELECT ON public.room_scan_documents TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00350_fulfillment_core.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_writer_guard() FROM public, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00351_fulfillment_events_config.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_business_hours_between(timestamptz, timestamptz) FROM public, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00351_fulfillment_events_config.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_business_hours_between(timestamptz, timestamptz) TO authenticated, agent_reader, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00352_fulfillment_ledger.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ledger_post(text, bigint, text, jsonb, jsonb) FROM public, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00352_fulfillment_ledger.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.ledger_post_t1_capture(uuid, bigint, text) FROM public, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_log_event(text,text,uuid,uuid,uuid,uuid,uuid,jsonb,jsonb,jsonb,timestamptz) FROM public, anon, authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_intake_order(jsonb, text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_intake_order(jsonb, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_assign_line_vendor(uuid,uuid,int,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_assign_line_vendor(uuid,uuid,int,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_move_line(uuid,uuid,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_move_line(uuid,uuid,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_confirm_split(uuid,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_confirm_split(uuid,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_record_transmission(uuid,text,text,text,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_record_transmission(uuid,text,text,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_record_ack(uuid,date,text,text,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_record_ack(uuid,date,text,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_record_shipment(uuid,text,text,text,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_record_shipment(uuid,text,text,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_record_delivery(uuid,text,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_record_delivery(uuid,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_open_exception(text,jsonb,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_open_exception(text,jsonb,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_resolve_exception(uuid,text,text,boolean,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_resolve_exception(uuid,text,text,boolean,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_settle_po(uuid,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_settle_po(uuid,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_record_client_note(uuid,uuid,text,text,text,text,text,jsonb,text,text,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_record_client_note(uuid,uuid,text,text,text,text,text,jsonb,text,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_update_config(text,jsonb,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_update_config(text,jsonb,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_update_vendor_profile(uuid,jsonb,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_update_vendor_profile(uuid,jsonb,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.rule_leah_review(uuid,text,text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.rule_leah_review(uuid,text,text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.fulfillment_order_status_v, public.fulfillment_queue_v TO authenticated, agent_reader, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  REVOKE ALL ON public.client_order_status_v FROM public, anon;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00353_fulfillment_rpcs_views.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.client_order_status_v TO authenticated, service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
