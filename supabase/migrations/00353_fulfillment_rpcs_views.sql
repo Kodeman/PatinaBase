@@ -535,36 +535,159 @@ REVOKE ALL ON FUNCTION public.rule_leah_review(uuid,text,text) FROM public, anon
 GRANT EXECUTE ON FUNCTION public.rule_leah_review(uuid,text,text) TO service_role;
 
 -- ─── 16. Views ─────────────────────────────────────────────────────────────
+-- ⚠ S1 IN-PLACE AMENDMENT (2026-07-16, flagged per patina-parallel-work S1
+-- instructions — pack unshipped, exists only on boh/* branches): the S0 cut of
+-- these views had no SLA-breach signal and an incomplete band CASE (bare
+-- 'intake'/'split' fell through to 'quiet' — no path for a stale unconfirmed
+-- order to ever surface, contradicting spec §5.1's zero-invisibility +
+-- exception-first intent and the S1 accepts-when's stale-order-breach test).
+-- Restructured fulfillment_order_status_v via CTEs (same output contract:
+-- order_id/order_no/client_name/intake_at/min_stage_idx/has_unmapped/
+-- open_exceptions/derived_status all unchanged) and ADDITIVELY exposes
+-- designer_attribution, unmapped_count, vendor_count, stage_entered_at.
+-- fulfillment_queue_v now also computes breach + next_action_kind/params +
+-- po_stages (for the Queue's stage dots) and fixes the band CASE. Band model
+-- (documented for S2+ authors): the ball is in the OPERATOR's court for
+-- 'intake' (unconfirmed) and 'split' (confirmed, not yet transmitted) — both
+-- are unconditionally Needs Action Now, matching the presentation's "Send 2
+-- POs" example. The ball is in a VENDOR/CARRIER's court for 'transmitted'
+-- through 'shipped' — Watching, unless the ack-chase SLA is breached (then
+-- Needs Action Now, next_action='chase_ack'). 'delivered' is Quiet — nothing
+-- to actively do until the inspection window closes or an exception opens
+-- (this was already the S0 author's implicit intent: 'delivered' was the one
+-- pre-settled state absent from the original watching list). has_unmapped /
+-- open_exceptions still override to Needs Action Now regardless of stage.
 CREATE OR REPLACE VIEW public.fulfillment_order_status_v
 WITH (security_invoker = true) AS
+WITH item_stage AS (
+  SELECT
+    i.order_id,
+    i.line_state,
+    i.line_state_entered_at,
+    array_position(ARRAY['intake','split','transmitted','acknowledged','in_production','shipped','delivered','settled'], i.line_state) AS stage_idx
+  FROM public.fulfillment_order_items i
+  WHERE i.line_state <> 'cancelled'
+),
+order_stage AS (
+  SELECT order_id, MIN(stage_idx) AS min_stage_idx
+  FROM item_stage
+  GROUP BY order_id
+),
+order_stage_entered AS (
+  SELECT s.order_id, s.min_stage_idx, MIN(i2.line_state_entered_at) AS stage_entered_at
+  FROM order_stage s
+  JOIN item_stage i2 ON i2.order_id = s.order_id AND i2.stage_idx = s.min_stage_idx
+  GROUP BY s.order_id, s.min_stage_idx
+),
+order_mapping AS (
+  SELECT order_id,
+         bool_or(mapping_state = 'unmapped') AS has_unmapped,
+         count(*) FILTER (WHERE mapping_state = 'unmapped') AS unmapped_count,
+         count(DISTINCT vendor_id) FILTER (WHERE vendor_id IS NOT NULL) AS vendor_count
+  FROM public.fulfillment_order_items
+  WHERE line_state <> 'cancelled'
+  GROUP BY order_id
+),
+order_exceptions AS (
+  SELECT order_id, count(*) AS open_exceptions
+  FROM public.fulfillment_exceptions
+  WHERE status <> 'resolved'
+  GROUP BY order_id
+)
 SELECT
-  o.id AS order_id, o.order_no, o.client_name, o.intake_at,
-  MIN(array_position(ARRAY['intake','split','transmitted','acknowledged','in_production','shipped','delivered','settled'],
-      i.line_state)) FILTER (WHERE i.line_state <> 'cancelled') AS min_stage_idx,
-  bool_or(i.mapping_state = 'unmapped') AS has_unmapped,
-  (SELECT count(*) FROM public.fulfillment_exceptions e
-     WHERE e.order_id = o.id AND e.status <> 'resolved') AS open_exceptions,
+  o.id AS order_id, o.order_no, o.client_name, o.intake_at, o.designer_attribution,
+  ose.min_stage_idx,
+  COALESCE(om.has_unmapped, false) AS has_unmapped,
+  COALESCE(om.unmapped_count, 0) AS unmapped_count,
+  COALESCE(om.vendor_count, 0) AS vendor_count,
+  COALESCE(oe.open_exceptions, 0) AS open_exceptions,
   CASE
-    WHEN bool_or(i.mapping_state = 'unmapped') THEN 'needs_mapping'
-    WHEN (SELECT count(*) FROM public.fulfillment_exceptions e
-            WHERE e.order_id = o.id AND e.status <> 'resolved') > 0 THEN 'exception'
-    ELSE (ARRAY['intake','split','transmitted','acknowledged','in_production','shipped','delivered','settled'])[
-           MIN(array_position(ARRAY['intake','split','transmitted','acknowledged','in_production','shipped','delivered','settled'], i.line_state))
-           FILTER (WHERE i.line_state <> 'cancelled')]
-  END AS derived_status
+    WHEN COALESCE(om.has_unmapped, false) THEN 'needs_mapping'
+    WHEN COALESCE(oe.open_exceptions, 0) > 0 THEN 'exception'
+    ELSE (ARRAY['intake','split','transmitted','acknowledged','in_production','shipped','delivered','settled'])[ose.min_stage_idx]
+  END AS derived_status,
+  ose.stage_entered_at
 FROM public.fulfillment_orders o
-JOIN public.fulfillment_order_items i ON i.order_id = o.id
-GROUP BY o.id;
+JOIN order_stage_entered ose ON ose.order_id = o.id
+LEFT JOIN order_mapping om ON om.order_id = o.id
+LEFT JOIN order_exceptions oe ON oe.order_id = o.id;
 
 CREATE OR REPLACE VIEW public.fulfillment_queue_v
 WITH (security_invoker = true) AS
-SELECT s.*,
+WITH sent_po AS (
+  -- earliest still-unacked PO send per order — the ack-chase clock reference
+  SELECT order_id, MIN(transmitted_at) AS oldest_sent_at
+  FROM public.fulfillment_vendor_pos
+  WHERE status = 'sent'
+  GROUP BY order_id
+),
+po_agg AS (
+  SELECT p.order_id,
+         jsonb_agg(jsonb_build_object(
+           'po_id', p.id, 'po_number', p.po_number, 'vendor_id', p.vendor_id,
+           'vendor_name', v.name, 'status', p.status
+         ) ORDER BY p.created_at) AS po_stages,
+         count(*) AS po_count
+  FROM public.fulfillment_vendor_pos p
+  JOIN public.vendors v ON v.id = p.vendor_id
+  GROUP BY p.order_id
+),
+sla AS (
+  SELECT
+    (SELECT (value->>'split_confirm_business_hours')::numeric FROM public.fulfillment_config WHERE key='sla_hours') AS split_confirm_hours,
+    (SELECT (value->>'ack_chase_business_days')::numeric FROM public.fulfillment_config WHERE key='sla_hours') AS ack_chase_days
+)
+SELECT
+  s.order_id, s.order_no, s.client_name, s.intake_at, s.designer_attribution,
+  s.min_stage_idx, s.has_unmapped, s.unmapped_count, s.vendor_count, s.open_exceptions,
+  s.derived_status, s.stage_entered_at,
+  COALESCE(pa.po_count, 0) AS po_count,
+  COALESCE(pa.po_stages, '[]'::jsonb) AS po_stages,
+  CASE
+    WHEN s.derived_status = 'intake' THEN
+      public.fulfillment_business_hours_between(s.intake_at, now()) > (SELECT split_confirm_hours FROM sla)
+    WHEN s.derived_status = 'transmitted' AND sp.oldest_sent_at IS NOT NULL THEN
+      public.fulfillment_business_hours_between(sp.oldest_sent_at, now()) > (SELECT ack_chase_days FROM sla) * 8
+    ELSE false
+  END AS breached,
+  GREATEST(public.fulfillment_business_hours_between(s.stage_entered_at, now()), 0) AS stage_age_business_hours,
+  CASE
+    WHEN s.has_unmapped THEN 'assign_vendor'
+    WHEN s.open_exceptions > 0 THEN 'resolve_exception'
+    WHEN s.derived_status = 'intake' THEN 'confirm_split'
+    WHEN s.derived_status = 'split' THEN 'transmit_pos'
+    WHEN s.derived_status = 'transmitted' AND sp.oldest_sent_at IS NOT NULL
+         AND public.fulfillment_business_hours_between(sp.oldest_sent_at, now()) > (SELECT ack_chase_days FROM sla) * 8
+      THEN 'chase_ack'
+    WHEN s.derived_status = 'transmitted' THEN 'awaiting_ack'
+    WHEN s.derived_status IN ('acknowledged','in_production') THEN 'in_production'
+    WHEN s.derived_status = 'shipped' THEN 'in_transit'
+    WHEN s.derived_status = 'delivered' THEN 'awaiting_settlement'
+    ELSE 'review'
+  END AS next_action_kind,
+  jsonb_build_object(
+    'unmapped_count', s.unmapped_count,
+    'exception_count', s.open_exceptions,
+    'po_count', COALESCE(pa.po_count, 0),
+    'days_overdue', CASE
+      WHEN s.derived_status = 'transmitted' AND sp.oldest_sent_at IS NOT NULL
+           AND public.fulfillment_business_hours_between(sp.oldest_sent_at, now()) > (SELECT ack_chase_days FROM sla) * 8
+        THEN ceil(public.fulfillment_business_hours_between(sp.oldest_sent_at, now()) / 8.0)
+      ELSE NULL
+    END
+  ) AS next_action_params,
   CASE
     WHEN s.has_unmapped OR s.open_exceptions > 0 THEN 'needs_action_now'
+    WHEN s.derived_status IN ('intake','split') THEN 'needs_action_now'
+    WHEN s.derived_status = 'transmitted' AND sp.oldest_sent_at IS NOT NULL
+         AND public.fulfillment_business_hours_between(sp.oldest_sent_at, now()) > (SELECT ack_chase_days FROM sla) * 8
+      THEN 'needs_action_now'
     WHEN s.derived_status IN ('transmitted','acknowledged','in_production','shipped') THEN 'watching'
     ELSE 'quiet'
   END AS band
 FROM public.fulfillment_order_status_v s
+LEFT JOIN sent_po sp ON sp.order_id = s.order_id
+LEFT JOIN po_agg pa ON pa.order_id = s.order_id
 WHERE s.derived_status IS DISTINCT FROM 'settled';
 
 -- client_order_status_v — DEFINER view (owner postgres). See D4.
