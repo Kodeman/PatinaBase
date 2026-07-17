@@ -16,6 +16,9 @@ Failure names (stable tokens; one line per failure on stderr):
     MANIFEST_PARSE         manifest.json is not valid JSON
     SCHEMA_VIOLATION       required key missing / wrong checksum algorithm
     MISSING_ARTIFACT       a mandatory artifact kind is not listed
+    PATH_VIOLATION         an artifact's relativePath escapes the bundle dir
+                            (absolute, contains a '..' segment, resolves
+                            outside the bundle, or is a symlink)
     MISSING_FILE           an artifact's relativePath does not exist on disk
     CHECKSUM_MISMATCH      an artifact's sha256 does not match the bytes
     SIZE_MISMATCH          an artifact's sizeBytes disagrees with the file
@@ -44,6 +47,7 @@ REQUIRED_TOP_LEVEL_KEYS = (
     "session",
     "anchors",
     "scorecard",
+    "poseGraphSummary",
     "unverified",
     "checksumAlgorithm",
     "artifacts",
@@ -65,6 +69,36 @@ def sha256_of(path: str) -> str:
 
 def _is_number(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _resolve_artifact_path(bundle_dir: str, rel: str) -> tuple[str | None, str | None]:
+    """Resolve an artifact's relativePath against bundle_dir, refusing anything
+    that escapes it (§10 PATH_VIOLATION). Checked BEFORE any file access.
+
+    Rejects: absolute paths (os.path.join would otherwise discard bundle_dir
+    and replace it with the absolute path), any '..' path segment, a resolved
+    real path that lands outside the bundle dir's real path (catches escapes
+    routed through an intermediate symlinked directory), and a candidate that
+    is itself a symlink (an artifact file must be a real file, never a link).
+
+    Returns (path, None) on success, or (None, 'reason') on a PATH_VIOLATION.
+    """
+    if os.path.isabs(rel):
+        return None, f"relativePath is absolute: {rel!r}"
+    if any(seg == ".." for seg in rel.replace("\\", "/").split("/")):
+        return None, f"relativePath contains a '..' segment: {rel!r}"
+
+    candidate = os.path.join(bundle_dir, rel)
+    real_bundle = os.path.realpath(bundle_dir)
+    real_candidate = os.path.realpath(candidate)
+    if real_candidate != real_bundle and not real_candidate.startswith(
+        real_bundle + os.sep
+    ):
+        return None, f"relativePath resolves outside the bundle dir: {rel!r}"
+    if os.path.islink(candidate):
+        return None, f"relativePath is a symlink: {rel!r}"
+
+    return candidate, None
 
 
 def validate_bundle(bundle_dir: str) -> list[str]:
@@ -119,7 +153,12 @@ def validate_bundle(bundle_dir: str) -> list[str]:
         if not isinstance(rel, str) or not rel:
             failures.append(f"SCHEMA_VIOLATION: artifact '{kind}' has no relativePath")
             continue
-        fpath = os.path.join(bundle_dir, rel)
+
+        fpath, violation = _resolve_artifact_path(bundle_dir, rel)
+        if violation is not None:
+            failures.append(f"PATH_VIOLATION: {violation} (kind '{kind}')")
+            continue
+
         if not os.path.isfile(fpath):
             failures.append(f"MISSING_FILE: {rel} (kind '{kind}')")
             continue
@@ -348,7 +387,49 @@ def selftest() -> int:
             )
             return 1
 
-    print("SELFTEST PASS: valid bundle accepted; corrupted bundle rejected naming both violations.")
+        # Third case: a fresh fixture whose manifest lists an artifact with a
+        # relativePath that escapes the bundle dir via '..'. Must be rejected
+        # before any file access, naming PATH_VIOLATION — never silently
+        # resolved against a file outside the bundle.
+        escaped = os.path.join(tmp, "bundle-escape")
+        make_fixture(escaped)
+        escape_bytes = b"should never be read by the validator"
+        escape_target = os.path.join(tmp, "escape.bin")  # deliberately OUTSIDE escaped/
+        with open(escape_target, "wb") as fh:
+            fh.write(escape_bytes)
+
+        escaped_manifest_path = os.path.join(escaped, "manifest.json")
+        with open(escaped_manifest_path, "r", encoding="utf-8") as fh:
+            escaped_manifest = json.load(fh)
+        escaped_manifest["artifacts"].append(
+            {
+                "kind": "escape-attempt",
+                "relativePath": "../escape.bin",
+                "sizeBytes": len(escape_bytes),
+                "sha256": sha256_of(escape_target),
+                "mimeType": "application/octet-stream",
+            }
+        )
+        with open(escaped_manifest_path, "w", encoding="utf-8") as fh:
+            json.dump(escaped_manifest, fh, indent=2)
+
+        failures = validate_bundle(escaped)
+        tokens = {f.split(":", 1)[0] for f in failures}
+        print(f"selftest: path-escape fixture produced failures: {sorted(tokens)}")
+        for f in failures:
+            print("  " + f)
+        if "PATH_VIOLATION" not in tokens:
+            print(
+                f"SELFTEST FAIL: expected PATH_VIOLATION in failures, got {sorted(tokens)}",
+                file=sys.stderr,
+            )
+            return 1
+
+    print(
+        "SELFTEST PASS: valid bundle accepted; corrupted bundle rejected naming "
+        "CHECKSUM_MISMATCH + MISSING_FILE; path-escaping bundle rejected naming "
+        "PATH_VIOLATION."
+    )
     return 0
 
 

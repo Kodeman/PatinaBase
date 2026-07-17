@@ -133,7 +133,7 @@ The QA gate (SC-09). The verdict is advisory — red walks the user to the gap, 
 
 ### 3.5 `poseGraphSummary`
 
-The on-device pose graph the shared ARSession holds — a **summary** only (full SfM is P2, SC-10).
+The on-device pose graph the shared ARSession holds — a **summary** only (full SfM is P2, SC-10). **Required** top-level manifest key in a v1 capture bundle (M1 review fix — the P1 package AC gates this section; the validator's `REQUIRED_TOP_LEVEL_KEYS` and `--make-fixture` both treat it as mandatory, not optional).
 
 ```jsonc
 "poseGraphSummary": {
@@ -211,7 +211,7 @@ A session may close with **fewer than three anchors**. When it does, the truth-f
 
 1. **Manifest** — `unverified: true` is written iff `anchors.length < 3`. The validator (§10) enforces `unverified == (anchors.length < 3)` and `scorecard.anchorCount == anchors.length` — an inconsistent pair is a named failure.
 2. **Ingest** — the server sets `room_files.unverified = true` for the generated version and records `anchor_count` on the row + in `certificate`.
-3. **Measurements** — every `room_file_measurements` row for an unverified file wears the **widest** `tolerance_class = 'estimated'` (no dimension may claim `verified` without an anchor; the `rfm_anchor_source_shape` CHECK enforces that an `anchor`-sourced row names its anchor).
+3. **Measurements** — every `room_file_measurements` row for an unverified file wears the **widest** `tolerance_class = 'estimated'` (no dimension may claim `verified` without an anchor; the `rfm_anchor_source_shape` CHECK DB-enforces both halves: an `anchor`-sourced row must name its anchor, **and** a `'verified'` `tolerance_class` must have `anchor_id` set regardless of `source` — a `parametric` row can never claim `verified`).
 4. **Drawing** — the UNVERIFIED stamp prints in the title block (item 11), and `room_files.tolerance_class` rolls up to the broadest class.
 
 The flag is carried untouched from device to server — item 6's AC ("the flag propagates untouched to the server") is satisfiable because it lives verbatim in the manifest and is re-asserted, never recomputed differently, at each stage.
@@ -250,7 +250,7 @@ Every published dimension (`room_file_measurements`) is a row with provenance (R
 
 - `source` — `'anchor'` (grounded on a typed span) | `'parametric'` (from the corrected RoomPlan graph). **P2 widens the CHECK to add `'mesh'`** (dense-fusion evidence).
 - `tolerance_mm` — the ± tolerance in integer mm.
-- `tolerance_class` — `'verified'` (anchor-exact, ±1 cm / 0.5% target, SC-13) | `'measured'` (parametric, in-tolerance) | `'estimated'` (sloped ceilings, no-anchor spans, any UNVERIFIED file). Matches SC-11's badge triad `verified / measured ± x / estimated`.
+- `tolerance_class` — `'verified'` (anchor-exact, ±1 cm / 0.5% target, SC-13) | `'measured'` (parametric, in-tolerance) | `'estimated'` (sloped ceilings, no-anchor spans, any UNVERIFIED file). Matches SC-11's badge triad `verified / measured ± x / estimated`. **DB-enforced (`rfm_anchor_source_shape`, 00341, M1 review fix):** `tolerance_class = 'verified'` requires `anchor_id IS NOT NULL` regardless of `source` — the constraint is not just convention, a `'verified'` row with no anchor cannot be inserted.
 - `verified_by` / `verified_at` — the designer-override receipt (SC-08: "field truth always outranks reconstruction").
 
 The **accuracy certificate** (`room_files.certificate`, SC-08 "the receipt") records anchors used, per-anchor residuals, and the class per dimension. Authority order when streams disagree (SC-06): **dense evidence → parametric model → live preview**.
@@ -262,14 +262,15 @@ The **accuracy certificate** (`room_files.certificate`, SC-08 "the receipt") rec
 `scripts/validate_capture_bundle.py <bundle_dir>` (python3, stdlib only). Exit 0 = valid; non-zero = one or more **named** failures printed to stderr. Checks:
 
 1. **manifest present & parses** — `manifest.json` exists and is valid JSON.
-2. **schema** — required top-level keys present: `schemaVersion`, `bundleSpecVersion`, `scanId`, `device`, `session`, `anchors`, `scorecard`, `unverified`, `checksumAlgorithm`, `artifacts`. (`SCHEMA_VIOLATION`)
+2. **schema** — required top-level keys present: `schemaVersion`, `bundleSpecVersion`, `scanId`, `device`, `session`, `anchors`, `scorecard`, `poseGraphSummary`, `unverified`, `checksumAlgorithm`, `artifacts`. `poseGraphSummary` is **required**, not optional (M1 review fix — the P1 package AC gates it as a manifest section; `--make-fixture` emits it). (`SCHEMA_VIOLATION`)
 3. **checksum algorithm** — `checksumAlgorithm == "sha256"`. (`SCHEMA_VIOLATION`)
 4. **required artifacts** — `capturedRoomJson` + `usdz` kinds present in `artifacts[]`. (`MISSING_ARTIFACT`)
-5. **per-artifact integrity** — for every artifact: file exists at `relativePath` (`MISSING_FILE`), `sha256` present and matches the computed SHA-256 of the bytes (`CHECKSUM_MISMATCH`), and `sizeBytes` matches actual size when present (`SIZE_MISMATCH`).
-6. **anchor / UNVERIFIED consistency** — `unverified == (len(anchors) < 3)` and `scorecard.anchorCount == len(anchors)`; each anchor has `endpointA/B` with numeric `x,y,z`, `measuredValueMm > 0`, `entryMethod == "typed"`. (`ANCHOR_INCONSISTENCY`)
-7. **photos parity** — if `photos/photos_metadata.ndjson` exists, its non-empty line count equals `len(manifest.photos)`. (`PHOTO_COUNT_MISMATCH`)
+5. **path containment** — checked BEFORE any file access for every artifact: `relativePath` must not be absolute, must not contain a `..` segment, and its resolved `os.path.realpath` must stay inside `os.path.realpath(bundle_dir)` (catches an intermediate symlinked directory routing outside the bundle); the resolved candidate itself must not be a symlink (an artifact must be a real file, never a link — even one that points back inside the bundle). (`PATH_VIOLATION`, M1 review fix)
+6. **per-artifact integrity** — for every artifact: file exists at `relativePath` (`MISSING_FILE`), `sha256` present and matches the computed SHA-256 of the bytes (`CHECKSUM_MISMATCH`), and `sizeBytes` matches actual size when present (`SIZE_MISMATCH`).
+7. **anchor / UNVERIFIED consistency** — `unverified == (len(anchors) < 3)` and `scorecard.anchorCount == len(anchors)`; each anchor has `endpointA/B` with numeric `x,y,z`, `measuredValueMm > 0`, `entryMethod == "typed"`. (`ANCHOR_INCONSISTENCY`)
+8. **photos parity** — if `photos/photos_metadata.ndjson` exists, its non-empty line count equals `len(manifest.photos)`. (`PHOTO_COUNT_MISMATCH`)
 
-`--make-fixture <dir>` writes a minimal synthetic **valid** bundle (tiny placeholder binaries, checksums computed). `--selftest` makes a fixture, validates it (must pass), then corrupts one artifact's bytes (checksum mismatch) and deletes one file, and validates again (must fail naming **both** `CHECKSUM_MISMATCH` and `MISSING_FILE`). No committed binary fixtures.
+`--make-fixture <dir>` writes a minimal synthetic **valid** bundle (tiny placeholder binaries, checksums computed, `poseGraphSummary` included). `--selftest` runs three cases: (1) a fresh fixture must validate cleanly; (2) a copy with one artifact's bytes corrupted (checksum mismatch) and one file deleted must fail naming **both** `CHECKSUM_MISMATCH` and `MISSING_FILE`; (3) a copy whose manifest lists an artifact with `relativePath: "../escape.bin"` must fail naming `PATH_VIOLATION` (M1 review fix). No committed binary fixtures.
 
 ---
 
@@ -290,4 +291,5 @@ Per the package's authority note, these are code-only (I-entry class) calls made
 | B-9 | **Reads delegate to `room_scans` RLS; anchors owner-writable; the server-generated three are service-role-write-only.** | R-a + 00337 pattern. One EXISTS composes owner/designer/studio; anchors are device input (owner write, like `room_scan_images`); files/measurements/events are solve output (service-role, no client write). |
 | B-10 | **`poseGraphSummary` is the on-device summary, not an SfM graph.** | SfM/COLMAP is P2 (SC-10). P1 carries the ARKit-held pose graph's summary stats so telemetry + the accuracy budget have inputs without building reconstruction. |
 | B-11 | **Migration minted at `00341`.** | 00341–00349 verified free on main + all branches; 00350–00369 are the materialized BOH reservation (files exist on boh/* branches). |
+| B-12 | **M1 review-pass fixes.** `rfm_anchor_source_shape` CHECK tightened so `tolerance_class = 'verified'` DB-requires `anchor_id` regardless of `source` (was convention-only, comment claimed enforcement that the CHECK didn't do); validator adds `os.path.realpath` containment + symlink refusal for every artifact `relativePath` (`PATH_VIOLATION`); `poseGraphSummary` promoted from documented-but-unchecked to a required top-level manifest key. | Review found the anchor-source CHECK's comment overclaimed what it enforced, the validator trusted manifest-supplied paths without containment checks, and `poseGraphSummary` was never actually gated despite the P1 package AC naming it. |
 ```

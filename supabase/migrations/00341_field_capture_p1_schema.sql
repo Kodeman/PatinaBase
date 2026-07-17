@@ -199,10 +199,12 @@ CREATE TABLE IF NOT EXISTS public.room_file_measurements (
 
   created_at      timestamptz NOT NULL DEFAULT now(),
 
-  -- an anchor-sourced measurement must name its anchor; a verified class must
-  -- have been verified by an anchor.
+  -- an anchor-sourced measurement must name its anchor, AND a 'verified'
+  -- tolerance_class must be grounded by an anchor regardless of source —
+  -- both halves are DB-enforced, not just convention (M1 review fix).
   CONSTRAINT rfm_anchor_source_shape CHECK (
-    source <> 'anchor' OR anchor_id IS NOT NULL
+    (source <> 'anchor' OR anchor_id IS NOT NULL)
+    AND (tolerance_class <> 'verified' OR anchor_id IS NOT NULL)
   )
 );
 
