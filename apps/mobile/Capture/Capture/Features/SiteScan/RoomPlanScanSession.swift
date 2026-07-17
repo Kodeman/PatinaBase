@@ -1,12 +1,19 @@
 //  RoomPlanScanSession.swift
-//  Capture · Wave F (Pro site-scan)
+//  Capture · Wave F (Pro site-scan) · Room View PHOTOS (I76)
 //
 //  The concrete, on-device `FieldScanSession` — a thin driver over Apple's
 //  RoomPlan `RoomCaptureView` (which owns the `RoomCaptureSession` + the built-in
-//  RoomBuilder post-process pass). v1-MINIMAL by design: it exports only the two
-//  artifacts the F pipeline ships — a USDZ and the CapturedRoom parametric JSON —
-//  to a temp bundle dir. No depth archives, world maps, posed photos or coverage
-//  heatmaps (that is the client app's v3 pipeline; deliberately not ported).
+//  RoomBuilder post-process pass). It exports the two ALWAYS-present artifacts the
+//  F pipeline ships — a USDZ and the CapturedRoom parametric JSON — to a temp
+//  bundle dir, PLUS a best-effort posed-photo lane (I76): while the scan runs it
+//  samples the RoomPlan `ARSession` into auto JPEG photos + 256px thumbs under
+//  `photos/`, then writes a `photos_metadata.json` sidecar at export.
+//
+//  Photos NEVER block the core artifacts: the two core exports always run; the
+//  photo lane is wrapped so a failure just yields a scan with no photos (an
+//  absent sidecar ⇒ the uploader sees zero photos). Still NOT ported from the
+//  client app's v3 pipeline: depth archives, world maps, NDJSON manifests, hero
+//  pickers, quality scoring and coverage heatmaps.
 //
 //  Only ever instantiated by `SupabaseSiteScanService` (real mode, LiDAR device).
 //  The simulator / preview / `-CaptureScreen` harness runs `MockScanSession`
@@ -29,6 +36,7 @@ import RoomPlan
 import ARKit
 import UIKit
 import simd
+import os.log
 
 @MainActor
 final class RoomPlanScanSession: NSObject, FieldScanSession {
@@ -50,6 +58,15 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
     private(set) var lastCoverage: Double = 0
     private(set) var floorAreaSqm: Double?
     private(set) var dimensionsMeters: SIMD3<Double>?
+
+    // Posed-photo lane (I76). The service samples the RoomPlan ARSession into
+    // JPEGs under `bundleDir/photos/` while the scan runs; the sidecar is written
+    // at export. Both are best-effort and NEVER block the two core artifacts.
+    private let posedPhotos = FieldPosedPhotoService()
+    /// The export bundle dir — created up front (at `start()`) so posed photos
+    /// can be written live, and reused by `exportBundle` for usdz/json/sidecar.
+    private var bundleDir: URL?
+    private let logger = Logger(subsystem: "cloud.patina.field", category: "SiteScan")
 
     override init() {
         roomCaptureView = RoomCaptureView(frame: .zero)
@@ -74,10 +91,42 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
         started = true
         eventContinuation.yield(.status("Scanning — walk the room slowly"))
         roomCaptureView.captureSession.run(configuration: RoomCaptureSession.Configuration())
+        // RoomPlan does NOT claim `ARSessionDelegate` (it owns the RoomCapture-
+        // Session + RoomCaptureView delegates, wired in init) — so we can take
+        // the ARSession delegate for posed-photo frame taps. Set it AFTER
+        // `run(...)`, once the session's ARSession is live, mirroring the
+        // reference `RoomCaptureSessionDriver.run()`.
+        roomCaptureView.captureSession.arSession.delegate = self
+        // Best-effort: prepare the bundle + `photos/` dir and begin sampling. A
+        // failure here means no photos this scan, but the core scan proceeds.
+        startPosedPhotoCapture()
+    }
+
+    /// Create the export bundle dir + its `photos/` subdir and begin auto-
+    /// sampling. Log-only on failure — the scan must never be blocked by photos.
+    private func startPosedPhotoCapture() {
+        do {
+            let dir = try makeBundleDir()
+            let photosDir = dir.appendingPathComponent(RoomScanStoragePath.Folder.photos, isDirectory: true)
+            try FileManager.default.createDirectory(at: photosDir, withIntermediateDirectories: true)
+            bundleDir = dir
+            posedPhotos.start(photosDir: photosDir)
+        } catch {
+            logger.error("Posed-photo capture disabled for this scan: \(error.localizedDescription)")
+        }
+    }
+
+    private func makeBundleDir() throws -> URL {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("site-scan-\(UUID().uuidString.lowercased())", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
     }
 
     /// Stop scanning, let RoomPlan build the final room, export the two artifacts.
     func finish() async throws -> FieldScanResult {
+        // Stop sampling before we tear the session down and build the sidecar.
+        posedPhotos.stop()
         let room = try await withCheckedThrowingContinuation { cont in
             finishContinuation = cont
             roomCaptureView.captureSession.stop()   // → captureView(shouldPresent:) → didPresent
@@ -95,6 +144,7 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
     }
 
     func cancel() {
+        posedPhotos.stop()
         roomCaptureView.captureSession.stop()
         eventContinuation.finish()
         if !didResumeFinish {
@@ -107,9 +157,9 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
     // MARK: - Export (USDZ + CapturedRoom JSON → temp bundle dir)
 
     private func exportBundle(_ room: CapturedRoom) throws -> URL {
-        let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent("site-scan-\(UUID().uuidString.lowercased())", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // Reuse the dir created at `start()` (where `photos/` was written live);
+        // fall back to a fresh dir only if posed-photo setup never ran.
+        let dir = try bundleDir ?? makeBundleDir()
 
         let usdzURL = dir.appendingPathComponent(RoomScanStoragePath.Filename.usdz)
         do {
@@ -128,7 +178,26 @@ final class RoomPlanScanSession: NSObject, FieldScanSession {
         } catch {
             throw SiteScanError.exportFailed("CapturedRoom JSON export failed: \(error.localizedDescription)")
         }
+
+        // Posed-photo sidecar — STRICTLY best-effort. The two core artifacts above
+        // are already written; a sidecar failure must not fail the export. An
+        // absent sidecar simply means the uploader sees zero photos.
+        writePhotosSidecar(into: dir)
         return dir
+    }
+
+    /// Serialise the captured `[FieldPhotoEntry]` to `photos_metadata.json`
+    /// alongside `photos/`. No-op when nothing was captured. Log-only on failure.
+    private func writePhotosSidecar(into dir: URL) {
+        let entries = posedPhotos.capturedEntries
+        guard !entries.isEmpty else { return }
+        do {
+            let data = try JSONEncoder().encode(entries)
+            try data.write(to: dir.appendingPathComponent(RoomScanStoragePath.Filename.photosMetadata),
+                           options: .atomic)
+        } catch {
+            logger.error("Posed-photo sidecar write failed (scan still exports): \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Coverage heuristic + dimension estimate
@@ -230,6 +299,23 @@ extension RoomPlanScanSession: RoomCaptureViewDelegate, RoomCaptureSessionDelega
                 self.finishContinuation?.resume(returning: processedResult)
             }
             self.finishContinuation = nil
+        }
+    }
+}
+
+// MARK: - ARSessionDelegate (posed-photo frame taps)
+//
+// RoomPlan does not implement `ARSessionDelegate` on its RoomCaptureSession, so
+// we own it for the posed-photo lane. `nonisolated` + a MainActor hop mirrors the
+// reference `RoomCaptureService`: the delegate fires off the main actor, and the
+// hop both retains the ARFrame past this callback and lets the @MainActor service
+// snapshot it. `consume(frame:)` self-gates via `FieldPhotoGate`, so feeding every
+// frame is fine — most are dropped by the 2.0s interval.
+
+extension RoomPlanScanSession: ARSessionDelegate {
+    nonisolated func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        Task { @MainActor in
+            self.posedPhotos.consume(frame: frame)
         }
     }
 }
