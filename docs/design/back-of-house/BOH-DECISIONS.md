@@ -576,4 +576,25 @@ Accepts-when all verified live: `test:boh-audit` A/Q/T/L/**E1–E18**/68 Deno gr
 
 ---
 
-*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I12 · R1–R3 · L— · last id = I12 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*
+### I13 · Launch acceptance — the four v1 criteria verified — 2026-07-17
+
+Wave H (read-only acceptance run, `boh/wave-h-acceptance` off `origin/boh/integration` @ `8e2fead1`, no code changes, no commits) proves the package's four v1 launch-acceptance criteria against the finished S0–S7 system, on a fresh reset + reseed + all three fixture scripts + one freshly-injected 3-vendor order (`pi_boh_launch_1`).
+
+1. **3-vendor intake→transmit**: **36.4 seconds** (`order.intake` 17:26:06.903256 → third `po.transmitted` 17:26:43.338153), driven by a real Playwright operator flow (queue→workbench→confirm split→composer×3, one email/one portal/one csv vendor) — under the 10-minute bar by two orders of magnitude.
+2. **Silent-gap audit**: a `.sql` query (run, not committed) finds **zero violating rows** across 17 orders / 62 qualifying state-change events. Honestly caveated: the zero rests on the 7-day grace arm (no notify/send drawer was exercised this run) — the query's correctness, not a proof of notes actually offered, is what's verified.
+3. **Daily reconciliation**: fixture-matched all 17 captures' T1/T4 ledger entries (incl. the launch order) through `fulfillment-stripe-recon` → `ledger_stripe_recon_v` shows **one day, delta_cents=0** (6,299,100 both sides, 17 txns); `job_runs` succeeded; cron `fulfillment-stripe-recon` registered `20 3 * * *`, active.
+4. **Zero-invisibility**: `test:boh-audit` fully green post-launch — A(9)/Q(7)/T(5)/L(23)/E(18) SQL asserts all PASS, **68/68 Deno**; the standalone band audit confirms the launch order appears **exactly once** (band=watching, next_action_kind=awaiting_ack) among 17/17/17/0 (expected/actual/distinct/dupes).
+
+Sweep: admin-portal build EXIT 0 (131 routes), client-portal build EXIT 0, `@patina/fulfillment` 158/158 vitest, admin-portal fulfillment jest 58/58 (7 suites), `boh-queue`+`boh-workbench` Playwright 7/7 chromium. One environment catch for the record: the shared local edge-runtime container was found bind-mounted to a STALE worktree (pre-merge S7 code) — any function call would have exercised old code; re-served from the acceptance worktree before measuring. When multiple worktrees share the local stack, the last `functions serve` wins the mount — check `docker inspect` before trusting a function-path result.
+
+**Program totals**: migrations 00350–00354 + 00358 + 00360–00364 = 11 files (head 00364); 7 `fulfillment-*` edge functions; 19 fulfillment/ledger/vendor-profile/leah_reviews tables; 36 fulfillment/ledger DB functions.
+
+**Owed to Kody, consolidated (I1–I12)**: `APNS_AUTH_KEY`/`APNS_KEY_ID`/`APNS_TEAM_ID`/`APNS_TOPIC` (O1 — code done, secrets outstanding; shared with arrival-arc) · `STRIPE_SECRET_KEY` for live recon (fixture path by design until then) · O3's first real `orders@patina.cloud` send (S3 shipped dry-run/sandbox; O3 closes on the first live PO email) · prod deploy + prod walk (nothing shipped past local/boh branches) · client-evidence device pass (I12) · the C3 ruling queue (I9: pledge freight term, separate pledge entry, T2 deposit basis, recon-pin conditions, the mirror's resolved `payment_intent_id` column, parcel appointment-confirm-as-trivial-stamp, capture-identity CHECK) and the drop-3 review queue (I12: separate settlement-preview RPC, evidence via project-documents, the dedicated `substitution` transition, the title/description spacing nit) · the operator ETA-slip surface question (I11).
+
+**O-items**: O1 **resolved** (code; secrets Kody's) · O2 **open** with counsel (pre-existing) · O3 **near-resolved** (domain already Resend-verified; closes on the first live send).
+
+**The L-family stays intentionally empty.** No Leah sessions have occurred against this build — `leah_reviews` and the substitution card (R1.4, I12) were exercised only by fixtures and automated walk-throughs, never by Leah. Per D1, the L-family is its own entry category; it opens when she actually works the deck, separate from and in addition to the prod-walk items above.
+
+---
+
+*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I13 · R1–R3 · L— · last id = I13 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*
