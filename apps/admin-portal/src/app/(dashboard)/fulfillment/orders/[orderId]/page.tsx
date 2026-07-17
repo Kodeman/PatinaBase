@@ -5,6 +5,7 @@ import { PageHeader, EmptyState } from '@/components/portal';
 import { useFulfillmentOrder } from '@/hooks/use-fulfillment-order';
 import { useFulfillmentRealtime } from '@/hooks/use-fulfillment-realtime';
 import { Workbench } from '@/components/fulfillment/workbench/workbench';
+import { useBreadcrumbLastLabel } from '@/contexts/breadcrumb-context';
 
 // The Order Workbench (S2, spec §5.2). A thin page — one detail round-trip
 // (useFulfillmentOrder) into the Workbench component tree; realtime keeps it
@@ -21,6 +22,11 @@ export default function FulfillmentOrderWorkbenchPage({
   useFulfillmentRealtime();
 
   const order = detail?.order;
+
+  // Breadcrumb (R3.6, C1 fix): the raw order UUID in the URL is meaningless
+  // on screen — once the order loads, swap the last breadcrumb segment for
+  // "Order #{orderNo} · {clientName}". Clears itself on unmount/navigation.
+  useBreadcrumbLastLabel(order ? `Order #${order.orderNo} · ${order.clientName}` : null);
   const derived = detail
     ? detail.confirmed
       ? `${detail.pos.length} vendor PO${detail.pos.length === 1 ? '' : 's'} · split confirmed`
