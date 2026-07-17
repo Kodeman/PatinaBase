@@ -398,6 +398,22 @@ def make_fixture(dest: str) -> None:
     artifacts.append(artifact("keyframeIndex", "keyframes/keyframe_index.ndjson", "application/x-ndjson"))
     artifacts.append(artifact("keyframeSummary", "keyframes/keyframe_summary.json", "application/json"))
 
+    # ── Transport archives (Part 3) — the heavy per-file streams tar'd at
+    # UPLOAD time. depth.tar (kind depthArchive) tars depth/*.bin; keyframes.tar
+    # (kind keyframesArchive) tars keyframes/*.heic + keyframes/*.bin. Both live
+    # in the bundle dir ALONGSIDE the logical per-file depth/ and keyframes/
+    # dirs, and are validated as opaque artifact files (present + sha256 + size)
+    # by the generic per-artifact integrity check above — no special-casing, no
+    # tar-internal inspection. Any small placeholder bytes suffice for the
+    # fixture. depthArchive → room_scans.depth_archive_url; keyframesArchive →
+    # room_scans.scan_bundle_url at upload. Both kinds are OPTIONAL.
+    with open(os.path.join(dest, "depth.tar"), "wb") as fh:
+        fh.write(b"PLACEHOLDER-DEPTH-TAR\x00ustar-opaque-transport-archive\x00")
+    with open(os.path.join(dest, "keyframes.tar"), "wb") as fh:
+        fh.write(b"PLACEHOLDER-KEYFRAMES-TAR\x00ustar-opaque-transport-archive\x00")
+    artifacts.append(artifact("depthArchive", "depth.tar", "application/x-tar"))
+    artifacts.append(artifact("keyframesArchive", "keyframes.tar", "application/x-tar"))
+
     anchors = [
         {
             "id": "00000000-0000-4000-8000-0000000000a1",

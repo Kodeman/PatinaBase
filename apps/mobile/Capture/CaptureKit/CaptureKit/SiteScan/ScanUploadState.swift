@@ -64,4 +64,26 @@ public enum ScanUploadPlanner {
     public static func canAttempt(_ artifact: ScanArtifactUploadState) -> Bool {
         (artifact.status == .pending || artifact.status == .failed) && artifact.attempts < maxAttempts
     }
+
+    /// From the full artifact kind set + the durable states, the kinds still to
+    /// upload (never uploaded, or previously failed) — the upload PLAN. Skips kinds
+    /// already `uploaded` (a resume). Fresh record ⇒ every kind; complete ⇒ empty.
+    public static func kindsToUpload(all: [String], existing: [ScanArtifactUploadState]) -> [String] {
+        let done = Set(existing.filter { $0.status == .uploaded }.map(\.kind))
+        return all.filter { !done.contains($0) }
+    }
+
+    /// The rehydration decision on relaunch / re-entry: keep uploading, confirm the
+    /// bundle server-side (all bytes are up), or the record is already complete.
+    public enum Step: Equatable, Sendable {
+        case upload([String])   // these kinds still need bytes
+        case confirm            // all uploaded → confirm-scan-bundle + mark complete
+        case done               // record already marked complete
+    }
+    public static func nextStep(all: [String], existing: [ScanArtifactUploadState],
+                                recordComplete: Bool) -> Step {
+        if recordComplete { return .done }
+        let remaining = kindsToUpload(all: all, existing: existing)
+        return remaining.isEmpty ? .confirm : .upload(remaining)
+    }
 }

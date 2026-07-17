@@ -50,6 +50,22 @@ final class SupabaseSiteScanService: SiteScanService {
     private weak var lastSession: RoomPlanScanSession?
     #endif
 
+    /// Background-session artifact transport (item 8 Part 3). Uploads survive
+    /// suspension; a per-kind continuation bridges the delegate callback back into the
+    /// awaiting `upload()`, and the durable record resumes a kill mid-upload.
+    private lazy var backgroundUploader: FieldBackgroundScanUploader = {
+        let uploader = FieldBackgroundScanUploader(
+            baseURL: AppConfiguration.supabaseURL, anonKey: AppConfiguration.supabaseAnonKey)
+        uploader.accessTokenProvider = { [weak self] in try? await self?.client.auth.session.accessToken }
+        uploader.refreshTokenProvider = { [weak self] in try? await self?.client.auth.refreshSession().accessToken }
+        uploader.onCompletion = { [weak self] _, kind, result in
+            self?.artifactContinuations.removeValue(forKey: kind)?.resume(returning: result)
+        }
+        return uploader
+    }()
+    private var artifactContinuations:
+        [String: CheckedContinuation<Result<Void, FieldBackgroundScanUploader.UploadError>, Never>] = [:]
+
     init(deps: WorkServiceDependencies) {
         self.client = deps.client
         self.session = deps.session
@@ -182,20 +198,32 @@ final class SupabaseSiteScanService: SiteScanService {
     /// persist per-artifact progress on the durable record.
     private func uploadBundleArtifacts(bundle: URL, scanID: UUID, roomID: UUID, userID: UUID,
                                        reserved: ScanReservation) async throws -> [ScanArtifactUploadState] {
+        // Tar the heavy streams + fold the archives into the manifest (Part 3), so a
+        // 500 MB bundle uploads as a handful of background tasks, not ~700.
+        buildTransportArchives(bundle: bundle)
+        try? FieldManifestAssembler.refreshArtifacts(bundleDir: bundle)
+
         var states = reserved.record.artifacts
         var patch = RoomScanArtifactPatch()
         for descriptor in Self.uploadDescriptors where !isUploaded(descriptor.kind, in: states) {
             let fileURL = bundle.appendingPathComponent(descriptor.relativePath)
             guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
             let sha = BundleChecksum.sha256(ofFile: fileURL)
-            let path = RoomScanStoragePath.object(folder: descriptor.folder, userID: userID,
-                                                  roomID: roomID, filename: descriptor.filename)
-            let data = try Data(contentsOf: fileURL)
-            try await client.storage.from(bucket).upload(
-                path, data: data,
-                options: FileOptions(contentType: descriptor.contentType, upsert: true,
-                                     metadata: Self.metadata(scanID: scanID, kind: descriptor.kind, sha: sha)))
-            let url = try client.storage.from(bucket).getPublicURL(path: path).absoluteString
+            let storagePath = RoomScanStoragePath.object(folder: descriptor.folder, userID: userID,
+                                                         roomID: roomID, filename: descriptor.filename)
+            // Transport via the BACKGROUND session; await the delegate's completion.
+            let ok = await uploadViaBackground(FieldBackgroundScanUploader.Descriptor(
+                scanID: scanID.uuidString, kind: descriptor.kind, sha256: sha,
+                mimeType: descriptor.contentType, fileURL: fileURL, storagePath: storagePath))
+            guard ok else {
+                states.append(ScanArtifactUploadState(
+                    kind: descriptor.kind, relativePath: descriptor.relativePath,
+                    mimeType: descriptor.contentType, storagePath: storagePath,
+                    sha256: sha, column: descriptor.column, status: .failed))
+                store.updateScanUploadRecord(reserved.record, artifacts: states, status: "failed")
+                throw SiteScanError.exportFailed("Upload of \(descriptor.kind) failed — retry resumes.")
+            }
+            let url = try client.storage.from(bucket).getPublicURL(path: storagePath).absoluteString
             if let sha {
                 try? await client.rpc("merge_scan_artifact_sha256",
                     params: ArtifactShaMergeParams(p_scan_id: scanID.uuidString,
@@ -204,13 +232,40 @@ final class SupabaseSiteScanService: SiteScanService {
             patch.apply(column: descriptor.column, url: url)
             states.append(ScanArtifactUploadState(
                 kind: descriptor.kind, relativePath: descriptor.relativePath,
-                mimeType: descriptor.contentType, storagePath: path, remoteUrl: url,
+                mimeType: descriptor.contentType, storagePath: storagePath, remoteUrl: url,
                 sha256: sha, column: descriptor.column, status: .uploaded))
             store.updateScanUploadRecord(reserved.record, artifacts: states, status: "uploading")
         }
         try await client.from("room_scans").update(patch.withSchemaVersion(3))
             .eq("id", value: scanID.uuidString).execute()
         return states
+    }
+
+    /// Enqueue one artifact on the background session and await its completion via the
+    /// per-kind continuation (bridged from the uploader's delegate callback).
+    private func uploadViaBackground(_ descriptor: FieldBackgroundScanUploader.Descriptor) async -> Bool {
+        let result: Result<Void, FieldBackgroundScanUploader.UploadError> =
+            await withCheckedContinuation { continuation in
+                artifactContinuations[descriptor.kind] = continuation
+                Task { await backgroundUploader.enqueue(descriptor) }
+            }
+        if case .success = result { return true }
+        return false
+    }
+
+    /// Tar depth/*.bin → depth.tar and keyframes/*.heic+*.bin → keyframes.tar into the
+    /// bundle dir (transport archives; the per-file dirs remain the logical form).
+    private func buildTransportArchives(bundle: URL) {
+        let fm = FileManager.default
+        func tar(dir: String, extensions: Set<String>, to name: String) {
+            let src = bundle.appendingPathComponent(dir, isDirectory: true)
+            guard let files = try? fm.contentsOfDirectory(at: src, includingPropertiesForKeys: nil)
+                .filter({ extensions.contains($0.pathExtension) }), !files.isEmpty else { return }
+            try? TarArchive.write(entries: files.map { TarArchive.Entry(name: $0.lastPathComponent, url: $0) },
+                                  to: bundle.appendingPathComponent(name))
+        }
+        tar(dir: "depth", extensions: ["bin"], to: "depth.tar")
+        tar(dir: "keyframes", extensions: ["heic", "bin"], to: "keyframes.tar")
     }
 
     /// The full v1 bundle artifact set (stable order). `column` non-nil ⇒ the URL is
@@ -237,7 +292,13 @@ final class SupabaseSiteScanService: SiteScanService {
         .init(relativePath: "keyframes/keyframe_index.ndjson", kind: "keyframeIndex", folder: "keyframes",
               filename: "keyframe_index.ndjson", contentType: "application/x-ndjson", column: nil),
         .init(relativePath: "keyframes/keyframe_summary.json", kind: "keyframeSummary", folder: "keyframes",
-              filename: "keyframe_summary.json", contentType: "application/json", column: nil)
+              filename: "keyframe_summary.json", contentType: "application/json", column: nil),
+        // Transport archives (Part 3) — the heavy streams; map to the archive columns
+        // confirm-scan-bundle HEAD-checks (depth_archive_url / scan_bundle_url).
+        .init(relativePath: "depth.tar", kind: "depthArchive", folder: "depth",
+              filename: "depth.tar", contentType: "application/x-tar", column: "depth_archive_url"),
+        .init(relativePath: "keyframes.tar", kind: "keyframesArchive", folder: "bundle",
+              filename: "keyframes.tar", contentType: "application/x-tar", column: "scan_bundle_url")
     ]
 
     /// base64(JSON) is the channel Storage persists into `user_metadata` — supabase-
@@ -469,6 +530,8 @@ private struct RoomScanArtifactPatch: Encodable {
     var captured_room_json_url: String?
     var mesh_url: String?
     var bundle_manifest_url: String?
+    var depth_archive_url: String?
+    var scan_bundle_url: String?
     var scan_schema_version: Int?
 
     mutating func apply(column: String?, url: String) {
@@ -477,6 +540,8 @@ private struct RoomScanArtifactPatch: Encodable {
         case "captured_room_json_url": captured_room_json_url = url
         case "mesh_url": mesh_url = url
         case "bundle_manifest_url": bundle_manifest_url = url
+        case "depth_archive_url": depth_archive_url = url
+        case "scan_bundle_url": scan_bundle_url = url
         default: break
         }
     }

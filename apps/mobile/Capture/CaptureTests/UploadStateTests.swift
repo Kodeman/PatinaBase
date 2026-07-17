@@ -43,4 +43,24 @@ struct UploadStateTests {
         #expect(!ScanUploadPlanner.canAttempt(artifact("a", .failed, attempts: 3)))   // budget spent
         #expect(!ScanUploadPlanner.canAttempt(artifact("a", .uploaded, attempts: 0))) // already done
     }
+
+    // MARK: - Plan generation + rehydration
+
+    @Test func kindsToUploadSkipsAlreadyUploaded() {
+        let all = ["usdz", "mesh", "depthArchive"]
+        #expect(ScanUploadPlanner.kindsToUpload(all: all, existing: []) == all)      // fresh → all
+        let existing = [artifact("usdz", .uploaded), artifact("mesh", .failed)]
+        #expect(ScanUploadPlanner.kindsToUpload(all: all, existing: existing) == ["mesh", "depthArchive"])
+    }
+
+    @Test func nextStepRehydrationDecision() {
+        let all = ["usdz", "mesh"]
+        #expect(ScanUploadPlanner.nextStep(all: all, existing: [], recordComplete: false)
+                == .upload(["usdz", "mesh"]))                                        // fresh
+        #expect(ScanUploadPlanner.nextStep(all: all, existing: [artifact("usdz", .uploaded)], recordComplete: false)
+                == .upload(["mesh"]))                                                // partial → resume
+        let full = [artifact("usdz", .uploaded), artifact("mesh", .uploaded)]
+        #expect(ScanUploadPlanner.nextStep(all: all, existing: full, recordComplete: false) == .confirm)   // bytes up
+        #expect(ScanUploadPlanner.nextStep(all: all, existing: full, recordComplete: true) == .done)       // finished
+    }
 }

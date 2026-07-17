@@ -63,7 +63,12 @@ public enum FieldManifestAssembler {
         Candidate(path: "scorecard.json", kind: "scorecard", mime: "application/json"),
         Candidate(path: "anchors.json", kind: "anchors", mime: "application/json"),
         Candidate(path: "keyframes/keyframe_index.ndjson", kind: "keyframeIndex", mime: "application/x-ndjson"),
-        Candidate(path: "keyframes/keyframe_summary.json", kind: "keyframeSummary", mime: "application/json")
+        Candidate(path: "keyframes/keyframe_summary.json", kind: "keyframeSummary", mime: "application/json"),
+        // Transport archives (item 8 Part 3) — present only at upload time, after the
+        // heavy streams are tar'd; the per-file listing above stays the logical
+        // inventory (the validator's subject). Additive.
+        Candidate(path: "depth.tar", kind: "depthArchive", mime: "application/x-tar"),
+        Candidate(path: "keyframes.tar", kind: "keyframesArchive", mime: "application/x-tar")
     ]
 
     /// Discover + checksum the present artifacts (stable order).
@@ -92,10 +97,29 @@ public enum FieldManifestAssembler {
             captureEnvironment: inputs.captureEnvironment, annotations: inputs.annotations,
             artifacts: discoverArtifacts(in: bundleDir), photos: inputs.photos)
 
+        try write(manifest, to: bundleDir)
+        return manifest
+    }
+
+    /// Re-discover + re-hash the artifacts of an existing `manifest.json` and rewrite
+    /// it (item 8 Part 3): called at UPLOAD after the transport archives (depth.tar,
+    /// keyframes.tar) are built into the bundle dir, so they join the artifact list
+    /// (with their sha256) while every other manifest field is preserved. No-op if
+    /// there's no manifest yet. Deterministic (same encoder).
+    @discardableResult
+    public static func refreshArtifacts(bundleDir: URL) throws -> FieldScanManifest? {
+        let url = bundleDir.appendingPathComponent("manifest.json")
+        guard let data = try? Data(contentsOf: url),
+              var manifest = try? JSONDecoder().decode(FieldScanManifest.self, from: data) else { return nil }
+        manifest.artifacts = discoverArtifacts(in: bundleDir)
+        try write(manifest, to: bundleDir)
+        return manifest
+    }
+
+    private static func write(_ manifest: FieldScanManifest, to bundleDir: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]     // deterministic key order
         let data = try encoder.encode(manifest)
         try data.write(to: bundleDir.appendingPathComponent("manifest.json"), options: .atomic)
-        return manifest
     }
 }

@@ -107,4 +107,36 @@ struct ManifestTests {
         let second = try Data(contentsOf: dir.appendingPathComponent("manifest.json"))
         #expect(first == second)      // sorted keys + stable artifact order → byte-identical
     }
+
+    // MARK: - Tar archive (transport of the heavy streams)
+
+    @Test func tarIsDeterministicAndStructured() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let a = dir.appendingPathComponent("a.bin"); try Data("AAA".utf8).write(to: a)
+        let b = dir.appendingPathComponent("b.bin"); try Data("BBBB".utf8).write(to: b)
+        // Deliberately reversed input order — the writer sorts by name.
+        let entries = [TarArchive.Entry(name: "b.bin", url: b), TarArchive.Entry(name: "a.bin", url: a)]
+
+        let out1 = dir.appendingPathComponent("1.tar")
+        let out2 = dir.appendingPathComponent("2.tar")
+        let count = try TarArchive.write(entries: entries, to: out1)
+        _ = try TarArchive.write(entries: entries, to: out2)
+
+        #expect(count == 2)
+        let bytes = try Data(contentsOf: out1)
+        #expect(bytes == (try Data(contentsOf: out2)))          // deterministic (sorted + mtime 0)
+        #expect(bytes.count == 512 * 6)                          // 2×(header+block) + 2 zero blocks
+        #expect(String(bytes: bytes.prefix(5), encoding: .utf8) == "a.bin")   // sorted: a before b
+    }
+
+    @Test func tarSkipsMissingSources() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let a = dir.appendingPathComponent("a.bin"); try Data("x".utf8).write(to: a)
+        let entries = [TarArchive.Entry(name: "a.bin", url: a),
+                       TarArchive.Entry(name: "gone.bin", url: dir.appendingPathComponent("gone.bin"))]
+        let out = dir.appendingPathComponent("o.tar")
+        #expect(try TarArchive.write(entries: entries, to: out) == 1)   // missing skipped
+    }
 }
