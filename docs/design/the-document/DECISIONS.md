@@ -4060,3 +4060,39 @@ at P2 splat training. Package design lands in
 docs/design/field-capture/scan-pipeline-worker-design.md.
 
 *Entries add: R109 · last id = R109*
+
+### R110 · Field Capture M2 passed — first real-room bundle end-to-end — 2026-07-17
+
+Kody walked a real room on the Field build (branch
+field-capture/p1-ios-capture-core) and the full chain held: capture rig
+(four streams, one clock) → coach/scorecard → typed anchors → checksummed
+manifest bundle → resumable upload → confirm-scan-bundle verification →
+parse sweep → Room View render (plan 10.0′ × 17.3′, 173 sq ft, 21 posed
+photos, project doc-link resolved). M2 gate PASSED. Branch merges to main;
+items 9–11 open against the R109 worker design.
+
+Two field defects found and fixed during the walk, both regression-guarded:
+
+1. Storage MIME allow-list rejected the new artifact kinds — the uploader
+sent semantic MIMEs (x-ndjson, x-tar) the 00077 bucket list refuses. Fix
+ef6fac59: octet-stream transport types + a drift-guard test pinning every
+descriptor against the allow-list; spec B-17 splits semantic (manifest)
+from transport (storage) MIME.
+
+2. confirm-scan-bundle HEAD-checked raw /object/public/ URLs on the
+private room-scans bucket — 409 on every bundle despite all artifacts
+present. Latent since 00082; exposed by the first caller that ever
+depended on its verdict. Fix 8df0d005 (fn v18 on Strata): verify via
+/object/info/authenticated with the caller's JWT. Open follow-up: the
+photos-manifest count cross-check still reads the raw URL (informational
+only, never 409s).
+
+Wording: the escalate-class coach/anchor/scorecard strings shipped as
+placeholders, were seen during the walk, and stand as accepted-for-P1
+unless Kody flags changes (catalogue in m2-device-walk.md).
+
+Device-owed edges carried forward, not gating M2: airplane-mode resume,
+500 MB unattended background completion, background-relaunch session
+rehydration, sharpness-threshold calibration, voice-note audio seam.
+
+*Entries add: R110 · last id = R110*
