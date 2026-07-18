@@ -116,6 +116,20 @@ task (belt-and-braces for a lost enqueue), logging to `job_runs`. The trigger
 allocates the `room_file_version`; the ingest stage reserves the pending
 `room_files` row.
 
+## Troubleshooting
+
+- **Drawings stage crashes with `[Errno 13] Permission denied:
+  …/.config/ezdxf/ezdxf.ini` (EACCES).** ezdxf writes its XDG config file on
+  first use. If the `patina` service user's `~/.config` is root-owned or absent
+  (a fresh-install footgun), the write fails and the drawings stage errors. The
+  worker confines this to `APP_DIR`: the systemd unit sets
+  `XDG_CONFIG_HOME=/opt/patina/scan-pipeline/.config` (and lists it on
+  `ReadWritePaths`), and `install.sh` creates that dir owned by `patina`.
+  **Fix on a box that hit this: re-run `sudo ./install.sh`** (it creates/chowns
+  the config dir and refreshes the unit), then `systemctl restart
+  patina-scan-worker`. `patina-scan-worker doctor` now includes a `config` check
+  that fails preflight if `$XDG_CONFIG_HOME` (or `~/.config`) is not writable.
+
 ## Telemetry query surface (item 13)
 
 Every run lands events in `scan_pipeline_events` across all six stages —
