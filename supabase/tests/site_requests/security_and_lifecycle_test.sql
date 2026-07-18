@@ -90,6 +90,8 @@ DECLARE
   v_old_token_hash text;
   v_token_hash text;
   v_access_id uuid;
+  v_outbox_id uuid;
+  v_notification_outbox_id uuid;
   v_upload jsonb;
   v_media_id uuid;
   v_object_path text;
@@ -113,6 +115,20 @@ BEGIN
     'authenticated must not execute service guest bootstrap';
   ASSERT has_function_privilege('service_role', 'public.site_request_guest_bootstrap(text)', 'EXECUTE'),
     'service_role must execute guest bootstrap';
+  ASSERT NOT has_table_privilege(
+    'authenticated', 'public.site_request_dispatch_outbox', 'SELECT'
+  ), 'designer must not browse internal dispatch retry state';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'site_request_dispatch_outbox'
+      AND column_name ~ '(token|body|url)'
+  ), 'dispatch outbox must persist identifiers and safe retry state, never raw messages/tokens';
+  ASSERT public._site_request_safe_provider_message_id('SM_safe-123') = 'SM_safe-123',
+    'provider message ids must preserve a narrow safe identifier';
+  ASSERT public._site_request_safe_provider_message_id(
+    'https://client.patina.cloud/field/sr_must_not_persist'
+  ) IS NULL, 'provider message ids must reject URLs';
 
   -- Draft creation snapshots stable item identities and immutable revisions.
   PERFORM pg_temp.assume_user('f3730000-0000-4000-8000-000000000001');
@@ -134,7 +150,7 @@ BEGIN
         'client_item_id','f3730000-0000-4000-8000-000000000402',
         'sort_order',1,'kit_code','K-02','title','Outlet detail photos',
         'room_id','f3730000-0000-4000-8000-000000000202',
-        'configuration',jsonb_build_object('shots',jsonb_build_array('wide','close'))
+        'configuration','{}'::jsonb
       )
     )
   );
@@ -230,23 +246,44 @@ BEGIN
     FROM public.project_parties WHERE id = 'f3730000-0000-4000-8000-000000000301'
   ), 'send must transition not_asked consent to pending';
 
-  -- Consent grant bridge target: first dispatch returns raw token once.
+  -- Consent grant creates identifier-only durable work; claim mints the raw
+  -- token only at actual send time and completion activates it.
   RESET ROLE;
   UPDATE public.project_parties
   SET sms_consent_status = 'granted', sms_consented_at = now()
   WHERE id = 'f3730000-0000-4000-8000-000000000301';
 
   v_dispatch := public.site_request_dispatch_after_consent(v_request_id);
+  v_outbox_id := (v_dispatch->>'outbox_id')::uuid;
+  ASSERT v_dispatch->>'token' IS NULL,
+    'durable dispatch preparation must never return or persist a raw token';
+  v_dispatch := public.site_request_claim_dispatch(v_outbox_id, now());
   v_token := v_dispatch->>'token';
   v_access_id := (v_dispatch->>'access_id')::uuid;
   v_old_token_hash := encode(extensions.digest(v_token, 'sha256'), 'hex');
-  ASSERT v_token IS NOT NULL AND length(v_token) = 64,
-    'consent dispatch must return a raw 64-hex token';
-  ASSERT public.site_request_guest_bootstrap(v_old_token_hash) IS NOT NULL,
-    'fresh consent token must bootstrap';
+  ASSERT v_token ~ '^sr_[A-Za-z0-9_-]{43}$',
+    'claimed dispatch must mint a distinguishable sr_ token';
+  ASSERT public.site_request_guest_bootstrap(v_old_token_hash) IS NULL,
+    'unacknowledged pending token must not bootstrap';
 
-  -- Unacknowledged retry remints, revokes old, and remains recoverable.
-  v_dispatch_retry := public.site_request_dispatch_after_consent(v_request_id);
+  -- Provider failure remains retryable, revokes the unacknowledged token, and
+  -- a later sweep remints without persisting either raw value.
+  PERFORM public.site_request_complete_dispatch(
+    v_outbox_id, 'retry', NULL,
+    'https://client.patina.cloud/field/sr_must_not_persist', now()
+  );
+  ASSERT (
+    SELECT last_error = 'dispatch_error'
+    FROM public.site_request_dispatch_outbox WHERE id = v_outbox_id
+  ), 'provider errors must be reduced to a safe retry code';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.site_request_events
+    WHERE request_id = v_request_id
+      AND payload::text LIKE '%sr_must_not_persist%'
+  ), 'raw provider errors must not persist in activity events';
+  UPDATE public.site_request_dispatch_outbox SET available_at = now()
+  WHERE id = v_outbox_id;
+  v_dispatch_retry := public.site_request_claim_dispatch(v_outbox_id, now());
   ASSERT v_dispatch_retry->>'token' IS NOT NULL,
     'unacknowledged retry must remint a recoverable token';
   ASSERT (v_dispatch_retry->>'access_id')::uuid <> v_access_id,
@@ -257,15 +294,16 @@ BEGIN
   v_access_id := (v_dispatch_retry->>'access_id')::uuid;
   v_token_hash := encode(extensions.digest(v_token, 'sha256'), 'hex');
 
-  PERFORM public.site_request_mark_dispatched(
-    v_request_id, v_access_id, 'sms-site-001', now()
+  v_dispatch := public.site_request_complete_dispatch(
+    v_outbox_id, 'sent', 'sms-site-001', NULL, now()
   );
-  v_dispatch_retry := public.site_request_dispatch_after_consent(v_request_id);
-  ASSERT v_dispatch_retry->>'token' IS NULL
-     AND (v_dispatch_retry->>'reused')::boolean,
-    'acknowledged consent dispatch must be idempotent';
-  ASSERT (v_dispatch_retry->>'access_id')::uuid = v_access_id,
-    'acknowledged retry must reuse access';
+  ASSERT public.site_request_guest_bootstrap(v_token_hash) IS NOT NULL,
+    'provider-acknowledged token must bootstrap';
+  v_dispatch_retry := public.site_request_complete_dispatch(
+    v_outbox_id, 'sent', 'sms-site-001', NULL, now()
+  );
+  ASSERT (v_dispatch_retry->>'idempotent')::boolean,
+    'dispatch completion must be idempotent';
 
   -- Narrow DTO excludes project/Binder browsing and includes request items.
   v_dispatch_retry := public.site_request_guest_bootstrap(v_token_hash);
@@ -306,28 +344,75 @@ BEGIN
   PERFORM public.site_request_guest_ack_upload(
     v_token_hash, v_media_id, 'etag-001', 4
   );
+  v_raised := false;
+  BEGIN
+    PERFORM public.site_request_guest_deliver(
+      v_token_hash, v_version_photo,
+      'f3730000-0000-4000-8000-000000000501',
+      jsonb_build_object('shots', jsonb_build_array(
+        jsonb_build_object(
+          'id','wide_context','label','Wide context','status','captured',
+          'media_id',v_media_id
+        )
+      )), '[]'::jsonb,
+      'Casey Contractor', '2026-07-17 15:00:00+00'
+    );
+  EXCEPTION WHEN invalid_parameter_value THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'K-02 must reject an incomplete configured shot list';
   v_delivery_photo := public.site_request_guest_deliver(
     v_token_hash, v_version_photo,
     'f3730000-0000-4000-8000-000000000501',
-    '{"shot_count":1}'::jsonb, '[]'::jsonb,
+    jsonb_build_object('shots', jsonb_build_array(
+      jsonb_build_object(
+        'id','wide_context','label','Wide context','status','captured',
+        'media_id',v_media_id
+      ),
+      jsonb_build_object(
+        'id','straight_on','label','Straight on','status','skipped',
+        'skip_note','The wall was blocked by stored millwork.'
+      ),
+      jsonb_build_object(
+        'id','left_return','label','Left return','status','skipped',
+        'skip_note','The left return was not installed yet.'
+      ),
+      jsonb_build_object(
+        'id','detail','label','Close detail','status','skipped',
+        'skip_note','The finish detail was covered for protection.'
+      )
+    )), '[]'::jsonb,
     'Casey Contractor', '2026-07-17 15:00:00+00'
   );
   ASSERT v_delivery_photo->>'item_status' = 'delivered',
     'photo item must deliver after receipt';
 
   -- K-01 delivery stores integer mm and is idempotent by client attempt UUID.
+  v_raised := false;
+  BEGIN
+    PERFORM public.site_request_guest_deliver(
+      v_token_hash, v_version_measure,
+      'f3730000-0000-4000-8000-000000000502',
+      '{"unit_input":"inches-sixteenths"}'::jsonb,
+      '[{"label":"wrong","value_mm":914}]'::jsonb,
+      'Casey Contractor', '2026-07-17 15:05:00+00'
+    );
+  EXCEPTION WHEN invalid_parameter_value THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'K-01 must reject missing or mislabeled configured dimensions';
   v_delivery_measure := public.site_request_guest_deliver(
     v_token_hash, v_version_measure,
     'f3730000-0000-4000-8000-000000000502',
     '{"unit_input":"inches-sixteenths"}'::jsonb,
-    '[{"label":"width","value_mm":914},{"label":"height","value_mm":1219}]'::jsonb,
+    '[{"label":"A · floor → sill","value_mm":914},{"label":"B · sill → head","value_mm":1219},{"label":"C · run length","value_mm":1800}]'::jsonb,
     'Casey Contractor', '2026-07-17 15:05:00+00'
   );
   v_dispatch_retry := public.site_request_guest_deliver(
     v_token_hash, v_version_measure,
     'f3730000-0000-4000-8000-000000000502',
     '{"unit_input":"inches-sixteenths"}'::jsonb,
-    '[{"label":"width","value_mm":914},{"label":"height","value_mm":1219}]'::jsonb,
+    '[{"label":"A · floor → sill","value_mm":914},{"label":"B · sill → head","value_mm":1219},{"label":"C · run length","value_mm":1800}]'::jsonb,
     'Casey Contractor', '2026-07-17 15:05:00+00'
   );
   ASSERT (v_dispatch_retry->>'idempotent')::boolean,
@@ -340,7 +425,40 @@ BEGIN
   SELECT count(*) INTO v_count
   FROM public.site_deliverable_dimensions
   WHERE deliverable_id = (v_delivery_measure->>'deliverable_id')::uuid;
-  ASSERT v_count = 2, 'idempotency must not duplicate dimensions';
+  ASSERT v_count = 3, 'idempotency must not duplicate dimensions';
+
+  SELECT id INTO v_notification_outbox_id
+  FROM public.site_request_delivery_notification_outbox
+  WHERE request_id = v_request_id AND status = 'pending';
+  ASSERT v_notification_outbox_id IS NOT NULL,
+    'non-idempotent delivery must enqueue a designer notification';
+  ASSERT (
+    SELECT cardinality(deliverable_ids) = 2
+    FROM public.site_request_delivery_notification_outbox
+    WHERE id = v_notification_outbox_id
+  ), 'deliveries in the short window must batch into one request notification';
+  ASSERT (
+    SELECT count(*) = 1
+    FROM public.site_request_delivery_notification_outbox
+    WHERE request_id = v_request_id
+  ), 'idempotent redelivery must not duplicate the notification outbox';
+  v_dispatch := public.site_request_claim_delivery_notification(
+    v_notification_outbox_id, now() + interval '3 minutes'
+  );
+  ASSERT v_dispatch->>'user_id' = 'f3730000-0000-4000-8000-000000000001',
+    'batched delivery notification must target the request creator';
+  ASSERT (v_dispatch->>'deliverable_count')::integer = 2,
+    'batched notification must report the exact new delivery count';
+  ASSERT NOT (v_dispatch::text LIKE '%Casey Contractor%'),
+    'push notification context must remain privacy-safe';
+  PERFORM public.site_request_complete_delivery_notification(
+    v_notification_outbox_id, false, 'apns_not_configured', now() + interval '3 minutes'
+  );
+  ASSERT (
+    SELECT status = 'pending' AND last_error = 'apns_not_configured'
+    FROM public.site_request_delivery_notification_outbox
+    WHERE id = v_notification_outbox_id
+  ), 'notification failure must be recorded and remain retryable';
 
   -- Atomic approval: invalid foreign room inserts no Binder row.
   PERFORM pg_temp.assume_user('f3730000-0000-4000-8000-000000000001');
@@ -393,7 +511,7 @@ BEGIN
     v_token_hash, v_version_measure,
     'f3730000-0000-4000-8000-000000000503',
     '{"unit_input":"metric"}'::jsonb,
-    '[{"label":"width","value_mm":916},{"label":"height","value_mm":1220}]'::jsonb,
+    '[{"label":"A · floor → sill","value_mm":916},{"label":"B · sill → head","value_mm":1220},{"label":"C · run length","value_mm":1802}]'::jsonb,
     'Casey Contractor', '2026-07-17 16:00:00+00'
   );
   v_dispatch := public.site_request_approve_item(
@@ -420,7 +538,11 @@ BEGIN
   ASSERT v_raised, 'Binder history must reject delete';
 
   -- One nudge per calendar day.
-  PERFORM public.site_request_nudge(v_request_id, 'Checking in.');
+  v_dispatch := public.site_request_nudge(v_request_id, 'Checking in.');
+  v_outbox_id := (v_dispatch->>'outbox_id')::uuid;
+  ASSERT (
+    SELECT last_nudged_at IS NULL FROM public.site_requests WHERE id = v_request_id
+  ), 'nudge timestamp must not finalize before provider acceptance';
   v_raised := false;
   BEGIN
     PERFORM public.site_request_nudge(v_request_id, 'Again.');
@@ -431,6 +553,13 @@ BEGIN
   SELECT count(*) INTO v_count FROM public.site_request_events
   WHERE request_id = v_request_id AND event_type = 'nudge_requested';
   ASSERT v_count = 1, 'nudge retry must not duplicate event';
+  v_dispatch := public.site_request_claim_dispatch(v_outbox_id, now());
+  PERFORM public.site_request_complete_dispatch(
+    v_outbox_id, 'sent', 'sms-nudge-001', NULL, now()
+  );
+  ASSERT (
+    SELECT last_nudged_at IS NOT NULL FROM public.site_requests WHERE id = v_request_id
+  ), 'successful nudge must finalize exactly after provider acceptance';
 
   -- Once-only due reminder.
   RESET ROLE;
@@ -446,6 +575,19 @@ BEGIN
   SELECT count(*) INTO v_count FROM public.site_request_events
   WHERE request_id = v_request_id AND event_type = 'due_reminder_ready';
   ASSERT v_count = 1, 'due reminder event must be once-only';
+  ASSERT (
+    SELECT due_reminder_sent_at IS NULL FROM public.site_requests WHERE id = v_request_id
+  ), 'due reminder must not finalize before provider acceptance';
+  SELECT id INTO v_outbox_id
+  FROM public.site_request_dispatch_outbox
+  WHERE request_id = v_request_id AND action = 'due-reminder';
+  v_dispatch := public.site_request_claim_dispatch(v_outbox_id, now());
+  PERFORM public.site_request_complete_dispatch(
+    v_outbox_id, 'sent', 'sms-due-001', NULL, now()
+  );
+  ASSERT (
+    SELECT due_reminder_sent_at IS NOT NULL FROM public.site_requests WHERE id = v_request_id
+  ), 'due reminder finalizes only after provider acceptance';
 
   -- Manual revocation kills token; resend installs a fresh one.
   PERFORM pg_temp.assume_user('f3730000-0000-4000-8000-000000000001');
@@ -453,11 +595,17 @@ BEGIN
   ASSERT public.site_request_guest_bootstrap(v_token_hash) IS NULL,
     'revoked token must not bootstrap';
   v_dispatch := public.site_request_resend(v_request_id, now() + interval '2 days');
+  v_outbox_id := (v_dispatch->>'outbox_id')::uuid;
+  ASSERT v_dispatch->>'token' IS NULL,
+    'resend preparation must persist identifiers only';
+  v_dispatch := public.site_request_claim_dispatch(v_outbox_id, now());
   v_token := v_dispatch->>'token';
   v_access_id := (v_dispatch->>'access_id')::uuid;
   v_token_hash := encode(extensions.digest(v_token, 'sha256'), 'hex');
   RESET ROLE;
-  PERFORM public.site_request_mark_dispatched(v_request_id, v_access_id, 'sms-site-002', now());
+  PERFORM public.site_request_complete_dispatch(
+    v_outbox_id, 'sent', 'sms-site-002', NULL, now()
+  );
 
   -- Expiry processing closes request, expires access, and preserves 90-day retention.
   UPDATE public.site_requests SET expires_at = now() - interval '1 minute'
@@ -472,6 +620,20 @@ BEGIN
        AND unapproved_media_delete_after >= now() + interval '89 days'
     FROM public.site_requests WHERE id = v_request_id
   ), 'expiry must establish 90-day unapproved media retention';
+  UPDATE public.site_requests
+  SET unapproved_media_delete_after = now() - interval '1 minute'
+  WHERE id = v_request_id;
+  ASSERT EXISTS (
+    SELECT 1
+    FROM public.site_request_unapproved_media_cleanup_candidates(now(), 100) c
+    WHERE c.media_id = v_media_id
+      AND c.bucket_id = 'site-requests'
+      AND c.object_path = v_object_path
+  ), 'cleanup must expose exact unapproved immutable Storage candidates after day 90';
+  ASSERT (
+    SELECT upload_state <> 'deleted'
+    FROM public.site_deliverable_media WHERE id = v_media_id
+  ), 'candidate enumeration must never fake Storage deletion';
 
   -- Event sequence is gap-free and append-only for this request.
   ASSERT NOT EXISTS (

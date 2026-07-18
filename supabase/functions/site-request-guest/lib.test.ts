@@ -9,7 +9,7 @@ import {
   type UploadBinding,
 } from "./lib.ts";
 
-const TOKEN = "opaque_site_request_token_1234567890abcd";
+const TOKEN = "sr_0123456789abcdefghijklmnopqrstuvwxyzABCDEFG";
 const HASH = "a".repeat(64);
 const ITEM_VERSION = "11111111-1111-4111-8111-111111111111";
 const ATTEMPT = "22222222-2222-4222-8222-222222222222";

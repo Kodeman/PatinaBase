@@ -83,6 +83,66 @@ Deno.test("quiet hours defer stores the body without sending", async () => {
   assertEquals((msgs[0] as { body: string }).body, "after hours");
 });
 
+Deno.test("caller-owned sensitive outbox never persists a raw guest URL", async () => {
+  const raw = "Open https://client.patina.cloud/field/sr_SECRET_RAW_TOKEN";
+  const audit = "Patina Site Request private link [redacted]";
+  const quietFake = createFakeSupabase({ project_parties: [party("p1", "granted")] });
+  const deferred = await sendPartySms(
+    quietFake as never,
+    {
+      partyId: "p1",
+      body: raw,
+      auditBody: audit,
+      deferToCaller: true,
+      siteRequestDispatchOutboxId: "77777777-7777-4777-8777-777777777777",
+    },
+    {
+      getEnv: envOf({ SMS_DEV_MODE: "off", TWILIO_FROM_NUMBER: "+1" }),
+      now: new Date("2026-07-08T09:00:00Z"),
+    },
+  );
+  assert(deferred.deferred);
+  assertEquals((quietFake._data.sms_messages ?? []).length, 0);
+
+  const redirectFake = createFakeSupabase({ project_parties: [party("p1", "granted")] });
+  let providerBody = "";
+  const sent = await sendPartySms(
+    redirectFake as never,
+    {
+      partyId: "p1",
+      body: raw,
+      auditBody: audit,
+      deferToCaller: true,
+      siteRequestDispatchOutboxId: "77777777-7777-4777-8777-777777777777",
+    },
+    {
+      getEnv: envOf({
+        SMS_DEV_MODE: "redirect",
+        SMS_DEV_REDIRECT_NUMBER: "+15550009999",
+        TWILIO_FROM_NUMBER: "+15550000000",
+        TWILIO_ACCOUNT_SID: "AC1",
+        TWILIO_AUTH_TOKEN: "tok",
+      }),
+      fetchImpl: ((_url: string, init: { body: string }) => {
+        providerBody = init.body;
+        return Promise.resolve(new Response(JSON.stringify({ sid: "SM123", status: "queued" }), { status: 200 }));
+      }) as unknown as typeof fetch,
+      now: new Date("2026-07-08T18:00:00Z"),
+    },
+  );
+  assert(sent.sent);
+  assert(providerBody.includes(encodeURIComponent(raw).replace(/%20/g, "+")) || providerBody.includes("sr_SECRET_RAW_TOKEN"));
+  const logged = String((redirectFake._data.sms_messages?.[0] as { body?: string })?.body ?? "");
+  assertEquals(logged, audit);
+  assert(!logged.includes("sr_SECRET_RAW_TOKEN"));
+  assertEquals(
+    (redirectFake._data.sms_messages?.[0] as {
+      site_request_dispatch_outbox_id?: string;
+    })?.site_request_dispatch_outbox_id,
+    "77777777-7777-4777-8777-777777777777",
+  );
+});
+
 Deno.test("a Messaging Service SID (MG…) is sent as MessagingServiceSid", async () => {
   const fake = createFakeSupabase({ project_parties: [party("p1", "granted")] });
   let capturedBody = "";

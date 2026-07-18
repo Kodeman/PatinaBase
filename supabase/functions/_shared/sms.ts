@@ -42,6 +42,12 @@ export interface SendPartySmsInput {
   projectId?: string;
   /** A ready-to-send body (skips template rendering + enrichment). */
   body?: string;
+  /** Privacy-safe body persisted to sms_messages instead of the provider body. */
+  auditBody?: string;
+  /** Let a caller-owned durable outbox handle quiet-hours retry. */
+  deferToCaller?: boolean;
+  /** Safe correlation id for provider-accepted retry reconciliation. */
+  siteRequestDispatchOutboxId?: string;
   /** A template slug in email_templates (rendered with {{vars}}). */
   templateKey?: string;
   /** Template variables. */
@@ -327,6 +333,7 @@ async function insertOutbound(
     party_id: string | null;
     project_id: string | null;
     template_key: string | null;
+    site_request_dispatch_outbox_id: string | null;
   },
 ): Promise<string | undefined> {
   const { data } = await supabase
@@ -384,17 +391,28 @@ export async function sendPartySms(
     recipient.partyId,
     recipient.projectId,
   );
+  const auditBody = input.auditBody?.trim() || body;
 
   // ── Quiet hours → defer (store, do not send) ──────────────────────────────
   if (isQuietHours(now, fieldTz)) {
+    if (input.deferToCaller) {
+      return {
+        sent: false,
+        deferred: true,
+        reason: "quiet_hours",
+        conversationId: convId ?? undefined,
+        body: auditBody,
+      };
+    }
     const messageId = await insertOutbound(supabase, {
       conversation_id: convId,
-      body,
+      body: auditBody,
       twilio_sid: null,
       twilio_status: "deferred",
       party_id: recipient.partyId,
       project_id: recipient.projectId,
       template_key: input.templateKey ?? null,
+      site_request_dispatch_outbox_id: input.siteRequestDispatchOutboxId ?? null,
     });
     return { sent: false, deferred: true, messageId, conversationId: convId ?? undefined, body };
   }
@@ -431,12 +449,13 @@ export async function sendPartySms(
 
   const messageId = await insertOutbound(supabase, {
     conversation_id: convId,
-    body: sendBody,
+    body: auditBody,
     twilio_sid: twilioSid,
     twilio_status: twilioStatus,
     party_id: recipient.partyId,
     project_id: recipient.projectId,
     template_key: input.templateKey ?? null,
+    site_request_dispatch_outbox_id: input.siteRequestDispatchOutboxId ?? null,
   });
 
   if (sent && convId) {
@@ -459,7 +478,7 @@ export async function sendPartySms(
     messageId,
     conversationId: convId ?? undefined,
     twilioSid: twilioSid ?? undefined,
-    body: sendBody,
+    body: auditBody,
   };
 }
 

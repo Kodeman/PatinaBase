@@ -166,8 +166,9 @@ CREATE TABLE IF NOT EXISTS public.site_deliverable_media (
   received_size_bytes  bigint CHECK (received_size_bytes IS NULL OR received_size_bytes >= 0),
   storage_etag         text,
   upload_state         text NOT NULL DEFAULT 'intended'
-    CHECK (upload_state IN ('intended','uploaded','processing','ready','failed')),
+    CHECK (upload_state IN ('intended','uploaded','processing','ready','failed','deleted')),
   received_at          timestamptz,
+  deleted_at           timestamptz,
   derivatives          jsonb NOT NULL DEFAULT '{}'::jsonb
     CHECK (jsonb_typeof(derivatives) = 'object'),
   processing_error     text,
@@ -181,6 +182,14 @@ CREATE INDEX IF NOT EXISTS idx_site_deliverable_media_delivery
 CREATE INDEX IF NOT EXISTS idx_site_deliverable_media_state
   ON public.site_deliverable_media(upload_state)
   WHERE upload_state IN ('intended','uploaded','processing','failed');
+
+ALTER TABLE public.site_deliverable_media
+  ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+ALTER TABLE public.site_deliverable_media
+  DROP CONSTRAINT IF EXISTS site_deliverable_media_upload_state_check;
+ALTER TABLE public.site_deliverable_media
+  ADD CONSTRAINT site_deliverable_media_upload_state_check
+  CHECK (upload_state IN ('intended','uploaded','processing','ready','failed','deleted'));
 
 CREATE TABLE IF NOT EXISTS public.site_deliverable_dimensions (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -228,8 +237,8 @@ CREATE TABLE IF NOT EXISTS public.site_request_access (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   request_id            uuid NOT NULL REFERENCES public.site_requests(id) ON DELETE CASCADE,
   token_hash            text NOT NULL UNIQUE CHECK (token_hash ~ '^[0-9a-f]{64}$'),
-  status                text NOT NULL DEFAULT 'active'
-    CHECK (status IN ('active','revoked','expired')),
+  status                text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','active','revoked','expired')),
   expires_at            timestamptz NOT NULL,
   last_used_at          timestamptz,
   revoked_at            timestamptz,
@@ -241,7 +250,7 @@ CREATE TABLE IF NOT EXISTS public.site_request_access (
   updated_at            timestamptz NOT NULL DEFAULT now(),
   CHECK (
     (status IN ('revoked','expired') AND revoked_at IS NOT NULL)
-    OR status = 'active'
+    OR status IN ('pending','active')
   )
 );
 
@@ -251,6 +260,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_site_request_access_active
 CREATE INDEX IF NOT EXISTS idx_site_request_access_expiry
   ON public.site_request_access(expires_at)
   WHERE status = 'active';
+
+ALTER TABLE public.site_request_access ALTER COLUMN status SET DEFAULT 'pending';
+ALTER TABLE public.site_request_access
+  DROP CONSTRAINT IF EXISTS site_request_access_status_check;
+ALTER TABLE public.site_request_access
+  ADD CONSTRAINT site_request_access_status_check
+  CHECK (status IN ('pending','active','revoked','expired'));
+ALTER TABLE public.site_request_access
+  DROP CONSTRAINT IF EXISTS site_request_access_check;
+ALTER TABLE public.site_request_access
+  ADD CONSTRAINT site_request_access_check CHECK (
+    (status IN ('revoked','expired') AND revoked_at IS NOT NULL)
+    OR status IN ('pending','active')
+  );
 
 CREATE TABLE IF NOT EXISTS public.site_request_events (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -271,6 +294,68 @@ CREATE TABLE IF NOT EXISTS public.site_request_events (
 
 CREATE INDEX IF NOT EXISTS idx_site_request_events_thread
   ON public.site_request_events(request_id, sequence_no);
+
+-- Durable dispatch work stores identifiers and retry state only. Raw guest
+-- tokens are minted into memory only after a worker claims a send-ready row.
+CREATE TABLE IF NOT EXISTS public.site_request_dispatch_outbox (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id          uuid NOT NULL REFERENCES public.site_requests(id) ON DELETE RESTRICT,
+  action              text NOT NULL CHECK (action IN (
+    'consent-invite','send','resend','consent-granted','nudge','due-reminder'
+  )),
+  source_event_id     uuid REFERENCES public.site_request_events(id) ON DELETE RESTRICT,
+  access_id           uuid REFERENCES public.site_request_access(id) ON DELETE SET NULL,
+  status              text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','processing','sent','cancelled')),
+  available_at        timestamptz NOT NULL DEFAULT now(),
+  claimed_at          timestamptz,
+  attempt_count       integer NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+  provider_message_id text,
+  last_error          text,
+  completed_at        timestamptz,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_site_request_dispatch_outbox_live
+  ON public.site_request_dispatch_outbox(request_id, action)
+  WHERE status IN ('pending','processing');
+CREATE INDEX IF NOT EXISTS idx_site_request_dispatch_outbox_ready
+  ON public.site_request_dispatch_outbox(available_at, created_at)
+  WHERE status IN ('pending','processing');
+
+ALTER TABLE public.sms_messages
+  ADD COLUMN IF NOT EXISTS site_request_dispatch_outbox_id uuid
+  REFERENCES public.site_request_dispatch_outbox(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_sms_messages_site_request_dispatch
+  ON public.sms_messages(site_request_dispatch_outbox_id, created_at DESC)
+  WHERE site_request_dispatch_outbox_id IS NOT NULL;
+
+-- Delivery notifications are separately durable and batched for a short
+-- request-scoped window. A duplicate guest delivery never appends here.
+CREATE TABLE IF NOT EXISTS public.site_request_delivery_notification_outbox (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id          uuid NOT NULL REFERENCES public.site_requests(id) ON DELETE RESTRICT,
+  bucket_started_at   timestamptz NOT NULL DEFAULT now(),
+  deliverable_ids     uuid[] NOT NULL DEFAULT '{}'::uuid[],
+  status              text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','processing','sent','cancelled')),
+  available_at        timestamptz NOT NULL DEFAULT (now() + interval '2 minutes'),
+  claimed_at          timestamptz,
+  attempt_count       integer NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+  notification_log_id uuid REFERENCES public.notification_log(id) ON DELETE SET NULL,
+  last_error          text,
+  completed_at        timestamptz,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_site_request_delivery_notification_live
+  ON public.site_request_delivery_notification_outbox(request_id)
+  WHERE status IN ('pending','processing');
+CREATE INDEX IF NOT EXISTS idx_site_request_delivery_notification_ready
+  ON public.site_request_delivery_notification_outbox(available_at, created_at)
+  WHERE status IN ('pending','processing');
 
 -- Current Binder state is derived. History remains in the base table.
 CREATE OR REPLACE VIEW public.site_binder_current
@@ -423,11 +508,12 @@ BEGIN
       USING errcode = '55000';
   END IF;
 
-  IF OLD.upload_state = 'intended' AND NEW.upload_state NOT IN ('intended','uploaded','failed')
-     OR OLD.upload_state = 'uploaded' AND NEW.upload_state NOT IN ('uploaded','processing','ready','failed')
-     OR OLD.upload_state = 'processing' AND NEW.upload_state NOT IN ('processing','ready','failed')
-     OR OLD.upload_state = 'ready' AND NEW.upload_state <> 'ready'
-     OR OLD.upload_state = 'failed' AND NEW.upload_state NOT IN ('failed','processing') THEN
+  IF OLD.upload_state = 'intended' AND NEW.upload_state NOT IN ('intended','uploaded','failed','deleted')
+     OR OLD.upload_state = 'uploaded' AND NEW.upload_state NOT IN ('uploaded','processing','ready','failed','deleted')
+     OR OLD.upload_state = 'processing' AND NEW.upload_state NOT IN ('processing','ready','failed','deleted')
+     OR OLD.upload_state = 'ready' AND NEW.upload_state NOT IN ('ready','deleted')
+     OR OLD.upload_state = 'failed' AND NEW.upload_state NOT IN ('failed','processing','deleted')
+     OR OLD.upload_state = 'deleted' AND NEW.upload_state <> 'deleted' THEN
     RAISE EXCEPTION 'invalid site media state transition'
       USING errcode = '23514';
   END IF;
@@ -451,8 +537,12 @@ BEGIN
     RAISE EXCEPTION 'site request access identity is immutable'
       USING errcode = '55000';
   END IF;
-  IF OLD.status <> 'active' AND NEW.status <> OLD.status THEN
+  IF OLD.status IN ('revoked','expired') AND NEW.status <> OLD.status THEN
     RAISE EXCEPTION 'revoked or expired access cannot be reactivated'
+      USING errcode = '23514';
+  END IF;
+  IF OLD.status = 'active' AND NEW.status = 'pending' THEN
+    RAISE EXCEPTION 'active access cannot return to pending'
       USING errcode = '23514';
   END IF;
   RETURN NEW;
@@ -522,6 +612,14 @@ DROP TRIGGER IF EXISTS set_updated_at_site_access ON public.site_request_access;
 CREATE TRIGGER set_updated_at_site_access
   BEFORE UPDATE ON public.site_request_access
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+DROP TRIGGER IF EXISTS set_updated_at_site_dispatch_outbox ON public.site_request_dispatch_outbox;
+CREATE TRIGGER set_updated_at_site_dispatch_outbox
+  BEFORE UPDATE ON public.site_request_dispatch_outbox
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+DROP TRIGGER IF EXISTS set_updated_at_site_delivery_notification_outbox ON public.site_request_delivery_notification_outbox;
+CREATE TRIGGER set_updated_at_site_delivery_notification_outbox
+  BEFORE UPDATE ON public.site_request_delivery_notification_outbox
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- ─── RLS: authenticated designers read; all mutation is transactional RPC ──
 
@@ -534,6 +632,8 @@ ALTER TABLE public.site_deliverable_dimensions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site_binder_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site_request_access ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site_request_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.site_request_dispatch_outbox ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.site_request_delivery_notification_outbox ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS site_requests_designer_read ON public.site_requests;
 CREATE POLICY site_requests_designer_read
@@ -742,14 +842,18 @@ BEGIN
     RAISE EXCEPTION 'access expiry must be in the future' USING errcode = '22023';
   END IF;
 
+  -- Only abandon an earlier unacknowledged attempt. An acknowledged active
+  -- link remains valid until the provider accepts its replacement.
   UPDATE public.site_request_access
   SET status = 'revoked',
       revoked_at = now(),
-      revoked_reason = COALESCE(NULLIF(btrim(p_reason), ''), 'superseded')
+      revoked_reason = COALESCE(NULLIF(btrim(p_reason), ''), 'unacknowledged retry')
   WHERE request_id = p_request_id
-    AND status = 'active';
+    AND status = 'pending';
 
-  v_token := encode(extensions.gen_random_bytes(32), 'hex');
+  v_token := 'sr_' || rtrim(translate(
+    encode(extensions.gen_random_bytes(32), 'base64'), '+/', '-_'
+  ), '=');
   v_hash := encode(extensions.digest(v_token, 'sha256'), 'hex');
 
   INSERT INTO public.site_request_access (
@@ -768,7 +872,8 @@ CREATE OR REPLACE FUNCTION public._site_request_dispatch_result(
   p_access_id uuid DEFAULT NULL,
   p_token text DEFAULT NULL,
   p_needs_consent boolean DEFAULT false,
-  p_reused boolean DEFAULT false
+  p_reused boolean DEFAULT false,
+  p_outbox_id uuid DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -786,6 +891,7 @@ BEGIN
     'expires_at', a.expires_at,
     'needs_consent', p_needs_consent,
     'reused', p_reused,
+    'outbox_id', p_outbox_id,
     'party_id', sr.assignee_party_id,
     'project_id', sr.project_id,
     'assignee_phone', sr.assignee_phone_snapshot,
@@ -883,6 +989,44 @@ AS $$
       )
     )
   );
+$$;
+
+CREATE OR REPLACE FUNCTION public._site_request_enqueue_dispatch(
+  p_request_id uuid,
+  p_action text,
+  p_source_event_id uuid DEFAULT NULL
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_outbox_id uuid;
+BEGIN
+  IF p_action NOT IN (
+    'consent-invite','send','resend','consent-granted','nudge','due-reminder'
+  ) THEN
+    RAISE EXCEPTION 'unsupported dispatch action %', p_action USING errcode = '22023';
+  END IF;
+
+  SELECT id INTO v_outbox_id
+  FROM public.site_request_dispatch_outbox
+  WHERE request_id = p_request_id
+    AND action = p_action
+    AND status IN ('pending','processing')
+  ORDER BY created_at DESC
+  LIMIT 1
+  FOR UPDATE;
+
+  IF v_outbox_id IS NULL THEN
+    INSERT INTO public.site_request_dispatch_outbox (
+      request_id, action, source_event_id
+    ) VALUES (p_request_id, p_action, p_source_event_id)
+    RETURNING id INTO v_outbox_id;
+  END IF;
+  RETURN v_outbox_id;
+END;
 $$;
 
 -- ─── Designer operations ───────────────────────────────────────────────────
@@ -1085,10 +1229,10 @@ AS $$
 DECLARE
   v_request public.site_requests;
   v_party public.project_parties;
-  v_access_id uuid;
-  v_token text;
   v_expiry timestamptz;
   v_consent text;
+  v_event_id uuid;
+  v_outbox_id uuid;
 BEGIN
   SELECT * INTO v_request FROM public.site_requests WHERE id = p_request_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -1134,19 +1278,31 @@ BEGIN
       consent_status_snapshot = v_consent
   WHERE id = p_request_id;
 
+  UPDATE public.site_request_dispatch_outbox
+  SET status = 'cancelled', completed_at = now(),
+      last_error = 'consent_already_granted'
+  WHERE request_id = p_request_id
+    AND action = 'consent-invite'
+    AND status IN ('pending','processing')
+    AND v_consent = 'granted';
+
   IF v_consent <> 'granted' THEN
     UPDATE public.site_requests
     SET status = 'awaiting_consent'
     WHERE id = p_request_id;
 
-    PERFORM public._site_request_append_event(
+    v_event_id := public._site_request_append_event(
       p_request_id, 'consent_requested', 'designer', auth.uid(), NULL,
       NULL, NULL,
       jsonb_build_object('party_id', v_party.id, 'consent_status', v_consent),
       'consent-requested:' || p_request_id::text
     );
+    v_outbox_id := public._site_request_enqueue_dispatch(
+      p_request_id, 'consent-invite', v_event_id
+    );
     RETURN public._site_request_dispatch_result(
-      p_request_id, 'consent-required', NULL, NULL, true, v_request.status = 'awaiting_consent'
+      p_request_id, 'consent-invite', NULL, NULL, true,
+      v_request.status = 'awaiting_consent', v_outbox_id
     );
   END IF;
 
@@ -1155,25 +1311,21 @@ BEGIN
     GREATEST(v_request.due_at + interval '7 days', now() + interval '7 days')
   );
   UPDATE public.site_requests
-  SET status = 'sent',
-      sent_at = COALESCE(sent_at, now()),
+  SET consent_status_snapshot = 'granted',
       expires_at = v_expiry
   WHERE id = p_request_id;
 
-  SELECT m.access_id, m.token, m.expires_at
-    INTO v_access_id, v_token, v_expiry
-  FROM public._site_request_mint_access(
-    p_request_id, v_expiry, auth.uid(), 'new send'
-  ) m;
-
-  PERFORM public._site_request_append_event(
-    p_request_id, 'request_sent', 'designer', auth.uid(), NULL,
+  v_event_id := public._site_request_append_event(
+    p_request_id, 'request_send_requested', 'designer', auth.uid(), NULL,
     NULL, NULL,
-    jsonb_build_object('access_id', v_access_id, 'expires_at', v_expiry),
-    'request-send:' || v_access_id::text
+    jsonb_build_object('expires_at', v_expiry),
+    'request-send-requested:' || p_request_id::text
+  );
+  v_outbox_id := public._site_request_enqueue_dispatch(
+    p_request_id, 'send', v_event_id
   );
   RETURN public._site_request_dispatch_result(
-    p_request_id, 'send', v_access_id, v_token, false, false
+    p_request_id, 'send', NULL, NULL, false, false, v_outbox_id
   );
 END;
 $$;
@@ -1190,9 +1342,9 @@ AS $$
 DECLARE
   v_request public.site_requests;
   v_party public.project_parties;
-  v_access_id uuid;
-  v_token text;
   v_expiry timestamptz;
+  v_event_id uuid;
+  v_outbox_id uuid;
 BEGIN
   SELECT * INTO v_request FROM public.site_requests WHERE id = p_request_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -1219,29 +1371,23 @@ BEGIN
     GREATEST(v_request.due_at + interval '7 days', now() + interval '7 days')
   );
   UPDATE public.site_requests
-  SET status = CASE WHEN status = 'awaiting_consent' THEN 'sent' ELSE status END,
-      consent_status_snapshot = 'granted',
+  SET consent_status_snapshot = 'granted',
       assignee_name_snapshot = v_party.display_name,
       assignee_phone_snapshot = v_party.phone_e164,
       assignee_trade_snapshot = v_party.trade,
-      sent_at = COALESCE(sent_at, now()),
       expires_at = v_expiry
   WHERE id = p_request_id;
 
-  SELECT m.access_id, m.token, m.expires_at
-    INTO v_access_id, v_token, v_expiry
-  FROM public._site_request_mint_access(
-    p_request_id, v_expiry, auth.uid(), 'resend superseded'
-  ) m;
-
-  PERFORM public._site_request_append_event(
-    p_request_id, 'request_resent', 'designer', auth.uid(), NULL,
+  v_event_id := public._site_request_append_event(
+    p_request_id, 'request_resend_requested', 'designer', auth.uid(), NULL,
     NULL, NULL,
-    jsonb_build_object('access_id', v_access_id, 'expires_at', v_expiry),
-    'request-resend:' || v_access_id::text
+    jsonb_build_object('expires_at', v_expiry), NULL
+  );
+  v_outbox_id := public._site_request_enqueue_dispatch(
+    p_request_id, 'resend', v_event_id
   );
   RETURN public._site_request_dispatch_result(
-    p_request_id, 'resend', v_access_id, v_token, false, false
+    p_request_id, 'resend', NULL, NULL, false, false, v_outbox_id
   );
 END;
 $$;
@@ -1258,10 +1404,9 @@ AS $$
 DECLARE
   v_request public.site_requests;
   v_party public.project_parties;
-  v_existing public.site_request_access;
-  v_access_id uuid;
-  v_token text;
   v_expiry timestamptz;
+  v_event_id uuid;
+  v_outbox_id uuid;
 BEGIN
   SELECT * INTO v_request FROM public.site_requests WHERE id = p_request_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -1280,47 +1425,36 @@ BEGIN
     RAISE EXCEPTION 'assignee has not granted SMS consent' USING errcode = '55000';
   END IF;
 
-  SELECT * INTO v_existing
-  FROM public.site_request_access
-  WHERE request_id = p_request_id AND status = 'active'
-  FOR UPDATE;
-
-  IF FOUND AND v_existing.link_dispatched_at IS NOT NULL
-     AND v_existing.expires_at > now() THEN
-    RETURN public._site_request_dispatch_result(
-      p_request_id, 'consent-granted', v_existing.id, NULL, false, true
-    );
-  END IF;
-
   v_expiry := COALESCE(
     p_expires_at,
     GREATEST(v_request.due_at + interval '7 days', now() + interval '7 days')
   );
   UPDATE public.site_requests
-  SET status = 'sent',
-      consent_status_snapshot = 'granted',
+  SET consent_status_snapshot = 'granted',
       assignee_name_snapshot = v_party.display_name,
       assignee_phone_snapshot = v_party.phone_e164,
       assignee_trade_snapshot = v_party.trade,
-      sent_at = COALESCE(sent_at, now()),
       expires_at = v_expiry
   WHERE id = p_request_id;
 
-  SELECT m.access_id, m.token, m.expires_at
-    INTO v_access_id, v_token, v_expiry
-  FROM public._site_request_mint_access(
-    p_request_id, v_expiry, NULL,
-    CASE WHEN v_existing.id IS NULL THEN 'consent granted' ELSE 'unacknowledged dispatch retry' END
-  ) m;
+  UPDATE public.site_request_dispatch_outbox
+  SET status = 'cancelled', completed_at = now(),
+      last_error = 'consent_already_granted'
+  WHERE request_id = p_request_id
+    AND action = 'consent-invite'
+    AND status IN ('pending','processing');
 
-  PERFORM public._site_request_append_event(
+  v_event_id := public._site_request_append_event(
     p_request_id, 'consent_granted_dispatch_ready', 'service', NULL, NULL,
     NULL, NULL,
-    jsonb_build_object('access_id', v_access_id, 'expires_at', v_expiry),
-    'consent-dispatch-ready:' || v_access_id::text
+    jsonb_build_object('expires_at', v_expiry),
+    'consent-dispatch-ready:' || p_request_id::text
+  );
+  v_outbox_id := public._site_request_enqueue_dispatch(
+    p_request_id, 'consent-granted', v_event_id
   );
   RETURN public._site_request_dispatch_result(
-    p_request_id, 'consent-granted', v_access_id, v_token, false, false
+    p_request_id, 'consent-granted', NULL, NULL, false, false, v_outbox_id
   );
 END;
 $$;
@@ -1385,6 +1519,238 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.site_request_claim_delivery_notification(
+  p_outbox_id uuid,
+  p_now timestamptz DEFAULT now()
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_outbox public.site_request_delivery_notification_outbox;
+  v_request public.site_requests;
+  v_log_id uuid;
+  v_count integer;
+  v_title text;
+  v_message text;
+  v_log_status public.notification_status;
+BEGIN
+  SELECT * INTO v_outbox
+  FROM public.site_request_delivery_notification_outbox
+  WHERE id = p_outbox_id
+    AND (
+      (status = 'pending' AND available_at <= p_now)
+      OR (status = 'processing' AND claimed_at < p_now - interval '5 minutes')
+    )
+  FOR UPDATE;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+
+  SELECT * INTO v_request
+  FROM public.site_requests
+  WHERE id = v_outbox.request_id;
+  IF v_request.status IN ('closed','expired') THEN
+    UPDATE public.site_request_delivery_notification_outbox
+    SET status = 'cancelled', completed_at = p_now,
+        last_error = 'request_terminal'
+    WHERE id = v_outbox.id;
+    RETURN NULL;
+  END IF;
+
+  v_count := cardinality(v_outbox.deliverable_ids);
+  v_title := 'Site Request delivery ready';
+  v_message := CASE WHEN v_count = 1
+    THEN '1 Site Request item is ready for review.'
+    ELSE v_count::text || ' Site Request items are ready for review.'
+  END;
+  v_log_id := v_outbox.notification_log_id;
+  IF v_log_id IS NOT NULL THEN
+    SELECT status INTO v_log_status
+    FROM public.notification_log WHERE id = v_log_id;
+    IF v_log_status IN ('delivered','opened','clicked') THEN
+      UPDATE public.site_request_delivery_notification_outbox
+      SET status = 'sent', completed_at = p_now, claimed_at = NULL,
+          last_error = NULL
+      WHERE id = v_outbox.id;
+      RETURN NULL;
+    END IF;
+  END IF;
+  IF v_log_id IS NULL THEN
+    INSERT INTO public.notification_log (
+      user_id, type, channel, status, template_id, metadata
+    ) VALUES (
+      v_request.created_by, 'site_request_delivery_ready', 'push', 'queued',
+      'site-request-delivery-ready',
+      jsonb_build_object(
+        'request_id', v_request.id,
+        'project_id', v_request.project_id,
+        'deliverable_count', v_count,
+        'entity_type', 'site_request',
+        'entity_id', v_request.id,
+        'title', v_title,
+        'message', v_message,
+        'deep_link', '/work/' || v_request.project_id::text || '/site/' || v_request.id::text
+      )
+    ) RETURNING id INTO v_log_id;
+  ELSE
+    UPDATE public.notification_log
+    SET status = 'sending', error = NULL,
+        retry_count = v_outbox.attempt_count,
+        metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
+          'deliverable_count', v_count,
+          'title', v_title,
+          'message', v_message
+        )
+    WHERE id = v_log_id;
+  END IF;
+
+  UPDATE public.site_request_delivery_notification_outbox
+  SET status = 'processing', claimed_at = p_now,
+      attempt_count = attempt_count + 1,
+      notification_log_id = v_log_id, last_error = NULL
+  WHERE id = v_outbox.id;
+
+  RETURN jsonb_build_object(
+    'outbox_id', v_outbox.id,
+    'request_id', v_request.id,
+    'user_id', v_request.created_by,
+    'notification_log_id', v_log_id,
+    'title', v_title,
+    'body', v_message,
+    'entity_type', 'site_request',
+    'entity_id', v_request.id,
+    'deliverable_count', v_count
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.site_request_complete_delivery_notification(
+  p_outbox_id uuid,
+  p_sent boolean,
+  p_error text DEFAULT NULL,
+  p_now timestamptz DEFAULT now()
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_outbox public.site_request_delivery_notification_outbox;
+  v_retry_at timestamptz;
+BEGIN
+  SELECT * INTO v_outbox
+  FROM public.site_request_delivery_notification_outbox
+  WHERE id = p_outbox_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'delivery notification outbox row not found'
+      USING errcode = 'no_data_found';
+  END IF;
+  IF v_outbox.status = 'sent' THEN
+    RETURN jsonb_build_object('outbox_id', v_outbox.id, 'status', 'sent', 'idempotent', true);
+  END IF;
+
+  IF p_sent THEN
+    UPDATE public.site_request_delivery_notification_outbox
+    SET status = 'sent', completed_at = p_now, claimed_at = NULL,
+        last_error = NULL
+    WHERE id = v_outbox.id;
+  ELSE
+    v_retry_at := p_now + make_interval(
+      mins => LEAST(60, GREATEST(2, (2 ^ LEAST(v_outbox.attempt_count, 5))::integer))
+    );
+    UPDATE public.site_request_delivery_notification_outbox
+    SET status = 'pending', available_at = v_retry_at, claimed_at = NULL,
+        last_error = left(COALESCE(NULLIF(btrim(p_error), ''), 'push_failed'), 500)
+    WHERE id = v_outbox.id;
+    UPDATE public.notification_log
+    SET status = 'failed',
+        error = left(COALESCE(NULLIF(btrim(p_error), ''), 'push_failed'), 500),
+        retry_count = v_outbox.attempt_count
+    WHERE id = v_outbox.notification_log_id;
+  END IF;
+  RETURN jsonb_build_object(
+    'outbox_id', v_outbox.id,
+    'status', CASE WHEN p_sent THEN 'sent' ELSE 'retry' END,
+    'retry_at', CASE WHEN p_sent THEN NULL ELSE v_retry_at END,
+    'idempotent', false
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.site_request_pending_delivery_notifications(
+  p_now timestamptz DEFAULT now(),
+  p_limit integer DEFAULT 25
+)
+RETURNS SETOF uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT id
+  FROM public.site_request_delivery_notification_outbox
+  WHERE (status = 'pending' AND available_at <= p_now)
+     OR (status = 'processing' AND claimed_at < p_now - interval '5 minutes')
+  ORDER BY available_at, created_at
+  LIMIT LEAST(GREATEST(COALESCE(p_limit, 25), 1), 100);
+$$;
+
+-- Storage cleanup is deliberately two-phase: the worker asks for immutable
+-- object paths, deletes them through Storage, then confirms exact media ids.
+CREATE OR REPLACE FUNCTION public.site_request_unapproved_media_cleanup_candidates(
+  p_now timestamptz DEFAULT now(),
+  p_limit integer DEFAULT 100
+)
+RETURNS TABLE (media_id uuid, bucket_id text, object_path text)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT m.id, 'site-requests'::text, m.object_path
+  FROM public.site_deliverable_media m
+  JOIN public.site_deliverables d ON d.id = m.deliverable_id
+  JOIN public.site_requests sr ON sr.id = d.request_id
+  WHERE sr.status IN ('closed','expired')
+    AND sr.unapproved_media_delete_after <= p_now
+    AND m.upload_state <> 'deleted'
+    AND NOT EXISTS (
+      SELECT 1 FROM public.site_binder_entries be
+      WHERE be.deliverable_id = d.id
+    )
+  ORDER BY sr.unapproved_media_delete_after, m.created_at
+  LIMIT LEAST(GREATEST(COALESCE(p_limit, 100), 1), 500);
+$$;
+
+CREATE OR REPLACE FUNCTION public.site_request_confirm_media_cleanup(
+  p_media_ids uuid[],
+  p_now timestamptz DEFAULT now()
+)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_count integer;
+BEGIN
+  UPDATE public.site_deliverable_media m
+  SET upload_state = 'deleted', deleted_at = p_now
+  FROM public.site_deliverables d, public.site_requests sr
+  WHERE m.id = ANY(COALESCE(p_media_ids, '{}'::uuid[]))
+    AND d.id = m.deliverable_id
+    AND sr.id = d.request_id
+    AND sr.status IN ('closed','expired')
+    AND sr.unapproved_media_delete_after <= p_now
+    AND NOT EXISTS (
+      SELECT 1 FROM public.site_binder_entries be
+      WHERE be.deliverable_id = d.id
+    );
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.site_request_nudge(
   p_request_id uuid,
   p_note text DEFAULT NULL
@@ -1397,6 +1763,8 @@ AS $$
 DECLARE
   v_request public.site_requests;
   v_access public.site_request_access;
+  v_event_id uuid;
+  v_outbox_id uuid;
 BEGIN
   SELECT * INTO v_request FROM public.site_requests WHERE id = p_request_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -1412,6 +1780,14 @@ BEGIN
      AND v_request.last_nudged_at::date = current_date THEN
     RAISE EXCEPTION 'request may be nudged at most once per day' USING errcode = '55000';
   END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.site_request_dispatch_outbox
+    WHERE request_id = p_request_id
+      AND action = 'nudge'
+      AND status IN ('pending','processing')
+  ) THEN
+    RAISE EXCEPTION 'request already has a pending nudge' USING errcode = '55000';
+  END IF;
 
   SELECT * INTO v_access
   FROM public.site_request_access
@@ -1424,15 +1800,17 @@ BEGIN
     RAISE EXCEPTION 'request has no dispatched active access' USING errcode = '55000';
   END IF;
 
-  UPDATE public.site_requests SET last_nudged_at = now() WHERE id = p_request_id;
-  PERFORM public._site_request_append_event(
+  v_event_id := public._site_request_append_event(
     p_request_id, 'nudge_requested', 'designer', auth.uid(), NULL,
     NULL, NULL,
     jsonb_build_object('note', NULLIF(btrim(p_note), ''), 'access_id', v_access.id),
-    'nudge:' || p_request_id::text || ':' || current_date::text
+    NULL
+  );
+  v_outbox_id := public._site_request_enqueue_dispatch(
+    p_request_id, 'nudge', v_event_id
   );
   RETURN public._site_request_dispatch_result(
-    p_request_id, 'nudge', v_access.id, NULL, false, true
+    p_request_id, 'nudge', v_access.id, NULL, false, false, v_outbox_id
   );
 END;
 $$;
@@ -1462,8 +1840,14 @@ BEGIN
   SET status = 'revoked',
       revoked_at = now(),
       revoked_reason = COALESCE(NULLIF(btrim(p_reason), ''), 'designer revoked')
-  WHERE request_id = p_request_id AND status = 'active';
+  WHERE request_id = p_request_id AND status IN ('pending','active');
   GET DIAGNOSTICS v_count = ROW_COUNT;
+
+  UPDATE public.site_request_dispatch_outbox
+  SET status = 'cancelled', completed_at = now(),
+      last_error = 'access revoked by designer'
+  WHERE request_id = p_request_id
+    AND status IN ('pending','processing');
 
   IF v_count > 0 THEN
     PERFORM public._site_request_append_event(
@@ -1506,8 +1890,12 @@ BEGIN
 
   UPDATE public.site_request_access
   SET status = 'revoked', revoked_at = now(), revoked_reason = 'request closed'
-  WHERE request_id = p_request_id AND status = 'active';
+  WHERE request_id = p_request_id AND status IN ('pending','active');
   GET DIAGNOSTICS v_revoked = ROW_COUNT;
+
+  UPDATE public.site_request_dispatch_outbox
+  SET status = 'cancelled', completed_at = now(), last_error = 'request closed'
+  WHERE request_id = p_request_id AND status IN ('pending','processing');
 
   PERFORM public._site_request_append_event(
     p_request_id, 'request_closed', 'designer', auth.uid(), NULL,
@@ -1523,6 +1911,44 @@ END;
 $$;
 
 -- ─── Service-only guest bootstrap / upload / delivery operations ──────────
+
+CREATE OR REPLACE FUNCTION public._site_request_queue_delivery_notification(
+  p_request_id uuid,
+  p_deliverable_id uuid,
+  p_now timestamptz DEFAULT now()
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_outbox_id uuid;
+BEGIN
+  SELECT id INTO v_outbox_id
+  FROM public.site_request_delivery_notification_outbox
+  WHERE request_id = p_request_id
+    AND status IN ('pending','processing')
+  ORDER BY bucket_started_at DESC LIMIT 1 FOR UPDATE;
+
+  IF v_outbox_id IS NULL THEN
+    INSERT INTO public.site_request_delivery_notification_outbox (
+      request_id, bucket_started_at, deliverable_ids, available_at
+    ) VALUES (
+      p_request_id, p_now, ARRAY[p_deliverable_id], p_now + interval '2 minutes'
+    ) RETURNING id INTO v_outbox_id;
+  ELSE
+    UPDATE public.site_request_delivery_notification_outbox
+    SET deliverable_ids = CASE
+          WHEN p_deliverable_id = ANY(deliverable_ids) THEN deliverable_ids
+          ELSE array_append(deliverable_ids, p_deliverable_id)
+        END,
+        available_at = GREATEST(available_at, p_now + interval '30 seconds')
+    WHERE id = v_outbox_id;
+  END IF;
+  RETURN v_outbox_id;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.site_request_guest_bootstrap(p_token_hash text)
 RETURNS jsonb
@@ -1914,6 +2340,11 @@ DECLARE
   v_deliverable public.site_deliverables;
   v_attempt integer;
   v_dimension jsonb;
+  v_expected jsonb;
+  v_definition jsonb;
+  v_submission jsonb;
+  v_definition_id text;
+  v_definition_label text;
   v_proof_media_id uuid;
   v_request_status text;
   v_idempotent boolean := false;
@@ -2004,21 +2435,6 @@ BEGIN
   END IF;
 
   IF NOT v_idempotent THEN
-    IF v_version.kit_code = 'K-01'
-       AND jsonb_array_length(COALESCE(p_dimensions, '[]'::jsonb)) = 0 THEN
-      RAISE EXCEPTION 'K-01 requires at least one integer-mm dimension'
-        USING errcode = '22023';
-    END IF;
-    IF v_version.kit_code = 'K-02'
-       AND NOT EXISTS (
-         SELECT 1 FROM public.site_deliverable_media
-         WHERE deliverable_id = v_deliverable.id
-           AND upload_state IN ('uploaded','ready')
-       )
-       AND length(btrim(COALESCE(p_payload->>'skip_reason', ''))) = 0 THEN
-      RAISE EXCEPTION 'K-02 requires received media or a skip_reason'
-        USING errcode = '22023';
-    END IF;
     IF EXISTS (
       SELECT 1 FROM public.site_deliverable_media
       WHERE deliverable_id = v_deliverable.id
@@ -2026,6 +2442,107 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'all upload intents must have server receipts before delivery'
         USING errcode = '55000';
+    END IF;
+
+    IF v_version.kit_code = 'K-01' THEN
+      v_expected := v_version.configuration->'dimensions';
+      IF jsonb_typeof(v_expected) <> 'array'
+         OR jsonb_array_length(v_expected) = 0 THEN
+        RAISE EXCEPTION 'K-01 item version has no valid dimension configuration'
+          USING errcode = '22023';
+      END IF;
+      IF jsonb_array_length(COALESCE(p_dimensions, '[]'::jsonb))
+         <> jsonb_array_length(v_expected) THEN
+        RAISE EXCEPTION 'K-01 requires every configured dimension exactly once'
+          USING errcode = '22023';
+      END IF;
+      FOR v_definition IN SELECT value FROM jsonb_array_elements(v_expected)
+      LOOP
+        v_definition_id := CASE
+          WHEN jsonb_typeof(v_definition) = 'string' THEN trim(both '"' from v_definition::text)
+          ELSE NULLIF(btrim(v_definition->>'id'), '')
+        END;
+        v_definition_label := CASE
+          WHEN jsonb_typeof(v_definition) = 'string' THEN trim(both '"' from v_definition::text)
+          ELSE NULLIF(btrim(v_definition->>'label'), '')
+        END;
+        IF v_definition_id IS NULL OR v_definition_label IS NULL THEN
+          RAISE EXCEPTION 'K-01 dimension configuration requires stable id and label'
+            USING errcode = '22023';
+        END IF;
+        IF (
+          SELECT count(*) FROM jsonb_array_elements(p_dimensions) dim
+          WHERE btrim(dim->>'label') = v_definition_label
+        ) <> 1 THEN
+          RAISE EXCEPTION 'K-01 configured dimension % (%) is missing or duplicated',
+            v_definition_id, v_definition_label USING errcode = '22023';
+        END IF;
+      END LOOP;
+    ELSIF v_version.kit_code = 'K-02' THEN
+      v_expected := v_version.configuration->'shots';
+      IF jsonb_typeof(v_expected) <> 'array'
+         OR jsonb_array_length(v_expected) = 0
+         OR jsonb_typeof(p_payload->'shots') <> 'array'
+         OR jsonb_array_length(p_payload->'shots') <> jsonb_array_length(v_expected) THEN
+        RAISE EXCEPTION 'K-02 requires a media-or-skip result for every configured shot'
+          USING errcode = '22023';
+      END IF;
+      FOR v_definition IN
+        SELECT value FROM jsonb_array_elements(v_expected) WITH ORDINALITY
+      LOOP
+        v_definition_id := CASE
+          WHEN jsonb_typeof(v_definition) = 'string' THEN NULL
+          ELSE NULLIF(btrim(v_definition->>'id'), '')
+        END;
+        v_definition_label := CASE
+          WHEN jsonb_typeof(v_definition) = 'string' THEN trim(both '"' from v_definition::text)
+          ELSE NULLIF(btrim(v_definition->>'label'), '')
+        END;
+        IF v_definition_id IS NULL OR v_definition_label IS NULL THEN
+          RAISE EXCEPTION 'K-02 shot configuration requires stable id and label'
+            USING errcode = '22023';
+        END IF;
+        SELECT value INTO v_submission
+        FROM jsonb_array_elements(p_payload->'shots') submitted(value)
+        WHERE submitted.value->>'id' = v_definition_id;
+        IF NOT FOUND
+           OR btrim(COALESCE(v_submission->>'label', '')) <> v_definition_label THEN
+          RAISE EXCEPTION 'K-02 configured shot % is missing or mislabeled', v_definition_id
+            USING errcode = '22023';
+        END IF;
+        IF v_submission->>'status' = 'captured' THEN
+          IF NULLIF(v_submission->>'media_id', '') IS NULL OR NOT EXISTS (
+            SELECT 1 FROM public.site_deliverable_media m
+            WHERE m.id = (v_submission->>'media_id')::uuid
+              AND m.deliverable_id = v_deliverable.id
+              AND m.upload_state IN ('uploaded','ready')
+          ) THEN
+            RAISE EXCEPTION 'K-02 captured shot % requires its received media', v_definition_id
+              USING errcode = '23514';
+          END IF;
+        ELSIF v_submission->>'status' = 'skipped' THEN
+          IF length(btrim(COALESCE(v_submission->>'skip_note', ''))) = 0 THEN
+            RAISE EXCEPTION 'K-02 skipped shot % requires a verbatim note', v_definition_id
+              USING errcode = '22023';
+          END IF;
+        ELSE
+          RAISE EXCEPTION 'K-02 shot % must be captured or skipped', v_definition_id
+            USING errcode = '22023';
+        END IF;
+      END LOOP;
+      IF EXISTS (
+        SELECT 1 FROM public.site_deliverable_media m
+        WHERE m.deliverable_id = v_deliverable.id
+          AND m.upload_state IN ('uploaded','ready')
+          AND NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements(p_payload->'shots') shot
+            WHERE shot->>'status' = 'captured'
+              AND NULLIF(shot->>'media_id', '')::uuid = m.id
+          )
+      ) THEN
+        RAISE EXCEPTION 'K-02 contains received media not mapped to a configured shot'
+          USING errcode = '22023';
+      END IF;
     END IF;
 
     FOR v_dimension IN
@@ -2097,6 +2614,14 @@ BEGIN
       ),
       'item-delivered:' || v_deliverable.id::text
     );
+    BEGIN
+      PERFORM public._site_request_queue_delivery_notification(
+        v_request.id, v_deliverable.id, now()
+      );
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'site request delivery notification enqueue failed for deliverable %: %',
+        v_deliverable.id, SQLERRM;
+    END;
     SELECT * INTO v_deliverable FROM public.site_deliverables WHERE id = v_deliverable.id;
   ELSE
     SELECT status INTO v_request_status FROM public.site_requests WHERE id = v_request.id;
@@ -2345,6 +2870,343 @@ $$;
 
 -- ─── Dispatch bookkeeping, expiry, due reminder, consent bridge ───────────
 
+CREATE OR REPLACE FUNCTION public._site_request_safe_dispatch_error(p_error text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path TO 'public'
+AS $$
+  SELECT CASE NULLIF(btrim(COALESCE(p_error, '')), '')
+    WHEN 'quiet_hours' THEN 'quiet_hours'
+    WHEN 'no_phone_number' THEN 'no_phone_number'
+    WHEN 'opted_out' THEN 'opted_out'
+    WHEN 'not_consented' THEN 'not_consented'
+    WHEN 'not_invitable' THEN 'not_invitable'
+    WHEN 'empty_body' THEN 'empty_body'
+    WHEN 'twilio_not_configured' THEN 'twilio_not_configured'
+    WHEN 'sms_dispatch_error' THEN 'sms_dispatch_error'
+    WHEN 'sms_provider_error' THEN 'sms_provider_error'
+    WHEN 'dispatch_token_missing' THEN 'dispatch_token_missing'
+    WHEN 'request_terminal' THEN 'request_terminal'
+    WHEN 'no_dispatched_access' THEN 'no_dispatched_access'
+    ELSE 'dispatch_error'
+  END;
+$$;
+
+CREATE OR REPLACE FUNCTION public._site_request_safe_provider_message_id(p_value text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path TO 'public'
+AS $$
+  SELECT CASE
+    WHEN btrim(COALESCE(p_value, '')) ~ '^[A-Za-z0-9_-]{1,100}$'
+      THEN btrim(p_value)
+    ELSE NULL
+  END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.site_request_claim_dispatch(
+  p_outbox_id uuid,
+  p_now timestamptz DEFAULT now()
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'extensions'
+AS $$
+DECLARE
+  v_outbox public.site_request_dispatch_outbox;
+  v_request public.site_requests;
+  v_access public.site_request_access;
+  v_access_id uuid;
+  v_token text;
+  v_expiry timestamptz;
+  v_result jsonb;
+  v_note text;
+BEGIN
+  SELECT * INTO v_outbox
+  FROM public.site_request_dispatch_outbox
+  WHERE id = p_outbox_id
+    AND (
+      (status = 'pending' AND available_at <= p_now)
+      OR (status = 'processing' AND claimed_at < p_now - interval '5 minutes')
+    )
+  FOR UPDATE;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+
+  SELECT * INTO v_request FROM public.site_requests
+  WHERE id = v_outbox.request_id FOR UPDATE;
+  IF v_request.status IN ('completed','closed','expired') THEN
+    UPDATE public.site_request_dispatch_outbox
+    SET status = 'cancelled', completed_at = p_now,
+        last_error = 'request_terminal'
+    WHERE id = v_outbox.id;
+    RETURN NULL;
+  END IF;
+
+  UPDATE public.site_request_dispatch_outbox
+  SET status = 'processing', claimed_at = p_now,
+      attempt_count = attempt_count + 1, last_error = NULL
+  WHERE id = v_outbox.id
+  RETURNING * INTO v_outbox;
+
+  IF v_outbox.action IN ('send','resend','consent-granted') THEN
+    v_expiry := COALESCE(
+      v_request.expires_at,
+      GREATEST(v_request.due_at + interval '7 days', p_now + interval '7 days')
+    );
+    SELECT m.access_id, m.token, m.expires_at
+      INTO v_access_id, v_token, v_expiry
+    FROM public._site_request_mint_access(
+      v_request.id, v_expiry, v_request.created_by,
+      'unacknowledged dispatch retry'
+    ) m;
+    UPDATE public.site_request_dispatch_outbox
+    SET access_id = v_access_id WHERE id = v_outbox.id;
+  ELSIF v_outbox.action IN ('nudge','due-reminder') THEN
+    SELECT * INTO v_access
+    FROM public.site_request_access
+    WHERE request_id = v_request.id
+      AND status = 'active'
+      AND expires_at > p_now
+      AND link_dispatched_at IS NOT NULL
+    ORDER BY created_at DESC LIMIT 1;
+    IF NOT FOUND THEN
+      UPDATE public.site_request_dispatch_outbox
+      SET status = 'cancelled', completed_at = p_now,
+          last_error = 'no_dispatched_access'
+      WHERE id = v_outbox.id;
+      RETURN NULL;
+    END IF;
+    v_access_id := v_access.id;
+  END IF;
+
+  IF v_outbox.source_event_id IS NOT NULL THEN
+    SELECT payload->>'note' INTO v_note
+    FROM public.site_request_events WHERE id = v_outbox.source_event_id;
+  END IF;
+
+  v_result := public._site_request_dispatch_result(
+    v_request.id, v_outbox.action, v_access_id, v_token,
+    v_outbox.action = 'consent-invite', false, v_outbox.id
+  );
+  RETURN v_result || jsonb_build_object(
+    'dispatch_note', v_note,
+    'attempt_count', v_outbox.attempt_count
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.site_request_complete_dispatch(
+  p_outbox_id uuid,
+  p_status text,
+  p_provider_message_id text DEFAULT NULL,
+  p_error text DEFAULT NULL,
+  p_now timestamptz DEFAULT now()
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_outbox public.site_request_dispatch_outbox;
+  v_access public.site_request_access;
+  v_retry_at timestamptz;
+  v_safe_error text;
+  v_provider_message_id text;
+BEGIN
+  IF p_status NOT IN ('sent','retry','cancelled') THEN
+    RAISE EXCEPTION 'dispatch completion must be sent, retry, or cancelled'
+      USING errcode = '22023';
+  END IF;
+  SELECT * INTO v_outbox FROM public.site_request_dispatch_outbox
+  WHERE id = p_outbox_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'dispatch outbox row not found' USING errcode = 'no_data_found';
+  END IF;
+  v_safe_error := public._site_request_safe_dispatch_error(p_error);
+  v_provider_message_id := public._site_request_safe_provider_message_id(
+    p_provider_message_id
+  );
+  IF v_outbox.status = 'sent' THEN
+    RETURN jsonb_build_object(
+      'outbox_id', v_outbox.id, 'status', 'sent', 'idempotent', true
+    );
+  END IF;
+  IF v_outbox.status = 'cancelled' THEN
+    RETURN jsonb_build_object(
+      'outbox_id', v_outbox.id, 'status', 'cancelled', 'idempotent', true
+    );
+  END IF;
+
+  IF p_status = 'sent' THEN
+    IF v_outbox.action IN ('send','resend','consent-granted') THEN
+      SELECT * INTO v_access FROM public.site_request_access
+      WHERE id = v_outbox.access_id
+        AND request_id = v_outbox.request_id
+        AND status = 'pending'
+      FOR UPDATE;
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'pending access for dispatch not found' USING errcode = 'no_data_found';
+      END IF;
+
+      UPDATE public.site_request_access
+      SET status = 'revoked', revoked_at = p_now,
+          revoked_reason = 'superseded by acknowledged dispatch'
+      WHERE request_id = v_outbox.request_id
+        AND status = 'active'
+        AND id <> v_access.id;
+      UPDATE public.site_request_access a
+      SET status = 'revoked', revoked_at = p_now,
+          revoked_reason = 'superseded dispatch work'
+      FROM public.site_request_dispatch_outbox o
+      WHERE o.request_id = v_outbox.request_id
+        AND o.id <> v_outbox.id
+        AND o.action IN ('send','resend','consent-granted')
+        AND o.status IN ('pending','processing')
+        AND a.id = o.access_id
+        AND a.status = 'pending';
+      UPDATE public.site_request_dispatch_outbox
+      SET status = 'cancelled', completed_at = p_now,
+          last_error = 'superseded by acknowledged dispatch'
+      WHERE request_id = v_outbox.request_id
+        AND id <> v_outbox.id
+        AND action IN ('send','resend','consent-granted')
+        AND status IN ('pending','processing');
+      UPDATE public.site_request_access
+      SET status = 'active', link_dispatched_at = p_now,
+          provider_message_id = v_provider_message_id
+      WHERE id = v_access.id;
+      UPDATE public.site_requests
+      SET status = CASE
+            WHEN status IN ('draft','awaiting_consent') THEN 'sent'
+            ELSE status
+          END,
+          sent_at = COALESCE(sent_at, p_now),
+          last_dispatched_at = p_now
+      WHERE id = v_outbox.request_id;
+    ELSIF v_outbox.action = 'nudge' THEN
+      UPDATE public.site_requests SET last_nudged_at = p_now
+      WHERE id = v_outbox.request_id;
+    ELSIF v_outbox.action = 'due-reminder' THEN
+      UPDATE public.site_requests SET due_reminder_sent_at = p_now
+      WHERE id = v_outbox.request_id;
+    END IF;
+
+    UPDATE public.site_request_dispatch_outbox
+    SET status = 'sent', completed_at = p_now, claimed_at = NULL,
+        provider_message_id = v_provider_message_id,
+        last_error = NULL
+    WHERE id = v_outbox.id;
+    PERFORM public._site_request_append_event(
+      v_outbox.request_id, 'dispatch_sent', 'service', NULL, NULL,
+      NULL, NULL,
+      jsonb_build_object(
+        'action', v_outbox.action,
+        'outbox_id', v_outbox.id,
+        'access_id', v_outbox.access_id,
+        'provider_message_id', v_provider_message_id
+      ),
+      'dispatch-sent:' || v_outbox.id::text
+    );
+    RETURN jsonb_build_object(
+      'outbox_id', v_outbox.id, 'request_id', v_outbox.request_id,
+      'status', 'sent', 'idempotent', false
+    );
+  END IF;
+
+  IF v_outbox.access_id IS NOT NULL THEN
+    UPDATE public.site_request_access
+    SET status = 'revoked', revoked_at = p_now,
+        revoked_reason = v_safe_error
+    WHERE id = v_outbox.access_id AND status = 'pending';
+  END IF;
+
+  IF p_status = 'cancelled' THEN
+    UPDATE public.site_request_dispatch_outbox
+    SET status = 'cancelled', completed_at = p_now, claimed_at = NULL,
+        last_error = v_safe_error
+    WHERE id = v_outbox.id;
+  ELSE
+    v_retry_at := p_now + make_interval(
+      mins => LEAST(60, GREATEST(2, (2 ^ LEAST(v_outbox.attempt_count, 5))::integer))
+    );
+    UPDATE public.site_request_dispatch_outbox
+    SET status = 'pending', available_at = v_retry_at, claimed_at = NULL,
+        access_id = NULL, last_error = v_safe_error
+    WHERE id = v_outbox.id;
+    PERFORM public._site_request_append_event(
+      v_outbox.request_id, 'dispatch_retry_scheduled', 'service', NULL, NULL,
+      NULL, NULL,
+      jsonb_build_object(
+        'action', v_outbox.action, 'outbox_id', v_outbox.id,
+        'attempt', v_outbox.attempt_count, 'retry_at', v_retry_at,
+        'error', v_safe_error
+      ),
+      'dispatch-retry:' || v_outbox.id::text || ':' || v_outbox.attempt_count::text
+    );
+  END IF;
+  RETURN jsonb_build_object(
+    'outbox_id', v_outbox.id, 'request_id', v_outbox.request_id,
+    'status', p_status,
+    'retry_at', CASE WHEN p_status = 'retry' THEN v_retry_at ELSE NULL END,
+    'idempotent', false
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.site_request_pending_dispatches(
+  p_now timestamptz DEFAULT now(),
+  p_limit integer DEFAULT 25
+)
+RETURNS SETOF uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT id
+  FROM public.site_request_dispatch_outbox
+  WHERE (
+    status = 'pending' AND available_at <= p_now
+  ) OR (
+    status = 'processing' AND claimed_at < p_now - interval '5 minutes'
+  )
+  ORDER BY available_at, created_at
+  LIMIT LEAST(GREATEST(COALESCE(p_limit, 25), 1), 100);
+$$;
+
+-- Compatibility shim for the pre-outbox Edge contract. New callers complete
+-- by outbox id; older probes that retained an access id still finalize safely.
+CREATE OR REPLACE FUNCTION public.site_request_mark_dispatched(
+  p_request_id uuid,
+  p_access_id uuid,
+  p_provider_message_id text DEFAULT NULL,
+  p_dispatched_at timestamptz DEFAULT now()
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_outbox_id uuid;
+BEGIN
+  SELECT id INTO v_outbox_id
+  FROM public.site_request_dispatch_outbox
+  WHERE request_id = p_request_id AND access_id = p_access_id
+  ORDER BY created_at DESC LIMIT 1;
+  IF v_outbox_id IS NULL THEN
+    RAISE EXCEPTION 'dispatch outbox row for access not found' USING errcode = 'no_data_found';
+  END IF;
+  RETURN public.site_request_complete_dispatch(
+    v_outbox_id, 'sent', p_provider_message_id, NULL,
+    COALESCE(p_dispatched_at, now())
+  );
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.site_request_dispatch_context(
   p_request_id uuid,
   p_action text
@@ -2385,6 +3247,7 @@ AS $$
 DECLARE
   v_event_id uuid;
   v_key text;
+  v_provider_message_id text;
 BEGIN
   IF p_status NOT IN ('sent','failed','skipped') THEN
     RAISE EXCEPTION 'dispatch status must be sent, failed, or skipped'
@@ -2394,9 +3257,13 @@ BEGIN
     RAISE EXCEPTION 'site request % not found', p_request_id USING errcode = 'no_data_found';
   END IF;
 
+  v_provider_message_id := public._site_request_safe_provider_message_id(
+    p_provider_message_id
+  );
+
   v_key := CASE
-    WHEN p_provider_message_id IS NOT NULL
-      THEN 'dispatch-provider:' || p_provider_message_id
+    WHEN v_provider_message_id IS NOT NULL
+      THEN 'dispatch-provider:' || v_provider_message_id
     WHEN p_action = 'due-reminder'
       THEN 'dispatch-due:' || p_request_id::text
     ELSE NULL
@@ -2406,8 +3273,8 @@ BEGIN
     NULL, NULL,
     jsonb_build_object(
       'action', p_action,
-      'provider_message_id', NULLIF(btrim(p_provider_message_id), ''),
-      'error', NULLIF(p_error, '')
+      'provider_message_id', v_provider_message_id,
+      'error', public._site_request_safe_dispatch_error(p_error)
     ),
     v_key
   );
@@ -2434,6 +3301,8 @@ DECLARE
   v_due jsonb := '[]'::jsonb;
   v_context jsonb;
   v_access_id uuid;
+  v_event_id uuid;
+  v_outbox_id uuid;
 BEGIN
   FOR v_request IN
     SELECT id
@@ -2453,7 +3322,11 @@ BEGIN
     SET status = 'expired',
         revoked_at = p_now,
         revoked_reason = 'request expired'
-    WHERE request_id = v_request.id AND status = 'active';
+    WHERE request_id = v_request.id AND status IN ('pending','active');
+    UPDATE public.site_request_dispatch_outbox
+    SET status = 'cancelled', completed_at = p_now,
+        last_error = 'request expired'
+    WHERE request_id = v_request.id AND status IN ('pending','processing');
     PERFORM public._site_request_append_event(
       v_request.id, 'request_expired', 'system', NULL, NULL,
       NULL, NULL, jsonb_build_object('expired_at', p_now),
@@ -2481,17 +3354,22 @@ BEGIN
     ORDER BY created_at DESC
     LIMIT 1;
 
-    IF v_access_id IS NOT NULL THEN
-      UPDATE public.site_requests
-      SET due_reminder_sent_at = p_now
-      WHERE id = v_request.id;
-      PERFORM public._site_request_append_event(
+    IF v_access_id IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM public.site_request_dispatch_outbox o
+      WHERE o.request_id = v_request.id
+        AND o.action = 'due-reminder'
+        AND o.status IN ('pending','processing','sent')
+    ) THEN
+      v_event_id := public._site_request_append_event(
         v_request.id, 'due_reminder_ready', 'system', NULL, NULL,
         NULL, NULL, jsonb_build_object('ready_at', p_now),
         'due-reminder:' || v_request.id::text
       );
+      v_outbox_id := public._site_request_enqueue_dispatch(
+        v_request.id, 'due-reminder', v_event_id
+      );
       v_context := public._site_request_dispatch_result(
-        v_request.id, 'due-reminder', v_access_id, NULL, false, true
+        v_request.id, 'due-reminder', v_access_id, NULL, false, false, v_outbox_id
       );
       v_due := v_due || jsonb_build_array(v_context);
     END IF;
@@ -2585,6 +3463,8 @@ REVOKE ALL ON TABLE public.site_deliverable_dimensions FROM PUBLIC, anon, authen
 REVOKE ALL ON TABLE public.site_binder_entries FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.site_request_access FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.site_request_events FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.site_request_dispatch_outbox FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.site_request_delivery_notification_outbox FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.site_binder_current FROM PUBLIC, anon, authenticated;
 
 GRANT SELECT ON TABLE public.site_requests TO authenticated;
@@ -2607,6 +3487,8 @@ GRANT ALL ON TABLE public.site_deliverable_dimensions TO service_role;
 GRANT ALL ON TABLE public.site_binder_entries TO service_role;
 GRANT ALL ON TABLE public.site_request_access TO service_role;
 GRANT ALL ON TABLE public.site_request_events TO service_role;
+GRANT ALL ON TABLE public.site_request_dispatch_outbox TO service_role;
+GRANT ALL ON TABLE public.site_request_delivery_notification_outbox TO service_role;
 GRANT SELECT ON TABLE public.site_binder_current TO service_role;
 
 REVOKE ALL ON FUNCTION public._site_request_validate_request() FROM PUBLIC, anon, authenticated;
@@ -2618,7 +3500,11 @@ REVOKE ALL ON FUNCTION public._site_access_guard() FROM PUBLIC, anon, authentica
 REVOKE ALL ON FUNCTION public._site_request_designer_authorized(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._site_request_append_event(uuid,text,text,uuid,text,uuid,uuid,jsonb,text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._site_request_mint_access(uuid,timestamptz,uuid,text) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public._site_request_dispatch_result(uuid,text,uuid,text,boolean,boolean) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public._site_request_dispatch_result(uuid,text,uuid,text,boolean,boolean,uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public._site_request_enqueue_dispatch(uuid,text,uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public._site_request_queue_delivery_notification(uuid,uuid,timestamptz) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public._site_request_safe_dispatch_error(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public._site_request_safe_provider_message_id(text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._site_request_consent_granted_dispatch() FROM PUBLIC, anon, authenticated;
 
 REVOKE ALL ON FUNCTION public.site_request_builtin_kits() FROM PUBLIC, anon;
@@ -2653,6 +3539,14 @@ REVOKE ALL ON FUNCTION public.site_request_mark_dispatched(uuid,uuid,text,timest
 REVOKE ALL ON FUNCTION public.site_request_dispatch_context(uuid,text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.site_request_record_dispatch(uuid,text,text,text,text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.site_request_process_lifecycle(timestamptz) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.site_request_claim_dispatch(uuid,timestamptz) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.site_request_complete_dispatch(uuid,text,text,text,timestamptz) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.site_request_pending_dispatches(timestamptz,integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.site_request_claim_delivery_notification(uuid,timestamptz) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.site_request_complete_delivery_notification(uuid,boolean,text,timestamptz) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.site_request_pending_delivery_notifications(timestamptz,integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.site_request_unapproved_media_cleanup_candidates(timestamptz,integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.site_request_confirm_media_cleanup(uuid[],timestamptz) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.site_request_guest_bootstrap(text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.site_request_guest_create_upload(text,uuid,uuid,text,text,text,bigint) TO service_role;
@@ -2663,9 +3557,17 @@ GRANT EXECUTE ON FUNCTION public.site_request_mark_dispatched(uuid,uuid,text,tim
 GRANT EXECUTE ON FUNCTION public.site_request_dispatch_context(uuid,text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.site_request_record_dispatch(uuid,text,text,text,text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.site_request_process_lifecycle(timestamptz) TO service_role;
+GRANT EXECUTE ON FUNCTION public.site_request_claim_dispatch(uuid,timestamptz) TO service_role;
+GRANT EXECUTE ON FUNCTION public.site_request_complete_dispatch(uuid,text,text,text,timestamptz) TO service_role;
+GRANT EXECUTE ON FUNCTION public.site_request_pending_dispatches(timestamptz,integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.site_request_claim_delivery_notification(uuid,timestamptz) TO service_role;
+GRANT EXECUTE ON FUNCTION public.site_request_complete_delivery_notification(uuid,boolean,text,timestamptz) TO service_role;
+GRANT EXECUTE ON FUNCTION public.site_request_pending_delivery_notifications(timestamptz,integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.site_request_unapproved_media_cleanup_candidates(timestamptz,integer) TO service_role;
+GRANT EXECUTE ON FUNCTION public.site_request_confirm_media_cleanup(uuid[],timestamptz) TO service_role;
 
 COMMENT ON TABLE public.site_request_access IS
-  'Request-scoped opaque guest access. token_hash stores lowercase SHA-256 only; raw tokens are returned once by send/resend/consent dispatch and are never persisted.';
+  'Request-scoped opaque guest access. token_hash stores lowercase SHA-256 only; sr_ raw tokens are minted only after dispatch outbox claim and are never persisted.';
 COMMENT ON TABLE public.site_binder_entries IS
   'Append-only approved Site Binder provenance. Current state is derived by site_binder_current; superseded entries remain immutable history.';
 COMMENT ON FUNCTION public.site_request_guest_bootstrap(text) IS

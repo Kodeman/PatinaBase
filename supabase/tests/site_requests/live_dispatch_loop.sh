@@ -37,6 +37,10 @@ BEGIN
     SELECT id FROM public.site_deliverables WHERE request_id = ANY(request_ids)
   );
   DELETE FROM public.site_deliverables WHERE request_id = ANY(request_ids);
+  DELETE FROM public.site_request_delivery_notification_outbox
+  WHERE request_id = ANY(request_ids);
+  DELETE FROM public.site_request_dispatch_outbox
+  WHERE request_id = ANY(request_ids);
   DELETE FROM public.site_request_events WHERE request_id = ANY(request_ids);
   DELETE FROM public.site_request_access WHERE request_id = ANY(request_ids);
   UPDATE public.site_request_items SET current_version_id = NULL
@@ -180,8 +184,13 @@ BEGIN
     SELECT 1 FROM public.sms_messages
     WHERE project_id = '$PROJECT_ID'
       AND template_key = 'site_request_send'
-      AND body LIKE '%/field/%'
-  ), 'consent bridge did not queue the private link';
+      AND body = 'Patina Site Request private link [redacted]'
+  ), 'consent bridge did not persist a redacted audit row';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.sms_messages
+    WHERE project_id = '$PROJECT_ID'
+      AND body LIKE '%/field/sr_%'
+  ), 'raw request token leaked into sms_messages';
 END
 \$\$;
 SQL
@@ -210,8 +219,8 @@ if [[ "$LIFECYCLE_ONE" != "200" || "$LIFECYCLE_TWO" != "200" ]]; then
   echo "Service lifecycle failed with HTTP $LIFECYCLE_ONE then $LIFECYCLE_TWO." >&2
   exit 1
 fi
-jq -e '.dueRemindersSent == 1' "$PROBE_TMP/lifecycle-one.json" >/dev/null
-jq -e '.dueRemindersSent == 0' "$PROBE_TMP/lifecycle-two.json" >/dev/null
+jq -e '.dispatchesSent == 1' "$PROBE_TMP/lifecycle-one.json" >/dev/null
+jq -e '.dispatchesSent == 0' "$PROBE_TMP/lifecycle-two.json" >/dev/null
 echo "live once-only due reminder + deferred SMS bookkeeping: pass"
 
 echo "Field Site Request live dispatch loop: PASS"
