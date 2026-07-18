@@ -35,7 +35,7 @@ APP_DIR=/opt/patina/scan-pipeline
 VENV="$APP_DIR/.venv"
 # A venv is not relocatable: console-script shebangs embed the build path. Build
 # at an immutable final path, then replace only the stable .venv symlink.
-STAGED_VENV="$APP_DIR/.venv.release.$(date -u +%Y%m%d%H%M%S).$$"
+STAGED_VENV=""
 PREVIOUS_VENV="$APP_DIR/.venv.previous"
 FAILED_VENV="$APP_DIR/.venv.failed"
 ETC_DIR=/etc/patina
@@ -43,6 +43,7 @@ TRANSACTION_PARENT="$ETC_DIR"
 TRANSACTION_DIR="$TRANSACTION_PARENT/.scan-worker-install-transaction"
 ENV_FILE="$ETC_DIR/scan-worker.env"
 WORK_DIR=/var/lib/patina/scan-work
+WORK_PARENT=/var/lib/patina
 SYSTEMD_DIR=/etc/systemd/system
 UNIT="$SYSTEMD_DIR/patina-scan-worker.service"
 DOCTOR_UNIT="$SYSTEMD_DIR/patina-scan-worker-doctor.service"
@@ -54,8 +55,39 @@ WORKER_SERVICE=patina-scan-worker
 SVC_USER=patina
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON="${PYTHON:-python3}"
+PATH_GUARD_PYTHON=/usr/bin/python3
+PATH_GUARD="$SRC_DIR/install-path-guard.py"
+RUNUSER=/usr/sbin/runuser
+INSTALL_TRUST_ANCHOR=/
+INSTALL_TRUSTED_UID=0
+INSTALL_TRUSTED_GID=0
 # shellcheck source=install-venv-lib.sh
 . "$SRC_DIR/install-venv-lib.sh"
+
+_path_guard() {
+  "$PATH_GUARD_PYTHON" "$PATH_GUARD" \
+    --anchor "$INSTALL_TRUST_ANCHOR" \
+    --trusted-uid "$INSTALL_TRUSTED_UID" \
+    --trusted-gid "$INSTALL_TRUSTED_GID" \
+    "$@"
+}
+
+_harden_managed_release() {
+  _path_guard harden-release --app-dir "$APP_DIR" --path "$1" >/dev/null
+}
+
+_run_as_service_user() {
+  "$RUNUSER" --user "$SVC_USER" -- \
+    env -i \
+      HOME="$APP_DIR" \
+      PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+      XDG_CONFIG_HOME="$APP_DIR/.config" \
+      XDG_CACHE_HOME="$APP_DIR/.cache" \
+      XDG_DATA_HOME="$APP_DIR/.data" \
+      XDG_STATE_HOME="$APP_DIR/.state" \
+      PYTHONDONTWRITEBYTECODE=1 \
+      "$@"
+}
 
 _recover_on_exit() {
   local status=$?
@@ -66,6 +98,23 @@ _recover_on_exit() {
   exit "$status"
 }
 trap _recover_on_exit EXIT
+
+if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+  echo "ERROR: install.sh must run as root (use sudo)." >&2
+  exit 2
+fi
+if [ ! -x "$PATH_GUARD_PYTHON" ] || [ ! -f "$PATH_GUARD" ]; then
+  echo "ERROR: installer path guard unavailable ($PATH_GUARD_PYTHON, $PATH_GUARD)." >&2
+  exit 2
+fi
+if [ ! -x "$RUNUSER" ]; then
+  echo "ERROR: service-user smoke requires $RUNUSER (util-linux)." >&2
+  exit 2
+fi
+
+# Recovery metadata is privileged input. Establish a real, root-owned,
+# non-group/world-writable parent before reading any prior marker.
+_path_guard ensure-trusted-dir --path "$ETC_DIR" --mode 0750
 
 # Recover before evaluating live GPU policy: an interrupted prior transaction
 # may have installed only one of its candidate drop-ins.
@@ -108,22 +157,47 @@ if [ "$GPU" -eq 1 ] && ! command -v nvidia-smi >/dev/null 2>&1; then
   echo "            + CUDA 11.8 toolkit (nvcc, for gsplat's JIT build) first."
 fi
 
-# 1. service user + writable/runtime dirs
+# 1. service user + root-owned executable namespace + delegated writable dirs
 if ! id -u "$SVC_USER" >/dev/null 2>&1; then
   echo "-- creating service user '$SVC_USER'"
   useradd --system --no-create-home --shell /usr/sbin/nologin "$SVC_USER"
 fi
-install -d -o "$SVC_USER" -g "$SVC_USER" "$APP_DIR" "$WORK_DIR"
-install -d -o "$SVC_USER" -g "$SVC_USER" \
-  "$APP_DIR/.config" "$APP_DIR/.cache" "$APP_DIR/.data" "$APP_DIR/.state"
+SVC_UID="$(id -u "$SVC_USER")"
+SVC_GID="$(id -g "$SVC_USER")"
+
+# /opt/patina and APP_DIR are an executable trust boundary. The one-time
+# --adopt-final transition accepts the old installer-created real APP_DIR, but
+# never a symlink and never an untrusted parent. All future release entries are
+# created below the root-owned, non-writable namespace.
+_path_guard ensure-trusted-dir --path "$(dirname "$APP_DIR")" --mode 0755
+_path_guard ensure-trusted-dir --path "$APP_DIR" --mode 0755 --adopt-final
+_path_guard ensure-trusted-dir --path "$WORK_PARENT" --mode 0755
+_path_guard ensure-owned-dir --app-dir "$WORK_PARENT" --path "$WORK_DIR" \
+  --owner-uid "$SVC_UID" --owner-gid "$SVC_GID" --mode 0750
+for writable_dir in \
+  "$APP_DIR/.config" "$APP_DIR/.cache" "$APP_DIR/.data" "$APP_DIR/.state"; do
+  _path_guard ensure-owned-dir --app-dir "$APP_DIR" --path "$writable_dir" \
+    --owner-uid "$SVC_UID" --owner-gid "$SVC_GID" --mode 0750
+done
 if [ "$GPU" -eq 1 ]; then
-  install -d -o "$SVC_USER" -g "$SVC_USER" \
+  for writable_dir in \
     "$APP_DIR/.cache/torch" "$APP_DIR/.cache/nv" \
-    "$APP_DIR/.cache/torch_extensions"
+    "$APP_DIR/.cache/torch_extensions"; do
+    _path_guard ensure-owned-dir --app-dir "$APP_DIR" --path "$writable_dir" \
+      --owner-uid "$SVC_UID" --owner-gid "$SVC_GID" --mode 0750
+  done
 fi
-# APP_DIR is intentionally patina-owned, so privileged transaction state must
-# not live beneath it: a service process could otherwise rename parent entries.
-install -d -o root -g root -m 0750 "$ETC_DIR"
+
+# Existing stable/previous symlinks must stay inside the managed immutable
+# namespace. Harden old installer releases before any service-user execution;
+# the no-follow guard revokes patina writes without traversing internal links.
+if [ -L "$VENV" ]; then
+  _path_guard harden-release --app-dir "$APP_DIR" --path "$VENV" --stable-link >/dev/null
+fi
+if [ -L "$PREVIOUS_VENV" ]; then
+  _path_guard harden-release --app-dir "$APP_DIR" --path "$PREVIOUS_VENV" \
+    --stable-link >/dev/null
+fi
 
 # A fresh install, explicit upgrade, CPU→GPU conversion, broken link, or legacy
 # real-directory .venv builds a clean release. The legacy case is converted once
@@ -139,6 +213,12 @@ if [ "$BUILD_VENV" -eq 1 ] && [ "$GPU" -eq 0 ] && [ -f "$DROPIN_DIR/gpu.conf" ];
   exit 2
 fi
 
+if [ "$BUILD_VENV" -eq 1 ]; then
+  # Generate only a high-entropy final name now. prepare_install_transaction
+  # durably records it before create-release performs the atomic mkdir.
+  STAGED_VENV="$(_path_guard generate-release-path --app-dir "$APP_DIR")"
+fi
+
 # From this point, every failure is either cleaned by the EXIT trap or recovered
 # from the durable marker by the next invocation.
 prepare_install_transaction
@@ -148,6 +228,7 @@ install -d "$CANDIDATE_SYSTEMD_DIR"
 # 2. immutable Python candidate + dependency/import/entrypoint smoke
 SMOKE_VENV="$VENV"
 if [ "$BUILD_VENV" -eq 1 ]; then
+  _path_guard create-release --app-dir "$APP_DIR" --path "$STAGED_VENV"
   echo "-- building staged venv at $STAGED_VENV ($($PYTHON --version 2>&1))"
   "$PYTHON" -m venv "$STAGED_VENV"
   "$STAGED_VENV/bin/pip" install --upgrade pip >/dev/null
@@ -161,15 +242,22 @@ if [ "$BUILD_VENV" -eq 1 ]; then
     "$STAGED_VENV/bin/pip" install "$SRC_DIR[drawings]"
   fi
   "$STAGED_VENV/bin/pip" check
-  chown -R "$SVC_USER:$SVC_USER" "$STAGED_VENV"
+  _path_guard harden-release --app-dir "$APP_DIR" --path "$STAGED_VENV" >/dev/null
   SMOKE_VENV="$STAGED_VENV"
 else
   echo "-- existing venv left untouched (use --upgrade to rebuild from source)"
 fi
+if [ "$SMOKE_VENV" = "$VENV" ]; then
+  _path_guard validate-release --app-dir "$APP_DIR" --path "$SMOKE_VENV" \
+    --stable-link --require-executables >/dev/null
+else
+  _path_guard validate-release --app-dir "$APP_DIR" --path "$SMOKE_VENV" \
+    --require-executables >/dev/null
+fi
 echo "-- smoke-checking package imports and console entrypoint"
-"$SMOKE_VENV/bin/python" -c \
+_run_as_service_user "$SMOKE_VENV/bin/python" -c \
   'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor'
-"$SMOKE_VENV/bin/patina-scan-worker" --help >/dev/null
+_run_as_service_user "$SMOKE_VENV/bin/patina-scan-worker" --help >/dev/null
 
 # 3. stage a complete candidate systemd tree. Nothing under /etc/systemd is
 # replaced until after verify + the rollback snapshot.

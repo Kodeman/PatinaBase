@@ -264,6 +264,10 @@ _switch_release() {
       legacy_release="$APP_DIR/.venv.release.legacy.$(date -u +%Y%m%d%H%M%S).$$"
       _transaction_value_write legacy_release "$legacy_release" || return 1
       _atomic_replace_path "$VENV" "$legacy_release" || return 1
+      if ! _harden_managed_release "$legacy_release"; then
+        _atomic_replace_path "$legacy_release" "$VENV" || true
+        return 1
+      fi
       if ! _atomic_symlink_replace "$STAGED_VENV" "$VENV"; then
         _atomic_replace_path "$legacy_release" "$VENV" || true
         return 1
@@ -441,6 +445,10 @@ _finalize_previous_release() {
     moved_previous="$APP_DIR/.venv.release.legacy-previous.$(date -u +%Y%m%d%H%M%S).$$"
     _transaction_value_write moved_previous "$moved_previous" || return 1
     _atomic_replace_path "$PREVIOUS_VENV" "$moved_previous" || return 1
+    if ! _harden_managed_release "$moved_previous"; then
+      _atomic_replace_path "$moved_previous" "$PREVIOUS_VENV" || true
+      return 1
+    fi
     old_previous="$moved_previous"
   fi
   if [ -n "$desired" ]; then

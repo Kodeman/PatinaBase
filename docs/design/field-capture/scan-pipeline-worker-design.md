@@ -172,6 +172,7 @@ services/scan-pipeline/
   pyproject.toml                 # deps + [project.scripts] patina-scan-worker = "patina_scan_worker.cli:main"
   README.md                      # box-prep + run instructions (appendix A, mirrored)
   install.sh                     # stage/verify/smoke, transactionally activate venv + units
+  install-path-guard.py          # no-follow ownership/containment guard for root install
   install-venv-lib.sh            # durable snapshot/switch/rollback/recovery state machine
   patina-scan-worker.service     # systemd unit (§5)
   patina-scan-worker-doctor.service # doctor-only acceptance oneshot (§5/§6)
@@ -215,8 +216,13 @@ cu118 torch + gsplat band). `[gpu]` is only the box convenience meta-extra for
 `refine+fuse+splat`; it is not a new execution mode.
 
 `install.sh` builds an immutable candidate release, runs `pip check`, an
-installed-package import/entrypoint smoke, and—on Linux—`systemd-analyze verify`
-against a staged unit tree. It then fsyncs a root-only snapshot at
+installed-package import/entrypoint smoke as `User=patina`, and—on
+Linux—`systemd-analyze verify` against a staged unit tree. `/opt/patina` and
+`APP_DIR` are a root-owned, non-service-writable executable namespace; only the
+four XDG directories and `WORK_DIR` are delegated to `patina`. New releases use
+a high-entropy direct-child name that is marker-backed before atomic creation,
+and stable release links are resolved no-follow and must remain directly
+contained by `APP_DIR`. It then fsyncs a root-only snapshot at
 `/etc/patina/.scan-worker-install-transaction` of installed unit
 presence/content and current/previous release references before stopping an
 active service. Unit replacement and the normal `.venv` symlink switch are
@@ -656,8 +662,10 @@ What the Linux box needs to run P1 (and to be P2-ready):
 - **Network** — **outbound 443 only**. No inbound ports, no forwarding, no reverse proxy in front of the worker. The firewall may deny all inbound. `cloudflared` (Kody's tunnel) is a separate, optional install for SSH/ops in — independent of the worker.
 - **Time** — `chrony`/NTP so `scan_pipeline_events` and audit timestamps are sane.
 - **Files** — `/etc/patina/scan-worker.env` at `0600` owned by `root:root`;
-  stable venv symlink at `/opt/patina/scan-pipeline/.venv`; immutable releases
-  beside it; scratch at `/var/lib/patina/scan-work`.
+  root-owned stable venv symlink at `/opt/patina/scan-pipeline/.venv`;
+  root-owned, non-service-writable immutable releases beside it; only the XDG
+  cache/state dirs below `APP_DIR` and scratch at `/var/lib/patina/scan-work`
+  are owned by `patina`.
 
 Bring-up: `sudo ./install.sh` → edit `/etc/patina/scan-worker.env` (URL, key,
 `WORKER_ID`) → `systemctl start patina-scan-worker-doctor` for a context-accurate

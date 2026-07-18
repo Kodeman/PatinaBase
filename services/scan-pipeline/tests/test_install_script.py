@@ -15,6 +15,7 @@ from pathlib import Path
 
 INSTALL = Path(__file__).resolve().parent.parent / "install.sh"
 VENV_LIB = Path(__file__).resolve().parent.parent / "install-venv-lib.sh"
+PATH_GUARD = Path(__file__).resolve().parent.parent / "install-path-guard.py"
 
 
 def test_upgrade_refuses_to_rebuild_gpu_install_as_cpu_by_omission():
@@ -41,7 +42,8 @@ def test_gpu_install_fails_before_changes_without_nvidia_modprobe():
 
 def test_candidate_is_checked_smoked_and_verified_before_transaction_activation():
     script = INSTALL.read_text()
-    assert 'STAGED_VENV="$APP_DIR/.venv.release.' in script
+    assert 'generate-release-path --app-dir "$APP_DIR"' in script
+    assert 'create-release --app-dir "$APP_DIR" --path "$STAGED_VENV"' in script
     assert '"$STAGED_VENV/bin/pip" check' in script
     assert 'import patina_scan_worker' in script
     assert '"$SMOKE_VENV/bin/patina-scan-worker" --help' in script
@@ -59,6 +61,222 @@ def test_candidate_is_checked_smoked_and_verified_before_transaction_activation(
     )
     # Stop/swap lives only in the helper, after all candidate checks.
     assert "systemctl stop patina-scan-worker" not in script
+
+
+def test_release_namespace_and_candidate_contents_stay_root_owned():
+    script = INSTALL.read_text()
+    assert 'ensure-trusted-dir' in script
+    assert '"$APP_DIR"' in script
+    assert 'generate-release-path' in script
+    assert 'create-release' in script
+    assert 'harden-release' in script
+    assert 'chown -R "$SVC_USER:$SVC_USER" "$STAGED_VENV"' not in script
+    assert 'install -d -o "$SVC_USER" -g "$SVC_USER" "$APP_DIR"' not in script
+
+
+def test_candidate_and_existing_release_smoke_runs_as_service_user():
+    script = INSTALL.read_text()
+    smoke = script[script.index("-- smoke-checking package imports") :]
+    assert '_run_as_service_user "$SMOKE_VENV/bin/python"' in smoke
+    assert '_run_as_service_user "$SMOKE_VENV/bin/patina-scan-worker"' in smoke
+    assert not any(
+        line.startswith('"$SMOKE_VENV/bin/python"') for line in smoke.splitlines()
+    )
+    assert not any(
+        line.startswith('"$SMOKE_VENV/bin/patina-scan-worker"')
+        for line in smoke.splitlines()
+    )
+
+
+def _path_guard(
+    tmp_path: Path,
+    *args: str,
+    expected_ok: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    anchor = tmp_path / "trusted"
+    anchor.mkdir(mode=0o700, exist_ok=True)
+    result = subprocess.run(
+        [
+            "python3",
+            str(PATH_GUARD),
+            "--anchor",
+            str(anchor),
+            "--trusted-uid",
+            str(os.getuid()),
+            "--trusted-gid",
+            str(os.getgid()),
+            *args,
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if expected_ok:
+        assert result.returncode == 0, result.stderr
+    else:
+        assert result.returncode != 0
+    return result
+
+
+def test_path_guard_adopts_only_the_final_real_directory(tmp_path):
+    anchor = tmp_path / "trusted"
+    parent = anchor / "opt" / "patina"
+    parent.mkdir(parents=True, mode=0o755)
+    app = parent / "scan-pipeline"
+    app.mkdir(mode=0o777)
+    app.chmod(0o777)
+
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(app),
+        "--mode",
+        "0755",
+        "--adopt-final",
+    )
+
+    assert stat.S_IMODE(app.stat().st_mode) == 0o755
+
+
+def test_path_guard_rejects_a_symlinked_managed_parent(tmp_path):
+    anchor = tmp_path / "trusted"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    anchor.mkdir(mode=0o700)
+    (anchor / "opt").symlink_to(outside)
+
+    result = _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(anchor / "opt" / "patina"),
+        "--mode",
+        "0755",
+        expected_ok=False,
+    )
+    assert "symlink" in result.stderr.lower()
+    assert not (outside / "patina").exists()
+
+
+def test_release_path_is_unpredictable_recordable_then_atomically_created(tmp_path):
+    app = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(app),
+        "--mode",
+        "0755",
+    )
+    first = _path_guard(
+        tmp_path, "generate-release-path", "--app-dir", str(app)
+    ).stdout.strip()
+    second = _path_guard(
+        tmp_path, "generate-release-path", "--app-dir", str(app)
+    ).stdout.strip()
+    assert first != second
+    assert Path(first).parent == app
+    assert Path(first).name.startswith(".venv.release.")
+    assert not Path(first).exists(), "marker can be made durable before mkdir"
+
+    _path_guard(tmp_path, "create-release", "--app-dir", str(app), "--path", first)
+    assert Path(first).is_dir()
+    assert stat.S_IMODE(Path(first).stat().st_mode) == 0o755
+    duplicate = _path_guard(
+        tmp_path,
+        "create-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        first,
+        expected_ok=False,
+    )
+    assert "exists" in duplicate.stderr.lower()
+
+
+def test_release_validation_rejects_escape_and_untrusted_targets(tmp_path):
+    app = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(app),
+        "--mode",
+        "0755",
+    )
+    outside = tmp_path / "trusted" / "outside"
+    outside.mkdir()
+    stable = app / ".venv"
+    stable.symlink_to(outside)
+
+    escaped = _path_guard(
+        tmp_path,
+        "validate-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        str(stable),
+        "--stable-link",
+        expected_ok=False,
+    )
+    assert "contained" in escaped.stderr.lower()
+
+    stable.unlink()
+    release = app / ".venv.release.deadbeefdeadbeefdeadbeef"
+    release.mkdir(mode=0o777)
+    release.chmod(0o777)
+    stable.symlink_to(release)
+    writable = _path_guard(
+        tmp_path,
+        "validate-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        str(stable),
+        "--stable-link",
+        expected_ok=False,
+    )
+    assert "writable" in writable.stderr.lower()
+
+
+def test_harden_release_removes_service_write_without_following_symlinks(tmp_path):
+    app = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(app),
+        "--mode",
+        "0755",
+    )
+    release = app / ".venv.release.deadbeefdeadbeefdeadbeef"
+    release.mkdir(mode=0o777)
+    release.chmod(0o777)
+    writable = release / "bin"
+    writable.mkdir(mode=0o777)
+    writable.chmod(0o777)
+    entrypoint = writable / "patina-scan-worker"
+    entrypoint.write_text("#!/bin/sh\n")
+    entrypoint.chmod(0o777)
+    outside = tmp_path / "outside"
+    outside.write_text("untouched")
+    outside.chmod(0o666)
+    (writable / "outside-link").symlink_to(outside)
+
+    _path_guard(
+        tmp_path,
+        "harden-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        str(release),
+    )
+
+    assert stat.S_IMODE(release.stat().st_mode) & 0o022 == 0
+    assert stat.S_IMODE(writable.stat().st_mode) & 0o022 == 0
+    assert stat.S_IMODE(entrypoint.stat().st_mode) & 0o022 == 0
+    assert stat.S_IMODE(outside.stat().st_mode) == 0o666
 
 
 def test_units_are_staged_instead_of_overwriting_live_paths_early():
@@ -83,7 +301,7 @@ def test_transaction_snapshots_units_and_recovers_on_next_install():
     activation = VENV_LIB.read_text()
     assert 'TRANSACTION_PARENT="$ETC_DIR"' in installer
     assert 'TRANSACTION_DIR="$TRANSACTION_PARENT/.scan-worker-install-transaction"' in installer
-    assert 'install -d -o root -g root -m 0750 "$ETC_DIR"' in installer
+    assert '_path_guard ensure-trusted-dir --path "$ETC_DIR" --mode 0750' in installer
     assert 'install -d -m 0700 "$TRANSACTION_DIR"' in activation
     assert 'TRANSACTION_DIR="$APP_DIR/' not in installer
     assert "snapshot/unit.$index.present" in activation
@@ -193,6 +411,14 @@ TRANSACTION_PARENT="$(dirname "$2")/etc"
 TRANSACTION_DIR="$TRANSACTION_PARENT/.scan-worker-install-transaction"
 WORKER_SERVICE=patina-scan-worker
 BUILD_VENV=1
+PATH_GUARD_SCRIPT="$3"
+INSTALL_TRUST_ANCHOR="$(dirname "$APP_DIR")"
+_harden_managed_release() {{
+  python3 "$PATH_GUARD_SCRIPT" \
+    --anchor "$INSTALL_TRUST_ANCHOR" \
+    --trusted-uid "$(id -u)" --trusted-gid "$(id -g)" \
+    harden-release --app-dir "$APP_DIR" --path "$1" >/dev/null
+}}
 MANAGED_UNIT_TARGETS=({target_args})
 CANDIDATE_UNIT_PATHS=({candidate_args})
 _transaction_hook() {{
@@ -243,6 +469,7 @@ def _run_transaction(
             "transaction-test",
             str(VENV_LIB),
             str(app),
+            str(PATH_GUARD),
         ],
         text=True,
         capture_output=True,

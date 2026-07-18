@@ -179,9 +179,13 @@ The worker installs a **copy** of the source into its venv, so `git pull` alone
 does **not** change a running worker's behaviour. `--upgrade` builds a fresh
 immutable `.venv.release.*`, runs `pip check`, imports the installed package,
 exercises the console entrypoint, stages a complete systemd tree, and requires
-`systemd-analyze verify` on Linux while the existing worker continues. Python
-venv scripts embed their absolute build path, so the release directory is never
-renamed.
+`systemd-analyze verify` on Linux while the existing worker continues. The
+executable namespace (`APP_DIR`, `.venv`, and every release tree) is root-owned
+and not writable by `patina`; only `.config/.cache/.data/.state` and `WORK_DIR`
+are delegated to the service account. Candidate and existing-release smoke
+commands run as `patina`, never in the installer's root shell. Python venv
+scripts embed their absolute build path, so a high-entropy final release name is
+durably recorded before its atomic directory creation and is never renamed.
 
 The installer then fsyncs a root-only snapshot under
 `/etc/patina/.scan-worker-install-transaction` of every managed unit's installed
@@ -193,8 +197,10 @@ daemon-reloads, and restarts the old worker. If power loss or SIGKILL interrupts
 a switch, the next invocation performs that rollback before doing new work.
 
 A pre-transaction real-directory `.venv` is converted once into the immutable
-release layout while stopped; that exceptional move is marker-backed at every
-step. Failed/abandoned stages are deleted only inside the installer's
+release layout while stopped, ownership-hardened, and retained for rollback;
+that exceptional move is marker-backed at every step. Stable release links are
+accepted only when their no-follow target is directly contained by the trusted
+release namespace. Failed/abandoned stages are deleted only inside the installer's
 `.venv.release.*` namespace and only when neither `.venv` nor `.venv.previous`
 references them. When the service was already inactive, it is not started; the
 previous release remains available for rollback. Rebuilding also fails before
