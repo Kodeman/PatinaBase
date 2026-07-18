@@ -19,14 +19,17 @@ def _wall(identifier, cx, cy, cz, length, height, thickness, along):
     }
 
 
-def rectangular_room(x0, x1, z0, z1, h, th=0.1, with_door=False):
-    """Walls: north(z0)/south(z1) run along x; east(x1)/west(x0) run along z."""
+def rectangular_room(x0, x1, z0, z1, h, th=0.1, with_door=False, north_height=None):
+    """Walls: north(z0)/south(z1) run along x; east(x1)/west(x0) run along z.
+    north_height (if set) makes the north wall shorter → a sloped ceiling: the
+    east/west walls then meet a lower corner at their north end."""
     midx = (x0 + x1) / 2
     midz = (z0 + z1) / 2
     wx = x1 - x0
     wz = z1 - z0
+    nh = north_height if north_height is not None else h
     walls = [
-        _wall("wall-north", midx, h / 2, z0, wx, h, th, "x"),
+        _wall("wall-north", midx, nh / 2, z0, wx, nh, th, "x"),
         _wall("wall-south", midx, h / 2, z1, wx, h, th, "x"),
         _wall("wall-east", x1, h / 2, midz, wz, h, th, "z"),
         _wall("wall-west", x0, h / 2, midz, wz, h, th, "z"),

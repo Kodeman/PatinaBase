@@ -48,3 +48,20 @@ def test_degenerate_empty_room():
 def test_non_object_input():
     room = parse_captured_room_meters("not-an-object")
     assert room.walls == []
+
+
+def test_polygon_corners_parsed_into_outline():
+    # iOS 17+ walls carry polygonCorners ([x,y,z] local); we keep (along-x, up-y).
+    room = {
+        "walls": [{
+            "identifier": "w0",
+            "dimensions": [4.0, 2.7, 0.1],
+            "transform": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2, 1.35, 0, 1],
+            "polygonCorners": [[-2, -1.35, 0], [2, -1.35, 0], [2, 1.1, 0], [-2, 1.35, 0]],
+        }],
+        "floors": [], "doors": [], "windows": [], "openings": [], "objects": [],
+    }
+    rm = parse_captured_room_meters(room)
+    assert len(rm.walls) == 1
+    ol = rm.walls[0].outline_local
+    assert ol == [(-2.0, -1.35), (2.0, -1.35), (2.0, 1.1), (-2.0, 1.35)]  # z dropped

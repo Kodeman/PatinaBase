@@ -30,6 +30,11 @@ class WallDim:
     a_xz: tuple[float, float]  # world endpoint A (x,z) metres
     b_xz: tuple[float, float]  # world endpoint B (x,z) metres
     base_y_m: float            # wall bottom in world y (metres)
+    # RoomPlan polygonCorners in the wall's LOCAL frame (metres): [(along_x, up_y), …]
+    # (iOS 17+). Empty when RoomPlan didn't emit them. A NON-flat top edge here
+    # encodes a real sloped-ceiling wall; a flat/empty one falls back to the
+    # corner-height synthesize (item-2 M3 revision).
+    outline_local: list[tuple[float, float]] = field(default_factory=list)
 
 
 @dataclass
@@ -110,6 +115,14 @@ def parse_captured_room_meters(json: Any) -> RoomModel:
         height = d[1] if len(d) > 1 and math.isfinite(d[1]) else math.nan
         thickness = d[2] if len(d) > 2 and math.isfinite(d[2]) else None
         base_y = (ty - height / 2.0) if math.isfinite(ty) and math.isfinite(height) else math.nan
+        # local-frame polygon outline (drop z; keep along-x + up-y)
+        outline: list[tuple[float, float]] = []
+        pc = w.get("polygonCorners")
+        if isinstance(pc, list):
+            for c in pc:
+                cc = [_num(v) for v in _as_list(c)]
+                if len(cc) >= 2 and math.isfinite(cc[0]) and math.isfinite(cc[1]):
+                    outline.append((cc[0], cc[1]))
         rm.walls.append(WallDim(
             apple_id=_identifier(w),
             length_m=abs(dx),
@@ -118,6 +131,7 @@ def parse_captured_room_meters(json: Any) -> RoomModel:
             a_xz=(tx + half * hx, tz + half * hz),
             b_xz=(tx - half * hx, tz - half * hz),
             base_y_m=base_y,
+            outline_local=outline,
         ))
         headings.append((abs(dx), math.atan2(hz, hx)))
 

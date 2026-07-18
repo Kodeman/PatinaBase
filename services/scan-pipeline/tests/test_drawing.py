@@ -95,6 +95,51 @@ def test_dxf_audit_clean_and_recoverable(tmp_path):
     assert len(list(doc2.modelspace().query('TEXT[layer=="dimensions"]'))) > 0
 
 
+def test_paperspace_layout_has_entities():
+    # item 1: the Layout tab must be a plottable sheet (viewport + title block),
+    # not empty. keep model space as-is (dimension_texts still populated).
+    ss, _ = _sheet_set()
+    doc = dxf_mod.build_dxf(ss)
+    assert dxf_mod.paperspace_entity_count(doc) > 0
+    # a VIEWPORT entity exists in paperspace
+    vps = list(doc.paperspace("Layout1").query("VIEWPORT"))
+    assert len(vps) >= 1
+    # model space is unchanged — dimensions still present
+    assert len(dxf_mod.dimension_texts(doc)) > 0
+
+
+def test_patina_brand_on_title_block():
+    # item 3: the PATINA mark brands every SVG sheet's title block…
+    ss, _ = _sheet_set()
+    svgs = render_set(ss)
+    assert "PATINA" in svgs["plan"] and "PATINA" in svgs["elev-north"]
+    # …and the DXF paperspace title block
+    doc = dxf_mod.build_dxf(ss)
+    ptxt = " ".join(e.dxf.text for e in doc.paperspace("Layout1").query("TEXT"))
+    assert "PATINA" in ptxt
+
+
+def test_sloped_ceiling_elevation_synthesizes_top_chord():
+    # item 2: a room with a short north wall (sloped ceiling) → an elevation's
+    # wall top is a SLOPED chord (y1 != y2), and its ceiling note says SLOPED.
+    from patina_scan_worker.drawing.model import LAYER_WALLS, Line
+    room = parse_captured_room_meters(rectangular_room(0, 4, 0, 5, 2.7, north_height=2.2))
+    cert = {"scale": 1.0, "unverified": False, "anchor_count": 3, "floor_area_sqft": 200.0,
+            "dimension_counts": {"verified": 0, "measured": 0, "estimated": 0}}
+    ss = build_sheet_set(room, [], cert, "P", "R", "D", tolerance_class="measured")
+    sloped_sheets = []
+    for s in ss.sheets:
+        if not s.id.startswith("elev-"):
+            continue
+        diag = [p for p in s.prims if isinstance(p, Line) and p.layer == LAYER_WALLS
+                and abs(p.y1 - p.y2) > 0.02 and abs(p.x1 - p.x2) > 0.02]
+        if diag:
+            sloped_sheets.append(s)
+    assert sloped_sheets, "no elevation drew a sloped top chord for a sloped-ceiling room"
+    notes = " ".join(p.text for s in sloped_sheets for p in s.prims if hasattr(p, "text"))
+    assert "SLOPED" in notes
+
+
 def test_unverified_stamp_presence_and_absence():
     ss_v, _ = _sheet_set(unverified=False)
     ss_u, _ = _sheet_set(unverified=True)

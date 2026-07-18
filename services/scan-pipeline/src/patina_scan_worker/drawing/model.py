@@ -241,6 +241,39 @@ def _elevation_sheets(room: RoomModel, mindex: dict, scale: float) -> list[Sheet
     return sheets
 
 
+def _pt_close(a: tuple[float, float], b: tuple[float, float], tol: float = 0.35) -> bool:
+    return math.hypot(a[0] - b[0], a[1] - b[1]) <= tol
+
+
+def _corner_height_m(room: RoomModel, endpoint: tuple[float, float]) -> float:
+    """Ceiling height (metres) at a wall corner = the MIN height of the walls
+    meeting there — the ceiling follows the lower wall at that corner, so a wall
+    running from a tall side down to a short wall gets a sloped top. Item-2
+    synthesize path (when RoomPlan's polygonCorners don't encode the slope)."""
+    hs = [w.height_m for w in room.walls
+          if math.isfinite(w.height_m)
+          and (_pt_close(w.a_xz, endpoint) or _pt_close(w.b_xz, endpoint))]
+    return min(hs) if hs else math.nan
+
+
+def _sloped_polygon(outline: list[tuple[float, float]]) -> list[tuple[float, float]] | None:
+    """If a wall's local polygon has a NON-flat top edge (top corners differ in
+    height by > 3 cm), return it normalised to a 0-based (along, up) outline; else
+    None (fall back to the corner-height synthesize)."""
+    if len(outline) < 4:
+        return None
+    ys = [p[1] for p in outline]
+    top_span = max(ys) - min(ys)
+    # top corners = those in the upper half; if their y's differ, it's sloped
+    mid = (max(ys) + min(ys)) / 2
+    top_ys = [y for _, y in outline if y >= mid]
+    if len(top_ys) < 2 or (max(top_ys) - min(top_ys)) <= 0.03 or top_span <= 0.03:
+        return None
+    minx = min(p[0] for p in outline)
+    miny = min(p[1] for p in outline)
+    return [(p[0] - minx, p[1] - miny) for p in outline]
+
+
 def _elevation_sheet(card: str, rep, room: RoomModel, mindex: dict, scale: float) -> Sheet:
     sheet = Sheet(id=f"elev-{card}", title=f"ELEVATION — {card.upper()}")
     if rep is None:
@@ -248,15 +281,35 @@ def _elevation_sheet(card: str, rep, room: RoomModel, mindex: dict, scale: float
         sheet.w_ft, sheet.h_ft = 4.0, 3.0
         return sheet
     i, w = rep
-    length_ft = w.length_m * M_TO_FT * scale
-    height_ft = (w.height_m if math.isfinite(w.height_m) else 2.7) * M_TO_FT * scale
-    sheet.w_ft, sheet.h_ft = length_ft, height_ft
+    k = M_TO_FT * scale
+    length_ft = w.length_m * k
+    height_ft = (w.height_m if math.isfinite(w.height_m) else 2.7) * k
 
-    # wall outline
-    sheet.prims.append(Line(0, 0, length_ft, 0, LAYER_WALLS))
-    sheet.prims.append(Line(length_ft, 0, length_ft, height_ft, LAYER_WALLS))
-    sheet.prims.append(Line(length_ft, height_ft, 0, height_ft, LAYER_WALLS))
-    sheet.prims.append(Line(0, height_ft, 0, 0, LAYER_WALLS))
+    # ── wall outline: real sloped polygon > synthesized corner-height slope ────
+    poly = _sloped_polygon(w.outline_local)
+    sloped = False
+    if poly is not None:
+        # RoomPlan gave a genuinely sloped polygon — draw it verbatim.
+        pts = [(px * k, py * k) for px, py in poly]
+        for j in range(len(pts)):
+            a, b = pts[j], pts[(j + 1) % len(pts)]
+            sheet.prims.append(Line(a[0], a[1], b[0], b[1], LAYER_WALLS))
+        top_ft = max(py for _, py in pts)
+        sloped = True
+    else:
+        # synthesize: top chord connects the corner heights (item 2) — a slope
+        # when the wall runs between neighbours of different heights.
+        lh = _corner_height_m(room, w.a_xz)
+        rh = _corner_height_m(room, w.b_xz)
+        left_ft = (lh if math.isfinite(lh) else w.height_m) * k
+        right_ft = (rh if math.isfinite(rh) else w.height_m) * k
+        sheet.prims.append(Line(0, 0, length_ft, 0, LAYER_WALLS))            # floor
+        sheet.prims.append(Line(0, 0, 0, left_ft, LAYER_WALLS))              # left jamb
+        sheet.prims.append(Line(length_ft, 0, length_ft, right_ft, LAYER_WALLS))  # right jamb
+        sheet.prims.append(Line(0, left_ft, length_ft, right_ft, LAYER_WALLS))    # top chord (SLOPE)
+        top_ft = max(left_ft, right_ft, height_ft)
+        sloped = abs(left_ft - right_ft) > 0.02
+    sheet.w_ft, sheet.h_ft = length_ft, top_ft
 
     # length dim (bottom) + height dim (left)
     lm = mindex.get(("wall", w.apple_id, i, "length"))
@@ -288,8 +341,8 @@ def _elevation_sheet(card: str, rep, room: RoomModel, mindex: dict, scale: float
         wt, wc = _fmt(wm)
         sheet.prims.append(Label(x0 + ow / 2, head + 0.3, f"{o.kind} {wt}", 0.28, "middle"))
 
-    # P1 ceiling honesty note (wall-height only; true ceiling planes are P2)
-    sheet.prims.append(Label(
-        length_ft / 2, height_ft + 0.8, "CEILING: ESTIMATED (wall-height only — P1)",
-        0.3, "middle", LAYER_TEXT))
+    # P1 ceiling honesty note (wall-height only; true ceiling planes are P2).
+    note = ("CEILING: ESTIMATED · SLOPED (P1 — no true ceiling planes)" if sloped
+            else "CEILING: ESTIMATED (wall-height only — P1)")
+    sheet.prims.append(Label(length_ft / 2, top_ft + 0.8, note, 0.3, "middle", LAYER_TEXT))
     return sheet

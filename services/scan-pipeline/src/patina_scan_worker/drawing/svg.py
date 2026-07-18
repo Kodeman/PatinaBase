@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from xml.sax.saxutils import escape
 
+from .brand import STRATA_LINES, WORDMARK
 from .model import Dim, Label, Line, Rect, Sheet, SheetSet
 from .units import select_scale
 
@@ -135,11 +136,30 @@ def _label_svg(p: Label, sx, sy, ppf) -> str:
     )
 
 
+def _brand_svg(x: float, y: float, box: float) -> str:
+    """Strata mark (in a `box`-pt square at top-left (x,y), y-down) + PATINA wordmark."""
+    parts = []
+    for (x1, y1, x2, y2) in STRATA_LINES:
+        parts.append(
+            f'<line x1="{round(x + x1 * box, 2)}" y1="{round(y + (1 - y1) * box, 2)}" '
+            f'x2="{round(x + x2 * box, 2)}" y2="{round(y + (1 - y2) * box, 2)}" '
+            f'stroke="#1a1a1a" stroke-width="0.9"/>'
+        )
+    parts.append(
+        f'<text x="{round(x + box + 7, 2)}" y="{round(y + box * 0.72, 2)}" '
+        f'font-family="Helvetica,Arial,sans-serif" font-size="13" font-weight="600" '
+        f'letter-spacing="3" fill="#1a1a1a">{WORDMARK}</text>'
+    )
+    return "".join(parts)
+
+
 def _title_block(sheet, sset, scale_label, sheet_no, sheet_total) -> str:
     m = sset.meta
     ty = PAGE_H - MARGIN - TITLE_H
     x0 = MARGIN
     w = PAGE_W - 2 * MARGIN
+    # Patina brand block at the far left; project text starts after it.
+    tx = x0 + 132
     rows = [
         (f"PROJECT  {m.project}", 12),
         (f"ROOM  {m.room}", 26),
@@ -153,9 +173,12 @@ def _title_block(sheet, sset, scale_label, sheet_no, sheet_total) -> str:
     badge = (f"TOLERANCE  {m.tolerance_class.upper()}   ANCHORS {m.anchor_count}   "
              f"FLOOR {m.floor_area_sqft:.0f} sq ft   —   ✓ verified   measured ±mm   ~ estimated")
     parts = [f'<line x1="{x0}" y1="{ty}" x2="{x0+w}" y2="{ty}" stroke="#1a1a1a" stroke-width="1"/>']
+    # Patina brand block + a hairline separator before the project text.
+    parts.append(_brand_svg(x0 + 8, ty + 10, 22))
+    parts.append(f'<line x1="{tx-12}" y1="{ty+6}" x2="{tx-12}" y2="{ty+48}" stroke="#1a1a1a" stroke-width="0.5"/>')
     for text, dy in rows:
         parts.append(
-            f'<text x="{x0+8}" y="{ty+dy}" font-family="Helvetica,Arial,sans-serif" '
+            f'<text x="{tx}" y="{ty+dy}" font-family="Helvetica,Arial,sans-serif" '
             f'font-size="9" fill="#1a1a1a">{escape(text)}</text>'
         )
     for text, dy in right:
