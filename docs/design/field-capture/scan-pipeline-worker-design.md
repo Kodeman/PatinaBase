@@ -47,7 +47,10 @@ Every task in the chain carries:
 - `source = 'scan-pipeline'`.
 - `idempotency_key = '{scan_id}:{stage}:{room_file_version}'` — e.g. `…:solve:2`.
 - `payload = { scan_id, room_file_version, room_file_id?, user_id }` (`room_file_id` known from solve onward; `user_id` = `room_scans.user_id`, needed for storage paths).
-- `parent_task_id` = the id of the stage that enqueued it (ingest→solve→drawings forms a traceable chain in `agent_tasks`).
+- `parent_task_id` = lineage/provenance (ingest→solve→drawings forms a
+  traceable chain; a fork/join may deliberately retain the common fork task).
+  It is distinct from guarded enqueue's `p_owner_task_id`, which must always be
+  the currently running task whose exact lease authorizes the write.
 
 **Agent-OS baggage — explicitly unused.** `agent_tasks` carries fields for the human-review workflow it was built for. These mechanical jobs do **not** use them:
 - `assignee` (CHECK `kody | leah`) is left **NULL** — a scan job has no human owner.
@@ -97,7 +100,8 @@ try:
     INSERT room_file_measurements (...)                                    # one row per dimension
 
     # enqueue successor — idempotent on its own key
-    enqueue_agent_task(
+    enqueue_agent_successor_if_owned(
+        p_owner_task_id  := task.id,
         p_task_type      := 'scan_pipeline.drawings',
         p_payload        := {scan_id, room_file_id, room_file_version},
         p_source         := 'scan-pipeline',
@@ -105,7 +109,6 @@ try:
         p_entity_id      := scan_id,
         p_idempotency_key := '{scan_id}:drawings:{room_file_version}',
         p_parent_task_id := task.id,
-        p_on_conflict    := 'ignore',
         p_actor          := LEASE_OWNER
     )
 
@@ -372,7 +375,8 @@ ingest ──▶ solve(P1) ──▶ drawings ──▶ delivery        (True La
   mesh; `splat` is a **parallel branch off `refine`** (it needs refined poses +
   keyframe images, not the mesh or the drawings), so it runs concurrently with
   `fuse`+solve on a second GPU lease or serially on one card.
-- Each hop is one `enqueue_agent_task` of the next `scan_pipeline.*` type against
+- Each hop is one `enqueue_agent_successor_if_owned` of the next
+  `scan_pipeline.*` type against
   the **same reserved `room_files` version** (entry-point allocation, 00370; §2.2).
   A P2 run does **not** mint a new version; a **retroactive re-solve** (R114.3) of
   an existing scan mints v+1 per R-f, then runs this same chain against it.
@@ -383,22 +387,31 @@ ingest ──▶ solve(P1) ──▶ drawings ──▶ delivery        (True La
 
 The P1 chain enqueues exactly one successor per stage. P2's `refine → {fuse,
 splat}` fork and the `{solve-upgrade, splat} → present` join need more, but reuse
-the SAME queue primitives (00297) — no barrier, no coordinator, no new table:
+the SAME queue primitives (00297 + the 00378 lease fence) — no barrier, no
+coordinator, no new table:
 
-- **The fork.** `refine`, on success, enqueues BOTH successors —
-  `enqueue_agent_task('scan_pipeline.fuse', …, idempotency_key '{scan}:fuse:{v}')`
-  AND `enqueue_agent_task('scan_pipeline.splat', …, idempotency_key
-  '{scan}:splat:{v}')` — both `p_on_conflict='ignore'`, both `parent_task_id =
-  refine.id`. The two then run independently (concurrently on two GPU leases,
-  serially on one — §10.9). A crash between the two enqueues just re-runs `refine`;
+- **The fork.** `refine`, on success, enqueues BOTH successors through its
+  exact running lease —
+  `enqueue_agent_successor_if_owned(refine.id, 'scan_pipeline.fuse', …,
+  idempotency_key '{scan}:fuse:{v}')` AND
+  `enqueue_agent_successor_if_owned(refine.id, 'scan_pipeline.splat', …,
+  idempotency_key '{scan}:splat:{v}')` — the guarded RPC hardcodes
+  conflict-ignore, and both
+  children have `parent_task_id = refine.id`. The two then run independently
+  (concurrently on two GPU leases, serially on one — §10.9). A crash between
+  the two enqueues just re-runs `refine`;
   the idempotency keys de-dupe both successors (§2.3 crash-safety, unchanged).
-- **The join (the trick).** BOTH terminal branches enqueue `present` on the SAME
-  key: the fuse branch tip (`solve-upgrade`, §10.4) enqueues `scan_pipeline.present`
-  with `'{scan}:present:{v}'`, and `splat` enqueues the identical
-  `'{scan}:present:{v}'` — both `p_on_conflict='ignore'`. The SECOND enqueue is a
+- **The join (the trick).** BOTH terminal branches enqueue `present` through
+  their own exact lease on the SAME key: the fuse branch tip (`solve-upgrade`,
+  §10.4) enqueues `scan_pipeline.present` with `'{scan}:present:{v}'`, and
+  `splat` enqueues the identical `'{scan}:present:{v}'`. The guarded RPC's
+  conflict-ignore makes the SECOND enqueue a
   no-op, so `present` is created **exactly once**, by whichever branch finishes
   first, with zero coordination. That double-enqueue-onto-one-key IS the join;
-  there is no barrier primitive to build or get wrong.
+  there is no barrier primitive to build or get wrong. For I87, each call uses
+  `p_owner_task_id = <that branch-tip task>` for authority while retaining the
+  common `p_parent_task_id = refine.id` for lineage; these IDs must not be
+  conflated.
 - **The wait (present self-gates on the data).** When `present` runs it re-reads
   the `room_files` row and checks BOTH prerequisites: the fuse branch's outputs
   (`dense_mesh_url` **and** `measure_mesh_url` set) **and** the splat branch's

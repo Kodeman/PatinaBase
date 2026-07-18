@@ -87,6 +87,7 @@ class SolveStage(BaseStage):
                 },
                 entity_id=scan_id,
                 idempotency_key=f"{scan_id}:drawings:{version}",
+                owner_task_id=task["id"],
                 parent_task_id=task["id"],
                 lease_owner=task["_lease_owner"],
             )

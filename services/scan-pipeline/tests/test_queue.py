@@ -110,7 +110,13 @@ def test_completion_rejects_static_worker_label_instead_of_falling_back(invalid_
 
 
 def test_enqueue_successor_lost_race_is_noop():
-    resp = _Resp(400, text='{"message":"task not found"}')
+    resp = _Resp(
+        400,
+        text=(
+            '{"message":"enqueue_agent_successor_if_owned: owner task '
+            'task-1 not found"}'
+        ),
+    )
     qc = _client(resp)
     # idempotent successor: a lost race is a no-op, returns None, never raises
     assert qc.enqueue_successor(
@@ -118,9 +124,74 @@ def test_enqueue_successor_lost_race_is_noop():
         {"scan_id": "s"},
         "s",
         "s:solve:1",
-        "task-1",
+        owner_task_id="task-1",
+        parent_task_id="task-1",
         lease_owner=LEASE_OWNER,
     ) is None
+
+
+def test_enqueue_successor_keeps_branch_owner_separate_from_join_lineage():
+    session = _FakeSession(_Resp(200, json_data={"id": "child-1"}))
+    qc = QueueClient(
+        session,
+        settings_from_env(BASE),
+        lease_id_factory=lambda: "test-lease",
+    )
+
+    assert qc.enqueue_successor(
+        "scan_pipeline.present",
+        {"scan_id": "s"},
+        "s",
+        "s:present:1",
+        owner_task_id="branch-tip-task",
+        parent_task_id="refine-task",
+        lease_owner=LEASE_OWNER,
+    ) == {"id": "child-1"}
+    assert session.posts == [
+        (
+            "/rest/v1/rpc/enqueue_agent_successor_if_owned",
+            {
+                "p_owner_task_id": "branch-tip-task",
+                "p_task_type": "scan_pipeline.present",
+                "p_payload": {"scan_id": "s"},
+                "p_source": "scan-pipeline",
+                "p_entity_type": "room_scan",
+                "p_entity_id": "s",
+                "p_idempotency_key": "s:present:1",
+                "p_max_attempts": 5,
+                "p_parent_task_id": "refine-task",
+                "p_actor": LEASE_OWNER,
+            },
+        )
+    ]
+
+
+def test_unguarded_rpc_does_not_swallow_not_found_as_a_lease_race():
+    qc = _client(_Resp(400, text='{"message":"task not found"}'))
+    with pytest.raises(RuntimeError, match="task not found"):
+        qc.requeue("task-1")
+
+
+def test_missing_guarded_rpc_is_not_misclassified_as_a_lease_race():
+    qc = _client(
+        _Resp(
+            404,
+            text=(
+                '{"message":"Could not find the function '
+                'public.enqueue_agent_successor_if_owned in the schema cache"}'
+            ),
+        )
+    )
+    with pytest.raises(RuntimeError, match="Could not find the function"):
+        qc.enqueue_successor(
+            "scan_pipeline.solve",
+            {"scan_id": "s"},
+            "s",
+            "s:solve:1",
+            owner_task_id="task-1",
+            parent_task_id="task-1",
+            lease_owner=LEASE_OWNER,
+        )
 
 
 def test_same_task_in_overlapping_claim_batches_keeps_immutable_lease_owners():

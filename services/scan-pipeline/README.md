@@ -8,7 +8,9 @@ queue, each enqueuing its successor on success, each landing telemetry into
 
 - **Design authority:** `docs/design/field-capture/scan-pipeline-worker-design.md` (R109).
 - **Bundle it consumes:** `docs/design/field-capture/capture-bundle-spec-v1.md`.
-- **Queue it uses:** `supabase/migrations/00297_agent_tasks_queue.sql` (never a parallel queue).
+- **Queue it uses:** `supabase/migrations/00297_agent_tasks_queue.sql`, with
+  lease-owner fencing from `00378_agent_task_lease_ownership.sql` (never a
+  parallel queue).
 - **Schema it reads/writes:** `supabase/migrations/00341_field_capture_p1_schema.sql`
   (`scan_pipeline_events`, `room_files`) + the ingest trigger/sweep migration
   `00370_scan_pipeline_ingest_trigger.sql`.
@@ -25,9 +27,14 @@ so those items only replace a stub body.
   (PostgREST RPCs + the `room-scans` Storage API). No inbound listener, no port
   forwarded. Kody's Cloudflare Tunnel is ops access (SSH/monitoring), **not** a
   dependency — the pipeline drains with the tunnel down.
-- **The queue is `agent_tasks`.** Claims/completes through the SECURITY DEFINER
-  RPCs; `assignee` stays NULL and the `awaiting_review/approved/rejected` states
-  are never used (a mechanical job has no human gate).
+- **The queue is `agent_tasks`.** Claims, completions, and successor enqueues
+  use SECURITY DEFINER RPCs. Each successor is created through
+  `enqueue_agent_successor_if_owned`, which locks the running owner task and checks
+  its exact UUID-backed lease owner before the idempotent enqueue. The RPC's
+  `owner_task_id` is lease authority; `parent_task_id` is lineage and can differ
+  at a fork/join (I87 Present). `assignee` stays NULL and the
+  `awaiting_review/approved/rejected` states are never used (a mechanical job
+  has no human gate).
 - **Native package, no orchestration.** Runs under `systemd` in a venv (R109.1).
 - **Burst-ready by config.** Behaviour and a readable identity prefix come from
   the env file; each claim batch adds a UUID, so overlapping workers never

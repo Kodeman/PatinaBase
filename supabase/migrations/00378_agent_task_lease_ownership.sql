@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00378 — Agent task completion lease ownership
+-- 00378 — Agent task completion + successor lease ownership
 --
 -- Lineage: 00297 complete_agent_task (latest and only prior definition).
 -- The 00297 body is repeated in full; the only behavior grafts are the
@@ -11,6 +11,14 @@
 -- now requires the caller's collision-resistant lease-owner identity to equal
 -- locked_by. The RPC remains service_role-only; service_role is trusted and a
 -- unique identity per claim invocation is the expected-owner contract.
+--
+-- A successor enqueue is also an ownership-sensitive write. A stale worker
+-- could previously enqueue an independently claimable child after another
+-- worker reclaimed its owner task, even though its later completion was rejected.
+-- The guarded successor RPC locks and verifies that running owner task, then
+-- delegates to the unchanged conflict-ignore enqueue RPC in the same
+-- transaction. Its idempotency key is required so a crash/retry converges.
+-- Generic/root enqueues intentionally keep their 00297 behavior.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public.complete_agent_task(
@@ -107,3 +115,88 @@ $$;
 
 REVOKE ALL ON FUNCTION public.complete_agent_task(uuid, text, jsonb, numeric, text, boolean, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.complete_agent_task(uuid, text, jsonb, numeric, text, boolean, text) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.enqueue_agent_successor_if_owned(
+  p_owner_task_id   uuid,
+  p_task_type       text,
+  p_payload         jsonb       DEFAULT '{}'::jsonb,
+  p_source          text        DEFAULT 'manual',
+  p_priority        int         DEFAULT 3,
+  p_assignee        text        DEFAULT NULL,
+  p_entity_type     text        DEFAULT NULL,
+  p_entity_id       uuid        DEFAULT NULL,
+  p_idempotency_key text        DEFAULT NULL,
+  p_run_after       timestamptz DEFAULT now(),
+  p_max_attempts    int         DEFAULT 5,
+  p_summary         text        DEFAULT '',
+  p_status          text        DEFAULT 'queued',
+  p_parent_task_id  uuid        DEFAULT NULL,
+  p_confidence      numeric     DEFAULT NULL,
+  p_artifacts       jsonb       DEFAULT '{}'::jsonb,
+  p_actor           text        DEFAULT NULL
+)
+RETURNS public.agent_tasks
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_owner public.agent_tasks;
+  v_row   public.agent_tasks;
+BEGIN
+  IF p_actor IS NULL OR btrim(p_actor) = '' THEN
+    RAISE EXCEPTION 'enqueue_agent_successor_if_owned: p_actor must be non-empty';
+  END IF;
+  IF p_idempotency_key IS NULL OR btrim(p_idempotency_key) = '' THEN
+    RAISE EXCEPTION
+      'enqueue_agent_successor_if_owned: p_idempotency_key must be non-empty';
+  END IF;
+
+  SELECT *
+    INTO v_owner
+    FROM public.agent_tasks
+   WHERE id = p_owner_task_id
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'enqueue_agent_successor_if_owned: owner task % not found',
+      p_owner_task_id;
+  END IF;
+  IF v_owner.status <> 'running' THEN
+    RAISE EXCEPTION
+      'enqueue_agent_successor_if_owned: owner task % is % (must be running)',
+      p_owner_task_id, v_owner.status;
+  END IF;
+  IF v_owner.locked_by IS DISTINCT FROM p_actor THEN
+    RAISE EXCEPTION
+      'enqueue_agent_successor_if_owned: lease ownership rejected for owner task % (locked_by %, p_actor %)',
+      p_owner_task_id, coalesce(v_owner.locked_by, '<none>'), p_actor;
+  END IF;
+
+  v_row := public.enqueue_agent_task(
+    p_task_type       => p_task_type,
+    p_payload         => p_payload,
+    p_source          => p_source,
+    p_priority        => p_priority,
+    p_assignee        => p_assignee,
+    p_entity_type     => p_entity_type,
+    p_entity_id       => p_entity_id,
+    p_idempotency_key => p_idempotency_key,
+    p_run_after       => p_run_after,
+    p_max_attempts    => p_max_attempts,
+    p_on_conflict     => 'ignore',
+    p_summary         => p_summary,
+    p_status          => p_status,
+    p_parent_task_id  => p_parent_task_id,
+    p_confidence      => p_confidence,
+    p_artifacts       => p_artifacts,
+    p_actor           => p_actor
+  );
+
+  RETURN v_row;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.enqueue_agent_successor_if_owned(uuid, text, jsonb, text, int, text, text, uuid, text, timestamptz, int, text, text, uuid, numeric, jsonb, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.enqueue_agent_successor_if_owned(uuid, text, jsonb, text, int, text, text, uuid, text, timestamptz, int, text, text, uuid, numeric, jsonb, text) TO service_role;

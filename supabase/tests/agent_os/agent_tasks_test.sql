@@ -10,7 +10,8 @@
 --      two GPU workers with the same stage filter claim distinct tasks and
 --      stamp their own WORKER_ID into both the lease and audit trail.
 --   4. a stale running task is reclaimed; only the new lease owner can
---      complete it, and completion requires a non-empty actor.
+--      complete it or enqueue successors (including indirect-lineage
+--      children), and both writes require a non-empty actor.
 --   5. complete 'failed' backoff walks +1m/+5m/+25m; parks at attempts>=max;
 --      p_fatal parks immediately.
 --   6. review: reject w/o note raises; reject w/ note merges payload.feedback;
@@ -218,12 +219,131 @@ BEGIN
   ASSERT to_jsonb(v_task2) = to_jsonb(v_before),
     'FAIL 4b: rejected completion must not mutate the B-owned row';
 
+  -- A stale owner cannot advance orchestration by enqueueing a child. Test
+  -- both direct lineage (child points at the leased task) and indirect
+  -- lineage (catalog_review-style child points at a separate commit task).
+  BEGIN
+    PERFORM public.enqueue_agent_successor_if_owned(
+      p_owner_task_id => v_id,
+      p_task_type => v_key_prefix || 'successor.stale.direct',
+      p_idempotency_key => v_key_prefix || 'successor-stale-direct',
+      p_parent_task_id => v_id,
+      p_actor => 'w1');
+    RAISE EXCEPTION 'FAIL 4c: expired owner w1 must not enqueue a direct-lineage successor';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'FAIL%' THEN RAISE; END IF;
+    ASSERT SQLERRM LIKE '%enqueue_agent_successor_if_owned: lease ownership rejected%',
+      'FAIL 4c: unexpected direct-lineage ownership rejection: ' || SQLERRM;
+  END;
+
+  BEGIN
+    PERFORM public.enqueue_agent_successor_if_owned(
+      p_owner_task_id => v_id,
+      p_task_type => v_key_prefix || 'successor.stale.indirect',
+      p_idempotency_key => v_key_prefix || 'successor-stale-indirect',
+      p_parent_task_id => v_bid,
+      p_actor => 'w1');
+    RAISE EXCEPTION 'FAIL 4d: expired owner w1 must not enqueue an indirect-lineage successor';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'FAIL%' THEN RAISE; END IF;
+    ASSERT SQLERRM LIKE '%enqueue_agent_successor_if_owned: lease ownership rejected%',
+      'FAIL 4d: unexpected indirect-lineage ownership rejection: ' || SQLERRM;
+  END;
+
+  SELECT count(*) INTO v_count FROM public.agent_tasks
+   WHERE idempotency_key IN (
+     v_key_prefix || 'successor-stale-direct',
+     v_key_prefix || 'successor-stale-indirect');
+  ASSERT v_count = 0,
+    'FAIL 4e: stale successor attempts must create zero child rows, got ' || v_count;
+
+  SELECT count(*) INTO v_count FROM public.claim_agent_tasks(
+    p_task_types => ARRAY[
+      v_key_prefix || 'successor.stale.direct',
+      v_key_prefix || 'successor.stale.indirect'],
+    p_batch => 10,
+    p_worker => 'w3');
+  ASSERT v_count = 0,
+    'FAIL 4f: worker C must have no stale-A child to claim, got ' || v_count;
+
+  BEGIN
+    PERFORM public.enqueue_agent_successor_if_owned(
+      p_owner_task_id => v_id,
+      p_task_type => v_key_prefix || 'successor.blank-actor',
+      p_idempotency_key => v_key_prefix || 'successor-blank-actor',
+      p_parent_task_id => v_id,
+      p_actor => '   ');
+    RAISE EXCEPTION 'FAIL 4g: blank successor actor must be rejected';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'FAIL%' THEN RAISE; END IF;
+    ASSERT SQLERRM LIKE '%enqueue_agent_successor_if_owned: p_actor must be non-empty%',
+      'FAIL 4g: unexpected blank-actor rejection: ' || SQLERRM;
+  END;
+
+  BEGIN
+    PERFORM public.enqueue_agent_successor_if_owned(
+      p_owner_task_id => v_id,
+      p_task_type => v_key_prefix || 'successor.blank-key',
+      p_idempotency_key => '   ',
+      p_parent_task_id => v_id,
+      p_actor => 'w2');
+    RAISE EXCEPTION 'FAIL 4h: blank successor idempotency key must be rejected';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'FAIL%' THEN RAISE; END IF;
+    ASSERT SQLERRM LIKE '%enqueue_agent_successor_if_owned: p_idempotency_key must be non-empty%',
+      'FAIL 4h: unexpected blank-key rejection: ' || SQLERRM;
+  END;
+
+  -- Current owner B may enqueue; a crash/retry repeats the same call and gets
+  -- the same conflict-ignore row rather than creating duplicate work.
+  v_task := public.enqueue_agent_successor_if_owned(
+    p_owner_task_id => v_id,
+    p_task_type => v_key_prefix || 'successor.valid',
+    p_idempotency_key => v_key_prefix || 'successor-valid',
+    p_parent_task_id => v_id,
+    p_actor => 'w2');
+  v_task2 := public.enqueue_agent_successor_if_owned(
+    p_owner_task_id => v_id,
+    p_task_type => v_key_prefix || 'successor.valid',
+    p_idempotency_key => v_key_prefix || 'successor-valid',
+    p_parent_task_id => v_id,
+    p_actor => 'w2');
+  ASSERT v_task.id = v_task2.id AND v_task.parent_task_id = v_id,
+    'FAIL 4i: valid-owner retry must return the same direct-lineage child';
+  SELECT count(*) INTO v_count FROM public.agent_tasks
+   WHERE idempotency_key = v_key_prefix || 'successor-valid';
+  ASSERT v_count = 1,
+    'FAIL 4i: valid-owner retry must create exactly one child, got ' || v_count;
+
+  v_task := public.enqueue_agent_successor_if_owned(
+    p_owner_task_id => v_id,
+    p_task_type => v_key_prefix || 'successor.valid.indirect',
+    p_idempotency_key => v_key_prefix || 'successor-valid-indirect',
+    p_parent_task_id => v_bid,
+    p_actor => 'w2');
+  ASSERT v_task.parent_task_id = v_bid,
+    'FAIL 4j: ownership fence must preserve an independently supplied lineage parent';
+
   PERFORM public.complete_agent_task(
     p_id => v_id, p_outcome => 'done', p_actor => 'w2');
   SELECT * INTO v_task FROM public.agent_tasks WHERE id = v_id;
   ASSERT v_task.status = 'done' AND v_task.locked_by IS NULL
          AND v_task.completed_at IS NOT NULL,
-    'FAIL 4c: current owner w2 should complete successfully';
+    'FAIL 4k: current owner w2 should complete successfully';
+
+  BEGIN
+    PERFORM public.enqueue_agent_successor_if_owned(
+      p_owner_task_id => v_id,
+      p_task_type => v_key_prefix || 'successor.after-complete',
+      p_idempotency_key => v_key_prefix || 'successor-after-complete',
+      p_parent_task_id => v_id,
+      p_actor => 'w2');
+    RAISE EXCEPTION 'FAIL 4l: a terminal owner must not enqueue a successor';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'FAIL%' THEN RAISE; END IF;
+    ASSERT SQLERRM LIKE '%enqueue_agent_successor_if_owned: owner task % is done (must be running)%',
+      'FAIL 4l: unexpected terminal-owner rejection: ' || SQLERRM;
+  END;
 
   SELECT count(*) INTO v_count FROM public.agent_task_audit a
    WHERE a.task_id = v_id AND a.op = 'UPDATE' AND a.actor = 'w1'
@@ -231,13 +351,13 @@ BEGIN
      AND a.new_row ->> 'status' = 'running'
      AND a.new_row ->> 'locked_by' = 'w1';
   ASSERT v_count = 1,
-    'FAIL 4d: worker w1 must have exactly its original claim audit, got ' || v_count;
+    'FAIL 4m: worker w1 must have exactly its original claim audit, got ' || v_count;
 
   SELECT count(*) INTO v_count FROM public.agent_task_audit a
    WHERE a.task_id = v_id AND a.op = 'UPDATE' AND a.actor = 'w1'
      AND a.new_row ->> 'status' = 'done';
   ASSERT v_count = 0,
-    'FAIL 4d: rejected worker w1 must have no completion audit, got ' || v_count;
+    'FAIL 4m: rejected worker w1 must have no completion audit, got ' || v_count;
 
   SELECT count(*) INTO v_count FROM public.agent_task_audit a
    WHERE a.task_id = v_id AND a.op = 'UPDATE' AND a.actor = 'w2'
@@ -245,14 +365,14 @@ BEGIN
      AND a.new_row ->> 'status' = 'running'
      AND a.new_row ->> 'locked_by' = 'w2';
   ASSERT v_count = 1,
-    'FAIL 4d: worker w2 must have exactly one reclaim audit, got ' || v_count;
+    'FAIL 4m: worker w2 must have exactly one reclaim audit, got ' || v_count;
 
   SELECT count(*) INTO v_count FROM public.agent_task_audit a
    WHERE a.task_id = v_id AND a.op = 'UPDATE' AND a.actor = 'w2'
      AND a.old_row ->> 'status' = 'running'
      AND a.new_row ->> 'status' = 'done';
   ASSERT v_count = 1,
-    'FAIL 4d: worker w2 must have exactly one completion audit, got ' || v_count;
+    'FAIL 4m: worker w2 must have exactly one completion audit, got ' || v_count;
 
   -- A whitespace-only actor is rejected before any outcome mutation.
   v_task := public.enqueue_agent_task(
@@ -266,15 +386,15 @@ BEGIN
   BEGIN
     PERFORM public.complete_agent_task(
       p_id => v_id, p_outcome => 'done', p_actor => '   ');
-    RAISE EXCEPTION 'FAIL 4e: blank completion actor must be rejected';
+    RAISE EXCEPTION 'FAIL 4n: blank completion actor must be rejected';
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM LIKE 'FAIL%' THEN RAISE; END IF;
     ASSERT SQLERRM LIKE '%complete_agent_task: p_actor must be non-empty%',
-      'FAIL 4e: unexpected blank-actor rejection: ' || SQLERRM;
+      'FAIL 4n: unexpected blank-actor rejection: ' || SQLERRM;
   END;
   SELECT * INTO v_task2 FROM public.agent_tasks WHERE id = v_id;
   ASSERT to_jsonb(v_task2) = to_jsonb(v_before),
-    'FAIL 4e: blank-actor rejection must not mutate the row';
+    'FAIL 4n: blank-actor rejection must not mutate the row';
   PERFORM public.complete_agent_task(
     p_id => v_id, p_outcome => 'done', p_actor => 'actor-required-worker');
 
@@ -529,6 +649,12 @@ $$;
 -- ─── Case 10: the queue RPCs are service-role only ──────────────────────────
 DO $$
 BEGIN
+  ASSERT has_function_privilege(
+    'service_role',
+    'public.enqueue_agent_successor_if_owned(uuid,text,jsonb,text,integer,text,text,uuid,text,timestamp with time zone,integer,text,text,uuid,numeric,jsonb,text)',
+    'EXECUTE'),
+    'FAIL 10: service_role must execute enqueue_agent_successor_if_owned';
+
   PERFORM set_config('request.jwt.claims', '{"role":"authenticated"}', true);
   EXECUTE 'SET LOCAL ROLE authenticated';
   BEGIN
@@ -549,18 +675,34 @@ BEGIN
     RAISE EXCEPTION 'FAIL 10c: authenticated must not execute complete_agent_task';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
+  BEGIN
+    PERFORM public.enqueue_agent_successor_if_owned(
+      p_owner_task_id => 'a5e70000-0000-4000-8000-000000000f02',
+      p_task_type => 'x',
+      p_actor => 'unauthorized-worker');
+    RAISE EXCEPTION 'FAIL 10d: authenticated must not execute enqueue_agent_successor_if_owned';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   EXECUTE 'RESET ROLE';
 
   PERFORM set_config('request.jwt.claims', '{}', true);
   EXECUTE 'SET LOCAL ROLE anon';
   BEGIN
     PERFORM public.enqueue_agent_task(p_task_type => 'x');
-    RAISE EXCEPTION 'FAIL 10d: anon must not execute enqueue_agent_task';
+    RAISE EXCEPTION 'FAIL 10e: anon must not execute enqueue_agent_task';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
   BEGIN
     PERFORM public.review_agent_task('a5e70000-0000-4000-8000-000000000f02', 'approved', 'x');
-    RAISE EXCEPTION 'FAIL 10e: anon must not execute review_agent_task';
+    RAISE EXCEPTION 'FAIL 10f: anon must not execute review_agent_task';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    PERFORM public.enqueue_agent_successor_if_owned(
+      p_owner_task_id => 'a5e70000-0000-4000-8000-000000000f02',
+      p_task_type => 'x',
+      p_actor => 'unauthorized-worker');
+    RAISE EXCEPTION 'FAIL 10g: anon must not execute enqueue_agent_successor_if_owned';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
   EXECUTE 'RESET ROLE';

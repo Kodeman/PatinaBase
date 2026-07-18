@@ -279,6 +279,7 @@ class IngestStage(BaseStage):
                 },
                 entity_id=scan_id,
                 idempotency_key=successor_key,
+                owner_task_id=task["id"],
                 parent_task_id=task["id"],
                 lease_owner=task["_lease_owner"],
             )

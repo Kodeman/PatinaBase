@@ -1,16 +1,16 @@
 """PostgREST RPC client for the ``agent_tasks`` queue (00297 + 00378).
 
 The worker holds a service-role client (the queue RPCs are granted to
-service_role only). This wraps the five RPCs the worker calls:
-claim / complete / enqueue (successor) / requeue / stats. It NEVER touches the
-human-review states (awaiting_review/approved/rejected) and always leaves
-``assignee`` NULL — a scan job has no human owner (design §2.1).
+service_role only). This wraps the five RPCs the worker calls: claim / complete /
+guarded successor enqueue / requeue / stats. It NEVER touches the human-review
+states (awaiting_review/approved/rejected) and always leaves ``assignee`` NULL —
+a scan job has no human owner (design §2.1).
 
 Lost-race guard (M1): a job whose lease expired (VISIBILITY_TIMEOUT) can be
-re-claimed and completed by a second worker while this one is still finishing.
-The completing RPC then rejects with the stable "lease ownership rejected"
-message (or a terminal/not-found message if the new owner already finished).
-That is a benign race, not a crash: the completion methods swallow it, log a
+re-claimed by a second worker while the first is still finishing. Completion
+and successor enqueue both verify the exact lease owner in PostgreSQL; either
+guarded RPC rejects the stale worker with a stable ownership/terminal message.
+That is a benign race, not a crash: guarded queue writes swallow it, log a
 warning naming both workers, and let the loop continue.
 """
 
@@ -28,14 +28,35 @@ from .errors import TransientError
 
 log = logging.getLogger("patina_scan_worker.queue")
 
-# Substrings in a complete_agent_task rejection that mean "someone else owns this
-# task now" — a lost race, not an error (00378 plus 00297 terminal messages).
-_LOST_RACE_MARKERS = ("lease ownership rejected", "must be running", "not found")
+
+def _is_lost_race_response(rpc_name: str, text: str) -> bool:
+    """Match only 00378's stable lease-fence errors.
+
+    Broad markers such as ``not found`` are unsafe even on a guarded RPC: a
+    missing PostgREST function/schema-cache entry must remain a hard failure.
+    """
+    if rpc_name == "complete_agent_task":
+        return (
+            "complete_agent_task: lease ownership rejected" in text
+            or (
+                "complete_agent_task: task " in text
+                and (" not found" in text or "(must be running)" in text)
+            )
+        )
+    if rpc_name == "enqueue_agent_successor_if_owned":
+        return (
+            "enqueue_agent_successor_if_owned: lease ownership rejected" in text
+            or (
+                "enqueue_agent_successor_if_owned: owner task " in text
+                and (" not found" in text or "(must be running)" in text)
+            )
+        )
+    return False
 
 
 class LostRaceError(RuntimeError):
     """A queue write was rejected because the task is no longer this worker's to
-    complete (re-claimed after a lease expiry). Benign — handled, never crashes
+    advance (re-claimed after a lease expiry). Benign — handled, never crashes
     the loop."""
 
 
@@ -60,14 +81,14 @@ class QueueClient:
     def _require_lease_owner(self, lease_owner: str) -> str:
         if not isinstance(lease_owner, str):
             raise RuntimeError(
-                "completion lease owner must be the exact base-prefixed identity "
+                "queue lease owner must be the exact base-prefixed identity "
                 "carried by a task returned from claim()"
             )
         owner = lease_owner.strip()
         prefix = f"{self._cfg.worker_id}:"
         if not owner.startswith(prefix) or len(owner) == len(prefix):
             raise RuntimeError(
-                "completion lease owner must be the exact base-prefixed identity "
+                "queue lease owner must be the exact base-prefixed identity "
                 "carried by a task returned from claim()"
             )
         return owner
@@ -81,7 +102,7 @@ class QueueClient:
             raise TransientError(f"rpc {name} -> {resp.status_code}: {resp.text[:300]}")
         if resp.status_code >= 400:
             text = resp.text[:400]
-            if any(m in text for m in _LOST_RACE_MARKERS):
+            if _is_lost_race_response(name, text):
                 raise LostRaceError(f"rpc {name}: {text}")
             # any other 4xx is a contract/permission problem — surface loudly.
             raise RuntimeError(f"rpc {name} -> {resp.status_code}: {text}")
@@ -177,17 +198,21 @@ class QueueClient:
         payload: dict[str, Any],
         entity_id: str,
         idempotency_key: str,
-        parent_task_id: str,
         *,
+        owner_task_id: str,
+        parent_task_id: str,
         lease_owner: str,
     ) -> dict[str, Any] | None:
         """Enqueue the next stage. Idempotent on its own key; assignee stays
         NULL; source is 'scan-pipeline'; entity_type 'room_scan' (design §2.1).
-        Guarded so a concurrent completer never turns this into a crash."""
+        ``owner_task_id`` is the running row whose lease grants authority;
+        ``parent_task_id`` is lineage and may differ at a fork/join. Guarded so
+        a concurrent reclaimer never turns this into an orchestration advance."""
         try:
             return self._rpc(
-                "enqueue_agent_task",
+                "enqueue_agent_successor_if_owned",
                 {
+                    "p_owner_task_id": owner_task_id,
                     "p_task_type": task_type,
                     "p_payload": payload,
                     "p_source": "scan-pipeline",
@@ -195,7 +220,6 @@ class QueueClient:
                     "p_entity_id": entity_id,
                     "p_idempotency_key": idempotency_key,
                     "p_max_attempts": self._cfg.max_attempts,
-                    "p_on_conflict": "ignore",
                     "p_parent_task_id": parent_task_id,
                     "p_actor": self._require_lease_owner(lease_owner),
                 },
