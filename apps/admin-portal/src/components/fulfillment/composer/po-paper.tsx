@@ -56,6 +56,7 @@ export function PoPaper({ poId }: { poId: string }) {
       {url && !error && (
         <>
           <object
+            key={url}
             data-testid="po-paper-object"
             data={url}
             type="application/pdf"
