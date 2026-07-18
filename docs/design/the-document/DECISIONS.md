@@ -4128,3 +4128,49 @@ drawn from scale×model while dim text carries snapped values;
 sub-drawing-scale) stands accepted for P1.
 
 *Entries add: R111 · last id = R111*
+
+### R112 · Field Capture P1 build complete — items 12–13 closed; M4 is operational — 2026-07-17
+
+Items 12 and 13 land, closing the P1 build scope (items 1–13 all built,
+each adversarially reviewed before the next stacked on it).
+
+**Item 12 — Room File v0** (branch field-capture/p1-room-file →
+merged): /portal/projects/[id]/room-file/[scanId], project-nested with
+the Room Files zone as entry (first consumer of useProjectRoomScans —
+the project→room navigation hole from I84 is closed) plus a quiet door
+from the R107 facts rail. Drawings with sign-at-click downloads,
+certificate rendered with the flagged-anchor table, measurements in
+ft-in with the badge triad, capture context resolved via the REAL flat
+dotted-key provenance contract (the design doc's nested shape matched
+zero shipped captures — docs corrected), version strip in the
+proposal-revision idiom. Fail-closed behind the `room-file` flag on all
+three surfaces. Click-path AC proven as a designer persona: project →
+Room Files → page → signed PDF 200, zero hand-typed URLs. Formatter
+identity TS↔Python guaranteed: banker's rounding both sides + one
+shared fixture table asserted in both test suites.
+
+**Item 13 — telemetry + pilot readiness:** all six stages emit
+(capture.metrics + upload.snapshot added worker-side from data in
+hand); query surface = scan_pipeline_runs + scan_tolerance_distribution
+(00372; SECURITY DEFINER views gated by the house admin idiom,
+authenticated-only, certified non-leaking); M4 pilot runbook at
+docs/design/field-capture/m4-pilot-checklist.md — ordered prod
+prerequisites, pilot-day walk against SC-16, rollback lines, owed-items
+ledger.
+
+**M4 prerequisites are now purely operational:** (1) Strata deploy —
+db push 00341/00370/00372, the confirm-scan-bundle photos-count
+follow-up, portal deploy with the room-file flag; (2) the worker on
+Kody's Linux box (services/scan-pipeline/install.sh + env); (3) iOS
+build with the anchor coach + B-19 manifest change to the pilot device,
+with the real-photo-bundle ingest probe on pilot day; (4) flag
+enablement for Leah. Gate: Leah retires the tape measure for one real
+project's drawings.
+
+P2 ledger (not P1 blockers): co-designer drawing-download walk before
+shared access ships; A3 deep-link gap on shared Room File links; GIN
+index on field_captures.provenance at inbox scale; voice-note audio
+seam; background-upload device edges; sharpness calibration; associative
+DXF dimensions.
+
+*Entries add: R112 · last id = R112*
