@@ -118,10 +118,11 @@ Deno.test("provider failure stays retryable and records only a generic safe erro
   const res = await handleSiteRequestDispatch(
     request("send"),
     deps({
-      sendSms: () => Promise.resolve({
-        sent: false,
-        reason: `Twilio 500 echoed ${TOKEN}`,
-      }),
+      sendSms: () =>
+        Promise.resolve({
+          sent: false,
+          reason: `Twilio 500 echoed ${TOKEN}`,
+        }),
       logNotification: (_context, _action, result) => {
         loggedReason = result.reason ?? "";
         return Promise.resolve();
@@ -188,20 +189,22 @@ Deno.test("lifecycle sweeps retryable SMS and batched designer push outboxes", a
     deps({
       callerRole: () => "service_role",
       pendingDispatches: () => Promise.resolve([OUTBOX_ID]),
-      pendingDeliveryNotifications: () => Promise.resolve([
-        "88888888-8888-4888-8888-888888888888",
-      ]),
-      claimDeliveryNotification: () => Promise.resolve({
-        outbox_id: "88888888-8888-4888-8888-888888888888",
-        request_id: REQUEST_ID,
-        user_id: "99999999-9999-4999-8999-999999999999",
-        notification_log_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        title: "Delivery ready",
-        body: "2 items are ready",
-        entity_type: "site_request",
-        entity_id: REQUEST_ID,
-        deliverable_count: 2,
-      }),
+      pendingDeliveryNotifications: () =>
+        Promise.resolve([
+          "88888888-8888-4888-8888-888888888888",
+        ]),
+      claimDeliveryNotification: () =>
+        Promise.resolve({
+          outbox_id: "88888888-8888-4888-8888-888888888888",
+          request_id: REQUEST_ID,
+          user_id: "99999999-9999-4999-8999-999999999999",
+          notification_log_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          title: "Delivery ready",
+          body: "2 items are ready",
+          entity_type: "site_request",
+          entity_id: REQUEST_ID,
+          deliverable_count: 2,
+        }),
       completeDeliveryNotification: (_id, result) => {
         pushCompleted = result.sent;
         return Promise.resolve();
@@ -222,7 +225,8 @@ Deno.test("lifecycle sweeps retryable SMS and batched designer push outboxes", a
 
 Deno.test("consent and lifecycle remain service-role only", async () => {
   assertEquals(
-    (await handleSiteRequestDispatch(request("consent-granted"), deps())).status,
+    (await handleSiteRequestDispatch(request("consent-granted"), deps()))
+      .status,
     403,
   );
   assertEquals(

@@ -151,8 +151,12 @@ interface Recipient {
 
 /** Consent precedence across all party rows on a phone: opted_out wins, then
  * granted, then pending, then not_asked. Keeps opt-out phone-global. */
-function reduceConsent(rows: { sms_consent_status: ConsentStatus }[]): ConsentStatus {
-  if (rows.some((r) => r.sms_consent_status === "opted_out")) return "opted_out";
+function reduceConsent(
+  rows: { sms_consent_status: ConsentStatus }[],
+): ConsentStatus {
+  if (rows.some((r) => r.sms_consent_status === "opted_out")) {
+    return "opted_out";
+  }
   if (rows.some((r) => r.sms_consent_status === "granted")) return "granted";
   if (rows.some((r) => r.sms_consent_status === "pending")) return "pending";
   return "not_asked";
@@ -187,10 +191,17 @@ async function resolveRecipient(
       .eq("phone_e164", phone);
     if (rows && rows.length > 0) {
       consent = reduceConsent(rows as { sms_consent_status: ConsentStatus }[]);
-      displayName = (rows[0] as { display_name: string | null }).display_name ?? null;
+      displayName = (rows[0] as { display_name: string | null }).display_name ??
+        null;
     }
   }
-  return { phone, projectId: input.projectId ?? null, partyId: null, displayName, consent };
+  return {
+    phone,
+    projectId: input.projectId ?? null,
+    partyId: null,
+    displayName,
+    consent,
+  };
 }
 
 export async function resolveStudioName(
@@ -210,7 +221,9 @@ export async function resolveStudioName(
     .select("organization_id")
     .eq("user_id", designerId)
     .eq("status", "active");
-  const orgIds = (memberships ?? []).map((m: { organization_id: string }) => m.organization_id);
+  const orgIds = (memberships ?? []).map((m: { organization_id: string }) =>
+    m.organization_id
+  );
   if (orgIds.length > 0) {
     const { data: org } = await supabase
       .from("organizations")
@@ -219,7 +232,9 @@ export async function resolveStudioName(
       .eq("type", "design_studio")
       .limit(1)
       .maybeSingle();
-    if ((org as { name?: string } | null)?.name) return (org as { name: string }).name;
+    if ((org as { name?: string } | null)?.name) {
+      return (org as { name: string }).name;
+    }
   }
   const { data: pr } = await supabase
     .from("profiles")
@@ -235,10 +250,14 @@ async function mintFieldLink(
   partyId: string,
   clientPortalUrl: string,
 ): Promise<string | null> {
-  const { data, error } = await supabase.rpc("create_field_link", { p_party_id: partyId });
+  const { data, error } = await supabase.rpc("create_field_link", {
+    p_party_id: partyId,
+  });
   if (error) return null;
   // RETURNS TABLE → an array of { id, token }.
-  const token = Array.isArray(data) ? data[0]?.token : (data as { token?: string })?.token;
+  const token = Array.isArray(data)
+    ? data[0]?.token
+    : (data as { token?: string })?.token;
   return token ? `${clientPortalUrl.replace(/\/$/, "")}/field/${token}` : null;
 }
 
@@ -256,29 +275,45 @@ async function resolveBody(
     .select("html_content, subject_default, is_active")
     .eq("slug", input.templateKey)
     .maybeSingle();
-  if (!tmpl || (tmpl as { is_active?: boolean }).is_active === false) return null;
-  const raw =
-    (tmpl as { html_content?: string }).html_content?.trim()
-      ? String((tmpl as { html_content: string }).html_content)
-      : String((tmpl as { subject_default?: string }).subject_default ?? "");
+  if (!tmpl || (tmpl as { is_active?: boolean }).is_active === false) {
+    return null;
+  }
+  const raw = (tmpl as { html_content?: string }).html_content?.trim()
+    ? String((tmpl as { html_content: string }).html_content)
+    : String((tmpl as { subject_default?: string }).subject_default ?? "");
   if (!raw) return null;
 
   const vars: Record<string, unknown> = { ...(input.vars ?? {}) };
 
   // Enrich only what the template references and the caller didn't supply.
-  if (raw.includes("party_first_name") && vars.party_first_name == null && recipient.displayName) {
+  if (
+    raw.includes("party_first_name") && vars.party_first_name == null &&
+    recipient.displayName
+  ) {
     vars.party_first_name = recipient.displayName.trim().split(/\s+/)[0];
   }
-  if (raw.includes("studio_name") && vars.studio_name == null && recipient.projectId) {
-    vars.studio_name = (await resolveStudioName(supabase, recipient.projectId)) ?? "your studio";
+  if (
+    raw.includes("studio_name") && vars.studio_name == null &&
+    recipient.projectId
+  ) {
+    vars.studio_name =
+      (await resolveStudioName(supabase, recipient.projectId)) ?? "your studio";
   }
-  if (raw.includes("project_name") && vars.project_name == null && recipient.projectId) {
+  if (
+    raw.includes("project_name") && vars.project_name == null &&
+    recipient.projectId
+  ) {
     const { data: proj } = await supabase
-      .from("projects").select("name").eq("id", recipient.projectId).maybeSingle();
-    vars.project_name = (proj as { name?: string } | null)?.name ?? "your project";
+      .from("projects").select("name").eq("id", recipient.projectId)
+      .maybeSingle();
+    vars.project_name = (proj as { name?: string } | null)?.name ??
+      "your project";
   }
-  if (/\{\{\s*link\s*\}\}/.test(raw) && vars.link == null && recipient.partyId) {
-    vars.link = (await mintFieldLink(supabase, recipient.partyId, clientPortalUrl)) ?? "";
+  if (
+    /\{\{\s*link\s*\}\}/.test(raw) && vars.link == null && recipient.partyId
+  ) {
+    vars.link =
+      (await mintFieldLink(supabase, recipient.partyId, clientPortalUrl)) ?? "";
   }
 
   return interpolate(raw, vars);
@@ -298,7 +333,9 @@ async function findOrCreateConversation(
     .eq("twilio_number", twilioNumber)
     .eq("phone_e164", phone)
     .maybeSingle();
-  if ((existing as { id?: string } | null)?.id) return (existing as { id: string }).id;
+  if ((existing as { id?: string } | null)?.id) {
+    return (existing as { id: string }).id;
+  }
 
   const { data: created, error } = await supabase
     .from("sms_conversations")
@@ -354,7 +391,8 @@ export async function sendPartySms(
   const fetchImpl = deps.fetchImpl ?? fetch;
   const mode = devMode(deps);
   const fieldTz = env(deps, "FIELD_TZ") ?? "America/Chicago";
-  const clientPortalUrl = env(deps, "CLIENT_PORTAL_URL") ?? "https://client.patina.cloud";
+  const clientPortalUrl = env(deps, "CLIENT_PORTAL_URL") ??
+    "https://client.patina.cloud";
   const fromNumber = env(deps, "TWILIO_FROM_NUMBER") ?? "";
   const accountSid = env(deps, "TWILIO_ACCOUNT_SID") ?? "";
   const authToken = env(deps, "TWILIO_AUTH_TOKEN") ?? "";
@@ -373,7 +411,10 @@ export async function sendPartySms(
     // Only the double-opt-in invite may reach a non-granted party.
     return { sent: false, reason: "not_consented" };
   }
-  if (isInvite && recipient.consent !== "pending" && recipient.consent !== "granted") {
+  if (
+    isInvite && recipient.consent !== "pending" &&
+    recipient.consent !== "granted"
+  ) {
     // The invite is meaningful only for a pending (or already-granted) party.
     return { sent: false, reason: "not_invitable" };
   }
@@ -412,9 +453,16 @@ export async function sendPartySms(
       party_id: recipient.partyId,
       project_id: recipient.projectId,
       template_key: input.templateKey ?? null,
-      site_request_dispatch_outbox_id: input.siteRequestDispatchOutboxId ?? null,
+      site_request_dispatch_outbox_id: input.siteRequestDispatchOutboxId ??
+        null,
     });
-    return { sent: false, deferred: true, messageId, conversationId: convId ?? undefined, body };
+    return {
+      sent: false,
+      deferred: true,
+      messageId,
+      conversationId: convId ?? undefined,
+      body,
+    };
   }
 
   // ── Send (dev-mode aware) ─────────────────────────────────────────────────
@@ -431,11 +479,17 @@ export async function sendPartySms(
   } else {
     const to = mode === "redirect" ? redirectNumber : recipient.phone;
     if (mode === "redirect") sendBody = `[DEV→${recipient.phone}] ${body}`;
-    if (!accountSid || !authToken || !fromNumber || (mode === "redirect" && !redirectNumber)) {
+    if (
+      !accountSid || !authToken || !fromNumber ||
+      (mode === "redirect" && !redirectNumber)
+    ) {
       twilioStatus = "failed";
       reason = "twilio_not_configured";
     } else {
-      const r = await sendViaTwilio({ accountSid, authToken, fromNumber }, { to, body: sendBody }, fetchImpl);
+      const r = await sendViaTwilio({ accountSid, authToken, fromNumber }, {
+        to,
+        body: sendBody,
+      }, fetchImpl);
       if (r.ok) {
         sent = true;
         twilioSid = r.sid ?? null;
@@ -509,7 +563,9 @@ export async function flushDeferredMessages(
 
   let flushed = 0;
   let skipped = 0;
-  for (const row of rows as { id: string; body: string; conversation_id: string }[]) {
+  for (
+    const row of rows as { id: string; body: string; conversation_id: string }[]
+  ) {
     if (isQuietHours(now, fieldTz)) {
       skipped++;
       continue;
@@ -534,11 +590,17 @@ export async function flushDeferredMessages(
     } else {
       const to = mode === "redirect" ? redirectNumber : phone;
       if (mode === "redirect") sendBody = `[DEV→${phone}] ${row.body}`;
-      if (!accountSid || !authToken || !fromNumber || (mode === "redirect" && !redirectNumber)) {
+      if (
+        !accountSid || !authToken || !fromNumber ||
+        (mode === "redirect" && !redirectNumber)
+      ) {
         skipped++;
         continue;
       }
-      const r = await sendViaTwilio({ accountSid, authToken, fromNumber }, { to, body: sendBody }, fetchImpl);
+      const r = await sendViaTwilio({ accountSid, authToken, fromNumber }, {
+        to,
+        body: sendBody,
+      }, fetchImpl);
       if (!r.ok) {
         skipped++;
         continue;
@@ -548,7 +610,11 @@ export async function flushDeferredMessages(
     }
     await supabase
       .from("sms_messages")
-      .update({ twilio_status: twilioStatus, twilio_sid: twilioSid, body: sendBody })
+      .update({
+        twilio_status: twilioStatus,
+        twilio_sid: twilioSid,
+        body: sendBody,
+      })
       .eq("id", row.id);
     flushed++;
   }

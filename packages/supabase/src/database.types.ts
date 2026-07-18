@@ -15524,13 +15524,16 @@ export type Database = {
           checksum_sha256: string
           client_filename: string
           created_at: string
+          deleted_at: string | null
           deliverable_id: string
           derivatives: Json
+          derive_attempts: number
           expected_size_bytes: number | null
           id: string
           mime_type: string
           object_path: string
           processing_error: string | null
+          purged_at: string | null
           received_at: string | null
           received_size_bytes: number | null
           storage_etag: string | null
@@ -15541,13 +15544,16 @@ export type Database = {
           checksum_sha256: string
           client_filename: string
           created_at?: string
+          deleted_at?: string | null
           deliverable_id: string
           derivatives?: Json
+          derive_attempts?: number
           expected_size_bytes?: number | null
           id?: string
           mime_type: string
           object_path: string
           processing_error?: string | null
+          purged_at?: string | null
           received_at?: string | null
           received_size_bytes?: number | null
           storage_etag?: string | null
@@ -15558,13 +15564,16 @@ export type Database = {
           checksum_sha256?: string
           client_filename?: string
           created_at?: string
+          deleted_at?: string | null
           deliverable_id?: string
           derivatives?: Json
+          derive_attempts?: number
           expected_size_bytes?: number | null
           id?: string
           mime_type?: string
           object_path?: string
           processing_error?: string | null
+          purged_at?: string | null
           received_at?: string | null
           received_size_bytes?: number | null
           storage_etag?: string | null
@@ -15714,6 +15723,142 @@ export type Database = {
             columns: ["request_id"]
             isOneToOne: false
             referencedRelation: "site_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_request_delivery_notification_outbox: {
+        Row: {
+          attempt_count: number
+          available_at: string
+          bucket_started_at: string
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          deliverable_ids: string[]
+          id: string
+          last_error: string | null
+          notification_log_id: string | null
+          request_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          available_at?: string
+          bucket_started_at?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          deliverable_ids?: string[]
+          id?: string
+          last_error?: string | null
+          notification_log_id?: string | null
+          request_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          available_at?: string
+          bucket_started_at?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          deliverable_ids?: string[]
+          id?: string
+          last_error?: string | null
+          notification_log_id?: string | null
+          request_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_request_delivery_notification_out_notification_log_id_fkey"
+            columns: ["notification_log_id"]
+            isOneToOne: false
+            referencedRelation: "notification_log"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_delivery_notification_outbox_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "site_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_request_dispatch_outbox: {
+        Row: {
+          access_id: string | null
+          action: string
+          attempt_count: number
+          available_at: string
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          provider_message_id: string | null
+          request_id: string
+          source_event_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          access_id?: string | null
+          action: string
+          attempt_count?: number
+          available_at?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          provider_message_id?: string | null
+          request_id: string
+          source_event_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          access_id?: string | null
+          action?: string
+          attempt_count?: number
+          available_at?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          provider_message_id?: string | null
+          request_id?: string
+          source_event_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_request_dispatch_outbox_access_id_fkey"
+            columns: ["access_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_access"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_dispatch_outbox_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "site_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_dispatch_outbox_source_event_id_fkey"
+            columns: ["source_event_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_events"
             referencedColumns: ["id"]
           },
         ]
@@ -16120,6 +16265,7 @@ export type Database = {
           project_id: string | null
           reviewed_at: string | null
           reviewed_by: string | null
+          site_request_dispatch_outbox_id: string | null
           template_key: string | null
           twilio_sid: string | null
           twilio_status: string | null
@@ -16141,6 +16287,7 @@ export type Database = {
           project_id?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          site_request_dispatch_outbox_id?: string | null
           template_key?: string | null
           twilio_sid?: string | null
           twilio_status?: string | null
@@ -16162,6 +16309,7 @@ export type Database = {
           project_id?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          site_request_dispatch_outbox_id?: string | null
           template_key?: string | null
           twilio_sid?: string | null
           twilio_status?: string | null
@@ -16228,6 +16376,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_messages_site_request_dispatch_outbox_id_fkey"
+            columns: ["site_request_dispatch_outbox_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_dispatch_outbox"
             referencedColumns: ["id"]
           },
         ]
@@ -20016,11 +20171,20 @@ export type Database = {
           p_access_id?: string
           p_action: string
           p_needs_consent?: boolean
+          p_outbox_id?: string
           p_request_id: string
           p_reused?: boolean
           p_token?: string
         }
         Returns: Json
+      }
+      _site_request_enqueue_dispatch: {
+        Args: {
+          p_action: string
+          p_request_id: string
+          p_source_event_id?: string
+        }
+        Returns: string
       }
       _site_request_mint_access: {
         Args: {
@@ -20034,6 +20198,18 @@ export type Database = {
           expires_at: string
           token: string
         }[]
+      }
+      _site_request_queue_delivery_notification: {
+        Args: { p_deliverable_id: string; p_now?: string; p_request_id: string }
+        Returns: string
+      }
+      _site_request_safe_dispatch_error: {
+        Args: { p_error: string }
+        Returns: string
+      }
+      _site_request_safe_provider_message_id: {
+        Args: { p_value: string }
+        Returns: string
       }
       accept_design_request: { Args: { p_lead_id: string }; Returns: Json }
       accept_workspace_invitation: {
@@ -22090,7 +22266,38 @@ export type Database = {
         Returns: Json
       }
       site_request_builtin_kits: { Args: never; Returns: Json }
+      site_request_claim_delivery_notification: {
+        Args: { p_now?: string; p_outbox_id: string }
+        Returns: Json
+      }
+      site_request_claim_dispatch: {
+        Args: { p_now?: string; p_outbox_id: string }
+        Returns: Json
+      }
       site_request_close: { Args: { p_request_id: string }; Returns: Json }
+      site_request_complete_delivery_notification: {
+        Args: {
+          p_error?: string
+          p_now?: string
+          p_outbox_id: string
+          p_sent: boolean
+        }
+        Returns: Json
+      }
+      site_request_complete_dispatch: {
+        Args: {
+          p_error?: string
+          p_now?: string
+          p_outbox_id: string
+          p_provider_message_id?: string
+          p_status: string
+        }
+        Returns: Json
+      }
+      site_request_confirm_media_cleanup: {
+        Args: { p_media_ids: string[]; p_now?: string }
+        Returns: number
+      }
       site_request_create_draft: {
         Args: {
           p_assignee_party_id: string
@@ -22160,6 +22367,14 @@ export type Database = {
         Args: { p_note?: string; p_request_id: string }
         Returns: Json
       }
+      site_request_pending_delivery_notifications: {
+        Args: { p_limit?: number; p_now?: string }
+        Returns: string[]
+      }
+      site_request_pending_dispatches: {
+        Args: { p_limit?: number; p_now?: string }
+        Returns: string[]
+      }
       site_request_process_lifecycle: {
         Args: { p_now?: string }
         Returns: Json
@@ -22200,6 +22415,14 @@ export type Database = {
       site_request_send: {
         Args: { p_expires_at?: string; p_request_id: string }
         Returns: Json
+      }
+      site_request_unapproved_media_cleanup_candidates: {
+        Args: { p_limit?: number; p_now?: string }
+        Returns: {
+          bucket_id: string
+          media_id: string
+          object_path: string
+        }[]
       }
       stripe_balance_tx_ingest: {
         Args: { p_cursor: string; p_txns: Json }

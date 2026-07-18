@@ -83,9 +83,14 @@ export interface SiteRequestDispatchDeps {
     action: string,
     result: DispatchSmsResult,
   ): Promise<void>;
-  processLifecycle(req: Request, now?: string): Promise<{ expired_count: number }>;
+  processLifecycle(
+    req: Request,
+    now?: string,
+  ): Promise<{ expired_count: number }>;
   pendingDeliveryNotifications(now?: string): Promise<string[]>;
-  claimDeliveryNotification(id: string): Promise<DeliveryNotificationContext | null>;
+  claimDeliveryNotification(
+    id: string,
+  ): Promise<DeliveryNotificationContext | null>;
   sendDeliveryNotification(
     context: DeliveryNotificationContext,
   ): Promise<{ sent: boolean; error?: string }>;
@@ -117,7 +122,9 @@ function json(body: unknown, status = 200): Response {
 }
 
 function contextUrl(deps: SiteRequestDispatchDeps, token: string): string {
-  return `${deps.clientPortalUrl.replace(/\/$/, "")}/field/${encodeURIComponent(token)}`;
+  return `${deps.clientPortalUrl.replace(/\/$/, "")}/field/${
+    encodeURIComponent(token)
+  }`;
 }
 
 function siteRequestBody(
@@ -203,7 +210,9 @@ async function completeWithRetry(
 async function dispatchClaimed(
   deps: SiteRequestDispatchDeps,
   context: SiteRequestDispatchContext,
-): Promise<{ sent: boolean; queued: boolean; context: SiteRequestDispatchContext }> {
+): Promise<
+  { sent: boolean; queued: boolean; context: SiteRequestDispatchContext }
+> {
   const action = context.action;
   let body: string;
   let templateKey: string;
@@ -243,7 +252,9 @@ async function dispatchClaimed(
   const safeResult = result.sent
     ? result
     : { ...result, reason: safeFailureReason(result) };
-  await deps.logNotification(context, action, safeResult).catch(() => undefined);
+  await deps.logNotification(context, action, safeResult).catch(() =>
+    undefined
+  );
   const completion = await completeWithRetry(deps, context.outbox_id!, {
     sent: result.sent,
     providerMessageId: result.twilioSid ?? result.messageId,
@@ -256,7 +267,9 @@ async function dispatchClaimed(
 async function processOutbox(
   deps: SiteRequestDispatchDeps,
   outboxId: string,
-): Promise<{ sent: boolean; queued: boolean; context?: SiteRequestDispatchContext }> {
+): Promise<
+  { sent: boolean; queued: boolean; context?: SiteRequestDispatchContext }
+> {
   const claimed = await deps.claimDispatch(outboxId);
   if (!claimed) return { sent: false, queued: true };
   return dispatchClaimed(deps, claimed);
@@ -265,7 +278,9 @@ async function processOutbox(
 async function sweep(
   deps: SiteRequestDispatchDeps,
   now?: string,
-): Promise<{ sent: number; queued: number; pushSent: number; pushQueued: number }> {
+): Promise<
+  { sent: number; queued: number; pushSent: number; pushQueued: number }
+> {
   let sent = 0;
   let queued = 0;
   if (!deps.shouldDefer()) {
@@ -313,27 +328,34 @@ export async function handleSiteRequestDispatch(
     return json({ error: "invalid_json" }, 400);
   }
   const action = typeof body.action === "string" &&
-      SITE_REQUEST_DISPATCH_ACTIONS.includes(body.action as SiteRequestDispatchAction)
+      SITE_REQUEST_DISPATCH_ACTIONS.includes(
+        body.action as SiteRequestDispatchAction,
+      )
     ? body.action as SiteRequestDispatchAction
     : null;
   const requestId = typeof body.request_id === "string" ? body.request_id : "";
   const note = typeof body.note === "string" ? body.note.trim() : undefined;
-  const expiresAt = typeof body.expires_at === "string" ? body.expires_at : undefined;
+  const expiresAt = typeof body.expires_at === "string"
+    ? body.expires_at
+    : undefined;
   if (
     !action ||
     (action !== "lifecycle" && !UUID_PATTERN.test(requestId)) ||
     (note && note.length > 500) ||
     (expiresAt && Number.isNaN(Date.parse(expiresAt)))
   ) return json({ error: "invalid_request" }, 422);
-  if (["consent-granted", "lifecycle"].includes(action) && role !== "service_role") {
+  if (
+    ["consent-granted", "lifecycle"].includes(action) && role !== "service_role"
+  ) {
     return json({ error: "forbidden" }, 403);
   }
 
   try {
     if (action === "lifecycle") {
-      const now = typeof body.now === "string" && !Number.isNaN(Date.parse(body.now))
-        ? body.now
-        : undefined;
+      const now =
+        typeof body.now === "string" && !Number.isNaN(Date.parse(body.now))
+          ? body.now
+          : undefined;
       const lifecycle = await deps.processLifecycle(req, now);
       const processed = await sweep(deps, now);
       return json({
@@ -346,7 +368,11 @@ export async function handleSiteRequestDispatch(
       });
     }
 
-    const prepared = await deps.prepare(req, action, { requestId, note, expiresAt });
+    const prepared = await deps.prepare(req, action, {
+      requestId,
+      note,
+      expiresAt,
+    });
     if (!prepared) return json({ error: "not_found" }, 404);
     if (!prepared.outbox_id) {
       return json({ ok: true, status: prepared.status, idempotent: true });

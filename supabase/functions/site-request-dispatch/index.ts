@@ -6,11 +6,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isQuietHours, sendPartySms } from "../_shared/sms.ts";
 import {
+  type DeliveryNotificationContext,
   DISPATCH_RPC_BY_ACTION,
   handleSiteRequestDispatch,
   type SiteRequestDispatchContext,
   type SiteRequestDispatchDeps,
-  type DeliveryNotificationContext,
   type SiteRequestPrepareAction,
 } from "./core.ts";
 
@@ -92,7 +92,13 @@ const deps: SiteRequestDispatchDeps = {
       .from("sms_messages")
       .select("id, twilio_sid")
       .eq("site_request_dispatch_outbox_id", outboxId)
-      .in("twilio_status", ["queued", "accepted", "sent", "delivered", "dry_run"])
+      .in("twilio_status", [
+        "queued",
+        "accepted",
+        "sent",
+        "delivered",
+        "dry_run",
+      ])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -115,24 +121,32 @@ const deps: SiteRequestDispatchDeps = {
       p_now: new Date().toISOString(),
     });
     if (error) throw new Error("claim_dispatch_failed");
-    return (Array.isArray(data) ? data[0] : data) as SiteRequestDispatchContext | null;
+    return (Array.isArray(data) ? data[0] : data) as
+      | SiteRequestDispatchContext
+      | null;
   },
   completeDispatch: async (outboxId, result) => {
-    const { data, error } = await admin().rpc("site_request_complete_dispatch", {
-      p_outbox_id: outboxId,
-      p_status: result.sent ? "sent" : "retry",
-      p_provider_message_id: result.providerMessageId ?? null,
-      p_error: result.error ?? null,
-      p_now: new Date().toISOString(),
-    });
+    const { data, error } = await admin().rpc(
+      "site_request_complete_dispatch",
+      {
+        p_outbox_id: outboxId,
+        p_status: result.sent ? "sent" : "retry",
+        p_provider_message_id: result.providerMessageId ?? null,
+        p_error: result.error ?? null,
+        p_now: new Date().toISOString(),
+      },
+    );
     if (error) throw new Error("complete_dispatch_failed");
     return (Array.isArray(data) ? data[0] : data) as Record<string, unknown>;
   },
   pendingDispatches: async (now) => {
-    const { data, error } = await admin().rpc("site_request_pending_dispatches", {
-      p_now: now ?? new Date().toISOString(),
-      p_limit: 25,
-    });
+    const { data, error } = await admin().rpc(
+      "site_request_pending_dispatches",
+      {
+        p_now: now ?? new Date().toISOString(),
+        p_limit: 25,
+      },
+    );
     if (error) throw new Error("pending_dispatches_failed");
     return (data ?? []) as string[];
   },
@@ -198,7 +212,9 @@ const deps: SiteRequestDispatchDeps = {
       { p_outbox_id: id, p_now: new Date().toISOString() },
     );
     if (error) throw new Error("claim_delivery_notification_failed");
-    return (Array.isArray(data) ? data[0] : data) as DeliveryNotificationContext | null;
+    return (Array.isArray(data) ? data[0] : data) as
+      | DeliveryNotificationContext
+      | null;
   },
   sendDeliveryNotification: async (context) => {
     const response = await fetch(`${SUPABASE_URL}/functions/v1/apns-send`, {
@@ -225,7 +241,8 @@ const deps: SiteRequestDispatchDeps = {
     if (!response.ok || !(payload.sent && payload.sent > 0)) {
       return {
         sent: false,
-        error: payload.skipped ?? payload.error ?? `apns_http_${response.status}`,
+        error: payload.skipped ?? payload.error ??
+          `apns_http_${response.status}`,
       };
     }
     return { sent: true };

@@ -1,7 +1,10 @@
 // Deno test for the shared sendPartySms path.
 // Run: deno test --no-check -A supabase/functions/_shared/sms.test.ts
 
-import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import {
+  assert,
+  assertEquals,
+} from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import { isQuietHours, sendPartySms } from "./sms.ts";
 import { createFakeSupabase } from "../_tests/fake-supabase.ts";
 
@@ -20,14 +23,22 @@ function party(id: string, consent: string) {
 }
 
 Deno.test("dry_run writes a row and never calls Twilio", async () => {
-  const fake = createFakeSupabase({ project_parties: [party("p1", "granted")] });
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+  });
   let fetchCalls = 0;
   const res = await sendPartySms(
     fake as never,
     { partyId: "p1", body: "hello" },
     {
-      getEnv: envOf({ SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+15550000000" }),
-      fetchImpl: (() => { fetchCalls++; return Promise.reject("nope"); }) as unknown as typeof fetch,
+      getEnv: envOf({
+        SMS_DEV_MODE: "dry_run",
+        TWILIO_FROM_NUMBER: "+15550000000",
+      }),
+      fetchImpl: (() => {
+        fetchCalls++;
+        return Promise.reject("nope");
+      }) as unknown as typeof fetch,
       now: new Date("2026-07-08T18:00:00Z"), // ~1pm Chicago — not quiet
     },
   );
@@ -36,42 +47,77 @@ Deno.test("dry_run writes a row and never calls Twilio", async () => {
   const msgs = fake._data.sms_messages ?? [];
   assertEquals(msgs.length, 1);
   assertEquals((msgs[0] as { twilio_status: string }).twilio_status, "dry_run");
-  assert(String((msgs[0] as { twilio_sid: string }).twilio_sid).startsWith("dev-"));
+  assert(
+    String((msgs[0] as { twilio_sid: string }).twilio_sid).startsWith("dev-"),
+  );
 });
 
 Deno.test("consent gate blocks not_asked and opted_out", async () => {
-  for (const [consent, reason] of [["not_asked", "not_consented"], ["opted_out", "opted_out"]]) {
-    const fake = createFakeSupabase({ project_parties: [party("p1", consent)] });
+  for (
+    const [consent, reason] of [["not_asked", "not_consented"], [
+      "opted_out",
+      "opted_out",
+    ]]
+  ) {
+    const fake = createFakeSupabase({
+      project_parties: [party("p1", consent)],
+    });
     const res = await sendPartySms(
       fake as never,
       { partyId: "p1", body: "hello" },
-      { getEnv: envOf({ SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+1" }), now: new Date("2026-07-08T18:00:00Z") },
+      {
+        getEnv: envOf({ SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+1" }),
+        now: new Date("2026-07-08T18:00:00Z"),
+      },
     );
     assert(!res.sent, `${consent} must not send`);
     assertEquals(res.reason, reason);
-    assertEquals((fake._data.sms_messages ?? []).length, 0, "no row on a blocked send");
+    assertEquals(
+      (fake._data.sms_messages ?? []).length,
+      0,
+      "no row on a blocked send",
+    );
   }
 });
 
 Deno.test("sms_optin_invite is allowed to a pending party", async () => {
-  const fake = createFakeSupabase({ project_parties: [party("p1", "pending")] });
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "pending")],
+  });
   const res = await sendPartySms(
     fake as never,
-    { partyId: "p1", templateKey: "sms_optin_invite", body: "Reply YES for updates" },
-    { getEnv: envOf({ SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+1" }), now: new Date("2026-07-08T18:00:00Z") },
+    {
+      partyId: "p1",
+      templateKey: "sms_optin_invite",
+      body: "Reply YES for updates",
+    },
+    {
+      getEnv: envOf({ SMS_DEV_MODE: "dry_run", TWILIO_FROM_NUMBER: "+1" }),
+      now: new Date("2026-07-08T18:00:00Z"),
+    },
   );
   assert(res.sent, "invite should reach a pending party");
 });
 
 Deno.test("quiet hours defer stores the body without sending", async () => {
-  const fake = createFakeSupabase({ project_parties: [party("p1", "granted")] });
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+  });
   let fetchCalls = 0;
   const res = await sendPartySms(
     fake as never,
     { partyId: "p1", body: "after hours" },
     {
-      getEnv: envOf({ SMS_DEV_MODE: "off", TWILIO_FROM_NUMBER: "+1", TWILIO_ACCOUNT_SID: "AC", TWILIO_AUTH_TOKEN: "tok" }),
-      fetchImpl: (() => { fetchCalls++; return Promise.reject("nope"); }) as unknown as typeof fetch,
+      getEnv: envOf({
+        SMS_DEV_MODE: "off",
+        TWILIO_FROM_NUMBER: "+1",
+        TWILIO_ACCOUNT_SID: "AC",
+        TWILIO_AUTH_TOKEN: "tok",
+      }),
+      fetchImpl: (() => {
+        fetchCalls++;
+        return Promise.reject("nope");
+      }) as unknown as typeof fetch,
       now: new Date("2026-07-08T09:00:00Z"), // ~4am Chicago — quiet
     },
   );
@@ -79,14 +125,19 @@ Deno.test("quiet hours defer stores the body without sending", async () => {
   assert(!res.sent);
   assertEquals(fetchCalls, 0);
   const msgs = fake._data.sms_messages ?? [];
-  assertEquals((msgs[0] as { twilio_status: string }).twilio_status, "deferred");
+  assertEquals(
+    (msgs[0] as { twilio_status: string }).twilio_status,
+    "deferred",
+  );
   assertEquals((msgs[0] as { body: string }).body, "after hours");
 });
 
 Deno.test("caller-owned sensitive outbox never persists a raw guest URL", async () => {
   const raw = "Open https://client.patina.cloud/field/sr_SECRET_RAW_TOKEN";
   const audit = "Patina Site Request private link [redacted]";
-  const quietFake = createFakeSupabase({ project_parties: [party("p1", "granted")] });
+  const quietFake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+  });
   const deferred = await sendPartySms(
     quietFake as never,
     {
@@ -104,7 +155,9 @@ Deno.test("caller-owned sensitive outbox never persists a raw guest URL", async 
   assert(deferred.deferred);
   assertEquals((quietFake._data.sms_messages ?? []).length, 0);
 
-  const redirectFake = createFakeSupabase({ project_parties: [party("p1", "granted")] });
+  const redirectFake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+  });
   let providerBody = "";
   const sent = await sendPartySms(
     redirectFake as never,
@@ -125,14 +178,23 @@ Deno.test("caller-owned sensitive outbox never persists a raw guest URL", async 
       }),
       fetchImpl: ((_url: string, init: { body: string }) => {
         providerBody = init.body;
-        return Promise.resolve(new Response(JSON.stringify({ sid: "SM123", status: "queued" }), { status: 200 }));
+        return Promise.resolve(
+          new Response(JSON.stringify({ sid: "SM123", status: "queued" }), {
+            status: 200,
+          }),
+        );
       }) as unknown as typeof fetch,
       now: new Date("2026-07-08T18:00:00Z"),
     },
   );
   assert(sent.sent);
-  assert(providerBody.includes(encodeURIComponent(raw).replace(/%20/g, "+")) || providerBody.includes("sr_SECRET_RAW_TOKEN"));
-  const logged = String((redirectFake._data.sms_messages?.[0] as { body?: string })?.body ?? "");
+  assert(
+    providerBody.includes(encodeURIComponent(raw).replace(/%20/g, "+")) ||
+      providerBody.includes("sr_SECRET_RAW_TOKEN"),
+  );
+  const logged = String(
+    (redirectFake._data.sms_messages?.[0] as { body?: string })?.body ?? "",
+  );
   assertEquals(logged, audit);
   assert(!logged.includes("sr_SECRET_RAW_TOKEN"));
   assertEquals(
@@ -144,7 +206,9 @@ Deno.test("caller-owned sensitive outbox never persists a raw guest URL", async 
 });
 
 Deno.test("a Messaging Service SID (MG…) is sent as MessagingServiceSid", async () => {
-  const fake = createFakeSupabase({ project_parties: [party("p1", "granted")] });
+  const fake = createFakeSupabase({
+    project_parties: [party("p1", "granted")],
+  });
   let capturedBody = "";
   const res = await sendPartySms(
     fake as never,
@@ -158,13 +222,20 @@ Deno.test("a Messaging Service SID (MG…) is sent as MessagingServiceSid", asyn
       }),
       fetchImpl: ((_url: string, init: { body: string }) => {
         capturedBody = init.body;
-        return Promise.resolve(new Response(JSON.stringify({ sid: "SM123", status: "queued" }), { status: 200 }));
+        return Promise.resolve(
+          new Response(JSON.stringify({ sid: "SM123", status: "queued" }), {
+            status: 200,
+          }),
+        );
       }) as unknown as typeof fetch,
       now: new Date("2026-07-08T18:00:00Z"),
     },
   );
   assert(res.sent);
-  assert(capturedBody.includes("MessagingServiceSid=MG0123456789abcdef"), "MG SID → MessagingServiceSid");
+  assert(
+    capturedBody.includes("MessagingServiceSid=MG0123456789abcdef"),
+    "MG SID → MessagingServiceSid",
+  );
   assert(!capturedBody.includes("From=MG"), "must not send From=MG…");
 });
 
