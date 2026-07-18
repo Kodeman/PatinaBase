@@ -830,12 +830,57 @@ AS $$
     jsonb_build_object(
       'code','K-01','version',1,'kind','measure_set',
       'title','Measure set','canonical_unit','integer_mm',
-      'allows_proof_photo',true
+      'allows_proof_photo',true,
+      'configuration',jsonb_build_object(
+        'precision_denominator',16,
+        'allows_metric',true,
+        'dimensions',jsonb_build_array(
+          jsonb_build_object(
+            'id','floor_to_sill','label','A · floor → sill',
+            'guidance','Measure vertically from the finished floor to the sill.',
+            'required',true
+          ),
+          jsonb_build_object(
+            'id','sill_to_head','label','B · sill → head',
+            'guidance','Measure vertically from the sill to the opening head.',
+            'required',true
+          ),
+          jsonb_build_object(
+            'id','run_length','label','C · run length',
+            'guidance','Measure the full horizontal run shown in the diagram.',
+            'required',true
+          )
+        )
+      )
     ),
     jsonb_build_object(
       'code','K-02','version',1,'kind','detail_photos',
       'title','Detail photos','allows_skip_reason',true,
-      'originals_retained',true
+      'originals_retained',true,
+      'configuration',jsonb_build_object(
+        'shots',jsonb_build_array(
+          jsonb_build_object(
+            'id','wide_context','label','Wide context',
+            'guidance','Show the detail in the full wall or room context.',
+            'required',true
+          ),
+          jsonb_build_object(
+            'id','straight_on','label','Straight on',
+            'guidance','Center the detail and keep the phone level.',
+            'required',true
+          ),
+          jsonb_build_object(
+            'id','left_return','label','Left return',
+            'guidance','Show the left edge, return, and nearby condition.',
+            'required',true
+          ),
+          jsonb_build_object(
+            'id','detail','label','Close detail',
+            'guidance','Move close enough to show material, joint, and finish.',
+            'required',true
+          )
+        )
+      )
     )
   );
 $$;
@@ -925,7 +970,15 @@ BEGIN
     VALUES (
       v_item_id, 1, v_item->>'kit_code', btrim(v_item->>'title'),
       NULLIF(btrim(v_item->>'guidance'), ''), v_room_id, v_room_name,
-      COALESCE(v_item->'configuration', '{}'::jsonb), auth.uid()
+      COALESCE(
+        (
+          SELECT kit.value->'configuration'
+          FROM jsonb_array_elements(public.site_request_builtin_kits()) AS kit(value)
+          WHERE kit.value->>'code' = v_item->>'kit_code'
+        ),
+        '{}'::jsonb
+      ) || COALESCE(v_item->'configuration', '{}'::jsonb),
+      auth.uid()
     )
     RETURNING id INTO v_version_id;
 
@@ -993,7 +1046,15 @@ BEGIN
   VALUES (
     p_item_id, v_version, p_kit_code, btrim(p_title),
     NULLIF(btrim(p_guidance), ''), p_room_id, v_room_name,
-    COALESCE(p_configuration, '{}'::jsonb), auth.uid()
+    COALESCE(
+      (
+        SELECT kit.value->'configuration'
+        FROM jsonb_array_elements(public.site_request_builtin_kits()) AS kit(value)
+        WHERE kit.value->>'code' = p_kit_code
+      ),
+      '{}'::jsonb
+    ) || COALESCE(p_configuration, '{}'::jsonb),
+    auth.uid()
   )
   RETURNING id INTO v_version_id;
 

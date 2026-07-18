@@ -746,8 +746,8 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
           </p>
           <h2 className="type-page-title mt-2">All delivered</h2>
           <p className="type-body-small mt-2 text-[var(--text-muted)]">
-            {initial.request.designer_name} has been notified. This link stays
-            available for any requested redo.
+            Your delivery is ready for {initial.request.designer_name} to review.
+            This link stays available for any requested redo.
           </p>
         </section>
       )}

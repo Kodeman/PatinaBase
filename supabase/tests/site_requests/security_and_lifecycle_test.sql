@@ -142,6 +142,17 @@ BEGIN
   FROM public.site_request_items WHERE request_id = v_request_id AND sort_order = 0;
   SELECT id, current_version_id INTO v_item_photo, v_version_photo
   FROM public.site_request_items WHERE request_id = v_request_id AND sort_order = 1;
+  ASSERT (
+    SELECT jsonb_array_length(configuration->'dimensions') = 3
+       AND configuration->>'precision' = '1/16in'
+    FROM public.site_request_item_versions
+    WHERE id = v_version_measure
+  ), 'K-01 must merge its versioned built-in checklist with caller overrides';
+  ASSERT (
+    SELECT jsonb_array_length(kit->'configuration'->'shots') = 4
+    FROM jsonb_array_elements(public.site_request_builtin_kits()) AS kit
+    WHERE kit->>'code' = 'K-02'
+  ), 'K-02 must publish its versioned four-shot checklist';
 
   PERFORM public.site_request_revise_item(
     v_item_measure, 'K-01', 'Window rough opening revised',
@@ -151,6 +162,12 @@ BEGIN
   );
   SELECT current_version_id INTO v_version_measure
   FROM public.site_request_items WHERE id = v_item_measure;
+  ASSERT (
+    SELECT jsonb_array_length(configuration->'dimensions') = 3
+       AND configuration->>'proof_required' = 'true'
+    FROM public.site_request_item_versions
+    WHERE id = v_version_measure
+  ), 'revision must retain built-in checklist defaults and apply overrides';
   SELECT count(*) INTO v_count
   FROM public.site_request_item_versions WHERE item_id = v_item_measure;
   ASSERT v_count = 2, 'revision must append, not overwrite';
