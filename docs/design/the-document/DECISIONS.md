@@ -4174,3 +4174,38 @@ seam; background-upload device edges; sharpness calibration; associative
 DXF dimensions.
 
 *Entries add: R112 · last id = R112*
+
+### I85 · Field Capture — first complete production run; box-ops findings — 2026-07-18
+
+Kody's M2 scan (room_scans 95266be1) ran the full production chain on his
+Linux GPU box: ingest 5.2 s → solve 0.7 s → drawings ~3.6 s → delivery
+~3.7 s (≈13 s compute). room_files v1 = generated; 11 objects under
+room_file/{uid}/{scanId}/v1/ (5 sheets SVG+PDF + room.dxf, all sha256
+recorded); certificate honest — all 3 short-span anchors flagged and
+excluded, scale 0.9828, RMS 133.6 mm, 24 dimensions measured ±11%, zero
+verified (the long-span coach exists to change this on the next scan).
+Room File renders on the project page behind the room-file flag.
+
+Operational findings, all fixed durably in-repo during the run:
+1. Legacy pre-B-19 manifests (shipped app builds) list a photosManifest
+   artifact that never uploads — ingest now normalizes it away
+   (77416c06; ingest.legacy_manifest_normalized event).
+2. install.sh does a COPY pip-install into the venv — git pull alone
+   never updates a running worker; re-running install.sh is the upgrade
+   path (and the box's source was an rsync snapshot, doubling the trap).
+3. systemd sandbox (ProtectSystem=strict) + ezdxf's XDG dotfiles
+   (config ini, then font cache) EACCES'd the drawings stage twice —
+   all four XDG base dirs now confined to APP_DIR with ReadWritePaths
+   (5d05a066, a4cf2c35) and doctor probes each preflight.
+4. Prod 00341 had been applied early by the BOH deploy from a pre-final
+   file — parity migration 00373 restored the drawings column (the
+   status CHECK and rfm UNIQUE had already made it).
+
+Parked, by design: task for scan fa361ed4 (the abandoned pre-MIME-fix
+upload; no manifest ever landed) stays failed — garbage row, 7-day
+retention reaps its partial objects.
+
+M4 remaining: Leah's device build + flag, pilot day per
+m4-pilot-checklist.md.
+
+*Entries add: I85 · last id = I85*
