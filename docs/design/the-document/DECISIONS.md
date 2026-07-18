@@ -4096,3 +4096,35 @@ Device-owed edges carried forward, not gating M2: airplane-mode resume,
 rehydration, sharpness-threshold calibration, voice-note audio seam.
 
 *Entries add: R110 · last id = R110*
+
+### R111 · Field Capture M3 passed — drawing set accepted after one revision round — 2026-07-17
+
+M3 slice review on Kody's real room (M2 scan 95266be1, chained locally).
+r1 verdict: model-space 2D "looks great"; four revisions ruled by Kody and
+applied (commits 0a36870d + e51ccb0e):
+
+1. DXF paperspace layout populated — the Layout tab is now a plottable A3
+sheet (viewport onto the approved model + branded title block); model
+space unchanged.
+2. Sloped ceilings render — RoomPlan supplied polygonCorners on one flat
+wall only, so the slope is synthesized as corner-height chords between
+walls of differing heights (2.48 m → 2.85 m in the review room); genuinely
+sloped polygons draw verbatim when future captures carry them. Ceiling
+note reads SLOPED; true ceiling planes remain P2.
+3. Patina brand on every title block — PATINA wordmark + strata-mark
+motif, monochrome plottable line art derived from the icon mark, deck
+type grain, in SVG/PDF and the DXF paperspace.
+4. iOS anchor coach steers to SC-08's recipe (two long spans + one
+ceiling height): short-span nudge (< 2.5 m or < half the larger plan
+dimension), staged prompts, "recipe met" confirmation — advisory only;
+R108.5's soft gate unchanged.
+
+r2 set accepted by Kody: **M3 PASSED.** Items 12–13 open.
+
+Carried notes: solve honesty validated live — Kody's short-span M2
+anchors produced RMS 133 mm, all flagged, visibly loose tolerances; the
+system refused false precision exactly as R108.5 intends. D4 (outlines
+drawn from scale×model while dim text carries snapped values;
+sub-drawing-scale) stands accepted for P1.
+
+*Entries add: R111 · last id = R111*
