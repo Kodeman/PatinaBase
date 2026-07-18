@@ -34,6 +34,7 @@ import {
 } from '@patina/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { useFeatureFlag } from '@/hooks/use-feature-flag';
+import { RoomFilesSection } from '@/components/room-file/room-files-section';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { useToast } from '@/components/portal/toast-provider';
 import { queryKeys } from '@/lib/react-query';
@@ -133,6 +134,11 @@ export default function ProjectDetailPage({
   const { value: procurementPilotEnabled } = useFeatureFlag(
     'procurement-workspace-pilot',
   );
+
+  // Room File v0 (Field Capture P1, item 12) — the "Room Files" zone lists
+  // this project's scans that have a generated drawing set. Fail-closed behind
+  // `room-file`; the section itself renders nothing when there are none.
+  const { value: roomFileEnabled } = useFeatureFlag('room-file');
 
   // Margin visibility (00185 dual pricing): trade cost + margin are studio-
   // owner-only. While roles load this is false → margin row simply hidden.
@@ -541,6 +547,12 @@ export default function ProjectDetailPage({
             <StrataMark variant="mini" />
           </>
         )}
+
+        {/* Zone 3c: Room Files (Field Capture P1, item 12) — scans with a
+            generated drawing set. Fail-closed behind `room-file`; the section
+            self-hides (renders null, its own mb-8 spacing, no external divider —
+            ProjectBoardsSection precedent) when the project has none. */}
+        {roomFileEnabled && isRealProject && <RoomFilesSection projectId={id} />}
 
         {/* Zone 4: Phase Timeline */}
         <PhaseTimelineV2

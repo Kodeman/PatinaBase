@@ -30,6 +30,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { RoomGeometryDocument, RoomScanPhoto } from '@patina/supabase';
+import { useRoomFiles, useRoomScan } from '@patina/supabase';
+import { useFeatureFlag } from '@/hooks/use-feature-flag';
 import type { RoomGeometry } from '@/lib/room-view/geometry';
 import type { PhotoProvenance } from '@/lib/room-view/photo-poses';
 import { roomEvents } from '@/lib/analytics';
@@ -111,6 +113,22 @@ export function RoomView({
   // naturally whenever RoomView remounts for a different room.
   const measure = useMeasure();
   const viewer = usePhotoViewer(photos.length, roomId);
+
+  // Room File door (Field Capture P1, item 12) — a quiet facts-rail link to
+  // this scan's generated drawing set. Resolved here (hooks above the early
+  // returns), passed to FactsRail as a plain href. Shown ONLY when: the
+  // `room-file` flag is on, a generated room_file exists for the scan, AND the
+  // scan is on a project (the route is project-nested). Absent otherwise.
+  const { value: roomFileEnabled } = useFeatureFlag('room-file');
+  const { data: roomFilesForDoor } = useRoomFiles(roomFileEnabled ? roomId : undefined);
+  const { data: scanRow } = useRoomScan(roomFileEnabled ? roomId : '');
+  const roomFileDoor = useMemo(() => {
+    if (!roomFileEnabled) return undefined;
+    const projectId = scanRow?.project?.id ?? scanRow?.project_id ?? null;
+    const hasGenerated = (roomFilesForDoor ?? []).some((rf) => rf.status === 'generated');
+    if (!projectId || !hasGenerated) return undefined;
+    return { href: `/portal/projects/${projectId}/room-file/${roomId}` };
+  }, [roomFileEnabled, scanRow, roomFilesForDoor, roomId]);
   const viewBox = useMemo(
     () => (geometry ? planViewBox(geometry) : { width: 1, height: 1 }),
     [geometry],
@@ -255,6 +273,7 @@ export function RoomView({
             onArm: measure.arm,
             onClear: measure.clear,
           }}
+          roomFile={roomFileDoor}
         />
         {/* Both stages hold the same grid cell; the inactive one is display-hidden
             (never unmounted once Orbit is up) so re-switching is instant. */}

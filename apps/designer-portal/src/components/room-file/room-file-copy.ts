@@ -1,0 +1,81 @@
+/**
+ * Room File v0 — user-facing copy catalogue (Field Capture P1, package item 12).
+ *
+ * ⚠ ESCALATE-CLASS PLACEHOLDERS. Per the P1 package's authority split
+ * (field-capture-p1-package.md §"bless vs escalate"), every designer-visible
+ * string here — section titles, the UNVERIFIED stamp, badge legend, empty
+ * states — is a design-owned decision, not a code call. They are gathered in
+ * ONE place so the design session can rule on the final wording without a
+ * component hunt. Treat these as provisional until that ruling lands.
+ */
+
+export const ROOM_FILE_COPY = {
+  // Project-page section
+  sectionTitle: 'Room Files',
+
+  // Page / header
+  eyebrow: 'Room File',
+  backToProject: (name: string) => `← ${name}`,
+  scanDatePrefix: 'Captured',
+  unverifiedBadge: 'UNVERIFIED',
+  unverifiedNote:
+    'Closed with fewer than three anchors — every dimension carries the widest tolerance. Confirm on site before ordering.',
+  notGeneratedYet: 'This scan has no finished drawing set yet.',
+  notGeneratedBody:
+    'The drawings are still being generated, or the last run stopped. Check back shortly.',
+
+  // Drawings section
+  drawingsTitle: 'Drawings',
+  drawingsSubtitle: (n: number, date: string | null) =>
+    `${n} sheet${n === 1 ? '' : 's'}${date ? ` · generated ${date}` : ''}`,
+  dxfLabel: 'CAD drawing (DXF)',
+  dxfHint: 'Layered walls · openings · dimensions — opens in your CAD tool',
+  sheetSvg: 'SVG',
+  sheetPdf: 'PDF',
+  downloadFailed: 'Could not download that drawing. Try again.',
+  drawingsEmpty: 'No sheets were recorded for this version.',
+
+  // Certificate section
+  certificateTitle: 'Accuracy certificate',
+  certScale: 'Scale fit',
+  certRms: 'RMS residual',
+  certAnchors: 'Anchors',
+  certFloorArea: 'Floor area',
+  certAnchorsTableTitle: 'Anchor residuals',
+  certColTyped: 'Typed',
+  certColModel: 'Model',
+  certColResidual: 'Residual',
+  certColUsed: 'Used',
+  certFlagged: 'flagged',
+  certToleranceModelTitle: 'Tolerance model',
+  certDimCountsTitle: 'Dimensions by class',
+  scaleIgnoredNote: 'A single implausible anchor was ignored — scale held at 1.0.',
+  certificateEmpty: 'No certificate was recorded for this version.',
+
+  // Badge legend (the triad, matching the sheets)
+  legendVerified: 'anchor-exact',
+  legendMeasured: 'anchor-corrected',
+  legendEstimated: 'RoomPlan estimate',
+
+  // Measurements section
+  measurementsTitle: 'Measurements',
+  measColLabel: 'Dimension',
+  measColValue: 'Value',
+  measColTolerance: 'Tolerance',
+  measColClass: 'Class',
+  measurementsEmpty: 'No measurements were published for this version.',
+  toleranceNone: 'convention',
+
+  // Capture context
+  contextTitle: 'Capture context',
+  contextSubtitle: 'Photos and notes pinned to this room during the scan',
+  contextEmpty: 'No photos or notes were pinned to this scan.',
+  contextVoiceLabel: 'Voice note',
+
+  // Version strip
+  versionCurrent: 'current',
+  versionReadOnly: 'read-only',
+
+  // Room View door
+  roomViewDoorLabel: 'Room File →',
+} as const;

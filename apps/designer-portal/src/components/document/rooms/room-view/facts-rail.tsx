@@ -20,6 +20,7 @@
  */
 
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { areaOf, ftIn, overallDims, type RoomGeometry } from '@/lib/room-view/geometry';
 import { fmtDay } from '@/lib/document/format';
 import { cn } from '@/lib/utils';
@@ -58,6 +59,11 @@ export interface FactsRailProps {
   /** Measure-tool toolrow — omitted entirely (no dead UI) when the caller
    *  doesn't wire the tool up. */
   measure?: FactsRailMeasureProps;
+  /** Room File door (Field Capture P1, item 12) — a quiet link to this scan's
+   *  generated drawing set, rendered ONLY when the caller resolves one
+   *  (a generated room_file exists for the scan AND it's on a project). One
+   *  link, no restructuring: absent otherwise. */
+  roomFile?: { href: string };
 }
 
 function plural(n: number, noun: string): string {
@@ -87,6 +93,7 @@ export function FactsRail({
   coveragePercentage,
   photos,
   measure,
+  roomFile,
 }: FactsRailProps) {
   const { w, d } = overallDims(geometry);
   const area = Math.round(areaOf(geometry));
@@ -135,6 +142,23 @@ export function FactsRail({
         {qualityGrade ? ` · quality ${qualityGrade}` : ''}
         {coveragePercentage != null ? ` · ${coveragePercentage.toFixed(2)}` : ''}
       </Fact>
+
+      {roomFile && (
+        <Fact k="Room File">
+          {/* Quiet, not button-chrome (Photos/Measure precedent): reads like any
+              other fact value, warms to clay + reveals a mono "open" hint on
+              hover/focus. Links into /portal/projects/[id]/room-file/[scanId]. */}
+          <Link
+            href={roomFile.href}
+            className="group inline-flex items-baseline gap-1.5 text-[14px] text-[var(--color-charcoal)] outline-none transition-colors hover:text-[var(--color-clay)] focus-visible:text-[var(--color-clay)]"
+          >
+            drawing set
+            <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[var(--color-aged-oak)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+              open
+            </span>
+          </Link>
+        </Fact>
+      )}
 
       {lowConfWalls.length > 0 && (
         <Fact k="Verify">

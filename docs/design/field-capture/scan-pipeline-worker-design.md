@@ -260,6 +260,10 @@ The worker writes with the service-role key (bypassing storage RLS on write), bu
 `rs.user_id::text = (storage.foldername(name))[2] AND ( rs.id::text = (…)[3] OR (rs.room_id IS NOT NULL AND rs.room_id::text = (…)[3]) )`.
 The drawings prefix `room_file/{userId}/{scanId}/v{version}/…` puts the **scan id** at segment `[3]`, which satisfies the **first branch** (`rs.id::text = [3]`) — exactly the segment the iOS bundle uploader writes, and the case 00287 was authored to fix. So a designer with an `active`/`full`|`preview` association reads the drawings without a `room_id`-shaped path. No later migration overrides this (00306/00320 touch unrelated storage policies). **`scanId` at `[3]` is correct; the prefix stays as-is.**
 
+**Capture-context resolution (item 12) — provenance is FLAT, not nested.** The Room File page's capture-context list resolves `field_captures` to a scan via `provenance`, because the inbox row does **not** persist project/scan columns (00233/00235). The iOS `ContextCaptureProvenance` contract flattens provenance to a `[String:String]` map with **dotted top-level keys** — the value lives under `"siteScanContext.scanId"`, NOT a nested `{ siteScanContext: { scanId } }` object. Resolve by `@>` containment, never a `->siteScanContext->>scanId` path (that matches nothing and misparses the dot):
+`field_captures.provenance @> '{"siteScanContext.scanId":"<scanId>"}'`.
+**P2 scale:** add a GIN index on `field_captures(provenance)` (or an expression index on the `scanId` key) before this runs against a large inbox — the `@>` filter is a seq scan without it (fine at pilot volume).
+
 ---
 
 ## 6. `doctor` — preflight

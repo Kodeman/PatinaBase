@@ -54,7 +54,7 @@ C1/C2/M3 behavior corrections.
 
 ### Context captures → Capture Inbox (item 7)
 - [ ] Mid-scan, capture a **detail photo** (`Photo added to Inbox`) and a **voice note** (`Voice note added to Inbox`), each pinned to the current pose.
-- [ ] These land in the **Capture Inbox** with a spatial address carried in **provenance only** (see server query). Note: the inbox row does NOT persist project_id/project_room_id columns — the association is in `provenance.siteScanContext.*`.
+- [ ] These land in the **Capture Inbox** with a spatial address carried in **provenance only** (see server query). Note: the inbox row does NOT persist project_id/project_room_id columns — the association is in `provenance` under the flat dotted keys `"siteScanContext.*"` (see the server query below; resolve with `@>` containment, not a nested path).
 
 ### Finish + bundle inspection (item 8)
 - [ ] Finish the scan. RoomPlan finalizes; the rig writes `mesh.ply` + drains depth, then the manifest is assembled.
@@ -95,15 +95,27 @@ Pull the `scanId` from the F4 receipt (and the client scan-session id for contex
   `keyframes/…/keyframe_summary.json`, `scorecard/…/scorecard.json`, `anchors/…/anchors.json`,
   and `photos/…` for any posed photos.
 - [ ] **confirm-scan-bundle → 200** (it HEAD-verifies `model_url`, `captured_room_json_url`, `scan_bundle_url`; `depth_archive_url` optional) and calls `mark_scan_upload_complete`. Check the edge-function logs for a 200 on this scanId.
-- [ ] **field_captures rows** for the context captures, carrying provenance:
+- [ ] **field_captures rows** for the context captures, carrying provenance.
+  ⚠ `provenance` is a **FLAT** `{String:String}` map with **dotted top-level
+  keys** (`"siteScanContext.scanId"`, `"siteScanContext.projectId"`, …), NOT a
+  nested `{ siteScanContext: { scanId } }` object — the iOS
+  `ContextCaptureProvenance` wire contract flattens to `[String:String]`. Resolve
+  by `@>` containment on the flat key (a `->siteScanContext->>scanId` path filter
+  matches nothing and misparses the dot):
   ```sql
-  select id, provenance->'siteScanContext' as ctx, created_at
+  select id, provenance, created_at
   from field_captures
-  where provenance->'siteScanContext'->>'scanId' = '<clientScanSessionId>'
+  where provenance @> jsonb_build_object('siteScanContext.scanId', '<clientScanSessionId>')
   order by created_at;
   ```
-  Each `ctx` should carry `source = "site-scan-context"`, `scanId`, `projectId`,
-  `projectRoomId`, `cameraPose` (16 comma-joined values on Pro), `capturedAt`.
+  Each `provenance` should carry `"siteScanContext.source" = "site-scan-context"`,
+  `"siteScanContext.scanId"`, `"siteScanContext.projectId"`,
+  `"siteScanContext.projectRoomId"`, `"siteScanContext.cameraPose"` (16
+  comma-joined values on Pro), `"siteScanContext.capturedAt"`.
+  - **P2 scale:** the `@>` filter is a sequential scan without a GIN index on
+    `field_captures(provenance)` (or an expression index on the `scanId` key).
+    Fine at pilot volume; add the index before capture-context resolution runs
+    against a large inbox.
 - [ ] **Validator on the device bundle** — `python3 scripts/validate_capture_bundle.py <bundle>` exits **0** (already run above; keep the transcript with the walk record).
 
 **Extracting the bundle from the device:** Xcode → *Window → Devices and Simulators* →
