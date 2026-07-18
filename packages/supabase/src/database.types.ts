@@ -1755,6 +1755,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "client_discovery_room_scan_id_fkey"
+            columns: ["room_scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
+          {
             foreignKeyName: "client_discovery_seeded_proposal_id_fkey"
             columns: ["seeded_proposal_id"]
             isOneToOne: false
@@ -6914,6 +6921,13 @@ export type Database = {
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "lead_room_scans_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
         ]
       }
       leads: {
@@ -7044,6 +7058,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_room_scan_id_fkey"
+            columns: ["room_scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
@@ -13619,6 +13640,13 @@ export type Database = {
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "room_features_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
         ]
       }
       room_file_measurements: {
@@ -13683,6 +13711,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "room_file_measurements_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["room_file_id"]
+          },
+          {
             foreignKeyName: "room_file_measurements_scan_id_fkey"
             columns: ["scan_id"]
             isOneToOne: false
@@ -13702,6 +13737,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
           {
             foreignKeyName: "room_file_measurements_verified_by_fkey"
@@ -13795,6 +13837,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_files_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
@@ -13934,6 +13983,13 @@ export type Database = {
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "room_scan_associations_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
         ]
       }
       room_scan_geometry: {
@@ -14024,6 +14080,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scan_geometry_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: true
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
@@ -14139,6 +14202,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scan_geometry_elements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
           {
             foreignKeyName: "room_scan_geometry_elements_wall_element_id_fkey"
@@ -14310,6 +14380,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scan_images_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
@@ -14821,6 +14898,13 @@ export type Database = {
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "scan_anchors_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
         ]
       }
       scan_pipeline_events: {
@@ -14866,6 +14950,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "scan_pipeline_events_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["room_file_id"]
+          },
+          {
             foreignKeyName: "scan_pipeline_events_scan_id_fkey"
             columns: ["scan_id"]
             isOneToOne: false
@@ -14885,6 +14976,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_pipeline_events_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
@@ -15246,6 +15344,699 @@ export type Database = {
           version?: number
         }
         Relationships: []
+      }
+      site_binder_entries: {
+        Row: {
+          approved_at: string
+          approved_by: string
+          created_at: string
+          deliverable_id: string
+          entry_kind: string
+          id: string
+          item_id: string
+          item_version_id: string
+          payload: Json
+          project_id: string
+          request_id: string
+          room_id: string
+          supersedes_entry_id: string | null
+        }
+        Insert: {
+          approved_at?: string
+          approved_by: string
+          created_at?: string
+          deliverable_id: string
+          entry_kind: string
+          id?: string
+          item_id: string
+          item_version_id: string
+          payload: Json
+          project_id: string
+          request_id: string
+          room_id: string
+          supersedes_entry_id?: string | null
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string
+          created_at?: string
+          deliverable_id?: string
+          entry_kind?: string
+          id?: string
+          item_id?: string
+          item_version_id?: string
+          payload?: Json
+          project_id?: string
+          request_id?: string
+          room_id?: string
+          supersedes_entry_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_binder_entries_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_deliverable_id_fkey"
+            columns: ["deliverable_id"]
+            isOneToOne: true
+            referencedRelation: "site_deliverables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_item_version_id_fkey"
+            columns: ["item_version_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_item_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "site_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_supersedes_entry_id_fkey"
+            columns: ["supersedes_entry_id"]
+            isOneToOne: false
+            referencedRelation: "site_binder_current"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_supersedes_entry_id_fkey"
+            columns: ["supersedes_entry_id"]
+            isOneToOne: false
+            referencedRelation: "site_binder_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_deliverable_dimensions: {
+        Row: {
+          captured_at: string
+          captured_by_name: string | null
+          created_at: string
+          deliverable_id: string
+          id: string
+          label: string
+          proof_media_id: string | null
+          value_mm: number
+        }
+        Insert: {
+          captured_at: string
+          captured_by_name?: string | null
+          created_at?: string
+          deliverable_id: string
+          id?: string
+          label: string
+          proof_media_id?: string | null
+          value_mm: number
+        }
+        Update: {
+          captured_at?: string
+          captured_by_name?: string | null
+          created_at?: string
+          deliverable_id?: string
+          id?: string
+          label?: string
+          proof_media_id?: string | null
+          value_mm?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_deliverable_dimensions_deliverable_id_fkey"
+            columns: ["deliverable_id"]
+            isOneToOne: false
+            referencedRelation: "site_deliverables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_deliverable_dimensions_proof_media_id_fkey"
+            columns: ["proof_media_id"]
+            isOneToOne: false
+            referencedRelation: "site_deliverable_media"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_deliverable_media: {
+        Row: {
+          checksum_sha256: string
+          client_filename: string
+          created_at: string
+          deliverable_id: string
+          derivatives: Json
+          expected_size_bytes: number | null
+          id: string
+          mime_type: string
+          object_path: string
+          processing_error: string | null
+          received_at: string | null
+          received_size_bytes: number | null
+          storage_etag: string | null
+          updated_at: string
+          upload_state: string
+        }
+        Insert: {
+          checksum_sha256: string
+          client_filename: string
+          created_at?: string
+          deliverable_id: string
+          derivatives?: Json
+          expected_size_bytes?: number | null
+          id?: string
+          mime_type: string
+          object_path: string
+          processing_error?: string | null
+          received_at?: string | null
+          received_size_bytes?: number | null
+          storage_etag?: string | null
+          updated_at?: string
+          upload_state?: string
+        }
+        Update: {
+          checksum_sha256?: string
+          client_filename?: string
+          created_at?: string
+          deliverable_id?: string
+          derivatives?: Json
+          expected_size_bytes?: number | null
+          id?: string
+          mime_type?: string
+          object_path?: string
+          processing_error?: string | null
+          received_at?: string | null
+          received_size_bytes?: number | null
+          storage_etag?: string | null
+          updated_at?: string
+          upload_state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_deliverable_media_deliverable_id_fkey"
+            columns: ["deliverable_id"]
+            isOneToOne: false
+            referencedRelation: "site_deliverables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_deliverables: {
+        Row: {
+          attempt_number: number
+          captured_at: string | null
+          captured_by_name: string | null
+          client_attempt_id: string
+          created_at: string
+          delivered_at: string | null
+          id: string
+          item_id: string
+          item_version_id: string
+          payload: Json
+          request_id: string
+          status: string
+        }
+        Insert: {
+          attempt_number: number
+          captured_at?: string | null
+          captured_by_name?: string | null
+          client_attempt_id: string
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          item_id: string
+          item_version_id: string
+          payload?: Json
+          request_id: string
+          status?: string
+        }
+        Update: {
+          attempt_number?: number
+          captured_at?: string | null
+          captured_by_name?: string | null
+          client_attempt_id?: string
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          item_id?: string
+          item_version_id?: string
+          payload?: Json
+          request_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_deliverables_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_deliverables_item_version_id_fkey"
+            columns: ["item_version_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_item_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_deliverables_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "site_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_request_access: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          last_used_at: string | null
+          link_dispatched_at: string | null
+          provider_message_id: string | null
+          request_id: string
+          revoked_at: string | null
+          revoked_reason: string | null
+          status: string
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          last_used_at?: string | null
+          link_dispatched_at?: string | null
+          provider_message_id?: string | null
+          request_id: string
+          revoked_at?: string | null
+          revoked_reason?: string | null
+          status?: string
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          link_dispatched_at?: string | null
+          provider_message_id?: string | null
+          request_id?: string
+          revoked_at?: string | null
+          revoked_reason?: string | null
+          status?: string
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_request_access_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_access_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_access_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "site_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_request_events: {
+        Row: {
+          actor_id: string | null
+          actor_kind: string
+          actor_label: string | null
+          created_at: string
+          dedupe_key: string | null
+          deliverable_id: string | null
+          event_type: string
+          id: string
+          item_id: string | null
+          payload: Json
+          request_id: string
+          sequence_no: number
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_kind: string
+          actor_label?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          deliverable_id?: string | null
+          event_type: string
+          id?: string
+          item_id?: string | null
+          payload?: Json
+          request_id: string
+          sequence_no: number
+        }
+        Update: {
+          actor_id?: string | null
+          actor_kind?: string
+          actor_label?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          deliverable_id?: string | null
+          event_type?: string
+          id?: string
+          item_id?: string | null
+          payload?: Json
+          request_id?: string
+          sequence_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_request_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_events_deliverable_id_fkey"
+            columns: ["deliverable_id"]
+            isOneToOne: false
+            referencedRelation: "site_deliverables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_events_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_events_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "site_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_request_item_versions: {
+        Row: {
+          configuration: Json
+          created_at: string
+          created_by: string
+          guidance: string | null
+          id: string
+          item_id: string
+          kit_code: string
+          room_id: string | null
+          room_name_snapshot: string | null
+          title: string
+          version_number: number
+        }
+        Insert: {
+          configuration?: Json
+          created_at?: string
+          created_by: string
+          guidance?: string | null
+          id?: string
+          item_id: string
+          kit_code: string
+          room_id?: string | null
+          room_name_snapshot?: string | null
+          title: string
+          version_number: number
+        }
+        Update: {
+          configuration?: Json
+          created_at?: string
+          created_by?: string
+          guidance?: string | null
+          id?: string
+          item_id?: string
+          kit_code?: string
+          room_id?: string | null
+          room_name_snapshot?: string | null
+          title?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_request_item_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_item_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_item_versions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_item_versions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_request_items: {
+        Row: {
+          approved_at: string | null
+          client_item_id: string | null
+          created_at: string
+          current_version_id: string | null
+          current_version_number: number
+          id: string
+          redo_note: string | null
+          reopened_at: string | null
+          request_id: string
+          sort_order: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          client_item_id?: string | null
+          created_at?: string
+          current_version_id?: string | null
+          current_version_number?: number
+          id?: string
+          redo_note?: string | null
+          reopened_at?: string | null
+          request_id: string
+          sort_order: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          client_item_id?: string | null
+          created_at?: string
+          current_version_id?: string | null
+          current_version_number?: number
+          id?: string
+          redo_note?: string | null
+          reopened_at?: string | null
+          request_id?: string
+          sort_order?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_request_items_current_version_id_fkey"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_item_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "site_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_requests: {
+        Row: {
+          assignee_name_snapshot: string | null
+          assignee_party_id: string
+          assignee_phone_snapshot: string | null
+          assignee_trade_snapshot: string | null
+          closed_at: string | null
+          consent_status_snapshot: string
+          created_at: string
+          created_by: string
+          due_at: string
+          due_context: string | null
+          due_reminder_sent_at: string | null
+          expires_at: string | null
+          id: string
+          last_dispatched_at: string | null
+          last_nudged_at: string | null
+          note: string | null
+          project_id: string
+          sent_at: string | null
+          status: string
+          unapproved_media_delete_after: string | null
+          updated_at: string
+        }
+        Insert: {
+          assignee_name_snapshot?: string | null
+          assignee_party_id: string
+          assignee_phone_snapshot?: string | null
+          assignee_trade_snapshot?: string | null
+          closed_at?: string | null
+          consent_status_snapshot?: string
+          created_at?: string
+          created_by: string
+          due_at: string
+          due_context?: string | null
+          due_reminder_sent_at?: string | null
+          expires_at?: string | null
+          id?: string
+          last_dispatched_at?: string | null
+          last_nudged_at?: string | null
+          note?: string | null
+          project_id: string
+          sent_at?: string | null
+          status?: string
+          unapproved_media_delete_after?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assignee_name_snapshot?: string | null
+          assignee_party_id?: string
+          assignee_phone_snapshot?: string | null
+          assignee_trade_snapshot?: string | null
+          closed_at?: string | null
+          consent_status_snapshot?: string
+          created_at?: string
+          created_by?: string
+          due_at?: string
+          due_context?: string | null
+          due_reminder_sent_at?: string | null
+          expires_at?: string | null
+          id?: string
+          last_dispatched_at?: string | null
+          last_nudged_at?: string | null
+          note?: string | null
+          project_id?: string
+          sent_at?: string | null
+          status?: string
+          unapproved_media_delete_after?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_requests_assignee_party_id_fkey"
+            columns: ["assignee_party_id"]
+            isOneToOne: false
+            referencedRelation: "project_parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_requests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "site_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sms_conversations: {
         Row: {
@@ -18484,6 +19275,231 @@ export type Database = {
           },
         ]
       }
+      scan_pipeline_runs: {
+        Row: {
+          anchor_count: number | null
+          drawing_ms: number | null
+          event_count: number | null
+          failed_events: number | null
+          first_event_at: string | null
+          ingest_ms: number | null
+          last_error: string | null
+          last_event_at: string | null
+          last_task_attempts: number | null
+          last_task_status: string | null
+          last_task_type: string | null
+          room_file_id: string | null
+          room_file_status: string | null
+          room_file_version: number | null
+          scan_id: string | null
+          scan_name: string | null
+          scan_status: string | null
+          solve_ms: number | null
+          tolerance_class: string | null
+          unverified: boolean | null
+          user_id: string | null
+          wall_seconds: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_scans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scan_tolerance_distribution: {
+        Row: {
+          max_tolerance_mm: number | null
+          measurement_count: number | null
+          min_tolerance_mm: number | null
+          p50_tolerance_mm: number | null
+          p95_tolerance_mm: number | null
+          room_file_id: string | null
+          scan_id: string | null
+          tolerance_class: string | null
+          with_tolerance: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_file_measurements_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "room_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["room_file_id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
+        ]
+      }
+      site_binder_current: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string | null
+          deliverable_id: string | null
+          entry_kind: string | null
+          id: string | null
+          item_id: string | null
+          item_version_id: string | null
+          payload: Json | null
+          project_id: string | null
+          request_id: string | null
+          room_id: string | null
+          supersedes_entry_id: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          deliverable_id?: string | null
+          entry_kind?: string | null
+          id?: string | null
+          item_id?: string | null
+          item_version_id?: string | null
+          payload?: Json | null
+          project_id?: string | null
+          request_id?: string | null
+          room_id?: string | null
+          supersedes_entry_id?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          deliverable_id?: string | null
+          entry_kind?: string | null
+          id?: string | null
+          item_id?: string | null
+          item_version_id?: string | null
+          payload?: Json | null
+          project_id?: string | null
+          request_id?: string | null
+          room_id?: string | null
+          supersedes_entry_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_binder_entries_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_deliverable_id_fkey"
+            columns: ["deliverable_id"]
+            isOneToOne: true
+            referencedRelation: "site_deliverables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_item_version_id_fkey"
+            columns: ["item_version_id"]
+            isOneToOne: false
+            referencedRelation: "site_request_item_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "field_activity_summary"
+            referencedColumns: ["project_id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "site_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "project_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_supersedes_entry_id_fkey"
+            columns: ["supersedes_entry_id"]
+            isOneToOne: false
+            referencedRelation: "site_binder_current"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_binder_entries_supersedes_entry_id_fkey"
+            columns: ["supersedes_entry_id"]
+            isOneToOne: false
+            referencedRelation: "site_binder_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_blocked_state: {
         Row: {
           blocked_by_open_item: boolean | null
@@ -18976,6 +19992,48 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      _site_request_append_event: {
+        Args: {
+          p_actor_id?: string
+          p_actor_kind: string
+          p_actor_label?: string
+          p_dedupe_key?: string
+          p_deliverable_id?: string
+          p_event_type: string
+          p_item_id?: string
+          p_payload?: Json
+          p_request_id: string
+        }
+        Returns: string
+      }
+      _site_request_designer_authorized: {
+        Args: { p_project_id: string }
+        Returns: boolean
+      }
+      _site_request_dispatch_result: {
+        Args: {
+          p_access_id?: string
+          p_action: string
+          p_needs_consent?: boolean
+          p_request_id: string
+          p_reused?: boolean
+          p_token?: string
+        }
+        Returns: Json
+      }
+      _site_request_mint_access: {
+        Args: {
+          p_created_by?: string
+          p_expires_at: string
+          p_reason?: string
+          p_request_id: string
+        }
+        Returns: {
+          access_id: string
+          expires_at: string
+          token: string
+        }[]
       }
       accept_design_request: { Args: { p_lead_id: string }; Returns: Json }
       accept_workspace_invitation: {
@@ -21022,6 +22080,126 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      site_request_approve_item: {
+        Args: {
+          p_deliverable_id: string
+          p_item_id: string
+          p_room_id?: string
+        }
+        Returns: Json
+      }
+      site_request_builtin_kits: { Args: never; Returns: Json }
+      site_request_close: { Args: { p_request_id: string }; Returns: Json }
+      site_request_create_draft: {
+        Args: {
+          p_assignee_party_id: string
+          p_due_at: string
+          p_due_context?: string
+          p_items?: Json
+          p_note?: string
+          p_project_id: string
+        }
+        Returns: string
+      }
+      site_request_dispatch_after_consent: {
+        Args: { p_expires_at?: string; p_request_id: string }
+        Returns: Json
+      }
+      site_request_dispatch_context: {
+        Args: { p_action: string; p_request_id: string }
+        Returns: Json
+      }
+      site_request_guest_ack_upload: {
+        Args: {
+          p_media_id: string
+          p_size_bytes?: number
+          p_storage_etag?: string
+          p_token_hash: string
+        }
+        Returns: Json
+      }
+      site_request_guest_bootstrap: {
+        Args: { p_token_hash: string }
+        Returns: Json
+      }
+      site_request_guest_create_upload: {
+        Args: {
+          p_checksum_sha256: string
+          p_client_attempt_id: string
+          p_filename: string
+          p_item_version_id: string
+          p_mime_type: string
+          p_size_bytes?: number
+          p_token_hash: string
+        }
+        Returns: Json
+      }
+      site_request_guest_deliver: {
+        Args: {
+          p_captured_at?: string
+          p_captured_by_name?: string
+          p_client_attempt_id: string
+          p_dimensions?: Json
+          p_item_version_id: string
+          p_payload?: Json
+          p_token_hash: string
+        }
+        Returns: Json
+      }
+      site_request_mark_dispatched: {
+        Args: {
+          p_access_id: string
+          p_dispatched_at?: string
+          p_provider_message_id?: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
+      site_request_nudge: {
+        Args: { p_note?: string; p_request_id: string }
+        Returns: Json
+      }
+      site_request_process_lifecycle: {
+        Args: { p_now?: string }
+        Returns: Json
+      }
+      site_request_record_dispatch: {
+        Args: {
+          p_action: string
+          p_error?: string
+          p_provider_message_id?: string
+          p_request_id: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      site_request_redo_item: {
+        Args: { p_item_id: string; p_note: string }
+        Returns: Json
+      }
+      site_request_resend: {
+        Args: { p_expires_at?: string; p_request_id: string }
+        Returns: Json
+      }
+      site_request_revise_item: {
+        Args: {
+          p_configuration?: Json
+          p_guidance?: string
+          p_item_id: string
+          p_kit_code: string
+          p_room_id?: string
+          p_title: string
+        }
+        Returns: string
+      }
+      site_request_revoke_access: {
+        Args: { p_reason?: string; p_request_id: string }
+        Returns: Json
+      }
+      site_request_send: {
+        Args: { p_expires_at?: string; p_request_id: string }
+        Returns: Json
       }
       stripe_balance_tx_ingest: {
         Args: { p_cursor: string; p_txns: Json }
