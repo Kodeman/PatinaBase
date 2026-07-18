@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   handleSiteRequestGuest,
   type SiteRequestGuestDeps,
+  siteRequestGuestRpcDirective,
   type UploadBinding,
 } from "./lib.ts";
 
@@ -25,7 +26,11 @@ async function rpc<T>(
   args: Record<string, unknown>,
 ): Promise<T | null> {
   const { data, error } = await admin().rpc(name, args);
-  if (error) throw new Error(`${name}_failed`);
+  if (error) {
+    const directive = siteRequestGuestRpcDirective(error);
+    if (directive) throw directive;
+    throw new Error(`${name}_failed`);
+  }
   return (Array.isArray(data) ? data[0] : data) as T | null;
 }
 
@@ -71,7 +76,18 @@ const deps: SiteRequestGuestDeps = {
     const { data, error } = await admin()
       .storage.from(bucketId)
       .download(objectPath);
-    if (error || !data || data.size !== expectedSizeBytes) {
+    if (error) {
+      const status = Number(error.statusCode);
+      const message = error.message.toLowerCase();
+      if (
+        [400, 404].includes(status) &&
+        (message.includes("not found") || message.includes("does not exist"))
+      ) {
+        return { exists: false, verified: false, sizeBytes: 0 };
+      }
+      throw new Error("verify_upload_failed");
+    }
+    if (!data || data.size !== expectedSizeBytes) {
       return { exists: !!data, verified: false, sizeBytes: data?.size ?? 0 };
     }
     const digest = await crypto.subtle.digest(

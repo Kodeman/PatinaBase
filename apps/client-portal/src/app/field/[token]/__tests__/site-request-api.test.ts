@@ -95,7 +95,7 @@ describe("site request guest API", () => {
     });
   });
 
-  it("keeps network, receipt propagation, and server failures retryable", () => {
+  it("keeps network, receipt propagation, and unexpected dependency failures retryable", () => {
     expect(classifySiteRequestFailure(new Error("offline"))).toMatchObject({
       retryable: true,
       errorClass: "transient",
@@ -106,7 +106,14 @@ describe("site request guest API", () => {
       ),
     ).toMatchObject({ retryable: true, errorClass: "transient" });
     expect(
-      classifySiteRequestFailure(new SiteRequestApiError(503, "request_failed")),
+      classifySiteRequestFailure(
+        new SiteRequestApiError(503, "temporary_service_unavailable"),
+      ),
+    ).toMatchObject({ retryable: true, errorClass: "transient" });
+    expect(
+      classifySiteRequestFailure(
+        new SiteRequestApiError(502, "invalid_upload_path"),
+      ),
     ).toMatchObject({ retryable: true, errorClass: "transient" });
     expect(
       classifySiteRequestFailure(

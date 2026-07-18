@@ -114,6 +114,30 @@ describe("durable site request queue", () => {
     expect((await store.get(record().id))?.id).toBe(record().id);
   });
 
+  it("keeps an unexpected guest dependency outage in retriable IndexedDB state", async () => {
+    const store = new MemorySiteRequestQueueStore();
+    const request = jest.fn().mockRejectedValue(
+      new SiteRequestApiError(503, "temporary_service_unavailable"),
+    );
+    const result = await processQueuedDelivery(
+      record(),
+      "opaque-token",
+      store,
+      deps(request),
+    );
+    expect(result).toMatchObject({
+      state: "failed",
+      retryCount: 1,
+      lastError: "temporary_delivery_failure",
+      nextRetryAt: "2026-07-17T15:05:01.000Z",
+    });
+    expect(shouldAutomaticallyRetrySiteRequest(result)).toBe(true);
+    expect(await store.get(record().id)).toMatchObject({
+      state: "failed",
+      terminalReason: undefined,
+    });
+  });
+
   it("persists ended access as terminal and never schedules or repeats it", async () => {
     const store = new MemorySiteRequestQueueStore();
     const request = jest

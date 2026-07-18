@@ -3,6 +3,7 @@ set -euo pipefail
 
 SITE_DB_URL="${SITE_DB_URL:-postgresql://postgres:postgres@127.0.0.1:54322/postgres}"
 SITE_API_URL="${SITE_API_URL:-http://127.0.0.1:54321}"
+SITE_FIELD_TZ="${FIELD_TZ:-America/Chicago}"
 
 case "$SITE_DB_URL $SITE_API_URL" in
   *127.0.0.1* | *localhost*) ;;
@@ -11,6 +12,16 @@ case "$SITE_DB_URL $SITE_API_URL" in
     exit 2
     ;;
 esac
+
+# This probe asserts provider acknowledgement, so quiet-hour deferral is an
+# invalid fixture condition rather than a flaky timeout. Serve the function
+# with the same FIELD_TZ and run between 08:00 (inclusive) and 21:00
+# (exclusive); quiet-hour queueing is covered independently by core.test.ts.
+SITE_LOCAL_HOUR="$(TZ="$SITE_FIELD_TZ" date +%H)"
+if (( 10#$SITE_LOCAL_HOUR < 8 || 10#$SITE_LOCAL_HOUR >= 21 )); then
+  echo "Dispatch live probe requires active SMS hours (08:00-21:00 $SITE_FIELD_TZ); current hour is $SITE_LOCAL_HOUR." >&2
+  exit 2
+fi
 
 DESIGNER_ID="a0000000-0000-0000-0000-000000000004"
 PROJECT_ID="f3750000-0000-4000-8000-000000000101"
@@ -159,8 +170,62 @@ END
 SQL
 echo "live authenticated send + link-free consent gate: pass"
 
-psql "$SITE_DB_URL" -v ON_ERROR_STOP=1 -q \
-  -c "UPDATE public.project_parties SET sms_consent_status = 'granted' WHERE id = '$PARTY_ID';"
+psql "$SITE_DB_URL" -v ON_ERROR_STOP=1 -q <<SQL
+BEGIN;
+UPDATE public.project_parties
+SET sms_consent_status = 'granted'
+WHERE id = '$PARTY_ID';
+DO \$\$
+BEGIN
+  ASSERT EXISTS (
+    SELECT 1 FROM public.site_request_dispatch_outbox
+    WHERE request_id = '$REQUEST_ID'
+      AND action = 'consent-granted'
+      AND status = 'pending'
+  ), 'YES consent did not transactionally enqueue durable work';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.site_request_access WHERE request_id = '$REQUEST_ID'
+  ), 'YES consent enqueue minted access before a worker claim';
+END
+\$\$;
+-- Hold the row past the trigger's best-effort pg_net wake-up. This simulates
+-- an Edge miss while preserving the committed identifier-only recovery work.
+UPDATE public.site_request_dispatch_outbox
+SET available_at = now() + interval '1 hour'
+WHERE request_id = '$REQUEST_ID'
+  AND action = 'consent-granted'
+  AND status = 'pending';
+COMMIT;
+SQL
+
+sleep 0.5
+psql "$SITE_DB_URL" -v ON_ERROR_STOP=1 -At <<SQL >/dev/null
+DO \$\$
+BEGIN
+  ASSERT (
+    SELECT status = 'awaiting_consent'
+    FROM public.site_requests WHERE id = '$REQUEST_ID'
+  ), 'missed eager wake-up must leave request honestly awaiting acknowledgement';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.site_request_access WHERE request_id = '$REQUEST_ID'
+  ), 'missed eager wake-up must not leave an unacknowledged token';
+END
+\$\$;
+UPDATE public.site_request_dispatch_outbox
+SET available_at = now()
+WHERE request_id = '$REQUEST_ID'
+  AND action = 'consent-granted'
+  AND status = 'pending';
+SQL
+
+RECOVERY_STATUS="$(dispatch_as "$SERVICE_ROLE_KEY" '{"action":"lifecycle"}' \
+  "$PROBE_TMP/consent-recovery.json")"
+if [[ "$RECOVERY_STATUS" != "200" ]] || \
+   ! jq -e '.dispatchesSent == 1' "$PROBE_TMP/consent-recovery.json" >/dev/null; then
+  cat "$PROBE_TMP/consent-recovery.json" >&2
+  echo "Lifecycle did not recover the missed YES-consent dispatch (HTTP $RECOVERY_STATUS)." >&2
+  exit 1
+fi
 
 DISPATCHED=0
 for _ in $(seq 1 40); do
@@ -194,7 +259,7 @@ BEGIN
 END
 \$\$;
 SQL
-echo "live YES-consent bridge + acknowledged link dispatch: pass"
+echo "live YES-consent durable enqueue + lifecycle recovery + acknowledged link dispatch: pass"
 
 NUDGE_BODY="$(jq -cn --arg request "$REQUEST_ID" \
   '{action:"nudge",request_id:$request,note:"Checking in from the local probe."}')"

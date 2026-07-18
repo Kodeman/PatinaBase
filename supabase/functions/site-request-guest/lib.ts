@@ -41,6 +41,70 @@ export interface SignedUpload {
   path: string;
 }
 
+export class SiteRequestGuestDirectiveError extends Error {
+  constructor(
+    public readonly status: 404 | 409 | 422,
+    public readonly code:
+      | "invalid_or_expired_link"
+      | "request_conflict"
+      | "receipt_not_ready"
+      | "receipt_checksum_mismatch"
+      | "invalid_delivery",
+  ) {
+    super(code);
+    this.name = "SiteRequestGuestDirectiveError";
+  }
+}
+
+/**
+ * Convert only known, intentional RPC contract failures into guest-facing
+ * directives. Unknown Postgres/dependency errors stay untyped so the handler
+ * returns a generic retryable 5xx instead of falsely terminalizing the queue.
+ */
+export function siteRequestGuestRpcDirective(
+  error: { message?: string },
+): SiteRequestGuestDirectiveError | null {
+  const message = error.message?.trim().toLowerCase() ?? "";
+  if (
+    message === "invalid or expired site request access" ||
+    message === "media does not belong to request"
+  ) {
+    return new SiteRequestGuestDirectiveError(404, "invalid_or_expired_link");
+  }
+  if (
+    [
+      "attempt is already delivered",
+      "idempotent upload intent metadata mismatch",
+      "idempotency key was reused with different delivery data",
+      "item is not open for capture",
+      "item is not open for delivery",
+      "item version is not current for this request",
+      "request is not open for delivery",
+    ].includes(message)
+  ) {
+    return new SiteRequestGuestDirectiveError(409, "request_conflict");
+  }
+  if (message === "storage object receipt not found") {
+    return new SiteRequestGuestDirectiveError(409, "receipt_not_ready");
+  }
+  if (message === "storage object size does not match upload intent") {
+    return new SiteRequestGuestDirectiveError(
+      409,
+      "receipt_checksum_mismatch",
+    );
+  }
+  if (
+    message === "payload must be an object and dimensions an array" ||
+    message.startsWith("k-01 ") ||
+    message.startsWith("k-02 ") ||
+    message.startsWith("dimension label and value_mm") ||
+    message.startsWith("proof media must be")
+  ) {
+    return new SiteRequestGuestDirectiveError(422, "invalid_delivery");
+  }
+  return null;
+}
+
 export interface SiteRequestGuestDeps {
   sha256Hex(rawToken: string): Promise<string>;
   bootstrap(tokenHash: string): Promise<Record<string, unknown> | null>;
@@ -219,13 +283,13 @@ export async function handleSiteRequestGuest(
     return json({ error: "invalid_json" }, 400);
   }
 
-  const action = actionFrom(req, body);
-  const tokenHash = await deps.sha256Hex(rawToken);
-  if (!SHA256_PATTERN.test(tokenHash)) {
-    return json({ error: "request_failed" }, 500);
-  }
-
   try {
+    const action = actionFrom(req, body);
+    const tokenHash = await deps.sha256Hex(rawToken);
+    if (!SHA256_PATTERN.test(tokenHash)) {
+      return json({ error: "temporary_service_unavailable" }, 503);
+    }
+
     if (action === "bootstrap") {
       const data = await deps.bootstrap(tokenHash);
       return data
@@ -336,9 +400,13 @@ export async function handleSiteRequestGuest(
     }
 
     return json({ error: "unknown_action" }, 404);
-  } catch {
+  } catch (error) {
+    if (error instanceof SiteRequestGuestDirectiveError) {
+      return json({ error: error.code }, error.status);
+    }
     // Fail closed and keep Postgres/storage implementation details out of the
-    // public token-authenticated response.
-    return json({ error: "request_conflict" }, 409);
+    // public token-authenticated response. Unexpected outages remain
+    // retryable so durable guest work is not falsely marked terminal.
+    return json({ error: "temporary_service_unavailable" }, 503);
   }
 }
