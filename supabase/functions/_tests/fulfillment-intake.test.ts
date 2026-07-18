@@ -198,6 +198,7 @@ Deno.test('idempotent re-delivery: two intakeInlinePI calls for the same PI both
 // ─── runIntakeWorker (worker path: claim → fetch → RPC → complete) ──────────
 
 Deno.test('runIntakeWorker: claims fulfillment_intake tasks, re-fetches the PI, calls the RPC, completes done', async () => {
+  const claims: Array<Record<string, unknown>> = [];
   const completions: Array<Record<string, unknown>> = [];
   const claimedTasks = [
     {
@@ -211,7 +212,10 @@ Deno.test('runIntakeWorker: claims fulfillment_intake tasks, re-fetches the PI, 
   const sb = createFakeSupabase(
     {},
     {
-      claim_agent_tasks: () => ({ data: claimedTasks, error: null }),
+      claim_agent_tasks: (args) => {
+        claims.push(args);
+        return { data: claimedTasks, error: null };
+      },
       complete_agent_task: (args) => {
         completions.push(args);
         return { data: null, error: null };
@@ -227,14 +231,17 @@ Deno.test('runIntakeWorker: claims fulfillment_intake tasks, re-fetches the PI, 
       return Promise.resolve(minimalPi(id, 9900));
     },
     now: () => new Date(),
+    worker: 'fulfillment-intake-test-worker',
   };
 
   const result = await runIntakeWorker(deps);
 
   assertEquals(result, { processed: 1, failed: 0 });
   assertEquals(fetched, ['pi_worker_1']);
+  assertEquals(claims[0].p_worker, 'fulfillment-intake-test-worker');
   assertEquals(completions.length, 1);
   assertEquals(completions[0].p_outcome, 'done');
+  assertEquals(completions[0].p_actor, 'fulfillment-intake-test-worker');
   assertEquals((completions[0].p_artifacts as Record<string, unknown>).order_id, 'order-uuid-1');
 });
 
@@ -253,12 +260,17 @@ Deno.test('runIntakeWorker: a task claimed without fetchPaymentIntent wired comp
       },
     },
   );
-  const deps: IntakeDeps = { supabase: sb as unknown as IntakeDeps['supabase'], now: () => new Date() };
+  const deps: IntakeDeps = {
+    supabase: sb as unknown as IntakeDeps['supabase'],
+    now: () => new Date(),
+    worker: 'fulfillment-intake-failure-worker',
+  };
 
   const result = await runIntakeWorker(deps);
 
   assertEquals(result, { processed: 0, failed: 1 });
   assertEquals(completions[0].p_outcome, 'failed');
+  assertEquals(completions[0].p_actor, 'fulfillment-intake-failure-worker');
 });
 
 Deno.test('runIntakeWorker: no claimed tasks → processed/failed both 0, no RPC calls', async () => {

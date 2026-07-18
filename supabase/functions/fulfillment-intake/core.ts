@@ -62,10 +62,11 @@ export async function intakeInlinePI(
 
 /** Worker path: claim fulfillment_intake tasks, re-fetch each PI, call the RPC, complete the task. */
 export async function runIntakeWorker(deps: IntakeDeps): Promise<{ processed: number; failed: number }> {
+  const worker = deps.worker ?? 'fulfillment-intake';
   const tasks = await claimAgentTasks(deps.supabase, {
     taskTypes: ['fulfillment_intake'],
     batch: 20,
-    worker: deps.worker ?? 'fulfillment-intake',
+    worker,
     visibilityTimeout: '60 seconds',
   });
   let processed = 0,
@@ -78,12 +79,12 @@ export async function runIntakeWorker(deps: IntakeDeps): Promise<{ processed: nu
       // Idempotent: if this PI already produced an order (redelivery, or a
       // retried task after a partial prior failure), the RPC returns the
       // SAME order_id and writes nothing further — this branch is a no-op.
-      const orderId = await intakeInlinePI(deps, pi, 'fulfillment-intake');
+      const orderId = await intakeInlinePI(deps, pi, worker);
       await completeAgentTask(deps.supabase, {
         id: t.id,
         outcome: 'done',
         artifacts: { order_id: orderId },
-        actor: 'fulfillment-intake',
+        actor: worker,
       });
       processed++;
     } catch (err) {
@@ -91,7 +92,7 @@ export async function runIntakeWorker(deps: IntakeDeps): Promise<{ processed: nu
         id: t.id,
         outcome: 'failed',
         error: String(err),
-        actor: 'fulfillment-intake',
+        actor: worker,
       });
       failed++;
     }

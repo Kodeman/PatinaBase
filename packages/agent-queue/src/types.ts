@@ -91,11 +91,12 @@ export interface ClaimInput {
 export interface CompleteInput {
   id: string;
   outcome: CompleteOutcome;
+  /** Must exactly match the WORKER_ID that claimed the current lease. */
+  actor: string;
   artifacts?: Json;
   confidence?: number | null;
   error?: string | null;
   fatal?: boolean;
-  actor?: string | null;
 }
 
 export interface ReviewInput {

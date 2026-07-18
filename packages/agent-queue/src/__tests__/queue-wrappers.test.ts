@@ -26,6 +26,16 @@ function mockFromClient(result: { data?: unknown; error?: unknown; count?: numbe
 }
 
 describe('createAgentQueue — request shapes', () => {
+  it('requires the completion actor at the TypeScript boundary', () => {
+    const { client } = mockRpcClient(null);
+    const q = createAgentQueue(client);
+    if (false) {
+      // @ts-expect-error Completion identity is the lease-owner contract.
+      void q.complete({ id: 't1', outcome: 'done' });
+    }
+    expect(q).toBeDefined();
+  });
+
   it('enqueue maps camelCase input onto p_* RPC args', async () => {
     const { client, rpc } = mockRpcClient({ id: 't1', status: 'queued' });
     const q = createAgentQueue(client);

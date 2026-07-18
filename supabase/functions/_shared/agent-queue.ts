@@ -1,9 +1,10 @@
 // _shared/agent-queue.ts — Deno twin of packages/agent-queue.
 //
-// Thin RPC wrappers over the Agent OS queue RPCs (00297) for edge functions
-// using their service-role client. ALL logic (state machine, backoff,
-// idempotency, audit) lives in Postgres — keep these signatures in sync with
-// packages/agent-queue/src/index.ts. No state machine here.
+// Thin RPC wrappers over the Agent OS queue RPCs (00297; completion ownership
+// hardened in 00378) for edge functions using their service-role client. ALL
+// logic (state machine, backoff, idempotency, audit) lives in Postgres — keep
+// these signatures in sync with packages/agent-queue/src/index.ts. No state
+// machine here.
 
 // ─── Types (public.agent_tasks, 00297) ───────────────────────────────────────
 
@@ -129,11 +130,12 @@ export async function completeAgentTask(
   opts: {
     id: string;
     outcome: 'done' | 'awaiting_review' | 'failed';
+    /** Must exactly match the WORKER_ID that claimed the current lease. */
+    actor: string;
     artifacts?: Record<string, unknown>;
     confidence?: number | null;
     error?: string | null;
     fatal?: boolean;
-    actor?: string | null;
   },
 ): Promise<void> {
   unwrap<null>(

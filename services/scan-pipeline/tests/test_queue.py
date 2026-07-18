@@ -1,5 +1,6 @@
-"""Queue client — the M1 lost-race guard: a completion rejected because the task
-is no longer running is swallowed (logged, returns False), never crashes."""
+"""Queue client — the M1 lost-race guard: a completion rejected because this
+worker no longer owns the lease is swallowed (logged, returns False), never
+crashes."""
 
 from __future__ import annotations
 
@@ -48,7 +49,13 @@ def _client(post_resp, get_resp=None):
 
 
 def test_complete_done_lost_race_returns_false_no_raise():
-    resp = _Resp(400, text='{"code":"P0001","message":"complete_agent_task: task 1 is done (must be running)"}')
+    resp = _Resp(
+        400,
+        text=(
+            '{"code":"P0001","message":"complete_agent_task: lease ownership '
+            'rejected for task 1 (locked_by worker-b, p_actor test-worker)"}'
+        ),
+    )
     qc = _client(resp)
     # must NOT raise; returns False (we lost the race)
     assert qc.complete_done("task-1", {"validated": True}) is False

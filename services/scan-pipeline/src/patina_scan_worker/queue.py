@@ -1,4 +1,4 @@
-"""PostgREST RPC client for the ``agent_tasks`` queue (00297).
+"""PostgREST RPC client for the ``agent_tasks`` queue (00297 + 00378).
 
 The worker holds a service-role client (the queue RPCs are granted to
 service_role only). This wraps the five RPCs the worker calls:
@@ -8,9 +8,10 @@ human-review states (awaiting_review/approved/rejected) and always leaves
 
 Lost-race guard (M1): a job whose lease expired (VISIBILITY_TIMEOUT) can be
 re-claimed and completed by a second worker while this one is still finishing.
-The completing RPC then rejects with "must be running" / "not found". That is a
-benign race, not a crash: the completion methods swallow it, log a warning
-naming both workers, and let the loop continue.
+The completing RPC then rejects with the stable "lease ownership rejected"
+message (or a terminal/not-found message if the new owner already finished).
+That is a benign race, not a crash: the completion methods swallow it, log a
+warning naming both workers, and let the loop continue.
 """
 
 from __future__ import annotations
@@ -26,8 +27,8 @@ from .errors import TransientError
 log = logging.getLogger("patina_scan_worker.queue")
 
 # Substrings in a complete_agent_task rejection that mean "someone else owns this
-# task now" — a lost race, not an error (00297 §5.3 RAISE messages).
-_LOST_RACE_MARKERS = ("must be running", "not found")
+# task now" — a lost race, not an error (00378 plus 00297 terminal messages).
+_LOST_RACE_MARKERS = ("lease ownership rejected", "must be running", "not found")
 
 
 class LostRaceError(RuntimeError):
