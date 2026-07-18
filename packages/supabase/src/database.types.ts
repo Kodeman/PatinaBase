@@ -13724,6 +13724,7 @@ export type Database = {
           anchor_count: number
           certificate: Json
           created_at: string
+          drawings: Json
           dxf_url: string | null
           generated_at: string | null
           generation_error: string | null
@@ -13741,6 +13742,7 @@ export type Database = {
           anchor_count?: number
           certificate?: Json
           created_at?: string
+          drawings?: Json
           dxf_url?: string | null
           generated_at?: string | null
           generation_error?: string | null
@@ -13758,6 +13760,7 @@ export type Database = {
           anchor_count?: number
           certificate?: Json
           created_at?: string
+          drawings?: Json
           dxf_url?: string | null
           generated_at?: string | null
           generation_error?: string | null
@@ -19675,6 +19678,15 @@ export type Database = {
       fulfillment_confirm_split: {
         Args: { p_actor: string; p_order_id: string }
         Returns: Json
+      }
+      fulfillment_create_vendor: {
+        Args: {
+          p_actor?: string
+          p_name: string
+          p_notes?: string
+          p_website?: string
+        }
+        Returns: string
       }
       fulfillment_enrich_ledger_lines: {
         Args: { p_lines: Json }

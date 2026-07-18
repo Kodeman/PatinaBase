@@ -217,10 +217,29 @@ export const fulfillmentNotifyService = {
   },
 };
 
+export interface CreateVendorInput {
+  name: string;
+  website?: string;
+  notes?: string;
+}
+
+export interface CreateVendorResult {
+  vendorId: string;
+}
+
 export const fulfillmentVendorsService = {
   /** Vendor Directory list (spec §7) — every vendor, profiled or not. */
   async listVendors(): Promise<VendorDirectoryRow[]> {
     return request<VendorDirectoryRow[]>('/api/admin/fulfillment/vendors');
+  },
+
+  /** Creates a bare vendors row via fulfillment_create_vendor (00371, I15) —
+   *  no protocol sheet yet; the caller routes to the profile editor next. */
+  async createVendor(input: CreateVendorInput): Promise<CreateVendorResult> {
+    return request<CreateVendorResult>('/api/admin/fulfillment/vendors/create', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
   },
 
   /** A vendor's name + profile (null if none yet) + its trailing-90d scorecard. */
