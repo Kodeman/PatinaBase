@@ -94,18 +94,86 @@ public struct SiteRequestMedia: Codable, Hashable, Identifiable, Sendable {
     public let objectPath: String
     public let mimeType: String
     public let checksumSHA256: String
-    public let derivativePath: String?
+    public let previewPath: String?
     public let caption: String?
+    /// An authenticated, short-lived presentation capability. This value is
+    /// intentionally omitted from Codable so it never enters durable payloads.
+    public let signedDisplayURL: URL?
 
     public init(id: String, objectPath: String, mimeType: String,
-                checksumSHA256: String, derivativePath: String? = nil,
-                caption: String? = nil) {
+                checksumSHA256: String, previewPath: String? = nil,
+                caption: String? = nil, signedDisplayURL: URL? = nil) {
         self.id = id
         self.objectPath = objectPath
         self.mimeType = mimeType
         self.checksumSHA256 = checksumSHA256
-        self.derivativePath = derivativePath
+        self.previewPath = previewPath
         self.caption = caption
+        self.signedDisplayURL = signedDisplayURL
+    }
+
+    public func withSignedDisplayURL(_ url: URL?) -> SiteRequestMedia {
+        SiteRequestMedia(
+            id: id, objectPath: objectPath, mimeType: mimeType,
+            checksumSHA256: checksumSHA256, previewPath: previewPath,
+            caption: caption, signedDisplayURL: url)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, objectPath, mimeType, checksumSHA256, previewPath, caption
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        objectPath = try container.decode(String.self, forKey: .objectPath)
+        mimeType = try container.decode(String.self, forKey: .mimeType)
+        checksumSHA256 = try container.decode(String.self, forKey: .checksumSHA256)
+        previewPath = try container.decodeIfPresent(String.self, forKey: .previewPath)
+        caption = try container.decodeIfPresent(String.self, forKey: .caption)
+        signedDisplayURL = nil
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(objectPath, forKey: .objectPath)
+        try container.encode(mimeType, forKey: .mimeType)
+        try container.encode(checksumSHA256, forKey: .checksumSHA256)
+        try container.encodeIfPresent(previewPath, forKey: .previewPath)
+        try container.encodeIfPresent(caption, forKey: .caption)
+    }
+}
+
+public enum SiteRequestMediaDisplayPath {
+    /// Returns only safe paths within the original immutable attempt. A valid
+    /// preview derivative is attempted first; the original is always the
+    /// fallback. Bucket names and signed query strings never belong here.
+    public static func candidates(originalPath: String, previewPath: String?) -> [String] {
+        guard isSafeRelativePath(originalPath) else { return [] }
+        var result: [String] = []
+        if let previewPath,
+           isPreview(previewPath, forOriginal: originalPath) {
+            result.append(previewPath)
+        }
+        if !result.contains(originalPath) { result.append(originalPath) }
+        return result
+    }
+
+    private static func isPreview(_ previewPath: String, forOriginal originalPath: String) -> Bool {
+        guard isSafeRelativePath(previewPath) else { return false }
+        let original = originalPath.split(separator: "/").map(String.init)
+        let preview = previewPath.split(separator: "/").map(String.init)
+        guard preview.count == original.count + 1,
+              preview.count >= 3,
+              preview[preview.count - 2] == "derivatives" else { return false }
+        return Array(preview.dropLast(2)) == Array(original.dropLast())
+    }
+
+    private static func isSafeRelativePath(_ path: String) -> Bool {
+        guard !path.isEmpty, !path.hasPrefix("/"), !path.contains("\\") else { return false }
+        let components = path.split(separator: "/", omittingEmptySubsequences: false)
+        return components.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
     }
 }
 
@@ -245,6 +313,15 @@ public struct SiteRequestItem: Codable, Hashable, Identifiable, Sendable {
         self.measureDefinitions = measureDefinitions
         self.photoShots = photoShots
     }
+
+    public func replacingMedia(_ media: [SiteRequestMedia]) -> SiteRequestItem {
+        SiteRequestItem(
+            id: id, requestID: requestID, versionID: versionID, version: version,
+            kit: kit, title: title, guidance: guidance, roomID: roomID,
+            roomName: roomName, status: status, dimensions: dimensions,
+            media: media, redoNote: redoNote, deliverableID: deliverableID,
+            measureDefinitions: measureDefinitions, photoShots: photoShots)
+    }
 }
 
 public struct SiteRequestSummary: Codable, Hashable, Identifiable, Sendable {
@@ -348,6 +425,15 @@ public struct SiteBinderEntry: Codable, Hashable, Identifiable, Sendable {
         self.approvedAt = approvedAt
         self.dimensions = dimensions
         self.media = media
+    }
+
+    public func replacingMedia(_ media: [SiteRequestMedia]) -> SiteBinderEntry {
+        SiteBinderEntry(
+            id: id, requestID: requestID, itemID: itemID,
+            itemVersionID: itemVersionID, roomID: roomID, title: title,
+            kind: kind, sourceDeliverableID: sourceDeliverableID,
+            supersedesEntryID: supersedesEntryID, approvedBy: approvedBy,
+            approvedAt: approvedAt, dimensions: dimensions, media: media)
     }
 }
 

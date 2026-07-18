@@ -330,6 +330,8 @@ private struct SiteRequestScreen: View {
                 .frame(minHeight: 72)
                 .padding(8)
                 .overlay(Rectangle().stroke(CaptureColor.line2))
+                .accessibilityLabel("Redo instructions for measurements")
+                .accessibilityIdentifier("siteRequest.measureRedoNote")
             HStack {
                 Button("Approve") { Task { await approveMeasure() } }.sitePrimary()
                 Button("Send back") { Task { await sendRedo(kit: .measureSet) } }
@@ -344,7 +346,9 @@ private struct SiteRequestScreen: View {
             let item = selectedReviewItem(kit: .detailPhotos)
             title(item?.title ?? "Detail photos",
                   subtitle: "\(item?.media.count ?? 0) immutable originals · display derivatives")
-            mediaGrid
+            mediaGrid(
+                item?.media ?? [],
+                emptyMessage: "No delivered photos are available for review.")
             sectionLabel("SEND BACK — NOTE REQUIRED")
             HStack { reasonChip("Glare"); reasonChip("Wrong angle"); reasonChip("Closer") }
             TextEditor(text: $redoNote)
@@ -352,6 +356,7 @@ private struct SiteRequestScreen: View {
                 .frame(minHeight: 96)
                 .padding(8)
                 .overlay(Rectangle().stroke(CaptureColor.line2))
+                .accessibilityLabel("Redo instructions for photos")
                 .accessibilityIdentifier("siteRequest.redoNote")
             Text("The pro receives this text verbatim. Only this item reopens.")
                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
@@ -421,6 +426,7 @@ private struct SiteRequestScreen: View {
                         if !entry.media.isEmpty {
                             Text("\(entry.media.count) approved photos")
                                 .font(CaptureType.callout)
+                            mediaGrid(entry.media)
                         }
                         Text("Approved by \(entry.approvedBy) · \(entry.approvedAt.formatted(date: .abbreviated, time: .shortened))")
                             .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
@@ -450,6 +456,9 @@ private struct SiteRequestScreen: View {
                                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
                             Text("Source delivery \(entry.sourceDeliverableID)")
                                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
+                            if !entry.media.isEmpty {
+                                mediaGrid(entry.media)
+                            }
                         }
                         Spacer()
                         status(currentBinderEntryIDs.contains(entry.id) ? "CURRENT" : "SUPERSEDED")
@@ -1081,18 +1090,78 @@ private struct SiteRequestScreen: View {
             .font(CaptureType.eyebrow).foregroundStyle(CaptureColor.verdigrisInk)
     }
 
-    private var mediaGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-            ForEach(selectedReviewItem(kit: .detailPhotos)?.media ?? []) { media in
-                ZStack(alignment: .bottomLeading) {
-                    CaptureColor.paper2
-                    Image(systemName: "photo").font(.title).foregroundStyle(CaptureColor.inkSoft)
-                    Text(media.caption ?? "Photo").font(CaptureType.footnote)
-                        .padding(8).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(CaptureColor.paper.opacity(0.9))
-                }.frame(height: 120).overlay(Rectangle().stroke(CaptureColor.line))
+    @ViewBuilder private func mediaGrid(
+        _ media: [SiteRequestMedia], emptyMessage: String? = nil
+    ) -> some View {
+        if media.isEmpty {
+            if let emptyMessage {
+                card {
+                    Text(emptyMessage)
+                        .font(CaptureType.callout)
+                        .foregroundStyle(CaptureColor.inkSoft)
+                }
+            }
+        } else {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(media) { mediaItem in
+                    mediaTile(mediaItem)
+                }
             }
         }
+    }
+
+    private func mediaTile(_ media: SiteRequestMedia) -> some View {
+        let label = media.caption ?? "Delivered photo"
+        return ZStack(alignment: .bottomLeading) {
+            CaptureColor.paper2
+            if let url = media.signedDisplayURL {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        mediaState(
+                            systemImage: "arrow.down.circle",
+                            title: "Loading preview")
+                            .accessibilityLabel("Loading \(label)")
+                    case let .success(image):
+                        image.resizable().scaledToFill()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .clipped()
+                            .accessibilityLabel(label)
+                    case .failure:
+                        mediaState(
+                            systemImage: "exclamationmark.triangle",
+                            title: "Preview unavailable")
+                            .accessibilityLabel("\(label), preview unavailable")
+                    @unknown default:
+                        mediaState(
+                            systemImage: "exclamationmark.triangle",
+                            title: "Preview unavailable")
+                            .accessibilityLabel("\(label), preview unavailable")
+                    }
+                }
+            } else {
+                mediaState(
+                    systemImage: "exclamationmark.triangle",
+                    title: "Preview unavailable")
+                    .accessibilityLabel("\(label), preview unavailable")
+            }
+            Text(label).font(CaptureType.footnote)
+                .lineLimit(2)
+                .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                .background(CaptureColor.paper.opacity(0.9))
+        }
+        .frame(height: 150)
+        .overlay(Rectangle().stroke(CaptureColor.line))
+    }
+
+    private func mediaState(systemImage: String, title: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.title2)
+            Text(title).font(CaptureType.footnote)
+        }
+        .foregroundStyle(CaptureColor.inkSoft)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func reasonChip(_ value: String) -> some View {
@@ -1148,6 +1217,7 @@ private struct SiteRequestScreen: View {
                 .keyboardType(.numbersAndPunctuation)
                 .font(CaptureType.monoBody).padding(14)
                 .overlay(Rectangle().stroke(CaptureColor.line2))
+                .accessibilityLabel(label)
         }
     }
 

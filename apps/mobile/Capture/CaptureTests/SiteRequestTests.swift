@@ -207,6 +207,40 @@ struct SiteRequestTests {
         #expect(SiteRequestMediaMIMEType.value(forFilename: "unknown") == "application/octet-stream")
     }
 
+    @Test func mediaDisplayPathPrefersValidatedPreviewThenOriginal() {
+        let original = "11111111-1111-1111-1111-111111111111/"
+            + "22222222-2222-2222-2222-222222222222/1/original.heic"
+        let preview = "11111111-1111-1111-1111-111111111111/"
+            + "22222222-2222-2222-2222-222222222222/1/derivatives/media_1600.jpg"
+        #expect(SiteRequestMediaDisplayPath.candidates(
+            originalPath: original, previewPath: preview) == [preview, original])
+
+        let foreignPreview = "33333333-3333-3333-3333-333333333333/"
+            + "22222222-2222-2222-2222-222222222222/1/derivatives/media_1600.jpg"
+        #expect(SiteRequestMediaDisplayPath.candidates(
+            originalPath: original, previewPath: foreignPreview) == [original])
+        #expect(SiteRequestMediaDisplayPath.candidates(
+            originalPath: original, previewPath: "../private.jpg") == [original])
+    }
+
+    @Test func signedMediaCapabilityNeverEntersDurableEncoding() throws {
+        let signedURL = try #require(URL(
+            string: "https://storage.example.invalid/object?token=secret-capability"))
+        let media = SiteRequestMedia(
+            id: "media", objectPath: "request/version/1/original.jpg",
+            mimeType: "image/jpeg", checksumSHA256: String(repeating: "a", count: 64),
+            previewPath: "request/version/1/derivatives/media_1600.jpg",
+            caption: "Wide context", signedDisplayURL: signedURL)
+        let encoded = try JSONEncoder().encode(media)
+        let encodedText = try #require(String(data: encoded, encoding: .utf8))
+        #expect(!encodedText.contains("secret-capability"))
+        #expect(!encodedText.contains("signedDisplayURL"))
+
+        let decoded = try JSONDecoder().decode(SiteRequestMedia.self, from: encoded)
+        #expect(decoded.signedDisplayURL == nil)
+        #expect(decoded.previewPath == media.previewPath)
+    }
+
     @Test func uploadIDsRemainUniqueAcrossRetry() {
         #expect(SiteRequestUploadIDs.appending("media-1", to: ["media-1"]) == ["media-1"])
         #expect(SiteRequestUploadIDs.appending("media-2", to: ["media-1"]) == ["media-1", "media-2"])

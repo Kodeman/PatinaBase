@@ -42,7 +42,7 @@ public enum SiteRequestFixtures {
             objectPath: "site-requests/req-site-001/version-photo-001/attempt-1/photo-\(index).jpg",
             mimeType: "image/jpeg",
             checksumSHA256: String(repeating: "\(index)", count: 64),
-            derivativePath: "site-requests/req-site-001/version-photo-001/attempt-1/photo-\(index)-display.jpg",
+            previewPath: "site-requests/req-site-001/version-photo-001/attempt-1/derivatives/media-\(index)_1600.jpg",
             caption: ["Wide context", "Straight on", "Left return", "Grout detail"][index - 1])
     }
 
