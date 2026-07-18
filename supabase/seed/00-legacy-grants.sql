@@ -3251,3 +3251,15 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.sweep_scan_pipeline_ingest() TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00371_fulfillment_create_vendor.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.fulfillment_create_vendor(text, text, text, text) FROM public, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00371_fulfillment_create_vendor.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.fulfillment_create_vendor(text, text, text, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
