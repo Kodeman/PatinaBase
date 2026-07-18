@@ -19,14 +19,21 @@ import CaptureKit
 @Observable
 final class SiteScanAnchorModel {
     private let capture: any AnchorCapturing
+    /// Room's larger plan dimension (metres) for the coach heuristic; nil ⇒ absolute
+    /// floor only (M4 · item 4).
+    private let roomLargerPlanDimensionMeters: Double?
 
     var pendingCount = 0
     var spanMeters: Double?
     var anchorCount = 0
     var lastTapMissed = false
+    /// True right after a SHORT span is committed — drives the transient coach nudge
+    /// (advisory only; never blocks). Cleared when the next tap sequence begins.
+    var lastSpanWasShort = false
 
-    init(capture: any AnchorCapturing) {
+    init(capture: any AnchorCapturing, roomLargerPlanDimensionMeters: Double? = nil) {
         self.capture = capture
+        self.roomLargerPlanDimensionMeters = roomLargerPlanDimensionMeters
         anchorCount = capture.capturedAnchors.count
     }
 
@@ -35,6 +42,7 @@ final class SiteScanAnchorModel {
         lastTapMissed = !hit
         pendingCount = capture.pendingEndpoints.count
         spanMeters = capture.pendingSpanMeters
+        lastSpanWasShort = false          // starting a new anchor — clear the nudge
     }
 
     func canAdd(_ text: String) -> Bool {
@@ -43,7 +51,16 @@ final class SiteScanAnchorModel {
 
     func addAnchor(_ text: String) {
         guard let mm = AnchorMeasurementParser.parseMillimetres(text) else { return }
-        _ = capture.commitAnchor(measuredValueMillimetres: mm, label: "span \(anchorCount + 1)")  // ESCALATE label
+        let record = capture.commitAnchor(measuredValueMillimetres: mm,
+                                          label: "span \(anchorCount + 1)")  // ESCALATE label
+        // Nudge only for a SHORT horizontal span — heights are never "short spans".
+        if let record, record.spanKind == .span {
+            lastSpanWasShort = AnchorCoach.classifySpan(
+                lengthMeters: record.modelSpanMeters,
+                roomLargerPlanDimensionMeters: roomLargerPlanDimensionMeters) == .short
+        } else {
+            lastSpanWasShort = false
+        }
         anchorCount = capture.capturedAnchors.count
         pendingCount = capture.pendingEndpoints.count
         spanMeters = nil
@@ -55,9 +72,24 @@ final class SiteScanAnchorModel {
         pendingCount = 0
         spanMeters = nil
         lastTapMissed = false
+        lastSpanWasShort = false
     }
 
     var isUnverified: Bool { AnchorGate.isUnverified(anchorCount: anchorCount) }
+
+    // MARK: - Anchor coach (advisory; never blocks completion — R108.5)
+
+    /// The captured set reduced to long-span + height counts.
+    var coachProgress: AnchorCoach.Progress {
+        AnchorCoach.summarize(anchors: capture.capturedAnchors,
+                              roomLargerPlanDimensionMeters: roomLargerPlanDimensionMeters)
+    }
+    /// Count-free next-step clause the instruction bar shows beneath the tap hint.
+    var coachNextAction: String { AnchorCoach.nextActionText(for: coachProgress) }
+    /// Full progress prompt (with recipe step) for the a11y label.
+    var coachProgressPrompt: String { AnchorCoach.progressPrompt(for: coachProgress) }
+    /// SOFT recipe check (≥2 long + 1 height) — advisory surface, not a gate.
+    var meetsRecipe: Bool { coachProgress.meetsRecipe }
 }
 
 struct SiteScanAnchorStep: View {
@@ -97,7 +129,9 @@ struct SiteScanAnchorStep: View {
         .task {
             analytics.screen("screen.F2.anchors")
             if anchor == nil, let capture = model.session as? AnchorCapturing {
-                anchor = SiteScanAnchorModel(capture: capture)
+                anchor = SiteScanAnchorModel(
+                    capture: capture,
+                    roomLargerPlanDimensionMeters: model.roomLargerPlanDimensionMeters)
             }
         }
     }
@@ -127,12 +161,34 @@ struct SiteScanAnchorStep: View {
             Text(headline)
                 .font(CaptureType.footnote)
                 .foregroundStyle(CaptureColor.paper2)
+            coachLine
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 18)
         .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(anchor?.coachProgressPrompt ?? ""))
+    }
+
+    /// The M4 anchor-coach nudge (advisory only, R108.5): a SHORT-span warning right
+    /// after a stubby span, otherwise the next-step guidance toward SC-08's recipe
+    /// (two long spans + one ceiling height), or a quiet confirmation once met.
+    @ViewBuilder private var coachLine: some View {
+        if anchor?.lastSpanWasShort == true {
+            Label(AnchorCoach.shortSpanNudge, systemImage: "arrow.up.left.and.arrow.down.right")
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.warning)   // ESCALATE placeholder copy
+        } else if anchor?.meetsRecipe == true {
+            Label(anchor?.coachNextAction ?? "", systemImage: "checkmark.seal")
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.success)   // ESCALATE placeholder copy
+        } else if let next = anchor?.coachNextAction {
+            Label(next, systemImage: "ruler")
+                .font(CaptureType.footnote)
+                .foregroundStyle(CaptureColor.paper2)     // ESCALATE placeholder copy
+        }
     }
 
     private var headline: String {

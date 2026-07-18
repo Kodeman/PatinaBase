@@ -110,3 +110,99 @@ struct AnchorTests {
         #expect(try JSONDecoder().decode([AnchorRecord].self, from: data) == [a, b])
     }
 }
+
+// MARK: - Anchor coach (M4 · item 4 — SC-08 accuracy-recipe nudge, soft gate R108.5)
+
+struct AnchorCoachTests {
+
+    private func span(_ meters: Double) -> AnchorRecord {
+        AnchorRecord(id: UUID().uuidString.lowercased(), index: 0, label: "s",
+                     spanKind: .span, entryMethod: .typed,
+                     endpointA: .init(x: 0, y: 0, z: 0), endpointB: .init(x: meters, y: 0, z: 0),
+                     modelSpanMeters: meters, measuredValueMm: Int(meters * 1000))
+    }
+    private func height(_ meters: Double) -> AnchorRecord {
+        AnchorRecord(id: UUID().uuidString.lowercased(), index: 0, label: "h",
+                     spanKind: .height, entryMethod: .typed,
+                     endpointA: .init(x: 0, y: 0, z: 0), endpointB: .init(x: 0, y: meters, z: 0),
+                     modelSpanMeters: meters, measuredValueMm: Int(meters * 1000))
+    }
+    private func progress(_ anchors: [AnchorRecord], room: Double? = nil) -> AnchorCoach.Progress {
+        AnchorCoach.summarize(anchors: anchors, roomLargerPlanDimensionMeters: room)
+    }
+
+    // MARK: Classification boundaries
+
+    @Test func classifiesShortByAbsoluteFloor() {
+        #expect(AnchorCoach.shortSpanCeilingMeters == 2.5)
+        // Absolute floor, no room dimension. Boundary is EXCLUSIVE: exactly 2.5 m is LONG.
+        #expect(AnchorCoach.classifySpan(lengthMeters: 2.49, roomLargerPlanDimensionMeters: nil) == .short)
+        #expect(AnchorCoach.classifySpan(lengthMeters: 2.5, roomLargerPlanDimensionMeters: nil) == .long)
+        #expect(AnchorCoach.classifySpan(lengthMeters: 4.0, roomLargerPlanDimensionMeters: nil) == .long)
+    }
+
+    @Test func classifiesShortByHalfRoom() {
+        // Room 8 m across ⇒ half = 4 m. A 3 m span clears the absolute floor but is
+        // < half-room ⇒ SHORT; exactly half-room ⇒ LONG (exclusive boundary).
+        #expect(AnchorCoach.classifySpan(lengthMeters: 3.0, roomLargerPlanDimensionMeters: 8.0) == .short)
+        #expect(AnchorCoach.classifySpan(lengthMeters: 4.0, roomLargerPlanDimensionMeters: 8.0) == .long)
+        #expect(AnchorCoach.classifySpan(lengthMeters: 5.0, roomLargerPlanDimensionMeters: 8.0) == .long)
+        // A ≤ 0 room dimension is ignored — absolute floor only.
+        #expect(AnchorCoach.classifySpan(lengthMeters: 3.0, roomLargerPlanDimensionMeters: 0) == .long)
+    }
+
+    // MARK: Recipe detection (≥2 long + 1 height)
+
+    @Test func summarizeCountsLongSpansAndHeights() {
+        // long, short (excluded), height, long
+        let p = progress([span(4.0), span(2.0), height(2.4), span(5.0)])
+        #expect(p.longSpanCount == 2)
+        #expect(p.heightCount == 1)
+        #expect(p.meetsRecipe)
+    }
+
+    @Test func meetsRecipeNeedsTwoLongPlusHeight() {
+        #expect(!progress([span(4), span(4)]).meetsRecipe)                 // no height
+        #expect(!progress([span(4), height(2.4)]).meetsRecipe)            // only one long
+        #expect(!progress([span(2), span(2), height(2.4)]).meetsRecipe)   // both spans short
+        #expect(progress([span(4), span(4), height(2.4)]).meetsRecipe)    // recipe met
+    }
+
+    // MARK: Prompt-sequence progression
+
+    @Test func nextStepProgression() {
+        #expect(AnchorCoach.nextStep(for: progress([])) == .addLongSpan)
+        #expect(AnchorCoach.nextStep(for: progress([span(4)])) == .addLongSpan)
+        #expect(AnchorCoach.nextStep(for: progress([span(4), span(4)])) == .addHeight)
+        #expect(AnchorCoach.nextStep(for: progress([span(4), span(4), height(2.4)])) == .complete)
+        // A short span does NOT advance the long-span requirement.
+        #expect(AnchorCoach.nextStep(for: progress([span(2), span(2)])) == .addLongSpan)
+    }
+
+    @Test func progressPromptStrings() {
+        #expect(AnchorCoach.progressPrompt(for: progress([]))
+                == "Anchor 1 of 3 — add a long span — a full wall or a diagonal")
+        #expect(AnchorCoach.progressPrompt(for: progress([span(4)]))
+                == "Anchor 2 of 3 — add another long span")
+        #expect(AnchorCoach.progressPrompt(for: progress([span(4), span(4)]))
+                == "Anchor 3 of 3 — add a ceiling height")
+        #expect(AnchorCoach.progressPrompt(for: progress([span(4), span(4), height(2.4)]))
+                == "Accuracy recipe met — two long spans and a ceiling height")
+        #expect(AnchorCoach.shortSpanNudge == "Longer spans pin accuracy — try a full wall or a diagonal")
+    }
+
+    // MARK: Soft gate — meeting the recipe is NEVER required to finish (R108.5)
+
+    @Test func recipeIsAdvisoryNotAGate() {
+        // Three SHORT spans clear the anchor gate (≥ 3 ⇒ not unverified) yet miss the
+        // recipe — completion is still allowed; the coach adds no gate of its own.
+        let shorties = [span(2), span(2), span(2)]
+        #expect(!AnchorGate.isUnverified(anchorCount: shorties.count))
+        #expect(!progress(shorties).meetsRecipe)
+        // And a set that DOES meet the recipe is likewise not unverified — the two
+        // signals are independent, neither blocks finishing.
+        let recipe = [span(4), span(4), height(2.4)]
+        #expect(progress(recipe).meetsRecipe)
+        #expect(!AnchorGate.isUnverified(anchorCount: recipe.count))
+    }
+}

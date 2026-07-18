@@ -40,6 +40,18 @@ final class SiteScanHostModel {
     /// Editable scan name — seeded from F1's handoff, tweaked in F3, sent in F4.
     var name: String
 
+    /// The room's larger plan dimension (metres) for the anchor coach's long/short
+    /// heuristic (M4 · item 4) — best-effort from the live RoomPlan room; nil on the
+    /// mock/sim, where the coach falls back to the absolute short-span floor.
+    var roomLargerPlanDimensionMeters: Double? {
+        #if canImport(RoomPlan)
+        if let roomSession = session as? RoomPlanScanSession, let d = roomSession.dimensionsMeters {
+            return max(d.x, d.z)
+        }
+        #endif
+        return nil
+    }
+
     private let siteScan: any SiteScanService
     private var eventTask: Task<Void, Never>?
 
