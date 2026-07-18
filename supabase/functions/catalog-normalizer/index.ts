@@ -17,10 +17,12 @@ import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supa
 import { createInferenceClient } from '../_shared/aesthete.ts';
 import {
   claimAgentTasks,
-  completeAgentTaskIfOwned,
-  createLeaseOwner,
   enqueueAgentTask,
 } from '../_shared/agent-queue.ts';
+import {
+  completeAgentTaskIfOwned,
+  createLeaseOwner,
+} from '../_shared/agent-queue-lease.ts';
 import { runNormalizer, type NormalizerDeps } from './core.ts';
 import type { ExistingProductFields } from './normalize-row.ts';
 

@@ -12,10 +12,12 @@
 // returned the first time.
 import {
   claimAgentTasks,
-  completeAgentTaskIfOwned,
-  createLeaseOwner,
   type RpcClient,
 } from '../_shared/agent-queue.ts';
+import {
+  completeAgentTaskIfOwned,
+  createLeaseOwner,
+} from '../_shared/agent-queue-lease.ts';
 
 const WORKER_LABEL = 'fulfillment-intake';
 

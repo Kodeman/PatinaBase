@@ -2,9 +2,10 @@
 """Prove claim_agent_tasks uses row locks + SKIP LOCKED across real sessions.
 
 This runner is deliberately local-only. It creates two uniquely keyed,
-committed ``scan_pipeline.refine`` fixtures, holds session A's claim transaction
-at an advisory-lock barrier, then lets session B claim while A still owns the
-first row lock. Cleanup targets only the two generated idempotency keys.
+committed fixtures under a per-run task-type namespace, holds session A's claim
+transaction at an advisory-lock barrier, then lets session B claim while A
+still owns the first row lock. A third, differently typed owned fixture proves
+the claim filter is exact. Cleanup targets only the generated idempotency keys.
 
 The database and migration are not started or applied by this script. Example:
 
@@ -108,14 +109,29 @@ def _start_psql(
     sql: str,
     variables: Dict[str, str],
     app_name: str,
+    *,
+    close_stdin: bool = True,
 ) -> subprocess.Popen[str]:
-    return subprocess.Popen(
-        _psql_command(psql, db_url, variables) + ["-c", sql],
+    process = subprocess.Popen(
+        _psql_command(psql, db_url, variables),
+        stdin=subprocess.PIPE,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=_psql_env(app_name),
     )
+    if process.stdin is None:
+        process.terminate()
+        raise RuntimeError(f"psql ({app_name}) did not expose stdin")
+    process.stdin.write(sql)
+    process.stdin.flush()
+    if close_stdin:
+        process.stdin.close()
+        # communicate() tries to flush stdin when the attribute is non-None.
+        # The full script is delivered and EOF is required for psql to exit, so
+        # clear the closed handle before later communicate() calls.
+        process.stdin = None
+    return process
 
 
 def _process_output(process: subprocess.Popen[str], name: str) -> str:
@@ -195,6 +211,28 @@ def _wait_for_barrier_state(
     raise RuntimeError(f"timed out waiting for advisory barrier to be {state}")
 
 
+def _release_barrier_holder(
+    process: subprocess.Popen[str],
+    *,
+    commit: bool,
+) -> None:
+    """Release the holder through its own open psql session.
+
+    Keeping stdin open lets the backend sit idle-in-transaction with the
+    advisory xact lock. COMMIT/ROLLBACK then releases it cooperatively; killing
+    a client during a server-side sleep can leave the backend locked until the
+    sleep finishes.
+    """
+
+    if process.stdin is None:
+        raise RuntimeError("barrier holder stdin is already closed")
+    process.stdin.write("COMMIT;\n\\q\n" if commit else "ROLLBACK;\n\\q\n")
+    process.stdin.flush()
+    process.stdin.close()
+    process.stdin = None
+    _process_output(process, "barrier holder")
+
+
 def _claim_line(output: str, session_name: str) -> Tuple[str, str]:
     rows = [line.strip() for line in output.splitlines() if "|" in line]
     if len(rows) != 1:
@@ -215,7 +253,7 @@ SELECT set_config('app.actor', :'cleanup_actor', true);
 CREATE TEMP TABLE owned_skip_locked_fixtures ON COMMIT DROP AS
 SELECT id
   FROM public.agent_tasks
- WHERE idempotency_key IN (:'fixture_key_a', :'fixture_key_b');
+ WHERE idempotency_key IN (:'fixture_key_a', :'fixture_key_b', :'fixture_key_decoy');
 DELETE FROM public.agent_tasks t
  USING owned_skip_locked_fixtures f
  WHERE t.id = f.id;
@@ -240,6 +278,9 @@ def run_proof(db_url: str, psql: str) -> Tuple[str, str]:
     variables = {
         "fixture_key_a": fixture_prefix + "a",
         "fixture_key_b": fixture_prefix + "b",
+        "fixture_key_decoy": fixture_prefix + "decoy",
+        "proof_task_type": f"scan_pipeline.refine.proof.{run_uuid}",
+        "decoy_task_type": f"scan_pipeline.refine.proof.decoy.{run_uuid}",
         "setup_actor": f"skip-locked-setup:{run_uuid}",
         "cleanup_actor": f"skip-locked-cleanup:{run_uuid}",
         "worker_a": f"skip-locked-worker-a:{run_uuid}",
@@ -255,7 +296,7 @@ def run_proof(db_url: str, psql: str) -> Tuple[str, str]:
         preflight_sql = """
 SELECT count(*)
   FROM public.agent_tasks
- WHERE idempotency_key IN (:'fixture_key_a', :'fixture_key_b');
+ WHERE idempotency_key IN (:'fixture_key_a', :'fixture_key_b', :'fixture_key_decoy');
 """
         preflight = _run_psql(
             psql,
@@ -267,42 +308,26 @@ SELECT count(*)
         if preflight != "0":
             raise RuntimeError("unique fixture preflight unexpectedly found existing rows")
 
-        conflict_sql = """
-SELECT count(*)
-  FROM public.agent_tasks
- WHERE task_type = 'scan_pipeline.refine'
-   AND (
-     (status = 'queued' AND run_after <= now())
-     OR (status = 'running' AND locked_at < now() - interval '15 minutes')
-   );
-"""
-        conflicts = _run_psql(
-            psql,
-            db_url,
-            conflict_sql,
-            {},
-            f"patina-skip-locked-conflict-check-{run_token}",
-        ).strip()
-        if conflicts != "0":
-            raise RuntimeError(
-                "local queue already has claimable scan_pipeline.refine rows; "
-                "refusing to claim anything outside this proof's fixtures"
-            )
-
         setup_started = True
         setup_sql = """
 BEGIN;
 SELECT set_config('app.actor', :'setup_actor', true);
 SELECT (public.enqueue_agent_task(
-  p_task_type => 'scan_pipeline.refine',
+  p_task_type => :'proof_task_type',
   p_priority => 1,
   p_idempotency_key => :'fixture_key_a',
   p_actor => :'setup_actor'
 )).id;
 SELECT (public.enqueue_agent_task(
-  p_task_type => 'scan_pipeline.refine',
+  p_task_type => :'proof_task_type',
   p_priority => 1,
   p_idempotency_key => :'fixture_key_b',
+  p_actor => :'setup_actor'
+)).id;
+SELECT (public.enqueue_agent_task(
+  p_task_type => :'decoy_task_type',
+  p_priority => 1,
+  p_idempotency_key => :'fixture_key_decoy',
   p_actor => :'setup_actor'
 )).id;
 UPDATE public.agent_tasks
@@ -330,16 +355,17 @@ SELECT id::text || '|' || idempotency_key
             raise AssertionError(f"expected two committed fixtures, got {fixture_rows!r}")
         fixture_a_id, fixture_b_id = fixture_rows[0][0], fixture_rows[1][0]
 
-        holder_sql = (
-            f"SELECT pg_advisory_lock({BARRIER_CLASS}, {barrier_object}); "
-            "SELECT pg_sleep(60);"
-        )
+        holder_sql = f"""
+BEGIN;
+SELECT pg_advisory_xact_lock({BARRIER_CLASS}, {barrier_object});
+"""
         holder = _start_psql(
             psql,
             db_url,
             holder_sql,
             {},
             f"patina-skip-locked-holder-{run_token}",
+            close_stdin=False,
         )
         _wait_for_barrier_state(
             psql, db_url, barrier_object, True, holder, run_token
@@ -349,8 +375,8 @@ SELECT id::text || '|' || idempotency_key
 BEGIN;
 SELECT id::text || '|' || locked_by
   FROM public.claim_agent_tasks(
-    ARRAY['scan_pipeline.refine'], 1, :'worker_a', '15 minutes');
-SELECT pg_advisory_lock({BARRIER_CLASS}, {barrier_object});
+    ARRAY[:'proof_task_type'], 1, :'worker_a', '15 minutes');
+SELECT pg_advisory_xact_lock({BARRIER_CLASS}, {barrier_object});
 COMMIT;
 """
         session_a = _start_psql(
@@ -372,7 +398,7 @@ COMMIT;
 BEGIN;
 SELECT id::text || '|' || locked_by
   FROM public.claim_agent_tasks(
-    ARRAY['scan_pipeline.refine'], 1, :'worker_b', '15 minutes');
+    ARRAY[:'proof_task_type'], 1, :'worker_b', '15 minutes');
 COMMIT;
 """
         session_b_output = _run_psql(
@@ -384,7 +410,7 @@ COMMIT;
         )
         claim_b_id, claim_b_worker = _claim_line(session_b_output, "session B")
 
-        _stop_process(holder)
+        _release_barrier_holder(holder, commit=True)
         holder = None
         session_a_output = _process_output(session_a, "session A")
         session_a = None
@@ -426,6 +452,24 @@ SELECT id::text || '|' || locked_by || '|' || status
         if final_rows != expected_rows:
             raise AssertionError(f"unexpected committed lease rows: {final_rows!r}")
 
+        decoy_sql = """
+SELECT status || '|' || coalesce(locked_by, '')
+  FROM public.agent_tasks
+ WHERE idempotency_key = :'fixture_key_decoy';
+"""
+        decoy_state = _run_psql(
+            psql,
+            db_url,
+            decoy_sql,
+            variables,
+            f"patina-skip-locked-decoy-{run_token}",
+        ).strip()
+        if decoy_state != "queued|":
+            raise AssertionError(
+                "claim filter touched the differently typed owned fixture: "
+                f"{decoy_state!r}"
+            )
+
         audit_sql = """
 SELECT t.idempotency_key || '|' || a.actor || '|' ||
        (a.new_row ->> 'locked_by') || '|' || count(*)::text
@@ -458,11 +502,42 @@ SELECT t.idempotency_key || '|' || a.actor || '|' ||
                 "each overlapping claim must leave exactly one independently "
                 f"attributed queued->running audit: {audit_rows!r}"
             )
+        decoy_audits_sql = """
+SELECT count(*)
+  FROM public.agent_task_audit a
+  JOIN public.agent_tasks t ON t.id = a.task_id
+ WHERE t.idempotency_key = :'fixture_key_decoy'
+   AND a.op = 'UPDATE'
+   AND a.old_row ->> 'status' = 'queued'
+   AND a.new_row ->> 'status' = 'running';
+"""
+        decoy_audits = _run_psql(
+            psql,
+            db_url,
+            decoy_audits_sql,
+            variables,
+            f"patina-skip-locked-decoy-audit-{run_token}",
+        ).strip()
+        if decoy_audits != "0":
+            raise AssertionError(
+                "claim filter left a queued->running audit for the decoy fixture"
+            )
         return claim_a_id, claim_b_id
     except BaseException as exc:
         primary_error = exc
         raise
     finally:
+        if holder is not None and holder.poll() is None:
+            try:
+                _release_barrier_holder(holder, commit=False)
+                holder = None
+            except BaseException as release_exc:
+                if primary_error is None:
+                    raise
+                print(
+                    f"WARNING: barrier-holder release also failed: {release_exc}",
+                    file=sys.stderr,
+                )
         _stop_process(holder)
         # Releasing the holder lets A finish normally. If A is still alive for
         # another reason, terminate only this runner's own psql process.

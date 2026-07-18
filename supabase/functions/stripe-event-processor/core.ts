@@ -26,11 +26,13 @@
 
 import {
   claimAgentTasks,
-  completeAgentTaskIfOwned,
-  createLeaseOwner,
   type AgentTask,
   type RpcClient,
 } from '../_shared/agent-queue.ts';
+import {
+  completeAgentTaskIfOwned,
+  createLeaseOwner,
+} from '../_shared/agent-queue-lease.ts';
 
 // Re-export so callers/tests can name the claimed-task type from this module.
 export type { AgentTask } from '../_shared/agent-queue.ts';

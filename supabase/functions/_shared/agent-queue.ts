@@ -1,10 +1,9 @@
 // _shared/agent-queue.ts — Deno twin of packages/agent-queue.
 //
-// Thin RPC wrappers over the Agent OS queue RPCs (00297; completion ownership
-// hardened in 00378) for edge functions using their service-role client. ALL
-// logic (state machine, backoff, idempotency, audit) lives in Postgres — keep
-// these signatures in sync with packages/agent-queue/src/index.ts. No state
-// machine here.
+// Thin RPC wrappers over the Agent OS queue RPCs (00297) for edge functions
+// using their service-role client. ALL logic (state machine, backoff,
+// idempotency, audit) lives in Postgres — keep these signatures in sync with
+// packages/agent-queue/src/index.ts. No state machine here.
 
 // ─── Types (public.agent_tasks, 00297) ───────────────────────────────────────
 
@@ -60,38 +59,6 @@ function unwrap<T>(res: { data: unknown; error: { message: string } | null }): T
   return res.data as T;
 }
 
-/**
- * Create the identity for one queue lease.
- *
- * The readable prefix is useful in locked_by/audit rows; the UUID prevents two
- * overlapping invocations of the same deployed worker from sharing authority.
- * Tests may pass an explicit unique suffix for deterministic assertions.
- */
-export function createLeaseOwner(baseLabel: string, uniqueId: string = crypto.randomUUID()): string {
-  const base = baseLabel.trim();
-  const suffix = uniqueId.trim();
-  if (!base) throw new Error('createLeaseOwner: baseLabel must be non-empty');
-  if (!suffix) throw new Error('createLeaseOwner: uniqueId must be non-empty');
-  return `${base}:${suffix}`;
-}
-
-function isLeaseLostCompletionMessage(message: string): boolean {
-  return (
-    message.includes('complete_agent_task: lease ownership rejected') ||
-    (message.includes('complete_agent_task: task ') &&
-      (message.includes(' not found') || message.includes('(must be running)')))
-  );
-}
-
-/** Stable, typed signal that a completion arrived after its lease ended. */
-export class AgentTaskLeaseLostError extends Error {
-  override name = 'AgentTaskLeaseLostError';
-}
-
-export function isAgentTaskLeaseLostError(error: unknown): error is AgentTaskLeaseLostError {
-  return error instanceof AgentTaskLeaseLostError;
-}
-
 // ─── Wrappers (keep in sync with packages/agent-queue) ───────────────────────
 
 export interface EnqueueArgs {
@@ -142,13 +109,7 @@ export async function enqueueAgentTask(client: RpcClient, args: EnqueueArgs): Pr
 /** Lease up to `batch` tasks (FOR UPDATE SKIP LOCKED); flips them to running. */
 export async function claimAgentTasks(
   client: RpcClient,
-  opts: {
-    taskTypes: string[] | null;
-    batch: number;
-    /** Collision-resistant identity for this claim invocation. */
-    worker: string;
-    visibilityTimeout?: string;
-  },
+  opts: { taskTypes: string[] | null; batch: number; worker: string; visibilityTimeout?: string },
 ): Promise<AgentTask[]> {
   return (
     unwrap<AgentTask[]>(
@@ -163,45 +124,29 @@ export async function claimAgentTasks(
 }
 
 /** Report a claimed task's outcome. Backoff/park are decided in Postgres. */
-export interface CompleteArgs {
-  id: string;
-  outcome: 'done' | 'awaiting_review' | 'failed';
-  /** Must exactly match the collision-resistant identity that claimed this lease. */
-  actor: string;
-  artifacts?: Record<string, unknown>;
-  confidence?: number | null;
-  error?: string | null;
-  fatal?: boolean;
-}
-
-export async function completeAgentTask(client: RpcClient, opts: CompleteArgs): Promise<void> {
-  const res = await client.rpc('complete_agent_task', {
-    p_id: opts.id,
-    p_outcome: opts.outcome,
-    p_artifacts: opts.artifacts,
-    p_confidence: opts.confidence,
-    p_error: opts.error,
-    p_fatal: opts.fatal,
-    p_actor: opts.actor,
-  });
-  if (res.error && isLeaseLostCompletionMessage(res.error.message)) {
-    throw new AgentTaskLeaseLostError(res.error.message);
-  }
-  unwrap<null>(res);
-}
-
-/** Complete when still owner; return false for an expected expiry/reclaim race. */
-export async function completeAgentTaskIfOwned(
+export async function completeAgentTask(
   client: RpcClient,
-  opts: CompleteArgs,
-): Promise<boolean> {
-  try {
-    await completeAgentTask(client, opts);
-    return true;
-  } catch (error) {
-    if (isAgentTaskLeaseLostError(error)) return false;
-    throw error;
-  }
+  opts: {
+    id: string;
+    outcome: 'done' | 'awaiting_review' | 'failed';
+    artifacts?: Record<string, unknown>;
+    confidence?: number | null;
+    error?: string | null;
+    fatal?: boolean;
+    actor?: string | null;
+  },
+): Promise<void> {
+  unwrap<null>(
+    await client.rpc('complete_agent_task', {
+      p_id: opts.id,
+      p_outcome: opts.outcome,
+      p_artifacts: opts.artifacts,
+      p_confidence: opts.confidence,
+      p_error: opts.error,
+      p_fatal: opts.fatal,
+      p_actor: opts.actor,
+    }),
+  );
 }
 
 /** Apply a human review decision to an awaiting_review task. */
