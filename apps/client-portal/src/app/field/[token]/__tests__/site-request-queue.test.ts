@@ -61,7 +61,7 @@ describe("durable site request queue", () => {
         uploadUrl: "signed",
         uploadToken: "token",
         objectPath: "path",
-        bucketId: "site-request-media",
+        bucketId: "site-requests",
         deliverableId: "delivery",
       })
       .mockResolvedValueOnce({ receipt: { upload_state: "received" } })
@@ -114,7 +114,7 @@ describe("durable site request queue", () => {
         uploadUrl: "signed",
         uploadToken: "token",
         objectPath: "path",
-        bucketId: "site-request-media",
+        bucketId: "site-requests",
         deliverableId: "delivery",
       })
       .mockResolvedValueOnce({ receipt: { upload_state: "received" } })
@@ -144,7 +144,7 @@ describe("durable site request queue", () => {
         uploadUrl: "signed",
         uploadToken: "token",
         objectPath: "path",
-        bucketId: "site-request-media",
+        bucketId: "site-requests",
         deliverableId: "delivery",
       })
       .mockRejectedValueOnce(new SiteRequestApiError(409, "receipt_not_ready"))

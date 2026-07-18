@@ -19,7 +19,7 @@ const item = (kit: "K-01" | "K-02", id: string): SiteRequestItem => ({
     title: kit === "K-01" ? "Kitchen west wall" : "Vanity alcove",
     room_id: null,
     room_name: kit === "K-01" ? "Kitchen" : "Primary bath",
-    guidance: {},
+    guidance: null,
     configuration:
       kit === "K-01"
         ? { dimensions: [{ id: "a", label: "A · Run length" }] }

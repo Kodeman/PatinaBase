@@ -24,9 +24,9 @@ const binding: UploadBinding = {
   deliverable_id: DELIVERABLE,
   media_id: MEDIA,
   attempt_number: 1,
-  bucket_id: "site-request-media",
+  bucket_id: "site-requests",
   object_path:
-    `site-requests/55555555-5555-4555-8555-555555555555/${ITEM_VERSION}/1/proof.jpg`,
+    `55555555-5555-4555-8555-555555555555/${ITEM_VERSION}/1/proof.jpg`,
   upload_state: "pending",
 };
 
@@ -170,7 +170,7 @@ Deno.test(
         createUpload: () =>
           Promise.resolve({
             ...binding,
-            object_path: "site-requests/foreign/escape.jpg",
+            object_path: "foreign/escape.jpg",
           }),
       }),
     );

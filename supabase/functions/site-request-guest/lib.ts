@@ -155,13 +155,13 @@ function validImmutablePath(binding: UploadBinding): boolean {
     !Number.isSafeInteger(binding.attempt_number) ||
     binding.attempt_number < 1 ||
     binding.attempt_number > 10_000 ||
-    binding.bucket_id !== "site-request-media" ||
+    binding.bucket_id !== "site-requests" ||
     binding.object_path.includes("..")
   ) {
     return false;
   }
   const prefix =
-    `site-requests/${binding.request_id}/${binding.item_version_id}/${binding.attempt_number}/`;
+    `${binding.request_id}/${binding.item_version_id}/${binding.attempt_number}/`;
   return (
     binding.object_path.startsWith(prefix) &&
     binding.object_path.length > prefix.length

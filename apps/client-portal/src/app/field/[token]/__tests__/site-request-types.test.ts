@@ -9,7 +9,7 @@ import {
 
 const item = (
   configuration: Record<string, unknown>,
-  guidance: Record<string, unknown> = {},
+  guidance: string | null = null,
 ): SiteRequestItem => ({
   id: "item",
   current_version_id: "version",

@@ -155,8 +155,8 @@ function MeasureCapture({
             {item.version.room_name}
           </p>
         )}
-        {typeof item.version.guidance.note === "string" && (
-          <p className="type-body mt-3">{item.version.guidance.note}</p>
+        {item.version.guidance && (
+          <p className="type-body mt-3">{item.version.guidance}</p>
         )}
       </div>
 

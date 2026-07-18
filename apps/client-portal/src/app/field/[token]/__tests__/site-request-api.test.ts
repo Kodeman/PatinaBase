@@ -75,7 +75,7 @@ describe("site request guest API", () => {
         {
           mediaId: "media",
           deliverableId: "delivery",
-          bucketId: "site-request-media",
+          bucketId: "site-requests",
           objectPath: "immutable.jpg",
           uploadUrl: "https://storage.test/signed",
           uploadToken: "signed",

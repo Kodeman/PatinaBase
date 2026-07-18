@@ -1696,7 +1696,7 @@ BEGIN
   END IF;
   v_filename := left(v_filename, 180);
   v_path := v_access.request_id::text || '/' || p_item_version_id::text || '/'
-    || p_client_attempt_id::text || '/' || left(lower(p_checksum_sha256), 12)
+    || v_deliverable.attempt_number::text || '/' || left(lower(p_checksum_sha256), 12)
     || '-' || v_filename;
 
   SELECT * INTO v_media

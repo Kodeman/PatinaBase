@@ -142,9 +142,11 @@ const deps: SiteRequestDispatchDeps = {
       p_request_id: context.request_id,
       p_action: action,
       p_provider_message_id: result.twilioSid ?? result.messageId ?? null,
-      p_status: result.sent || result.deferred
-        ? result.deferred ? "deferred" : "sent"
-        : "failed",
+      // The RPC contract intentionally records only terminal send outcomes.
+      // A quiet-hours defer is a durable queue acknowledgement, not a failed
+      // delivery, so represent it as skipped until the shared SMS flusher
+      // advances the underlying sms_messages row.
+      p_status: result.sent ? "sent" : result.deferred ? "skipped" : "failed",
       p_error: result.reason ?? null,
     });
     if (error) throw new Error("record_dispatch_failed");

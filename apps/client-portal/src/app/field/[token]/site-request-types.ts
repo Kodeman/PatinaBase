@@ -35,7 +35,7 @@ export interface SiteRequestItem {
     version_number: number;
     kit_code: SiteRequestKitCode;
     title: string;
-    guidance: Record<string, unknown>;
+    guidance: string | null;
     room_id: string | null;
     room_name: string | null;
     configuration: Record<string, unknown>;
@@ -128,10 +128,8 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 export function measureDefinitions(item: SiteRequestItem): MeasureDefinition[] {
-  const candidates =
-    item.version.configuration.dimensions ??
-    item.version.guidance.dimensions ??
-    item.version.guidance.dim_labels;
+  const candidates = item.version.configuration.dimensions ??
+    item.version.configuration.dim_labels;
   if (!Array.isArray(candidates)) return [{ id: "A", label: "A" }];
   return candidates.slice(0, 20).map((candidate, index) => {
     if (typeof candidate === "string")
@@ -157,10 +155,8 @@ export function measureDefinitions(item: SiteRequestItem): MeasureDefinition[] {
 export function photoShotDefinitions(
   item: SiteRequestItem,
 ): PhotoShotDefinition[] {
-  const candidates =
-    item.version.configuration.shots ??
-    item.version.guidance.shot_list ??
-    item.version.guidance.shots;
+  const candidates = item.version.configuration.shots ??
+    item.version.configuration.shot_list;
   if (!Array.isArray(candidates)) return [{ id: "1", label: "Site photo" }];
   return candidates.slice(0, 30).map((candidate, index) => {
     if (typeof candidate === "string")
