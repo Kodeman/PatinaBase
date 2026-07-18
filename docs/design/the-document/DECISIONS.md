@@ -4209,3 +4209,37 @@ M4 remaining: Leah's device build + flag, pilot day per
 m4-pilot-checklist.md.
 
 *Entries add: I85 · last id = I85*
+
+### R113 · Field Capture M4 passed by Kody's ruling — P1 CLOSED; P2 opens — 2026-07-18
+
+Kody rules M4 passed on his own testing: the full production chain ran
+end-to-end on his real room (I85 receipt — capture through delivered
+Room File, ~13 s compute on his GPU box), and he accepts that as the
+P1 gate. The package's literal gate — Leah retires the tape measure —
+is deferred, not discarded: Leah's device build, flag entry, and pilot
+walk (m4-pilot-checklist.md) carry forward as the first P2-era
+operational item, and her walk remains the first third-party
+validation of the instrument.
+
+**P1 is CLOSED.** Items 1–13 built, reviewed, deployed, and run in
+production. The tolerance-honesty system validated live twice (short
+anchors → flagged, loose, truthful).
+
+**P2 — presence — opens** per deck SC-15: pose refinement (SfM warm-
+started from the ARKit trajectory), dense fusion (TSDF → measurable
+mesh), splat training (SPZ for the browser), the portal walkthrough
+viewer with click-to-measure against the hidden dense mesh, and the
+pinned photo registry. P2 gate: a maker quotes from the Room File
+without a site visit. The GPU (2080 Ti, confirmed live by doctor) now
+earns its keep. A P2 package — scope, numbered plan, gates, and the
+open questions needing rulings — goes to Kody for a ruling session
+before P2 code starts, mirroring the P1 discipline.
+
+Carried P2 ledger: Leah pilot walk; co-designer download walk; A3
+deep-links on shared Room File links; GIN index on
+field_captures.provenance; voice-note audio seam; background-upload
+device edges; sharpness calibration; associative DXF dimensions;
+measurements 'mesh' source-class widening; arrival-arc/schedule-spine
+flag rollout misconfig (flagged 2026-07-18, awaiting Kody's call).
+
+*Entries add: R113 · last id = R113*
