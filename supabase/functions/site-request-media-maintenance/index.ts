@@ -118,11 +118,10 @@ async function deriveOne(
       },
     );
     if (!response.ok) {
-      throw new Error(
-        `inference ${response.status}: ${
-          (await response.text()).slice(0, 180)
-        }`,
-      );
+      // Do not persist the upstream body: a proxy error may echo the signed
+      // source URL. Status is sufficient for retry/operations evidence.
+      await response.body?.cancel().catch(() => undefined);
+      throw new Error(`inference HTTP ${response.status}`);
     }
     const payload = await response.json() as {
       thumb?: Variant;
