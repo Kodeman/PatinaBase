@@ -4243,3 +4243,41 @@ measurements 'mesh' source-class widening; arrival-arc/schedule-spine
 flag rollout misconfig (flagged 2026-07-18, awaiting Kody's call).
 
 *Entries add: R113 · last id = R113*
+
+### R114 · Field Capture P2 boundary — six rulings on the P2 package — 2026-07-18
+
+Ruling session against field-capture-p2-package.md (Part B). All six ruled
+by Kody.
+
+**R114.1 — On-device splat preview: IN, preferred for preview.**
+Overrules the package's server-only recommendation and amends R108.3 for
+P2: on-device splat training/preview joins the capture flow as an
+orientation tool (the Scaniverse-proven capability the deck catalogued).
+Two-tier framing preserves the trust architecture: the DEVICE preview is
+what the designer sees on site — beauty and coverage orientation, never
+measured against; the SERVER-trained splat remains the Room File
+deliverable, and click-to-measure only ever rays the hidden dense mesh.
+The P1 "preview is the gate" coverage scorecard stays authoritative for
+QA; the splat preview augments, never replaces it. iOS is therefore no
+longer untouched in P2 — the preview becomes its own build item on the
+capture side.
+
+**R114.2 — GPU budget ratified:** ≤10 min wall-clock per room for
+refine + fuse + splat on the 2080 Ti, bounded MCMC Gaussian-count cap;
+amber past ~20 min.
+
+**R114.3 — Retroactive re-solve ratified:** IN, operator-triggered
+(no auto-sweep); scan 95266be1 is the P2-M2 subject — the dense mesh
+re-solve should tighten its honest ±11%.
+
+**R114.4 — Keyframe cadence ratified:** unchanged at P2 start;
+revisit only with P2-M2 reconstruction-quality evidence.
+
+**R114.5 — Leah walk ratified:** the P1 pilot runs in parallel when
+she is available; not a predecessor to P2 server-side work.
+
+**R114.6 — Cloud burst ratified:** the R109 config-not-code contract
+holds for GPU stages, same flip trigger, plus a per-room GPU-cost
+ceiling; pilot volume stays on Kody's box.
+
+*Entries add: R114 · last id = R114*
