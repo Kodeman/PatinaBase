@@ -118,17 +118,42 @@ allocates the `room_file_version`; the ingest stage reserves the pending
 
 ## Troubleshooting
 
-- **Drawings stage crashes with `[Errno 13] Permission denied:
-  …/.config/ezdxf/ezdxf.ini` (EACCES).** ezdxf writes its XDG config file on
-  first use. If the `patina` service user's `~/.config` is root-owned or absent
-  (a fresh-install footgun), the write fails and the drawings stage errors. The
-  worker confines this to `APP_DIR`: the systemd unit sets
-  `XDG_CONFIG_HOME=/opt/patina/scan-pipeline/.config` (and lists it on
-  `ReadWritePaths`), and `install.sh` creates that dir owned by `patina`.
-  **Fix on a box that hit this: re-run `sudo ./install.sh`** (it creates/chowns
-  the config dir and refreshes the unit), then `systemctl restart
-  patina-scan-worker`. `patina-scan-worker doctor` now includes a `config` check
-  that fails preflight if `$XDG_CONFIG_HOME` (or `~/.config`) is not writable.
+- **Drawings stage crashes with `[Errno 13] Permission denied` under the service
+  user's home** — e.g. `…/.config/ezdxf/ezdxf.ini` (first incident) then
+  `…/.cache/ezdxf/font_manager_cache.json` (second). ezdxf touches its XDG
+  **config** AND its **font cache** on use; if the `patina` service user's
+  `~/.config` / `~/.cache` are root-owned or absent (a fresh-install footgun,
+  compounded by `ProtectHome=true`), those writes EACCES and the drawings stage
+  errors.
+
+  The worker confines **all four** XDG base dirs inside `APP_DIR`: the systemd
+  unit sets `XDG_CONFIG_HOME` / `XDG_CACHE_HOME` / `XDG_DATA_HOME` /
+  `XDG_STATE_HOME` to `/opt/patina/scan-pipeline/.{config,cache,data,state}`
+  (each also on `ReadWritePaths`), and `install.sh` creates all four owned by
+  `patina`. **Durable fix on a box that hit this: re-run `sudo ./install.sh`**
+  (creates/chowns the dirs and refreshes the unit) → `systemctl daemon-reload &&
+  systemctl restart patina-scan-worker`.
+
+  **No-redeploy interim fix** (before pulling this repo change) — a systemd
+  drop-in override:
+  ```bash
+  sudo systemctl edit patina-scan-worker    # writes …/patina-scan-worker.service.d/override.conf
+  ```
+  ```ini
+  [Service]
+  Environment=XDG_CONFIG_HOME=/opt/patina/scan-pipeline/.config
+  Environment=XDG_CACHE_HOME=/opt/patina/scan-pipeline/.cache
+  Environment=XDG_DATA_HOME=/opt/patina/scan-pipeline/.data
+  Environment=XDG_STATE_HOME=/opt/patina/scan-pipeline/.state
+  ReadWritePaths=/opt/patina/scan-pipeline/.config /opt/patina/scan-pipeline/.cache /opt/patina/scan-pipeline/.data /opt/patina/scan-pipeline/.state
+  ```
+  ```bash
+  sudo install -d -o patina -g patina /opt/patina/scan-pipeline/.{config,cache,data,state}
+  sudo systemctl daemon-reload && sudo systemctl restart patina-scan-worker
+  ```
+
+  `patina-scan-worker doctor` has an `xdg` check that fails preflight (naming the
+  offending var) if any of the four XDG base dirs is not writable.
 
 ## Telemetry query surface (item 13)
 

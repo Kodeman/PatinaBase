@@ -12,20 +12,26 @@ Type=simple
 User=patina
 Group=patina
 EnvironmentFile=/etc/patina/scan-worker.env
-# Confine the worker's writable config state (ezdxf touches its XDG config file
-# on use — $XDG_CONFIG_HOME/ezdxf/ezdxf.ini) INSIDE APP_DIR, independent of the
-# service user's home, so ProtectHome + a root-owned/absent ~/.config can't EACCES it.
+# Confine ALL of the worker's writable XDG state INSIDE APP_DIR, independent of
+# the service user's home (ProtectHome=true + a root-owned/absent ~/.config or
+# ~/.cache would otherwise EACCES). ezdxf touches BOTH its config
+# ($XDG_CONFIG_HOME/ezdxf/ezdxf.ini) AND its font cache
+# ($XDG_CACHE_HOME/ezdxf/font_manager_cache.json) on use; confine all four XDG
+# base dirs so nothing reaches the home dir.
 Environment=XDG_CONFIG_HOME=/opt/patina/scan-pipeline/.config
+Environment=XDG_CACHE_HOME=/opt/patina/scan-pipeline/.cache
+Environment=XDG_DATA_HOME=/opt/patina/scan-pipeline/.data
+Environment=XDG_STATE_HOME=/opt/patina/scan-pipeline/.state
 ExecStart=/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker run
 Restart=always
 RestartSec=5
 # hardening — an outbound-only worker needs no privilege and no host write beyond
-# scratch + its own XDG config dir
+# scratch + its own XDG state dirs
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/patina/scan-work /opt/patina/scan-pipeline/.config
+ReadWritePaths=/var/lib/patina/scan-work /opt/patina/scan-pipeline/.config /opt/patina/scan-pipeline/.cache /opt/patina/scan-pipeline/.data /opt/patina/scan-pipeline/.state
 # logs to journald
 StandardOutput=journal
 StandardError=journal

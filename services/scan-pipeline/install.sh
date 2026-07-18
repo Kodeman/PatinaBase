@@ -43,10 +43,11 @@ if ! id -u "$SVC_USER" >/dev/null 2>&1; then
   useradd --system --no-create-home --shell /usr/sbin/nologin "$SVC_USER"
 fi
 install -d -o "$SVC_USER" -g "$SVC_USER" "$APP_DIR" "$WORK_DIR"
-# ezdxf writes its XDG config on use — give the service user a writable config
-# dir INSIDE APP_DIR (the unit points XDG_CONFIG_HOME here), so it never depends
-# on a root-owned/absent service-user home.
-install -d -o "$SVC_USER" -g "$SVC_USER" "$APP_DIR/.config"
+# ezdxf writes BOTH its config and its font cache on use. Give the service user
+# writable XDG state dirs INSIDE APP_DIR (the unit points all four XDG_* base
+# vars here), so nothing ever depends on a root-owned/absent service-user home.
+install -d -o "$SVC_USER" -g "$SVC_USER" \
+  "$APP_DIR/.config" "$APP_DIR/.cache" "$APP_DIR/.data" "$APP_DIR/.state"
 install -d -m 0750 "$ETC_DIR"
 
 # 2. venv + install
