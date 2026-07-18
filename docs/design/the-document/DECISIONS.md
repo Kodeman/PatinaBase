@@ -4351,3 +4351,22 @@ gates the prod push.
    point is refine-complete, concurrent with fuse+solve, per §10.1.
 
 *Entries add: I86 · last id = I86*
+
+### R115 · Field Capture P2-M1 passed — stage contracts + schema approved — 2026-07-18
+
+Kody passes P2-M1. Approved: the §10 stage contract (refine → {fuse,
+splat} fork with the same-key conflict-ignore join into present;
+per-stage budgets with single-card serial ≈15–24 min = R114.2 amber by
+design; inspect-and-requeue failure posture) and the additive schema
+(00376 source+'mesh' / stage widenings / Present columns; 00377 view
+extensions + scan_present_stats). The review certified the load-bearing
+invariant at the DB: mesh evidence can never manufacture 'verified'
+without an anchor — rfm_anchor_source_shape untouched and still firing.
+
+Authorized by this pass: 00376/00377 push to Strata; items 2–7 of the
+P2 package (the GPU stages) open on the established cadence — build,
+adversarial review, gate. Kody's prod bundle 95266be1 is the standing
+subject through P2-M2 (first dense mesh vs the P1 certificate) and
+P2-M3 (walkthrough + click-to-measure).
+
+*Entries add: R115 · last id = R115*
