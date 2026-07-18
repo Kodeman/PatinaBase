@@ -215,6 +215,15 @@ accident: `[solve]` (numpy/scipy), `[drawings]` (ezdxf/cairosvg), `[refine]`
 cu118 torch + gsplat band). `[gpu]` is only the box convenience meta-extra for
 `refine+fuse+splat`; it is not a new execution mode.
 
+The supported first-run path stages an operator-reviewed snapshot at `APP_DIR`
+with root ownership. That copy is the explicit bootstrap trust event. Before
+sourcing either helper, `install.sh` uses only fixed `/usr/bin/python3` plus
+no-follow dirfd opens to adopt a legacy APP_DIR snapshot once and revoke service
+writes from the installer/guard/transaction files. The guard then locks every
+install-time package/unit/env input and `src/**`; a non-APP source must already
+have a symlink-free root-owned ancestry. Runtime XDG dirs/releases are excluded
+from source hardening. Future invocations use the managed root-owned copy.
+
 `install.sh` builds an immutable candidate release, runs `pip check`, an
 installed-package import/entrypoint smoke as `User=patina`, and—on
 Linux—`systemd-analyze verify` against a staged unit tree. `/opt/patina` and
@@ -224,13 +233,18 @@ a high-entropy direct-child name that is marker-backed before atomic creation,
 and stable release links are resolved no-follow and must remain directly
 contained by `APP_DIR`. It then fsyncs a root-only snapshot at
 `/etc/patina/.scan-worker-install-transaction` of installed unit
-presence/content and current/previous release references before stopping an
-active service. Unit replacement and the normal `.venv` symlink switch are
-same-filesystem atomic renames. A failed activation restores all unit/release
-snapshots, daemon-reloads, and restarts the prior service; a durable transaction
-marker makes the next invocation recover an interrupted switch. A legacy real
-`.venv` directory is converted once while stopped under that same recovery
-record. The installer never runs doctor from its root shell.
+presence/content and current/previous release references. Recovery accepts only
+a symlink-free root-owned transaction tree, no-follow regular marker files, and
+unit targets exactly in `MANAGED_UNIT_TARGETS`. `ActiveState` must be stable;
+`activating`, `deactivating`, and `reloading` fail closed. Unit replacement and
+the normal `.venv` symlink switch are same-filesystem atomic renames after an
+active worker is stopped and confirmed quiescent. A failed activation restores
+all unit/release snapshots, daemon-reloads, and restarts the prior service; a
+durable transaction marker makes the next invocation recover an interrupted
+switch, while `committed` recovery only finishes cleanup. A legacy real `.venv`
+is converted once while stopped, normalized to root-owned `0755` directories /
+executables and `0644` modules, and remains rollback-safe. The installer never
+runs doctor from its root shell.
 
 ---
 
@@ -319,7 +333,8 @@ The drawings prefix `room_file/{userId}/{scanId}/v{version}/…` puts the **scan
   stage set and red for `refine`/`fuse`/`splat`. Readiness is scoped to enabled
   stages: the refine command/module surface is a preflight only (runtime engine
   qualification belongs to the item-4 decision record); fuse requires Open3D's
-  public CUDA availability/device probe; splat requires CUDA 11.8 `nvcc`, a
+  public CUDA availability/device probe plus a deterministic CUDA tensor
+  allocate/kernel/CPU-copy result of `2.0`; splat requires CUDA 11.8 `nvcc`, a
   cu118 torch wheel with `sm_75` plus a real CUDA arithmetic op, and gsplat's
   public rasterizer returning the expected CUDA shapes, finite values, and a
   positive alpha. See
@@ -652,7 +667,7 @@ quality — realistic against the §10.2–10.5 engine survey:
 What the Linux box needs to run P1 (and to be P2-ready):
 
 - **Distro** — Ubuntu 22.04/24.04 LTS or Debian 12, x86_64. A service user `patina` and `systemd` (present on all three).
-- **Python** — 3.11 or newer, with `venv` (`apt install python3.11-venv`). `install.sh` builds the venv; no system-wide Python packages.
+- **Python** — 3.11 or newer, with `venv` (`apt install python3.11-venv`). `install.sh` builds the venv; no system-wide Python packages. If the distro's `/usr/bin/python3` is older, pass an absolute `PYTHON=/usr/bin/python3.11`; the installer accepts only a canonical root-owned executable reached through root-owned, non-group/world-writable ancestry.
 - **CPU only for P1** — the three P1 stages (validate, least-squares scale fit, SVG/PDF/DXF) are CPU-bound. No GPU driver is needed to run P1. `doctor` will report GPU absent as a warning, which is expected.
 - **Optional NVIDIA for P2** — the proprietary NVIDIA driver, CUDA 11.8 toolkit,
   and `/usr/bin/nvidia-modprobe` for the accepted RTX 2080 Ti/cu118 stack.
@@ -667,11 +682,15 @@ What the Linux box needs to run P1 (and to be P2-ready):
   cache/state dirs below `APP_DIR` and scratch at `/var/lib/patina/scan-work`
   are owned by `patina`.
 
-Bring-up: `sudo ./install.sh` → edit `/etc/patina/scan-worker.env` (URL, key,
+Bring-up: stage reviewed source root-owned at `APP_DIR` →
+`sudo /opt/patina/scan-pipeline/install.sh` → edit
+`/etc/patina/scan-worker.env` (URL, key,
 `WORKER_ID`) → `systemctl start patina-scan-worker-doctor` for a context-accurate
 preflight → `systemctl enable --now patina-scan-worker` → watch
 `journalctl -u patina-scan-worker -f`. Item-3 GPU-only acceptance stops at the
-doctor unit and never starts the queue worker with unregistered GPU stages.
+doctor unit: its documented subshell stops the queue worker before the shared
+env edit and restores the env plus prior active/inactive posture afterward, so
+it never starts the queue worker with unregistered GPU stages.
 
 ---
 

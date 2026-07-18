@@ -187,6 +187,111 @@ def ensure_owned_directory(
         os.close(current_fd)
 
 
+def read_trusted_file(
+    root: str,
+    path: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+    max_bytes: int = 1024 * 1024,
+) -> bytes:
+    """Read one regular marker/snapshot file without following any symlink."""
+
+    _validate_trusted_tree(anchor, root, uid=uid, gid=gid)
+    root_abs, path_abs, parts = _contained_parts(root, path)
+    if not parts:
+        raise GuardError(f"trusted file path names a directory: {path_abs}")
+    current_fd = _open_directory(root_abs)
+    current_path = root_abs
+    try:
+        for part in parts[:-1]:
+            current_path = os.path.join(current_path, part)
+            info = os.stat(part, dir_fd=current_fd, follow_symlinks=False)
+            _require_trusted_directory(current_path, info, uid=uid, gid=gid)
+            next_fd = _open_child_directory(current_fd, part)
+            os.close(current_fd)
+            current_fd = next_fd
+
+        name = parts[-1]
+        display = os.path.join(current_path, name)
+        info = os.stat(name, dir_fd=current_fd, follow_symlinks=False)
+        if stat.S_ISLNK(info.st_mode):
+            raise GuardError(f"trusted file is a symlink: {display}")
+        if not stat.S_ISREG(info.st_mode):
+            raise GuardError(f"trusted file is not regular: {display}")
+        if info.st_uid != uid or info.st_gid != gid:
+            raise GuardError(f"trusted file is not owned by {uid}:{gid}: {display}")
+        if stat.S_IMODE(info.st_mode) & 0o022:
+            raise GuardError(f"trusted file is group/world writable: {display}")
+        if info.st_size > max_bytes:
+            raise GuardError(
+                f"trusted file exceeds {max_bytes} byte safety limit: {display}"
+            )
+        file_fd = os.open(
+            name,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=current_fd,
+        )
+        try:
+            opened = os.fstat(file_fd)
+            if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                raise GuardError(f"trusted file changed during open: {display}")
+            chunks: list[bytes] = []
+            remaining = max_bytes + 1
+            while remaining > 0:
+                chunk = os.read(file_fd, min(65536, remaining))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            data = b"".join(chunks)
+            if len(data) > max_bytes:
+                raise GuardError(
+                    f"trusted file exceeds {max_bytes} byte safety limit: {display}"
+                )
+            return data
+        finally:
+            os.close(file_fd)
+    finally:
+        os.close(current_fd)
+
+
+def validate_trusted_executable(
+    path: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> str:
+    """Return the canonical path for a privileged executable after validation."""
+
+    if not os.path.isabs(path):
+        raise GuardError(f"trusted executable path must be absolute: {path}")
+
+    path_abs = _absolute(path)
+    _validate_trusted_tree(anchor, os.path.dirname(path_abs), uid=uid, gid=gid)
+    link_info = os.lstat(path_abs)
+    if not (stat.S_ISREG(link_info.st_mode) or stat.S_ISLNK(link_info.st_mode)):
+        raise GuardError(f"trusted executable is not regular or a symlink: {path_abs}")
+    if link_info.st_uid != uid or link_info.st_gid != gid:
+        raise GuardError(f"trusted executable path is not owned by {uid}:{gid}: {path_abs}")
+
+    target = os.path.realpath(path_abs)
+    _contained_parts(anchor, target)
+    _validate_trusted_tree(anchor, os.path.dirname(target), uid=uid, gid=gid)
+    target_info = os.lstat(target)
+    if not stat.S_ISREG(target_info.st_mode):
+        raise GuardError(f"trusted executable target is not regular: {target}")
+    if target_info.st_uid != uid or target_info.st_gid != gid:
+        raise GuardError(f"trusted executable target is not owned by {uid}:{gid}: {target}")
+    if stat.S_IMODE(target_info.st_mode) & 0o022:
+        raise GuardError(f"trusted executable target is group/world writable: {target}")
+    if not stat.S_IMODE(target_info.st_mode) & 0o111:
+        raise GuardError(f"trusted executable target is not executable: {target}")
+    return target
+
+
 def _release_name(path: str, app_dir: str) -> str:
     app_abs = _absolute(app_dir)
     path_abs = _absolute(path)
@@ -272,9 +377,73 @@ def _harden_entry(parent_fd: int, name: str, *, uid: int, gid: int) -> None:
     entry_fd = os.open(name, flags, dir_fd=parent_fd)
     try:
         os.fchown(entry_fd, uid, gid)
+        if stat.S_ISDIR(info.st_mode):
+            hardened_mode = 0o755
+        elif stat.S_IMODE(info.st_mode) & 0o111:
+            hardened_mode = 0o755
+        else:
+            hardened_mode = 0o644
+        os.fchmod(entry_fd, hardened_mode)
+    finally:
+        os.close(entry_fd)
+
+
+def _harden_source_entry(parent_fd: int, name: str, *, uid: int, gid: int) -> None:
+    info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    if stat.S_ISLNK(info.st_mode):
+        raise GuardError(f"installer source entry is a symlink: {name}")
+    if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
+        raise GuardError(f"installer source contains unsupported object: {name}")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    if stat.S_ISDIR(info.st_mode):
+        flags |= getattr(os, "O_DIRECTORY", 0)
+    entry_fd = os.open(name, flags, dir_fd=parent_fd)
+    try:
+        os.fchown(entry_fd, uid, gid)
         os.fchmod(entry_fd, stat.S_IMODE(info.st_mode) & ~0o022)
     finally:
         os.close(entry_fd)
+
+
+def harden_source_tree(
+    source_dir: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> None:
+    """Lock every install-time input while leaving runtime write dirs alone."""
+
+    _validate_trusted_tree(anchor, source_dir, uid=uid, gid=gid)
+    required_files = (
+        "install.sh",
+        "install-path-guard.py",
+        "install-venv-lib.sh",
+        "pyproject.toml",
+        "patina-scan-worker.service",
+        "patina-scan-worker-doctor.service",
+        "patina-scan-worker.gpu.conf",
+        "patina-scan-worker-nvidia-prepare.service",
+        "scan-worker.env.example",
+    )
+    source_fd = _open_directory(_absolute(source_dir))
+    try:
+        for name in required_files:
+            _harden_source_entry(source_fd, name, uid=uid, gid=gid)
+        _harden_source_entry(source_fd, "src", uid=uid, gid=gid)
+    finally:
+        os.close(source_fd)
+
+    package_root = os.path.join(_absolute(source_dir), "src")
+    for current, directories, files, current_fd in os.fwalk(
+        package_root, topdown=True, follow_symlinks=False
+    ):
+        for entry in (*directories, *files):
+            try:
+                _harden_source_entry(current_fd, entry, uid=uid, gid=gid)
+            except GuardError as exc:
+                raise GuardError(f"{exc} ({os.path.join(current, entry)})") from exc
+    _validate_release_tree(package_root, uid=uid, gid=gid)
 
 
 def _validate_release_tree(path: str, *, uid: int, gid: int) -> None:
@@ -312,7 +481,7 @@ def harden_release(
         release_fd = _open_child_directory(app_fd, name)
         try:
             os.fchown(release_fd, uid, gid)
-            os.fchmod(release_fd, stat.S_IMODE(info.st_mode) & ~0o022)
+            os.fchmod(release_fd, 0o755)
         finally:
             os.close(release_fd)
     finally:
@@ -387,6 +556,20 @@ def _parser() -> argparse.ArgumentParser:
     ensure.add_argument("--mode", type=_octal_mode, required=True)
     ensure.add_argument("--adopt-final", action="store_true")
 
+    validate_dir = subparsers.add_parser("validate-trusted-dir")
+    validate_dir.add_argument("--path", required=True)
+
+    read_file = subparsers.add_parser("read-trusted-file")
+    read_file.add_argument("--root", required=True)
+    read_file.add_argument("--path", required=True)
+    read_file.add_argument("--max-bytes", type=int, default=1024 * 1024)
+
+    validate_executable = subparsers.add_parser("validate-trusted-executable")
+    validate_executable.add_argument("--path", required=True)
+
+    harden_source = subparsers.add_parser("harden-source-tree")
+    harden_source.add_argument("--source-dir", required=True)
+
     owned = subparsers.add_parser("ensure-owned-dir")
     owned.add_argument("--app-dir", required=True)
     owned.add_argument("--path", required=True)
@@ -396,6 +579,10 @@ def _parser() -> argparse.ArgumentParser:
 
     generate = subparsers.add_parser("generate-release-path")
     generate.add_argument("--app-dir", required=True)
+
+    validate_name = subparsers.add_parser("validate-release-name")
+    validate_name.add_argument("--app-dir", required=True)
+    validate_name.add_argument("--path", required=True)
 
     create = subparsers.add_parser("create-release")
     create.add_argument("--app-dir", required=True)
@@ -429,6 +616,25 @@ def main(argv: list[str] | None = None) -> int:
                 mode=args.mode,
                 adopt_final=args.adopt_final,
             )
+        elif args.command == "validate-trusted-dir":
+            _validate_trusted_tree(
+                args.anchor,
+                args.path,
+                uid=args.trusted_uid,
+                gid=args.trusted_gid,
+            )
+        elif args.command == "read-trusted-file":
+            data = read_trusted_file(
+                args.root,
+                args.path,
+                max_bytes=args.max_bytes,
+                **common,
+            )
+            sys.stdout.buffer.write(data)
+        elif args.command == "validate-trusted-executable":
+            print(validate_trusted_executable(args.path, **common))
+        elif args.command == "harden-source-tree":
+            harden_source_tree(args.source_dir, **common)
         elif args.command == "ensure-owned-dir":
             ensure_owned_directory(
                 args.app_dir,
@@ -441,6 +647,14 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "generate-release-path":
             print(generate_release_path(args.app_dir, **common))
+        elif args.command == "validate-release-name":
+            _validate_trusted_tree(
+                args.anchor,
+                args.app_dir,
+                uid=args.trusted_uid,
+                gid=args.trusted_gid,
+            )
+            _release_name(args.path, args.app_dir)
         elif args.command == "create-release":
             create_release(args.app_dir, args.path, **common)
         elif args.command == "harden-release":

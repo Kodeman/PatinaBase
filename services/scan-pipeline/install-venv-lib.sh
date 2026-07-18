@@ -4,6 +4,94 @@
 # file is sourced so the filesystem/systemctl state machine can be tested with a
 # fake manager and no root privileges.
 
+if ! type _path_guard >/dev/null 2>&1; then
+  _path_guard() {
+    "${INSTALL_PATH_GUARD_PYTHON:-python3}" \
+      "${INSTALL_PATH_GUARD_SCRIPT:?INSTALL_PATH_GUARD_SCRIPT is required}" \
+      --anchor "${INSTALL_TRUST_ANCHOR:?INSTALL_TRUST_ANCHOR is required}" \
+      --trusted-uid "${INSTALL_TRUSTED_UID:?INSTALL_TRUSTED_UID is required}" \
+      --trusted-gid "${INSTALL_TRUSTED_GID:?INSTALL_TRUSTED_GID is required}" \
+      "$@"
+  }
+fi
+
+_assert_transaction_dir_trusted() {
+  _path_guard validate-trusted-dir --path "$TRANSACTION_DIR"
+}
+
+_trusted_transaction_file_read() {
+  local path="$1"
+  _path_guard read-trusted-file --root "$TRANSACTION_DIR" --path "$path"
+}
+
+_transaction_value_read() {
+  local name="$1"
+  case "$name" in
+    ""|*/*|*..*)
+      echo "ERROR: unsafe transaction marker name: $name" >&2
+      return 1
+      ;;
+  esac
+  _trusted_transaction_file_read "$TRANSACTION_DIR/$name"
+}
+
+_transaction_value_exists() {
+  local name="$1"
+  [ -e "$TRANSACTION_DIR/$name" ] || [ -L "$TRANSACTION_DIR/$name" ]
+}
+
+_trusted_transaction_file_validate() {
+  _trusted_transaction_file_read "$1" >/dev/null
+}
+
+_managed_unit_target_allowed() {
+  local candidate="$1"
+  local allowed
+  if ! declare -p MANAGED_UNIT_TARGETS >/dev/null 2>&1; then
+    echo "ERROR: MANAGED_UNIT_TARGETS is unavailable during recovery." >&2
+    return 1
+  fi
+  for allowed in "${MANAGED_UNIT_TARGETS[@]}"; do
+    if [ "$candidate" = "$allowed" ]; then
+      return 0
+    fi
+  done
+  echo "ERROR: snapshot unit target is outside MANAGED_UNIT_TARGETS: $candidate" >&2
+  return 1
+}
+
+_worker_active_state() {
+  local state
+  if ! state="$(systemctl show --property=ActiveState --value "$WORKER_SERVICE")"; then
+    echo "ERROR: could not inspect ActiveState for $WORKER_SERVICE." >&2
+    return 1
+  fi
+  case "$state" in
+    active|inactive|failed|activating|deactivating|reloading) ;;
+    *)
+      echo "ERROR: unexpected ActiveState for $WORKER_SERVICE: $state" >&2
+      return 1
+      ;;
+  esac
+  printf '%s\n' "$state"
+}
+
+_require_worker_quiescent() {
+  local state
+  state="$(_worker_active_state)" || return 1
+  case "$state" in
+    inactive|failed) return 0 ;;
+    *)
+      echo "ERROR: $WORKER_SERVICE did not quiesce (ActiveState=$state)." >&2
+      return 1
+      ;;
+  esac
+}
+
+_validate_managed_release_path() {
+  _path_guard validate-release-name --app-dir "$APP_DIR" --path "$1" >/dev/null
+}
+
 _transaction_state_write() {
   local state="$1"
   local temporary="$TRANSACTION_DIR/state.tmp.$$"
@@ -126,14 +214,11 @@ _remove_managed_release() {
   local target="${1:-}"
 
   [ -n "$APP_DIR" ] && [ "$APP_DIR" != "/" ] || return 1
-  case "$target" in
-    "$APP_DIR"/.venv.release.*) ;;
-    "") return 0 ;;
-    *)
-      echo "WARNING: refusing to remove unmanaged release path $target" >&2
-      return 0
-      ;;
-  esac
+  [ -n "$target" ] || return 0
+  if ! _validate_managed_release_path "$target"; then
+    echo "ERROR: refusing unmanaged release path $target" >&2
+    return 1
+  fi
   if _managed_release_is_referenced "$target"; then
     return 0
   fi
@@ -147,6 +232,7 @@ _discard_transaction() {
     echo "ERROR: refusing to remove unexpected transaction path $TRANSACTION_DIR" >&2
     return 1
   fi
+  _assert_transaction_dir_trusted || return 1
   rm -rf -- "$TRANSACTION_DIR" || return 1
   _fsync_directory "$TRANSACTION_PARENT"
 }
@@ -157,6 +243,7 @@ prepare_install_transaction() {
     return 1
   fi
   install -d -m 0700 "$TRANSACTION_DIR" || return 1
+  _assert_transaction_dir_trusted || return 1
   _fsync_directory "$TRANSACTION_PARENT" || return 1
   _transaction_state_write building || return 1
   # The state marker precedes all build work. If power fails before this value
@@ -200,21 +287,31 @@ _snapshot_units() {
   local target
   install -d -m 0700 "$TRANSACTION_DIR/snapshot" || return 1
   for target in "${MANAGED_UNIT_TARGETS[@]}"; do
+    _managed_unit_target_allowed "$target" || return 1
     printf '%s\n' "$target" > "$TRANSACTION_DIR/snapshot/unit.$index.target" || return 1
-    if [ -f "$target" ]; then
+    chmod 0600 "$TRANSACTION_DIR/snapshot/unit.$index.target" || return 1
+    if [ -L "$target" ]; then
+      echo "ERROR: refusing to snapshot symlinked managed unit: $target" >&2
+      return 1
+    elif [ -f "$target" ]; then
       printf '1\n' > "$TRANSACTION_DIR/snapshot/unit.$index.present" || return 1
+      chmod 0600 "$TRANSACTION_DIR/snapshot/unit.$index.present" || return 1
       cp -p "$target" "$TRANSACTION_DIR/snapshot/unit.$index.content" || return 1
+      chmod 0600 "$TRANSACTION_DIR/snapshot/unit.$index.content" || return 1
     else
       printf '0\n' > "$TRANSACTION_DIR/snapshot/unit.$index.present" || return 1
+      chmod 0600 "$TRANSACTION_DIR/snapshot/unit.$index.present" || return 1
     fi
     index=$((index + 1))
   done
+  _transaction_value_write unit_count "$index" || return 1
 }
 
 begin_install_transaction() {
+  local active_state
   local was_active=0
 
-  [ "$(cat "$TRANSACTION_DIR/state")" = building ] || {
+  [ "$(_transaction_value_read state)" = building ] || {
     echo "ERROR: transaction is not in building state." >&2
     return 1
   }
@@ -224,9 +321,16 @@ begin_install_transaction() {
   fi
   _snapshot_release || return 1
   _snapshot_units || return 1
-  if systemctl is-active --quiet "$WORKER_SERVICE"; then
-    was_active=1
-  fi
+  active_state="$(_worker_active_state)" || return 1
+  case "$active_state" in
+    active) was_active=1 ;;
+    inactive|failed) was_active=0 ;;
+    activating|deactivating|reloading)
+      echo "ERROR: refusing install while $WORKER_SERVICE is $active_state; " \
+        "wait for a stable ActiveState or stop it explicitly." >&2
+      return 1
+      ;;
+  esac
   _transaction_value_write was_active "$was_active" || return 1
   # All rollback data and containing directories must reach stable storage
   # before the durable state can authorize mutations of live files.
@@ -248,16 +352,18 @@ _install_candidate_units() {
       return 1
     fi
     _atomic_file_replace "$candidate" "$target" || return 1
+    _transaction_hook "after_unit_$index" || return $?
   done
 }
 
 _switch_release() {
   local kind
   local legacy_release
-  kind="$(cat "$TRANSACTION_DIR/release_kind")"
+  kind="$(_transaction_value_read release_kind)"
 
   case "$kind" in
     symlink|absent)
+      _validate_managed_release_path "$STAGED_VENV" || return 1
       _atomic_symlink_replace "$STAGED_VENV" "$VENV"
       ;;
     legacy)
@@ -281,19 +387,38 @@ _switch_release() {
 }
 
 _restore_units() {
-  local index=0
+  local count
+  local index
   local present
   local target
-  while [ -f "$TRANSACTION_DIR/snapshot/unit.$index.target" ]; do
-    target="$(cat "$TRANSACTION_DIR/snapshot/unit.$index.target")"
-    present="$(cat "$TRANSACTION_DIR/snapshot/unit.$index.present")"
+  count="$(_transaction_value_read unit_count)" || return 1
+  case "$count" in
+    ""|*[!0-9]*)
+      echo "ERROR: invalid unit_count marker: $count" >&2
+      return 1
+      ;;
+  esac
+  if [ "$count" -gt "${#MANAGED_UNIT_TARGETS[@]}" ]; then
+    echo "ERROR: unit_count exceeds MANAGED_UNIT_TARGETS." >&2
+    return 1
+  fi
+  for ((index = 0; index < count; index++)); do
+    target="$(_trusted_transaction_file_read \
+      "$TRANSACTION_DIR/snapshot/unit.$index.target")" || return 1
+    present="$(_trusted_transaction_file_read \
+      "$TRANSACTION_DIR/snapshot/unit.$index.present")" || return 1
+    _managed_unit_target_allowed "$target" || return 1
     if [ "$present" = 1 ]; then
+      _trusted_transaction_file_validate \
+        "$TRANSACTION_DIR/snapshot/unit.$index.content" || return 1
       _atomic_file_replace \
         "$TRANSACTION_DIR/snapshot/unit.$index.content" "$target" || return 1
-    else
+    elif [ "$present" = 0 ]; then
       _durable_unlink "$target" || return 1
+    else
+      echo "ERROR: invalid unit presence marker for $target: $present" >&2
+      return 1
     fi
-    index=$((index + 1))
   done
 }
 
@@ -301,14 +426,15 @@ _restore_release() {
   local kind
   local target
   local legacy_release=""
-  kind="$(cat "$TRANSACTION_DIR/release_kind")"
-  target="$(cat "$TRANSACTION_DIR/release_target")"
-  if [ -f "$TRANSACTION_DIR/legacy_release" ]; then
-    legacy_release="$(cat "$TRANSACTION_DIR/legacy_release")"
+  kind="$(_transaction_value_read release_kind)"
+  target="$(_transaction_value_read release_target)"
+  if _transaction_value_exists legacy_release; then
+    legacy_release="$(_transaction_value_read legacy_release)"
   fi
 
   case "$kind" in
     symlink)
+      _validate_managed_release_path "$target" || return 1
       _atomic_symlink_replace "$target" "$VENV"
       ;;
     absent)
@@ -328,6 +454,7 @@ _restore_release() {
         _durable_unlink "$VENV" || return 1
       fi
       if [ -n "$legacy_release" ] && [ -d "$legacy_release" ]; then
+        _validate_managed_release_path "$legacy_release" || return 1
         _atomic_replace_path "$legacy_release" "$VENV" || return 1
       elif [ ! -d "$VENV" ]; then
         echo "ERROR: legacy venv backup is unavailable; transaction retained." >&2
@@ -345,10 +472,10 @@ _restore_previous_release() {
   local kind
   local target
   local moved_previous=""
-  kind="$(cat "$TRANSACTION_DIR/previous_kind")"
-  target="$(cat "$TRANSACTION_DIR/previous_target")"
-  if [ -f "$TRANSACTION_DIR/moved_previous" ]; then
-    moved_previous="$(cat "$TRANSACTION_DIR/moved_previous")"
+  kind="$(_transaction_value_read previous_kind)"
+  target="$(_transaction_value_read previous_target)"
+  if _transaction_value_exists moved_previous; then
+    moved_previous="$(_transaction_value_read moved_previous)"
   fi
 
   case "$kind" in
@@ -357,6 +484,7 @@ _restore_previous_release() {
         echo "ERROR: cannot restore previous symlink over $PREVIOUS_VENV" >&2
         return 1
       fi
+      _validate_managed_release_path "$target" || return 1
       _atomic_symlink_replace "$target" "$PREVIOUS_VENV"
       ;;
     absent)
@@ -375,6 +503,7 @@ _restore_previous_release() {
         _durable_unlink "$PREVIOUS_VENV" || return 1
       fi
       if [ -n "$moved_previous" ] && [ -d "$moved_previous" ]; then
+        _validate_managed_release_path "$moved_previous" || return 1
         _atomic_replace_path "$moved_previous" "$PREVIOUS_VENV" || return 1
       else
         echo "ERROR: previous legacy release backup is unavailable." >&2
@@ -390,8 +519,8 @@ _restore_previous_release() {
 
 _cleanup_failed_stage() {
   local staged=""
-  if [ -f "$TRANSACTION_DIR/staged_release" ]; then
-    staged="$(cat "$TRANSACTION_DIR/staged_release")"
+  if _transaction_value_exists staged_release; then
+    staged="$(_transaction_value_read staged_release)"
   fi
   _remove_managed_release "$staged"
 }
@@ -399,11 +528,15 @@ _cleanup_failed_stage() {
 _rollback_install_transaction() {
   local was_active
   local failed=0
-  was_active="$(cat "$TRANSACTION_DIR/was_active")"
+  was_active="$(_transaction_value_read was_active)"
 
   # The new unit may be partially active, or a crash may have happened at any
   # point after stop. Quiesce it before restoring the complete snapshot.
-  systemctl stop "$WORKER_SERVICE" >/dev/null 2>&1 || true
+  if ! systemctl stop "$WORKER_SERVICE" >/dev/null 2>&1 || \
+     ! _require_worker_quiescent; then
+    echo "ERROR: rollback could not quiesce $WORKER_SERVICE; transaction retained." >&2
+    return 1
+  fi
   _restore_units || failed=1
   _restore_release || failed=1
   _restore_previous_release || failed=1
@@ -430,15 +563,15 @@ _finalize_previous_release() {
   local desired=""
   local old_previous=""
   local moved_previous=""
-  kind="$(cat "$TRANSACTION_DIR/release_kind")"
+  kind="$(_transaction_value_read release_kind)"
 
   case "$kind" in
-    symlink) desired="$(cat "$TRANSACTION_DIR/release_target")" ;;
-    legacy) desired="$(cat "$TRANSACTION_DIR/legacy_release")" ;;
+    symlink) desired="$(_transaction_value_read release_target)" ;;
+    legacy) desired="$(_transaction_value_read legacy_release)" ;;
     absent) desired="" ;;
   esac
-  if [ -f "$TRANSACTION_DIR/previous_target" ]; then
-    old_previous="$(cat "$TRANSACTION_DIR/previous_target")"
+  if _transaction_value_exists previous_target; then
+    old_previous="$(_transaction_value_read previous_target)"
   fi
 
   if [ -d "$PREVIOUS_VENV" ] && [ ! -L "$PREVIOUS_VENV" ]; then
@@ -452,6 +585,7 @@ _finalize_previous_release() {
     old_previous="$moved_previous"
   fi
   if [ -n "$desired" ]; then
+    _validate_managed_release_path "$desired" || return 1
     _atomic_symlink_replace "$desired" "$PREVIOUS_VENV" || return 1
   elif [ -L "$PREVIOUS_VENV" ]; then
     _durable_unlink "$PREVIOUS_VENV" || return 1
@@ -466,8 +600,8 @@ _finalize_previous_release() {
 
 _cleanup_committed_previous() {
   local obsolete=""
-  if [ -f "$TRANSACTION_DIR/obsolete_previous_release" ]; then
-    obsolete="$(cat "$TRANSACTION_DIR/obsolete_previous_release")"
+  if _transaction_value_exists obsolete_previous_release; then
+    obsolete="$(_transaction_value_read obsolete_previous_release)"
   fi
   _remove_managed_release "$obsolete"
 }
@@ -479,11 +613,15 @@ fi
 activate_install_transaction() {
   local was_active
   local hook_status=0
-  was_active="$(cat "$TRANSACTION_DIR/was_active")"
+  was_active="$(_transaction_value_read was_active)"
 
   if [ "$was_active" = 1 ]; then
     echo "-- stopping active worker after candidate validation and snapshot"
     if ! systemctl stop "$WORKER_SERVICE"; then
+      _rollback_install_transaction || true
+      return 1
+    fi
+    if ! _require_worker_quiescent; then
       _rollback_install_transaction || true
       return 1
     fi
@@ -535,6 +673,10 @@ activate_install_transaction() {
     _rollback_install_transaction || true
     return 1
   fi
+  _transaction_hook after_commit || hook_status=$?
+  if [ "$hook_status" -ne 0 ]; then
+    return "$hook_status"
+  fi
   # Irreversible stale-release cleanup starts only after `committed` is durable.
   _cleanup_committed_previous || return 1
   _discard_transaction || return 1
@@ -548,16 +690,17 @@ recover_install_transaction() {
     echo "ERROR: refusing transaction symlink at $TRANSACTION_DIR" >&2
     return 1
   fi
-  [ -d "$TRANSACTION_DIR" ] || return 0
-  if [ ! -f "$TRANSACTION_DIR/state" ]; then
+  [ -e "$TRANSACTION_DIR" ] || return 0
+  _assert_transaction_dir_trusted || return 1
+  if ! _transaction_value_exists state; then
     echo "ERROR: transaction directory has no durable state marker: $TRANSACTION_DIR" >&2
     return 1
   fi
-  state="$(cat "$TRANSACTION_DIR/state")"
+  state="$(_transaction_value_read state)" || return 1
   case "$state" in
     building)
-      if [ -f "$TRANSACTION_DIR/staged_release" ]; then
-        staged="$(cat "$TRANSACTION_DIR/staged_release")"
+      if _transaction_value_exists staged_release; then
+        staged="$(_transaction_value_read staged_release)"
       fi
       _remove_managed_release "$staged" || return 1
       _discard_transaction || return 1

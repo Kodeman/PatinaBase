@@ -53,16 +53,105 @@ NVIDIA_PREPARE_UNIT="$SYSTEMD_DIR/patina-scan-worker-nvidia-prepare.service"
 NVIDIA_MODPROBE=/usr/bin/nvidia-modprobe
 WORKER_SERVICE=patina-scan-worker
 SVC_USER=patina
-SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON="${PYTHON:-python3}"
+SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+PYTHON="${PYTHON:-/usr/bin/python3}"
 PATH_GUARD_PYTHON=/usr/bin/python3
 PATH_GUARD="$SRC_DIR/install-path-guard.py"
 RUNUSER=/usr/sbin/runuser
 INSTALL_TRUST_ANCHOR=/
 INSTALL_TRUSTED_UID=0
 INSTALL_TRUSTED_GID=0
-# shellcheck source=install-venv-lib.sh
-. "$SRC_DIR/install-venv-lib.sh"
+# Recovery may be finishing a GPU transaction even when the new invocation did
+# not pass --gpu. Keep the complete exact allowlist available until recovery;
+# current candidate arrays are narrowed again during staging below.
+MANAGED_UNIT_TARGETS=(
+  "$UNIT"
+  "$DOCTOR_UNIT"
+  "$DROPIN_DIR/gpu.conf"
+  "$DOCTOR_DROPIN_DIR/gpu.conf"
+  "$NVIDIA_PREPARE_UNIT"
+)
+
+if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+  echo "ERROR: install.sh must run as root (use sudo)." >&2
+  exit 2
+fi
+if [ ! -x "$PATH_GUARD_PYTHON" ]; then
+  echo "ERROR: trusted bootstrap Python is unavailable: $PATH_GUARD_PYTHON" >&2
+  exit 2
+fi
+
+# Bootstrap boundary: the first invocation necessarily trusts the operator's
+# supplied install.sh bytes. Before sourcing or executing any sibling helper,
+# revoke service-user writes on the source directory and the three executable
+# installer inputs using only fixed /usr/bin/python3 and no-follow dirfd opens.
+# A legacy rsync snapshot at APP_DIR may be adopted once; any other source must
+# already have a root-owned, non-writable, symlink-free ancestry.
+"$PATH_GUARD_PYTHON" - "$SRC_DIR" "$APP_DIR" <<'PY'
+import os
+import stat
+import sys
+
+source, app = map(lambda value: os.path.abspath(os.path.normpath(value)), sys.argv[1:3])
+trusted_uid = trusted_gid = 0
+
+def require_directory(path, info):
+    if stat.S_ISLNK(info.st_mode):
+        raise SystemExit(f"ERROR: installer source ancestry contains symlink: {path}")
+    if not stat.S_ISDIR(info.st_mode):
+        raise SystemExit(f"ERROR: installer source ancestry is not a directory: {path}")
+    if info.st_uid != trusted_uid or info.st_gid != trusted_gid:
+        raise SystemExit(f"ERROR: installer source ancestry is not root-owned: {path}")
+    if stat.S_IMODE(info.st_mode) & 0o022:
+        raise SystemExit(f"ERROR: installer source ancestry is group/world writable: {path}")
+
+def validate_ancestry(path, *, exclude_final=False):
+    components = path.strip(os.sep).split(os.sep) if path != os.sep else []
+    current = os.sep
+    limit = len(components) - (1 if exclude_final else 0)
+    require_directory(current, os.lstat(current))
+    for component in components[:limit]:
+        current = os.path.join(current, component)
+        require_directory(current, os.lstat(current))
+
+if source == app:
+    validate_ancestry(source, exclude_final=True)
+    info = os.lstat(source)
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        raise SystemExit(f"ERROR: legacy APP_DIR source is not a real directory: {source}")
+    source_fd = os.open(
+        source,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+    )
+    os.fchown(source_fd, trusted_uid, trusted_gid)
+    os.fchmod(source_fd, 0o755)
+else:
+    validate_ancestry(source)
+    source_fd = os.open(
+        source,
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+    )
+
+try:
+    for name in ("install.sh", "install-path-guard.py", "install-venv-lib.sh"):
+        info = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            raise SystemExit(f"ERROR: installer bootstrap input is not regular: {source}/{name}")
+        fd = os.open(
+            name,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=source_fd,
+        )
+        try:
+            os.fchown(fd, trusted_uid, trusted_gid)
+            os.fchmod(fd, stat.S_IMODE(info.st_mode) & ~0o022)
+        finally:
+            os.close(fd)
+finally:
+    os.close(source_fd)
+
+validate_ancestry(source)
+PY
 
 _path_guard() {
   "$PATH_GUARD_PYTHON" "$PATH_GUARD" \
@@ -89,6 +178,23 @@ _run_as_service_user() {
       "$@"
 }
 
+if [ ! -f "$PATH_GUARD" ]; then
+  echo "ERROR: installer path guard unavailable: $PATH_GUARD" >&2
+  exit 2
+fi
+_path_guard harden-source-tree --source-dir "$SRC_DIR"
+
+# PYTHON is intentionally operator-selectable because Ubuntu 22.04's default
+# interpreter can be older than the worker's Python 3.11 floor. Treat that
+# environment value as privileged input: require a root-owned executable under
+# a symlink-free, non-writable ancestry, then use only its canonical path.
+PYTHON="$(_path_guard validate-trusted-executable --path "$PYTHON")"
+
+# Only now are helper bytes root-owned, non-service-writable, and reached
+# through a trusted ancestry.
+# shellcheck source=install-venv-lib.sh
+. "$SRC_DIR/install-venv-lib.sh"
+
 _recover_on_exit() {
   local status=$?
   trap - EXIT
@@ -99,14 +205,6 @@ _recover_on_exit() {
 }
 trap _recover_on_exit EXIT
 
-if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-  echo "ERROR: install.sh must run as root (use sudo)." >&2
-  exit 2
-fi
-if [ ! -x "$PATH_GUARD_PYTHON" ] || [ ! -f "$PATH_GUARD" ]; then
-  echo "ERROR: installer path guard unavailable ($PATH_GUARD_PYTHON, $PATH_GUARD)." >&2
-  exit 2
-fi
 if [ ! -x "$RUNUSER" ]; then
   echo "ERROR: service-user smoke requires $RUNUSER (util-linux)." >&2
   exit 2
@@ -333,11 +431,39 @@ if [ "$GPU" -eq 1 ]; then
   cat <<EOF
 
 Next (item-3 GPU acceptance; doctor only, never the queue worker):
-  1. edit $ENV_FILE with temporary STAGES=refine,fuse,splat and GPU=auto
-  2. retain the README empty-GPU-queue query as rollout evidence
-  3. systemctl start patina-scan-worker-doctor
-  4. journalctl -u patina-scan-worker-doctor -n 100 --no-pager
-  5. restore the normal STAGES value; do not enable GPU handlers early
+  1. retain the README empty-GPU-queue query as rollout evidence
+  2. copy/paste this as one subshell; it stops the queue worker BEFORE editing
+     the shared env and restores both env + prior active/inactive posture:
+
+(
+  set -eu
+  ITEM3_ENV_BACKUP="$ENV_FILE.item3-backup"
+  WORKER_WAS_ACTIVE="\$(systemctl show --property=ActiveState --value $WORKER_SERVICE)"
+  case "\$WORKER_WAS_ACTIVE" in
+    active|inactive|failed) ;;
+    *) echo "refusing transitional worker state: \$WORKER_WAS_ACTIVE" >&2; exit 1 ;;
+  esac
+  restore_item3_env() {
+    trap - EXIT INT TERM
+    if [ -f "\$ITEM3_ENV_BACKUP" ]; then
+      sudo install -o root -g root -m 0600 "\$ITEM3_ENV_BACKUP" "$ENV_FILE"
+      sudo rm -f -- "\$ITEM3_ENV_BACKUP"
+    fi
+    if [ "\$WORKER_WAS_ACTIVE" = active ]; then
+      sudo systemctl start $WORKER_SERVICE
+    fi
+  }
+  trap restore_item3_env EXIT INT TERM
+  sudo systemctl stop $WORKER_SERVICE
+  sudo install -o root -g root -m 0600 "$ENV_FILE" "\$ITEM3_ENV_BACKUP"
+  sudoedit "$ENV_FILE"  # temporarily set STAGES=refine,fuse,splat and GPU=auto
+  sudo systemctl start patina-scan-worker-doctor
+  sudo journalctl -u patina-scan-worker-doctor -n 100 --no-pager
+  restore_item3_env
+)
+
+  3. require every README GPU line green; the block always restores normal
+     STAGES and never starts the queue worker with temporary GPU handlers
 EOF
 else
   cat <<EOF

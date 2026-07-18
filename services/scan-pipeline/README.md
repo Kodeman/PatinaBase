@@ -39,12 +39,35 @@ Ubuntu 22.04/24.04 LTS or Debian 12, x86_64, Python 3.11+ with `venv`
 inbound.
 
 ```bash
-sudo ./install.sh                       # CPU worker: venv + .[drawings] + unit + env template
-sudo -e /etc/patina/scan-worker.env     # set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, WORKER_ID
-sudo systemctl enable --now patina-scan-worker  # ExecStartPre doctor gates worker start
+# Stage the operator-reviewed source snapshot in the managed root-owned path.
+sudo install -d -o root -g root -m 0755 /opt/patina/scan-pipeline
+sudo rsync -a --chown=root:root \
+  --exclude='/.venv*' --exclude='/.config' --exclude='/.cache' \
+  --exclude='/.data' --exclude='/.state' \
+  ./ /opt/patina/scan-pipeline/
+sudo /opt/patina/scan-pipeline/install.sh  # CPU venv + .[drawings] + units
+sudo -e /etc/patina/scan-worker.env        # set URL/key/WORKER_ID
+sudo systemctl enable --now patina-scan-worker  # ExecStartPre doctor gates start
 systemctl status patina-scan-worker
 journalctl -u patina-scan-worker -f
 ```
+
+That source staging is the explicit first-run bootstrap trust event: review the
+snapshot before copying it. The installer then locks `install.sh`, its path
+guard/transaction helper, `pyproject.toml`, every unit/env template, and
+`src/**` to `root:root` with no service-user write bit **before** it sources or
+executes a helper. A legacy snapshot already at `APP_DIR` is adopted once with
+no-follow opens. An installer launched anywhere else must already have a
+symlink-free, root-owned, non-group/world-writable ancestry and otherwise fails
+closed. Future runs use only the managed path above; never run a
+patina-writable checkout with `sudo`.
+
+If `/usr/bin/python3` is older than 3.11, select the installed interpreter with
+an absolute path, for example
+`sudo PYTHON=/usr/bin/python3.11 /opt/patina/scan-pipeline/install.sh`. The
+installer canonicalizes that value and rejects an interpreter or ancestry that
+is not root-owned, executable, and free of group/world writes before any
+transaction helper runs.
 
 CPU is enough for the P1 stages (validate + least-squares fit + SVG/PDF/DXF) and
 the CPU P2 stages. `install.sh` (no flags) installs **only** the CPU extras —
@@ -91,7 +114,7 @@ Prereqs to install **before** `./install.sh --gpu`:
 Then:
 
 ```bash
-sudo ./install.sh --gpu                 # + .[gpu] via cu118 index, + GPU systemd drop-in
+sudo /opt/patina/scan-pipeline/install.sh --gpu  # + .[gpu] + GPU systemd policy
 sudo systemd-analyze verify /etc/systemd/system/patina-scan-worker.service
 sudo systemd-analyze verify /etc/systemd/system/patina-scan-worker-doctor.service
 sudo systemd-analyze verify \
@@ -151,20 +174,46 @@ window only:
    This is acceptance evidence, not a runtime safety mechanism: the next step
    is doctor-only and never enters the claim loop.
 
-2. Stop the normal worker before editing its shared env file. Temporarily set
-   `STAGES=refine,fuse,splat` and `GPU=auto`, then run only the doctor oneshot:
+2. Copy/paste this as one subshell. It records the normal worker's stable state,
+   stops it **before** backing up/editing the shared env, and restores both the
+   root-only env file and prior active/inactive posture even when doctor fails:
 
    ```bash
-   sudo systemctl stop patina-scan-worker
-   sudo systemctl start patina-scan-worker-doctor
-   sudo journalctl -u patina-scan-worker-doctor -n 100 --no-pager
+   (
+     set -eu
+     env_file=/etc/patina/scan-worker.env
+     backup=/etc/patina/scan-worker.env.item3-backup
+     was_active="$(systemctl show --property=ActiveState --value patina-scan-worker)"
+     case "$was_active" in
+       active|inactive|failed) ;;
+       *) echo "refusing transitional worker state: $was_active" >&2; exit 1 ;;
+     esac
+     restore_item3_env() {
+       trap - EXIT INT TERM
+       if [ -f "$backup" ]; then
+         sudo install -o root -g root -m 0600 "$backup" "$env_file"
+         sudo rm -f -- "$backup"
+       fi
+       if [ "$was_active" = active ]; then
+         sudo systemctl start patina-scan-worker
+       fi
+     }
+     trap restore_item3_env EXIT INT TERM
+     sudo systemctl stop patina-scan-worker
+     sudo install -o root -g root -m 0600 "$env_file" "$backup"
+     sudoedit "$env_file"  # temporarily: STAGES=refine,fuse,splat; GPU=auto
+     sudo systemctl start patina-scan-worker-doctor
+     sudo journalctl -u patina-scan-worker-doctor -n 100 --no-pager
+     restore_item3_env
+   )
    ```
 
 3. Require green `gpu`, `colmap`, `pycolmap`, `open3d-cuda`, `trimesh`, `nvcc`,
-   `torch-cuda`, `gsplat-cuda`, and `xdg` lines. Restore the CPU `STAGES` value
-   before restarting normal P1 service, or leave the worker stopped. Do not
-   enable GPU stages persistently until their handlers register. The doctor
-   oneshot has no `[Install]` section and must never be enabled.
+   `torch-cuda`, `gsplat-cuda`, and `xdg` lines. The subshell restores normal
+   CPU `STAGES` before restarting a previously active P1 service; it leaves a
+   previously inactive/failed worker stopped. Do not enable GPU stages
+   persistently until their handlers register. The doctor oneshot has no
+   `[Install]` section and must never be enabled.
 
 Optional pre-install resolver evidence on a networked Linux host:
 
@@ -190,17 +239,26 @@ durably recorded before its atomic directory creation and is never renamed.
 The installer then fsyncs a root-only snapshot under
 `/etc/patina/.scan-worker-install-transaction` of every managed unit's installed
 presence/content, the current/previous release references, and a durable state
-marker. Only after that does it stop an active service, atomically
+marker. Recovery first requires a symlink-free root-owned `/etc/patina` and
+transaction tree; every marker/snapshot input must be a regular root-owned,
+non-group/world-writable file, and restored unit targets must exactly match the
+installer's five-path allowlist. It inspects `ActiveState` explicitly and fails
+closed on `activating`, `deactivating`, or `reloading`. Only after a stable
+`active` worker is stopped and confirmed quiescent does it atomically
 replace units and the stable `.venv` symlink, reload systemd, and activate. If
 candidate activation fails, it restores every unit and both release references,
 daemon-reloads, and restarts the old worker. If power loss or SIGKILL interrupts
-a switch, the next invocation performs that rollback before doing new work.
+a switch, the next invocation performs that rollback before doing new work;
+an interruption after the durable `committed` marker keeps the new release and
+finishes cleanup instead of rolling it back.
 
 A pre-transaction real-directory `.venv` is converted once into the immutable
 release layout while stopped, ownership-hardened, and retained for rollback;
 that exceptional move is marker-backed at every step. Stable release links are
 accepted only when their no-follow target is directly contained by the trusted
-release namespace. Failed/abandoned stages are deleted only inside the installer's
+release namespace. Hardened legacy contents are normalized to service-readable
+`0755` directories/executables and `0644` data/modules while remaining
+root-owned. Failed/abandoned stages are deleted only inside the installer's
 `.venv.release.*` namespace and only when neither `.venv` nor `.venv.previous`
 references them. When the service was already inactive, it is not started; the
 previous release remains available for rollback. Rebuilding also fails before
@@ -208,10 +266,10 @@ activation if a GPU drop-in exists but `--gpu` was omitted, preventing an
 accidental CUDA-dependency downgrade:
 
 ```bash
-git pull
-sudo ./install.sh --upgrade             # CPU worker
+# Re-stage the reviewed source with the root-owned rsync command above, then:
+sudo /opt/patina/scan-pipeline/install.sh --upgrade  # CPU worker
 # or, on the accepted GPU box:
-sudo ./install.sh --gpu --upgrade
+sudo /opt/patina/scan-pipeline/install.sh --gpu --upgrade
 ```
 
 ## The env file (`/etc/patina/scan-worker.env`)
