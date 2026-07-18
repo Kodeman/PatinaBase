@@ -17,6 +17,8 @@ warning naming both workers, and let the loop continue.
 from __future__ import annotations
 
 import logging
+import uuid
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -38,9 +40,37 @@ class LostRaceError(RuntimeError):
 
 
 class QueueClient:
-    def __init__(self, session: httpx.Client, settings: Settings):
+    def __init__(
+        self,
+        session: httpx.Client,
+        settings: Settings,
+        lease_id_factory: Callable[[], str] | None = None,
+    ):
         self._s = session
         self._cfg = settings
+        self._lease_id_factory = lease_id_factory or (lambda: str(uuid.uuid4()))
+
+    def _new_lease_owner(self) -> str:
+        raw_suffix = self._lease_id_factory()
+        if not isinstance(raw_suffix, str) or not raw_suffix.strip():
+            raise RuntimeError("lease identity factory returned an empty value")
+        suffix = raw_suffix.strip()
+        return f"{self._cfg.worker_id}:{suffix}"
+
+    def _require_lease_owner(self, lease_owner: str) -> str:
+        if not isinstance(lease_owner, str):
+            raise RuntimeError(
+                "completion lease owner must be the exact base-prefixed identity "
+                "carried by a task returned from claim()"
+            )
+        owner = lease_owner.strip()
+        prefix = f"{self._cfg.worker_id}:"
+        if not owner.startswith(prefix) or len(owner) == len(prefix):
+            raise RuntimeError(
+                "completion lease owner must be the exact base-prefixed identity "
+                "carried by a task returned from claim()"
+            )
+        return owner
 
     def _rpc(self, name: str, body: dict[str, Any]) -> Any:
         try:
@@ -76,30 +106,48 @@ class QueueClient:
     def claim(self) -> list[dict[str, Any]]:
         """Atomically lease up to MAX_CONCURRENT queued/stale-running tasks whose
         task_type is in this worker's STAGES. FOR UPDATE SKIP LOCKED in the RPC
-        makes a second worker's claims disjoint with zero coordination."""
+        makes a second worker's claims disjoint with zero coordination. Every
+        call creates a fresh, base-prefixed lease owner and carries it on each
+        returned task for exact completion."""
+        lease_owner = self._new_lease_owner()
         rows = self._rpc(
             "claim_agent_tasks",
             {
                 "p_task_types": list(self._cfg.task_types),
                 "p_batch": self._cfg.max_concurrent,
-                "p_worker": self._cfg.worker_id,
+                "p_worker": lease_owner,
                 "p_visibility_timeout": self._cfg.visibility_timeout,
             },
         )
-        return rows or []
+        # Carry the immutable authority on each returned task. Do not look it
+        # up later by task id: the same id may be reclaimed under a newer token
+        # while an old task object is still finishing.
+        return [{**row, "_lease_owner": lease_owner} for row in (rows or [])]
 
     # ── complete (lost-race-guarded) ──────────────────────────────────────────
-    def complete_done(self, task_id: str, artifacts: dict[str, Any]) -> bool:
+    def complete_done(
+        self,
+        task_id: str,
+        artifacts: dict[str, Any],
+        *,
+        lease_owner: str,
+    ) -> bool:
         """Returns True if we completed it, False if we lost the race."""
         return self._guarded_complete(task_id, {
             "p_id": task_id,
             "p_outcome": "done",
             "p_artifacts": artifacts,
-            "p_actor": self._cfg.worker_id,
+            "p_actor": self._require_lease_owner(lease_owner),
         })
 
     def complete_failed(
-        self, task_id: str, error: str, fatal: bool, artifacts: dict[str, Any] | None = None
+        self,
+        task_id: str,
+        error: str,
+        fatal: bool,
+        artifacts: dict[str, Any] | None = None,
+        *,
+        lease_owner: str,
     ) -> bool:
         return self._guarded_complete(task_id, {
             "p_id": task_id,
@@ -107,7 +155,7 @@ class QueueClient:
             "p_error": error[:2000],
             "p_fatal": fatal,
             "p_artifacts": artifacts or {},
-            "p_actor": self._cfg.worker_id,
+            "p_actor": self._require_lease_owner(lease_owner),
         })
 
     def _guarded_complete(self, task_id: str, body: dict[str, Any]) -> bool:
@@ -118,7 +166,7 @@ class QueueClient:
             log.warning(
                 "worker %s lost the race completing task %s (now %s) — another "
                 "worker owns it; skipping. (%s)",
-                self._cfg.worker_id, task_id, self._current_holder(task_id), exc,
+                body["p_actor"], task_id, self._current_holder(task_id), exc,
             )
             return False
 
@@ -130,6 +178,8 @@ class QueueClient:
         entity_id: str,
         idempotency_key: str,
         parent_task_id: str,
+        *,
+        lease_owner: str,
     ) -> dict[str, Any] | None:
         """Enqueue the next stage. Idempotent on its own key; assignee stays
         NULL; source is 'scan-pipeline'; entity_type 'room_scan' (design §2.1).
@@ -147,14 +197,14 @@ class QueueClient:
                     "p_max_attempts": self._cfg.max_attempts,
                     "p_on_conflict": "ignore",
                     "p_parent_task_id": parent_task_id,
-                    "p_actor": self._cfg.worker_id,
+                    "p_actor": self._require_lease_owner(lease_owner),
                 },
             )
         except LostRaceError as exc:
             log.warning(
                 "worker %s: successor enqueue for %s hit a lost race (%s) — the "
                 "idempotency key makes this a no-op; continuing.",
-                self._cfg.worker_id, idempotency_key, exc,
+                self._require_lease_owner(lease_owner), idempotency_key, exc,
             )
             return None
 
@@ -162,7 +212,7 @@ class QueueClient:
     def requeue(self, task_id: str) -> dict[str, Any] | None:
         return self._rpc(
             "requeue_agent_task",
-            {"p_id": task_id, "p_actor": self._cfg.worker_id},
+            {"p_id": task_id, "p_actor": self._new_lease_owner()},
         )
 
     # ── stats (doctor DB-reachability probe) ──────────────────────────────────

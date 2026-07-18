@@ -31,6 +31,46 @@ function unwrap<T>(res: { data: T; error: unknown }): T {
   return res.data;
 }
 
+/**
+ * Create the identity for one queue lease.
+ *
+ * The readable prefix is useful in locked_by/audit rows; the UUID prevents two
+ * overlapping invocations of the same deployed worker from sharing authority.
+ * Tests may pass an explicit unique suffix for deterministic assertions.
+ */
+export function createLeaseOwner(baseLabel: string, uniqueId: string = crypto.randomUUID()): string {
+  const base = baseLabel.trim();
+  const suffix = uniqueId.trim();
+  if (!base) throw new Error('createLeaseOwner: baseLabel must be non-empty');
+  if (!suffix) throw new Error('createLeaseOwner: uniqueId must be non-empty');
+  return `${base}:${suffix}`;
+}
+
+function errorMessage(error: unknown): string | null {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return null;
+}
+
+function isLeaseLostCompletionMessage(message: string): boolean {
+  return (
+    message.includes('complete_agent_task: lease ownership rejected') ||
+    (message.includes('complete_agent_task: task ') &&
+      (message.includes(' not found') || message.includes('(must be running)')))
+  );
+}
+
+/** Stable, typed signal that a completion arrived after its lease ended. */
+export class AgentTaskLeaseLostError extends Error {
+  override name = 'AgentTaskLeaseLostError';
+}
+
+export function isAgentTaskLeaseLostError(error: unknown): error is AgentTaskLeaseLostError {
+  return error instanceof AgentTaskLeaseLostError;
+}
+
 export interface AgentQueue {
   enqueue(input: EnqueueInput): Promise<AgentTask>;
   claim(input: ClaimInput): Promise<AgentTask[]>;
@@ -81,17 +121,20 @@ export function createAgentQueue(client: SupabaseClient): AgentQueue {
     },
 
     async complete(input) {
-      unwrap(
-        await client.rpc('complete_agent_task', {
-          p_id: input.id,
-          p_outcome: input.outcome,
-          p_artifacts: input.artifacts,
-          p_confidence: input.confidence,
-          p_error: input.error,
-          p_fatal: input.fatal,
-          p_actor: input.actor,
-        }),
-      );
+      const res = await client.rpc('complete_agent_task', {
+        p_id: input.id,
+        p_outcome: input.outcome,
+        p_artifacts: input.artifacts,
+        p_confidence: input.confidence,
+        p_error: input.error,
+        p_fatal: input.fatal,
+        p_actor: input.actor,
+      });
+      const message = errorMessage(res.error);
+      if (message && isLeaseLostCompletionMessage(message)) {
+        throw new AgentTaskLeaseLostError(message);
+      }
+      unwrap(res);
     },
 
     async review(input) {

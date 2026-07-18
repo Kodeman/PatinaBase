@@ -380,3 +380,42 @@ Deno.test('runProcessor: stripe_event + payment_discrepancy passthrough, job_run
   assertEquals(detail.done, 1);
   assertEquals(detail.passthrough, 1);
 });
+
+Deno.test('runProcessor: a stale completion is a benign lease loss and is not retried as failed', async () => {
+  const task = makeTask(
+    { discrepancy: 'stale worker evidence' },
+    { task_type: 'payment_discrepancy' },
+  );
+  let completionCalls = 0;
+  const sb = createFakeSupabase(
+    {},
+    {
+      claim_agent_tasks: () => ({ data: [task], error: null }),
+      complete_agent_task: () => {
+        completionCalls++;
+        return {
+          data: null,
+          error: {
+            message:
+              `complete_agent_task: lease ownership rejected for task ${task.id} ` +
+              '(locked_by stripe-event-processor:new, p_actor stripe-event-processor:old)',
+          },
+        };
+      },
+    },
+  );
+
+  const summary = await runProcessor({
+    supabase: sb as unknown as ProcessorSupabase,
+    fetchStripeObject: fetchFrom({}),
+    now: () => new Date('2026-07-12T06:00:00Z'),
+    worker: 'stripe-event-processor:old',
+  });
+
+  assertEquals(summary.status, 'succeeded');
+  assertEquals(summary.claimed, 1);
+  assertEquals(summary.passthrough, 0);
+  assertEquals(summary.failed, 0);
+  assertEquals(summary.error, null);
+  assertEquals(completionCalls, 1, 'must not retry completion as a failed outcome after losing the lease');
+});

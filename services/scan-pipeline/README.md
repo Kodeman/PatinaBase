@@ -29,8 +29,10 @@ so those items only replace a stub body.
   RPCs; `assignee` stays NULL and the `awaiting_review/approved/rejected` states
   are never used (a mechanical job has no human gate).
 - **Native package, no orchestration.** Runs under `systemd` in a venv (R109.1).
-- **Burst-ready by config.** Identity + behaviour come entirely from an env file;
-  a cloud burst worker is the same package with a different `WORKER_ID`/`STAGES`.
+- **Burst-ready by config.** Behaviour and a readable identity prefix come from
+  the env file; each claim batch adds a UUID, so overlapping workers never
+  share completion authority. A cloud burst worker is the same package with
+  its own `WORKER_ID`/`STAGES` labels.
 
 ## Install on a Linux box
 
@@ -111,7 +113,7 @@ via `EnvironmentFile` so it never appears in `argv`. Full schema: design §3.
 
 | var | default | purpose |
 |---|---|---|
-| `WORKER_ID` | *(required)* | identity in `locked_by` + `app.actor` (audit); unique per worker |
+| `WORKER_ID` | *(required)* | readable audit prefix; each claim appends a fresh UUID for the exact `locked_by` + completion `app.actor` identity |
 | `SUPABASE_URL` | *(required)* | Strata PostgREST + Storage base |
 | `SUPABASE_SERVICE_ROLE_KEY` | *(required)* | service-role JWT (server-side only) |
 | `STAGES` | `ingest,solve,drawings` | which `scan_pipeline.*` stages this worker claims. Known: `ingest,solve,drawings` (CPU, live) + `refine,fuse,splat,present` (P2; `refine/fuse/splat` are GPU). Default stays CPU-only — a GPU box lists the GPU stages explicitly |
@@ -140,7 +142,8 @@ patina-scan-worker doctor        # preflight: env / DB / Storage / GPU (+torch-c
 - **Watch:** `journalctl -u patina-scan-worker -f`.
 - **Inspect a failed job:** it is a row in `agent_tasks` (`last_error`,
   `attempts`, `task_type`, `payload` = `scan_id`/version, `parent_task_id`
-  chain); `agent_task_audit` holds the transition history (`actor = WORKER_ID`);
+  chain); `agent_task_audit` holds the transition history (claim/completion
+  actors are `WORKER_ID:<claim-uuid>`);
   `scan_pipeline_events` holds the per-stage `*.failed` event with a structured
   `detail`. No bespoke admin table.
 - **Re-run a parked `failed` job** (after fixing the cause):
@@ -152,9 +155,11 @@ patina-scan-worker doctor        # preflight: env / DB / Storage / GPU (+torch-c
 - **Fresh re-run / re-scan:** a new bundle upload flips the scan to `ready` again
   → the trigger allocates version+1 → a new ingest→solve→drawings chain and a new
   `room_files` row.
-- **Burst:** stand up a second worker with a different `WORKER_ID` (same package,
-  different env file). `claim_agent_tasks` uses `FOR UPDATE SKIP LOCKED`, so the
-  two claim disjoint tasks with zero coordination.
+- **Burst:** stand up a second worker with its own readable `WORKER_ID` label
+  (same package, different env file). `claim_agent_tasks` uses `FOR UPDATE SKIP
+  LOCKED`, and every claim batch has a fresh UUID-backed lease owner, so the two
+  claim disjoint tasks with zero coordination even if labels are accidentally
+  reused.
 
 ## How ingest is enqueued (the DB side)
 

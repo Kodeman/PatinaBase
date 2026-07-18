@@ -8,9 +8,9 @@
 -- Hazard reconciled: after a visibility timeout, worker B can reclaim a task
 -- that worker A is still processing. The 00297 completion RPC checked only
 -- status='running', so late worker A could complete B's live lease. Completion
--- now requires the caller's stable, unique WORKER_ID to equal locked_by. The
--- RPC remains service_role-only; service_role is trusted and WORKER_ID
--- uniqueness is the expected-owner contract.
+-- now requires the caller's collision-resistant lease-owner identity to equal
+-- locked_by. The RPC remains service_role-only; service_role is trusted and a
+-- unique identity per claim invocation is the expected-owner contract.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public.complete_agent_task(

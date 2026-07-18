@@ -83,6 +83,7 @@ export interface ClaimInput {
   /** null claims across all task types. */
   taskTypes: string[] | null;
   batch: number;
+  /** Collision-resistant identity for this claim invocation; use createLeaseOwner(). */
   worker: string;
   /** Postgres interval literal, e.g. '15 minutes'. */
   visibilityTimeout?: string;
@@ -91,7 +92,7 @@ export interface ClaimInput {
 export interface CompleteInput {
   id: string;
   outcome: CompleteOutcome;
-  /** Must exactly match the WORKER_ID that claimed the current lease. */
+  /** Must exactly match the collision-resistant identity that claimed this lease. */
   actor: string;
   artifacts?: Json;
   confidence?: number | null;

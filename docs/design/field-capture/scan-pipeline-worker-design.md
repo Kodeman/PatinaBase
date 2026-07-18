@@ -69,13 +69,14 @@ The worker holds a **service-role** Supabase client (the queue RPCs are granted 
 
 ```
 # ── poll ────────────────────────────────────────────────────────────────────
+LEASE_OWNER := WORKER_ID || ':' || random_uuid()  # fresh for this claim batch
 rows = claim_agent_tasks(
     p_task_types        := ARRAY[<enabled STAGES>],   # e.g. {'scan_pipeline.ingest','scan_pipeline.solve','scan_pipeline.drawings'}
     p_batch             := MAX_CONCURRENT,
-    p_worker            := WORKER_ID,
+    p_worker            := LEASE_OWNER,
     p_visibility_timeout := VISIBILITY_TIMEOUT        # default '15 minutes'
 )
-# → each returned row is now status='running', attempts+1, locked_by=WORKER_ID.
+# → each returned row is status='running', attempts+1, locked_by=LEASE_OWNER.
 # If rows is empty: sleep POLL_SECONDS, poll again.
 
 # ── per claimed task (dispatched by task.task_type) ─────────────────────────
@@ -105,25 +106,25 @@ try:
         p_idempotency_key := '{scan_id}:drawings:{room_file_version}',
         p_parent_task_id := task.id,
         p_on_conflict    := 'ignore',
-        p_actor          := WORKER_ID
+        p_actor          := LEASE_OWNER
     )
 
     scan_pipeline_events.insert(..., event='solve.succeeded', status='succeeded',
                                 duration_ms=..., detail={tolerance_counts, mean_residual_mm})
     complete_agent_task(p_id := task.id, p_outcome := 'done',
                         p_artifacts := {room_file_id, tolerance_counts},
-                        p_actor := WORKER_ID)
+                        p_actor := LEASE_OWNER)
 
 except TransientError as e:      # storage blip, network, lock contention
     scan_pipeline_events.insert(..., event='solve.failed', status='failed', detail={error})
     complete_agent_task(task.id, 'failed', p_error := str(e), p_fatal := False,
-                        p_actor := WORKER_ID)          # → backoff requeue, SAME version
+                        p_actor := LEASE_OWNER)        # → backoff requeue, SAME version
 
 except PermanentError as e:      # unsolvable inputs, corrupt geometry, poison
     UPDATE room_files SET status='error', generation_error := str(e) WHERE id = room_file_id
     scan_pipeline_events.insert(..., event='solve.failed', status='failed', detail={error, fatal:true})
     complete_agent_task(task.id, 'failed', p_error := str(e), p_fatal := True,
-                        p_actor := WORKER_ID)          # → parked failed, no more retries
+                        p_actor := LEASE_OWNER)        # → parked failed, no more retries
 ```
 
 Ordering note: the successor is enqueued **before** `complete_agent_task('done')`, and the successor enqueue is idempotent. A crash between the two leaves the job `running`; the visibility timeout reclaims it, the stage re-runs (writes are idempotent by `(scan_id, version)`), the successor enqueue de-dupes on its key, and the job completes. A crash *before* the enqueue simply re-runs the whole stage. Every path converges.
@@ -140,11 +141,11 @@ The ingest stage is the server half of the integrity contract (spec §7, §10). 
 
 ## 3. Configuration schema
 
-Everything about a worker — identity, which stages it runs, cadence, concurrency, GPU posture, and its one credential — comes from the environment (an `EnvironmentFile`, `/etc/patina/scan-worker.env`). This is what makes a cloud burst worker a config change, not a code change.
+Everything about a worker — its readable identity prefix, which stages it runs, cadence, concurrency, GPU posture, and its one credential — comes from the environment (an `EnvironmentFile`, `/etc/patina/scan-worker.env`). This is what makes a cloud burst worker a config change, not a code change. Runtime lease authority is narrower: each claim batch appends a fresh UUID to the configured prefix.
 
 | Env var | Type | Default | Purpose |
 |---|---|---|---|
-| `WORKER_ID` | string | *(required)* | Identity stamped into `locked_by` and `app.actor` (audit). Unique per running worker (`homelab-1`, `cloud-burst-a`). |
+| `WORKER_ID` | string | *(required)* | Readable audit prefix (`homelab-1`, `cloud-burst-a`). Each claim appends a UUID; that full value is stamped into `locked_by` and used as the matching completion `app.actor`. |
 | `STAGES` | csv | `ingest,solve,drawings` | Which `scan_pipeline.*` stages this worker claims. A cloud worker might run `drawings` only; a P2 GPU worker adds `splat` (§8). |
 | `POLL_SECONDS` | int | `5` | Sleep between polls when a claim returns zero tasks. |
 | `MAX_CONCURRENT` | int | `2` | Claim batch size and max in-flight jobs (`p_batch`). Bounds scratch disk and CPU. |
@@ -293,9 +294,9 @@ All retry logic lives in the queue (00297), not the worker. The worker's job is 
 | Parked `failed`, unattended | — | `groom_agent_tasks` auto-requeues **once** after the failed cooldown (6h), marked `payload.groom_requeued_at` so it never auto-loops. |
 | Deliberate fresh re-run / re-scan | Entry point reserves version + 1 | A new `room_files` row and a new ingest→solve→drawings chain. |
 
-**Inspectability.** Every failed job is a row in `agent_tasks` with `last_error`, `attempts`, `task_type`, `payload` (scan_id, version), and its `parent_task_id` chain; `agent_task_audit` holds the full transition history with `actor = WORKER_ID`; `scan_pipeline_events` holds the per-stage `*.failed` event with a structured `detail`. Item 9's AC — "failed jobs are inspectable and re-runnable" — is satisfied by the queue's own surfaces; no bespoke admin table.
+**Inspectability.** Every failed job is a row in `agent_tasks` with `last_error`, `attempts`, `task_type`, `payload` (scan_id, version), and its `parent_task_id` chain; `agent_task_audit` holds the full transition history with claim/completion actor `WORKER_ID:<claim-uuid>`; `scan_pipeline_events` holds the per-stage `*.failed` event with a structured `detail`. Item 9's AC — "failed jobs are inspectable and re-runnable" — is satisfied by the queue's own surfaces; no bespoke admin table.
 
-**Second-worker AC.** Because `claim_agent_tasks` uses `FOR UPDATE SKIP LOCKED`, a second worker attaching (even a stub) with a different `WORKER_ID` claims disjoint tasks with zero coordination. That is the burst-ready proof (item 9 AC) and it is purely a config act.
+**Second-worker AC.** Because `claim_agent_tasks` uses `FOR UPDATE SKIP LOCKED`, a second worker attaching (even a stub) claims disjoint tasks with zero coordination. Every batch uses a fresh UUID-backed lease owner, so safety does not depend on operators assigning distinct `WORKER_ID` prefixes (distinct prefixes remain useful for audit readability). That is the burst-ready proof (item 9 AC) and it is purely a config act.
 
 ---
 
