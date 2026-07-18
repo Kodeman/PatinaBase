@@ -116,6 +116,48 @@ task (belt-and-braces for a lost enqueue), logging to `job_runs`. The trigger
 allocates the `room_file_version`; the ingest stage reserves the pending
 `room_files` row.
 
+## Telemetry query surface (item 13)
+
+Every run lands events in `scan_pipeline_events` across all six stages —
+`capture` (metrics from the validated manifest), `upload` (timing snapshot from
+the `room_scans` columns), `ingest` / `solve` / `drawing` / `delivery`. Two
+admin-only views (migration `00372`) are the "minimal query surface":
+
+```sql
+-- per-scan run summary: stage durations (ms), wall time, room_file status,
+-- and the last scan_pipeline.* task's status/attempts/error.
+SELECT scan_id, room_file_version, room_file_status, tolerance_class,
+       ingest_ms, solve_ms, drawing_ms, wall_seconds,
+       last_task_status, last_task_attempts
+FROM   public.scan_pipeline_runs
+ORDER  BY last_event_at DESC
+LIMIT  20;
+
+-- per-deliverable tolerance distribution: counts + p50/p95 tolerance_mm by class.
+SELECT tolerance_class, measurement_count, with_tolerance,
+       p50_tolerance_mm, p95_tolerance_mm, max_tolerance_mm
+FROM   public.scan_tolerance_distribution
+WHERE  room_file_id = '<uuid>'
+ORDER  BY tolerance_class;
+
+-- the raw stage timeline for one scan (all six stages, created_at order).
+SELECT stage, event, status, duration_ms, detail
+FROM   public.scan_pipeline_events
+WHERE  scan_id = '<uuid>'
+ORDER  BY created_at;
+```
+
+Both views are SECURITY DEFINER + admin-domain gated (they read past the
+event tables' delegated RLS, then self-restrict to `roles.domain = 'admin'`), so
+they return rows only to an admin caller. To probe them locally, impersonate a
+seeded admin:
+
+```sql
+SET LOCAL role authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","role":"authenticated"}';
+SELECT * FROM public.scan_pipeline_runs LIMIT 5;
+```
+
 ## Stage seam (items 10 / 11)
 
 `src/patina_scan_worker/stages/__init__.py` is the `task_type → handler` dispatch

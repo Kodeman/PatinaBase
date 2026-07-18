@@ -3263,3 +3263,15 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.fulfillment_create_vendor(text, text, text, text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00372_scan_pipeline_query_surface.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.scan_pipeline_runs TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00372_scan_pipeline_query_surface.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.scan_tolerance_distribution TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

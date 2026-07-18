@@ -127,6 +127,54 @@ def reconcile_artifacts_sha256(
     return tokens
 
 
+def capture_metrics(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Capture-quality metrics for the `capture.metrics` telemetry event (item 13),
+    lifted from the validated manifest's scorecard + poseGraphSummary + session."""
+    sc = manifest.get("scorecard") or {}
+    pg = manifest.get("poseGraphSummary") or {}
+    sess = manifest.get("session") or {}
+    return {
+        "coverage_pct": sc.get("coveragePct"),
+        "sharp_frame_ratio": sc.get("sharpFrameRatio"),
+        "tracking_health": sc.get("trackingHealth"),
+        "anchor_count": sc.get("anchorCount"),
+        "verdict": sc.get("verdict"),
+        "keyframe_count": pg.get("keyframeCount"),
+        "mean_translation_drift_pct": pg.get("meanTranslationDriftPct"),
+        "blur_rejected_count": pg.get("blurRejectedCount"),
+        "loop_closures": pg.get("loopClosures"),
+        "capture_duration_s": sess.get("captureDurationSeconds"),
+        "thermal_peak": sess.get("thermalPeak"),
+    }
+
+
+def upload_metrics(scan_row: dict[str, Any]) -> dict[str, Any]:
+    """Upload-timing snapshot for the `upload.snapshot` telemetry event (item 13),
+    from the room_scans upload columns (00082) the DB records but the event
+    stream doesn't yet surface."""
+    return {
+        "upload_started_at": scan_row.get("upload_started_at"),
+        "upload_completed_at": scan_row.get("upload_completed_at"),
+        "upload_progress": scan_row.get("upload_progress"),
+        "upload_attempt_count": scan_row.get("upload_attempt_count"),
+    }
+
+
+def upload_duration_ms(scan_row: dict[str, Any]) -> int | None:
+    s = scan_row.get("upload_started_at")
+    e = scan_row.get("upload_completed_at")
+    if not (isinstance(s, str) and isinstance(e, str)):
+        return None
+    try:
+        import datetime as _dt
+        ds = _dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+        de = _dt.datetime.fromisoformat(e.replace("Z", "+00:00"))
+        d = int((de - ds).total_seconds() * 1000)
+        return d if d >= 0 else None
+    except (ValueError, TypeError):
+        return None
+
+
 def _summarize(manifest: dict[str, Any]) -> dict[str, Any]:
     artifacts = manifest.get("artifacts") or []
     anchors = manifest.get("anchors") or []
@@ -257,6 +305,19 @@ class IngestStage(BaseStage):
             raise PermanentError(f"manifest parse: {exc}", token="MANIFEST_PARSE") from exc
         if not isinstance(manifest, dict):
             raise PermanentError("manifest top-level is not an object", token="MANIFEST_PARSE")
+
+        # ── item-13 telemetry: land the capture + upload metrics the DB has no
+        # other record of, from the validated manifest + room_scans columns
+        # already in hand (no iOS changes). Emitted once the manifest parses, so
+        # even a later-failing bundle contributes end-to-end telemetry. ──────────
+        cap = capture_metrics(manifest)
+        cap_ms = int(cap["capture_duration_s"] * 1000) \
+            if isinstance(cap.get("capture_duration_s"), (int, float)) else None
+        ctx.telemetry.emit(scan_id, "capture", "capture.metrics", "info",
+                           duration_ms=cap_ms, detail=cap)
+        ctx.telemetry.emit(scan_id, "upload", "upload.snapshot", "info",
+                           duration_ms=upload_duration_ms(scan_row),
+                           detail=upload_metrics(scan_row))
 
         # Download every listed artifact into the scratch bundle. A 404
         # (MISSING_FILE) is left for the validator to name so classification runs

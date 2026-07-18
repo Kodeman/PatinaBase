@@ -9,8 +9,11 @@ import pytest
 from patina_scan_worker.errors import PermanentError, classify_failures
 from patina_scan_worker.stages import validator
 from patina_scan_worker.stages.ingest import (
+    capture_metrics,
     plan_downloads,
     reconcile_artifacts_sha256,
+    upload_duration_ms,
+    upload_metrics,
     _summarize,
 )
 
@@ -149,6 +152,31 @@ def test_classify_failures_permanent_vs_transient():
 
     with pytest.raises(ValueError):
         classify_failures([], attempts=1)
+
+
+def test_capture_metrics_from_manifest(tmp_path):
+    manifest = _fixture_manifest(tmp_path)
+    cap = capture_metrics(manifest)
+    # fixture scorecard: coveragePct 92, anchorCount 3, verdict green
+    assert cap["coverage_pct"] == 92
+    assert cap["anchor_count"] == 3
+    assert cap["verdict"] == "green"
+    assert cap["keyframe_count"] == 312          # poseGraphSummary
+    assert cap["capture_duration_s"] == 630       # session
+
+
+def test_upload_metrics_and_duration():
+    row = {
+        "upload_started_at": "2026-07-17T15:04:00Z",
+        "upload_completed_at": "2026-07-17T15:06:30Z",
+        "upload_progress": 100, "upload_attempt_count": 1,
+    }
+    m = upload_metrics(row)
+    assert m["upload_progress"] == 100 and m["upload_attempt_count"] == 1
+    assert upload_duration_ms(row) == 150_000     # 2m30s
+    # missing timestamps → None (not a crash)
+    assert upload_duration_ms({}) is None
+    assert upload_duration_ms({"upload_started_at": "2026-07-17T15:04:00Z"}) is None
 
 
 def test_validator_end_to_end_on_fixture(tmp_path):
