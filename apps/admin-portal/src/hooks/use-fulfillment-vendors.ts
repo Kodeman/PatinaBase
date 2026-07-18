@@ -27,6 +27,20 @@ export function useVendorDetail(vendorId: string | null) {
   });
 }
 
+/** The Directory's "Add vendor" affordance (I15) — invalidates the whole
+ *  fulfillment root key on success, same as every other fulfillment
+ *  mutation hook (see use-fulfillment-shipments.ts's useRecordEtaChange). */
+export function useCreateVendor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; website?: string; notes?: string }) =>
+      fulfillmentVendorsService.createVendor(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: fulfillmentKeys.all });
+    },
+  });
+}
+
 export function useUpdateVendorProfile(vendorId: string) {
   const qc = useQueryClient();
   return useMutation({
