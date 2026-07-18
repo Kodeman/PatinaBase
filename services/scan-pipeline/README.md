@@ -39,10 +39,10 @@ Ubuntu 22.04/24.04 LTS or Debian 12, x86_64, Python 3.11+ with `venv`
 inbound.
 
 ```bash
-sudo ./install.sh                       # CPU worker: venv + .[drawings] + unit + env template + doctor
+sudo ./install.sh                       # CPU worker: venv + .[drawings] + unit + env template
 sudo -e /etc/patina/scan-worker.env     # set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, WORKER_ID
-/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker doctor
-sudo systemctl enable --now patina-scan-worker
+sudo systemctl enable --now patina-scan-worker  # ExecStartPre doctor gates worker start
+systemctl status patina-scan-worker
 journalctl -u patina-scan-worker -f
 ```
 
@@ -55,15 +55,15 @@ hard **failure** only when `STAGES` lists a GPU stage (see below). Provision
 
 ### Box prep (GPU)
 
-The GPU stages — `refine` (GLOMAP/COLMAP), `fuse` (Open3D TSDF), `splat` (gsplat
+The GPU stages — `refine` (COLMAP), `fuse` (Open3D TSDF), `splat` (gsplat
 3DGS → SPZ) — run on an NVIDIA box. **Turing pin reality (target GPU = RTX 2080
 Ti, SM 7.5):** `sm_75` is *not* dropped from modern PyTorch — it stays in the
 **cu118** (CUDA 11.8) wheel's arch list. The binding constraint is the box's
 **CUDA-11.x-era driver**, which needs the cu118 *runtime*, so we install the
 `+cu118` torch wheel via the PyTorch index. `install.sh --gpu` does this for you
 (`--extra-index-url https://download.pytorch.org/whl/cu118`). The torch band is
-pinned in `pyproject.toml` `[splat]`; `doctor`'s `gpu` + `torch-cuda` lines on
-the box are the ground truth.
+pinned in `pyproject.toml` `[splat]`; the unit's stage-scoped `ExecStartPre`
+doctor is the ground truth.
 
 Prereqs to install **before** `./install.sh --gpu`:
 
@@ -71,9 +71,11 @@ Prereqs to install **before** `./install.sh --gpu`:
 2. **CUDA 11.8 toolkit** (`nvcc`) — gsplat JIT-compiles its CUDA kernels at
    install against the torch CUDA version, so `nvcc` must be 11.8. Verify:
    `nvcc --version`.
-3. **GLOMAP + COLMAP** binaries on `PATH` (system packages / build) — these are
-   the `refine` stage's SfM front-end (not pip; `pycolmap` is the Python binding
-   and *is* pulled by `.[refine]`).
+3. **COLMAP** on `PATH` with `feature_extractor`, `sequential_matcher`,
+   `exhaustive_matcher`, `point_triangulator`, `bundle_adjuster`, and
+   `pose_prior_mapper`. These are the `refine` stage's known-pose path and
+   fallback (not pip; `pycolmap` is pulled by `.[refine]`). `global_mapper` is
+   reported when available but is not treated as a full-pose warm start.
 
 Then:
 
@@ -81,24 +83,48 @@ Then:
 sudo ./install.sh --gpu                 # + .[gpu] via cu118 index, + GPU systemd drop-in
 sudo -e /etc/patina/scan-worker.env     # set STAGES to include the GPU stage(s), e.g.
                                         #   STAGES=ingest,refine,fuse,splat,present
-/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker doctor   # gpu + torch-cuda must pass
-sudo systemctl enable --now patina-scan-worker
+sudo systemctl enable --now patina-scan-worker  # ExecStartPre must pass before claims
+systemctl status patina-scan-worker
+journalctl -u patina-scan-worker -n 100 --no-pager
+sudo systemd-analyze verify /etc/systemd/system/patina-scan-worker.service
+sudo systemctl show patina-scan-worker \
+  -p User -p Environment -p ReadWritePaths -p PrivateDevices -p DevicePolicy -p DeviceAllow
 ```
 
 `--gpu` also lays down `…/patina-scan-worker.service.d/gpu.conf`, which grants
-`/dev/nvidia*` (flipping systemd to a *closed* device policy — GPU nodes and
-nothing else) and confines `TORCH_HOME` + `CUDA_CACHE_PATH` under `APP_DIR/.cache`
-so `ProtectSystem=strict` never EACCESes the CUDA JIT cache.
+the accepted single-2080-Ti box's exact `/dev/nvidia0`, control, UVM, and modeset
+nodes. Systemd does not expand device-path globs; a future multi-GPU box must add
+one exact `/dev/nvidiaN` line per card. The drop-in also confines `TORCH_HOME`,
+`CUDA_CACHE_PATH`, and `TORCH_EXTENSIONS_DIR` under `APP_DIR/.cache` so
+`ProtectSystem=strict` never redirects model, kernel, or extension-build caches
+outside the app-owned write surface.
+
+`install.sh` does not run doctor from its root shell. The authoritative doctor is
+`ExecStartPre` in the worker unit, so it inherits `User=patina`, the real
+`EnvironmentFile`, XDG/GPU variables, `DeviceAllow`, `ProtectSystem`, and
+`ReadWritePaths`. Any RED check stops the worker before it can claim a task. A
+manual `patina-scan-worker doctor` remains useful diagnostics, but does not prove
+the systemd sandbox/device policy.
+
+Optional pre-install resolver evidence on a networked Linux host:
+
+```bash
+python3 -m pip install --dry-run --report /tmp/patina-gpu-resolve.json \
+  --extra-index-url https://download.pytorch.org/whl/cu118 '.[gpu]'
+```
 
 ### Upgrading a running worker
 
 The worker installs a **copy** of the source into its venv, so `git pull` alone
-does **not** change a running worker's behaviour. The upgrade is two commands
-(add `--gpu` on a GPU box); `--upgrade` rebuilds the venv from the pulled source:
+does **not** change a running worker's behaviour. `--upgrade` rebuilds the venv
+from the pulled source. It fails before touching the venv if a GPU drop-in exists
+but `--gpu` was omitted, preventing an accidental CUDA-dependency downgrade:
 
 ```bash
 git pull
-sudo ./install.sh --upgrade             # (--gpu --upgrade on a GPU box)
+sudo ./install.sh --upgrade             # CPU worker
+# or, on the accepted GPU box:
+sudo ./install.sh --gpu --upgrade
 sudo systemctl restart patina-scan-worker
 ```
 
@@ -132,7 +158,7 @@ via `EnvironmentFile` so it never appears in `argv`. Full schema: design §3.
 patina-scan-worker run           # long-lived loop (what systemd starts)
 patina-scan-worker run --once    # claim-and-drain one batch then exit
 patina-scan-worker once          # alias for `run --once`
-patina-scan-worker doctor        # preflight: env / DB / Storage / GPU (+torch-cuda for splat) / disk / caches (no queue interaction)
+patina-scan-worker doctor        # diagnostics only; no queue interaction (systemd ExecStartPre is authoritative)
 ```
 
 ## Operate
@@ -203,7 +229,8 @@ allocates the `room_file_version`; the ingest stage reserves the pending
   ```
 
   `patina-scan-worker doctor` has an `xdg` check that fails preflight (naming the
-  offending var) if any of the four XDG base dirs is not writable.
+  offending var) if any XDG base dir is not writable. A GPU stage also probes
+  torch hub, CUDA kernel, and torch extension-build caches.
 
 ## Telemetry query surface (item 13)
 

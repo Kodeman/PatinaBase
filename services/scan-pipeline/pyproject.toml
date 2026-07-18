@@ -29,9 +29,9 @@ solve = ["numpy>=1.26", "scipy>=1.11"]
 drawings = ["ezdxf>=1.1", "cairosvg>=2.7"]
 
 # ── P2 GPU stages (item 3) — each pulls ONLY what its stage imports ──────────
-# refine (§10.2): GLOMAP global SfM warm-started on the ARKit poses; GLOMAP +
-#   COLMAP are SYSTEM binaries (box-prep, apt/build — NOT pip), pycolmap reads/
-#   writes the COLMAP DB + poses. No torch.
+# refine (§10.2): COLMAP known-pose reconstruction + pose-prior fallback. COLMAP
+#   is a SYSTEM binary (box-prep, apt/build — NOT pip); pycolmap reads/writes its
+#   DB + models. No torch.
 refine = ["pycolmap>=0.6", "numpy>=1.26", "scipy>=1.11"]
 # fuse (§10.3): TSDF dense mesh (Open3D) + decimation + glb export. No torch.
 fuse = ["open3d>=0.18", "trimesh>=4.0", "numpy>=1.26"]

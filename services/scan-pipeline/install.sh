@@ -7,24 +7,25 @@
 #
 #   --gpu       also install the GPU extras (.[gpu] = refine+fuse+splat, via the
 #               PyTorch cu118 index) and lay down the GPU systemd drop-in
-#               (DeviceAllow=/dev/nvidia*, torch/CUDA cache confinement). Omit it
-#               for a CPU-only worker — which then never pulls CUDA and stays
-#               device-isolated.
+#               (exact 2080 Ti device nodes, torch/CUDA cache confinement). Omit it
+#               for a CPU-only worker — which then never pulls CUDA or installs
+#               a GPU device allowlist.
 #   --upgrade   REBUILD the venv from scratch (rm -rf then fresh install). The
 #               worker installs a COPY of the source, so `git pull` alone (or a
 #               plain re-run at an unchanged version) does NOT update a running
-#               worker — the two-command upgrade is:  git pull && sudo ./install.sh --upgrade
-#               (add --gpu to that if this is a GPU box).
+#               worker. If a GPU drop-in already exists, omitting --gpu is a hard
+#               error rather than an accidental CUDA-dependency downgrade. The
+#               two-command GPU upgrade is: git pull && sudo ./install.sh --gpu --upgrade
 #
 # Steps:
 #   1. create the `patina` service user + dirs (/opt/patina, /var/lib/patina, /etc/patina)
 #   2. build a venv at /opt/patina/scan-pipeline/.venv and `pip install .[…]`
 #   3. drop the systemd unit (+ GPU drop-in with --gpu) + env template (0600) if absent
-#   4. run `doctor` and print the result
+#   4. install `doctor` as ExecStartPre so it runs in the real service context
 #
 # After install: edit /etc/patina/scan-worker.env (URL, key, WORKER_ID, STAGES), then
-#   patina-scan-worker doctor
 #   systemctl enable --now patina-scan-worker
+#   systemctl status patina-scan-worker
 #   journalctl -u patina-scan-worker -f
 set -euo pipefail
 
@@ -51,6 +52,15 @@ SVC_USER=patina
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON="${PYTHON:-python3}"
 
+# Fail closed BEFORE touching the venv. Rebuilding an existing GPU installation
+# without --gpu would leave the GPU unit policy in place but remove its Python
+# dependencies. The operator must state the GPU intent on every upgrade.
+if [ "$UPGRADE" -eq 1 ] && [ "$GPU" -eq 0 ] && [ -f "$DROPIN_DIR/gpu.conf" ]; then
+  echo "ERROR: refusing to rebuild an existing GPU worker as CPU-only by omission." >&2
+  echo "       Re-run with: sudo ./install.sh --gpu --upgrade" >&2
+  exit 2
+fi
+
 echo "== Patina scan-pipeline worker install (gpu=$GPU upgrade=$UPGRADE) =="
 echo "source: $SRC_DIR"
 
@@ -64,7 +74,7 @@ if [ "$GPU" -eq 1 ] && ! command -v nvidia-smi >/dev/null 2>&1; then
   echo "   WARNING: --gpu given but nvidia-smi not found. Install the NVIDIA driver"
   echo "            + CUDA 11.8 toolkit (nvcc, for gsplat's JIT build) FIRST — see"
   echo "            README 'Box prep (GPU)'. torch will install regardless, but the"
-  echo "            splat stage cannot run until doctor's gpu/torch-cuda lines pass."
+  echo "            splat cannot run until doctor's gpu/nvcc/torch-cuda/gsplat lines pass."
 fi
 
 # 1. service user + dirs
@@ -79,9 +89,11 @@ install -d -o "$SVC_USER" -g "$SVC_USER" "$APP_DIR" "$WORK_DIR"
 install -d -o "$SVC_USER" -g "$SVC_USER" \
   "$APP_DIR/.config" "$APP_DIR/.cache" "$APP_DIR/.data" "$APP_DIR/.state"
 if [ "$GPU" -eq 1 ]; then
-  # torch hub cache + nvidia JIT/PTX cache, both under the already-RW .cache
-  # (the GPU drop-in points TORCH_HOME / CUDA_CACHE_PATH here).
-  install -d -o "$SVC_USER" -g "$SVC_USER" "$APP_DIR/.cache/torch" "$APP_DIR/.cache/nv"
+  # torch hub, nvidia JIT/PTX, and torch extension-build caches, all under the
+  # already-RW .cache (the GPU drop-in points their env vars here).
+  install -d -o "$SVC_USER" -g "$SVC_USER" \
+    "$APP_DIR/.cache/torch" "$APP_DIR/.cache/nv" \
+    "$APP_DIR/.cache/torch_extensions"
 fi
 install -d -m 0750 "$ETC_DIR"
 
@@ -124,20 +136,18 @@ else
 fi
 systemctl daemon-reload
 
-# 4. doctor (best-effort — will FAIL until the env file is filled in)
-echo "-- running doctor (expect FAIL until $ENV_FILE is filled in):"
-set +e
-# shellcheck disable=SC1090
-set -a; [ -f "$ENV_FILE" ] && . "$ENV_FILE"; set +a
-"$VENV/bin/patina-scan-worker" doctor
-set -e
+# 4. doctor is the unit's ExecStartPre — never run it here as root. systemd
+# executes it as User=patina with the unit's EnvironmentFile, cache variables,
+# filesystem sandbox, and GPU DeviceAllow before ExecStart can claim work.
+echo "-- doctor installed as ExecStartPre in $UNIT"
+echo "   readiness is certified only when systemctl start runs it in the real unit context"
 
 cat <<EOF
 
 Next:
   1. edit $ENV_FILE   (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, WORKER_ID$([ "$GPU" -eq 1 ] && echo ", STAGES incl. a GPU stage"))
-  2. $VENV/bin/patina-scan-worker doctor
-  3. systemctl enable --now patina-scan-worker
+  2. systemctl enable --now patina-scan-worker  (ExecStartPre doctor must pass)
+  3. systemctl status patina-scan-worker
   4. journalctl -u patina-scan-worker -f
 $([ "$GPU" -eq 0 ] && echo "  (GPU worker?  re-run:  sudo ./install.sh --gpu)")
 EOF

@@ -39,7 +39,7 @@ def test_cpu_install_never_pulls_cuda():
 
 def test_gpu_stage_extras_pull_only_their_imports():
     extras, _ = _extras()
-    # refine drives GLOMAP/COLMAP (system binaries) via pycolmap — NOT torch.
+    # refine drives COLMAP's known-pose path via pycolmap — NOT torch.
     refine = " ".join(extras["refine"]).lower()
     assert "pycolmap" in refine and "torch" not in refine and "gsplat" not in refine
     # fuse = Open3D TSDF (+ trimesh export) — NOT torch.
@@ -65,6 +65,31 @@ def test_gpu_is_the_meta_extra():
     extras, _ = _extras()
     gpu = [d.replace(" ", "").lower() for d in extras["gpu"]]
     assert gpu == ["patina-scan-worker[refine,fuse,splat]"]
+
+
+def test_gpu_meta_extra_expands_to_all_concrete_stage_requirements():
+    """Resolver-shaped proof: recursively expand our self-extra and ensure it
+    terminates in the concrete requirements for all three GPU stages."""
+    import pytest
+    Requirement = pytest.importorskip("packaging.requirements").Requirement
+    extras, _ = _extras()
+
+    expanded: set[str] = set()
+    pending = [Requirement(dep) for dep in extras["gpu"]]
+    seen_extras: set[str] = set()
+    while pending:
+        requirement = pending.pop()
+        if requirement.name == "patina-scan-worker":
+            for extra in requirement.extras:
+                assert extra in extras
+                if extra not in seen_extras:
+                    seen_extras.add(extra)
+                    pending.extend(Requirement(dep) for dep in extras[extra])
+        else:
+            expanded.add(requirement.name.lower())
+
+    assert seen_extras == {"refine", "fuse", "splat"}
+    assert {"pycolmap", "scipy", "open3d", "trimesh", "torch", "gsplat", "numpy"} <= expanded
 
 
 def test_every_extra_is_a_valid_pep508_requirement():
