@@ -19,6 +19,9 @@ import { notFound } from 'next/navigation';
 import { createServiceClient } from '@patina/supabase/server';
 import { getFieldTradeLabel, getPartyKindLabel } from '@patina/types';
 import { FieldWorkBody } from './field-actions';
+import { bootstrapSiteRequest } from './site-request-api';
+import { SiteRequestGuest } from './site-request-guest';
+import { isLikelySiteRequestToken } from './site-request-types';
 import { firstName, isLikelyFieldToken, type FieldLinkDTO } from './types';
 
 // The token is resolved per request (and bumps last_used_at) — never static.
@@ -27,15 +30,24 @@ export const dynamic = 'force-dynamic';
 export default async function FieldLinkPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  // Cheap format gate before any DB round-trip (no existence signal either way).
-  if (!isLikelyFieldToken(token)) notFound();
+  // Site Request tokens may be base64url while the older Field Coordination
+  // rail uses 64 lowercase hex. Reject path-like/malformed values before
+  // either lookup, but keep the old format and behavior intact.
+  if (!isLikelySiteRequestToken(token)) notFound();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createServiceClient() as any;
-  const { data, error } = await admin.rpc('resolve_field_link', { p_token: token });
-  const dto = (Array.isArray(data) ? data[0] : data) as FieldLinkDTO | null;
+  let dto: FieldLinkDTO | null = null;
+  if (isLikelyFieldToken(token)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createServiceClient() as any;
+    const { data, error } = await admin.rpc('resolve_field_link', { p_token: token });
+    dto = error ? null : (Array.isArray(data) ? data[0] : data) as FieldLinkDTO | null;
+  }
 
-  if (error || !dto?.party?.id) notFound();
+  if (!dto?.party?.id) {
+    const siteRequest = await bootstrapSiteRequest(token).catch(() => null);
+    if (!siteRequest?.request?.id) notFound();
+    return <SiteRequestGuest token={token} initial={siteRequest} />;
+  }
 
   // NOTE (PostHog): the plan asks for a server-side field_link_opened capture
   // here. client-portal has no server-side PostHog client today (only the
