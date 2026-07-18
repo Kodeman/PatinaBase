@@ -77,7 +77,8 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next({ request: { headers: requestHeaders } });
 
   // Apple fetches this exact extensionless path without a user session while
-  // deciding whether client.patina.cloud/field/* should open Patina Field.
+  // deciding whether namespaced client.patina.cloud/field/sr_* links should
+  // open Patina Field; legacy Field Coordination links intentionally stay web.
   // Return the route untouched before initializing auth; redirects, cookies,
   // or HTML here invalidate Universal Links for every guest request.
   if (req.nextUrl.pathname === '/.well-known/apple-app-site-association') return res;

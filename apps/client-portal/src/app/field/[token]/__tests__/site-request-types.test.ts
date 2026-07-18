@@ -39,11 +39,10 @@ describe("site request capture types", () => {
     );
   });
 
-  it("accepts opaque base64url/hex links but rejects malformed paths", () => {
-    expect(isLikelySiteRequestToken("a".repeat(64))).toBe(true);
-    expect(
-      isLikelySiteRequestToken("opaque_site_request_token_1234567890abcd"),
-    ).toBe(true);
+  it("accepts only the namespaced Site Request credential shape", () => {
+    expect(isLikelySiteRequestToken(`sr_${"a".repeat(43)}`)).toBe(true);
+    expect(isLikelySiteRequestToken("a".repeat(64))).toBe(false);
+    expect(isLikelySiteRequestToken("opaque_site_request_token_1234567890abcd")).toBe(false);
     expect(isLikelySiteRequestToken("../request/token")).toBe(false);
   });
 

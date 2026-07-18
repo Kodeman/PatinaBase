@@ -1,4 +1,4 @@
-export const SITE_REQUEST_TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,256}$/;
+export const SITE_REQUEST_TOKEN_PATTERN = /^sr_[A-Za-z0-9_-]{43}$/;
 
 export type SiteRequestKitCode = "K-01" | "K-02";
 export type SiteRequestQueueState =

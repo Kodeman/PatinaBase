@@ -30,10 +30,10 @@ export const dynamic = 'force-dynamic';
 export default async function FieldLinkPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
 
-  // Site Request tokens may be base64url while the older Field Coordination
-  // rail uses 64 lowercase hex. Reject path-like/malformed values before
-  // either lookup, but keep the old format and behavior intact.
-  if (!isLikelySiteRequestToken(token)) notFound();
+  // Namespaced Site Request tokens are distinguishable from the older Field
+  // Coordination rail's 64 lowercase hex. Reject everything else before a DB
+  // or Edge round-trip while preserving that legacy web behavior.
+  if (!isLikelySiteRequestToken(token) && !isLikelyFieldToken(token)) notFound();
 
   let dto: FieldLinkDTO | null = null;
   if (isLikelyFieldToken(token)) {
@@ -43,7 +43,7 @@ export default async function FieldLinkPage({ params }: { params: Promise<{ toke
     dto = error ? null : (Array.isArray(data) ? data[0] : data) as FieldLinkDTO | null;
   }
 
-  if (!dto?.party?.id) {
+  if (!dto?.party?.id && isLikelySiteRequestToken(token)) {
     let siteRequest = null;
     let temporarilyUnavailable = false;
     try {
@@ -73,7 +73,7 @@ export default async function FieldLinkPage({ params }: { params: Promise<{ toke
       );
     }
     return <SiteRequestGuest token={token} initial={siteRequest} />;
-  }
+  } else if (!dto?.party?.id) notFound();
 
   // NOTE (PostHog): the plan asks for a server-side field_link_opened capture
   // here. client-portal has no server-side PostHog client today (only the

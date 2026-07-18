@@ -33,6 +33,7 @@ const legacy = {
   punch: [],
   deliveries: [],
 };
+const siteRequestToken = `sr_${"a".repeat(43)}`;
 
 describe("/field/[token] compatibility routing", () => {
   beforeEach(() => {
@@ -62,7 +63,7 @@ describe("/field/[token] compatibility routing", () => {
     render(
       await FieldLinkPage({
         params: Promise.resolve({
-          token: "opaque_site_request_token_1234567890abcd",
+          token: siteRequestToken,
         }),
       }),
     );
@@ -80,7 +81,7 @@ describe("/field/[token] compatibility routing", () => {
     render(
       await FieldLinkPage({
         params: Promise.resolve({
-          token: "opaque_site_request_token_1234567890abcd",
+          token: siteRequestToken,
         }),
       }),
     );
@@ -95,7 +96,7 @@ describe("/field/[token] compatibility routing", () => {
     render(
       await FieldLinkPage({
         params: Promise.resolve({
-          token: "opaque_site_request_token_1234567890abcd",
+          token: siteRequestToken,
         }),
       }),
     );

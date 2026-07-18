@@ -28,18 +28,19 @@ describe("Apple App Site Association", () => {
     );
   });
 
-  it("associates only /field/* with the Patina Field production app", () => {
+  it("associates only namespaced Site Request links with the Field app", () => {
     expect(appleAppSiteAssociation()).toEqual({
       applinks: {
         apps: [],
         details: [
           {
             appID: "VP22LXHT7L.cloud.patina.field",
-            paths: ["/field/*"],
+            paths: ["/field/sr_*"],
             components: [
               {
-                "/": "/field/*",
-                comment: "Patina Field Site Request links only",
+                "/": "/field/sr_*",
+                comment:
+                  "Patina Field Site Request links only; legacy 64-hex Field links stay on web",
               },
             ],
           },
