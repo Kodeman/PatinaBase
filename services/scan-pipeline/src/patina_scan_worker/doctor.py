@@ -117,23 +117,35 @@ def run_checks(settings: Settings) -> list[Check]:
     except OSError as exc:
         checks.append(Check("disk", False, True, f"disk_usage failed: {exc}"))
 
-    # XDG config writability — ezdxf (drawings) writes $XDG_CONFIG_HOME/ezdxf/
-    # on use; a root-owned/absent dir EACCESes the drawings stage. Preflight it.
-    config_dir = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    try:
-        os.makedirs(config_dir, exist_ok=True)
-        probe = os.path.join(config_dir, ".patina-doctor-write-test")
-        with open(probe, "w") as fh:
-            fh.write("ok")
-        os.remove(probe)
-        checks.append(Check("config", True, False, f"{config_dir} writable (XDG/ezdxf)"))
-    except OSError as exc:
+    # XDG writability — ezdxf (drawings) writes BOTH $XDG_CONFIG_HOME/ezdxf/ AND
+    # $XDG_CACHE_HOME/ezdxf/ on use; a root-owned/absent dir EACCESes the drawings
+    # stage. Preflight ALL four XDG base dirs (env var or its ~-default).
+    xdg = [
+        ("XDG_CONFIG_HOME", "~/.config"),
+        ("XDG_CACHE_HOME", "~/.cache"),
+        ("XDG_DATA_HOME", "~/.local/share"),
+        ("XDG_STATE_HOME", "~/.local/state"),
+    ]
+    failing: list[str] = []
+    for var, default in xdg:
+        d = os.environ.get(var) or os.path.expanduser(default)
+        try:
+            os.makedirs(d, exist_ok=True)
+            probe = os.path.join(d, ".patina-doctor-write-test")
+            with open(probe, "w") as fh:
+                fh.write("ok")
+            os.remove(probe)
+        except OSError as exc:
+            failing.append(f"{var}={d} ({exc.__class__.__name__})")
+    if failing:
         checks.append(Check(
-            "config", False, False,
-            f"{config_dir} NOT writable — ezdxf (drawings) will EACCES: {exc}. "
-            f"Set XDG_CONFIG_HOME to a writable dir (the systemd unit does) or "
-            f"re-run install.sh.",
+            "xdg", False, False,
+            "NOT writable: " + "; ".join(failing) + " — ezdxf (drawings) will "
+            "EACCES; point the XDG_* var(s) at a writable dir (the systemd unit "
+            "does) or re-run install.sh.",
         ))
+    else:
+        checks.append(Check("xdg", True, False, "all 4 XDG base dirs writable (config/cache/data/state)"))
 
     return checks
 
