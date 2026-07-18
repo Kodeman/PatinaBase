@@ -61,6 +61,12 @@ private struct SiteRequestScreen: View {
     @State private var imperialB = "25 3/4"
     @State private var imperialC = "96 1/4"
     @State private var metricEntry = false
+    @State private var additionalMeasurements: [String: String] = [:]
+    @State private var measurementProofPaths: [String: String] = [:]
+    @State private var photoShotIndex = 0
+    @State private var capturedPhotoPaths: [String: String] = [:]
+    @State private var skippedPhotoNotes: [String: String] = [:]
+    @State private var photoSkipNote = ""
     @State private var actionMessage: String?
     @State private var isWorking = false
     @State private var contractLoaded = false
@@ -90,7 +96,10 @@ private struct SiteRequestScreen: View {
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier(screen.rawValue)
-        .task { await loadContractData() }
+        .task {
+            await loadContractData()
+            await runForegroundRetryLoop()
+        }
     }
 
     private var navigationTitle: String {
@@ -110,9 +119,17 @@ private struct SiteRequestScreen: View {
 
     @ViewBuilder private var header: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(isGuest ? "PATINA · SITE REQUEST" : "FIELD · \((contractLoaded || !AppConfiguration.runsRealServices ? hub.projectName : "SITE").uppercased())")
-                .font(CaptureType.eyebrow)
-                .foregroundStyle(CaptureColor.verdigrisInk)
+            HStack {
+                Text(isGuest ? "PATINA · SITE REQUEST" : "FIELD · \((contractLoaded || !AppConfiguration.runsRealServices ? hub.projectName : "SITE").uppercased())")
+                    .font(CaptureType.eyebrow)
+                    .foregroundStyle(CaptureColor.verdigrisInk)
+                Spacer()
+                if isGuest, accessToken != nil {
+                    Button("Leave") { coordinator.leaveGuestRequest() }
+                        .font(CaptureType.footnote)
+                        .accessibilityIdentifier("siteRequest.leaveGuest")
+                }
+            }
             Rectangle().fill(CaptureColor.line).frame(height: 1)
         }
     }
@@ -347,11 +364,19 @@ private struct SiteRequestScreen: View {
     private var approval: some View {
         VStack(alignment: .leading, spacing: 18) {
             title("Filed to the Binder", subtitle: "Exactly one append-only entry created")
-            card {
-                Label("Kitchen · Measure Set", systemImage: "checkmark.seal.fill")
-                    .font(CaptureType.bodyEmph).foregroundStyle(CaptureColor.success)
+            if let entry = approvedBinderEntry {
+                card {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Label(entry.title, systemImage: "checkmark.seal.fill")
+                            .font(CaptureType.bodyEmph).foregroundStyle(CaptureColor.success)
+                        Text("\(roomName(entry.roomID)) · \(entry.dimensions.count) dimensions · \(entry.media.count) photos")
+                            .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
+                    }
+                }
+                provenance(entry)
+            } else {
+                card { Text("No approved Binder entry is available yet.") }
             }
-            provenance
             Button("View Binder rooms") { go(.sr10BinderRooms) }.sitePrimary()
         }
     }
@@ -360,7 +385,7 @@ private struct SiteRequestScreen: View {
         VStack(alignment: .leading, spacing: 18) {
             title("Site Binder", subtitle: "Rooms are the spine; entries append")
             ForEach(hub.rooms) { room in
-                Button { go(.sr11BinderDetail) } label: {
+                Button { go(.sr11BinderDetail, requestID: "room:\(room.id)") } label: {
                     card {
                         HStack {
                             VStack(alignment: .leading, spacing: 5) {
@@ -378,29 +403,63 @@ private struct SiteRequestScreen: View {
 
     private var binderDetail: some View {
         VStack(alignment: .leading, spacing: 18) {
-            title("Kitchen", subtitle: "Current approved values with their source")
-            ForEach(selectedReviewItem(kit: .measureSet)?.dimensions ?? []) { dimension in
+            title(selectedBinderRoom?.name ?? "Binder room",
+                  subtitle: "Current approved values with their source")
+            ForEach(currentBinderEntriesForRoom) { entry in
                 card {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(dimension.label).font(CaptureType.eyebrow)
-                        Text(SiteMeasurement.imperialString(millimetres: dimension.millimetres))
-                            .font(CaptureType.title2)
-                        Text("Captured by \(dimension.capturedBy) · approved by Leah")
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text(entry.title).font(CaptureType.bodyEmph)
+                        ForEach(entry.dimensions) { dimension in
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(dimension.label).font(CaptureType.eyebrow)
+                                Text(SiteMeasurement.imperialString(millimetres: dimension.millimetres))
+                                    .font(CaptureType.title2)
+                                Text("Captured by \(dimension.capturedBy)")
+                                    .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
+                            }
+                        }
+                        if !entry.media.isEmpty {
+                            Text("\(entry.media.count) approved photos")
+                                .font(CaptureType.callout)
+                        }
+                        Text("Approved by \(entry.approvedBy) · \(entry.approvedAt.formatted(date: .abbreviated, time: .shortened))")
                             .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
                     }
                 }
+                provenance(entry)
             }
-            Button("View append-only history") { go(.sr12BinderHistory) }.sitePrimary()
+            if currentBinderEntriesForRoom.isEmpty {
+                card { Text("No approved entries in this room.") }
+            }
+            Button("View append-only history") {
+                go(.sr12BinderHistory, requestID: "room:\(selectedBinderRoomID ?? "")")
+            }.sitePrimary()
         }
     }
 
     private var binderHistory: some View {
         VStack(alignment: .leading, spacing: 18) {
-            title("Kitchen · history", subtitle: "Prior attempts remain retrievable")
-            historyRow("96 1/4 in", detail: "Current · Dan K. · approved Friday", current: true)
-            historyRow("95 3/4 in", detail: "Superseded · Dan K. · May 12", current: false)
-            historyRow("96 in", detail: "Original site note · Leah · April 8", current: false)
-            provenance
+            title("\(selectedBinderRoom?.name ?? "Binder room") · history",
+                  subtitle: "Prior approved entries remain retrievable")
+            ForEach(binderHistoryForRoom) { entry in
+                card {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(entry.title).font(CaptureType.bodyEmph)
+                            Text("\(entry.kind.title) · approved \(entry.approvedAt.formatted(date: .abbreviated, time: .shortened))")
+                                .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
+                            Text("Source delivery \(entry.sourceDeliverableID)")
+                                .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
+                        }
+                        Spacer()
+                        status(currentBinderEntryIDs.contains(entry.id) ? "CURRENT" : "SUPERSEDED")
+                    }
+                }
+                provenance(entry)
+            }
+            if binderHistoryForRoom.isEmpty {
+                card { Text("No Binder history is available for this room.") }
+            }
         }
     }
 
@@ -438,14 +497,30 @@ private struct SiteRequestScreen: View {
 
     private var guestMeasure: some View {
         VStack(alignment: .leading, spacing: 16) {
-            title(guest.items.first(where: { $0.kit == .measureSet })?.title ?? "Measure set",
-                  subtitle: guest.items.first(where: { $0.kit == .measureSet })?.guidance ?? "Enter the requested measurements.")
+            title(measureItem?.title ?? "Measure set",
+                  subtitle: measureItem?.guidance ?? "Enter the requested measurements.")
             Picker("Units", selection: $metricEntry) {
                 Text("Imperial").tag(false); Text("Metric").tag(true)
             }.pickerStyle(.segmented)
-            measureField("A · FLOOR → SILL", text: $imperialA)
-            measureField("B · SILL → HEAD", text: $imperialB)
-            measureField("C · RUN LENGTH", text: $imperialC)
+            ForEach(Array(measureDefinitions.enumerated()), id: \.element.id) { index, definition in
+                VStack(alignment: .leading, spacing: 7) {
+                    measureField(definition.label.uppercased(),
+                                 text: measurementBinding(index: index, id: definition.id))
+                    if let guidance = definition.guidance, !guidance.isEmpty {
+                        Text(guidance).font(CaptureType.footnote)
+                            .foregroundStyle(CaptureColor.inkSoft)
+                    }
+                    Button(measurementProofPaths[definition.id] == nil
+                           ? "Add optional tape proof" : "Replace tape proof") {
+                        Task { await captureMeasurementProof(for: definition) }
+                    }
+                    .font(CaptureType.footnote)
+                    if measurementProofPaths[definition.id] != nil {
+                        Label("Proof saved on this phone", systemImage: "checkmark.circle.fill")
+                            .font(CaptureType.footnote).foregroundStyle(CaptureColor.success)
+                    }
+                }
+            }
             Text("Imperial entry snaps to 1/16 in. Storage is canonical integer millimetres.")
                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
             Button("Queue measurement delivery") { Task { await queueMeasurement() } }
@@ -455,34 +530,64 @@ private struct SiteRequestScreen: View {
 
     private var guestPhoto: some View {
         VStack(alignment: .leading, spacing: 16) {
-            let item = guest.items.first(where: { $0.kit == .detailPhotos })
-            title(item?.title ?? "Detail photos", subtitle: item?.guidance ?? "Capture the requested view.")
-            ZStack {
-                CaptureColor.ink2
-                RoundedRectangle(cornerRadius: 80)
-                    .stroke(CaptureColor.paper.opacity(0.7), lineWidth: 2)
-                    .frame(width: 180, height: 210)
-                VStack {
-                    Text("GHOST FRAME").font(CaptureType.eyebrow).foregroundStyle(CaptureColor.paper)
-                    Spacer()
-                    Image(systemName: "camera.circle.fill").font(.system(size: 58)).foregroundStyle(CaptureColor.paper)
-                }.padding(24)
+            title(photoItem?.title ?? "Detail photos",
+                  subtitle: photoItem?.guidance ?? "Capture the requested views.")
+            if let shot = currentPhotoShot {
+                Text("SHOT \(photoShotIndex + 1) OF \(photoShots.count)")
+                    .font(CaptureType.eyebrow).foregroundStyle(CaptureColor.verdigrisInk)
+                Text(shot.label).font(CaptureType.title2)
+                if let guidance = shot.guidance, !guidance.isEmpty {
+                    Text(guidance).font(CaptureType.callout)
+                }
+                ZStack {
+                    CaptureColor.ink2
+                    RoundedRectangle(cornerRadius: 80)
+                        .stroke(CaptureColor.paper.opacity(0.7), lineWidth: 2)
+                        .frame(width: 180, height: 210)
+                    VStack {
+                        Text(shot.referenceURL == nil ? "GUIDED FRAME" : "REFERENCE FRAME")
+                            .font(CaptureType.eyebrow).foregroundStyle(CaptureColor.paper)
+                        Spacer()
+                        Image(systemName: "camera.circle.fill").font(.system(size: 58))
+                            .foregroundStyle(CaptureColor.paper)
+                    }.padding(24)
+                }
+                .frame(height: 300)
+                Text("Low light — steady the phone or turn on the work lamp.")
+                    .font(CaptureType.callout).foregroundStyle(CaptureColor.warning)
+                Button("Capture \(shot.label)") { Task { await captureCurrentPhoto() } }
+                    .sitePrimary().disabled(isWorking)
+                TextField("Required reason to skip this shot", text: $photoSkipNote)
+                    .font(CaptureType.body).padding(14)
+                    .overlay(Rectangle().stroke(CaptureColor.line2))
+                Button("Skip this shot") { skipCurrentPhoto() }
+                    .siteSecondary()
+                    .disabled(photoSkipNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } else {
+                card {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("All configured shots accounted for").font(CaptureType.bodyEmph)
+                        Text("\(capturedPhotoPaths.count) captured · \(skippedPhotoNotes.count) skipped with notes")
+                            .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
+                    }
+                }
+                Button("Queue photo delivery") { Task { await queuePhoto() } }
+                    .sitePrimary().disabled(isWorking || !photoShotsComplete)
             }
-            .frame(height: 300)
-            Text("Low light — steady the phone or turn on the work lamp.")
-                .font(CaptureType.callout).foregroundStyle(CaptureColor.warning)
-            Button("Capture and queue photo") { Task { await queuePhoto() } }
-                .sitePrimary().disabled(isWorking)
-            Button("Skip this shot · records the reason") { go(.sr17GuestQueue) }.siteSecondary()
         }
     }
 
     private var guestQueue: some View {
         VStack(alignment: .leading, spacing: 18) {
             title("Delivery queue", subtitle: "Durable across relaunch")
-            queueRow("Measurements", state: "AWAITING RECEIPT", tint: CaptureColor.warning)
-            queueRow("Vanity photo 2", state: "UPLOADING", tint: CaptureColor.verdigrisInk)
-            queueRow("Vanity photo 3", state: "QUEUED · OFFLINE", tint: CaptureColor.inkSoft)
+            ForEach(guestOutboxRecords) { record in
+                queueRow(guest.items.first(where: { $0.id == record.itemID })?.title ?? "Site request item",
+                         state: record.state.rawValue.uppercased(),
+                         tint: record.state == .failed ? CaptureColor.error : CaptureColor.verdigrisInk)
+            }
+            if guestOutboxRecords.isEmpty {
+                card { Text("No deliveries are queued on this phone.") }
+            }
             Text("Retries keep the same client delivery ID and checksum. Duplicate taps cannot create duplicate deliveries.")
                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
             Button("View receipt state") { go(.sr18GuestReceipt) }.sitePrimary()
@@ -492,12 +597,19 @@ private struct SiteRequestScreen: View {
     private var guestReceipt: some View {
         VStack(alignment: .leading, spacing: 18) {
             title("Received by Patina", subtitle: "Server receipt recorded")
-            card {
+            if let receipt = deliveredGuestRecord {
+                card {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Checksum verified", systemImage: "checkmark.circle.fill")
-                    Label("Item version 1 received", systemImage: "checkmark.circle.fill")
-                    Label("Designer notification queued", systemImage: "bell.badge")
+                    Label("Server receipt recorded", systemImage: "checkmark.circle.fill")
+                    if !receipt.mediaPaths.isEmpty {
+                        Label("\(receipt.mediaPaths.count) media checksums verified", systemImage: "checkmark.circle.fill")
+                    }
+                    Label("Server delivery \(receipt.serverDeliverableID ?? "recorded")", systemImage: "checkmark.circle.fill")
+                    Label("Delivery linked to item version \(receipt.itemVersionID)", systemImage: "link")
                 }.font(CaptureType.callout).foregroundStyle(CaptureColor.success)
+                }
+            } else {
+                card { Text("Patina has not returned a delivery receipt on this phone yet.") }
             }
             Button("Back to checklist") { go(.sr19GuestDone) }.sitePrimary()
         }
@@ -509,7 +621,7 @@ private struct SiteRequestScreen: View {
                 .font(.system(size: 72)).foregroundStyle(CaptureColor.success)
             Text("\(guest.items.filter { $0.status == .delivered || $0.status == .approved }.count) of \(guest.items.count) delivered")
                 .font(CaptureType.title)
-            Text("\(guest.designerName) has been notified. This link stays available for a returned item until the request closes.")
+            Text("Patina recorded the server receipt. This link stays available for a returned item until the request closes.")
                 .font(CaptureType.callout).foregroundStyle(CaptureColor.inkSoft)
                 .multilineTextAlignment(.center)
             Button("See returned-item example") { go(.sr20GuestReturned) }.siteSecondary()
@@ -542,7 +654,7 @@ private struct SiteRequestScreen: View {
 
     private var activeRequestID: String {
         if isGuest, accessToken != nil { return guest.request.id }
-        if !requestID.isEmpty { return requestID }
+        if !requestID.isEmpty, !requestID.hasPrefix("room:") { return requestID }
         return hub.requests.first?.id ?? ""
     }
 
@@ -560,6 +672,96 @@ private struct SiteRequestScreen: View {
 
     private var nextGuestItem: SiteRequestItem? {
         guest.items.first(where: { $0.status == .pending || $0.status == .redo })
+    }
+
+    private var approvedBinderEntry: SiteBinderEntry? {
+        hub.currentBinderEntries.first(where: { $0.requestID == activeRequestID })
+            ?? (AppConfiguration.runsRealServices ? nil : hub.currentBinderEntries.first)
+    }
+
+    private var selectedBinderRoomID: String? {
+        if requestID.hasPrefix("room:") {
+            let value = String(requestID.dropFirst("room:".count))
+            if !value.isEmpty { return value }
+        }
+        return approvedBinderEntry?.roomID ?? hub.currentBinderEntries.first?.roomID
+            ?? hub.rooms.first?.id
+    }
+
+    private var selectedBinderRoom: SiteBinderRoom? {
+        hub.rooms.first(where: { $0.id == selectedBinderRoomID })
+    }
+
+    private var currentBinderEntriesForRoom: [SiteBinderEntry] {
+        hub.currentBinderEntries.filter { $0.roomID == selectedBinderRoomID }
+            .sorted { $0.approvedAt > $1.approvedAt }
+    }
+
+    private var binderHistoryForRoom: [SiteBinderEntry] {
+        hub.binderEntries.filter { $0.roomID == selectedBinderRoomID }
+            .sorted { $0.approvedAt > $1.approvedAt }
+    }
+
+    private var currentBinderEntryIDs: Set<String> {
+        Set(hub.currentBinderEntries.map(\.id))
+    }
+
+    private var measureItem: SiteRequestItem? {
+        guest.items.first(where: { $0.kit == .measureSet })
+    }
+
+    private var measureDefinitions: [SiteRequestMeasureDefinition] {
+        guard let configured = measureItem?.measureDefinitions, !configured.isEmpty else {
+            return SiteRequestMeasureDefinition.p1MeasureSet
+        }
+        return configured
+    }
+
+    private var photoItem: SiteRequestItem? {
+        guest.items.first(where: { $0.kit == .detailPhotos })
+    }
+
+    private var photoShots: [SiteRequestPhotoShot] {
+        guard let configured = photoItem?.photoShots, !configured.isEmpty else {
+            return SiteRequestPhotoShot.p1DetailPhotos
+        }
+        return configured
+    }
+
+    private var currentPhotoShot: SiteRequestPhotoShot? {
+        guard photoShots.indices.contains(photoShotIndex) else { return nil }
+        return photoShots[photoShotIndex]
+    }
+
+    private var photoShotsComplete: Bool {
+        photoShots.allSatisfy {
+            capturedPhotoPaths[$0.id] != nil || skippedPhotoNotes[$0.id] != nil
+        }
+    }
+
+    private var photoResults: [SiteRequestPhotoResult] {
+        photoShots.compactMap { shot in
+            if capturedPhotoPaths[shot.id] != nil {
+                return SiteRequestPhotoResult(
+                    id: shot.id, label: shot.label, status: .captured)
+            }
+            if let note = skippedPhotoNotes[shot.id] {
+                return SiteRequestPhotoResult(
+                    id: shot.id, label: shot.label, status: .skipped,
+                    skipNote: note)
+            }
+            return nil
+        }
+    }
+
+    private var guestOutboxRecords: [SiteRequestOutboxRecord] {
+        container.store.siteRequestOutbox()
+            .filter { $0.requestID == guest.request.id }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    private var deliveredGuestRecord: SiteRequestOutboxRecord? {
+        guestOutboxRecords.last(where: { $0.state == .delivered })
     }
 
     private func selectedReviewItem(kit: SiteRequestKit) -> SiteRequestItem? {
@@ -587,12 +789,16 @@ private struct SiteRequestScreen: View {
     private func guestSubmission(
         kit: SiteRequestKit,
         clientDeliveryID: UUID,
-        dimensions: [SiteRequestDimension] = []
+        dimensions: [SiteRequestDimension] = [],
+        skippedShotLabels: [String] = [],
+        photoResults: [SiteRequestPhotoResult]? = nil
     ) throws -> SiteDeliverySubmission {
         if accessToken != nil {
             guard let submission = guest.deliverySubmission(
                 for: kit, clientDeliveryID: clientDeliveryID,
-                dimensions: dimensions) else {
+                dimensions: dimensions,
+                skippedShotLabels: skippedShotLabels,
+                photoResults: photoResults) else {
                 throw SiteRequestRemoteError.noOpenItem
             }
             return submission
@@ -606,7 +812,8 @@ private struct SiteRequestScreen: View {
         return SiteDeliverySubmission(
             requestID: SiteRequestFixtures.requestID, itemID: fixture.0,
             itemVersionID: fixture.1, clientDeliveryID: clientDeliveryID,
-            dimensions: dimensions)
+            dimensions: dimensions, skippedShotLabels: skippedShotLabels,
+            photoResults: photoResults)
     }
 
     private func createAndSendRequest() async {
@@ -627,18 +834,20 @@ private struct SiteRequestScreen: View {
                     SiteRequestDraftItem(
                         kit: .measureSet, title: "\(firstRoom.name) · measure set",
                         guidance: "Measure the requested opening to the nearest 1/16 inch.",
-                        roomID: firstRoom.id, sortOrder: 0),
+                        roomID: firstRoom.id, sortOrder: 0,
+                        measureDefinitions: SiteRequestMeasureDefinition.p1MeasureSet),
                     SiteRequestDraftItem(
                         kit: .detailPhotos, title: "\(secondRoom.name) · detail photos",
                         guidance: "Capture wide context, straight on, left return, and detail.",
-                        roomID: secondRoom.id, sortOrder: 1)
+                        roomID: secondRoom.id, sortOrder: 1,
+                        photoShots: SiteRequestPhotoShot.p1DetailPhotos)
                 ])
             let newRequestID = try await container.siteRequests.createDraft(draft)
             try await container.siteRequests.send(
                 requestID: newRequestID,
                 expiresAt: dueAt.addingTimeInterval(30 * 86_400))
             actionMessage = assignee.smsConsentGranted
-                ? "Request dispatched"
+                ? "Request accepted for dispatch"
                 : "Request created · awaiting SMS consent"
             go(.sr05Tracker, requestID: newRequestID)
         } catch { actionMessage = error.localizedDescription }
@@ -649,8 +858,9 @@ private struct SiteRequestScreen: View {
         do {
             if isGuest, let accessToken {
                 guest = try await container.guestSiteRequests.bootstrap(accessToken: accessToken)
+                coordinator.bindGuestRequest(requestID: guest.request.id)
                 contractLoaded = true
-                await container.siteRequestOutboxDrainer.resume(accessToken: accessToken)
+                await resumeGuestOutbox()
             } else if !isGuest {
                 hub = try await container.siteRequests.hub(projectID: projectID)
                 contractLoaded = true
@@ -666,6 +876,20 @@ private struct SiteRequestScreen: View {
             actionMessage = AppConfiguration.runsRealServices
                 ? error.localizedDescription
                 : "Offline fixture shown · \(error.localizedDescription)"
+        }
+    }
+
+    private func runForegroundRetryLoop() async {
+        guard isGuest, accessToken != nil, contractLoaded else { return }
+        while !Task.isCancelled {
+            do { try await Task.sleep(for: .seconds(5)) } catch { return }
+            await resumeGuestOutbox()
+        }
+    }
+
+    private func resumeGuestOutbox() async {
+        await container.siteRequestOutboxDrainer.resume { requestID in
+            coordinator.guestAccessToken(for: requestID)
         }
     }
 
@@ -710,14 +934,16 @@ private struct SiteRequestScreen: View {
         defer { isWorking = false }
         do {
             let parser = metricEntry ? SiteMeasurement.millimetres(fromMetric:) : SiteMeasurement.millimetres(fromImperial:)
-            let values = try [imperialA, imperialB, imperialC].map(parser)
-            let labels = ["A · floor → sill", "B · sill → head", "C · run length"]
-            let dimensions = zip(labels, values).enumerated().map { index, pair in
-                SiteRequestDimension(id: "local-dim-\(index)", label: pair.0,
-                                     millimetres: pair.1, capturedBy: "Guest", capturedAt: Date())
+            let dimensions = try measureDefinitions.enumerated().map { index, definition in
+                SiteRequestDimension(
+                    id: "local-dim-\(definition.id)", label: definition.label,
+                    millimetres: try parser(measurementValue(index: index, id: definition.id)),
+                    capturedBy: guest.request.assignee.name, capturedAt: Date(),
+                    proofAssetPath: measurementProofPaths[definition.id])
             }
             try enqueue(submission: try guestSubmission(
-                kit: .measureSet, clientDeliveryID: UUID(), dimensions: dimensions))
+                kit: .measureSet, clientDeliveryID: UUID(), dimensions: dimensions),
+                mediaPaths: measureDefinitions.compactMap { measurementProofPaths[$0.id] })
             go(.sr17GuestQueue)
         } catch { actionMessage = error.localizedDescription }
     }
@@ -726,16 +952,57 @@ private struct SiteRequestScreen: View {
         isWorking = true
         defer { isWorking = false }
         do {
+            guard photoShotsComplete else { throw SiteRequestRemoteError.invalidResponse }
+            let skipped = photoResults.filter { $0.status == .skipped }.map(\.label)
+            try enqueue(submission: try guestSubmission(
+                kit: .detailPhotos, clientDeliveryID: UUID(),
+                skippedShotLabels: skipped, photoResults: photoResults),
+                mediaPaths: photoShots.compactMap { capturedPhotoPaths[$0.id] })
+            go(.sr17GuestQueue)
+        } catch { actionMessage = error.localizedDescription }
+    }
+
+    private func captureCurrentPhoto() async {
+        guard let shot = currentPhotoShot else { return }
+        isWorking = true
+        defer { isWorking = false }
+        do {
             try await container.camera.configure(mode: .photo)
             await container.camera.start()
+            defer { container.camera.stop() }
             let frame = try await container.camera.capture()
-            container.camera.stop()
             let mediaURL = try container.store.writeMedia(
-                frame.data, filename: "site-request-\(UUID().uuidString).heic")
-            try enqueue(submission: try guestSubmission(
-                kit: .detailPhotos, clientDeliveryID: UUID()),
-                mediaPaths: [mediaURL.path])
-            go(.sr17GuestQueue)
+                frame.data,
+                filename: "site-request-\(UUID().uuidString).heic")
+            capturedPhotoPaths[shot.id] = mediaURL.path
+            skippedPhotoNotes.removeValue(forKey: shot.id)
+            photoSkipNote = ""
+            photoShotIndex += 1
+        } catch { actionMessage = error.localizedDescription }
+    }
+
+    private func skipCurrentPhoto() {
+        guard let shot = currentPhotoShot else { return }
+        let note = photoSkipNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !note.isEmpty else { return }
+        skippedPhotoNotes[shot.id] = note
+        capturedPhotoPaths.removeValue(forKey: shot.id)
+        photoSkipNote = ""
+        photoShotIndex += 1
+    }
+
+    private func captureMeasurementProof(for definition: SiteRequestMeasureDefinition) async {
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await container.camera.configure(mode: .photo)
+            await container.camera.start()
+            defer { container.camera.stop() }
+            let frame = try await container.camera.capture()
+            let mediaURL = try container.store.writeMedia(
+                frame.data,
+                filename: "site-proof-\(UUID().uuidString).heic")
+            measurementProofPaths[definition.id] = mediaURL.path
         } catch { actionMessage = error.localizedDescription }
     }
 
@@ -754,9 +1021,7 @@ private struct SiteRequestScreen: View {
             mediaPaths: mediaPaths,
             checksumSHA256: SiteRequestChecksum.sha256(payload))
         try container.store.enqueueSiteRequestDelivery(record)
-        if let accessToken {
-            Task { await container.siteRequestOutboxDrainer.resume(accessToken: accessToken) }
-        }
+        if accessToken != nil { Task { await resumeGuestOutbox() } }
     }
 
     private func go(_ destination: CaptureScreenID, requestID overrideRequestID: String? = nil) {
@@ -835,28 +1100,45 @@ private struct SiteRequestScreen: View {
             .font(CaptureType.footnote).buttonStyle(.bordered)
     }
 
-    private var provenance: some View {
+    private func provenance(_ entry: SiteBinderEntry) -> some View {
         card {
             VStack(alignment: .leading, spacing: 6) {
                 Text("PROVENANCE").font(CaptureType.eyebrow)
-                Text("Request → item v1 → immutable delivery → approval → Binder entry")
+                Text("Request \(entry.requestID ?? "unknown") → item version \(entry.itemVersionID ?? "unknown")")
                     .font(CaptureType.callout)
-                Text("Source attempts are retained; a newer entry supersedes without overwriting.")
+                Text("Immutable delivery \(entry.sourceDeliverableID) → approved by \(entry.approvedBy)")
+                    .font(CaptureType.callout)
+                Text(entry.supersedesEntryID.map { "Supersedes Binder entry \($0); prior history remains retrievable." }
+                     ?? "This append-only Binder entry does not overwrite its source delivery.")
                     .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
             }
         }
     }
 
-    private func historyRow(_ value: String, detail: String, current: Bool) -> some View {
-        card {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(value).font(CaptureType.title2)
-                    Text(detail).font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
-                }
-                Spacer(); status(current ? "CURRENT" : "SUPERSEDED")
-            }
+    private func roomName(_ id: String) -> String {
+        hub.rooms.first(where: { $0.id == id })?.name ?? "Project room"
+    }
+
+    private func measurementValue(index: Int, id: String) -> String {
+        switch index {
+        case 0: return imperialA
+        case 1: return imperialB
+        case 2: return imperialC
+        default: return additionalMeasurements[id] ?? ""
         }
+    }
+
+    private func measurementBinding(index: Int, id: String) -> Binding<String> {
+        Binding(
+            get: { measurementValue(index: index, id: id) },
+            set: { value in
+                switch index {
+                case 0: imperialA = value
+                case 1: imperialB = value
+                case 2: imperialC = value
+                default: additionalMeasurements[id] = value
+                }
+            })
     }
 
     private func measureField(_ label: String, text: Binding<String>) -> some View {

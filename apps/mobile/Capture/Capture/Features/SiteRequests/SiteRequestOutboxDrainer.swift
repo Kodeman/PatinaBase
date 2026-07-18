@@ -19,7 +19,7 @@ final class SiteRequestOutboxDrainer {
         self.remote = remote
     }
 
-    func resume(accessToken: String) async {
+    func resume(accessTokenForRequest: (String) -> String?) async {
         guard !isDraining else { return }
         isDraining = true
         defer { isDraining = false }
@@ -27,6 +27,9 @@ final class SiteRequestOutboxDrainer {
         for record in store.siteRequestOutbox().filter({
             $0.state != .delivered && ($0.nextAttemptAt == nil || $0.nextAttemptAt! <= now)
         }) {
+            guard let accessToken = accessTokenForRequest(record.requestID) else {
+                continue
+            }
             await drain(record, accessToken: accessToken)
         }
     }
@@ -94,8 +97,14 @@ final class SiteRequestOutboxDrainer {
             if receipt?.checksumVerified != true {
                 var request = URLRequest(url: intent.signedURL)
                 request.httpMethod = "PUT"
-                request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
-                let (_, response) = try await URLSession.shared.upload(for: request, from: data)
+                request.setValue("false", forHTTPHeaderField: "x-upsert")
+                let multipart = signedUploadBody(
+                    data: data, filename: url.lastPathComponent, mimeType: mimeType)
+                request.setValue(
+                    "multipart/form-data; boundary=\(multipart.boundary)",
+                    forHTTPHeaderField: "Content-Type")
+                let (_, response) = try await URLSession.shared.upload(
+                    for: request, from: multipart.data)
                 guard let http = response as? HTTPURLResponse,
                       (200..<300).contains(http.statusCode) else {
                     throw SiteRequestRemoteError.invalidResponse
@@ -113,16 +122,43 @@ final class SiteRequestOutboxDrainer {
         return uploadIDs
     }
 
+    private func signedUploadBody(data: Data, filename: String, mimeType: String)
+        -> (boundary: String, data: Data) {
+        let boundary = "PatinaSiteRequest-\(UUID().uuidString)"
+        var body = Data()
+        body.append(Data("--\(boundary)\r\n".utf8))
+        body.append(Data("Content-Disposition: form-data; name=\"cacheControl\"\r\n\r\n".utf8))
+        body.append(Data("3600\r\n".utf8))
+        body.append(Data("--\(boundary)\r\n".utf8))
+        body.append(Data("Content-Disposition: form-data; name=\"\"; filename=\"\(filename)\"\r\n".utf8))
+        body.append(Data("Content-Type: \(mimeType)\r\n\r\n".utf8))
+        body.append(data)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        return (boundary, body)
+    }
+
     private func replacingUploadIDs(_ uploadIDs: [String],
                                     in submission: SiteDeliverySubmission) -> SiteDeliverySubmission {
-        SiteDeliverySubmission(
+        var proofIDs = uploadIDs.makeIterator()
+        let dimensions = submission.dimensions.map { dimension in
+            guard dimension.proofAssetPath != nil,
+                  let proofMediaID = proofIDs.next() else { return dimension }
+            return SiteRequestDimension(
+                id: dimension.id, label: dimension.label,
+                millimetres: dimension.millimetres,
+                capturedBy: dimension.capturedBy,
+                capturedAt: dimension.capturedAt,
+                proofAssetPath: proofMediaID)
+        }
+        return SiteDeliverySubmission(
             requestID: submission.requestID,
             itemID: submission.itemID,
             itemVersionID: submission.itemVersionID,
             clientDeliveryID: submission.clientDeliveryID,
-            dimensions: submission.dimensions,
+            dimensions: dimensions,
             uploadIDs: uploadIDs,
-            skippedShotLabels: submission.skippedShotLabels)
+            skippedShotLabels: submission.skippedShotLabels,
+            photoResults: submission.photoResults)
     }
 
     private func loadSubmission(at path: String) throws -> SiteDeliverySubmission {

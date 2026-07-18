@@ -19,6 +19,20 @@ public enum SiteRequestKit: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum SiteRequestAccessToken {
+    /// Site Request tokens have their own namespace so iOS never intercepts
+    /// legacy 64-hex Field Coordination links that share `/field/{token}`.
+    public static func isNativeSiteRequestToken(_ token: String) -> Bool {
+        guard token.hasPrefix("sr_") else { return false }
+        let opaque = token.dropFirst(3)
+        guard opaque.count == 43 else { return false }
+        return opaque.allSatisfy { character in
+            character.isASCII && (character.isLetter || character.isNumber
+                || character == "_" || character == "-")
+        }
+    }
+}
+
 public enum SiteRequestStatus: String, Codable, Sendable {
     case draft
     case awaitingConsent = "awaiting_consent"
@@ -95,6 +109,97 @@ public struct SiteRequestMedia: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
+public struct SiteRequestPhotoShot: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    public let label: String
+    public let guidance: String?
+    public let referenceURL: URL?
+
+    public init(id: String, label: String, guidance: String? = nil,
+                referenceURL: URL? = nil) {
+        self.id = id
+        self.label = label
+        self.guidance = guidance
+        self.referenceURL = referenceURL
+    }
+
+    public static let p1DetailPhotos: [SiteRequestPhotoShot] = [
+        SiteRequestPhotoShot(
+            id: "wide_context", label: "Wide context",
+            guidance: "Show the detail in the full wall or room context."),
+        SiteRequestPhotoShot(
+            id: "straight_on", label: "Straight on",
+            guidance: "Center the detail and keep the phone level."),
+        SiteRequestPhotoShot(
+            id: "left_return", label: "Left return",
+            guidance: "Show the left edge, return, and nearby condition."),
+        SiteRequestPhotoShot(
+            id: "detail", label: "Close detail",
+            guidance: "Move close enough to show material, joint, and finish.")
+    ]
+}
+
+public struct SiteRequestMeasureDefinition: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    public let label: String
+    public let guidance: String?
+
+    public init(id: String, label: String, guidance: String? = nil) {
+        self.id = id
+        self.label = label
+        self.guidance = guidance
+    }
+
+    public static let p1MeasureSet: [SiteRequestMeasureDefinition] = [
+        SiteRequestMeasureDefinition(
+            id: "floor_to_sill", label: "A · floor → sill",
+            guidance: "Measure vertically from the finished floor to the sill."),
+        SiteRequestMeasureDefinition(
+            id: "sill_to_head", label: "B · sill → head",
+            guidance: "Measure vertically from the sill to the opening head."),
+        SiteRequestMeasureDefinition(
+            id: "run_length", label: "C · run length",
+            guidance: "Measure the full horizontal run shown in the diagram.")
+    ]
+}
+
+public enum SiteRequestPhotoResultStatus: String, Codable, Hashable, Sendable {
+    case captured
+    case skipped
+}
+
+public struct SiteRequestPhotoResult: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    public let label: String
+    public let status: SiteRequestPhotoResultStatus
+    public let skipNote: String?
+
+    public init(id: String, label: String, status: SiteRequestPhotoResultStatus,
+                skipNote: String? = nil) {
+        self.id = id
+        self.label = label
+        self.status = status
+        self.skipNote = skipNote
+    }
+}
+
+public struct SiteRequestResolvedPhotoResult: Codable, Hashable, Identifiable, Sendable {
+    public let id: String
+    public let label: String
+    public let status: SiteRequestPhotoResultStatus
+    public let mediaID: String?
+    public let skipNote: String?
+
+    public init(id: String, label: String, status: SiteRequestPhotoResultStatus,
+                mediaID: String? = nil, skipNote: String? = nil) {
+        self.id = id
+        self.label = label
+        self.status = status
+        self.mediaID = mediaID
+        self.skipNote = skipNote
+    }
+}
+
 public struct SiteRequestItem: Codable, Hashable, Identifiable, Sendable {
     public let id: String
     public let requestID: String?
@@ -110,6 +215,8 @@ public struct SiteRequestItem: Codable, Hashable, Identifiable, Sendable {
     public let media: [SiteRequestMedia]
     public let redoNote: String?
     public let deliverableID: String?
+    public let measureDefinitions: [SiteRequestMeasureDefinition]
+    public let photoShots: [SiteRequestPhotoShot]
 
     public init(id: String, requestID: String? = nil,
                 versionID: String, version: Int = 1,
@@ -118,7 +225,9 @@ public struct SiteRequestItem: Codable, Hashable, Identifiable, Sendable {
                 status: SiteRequestItemStatus = .pending,
                 dimensions: [SiteRequestDimension] = [],
                 media: [SiteRequestMedia] = [], redoNote: String? = nil,
-                deliverableID: String? = nil) {
+                deliverableID: String? = nil,
+                measureDefinitions: [SiteRequestMeasureDefinition] = [],
+                photoShots: [SiteRequestPhotoShot] = []) {
         self.id = id
         self.requestID = requestID
         self.versionID = versionID
@@ -133,6 +242,8 @@ public struct SiteRequestItem: Codable, Hashable, Identifiable, Sendable {
         self.media = media
         self.redoNote = redoNote
         self.deliverableID = deliverableID
+        self.measureDefinitions = measureDefinitions
+        self.photoShots = photoShots
     }
 }
 
@@ -205,6 +316,9 @@ public struct SiteBinderRoom: Codable, Hashable, Identifiable, Sendable {
 
 public struct SiteBinderEntry: Codable, Hashable, Identifiable, Sendable {
     public let id: String
+    public let requestID: String?
+    public let itemID: String?
+    public let itemVersionID: String?
     public let roomID: String
     public let title: String
     public let kind: SiteRequestKit
@@ -215,11 +329,16 @@ public struct SiteBinderEntry: Codable, Hashable, Identifiable, Sendable {
     public let dimensions: [SiteRequestDimension]
     public let media: [SiteRequestMedia]
 
-    public init(id: String, roomID: String, title: String, kind: SiteRequestKit,
+    public init(id: String, requestID: String? = nil, itemID: String? = nil,
+                itemVersionID: String? = nil, roomID: String,
+                title: String, kind: SiteRequestKit,
                 sourceDeliverableID: String, supersedesEntryID: String? = nil,
                 approvedBy: String, approvedAt: Date,
                 dimensions: [SiteRequestDimension] = [], media: [SiteRequestMedia] = []) {
         self.id = id
+        self.requestID = requestID
+        self.itemID = itemID
+        self.itemVersionID = itemVersionID
         self.roomID = roomID
         self.title = title
         self.kind = kind
@@ -240,11 +359,14 @@ public struct SiteProjectHub: Codable, Hashable, Sendable {
     public let rooms: [SiteBinderRoom]
     public let assignees: [SiteRequestAssignee]
     public let events: [SiteRequestEvent]
+    public let binderEntries: [SiteBinderEntry]
+    public let currentBinderEntries: [SiteBinderEntry]
 
     public init(projectID: String, projectName: String,
                 requests: [SiteRequestSummary], reviewItems: [SiteRequestItem],
                 rooms: [SiteBinderRoom], assignees: [SiteRequestAssignee] = [],
-                events: [SiteRequestEvent]) {
+                events: [SiteRequestEvent], binderEntries: [SiteBinderEntry] = [],
+                currentBinderEntries: [SiteBinderEntry]? = nil) {
         self.projectID = projectID
         self.projectName = projectName
         self.requests = requests
@@ -252,6 +374,9 @@ public struct SiteProjectHub: Codable, Hashable, Sendable {
         self.rooms = rooms
         self.assignees = assignees
         self.events = events
+        self.binderEntries = binderEntries
+        self.currentBinderEntries = currentBinderEntries
+            ?? SiteBinderProjection.currentEntries(from: binderEntries)
     }
 }
 
@@ -261,14 +386,20 @@ public struct SiteRequestDraftItem: Codable, Hashable, Sendable {
     public let guidance: String
     public let roomID: String?
     public let sortOrder: Int
+    public let measureDefinitions: [SiteRequestMeasureDefinition]
+    public let photoShots: [SiteRequestPhotoShot]
 
     public init(kit: SiteRequestKit, title: String, guidance: String,
-                roomID: String?, sortOrder: Int) {
+                roomID: String?, sortOrder: Int,
+                measureDefinitions: [SiteRequestMeasureDefinition] = [],
+                photoShots: [SiteRequestPhotoShot] = []) {
         self.kit = kit
         self.title = title
         self.guidance = guidance
         self.roomID = roomID
         self.sortOrder = sortOrder
+        self.measureDefinitions = measureDefinitions
+        self.photoShots = photoShots
     }
 }
 
@@ -368,10 +499,12 @@ public struct SiteDeliverySubmission: Codable, Hashable, Sendable {
     public let dimensions: [SiteRequestDimension]
     public let uploadIDs: [String]
     public let skippedShotLabels: [String]
+    public let photoResults: [SiteRequestPhotoResult]?
 
     public init(requestID: String, itemID: String, itemVersionID: String,
                 clientDeliveryID: UUID, dimensions: [SiteRequestDimension] = [],
-                uploadIDs: [String] = [], skippedShotLabels: [String] = []) {
+                uploadIDs: [String] = [], skippedShotLabels: [String] = [],
+                photoResults: [SiteRequestPhotoResult]? = nil) {
         self.requestID = requestID
         self.itemID = itemID
         self.itemVersionID = itemVersionID
@@ -379,6 +512,45 @@ public struct SiteDeliverySubmission: Codable, Hashable, Sendable {
         self.dimensions = dimensions
         self.uploadIDs = uploadIDs
         self.skippedShotLabels = skippedShotLabels
+        self.photoResults = photoResults
+    }
+}
+
+public extension SiteDeliverySubmission {
+    /// Resolves each captured result to exactly one received media id and keeps
+    /// verbatim skip notes. Nil means the K-02 payload is incomplete or
+    /// ambiguous and must not reach the server.
+    func resolvedPhotoResults() -> [SiteRequestResolvedPhotoResult]? {
+        guard let photoResults, !photoResults.isEmpty,
+              Set(photoResults.map(\.id)).count == photoResults.count else { return nil }
+        var mediaIDs = uploadIDs.makeIterator()
+        var consumedMediaCount = 0
+        var resolved: [SiteRequestResolvedPhotoResult] = []
+        for result in photoResults {
+            switch result.status {
+            case .captured:
+                guard let mediaID = mediaIDs.next(), !mediaID.isEmpty else { return nil }
+                consumedMediaCount += 1
+                resolved.append(SiteRequestResolvedPhotoResult(
+                    id: result.id, label: result.label, status: .captured,
+                    mediaID: mediaID))
+            case .skipped:
+                guard let note = result.skipNote?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !note.isEmpty else { return nil }
+                resolved.append(SiteRequestResolvedPhotoResult(
+                    id: result.id, label: result.label, status: .skipped,
+                    skipNote: note))
+            }
+        }
+        guard consumedMediaCount == uploadIDs.count else { return nil }
+        return resolved
+    }
+}
+
+public enum SiteBinderProjection {
+    public static func currentEntries(from history: [SiteBinderEntry]) -> [SiteBinderEntry] {
+        let superseded = Set(history.compactMap(\.supersedesEntryID))
+        return history.filter { !superseded.contains($0.id) }
     }
 }
 
@@ -428,7 +600,8 @@ public extension GuestSiteRequest {
         clientDeliveryID: UUID,
         dimensions: [SiteRequestDimension] = [],
         uploadIDs: [String] = [],
-        skippedShotLabels: [String] = []
+        skippedShotLabels: [String] = [],
+        photoResults: [SiteRequestPhotoResult]? = nil
     ) -> SiteDeliverySubmission? {
         guard let item = items.first(where: {
             $0.kit == kit && ($0.status == .pending || $0.status == .redo)
@@ -440,7 +613,8 @@ public extension GuestSiteRequest {
             clientDeliveryID: clientDeliveryID,
             dimensions: dimensions,
             uploadIDs: uploadIDs,
-            skippedShotLabels: skippedShotLabels)
+            skippedShotLabels: skippedShotLabels,
+            photoResults: photoResults)
     }
 }
 

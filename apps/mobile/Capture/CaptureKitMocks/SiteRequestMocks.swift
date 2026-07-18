@@ -56,7 +56,8 @@ public enum SiteRequestFixtures {
         roomName: "Kitchen",
         status: .delivered,
         dimensions: dimensions,
-        deliverableID: deliverableID)
+        deliverableID: deliverableID,
+        measureDefinitions: SiteRequestMeasureDefinition.p1MeasureSet)
 
     public static let photoItem = SiteRequestItem(
         id: photoItemID, requestID: requestID,
@@ -69,7 +70,8 @@ public enum SiteRequestFixtures {
         status: .redo,
         media: media,
         redoNote: redoNote,
-        deliverableID: deliverableID)
+        deliverableID: deliverableID,
+        photoShots: SiteRequestPhotoShot.p1DetailPhotos)
 
     public static let request = SiteRequestSummary(
         id: requestID,
@@ -84,10 +86,37 @@ public enum SiteRequestFixtures {
         deliveredItemCount: 1,
         itemCount: 2)
 
+    public static let binderEntries: [SiteBinderEntry] = [
+        SiteBinderEntry(
+            id: "binder-measure-current", requestID: requestID,
+            itemID: measureItemID, itemVersionID: measureVersionID,
+            roomID: "room-1", title: "Kitchen · west wall", kind: .measureSet,
+            sourceDeliverableID: deliverableID,
+            supersedesEntryID: "binder-measure-prior",
+            approvedBy: "Leah", approvedAt: now,
+            dimensions: dimensions),
+        SiteBinderEntry(
+            id: "binder-photo-current", requestID: requestID,
+            itemID: photoItemID, itemVersionID: photoVersionID,
+            roomID: "room-2", title: "Photos · Vanity alcove", kind: .detailPhotos,
+            sourceDeliverableID: "delivery-photo-001",
+            approvedBy: "Leah", approvedAt: now.addingTimeInterval(-300),
+            media: media),
+        SiteBinderEntry(
+            id: "binder-measure-prior", requestID: requestID,
+            itemID: measureItemID, itemVersionID: "version-measure-prior",
+            roomID: "room-1", title: "Kitchen · west wall", kind: .measureSet,
+            sourceDeliverableID: "delivery-measure-prior",
+            approvedBy: "Leah", approvedAt: now.addingTimeInterval(-86_400),
+            dimensions: [SiteRequestDimension(
+                id: "dim-prior", label: "C · run length", millimetres: 2_432,
+                capturedBy: "Dan K.", capturedAt: now.addingTimeInterval(-87_000))])
+    ]
+
     public static let rooms: [SiteBinderRoom] = [
-        SiteBinderRoom(id: "room-1", name: "Kitchen", dimensionCount: 12, photoCount: 34, updatedAt: now),
-        SiteBinderRoom(id: "room-2", name: "Primary bath", dimensionCount: 8, photoCount: 21, updatedAt: now),
-        SiteBinderRoom(id: "room-3", name: "Mudroom", dimensionCount: 0, photoCount: 2, updatedAt: nil)
+        SiteBinderRoom(id: "room-1", name: "Kitchen", dimensionCount: 3, photoCount: 0, updatedAt: now),
+        SiteBinderRoom(id: "room-2", name: "Primary bath", dimensionCount: 0, photoCount: 4, updatedAt: now),
+        SiteBinderRoom(id: "room-3", name: "Mudroom", dimensionCount: 0, photoCount: 0, updatedAt: nil)
     ]
 
     public static let events: [SiteRequestEvent] = [
@@ -106,7 +135,8 @@ public enum SiteRequestFixtures {
         reviewItems: [measureItem, photoItem],
         rooms: rooms,
         assignees: [assignee],
-        events: events)
+        events: events,
+        binderEntries: binderEntries)
 
     public static let guest = GuestSiteRequest(
         request: request,
@@ -184,7 +214,9 @@ public actor MockSiteRequestService: SiteRequestService, GuestSiteRequestService
                 kit: item.kit, title: item.title, guidance: item.guidance,
                 roomID: item.roomID, roomName: item.roomName, status: status,
                 dimensions: item.dimensions, media: item.media, redoNote: item.redoNote,
-                deliverableID: item.deliverableID)
+                deliverableID: item.deliverableID,
+                measureDefinitions: item.measureDefinitions,
+                photoShots: item.photoShots)
         }
         return SiteProjectHub(projectID: currentHub.projectID,
                               projectName: currentHub.projectName,
@@ -192,7 +224,9 @@ public actor MockSiteRequestService: SiteRequestService, GuestSiteRequestService
                               reviewItems: items,
                               rooms: currentHub.rooms,
                               assignees: currentHub.assignees,
-                              events: currentHub.events)
+                              events: currentHub.events,
+                              binderEntries: currentHub.binderEntries,
+                              currentBinderEntries: currentHub.currentBinderEntries)
     }
 }
 
