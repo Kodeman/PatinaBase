@@ -8,8 +8,8 @@
 import Foundation
 
 public enum SiteRequestKit: String, Codable, CaseIterable, Sendable {
-    case measureSet = "k01"
-    case detailPhotos = "k02"
+    case measureSet = "K-01"
+    case detailPhotos = "K-02"
 
     public var title: String {
         switch self {
@@ -25,17 +25,18 @@ public enum SiteRequestStatus: String, Codable, Sendable {
     case sent
     case inProgress = "in_progress"
     case delivered
+    case completed
     case closed
     case expired
 }
 
 public enum SiteRequestItemStatus: String, Codable, Sendable {
-    case pending
+    case pending = "open"
     case captured
     case uploading
     case delivered
     case approved
-    case redo
+    case redo = "redo_requested"
 }
 
 public struct SiteRequestAssignee: Codable, Hashable, Sendable {
@@ -96,6 +97,7 @@ public struct SiteRequestMedia: Codable, Hashable, Identifiable, Sendable {
 
 public struct SiteRequestItem: Codable, Hashable, Identifiable, Sendable {
     public let id: String
+    public let requestID: String?
     public let versionID: String
     public let version: Int
     public let kit: SiteRequestKit
@@ -107,14 +109,18 @@ public struct SiteRequestItem: Codable, Hashable, Identifiable, Sendable {
     public let dimensions: [SiteRequestDimension]
     public let media: [SiteRequestMedia]
     public let redoNote: String?
+    public let deliverableID: String?
 
-    public init(id: String, versionID: String, version: Int = 1,
+    public init(id: String, requestID: String? = nil,
+                versionID: String, version: Int = 1,
                 kit: SiteRequestKit, title: String, guidance: String,
                 roomID: String? = nil, roomName: String? = nil,
                 status: SiteRequestItemStatus = .pending,
                 dimensions: [SiteRequestDimension] = [],
-                media: [SiteRequestMedia] = [], redoNote: String? = nil) {
+                media: [SiteRequestMedia] = [], redoNote: String? = nil,
+                deliverableID: String? = nil) {
         self.id = id
+        self.requestID = requestID
         self.versionID = versionID
         self.version = version
         self.kit = kit
@@ -126,6 +132,7 @@ public struct SiteRequestItem: Codable, Hashable, Identifiable, Sendable {
         self.dimensions = dimensions
         self.media = media
         self.redoNote = redoNote
+        self.deliverableID = deliverableID
     }
 }
 
@@ -162,12 +169,17 @@ public struct SiteRequestSummary: Codable, Hashable, Identifiable, Sendable {
 
 public struct SiteRequestEvent: Codable, Hashable, Identifiable, Sendable {
     public let id: String
+    public let requestID: String?
+    public let type: String?
     public let occurredAt: Date
     public let actorName: String
     public let message: String
 
-    public init(id: String, occurredAt: Date, actorName: String, message: String) {
+    public init(id: String, requestID: String? = nil, type: String? = nil,
+                occurredAt: Date, actorName: String, message: String) {
         self.id = id
+        self.requestID = requestID
+        self.type = type
         self.occurredAt = occurredAt
         self.actorName = actorName
         self.message = message
@@ -226,16 +238,19 @@ public struct SiteProjectHub: Codable, Hashable, Sendable {
     public let requests: [SiteRequestSummary]
     public let reviewItems: [SiteRequestItem]
     public let rooms: [SiteBinderRoom]
+    public let assignees: [SiteRequestAssignee]
     public let events: [SiteRequestEvent]
 
     public init(projectID: String, projectName: String,
                 requests: [SiteRequestSummary], reviewItems: [SiteRequestItem],
-                rooms: [SiteBinderRoom], events: [SiteRequestEvent]) {
+                rooms: [SiteBinderRoom], assignees: [SiteRequestAssignee] = [],
+                events: [SiteRequestEvent]) {
         self.projectID = projectID
         self.projectName = projectName
         self.requests = requests
         self.reviewItems = reviewItems
         self.rooms = rooms
+        self.assignees = assignees
         self.events = events
     }
 }
@@ -399,7 +414,51 @@ public protocol GuestSiteRequestService: Sendable {
     func createUploadIntent(accessToken: String,
                             request: SiteUploadIntentRequest) async throws -> SiteUploadIntent
     func acknowledgeUpload(accessToken: String, uploadID: String,
-                           checksumSHA256: String) async throws -> SiteUploadReceipt
+                           request: SiteUploadIntentRequest) async throws -> SiteUploadReceipt
     func deliver(accessToken: String,
                  submission: SiteDeliverySubmission) async throws -> SiteDeliveryReceipt
+}
+
+public extension GuestSiteRequest {
+    /// Selects only an item the server says is currently open. Real guest
+    /// deliveries therefore inherit request/item/version identity from the
+    /// narrow bootstrap DTO instead of from route or screenshot fixtures.
+    func deliverySubmission(
+        for kit: SiteRequestKit,
+        clientDeliveryID: UUID,
+        dimensions: [SiteRequestDimension] = [],
+        uploadIDs: [String] = [],
+        skippedShotLabels: [String] = []
+    ) -> SiteDeliverySubmission? {
+        guard let item = items.first(where: {
+            $0.kit == kit && ($0.status == .pending || $0.status == .redo)
+        }) else { return nil }
+        return SiteDeliverySubmission(
+            requestID: request.id,
+            itemID: item.id,
+            itemVersionID: item.versionID,
+            clientDeliveryID: clientDeliveryID,
+            dimensions: dimensions,
+            uploadIDs: uploadIDs,
+            skippedShotLabels: skippedShotLabels)
+    }
+}
+
+public enum SiteRequestMediaMIMEType {
+    public static func value(forFilename filename: String) -> String {
+        switch URL(fileURLWithPath: filename).pathExtension.lowercased() {
+        case "heic": return "image/heic"
+        case "heif": return "image/heif"
+        case "jpg", "jpeg": return "image/jpeg"
+        case "png": return "image/png"
+        case "webp": return "image/webp"
+        default: return "application/octet-stream"
+        }
+    }
+}
+
+public enum SiteRequestUploadIDs {
+    public static func appending(_ uploadID: String, to existing: [String]) -> [String] {
+        existing.contains(uploadID) ? existing : existing + [uploadID]
+    }
 }

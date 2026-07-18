@@ -47,7 +47,7 @@ public enum SiteRequestFixtures {
     }
 
     public static let measureItem = SiteRequestItem(
-        id: measureItemID,
+        id: measureItemID, requestID: requestID,
         versionID: measureVersionID,
         kit: .measureSet,
         title: "Kitchen · west wall",
@@ -55,10 +55,11 @@ public enum SiteRequestFixtures {
         roomID: "room-1",
         roomName: "Kitchen",
         status: .delivered,
-        dimensions: dimensions)
+        dimensions: dimensions,
+        deliverableID: deliverableID)
 
     public static let photoItem = SiteRequestItem(
-        id: photoItemID,
+        id: photoItemID, requestID: requestID,
         versionID: photoVersionID,
         kit: .detailPhotos,
         title: "Photos · Vanity alcove",
@@ -67,7 +68,8 @@ public enum SiteRequestFixtures {
         roomName: "Primary bath",
         status: .redo,
         media: media,
-        redoNote: redoNote)
+        redoNote: redoNote,
+        deliverableID: deliverableID)
 
     public static let request = SiteRequestSummary(
         id: requestID,
@@ -103,6 +105,7 @@ public enum SiteRequestFixtures {
         requests: [request],
         reviewItems: [measureItem, photoItem],
         rooms: rooms,
+        assignees: [assignee],
         events: events)
 
     public static let guest = GuestSiteRequest(
@@ -157,7 +160,7 @@ public actor MockSiteRequestService: SiteRequestService, GuestSiteRequestService
     }
 
     public func acknowledgeUpload(accessToken _: String, uploadID: String,
-                                  checksumSHA256 _: String) async throws -> SiteUploadReceipt {
+                                  request _: SiteUploadIntentRequest) async throws -> SiteUploadReceipt {
         SiteUploadReceipt(uploadID: uploadID,
                           objectPath: "site-requests/fixture/immutable-object.jpg",
                           checksumVerified: true)
@@ -176,16 +179,19 @@ public actor MockSiteRequestService: SiteRequestService, GuestSiteRequestService
         let items = currentHub.reviewItems.map { item in
             guard item.id == itemID else { return item }
             return SiteRequestItem(
-                id: item.id, versionID: item.versionID, version: item.version,
+                id: item.id, requestID: item.requestID,
+                versionID: item.versionID, version: item.version,
                 kit: item.kit, title: item.title, guidance: item.guidance,
                 roomID: item.roomID, roomName: item.roomName, status: status,
-                dimensions: item.dimensions, media: item.media, redoNote: item.redoNote)
+                dimensions: item.dimensions, media: item.media, redoNote: item.redoNote,
+                deliverableID: item.deliverableID)
         }
         return SiteProjectHub(projectID: currentHub.projectID,
                               projectName: currentHub.projectName,
                               requests: currentHub.requests,
                               reviewItems: items,
                               rooms: currentHub.rooms,
+                              assignees: currentHub.assignees,
                               events: currentHub.events)
     }
 }

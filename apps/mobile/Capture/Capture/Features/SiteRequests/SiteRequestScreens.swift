@@ -21,8 +21,8 @@ enum SiteRequestScreens {
             }
             return AnyView(SiteRequestScreen(
                 screen: screen,
-                projectID: projectID ?? SiteRequestFixtures.projectID,
-                requestID: requestID ?? SiteRequestFixtures.requestID,
+                projectID: projectID ?? (AppConfiguration.runsRealServices ? "" : SiteRequestFixtures.projectID),
+                requestID: requestID ?? (AppConfiguration.runsRealServices ? "" : SiteRequestFixtures.requestID),
                 accessToken: coordinator.guestAccessToken,
                 container: container,
                 coordinator: coordinator))
@@ -38,8 +38,8 @@ struct GuestSiteRequestRootView: View {
     var body: some View {
         SiteRequestScreen(
             screen: .sr13GuestLanding,
-            projectID: SiteRequestFixtures.projectID,
-            requestID: SiteRequestFixtures.requestID,
+            projectID: "",
+            requestID: "",
             accessToken: accessToken,
             container: container,
             coordinator: coordinator)
@@ -56,13 +56,15 @@ private struct SiteRequestScreen: View {
 
     @State private var hub = SiteRequestFixtures.hub
     @State private var guest = SiteRequestFixtures.guest
-    @State private var redoNote = SiteRequestFixtures.redoNote
+    @State private var redoNote = AppConfiguration.runsRealServices ? "" : SiteRequestFixtures.redoNote
     @State private var imperialA = "41 3/8"
     @State private var imperialB = "25 3/4"
     @State private var imperialC = "96 1/4"
     @State private var metricEntry = false
     @State private var actionMessage: String?
     @State private var isWorking = false
+    @State private var contractLoaded = false
+    @State private var contractFailed = false
 
     var body: some View {
         ZStack {
@@ -70,7 +72,11 @@ private struct SiteRequestScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     header
-                    content
+                    if AppConfiguration.runsRealServices && !contractLoaded {
+                        contractLoadState
+                    } else {
+                        content
+                    }
                     if let actionMessage {
                         Text(actionMessage)
                             .font(CaptureType.footnote)
@@ -104,10 +110,21 @@ private struct SiteRequestScreen: View {
 
     @ViewBuilder private var header: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(isGuest ? "PATINA · SITE REQUEST" : "FIELD · \(hub.projectName.uppercased())")
+            Text(isGuest ? "PATINA · SITE REQUEST" : "FIELD · \((contractLoaded || !AppConfiguration.runsRealServices ? hub.projectName : "SITE").uppercased())")
                 .font(CaptureType.eyebrow)
                 .foregroundStyle(CaptureColor.verdigrisInk)
             Rectangle().fill(CaptureColor.line).frame(height: 1)
+        }
+    }
+
+    @ViewBuilder private var contractLoadState: some View {
+        if contractFailed {
+            title("Request unavailable", subtitle: actionMessage ?? "Check your connection and try again.")
+        } else {
+            HStack(spacing: 12) {
+                ProgressView()
+                Text("Loading current site request data…").font(CaptureType.callout)
+            }
         }
     }
 
@@ -171,9 +188,13 @@ private struct SiteRequestScreen: View {
             kitRow(.measureSet, detail: "Three dimensions · optional tape proof")
             kitRow(.detailPhotos, detail: "Four guided angles · reference framing")
             sectionLabel("DUE")
-            field("Friday, August 29 · before drywall")
+            field("In 7 days · before drywall")
             sectionLabel("ASSIGNEE")
-            field("Dan K. · +1 608 555 0142")
+            if let assignee = hub.assignees.first {
+                field("\(assignee.name) · \(assignee.normalizedPhone)")
+            } else {
+                field("No SMS-capable project party")
+            }
             Button("Configure 2 items") { go(.sr03ItemConfig) }.sitePrimary()
         }
     }
@@ -184,7 +205,7 @@ private struct SiteRequestScreen: View {
             card {
                 VStack(alignment: .leading, spacing: 9) {
                     Text(SiteRequestKit.measureSet.title).font(CaptureType.bodyEmph)
-                    Text("Kitchen · west wall").font(CaptureType.title2)
+                    Text(hub.rooms.first?.name ?? "Choose a project room").font(CaptureType.title2)
                     Text("A floor → sill · B sill → head · C run length")
                         .font(CaptureType.callout).foregroundStyle(CaptureColor.inkSoft)
                     Text("Inside face to inside face — ignore the trim.")
@@ -194,7 +215,8 @@ private struct SiteRequestScreen: View {
             card {
                 VStack(alignment: .leading, spacing: 9) {
                     Text(SiteRequestKit.detailPhotos.title).font(CaptureType.bodyEmph)
-                    Text("Primary bath · vanity alcove").font(CaptureType.title2)
+                    Text(hub.rooms.dropFirst().first?.name ?? hub.rooms.first?.name ?? "Choose a project room")
+                        .font(CaptureType.title2)
                     Text("Wide context · straight on · left return · grout detail")
                         .font(CaptureType.callout).foregroundStyle(CaptureColor.inkSoft)
                 }
@@ -210,31 +232,41 @@ private struct SiteRequestScreen: View {
             title("Send request", subtitle: "2 items · due Friday")
             card {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(SiteRequestFixtures.assignee.name).font(CaptureType.bodyEmph)
-                    Text("\(SiteRequestFixtures.assignee.normalizedPhone) · \(SiteRequestFixtures.assignee.trade ?? "Trade")")
+                    let assignee = hub.assignees.first
+                    Text(assignee?.name ?? "No eligible project party").font(CaptureType.bodyEmph)
+                    Text("\(assignee?.normalizedPhone ?? "Missing phone") · \(assignee?.trade ?? "Trade")")
                         .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
-                    Label("SMS consent on file", systemImage: "checkmark.circle.fill")
-                        .font(CaptureType.callout).foregroundStyle(CaptureColor.success)
+                    Label(assignee?.smsConsentGranted == true ? "SMS consent on file" : "Consent required before link dispatch",
+                          systemImage: assignee?.smsConsentGranted == true ? "checkmark.circle.fill" : "clock")
+                        .font(CaptureType.callout)
+                        .foregroundStyle(assignee?.smsConsentGranted == true ? CaptureColor.success : CaptureColor.warning)
                 }
             }
             sectionLabel("EXACT SMS PREVIEW")
             card {
-                Text("Leah at Middlewest Studio needs 2 site items for Killkenny West — due Friday. Open your private checklist: client.patina.cloud/field/••••")
+                Text("Your designer needs 2 site items for \(hub.projectName) — due in 7 days. Open your private checklist: client.patina.cloud/field/••••")
                     .font(CaptureType.callout)
             }
-            Text("Without consent, this request waits in awaiting consent until Dan replies YES.")
+            Text("Without consent, this request waits in awaiting consent until \(hub.assignees.first?.name ?? "the project contact") replies YES.")
                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
-            Button("Send request") { go(.sr05Tracker) }.sitePrimary()
+            Button("Send request") { Task { await createAndSendRequest() } }
+                .sitePrimary().disabled(isWorking || hub.assignees.first == nil || hub.rooms.first == nil)
         }
     }
 
     private var tracker: some View {
         VStack(alignment: .leading, spacing: 18) {
-            title("Pre-drywall pass", subtitle: "Dan K. · opened 12 minutes ago")
-            ProgressView(value: 0.5).tint(CaptureColor.verdigris)
-            Text("1 of 2 delivered").font(CaptureType.monoBody)
-            requestItemRow(SiteRequestFixtures.measureItem, trailing: "DELIVERED")
-            requestItemRow(SiteRequestFixtures.photoItem, trailing: "RETURNED")
+            let request = activeRequest
+            title(request?.title ?? "Site request",
+                  subtitle: "\(request?.assignee.name ?? "Project contact") · \(request?.openedAt == nil ? "not opened" : "opened")")
+            ProgressView(value: request.map {
+                $0.itemCount == 0 ? 0 : Double($0.deliveredItemCount) / Double($0.itemCount)
+            } ?? 0).tint(CaptureColor.verdigris)
+            Text("\(request?.deliveredItemCount ?? 0) of \(request?.itemCount ?? 0) delivered")
+                .font(CaptureType.monoBody)
+            ForEach(itemsForActiveRequest) { item in
+                requestItemRow(item, trailing: item.status.rawValue)
+            }
             sectionLabel("ACTIVITY")
             ForEach(hub.events) { event in
                 Text("\(event.actorName) · \(event.message)").font(CaptureType.callout)
@@ -247,18 +279,21 @@ private struct SiteRequestScreen: View {
     private var reviewInbox: some View {
         VStack(alignment: .leading, spacing: 18) {
             title("Review", subtitle: "2 item deliveries keep their provenance")
-            requestItemRow(SiteRequestFixtures.measureItem, trailing: "REVIEW")
-            requestItemRow(SiteRequestFixtures.photoItem, trailing: "REVIEW")
+            ForEach(deliveredReviewItems) { item in
+                requestItemRow(item, trailing: "REVIEW")
+            }
             Text("Approvals are item-granular. There is no bulk approve.")
                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
-            Button("Review measure set") { go(.sr07MeasureReview) }.sitePrimary()
+            Button("Review next delivery") { reviewNextDelivery() }
+                .sitePrimary().disabled(deliveredReviewItems.isEmpty)
         }
     }
 
     private var measureReview: some View {
         VStack(alignment: .leading, spacing: 18) {
-            title("Measure · Kitchen west wall", subtitle: "Dan K. · captured Friday 2:41 PM")
-            ForEach(SiteRequestFixtures.dimensions) { dimension in
+            let item = selectedReviewItem(kit: .measureSet)
+            title(item?.title ?? "Measure set", subtitle: activeRequest?.assignee.name ?? "Project contact")
+            ForEach(selectedReviewItem(kit: .measureSet)?.dimensions ?? []) { dimension in
                 card {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
@@ -272,16 +307,26 @@ private struct SiteRequestScreen: View {
                     }
                 }
             }
+            sectionLabel("SEND BACK — NOTE REQUIRED")
+            TextEditor(text: $redoNote)
+                .font(CaptureType.body)
+                .frame(minHeight: 72)
+                .padding(8)
+                .overlay(Rectangle().stroke(CaptureColor.line2))
             HStack {
                 Button("Approve") { Task { await approveMeasure() } }.sitePrimary()
-                Button("Redo…") { go(.sr08PhotoReview) }.siteSecondary()
+                Button("Send back") { Task { await sendRedo(kit: .measureSet) } }
+                    .siteSecondary()
+                    .disabled(redoNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
     }
 
     private var photoReview: some View {
         VStack(alignment: .leading, spacing: 18) {
-            title("Photos · Vanity alcove", subtitle: "4 immutable originals · display derivatives")
+            let item = selectedReviewItem(kit: .detailPhotos)
+            title(item?.title ?? "Detail photos",
+                  subtitle: "\(item?.media.count ?? 0) immutable originals · display derivatives")
             mediaGrid
             sectionLabel("SEND BACK — NOTE REQUIRED")
             HStack { reasonChip("Glare"); reasonChip("Wrong angle"); reasonChip("Closer") }
@@ -293,7 +338,7 @@ private struct SiteRequestScreen: View {
                 .accessibilityIdentifier("siteRequest.redoNote")
             Text("The pro receives this text verbatim. Only this item reopens.")
                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
-            Button("Send back with note") { Task { await sendRedo() } }
+            Button("Send back with note") { Task { await sendRedo(kit: .detailPhotos) } }
                 .sitePrimary().disabled(redoNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Button("Approve instead") { Task { await approvePhoto() } }.siteSecondary()
         }
@@ -334,7 +379,7 @@ private struct SiteRequestScreen: View {
     private var binderDetail: some View {
         VStack(alignment: .leading, spacing: 18) {
             title("Kitchen", subtitle: "Current approved values with their source")
-            ForEach(SiteRequestFixtures.dimensions) { dimension in
+            ForEach(selectedReviewItem(kit: .measureSet)?.dimensions ?? []) { dimension in
                 card {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(dimension.label).font(CaptureType.eyebrow)
@@ -377,19 +422,24 @@ private struct SiteRequestScreen: View {
     private var guestChecklist: some View {
         VStack(alignment: .leading, spacing: 18) {
             title("For the \(guest.projectDisplayName) site", subtitle: "From \(guest.designerName) · due Friday")
-            Text("1 of 2 server-received").font(CaptureType.monoBody)
-            ProgressView(value: 0.5).tint(CaptureColor.verdigris)
-            requestItemRow(SiteRequestFixtures.measureItem, trailing: "DELIVERED")
-            requestItemRow(SiteRequestFixtures.photoItem, trailing: "RETURNED")
+            let deliveredCount = guest.items.filter { $0.status == .delivered || $0.status == .approved }.count
+            Text("\(deliveredCount) of \(guest.items.count) server-received").font(CaptureType.monoBody)
+            ProgressView(value: guest.items.isEmpty ? 0 : Double(deliveredCount) / Double(guest.items.count))
+                .tint(CaptureColor.verdigris)
+            ForEach(guest.items) { item in
+                requestItemRow(item, trailing: item.status.rawValue)
+            }
             Text("Captured work stays on this phone through dead zones and relaunches. Delivered means the server acknowledged it.")
                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
-            Button("Continue · Kitchen west wall") { go(.sr15GuestMeasure) }.sitePrimary()
+            Button("Continue · \(nextGuestItem?.title ?? "No open items")") { continueGuestItem() }
+                .sitePrimary().disabled(nextGuestItem == nil)
         }
     }
 
     private var guestMeasure: some View {
         VStack(alignment: .leading, spacing: 16) {
-            title("Kitchen · west wall", subtitle: SiteRequestFixtures.measureItem.guidance)
+            title(guest.items.first(where: { $0.kit == .measureSet })?.title ?? "Measure set",
+                  subtitle: guest.items.first(where: { $0.kit == .measureSet })?.guidance ?? "Enter the requested measurements.")
             Picker("Units", selection: $metricEntry) {
                 Text("Imperial").tag(false); Text("Metric").tag(true)
             }.pickerStyle(.segmented)
@@ -405,7 +455,8 @@ private struct SiteRequestScreen: View {
 
     private var guestPhoto: some View {
         VStack(alignment: .leading, spacing: 16) {
-            title("Photos · Vanity alcove", subtitle: "Shot 2 of 4 · Straight on — include the sconce")
+            let item = guest.items.first(where: { $0.kit == .detailPhotos })
+            title(item?.title ?? "Detail photos", subtitle: item?.guidance ?? "Capture the requested view.")
             ZStack {
                 CaptureColor.ink2
                 RoundedRectangle(cornerRadius: 80)
@@ -440,7 +491,7 @@ private struct SiteRequestScreen: View {
 
     private var guestReceipt: some View {
         VStack(alignment: .leading, spacing: 18) {
-            title("Received by Patina", subtitle: "Server receipt · \(SiteRequestFixtures.deliverableID)")
+            title("Received by Patina", subtitle: "Server receipt recorded")
             card {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Checksum verified", systemImage: "checkmark.circle.fill")
@@ -456,8 +507,9 @@ private struct SiteRequestScreen: View {
         VStack(alignment: .center, spacing: 18) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 72)).foregroundStyle(CaptureColor.success)
-            Text("2 of 2 delivered").font(CaptureType.title)
-            Text("Leah has been notified. This link stays available for a returned item until the request closes.")
+            Text("\(guest.items.filter { $0.status == .delivered || $0.status == .approved }.count) of \(guest.items.count) delivered")
+                .font(CaptureType.title)
+            Text("\(guest.designerName) has been notified. This link stays available for a returned item until the request closes.")
                 .font(CaptureType.callout).foregroundStyle(CaptureColor.inkSoft)
                 .multilineTextAlignment(.center)
             Button("See returned-item example") { go(.sr20GuestReturned) }.siteSecondary()
@@ -467,58 +519,189 @@ private struct SiteRequestScreen: View {
     private var guestReturned: some View {
         VStack(alignment: .leading, spacing: 18) {
             title("1 item returned", subtitle: "Everything else stands")
-            requestItemRow(SiteRequestFixtures.photoItem, trailing: "RETURNED")
+            if let returned = guest.items.first(where: { $0.status == .redo }) {
+                requestItemRow(returned, trailing: "RETURNED")
+            }
             card {
-                Text(SiteRequestFixtures.redoNote)
+                Text(guest.items.first(where: { $0.status == .redo })?.redoNote ?? "Please recapture this item.")
                     .font(CaptureType.bodyEmph)
                     .accessibilityIdentifier("siteRequest.verbatimRedoNote")
             }
             Text("The previous attempt remains in history. This exact item alone is open again.")
                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
-            Button("Recapture this item") { go(.sr16GuestPhoto) }.sitePrimary()
+            Button("Recapture this item") { continueGuestItem(preferReturned: true) }.sitePrimary()
         }
     }
 
     // MARK: - Contract actions
+
+    private var activeProjectID: String {
+        if isGuest, accessToken != nil { return guest.request.projectID }
+        return projectID.isEmpty ? hub.projectID : projectID
+    }
+
+    private var activeRequestID: String {
+        if isGuest, accessToken != nil { return guest.request.id }
+        if !requestID.isEmpty { return requestID }
+        return hub.requests.first?.id ?? ""
+    }
+
+    private var activeRequest: SiteRequestSummary? {
+        hub.requests.first(where: { $0.id == activeRequestID }) ?? hub.requests.first
+    }
+
+    private var itemsForActiveRequest: [SiteRequestItem] {
+        hub.reviewItems.filter { $0.requestID == nil || $0.requestID == activeRequestID }
+    }
+
+    private var deliveredReviewItems: [SiteRequestItem] {
+        itemsForActiveRequest.filter { $0.status == .delivered }
+    }
+
+    private var nextGuestItem: SiteRequestItem? {
+        guest.items.first(where: { $0.status == .pending || $0.status == .redo })
+    }
+
+    private func selectedReviewItem(kit: SiteRequestKit) -> SiteRequestItem? {
+        if let delivered = deliveredReviewItems.first(where: { $0.kit == kit }) {
+            return delivered
+        }
+        return AppConfiguration.runsRealServices
+            ? nil
+            : itemsForActiveRequest.first(where: { $0.kit == kit })
+    }
+
+    private func reviewNextDelivery() {
+        guard let item = deliveredReviewItems.first else { return }
+        go(item.kit == .measureSet ? .sr07MeasureReview : .sr08PhotoReview)
+    }
+
+    private func continueGuestItem(preferReturned: Bool = false) {
+        let item = preferReturned
+            ? guest.items.first(where: { $0.status == .redo })
+            : nextGuestItem
+        guard let item else { return }
+        go(item.kit == .measureSet ? .sr15GuestMeasure : .sr16GuestPhoto)
+    }
+
+    private func guestSubmission(
+        kit: SiteRequestKit,
+        clientDeliveryID: UUID,
+        dimensions: [SiteRequestDimension] = []
+    ) throws -> SiteDeliverySubmission {
+        if accessToken != nil {
+            guard let submission = guest.deliverySubmission(
+                for: kit, clientDeliveryID: clientDeliveryID,
+                dimensions: dimensions) else {
+                throw SiteRequestRemoteError.noOpenItem
+            }
+            return submission
+        }
+        guard !AppConfiguration.runsRealServices else {
+            throw SiteRequestRemoteError.noOpenItem
+        }
+        let fixture = kit == .measureSet
+            ? (SiteRequestFixtures.measureItemID, SiteRequestFixtures.measureVersionID)
+            : (SiteRequestFixtures.photoItemID, SiteRequestFixtures.photoVersionID)
+        return SiteDeliverySubmission(
+            requestID: SiteRequestFixtures.requestID, itemID: fixture.0,
+            itemVersionID: fixture.1, clientDeliveryID: clientDeliveryID,
+            dimensions: dimensions)
+    }
+
+    private func createAndSendRequest() async {
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            guard let assignee = hub.assignees.first,
+                  let firstRoom = hub.rooms.first else {
+                throw SiteRequestRemoteError.assigneePartyRequired
+            }
+            let secondRoom = hub.rooms.dropFirst().first ?? firstRoom
+            let dueAt = Date().addingTimeInterval(7 * 86_400)
+            let draft = SiteRequestDraft(
+                projectID: hub.projectID, title: "Site request",
+                assignee: assignee, dueAt: dueAt,
+                dueContext: "before drywall",
+                items: [
+                    SiteRequestDraftItem(
+                        kit: .measureSet, title: "\(firstRoom.name) · measure set",
+                        guidance: "Measure the requested opening to the nearest 1/16 inch.",
+                        roomID: firstRoom.id, sortOrder: 0),
+                    SiteRequestDraftItem(
+                        kit: .detailPhotos, title: "\(secondRoom.name) · detail photos",
+                        guidance: "Capture wide context, straight on, left return, and detail.",
+                        roomID: secondRoom.id, sortOrder: 1)
+                ])
+            let newRequestID = try await container.siteRequests.createDraft(draft)
+            try await container.siteRequests.send(
+                requestID: newRequestID,
+                expiresAt: dueAt.addingTimeInterval(30 * 86_400))
+            actionMessage = assignee.smsConsentGranted
+                ? "Request dispatched"
+                : "Request created · awaiting SMS consent"
+            go(.sr05Tracker, requestID: newRequestID)
+        } catch { actionMessage = error.localizedDescription }
+    }
 
     private func loadContractData() async {
         container.analytics.screen(screen.rawValue)
         do {
             if isGuest, let accessToken {
                 guest = try await container.guestSiteRequests.bootstrap(accessToken: accessToken)
+                contractLoaded = true
                 await container.siteRequestOutboxDrainer.resume(accessToken: accessToken)
             } else if !isGuest {
                 hub = try await container.siteRequests.hub(projectID: projectID)
+                contractLoaded = true
+            } else {
+                contractLoaded = true
             }
         } catch {
-            actionMessage = "Offline fixture shown · \(error.localizedDescription)"
+            if let remote = error as? SiteRequestRemoteError,
+               remote.invalidatesGuestAccess {
+                coordinator.leaveGuestRequest()
+            }
+            contractFailed = true
+            actionMessage = AppConfiguration.runsRealServices
+                ? error.localizedDescription
+                : "Offline fixture shown · \(error.localizedDescription)"
         }
     }
 
     private func approveMeasure() async {
         do {
+            guard let item = selectedReviewItem(kit: .measureSet),
+                  let deliverableID = item.deliverableID else {
+                throw SiteRequestRemoteError.reviewDeliveryRequired
+            }
             try await container.siteRequests.approve(
-                itemID: SiteRequestFixtures.measureItemID,
-                deliverableID: SiteRequestFixtures.deliverableID,
-                roomID: "room-1")
+                itemID: item.id, deliverableID: deliverableID,
+                roomID: item.roomID ?? hub.rooms.first?.id)
             go(.sr09Approval)
         } catch { actionMessage = error.localizedDescription }
     }
 
     private func approvePhoto() async {
         do {
+            guard let item = selectedReviewItem(kit: .detailPhotos),
+                  let deliverableID = item.deliverableID else {
+                throw SiteRequestRemoteError.reviewDeliveryRequired
+            }
             try await container.siteRequests.approve(
-                itemID: SiteRequestFixtures.photoItemID,
-                deliverableID: SiteRequestFixtures.deliverableID,
-                roomID: "room-2")
+                itemID: item.id, deliverableID: deliverableID,
+                roomID: item.roomID ?? hub.rooms.first?.id)
             go(.sr09Approval)
         } catch { actionMessage = error.localizedDescription }
     }
 
-    private func sendRedo() async {
+    private func sendRedo(kit: SiteRequestKit) async {
         do {
-            try await container.siteRequests.redo(itemID: SiteRequestFixtures.photoItemID, note: redoNote)
-            actionMessage = "Returned verbatim · only Vanity alcove reopened"
+            guard let item = selectedReviewItem(kit: kit) else {
+                throw SiteRequestRemoteError.reviewDeliveryRequired
+            }
+            try await container.siteRequests.redo(itemID: item.id, note: redoNote)
+            actionMessage = "Returned verbatim · only \(item.title) reopened"
         } catch { actionMessage = error.localizedDescription }
     }
 
@@ -533,12 +716,8 @@ private struct SiteRequestScreen: View {
                 SiteRequestDimension(id: "local-dim-\(index)", label: pair.0,
                                      millimetres: pair.1, capturedBy: "Guest", capturedAt: Date())
             }
-            try enqueue(submission: SiteDeliverySubmission(
-                requestID: requestID,
-                itemID: SiteRequestFixtures.measureItemID,
-                itemVersionID: SiteRequestFixtures.measureVersionID,
-                clientDeliveryID: UUID(),
-                dimensions: dimensions))
+            try enqueue(submission: try guestSubmission(
+                kit: .measureSet, clientDeliveryID: UUID(), dimensions: dimensions))
             go(.sr17GuestQueue)
         } catch { actionMessage = error.localizedDescription }
     }
@@ -553,11 +732,8 @@ private struct SiteRequestScreen: View {
             container.camera.stop()
             let mediaURL = try container.store.writeMedia(
                 frame.data, filename: "site-request-\(UUID().uuidString).heic")
-            try enqueue(submission: SiteDeliverySubmission(
-                requestID: requestID,
-                itemID: SiteRequestFixtures.photoItemID,
-                itemVersionID: SiteRequestFixtures.photoVersionID,
-                clientDeliveryID: UUID()),
+            try enqueue(submission: try guestSubmission(
+                kit: .detailPhotos, clientDeliveryID: UUID()),
                 mediaPaths: [mediaURL.path])
             go(.sr17GuestQueue)
         } catch { actionMessage = error.localizedDescription }
@@ -583,10 +759,10 @@ private struct SiteRequestScreen: View {
         }
     }
 
-    private func go(_ destination: CaptureScreenID) {
+    private func go(_ destination: CaptureScreenID, requestID overrideRequestID: String? = nil) {
         coordinator.navigate(to: .site(screen: destination,
-                                       projectID: projectID,
-                                       requestID: requestID))
+                                       projectID: activeProjectID,
+                                       requestID: overrideRequestID ?? activeRequestID))
     }
 
     // MARK: - Small visual primitives
@@ -642,7 +818,7 @@ private struct SiteRequestScreen: View {
 
     private var mediaGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-            ForEach(SiteRequestFixtures.media) { media in
+            ForEach(selectedReviewItem(kit: .detailPhotos)?.media ?? []) { media in
                 ZStack(alignment: .bottomLeading) {
                     CaptureColor.paper2
                     Image(systemName: "photo").font(.title).foregroundStyle(CaptureColor.inkSoft)
@@ -655,7 +831,7 @@ private struct SiteRequestScreen: View {
     }
 
     private func reasonChip(_ value: String) -> some View {
-        Button(value) { redoNote = value == "Glare" ? SiteRequestFixtures.redoNote : "\(value) — please recapture this exact shot." }
+        Button(value) { redoNote = value == "Glare" ? "Re-shoot in daylight — glare hides the grout line." : "\(value) — please recapture this exact shot." }
             .font(CaptureType.footnote).buttonStyle(.bordered)
     }
 

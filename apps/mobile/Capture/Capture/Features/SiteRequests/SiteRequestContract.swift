@@ -18,12 +18,14 @@ enum SiteRequestContract {
         static let close = "site_request_close"
     }
 
-    enum GuestFunction {
-        static let bootstrap = "site_request_guest_bootstrap"
-        static let createUpload = "site_request_guest_create_upload"
-        static let acknowledgeUpload = "site_request_guest_ack_upload"
-        static let deliver = "site_request_guest_deliver"
+    enum GuestAction {
+        static let bootstrap = "bootstrap"
+        static let createUpload = "upload-intent"
+        static let acknowledgeUpload = "receipt"
+        static let deliver = "deliver"
     }
+
+    static let guestFunction = "site-request-guest"
 
     /// Authenticated comms rail. It preserves the caller JWT into the RPC and
     /// performs the server-side SMS dispatch before acknowledging success.
@@ -32,13 +34,24 @@ enum SiteRequestContract {
 
 enum SiteRequestRemoteError: LocalizedError, Sendable {
     case assigneePartyRequired
+    case noOpenItem
+    case reviewDeliveryRequired
     case invalidResponse
     case rejected(status: Int, message: String)
+
+    var invalidatesGuestAccess: Bool {
+        guard case let .rejected(status, _) = self else { return false }
+        return status == 401 || status == 404
+    }
 
     var errorDescription: String? {
         switch self {
         case .assigneePartyRequired:
             return "Choose a project contact before sending this request."
+        case .noOpenItem:
+            return "This item is no longer open for capture. Refresh the private link."
+        case .reviewDeliveryRequired:
+            return "A server-received delivery is required before review."
         case .invalidResponse:
             return "The site request service returned an unreadable response."
         case let .rejected(status, message):
