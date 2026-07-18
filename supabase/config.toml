@@ -452,6 +452,19 @@ verify_jwt = false
 [functions.fulfillment-stripe-recon]
 verify_jwt = true
 
+# Zero-install Site Request fulfillment. The request-scoped opaque Bearer token
+# is the credential; the function validates its shape, SHA-256 hashes it, and
+# uses only service-role RPCs that accept the hash. It never returns a JWT,
+# service key, or direct table access. Browser CORS is enforced in-code.
+[functions.site-request-guest]
+verify_jwt = false
+
+# Authenticated Site Request SMS boundary. Designer send/resend/nudge retains
+# the caller JWT for RPC authorization; the consent-granted bridge additionally
+# requires a service_role claim in-code before minting or dispatching a link.
+[functions.site-request-dispatch]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
