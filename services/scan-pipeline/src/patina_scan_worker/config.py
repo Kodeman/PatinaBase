@@ -1,9 +1,10 @@
 """Runtime settings for the scan-pipeline worker.
 
-Everything about a worker — identity, which stages it runs, cadence, concurrency,
-GPU posture, and its one credential — comes from the environment (an
-``EnvironmentFile``, ``/etc/patina/scan-worker.env``). This is what makes a cloud
-burst worker a config change, not a code change (design §3, R108.4/R109.1).
+Everything about a worker — its readable identity prefix, which stages it runs,
+cadence, concurrency, GPU posture, and its one credential — comes from the
+environment (an ``EnvironmentFile``, ``/etc/patina/scan-worker.env``). This is
+what makes a cloud burst worker a config change, not a code change (design §3,
+R108.4/R109.1).
 
 Mirrors services/aesthete-inference/app/config.py: a frozen dataclass built by
 ``settings_from_env()``; the three required values have no default — the worker
@@ -49,6 +50,7 @@ class ConfigError(RuntimeError):
 @dataclass(frozen=True)
 class Settings:
     # ── identity / behaviour (design §3) ────────────────────────────────────
+    # Readable prefix only. QueueClient appends a UUID for every claim batch.
     worker_id: str
     supabase_url: str
     service_role_key: str

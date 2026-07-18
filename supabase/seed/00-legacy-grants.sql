@@ -3905,3 +3905,27 @@ DO $g$ BEGIN
   GRANT SELECT ON public.scan_present_stats TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00378_agent_task_lease_ownership.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.complete_agent_task(uuid, text, jsonb, numeric, text, boolean, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00378_agent_task_lease_ownership.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.complete_agent_task(uuid, text, jsonb, numeric, text, boolean, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00378_agent_task_lease_ownership.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.enqueue_agent_successor_if_owned(uuid, text, jsonb, text, int, text, text, uuid, text, timestamptz, int, text, text, uuid, numeric, jsonb, text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00378_agent_task_lease_ownership.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.enqueue_agent_successor_if_owned(uuid, text, jsonb, text, int, text, text, uuid, text, timestamptz, int, text, text, uuid, numeric, jsonb, text) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;

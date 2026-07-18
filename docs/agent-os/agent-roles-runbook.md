@@ -4,6 +4,17 @@ Least-privilege Postgres roles for server-side agent code, introduced in migrati
 `00299_agent_roles.sql`. Companion to the queue contract (`00297_agent_tasks_queue.sql`,
 `00298_agent_tasks_cowork_bridge.sql`) and the queue-groom job (`00300_queue_groom.sql`).
 
+Migration `00378_agent_task_lease_ownership.sql` adds two trusted-worker fences:
+`complete_agent_task` and `enqueue_agent_successor_if_owned` both require the
+exact nonblank actor that owns the running task. The successor RPC holds the
+owner row `FOR UPDATE` while delegating to the unchanged conflict-ignore
+`enqueue_agent_task`, so lease reclaim and orchestration advance cannot race.
+Its required `p_owner_task_id` is lease authority and is intentionally separate
+from the child row's optional `p_parent_task_id` lineage. It is
+`service_role`-only. Root/intake producers (including `agent_writer`)
+continue to use generic `enqueue_agent_task`; `p_actor` on that generic RPC is
+audit attribution, not lease authority.
+
 ## 1. What the roles are
 
 Two cluster-level, `NOLOGIN` Postgres roles. Neither can be connected to directly — they

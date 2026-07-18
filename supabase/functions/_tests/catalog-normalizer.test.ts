@@ -175,7 +175,7 @@ function makeDeps(store: Store): NormalizerDeps {
     now: () => new Date('2026-07-12T09:45:00Z'),
 
     claimNormalizeTasks: async () => [],
-    completeTask: async () => {},
+    completeTask: async () => true,
     enqueueTask: async (input: EnqueueTaskInput): Promise<EnqueuedTask> => {
       const dup = store.tasks.find((t) => t.idempotency_key === input.idempotencyKey);
       if (dup) return { id: dup.id };
@@ -374,6 +374,7 @@ Deno.test('runNormalizer: sweeps a stranded batch, claims it, processes it, comp
     },
     completeTask: async (_id, outcome) => {
       completedOutcomes.push(outcome);
+      return true;
     },
   };
 
@@ -404,6 +405,7 @@ Deno.test('runNormalizer: a task missing payload.batch_id fails fatally without 
     completeTask: async (_id, outcome, patch) => {
       assertEquals(outcome, 'failed');
       failed.push(patch);
+      return true;
     },
   };
 
@@ -412,4 +414,20 @@ Deno.test('runNormalizer: a task missing payload.batch_id fails fatally without 
   assertEquals(summary.batchesOk, 0);
   assertEquals(failed.length, 1);
   assertEquals(failed[0].fatal, true);
+});
+
+Deno.test('runNormalizer: a lease-lost completion is benign and not counted as durable failure', async () => {
+  const store = makeStore();
+  const baseDeps = makeDeps(store);
+  const deps: NormalizerDeps = {
+    ...baseDeps,
+    claimNormalizeTasks: async () => [{ id: 'task-stale', payload: {} }],
+    completeTask: async () => false,
+  };
+
+  const summary = await runNormalizer(deps);
+  assertEquals(summary.claimed, 1);
+  assertEquals(summary.batchesFailed, 0);
+  assertEquals(summary.batchesOk, 0);
+  assertEquals(summary.error, null);
 });

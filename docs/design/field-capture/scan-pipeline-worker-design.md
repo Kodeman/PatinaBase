@@ -47,7 +47,10 @@ Every task in the chain carries:
 - `source = 'scan-pipeline'`.
 - `idempotency_key = '{scan_id}:{stage}:{room_file_version}'` — e.g. `…:solve:2`.
 - `payload = { scan_id, room_file_version, room_file_id?, user_id }` (`room_file_id` known from solve onward; `user_id` = `room_scans.user_id`, needed for storage paths).
-- `parent_task_id` = the id of the stage that enqueued it (ingest→solve→drawings forms a traceable chain in `agent_tasks`).
+- `parent_task_id` = lineage/provenance (ingest→solve→drawings forms a
+  traceable chain; a fork/join may deliberately retain the common fork task).
+  It is distinct from guarded enqueue's `p_owner_task_id`, which must always be
+  the currently running task whose exact lease authorizes the write.
 
 **Agent-OS baggage — explicitly unused.** `agent_tasks` carries fields for the human-review workflow it was built for. These mechanical jobs do **not** use them:
 - `assignee` (CHECK `kody | leah`) is left **NULL** — a scan job has no human owner.
@@ -69,13 +72,14 @@ The worker holds a **service-role** Supabase client (the queue RPCs are granted 
 
 ```
 # ── poll ────────────────────────────────────────────────────────────────────
+LEASE_OWNER := WORKER_ID || ':' || random_uuid()  # fresh for this claim batch
 rows = claim_agent_tasks(
     p_task_types        := ARRAY[<enabled STAGES>],   # e.g. {'scan_pipeline.ingest','scan_pipeline.solve','scan_pipeline.drawings'}
     p_batch             := MAX_CONCURRENT,
-    p_worker            := WORKER_ID,
+    p_worker            := LEASE_OWNER,
     p_visibility_timeout := VISIBILITY_TIMEOUT        # default '15 minutes'
 )
-# → each returned row is now status='running', attempts+1, locked_by=WORKER_ID.
+# → each returned row is status='running', attempts+1, locked_by=LEASE_OWNER.
 # If rows is empty: sleep POLL_SECONDS, poll again.
 
 # ── per claimed task (dispatched by task.task_type) ─────────────────────────
@@ -96,7 +100,8 @@ try:
     INSERT room_file_measurements (...)                                    # one row per dimension
 
     # enqueue successor — idempotent on its own key
-    enqueue_agent_task(
+    enqueue_agent_successor_if_owned(
+        p_owner_task_id  := task.id,
         p_task_type      := 'scan_pipeline.drawings',
         p_payload        := {scan_id, room_file_id, room_file_version},
         p_source         := 'scan-pipeline',
@@ -104,26 +109,25 @@ try:
         p_entity_id      := scan_id,
         p_idempotency_key := '{scan_id}:drawings:{room_file_version}',
         p_parent_task_id := task.id,
-        p_on_conflict    := 'ignore',
-        p_actor          := WORKER_ID
+        p_actor          := LEASE_OWNER
     )
 
     scan_pipeline_events.insert(..., event='solve.succeeded', status='succeeded',
                                 duration_ms=..., detail={tolerance_counts, mean_residual_mm})
     complete_agent_task(p_id := task.id, p_outcome := 'done',
                         p_artifacts := {room_file_id, tolerance_counts},
-                        p_actor := WORKER_ID)
+                        p_actor := LEASE_OWNER)
 
 except TransientError as e:      # storage blip, network, lock contention
     scan_pipeline_events.insert(..., event='solve.failed', status='failed', detail={error})
     complete_agent_task(task.id, 'failed', p_error := str(e), p_fatal := False,
-                        p_actor := WORKER_ID)          # → backoff requeue, SAME version
+                        p_actor := LEASE_OWNER)        # → backoff requeue, SAME version
 
 except PermanentError as e:      # unsolvable inputs, corrupt geometry, poison
     UPDATE room_files SET status='error', generation_error := str(e) WHERE id = room_file_id
     scan_pipeline_events.insert(..., event='solve.failed', status='failed', detail={error, fatal:true})
     complete_agent_task(task.id, 'failed', p_error := str(e), p_fatal := True,
-                        p_actor := WORKER_ID)          # → parked failed, no more retries
+                        p_actor := LEASE_OWNER)        # → parked failed, no more retries
 ```
 
 Ordering note: the successor is enqueued **before** `complete_agent_task('done')`, and the successor enqueue is idempotent. A crash between the two leaves the job `running`; the visibility timeout reclaims it, the stage re-runs (writes are idempotent by `(scan_id, version)`), the successor enqueue de-dupes on its key, and the job completes. A crash *before* the enqueue simply re-runs the whole stage. Every path converges.
@@ -140,11 +144,11 @@ The ingest stage is the server half of the integrity contract (spec §7, §10). 
 
 ## 3. Configuration schema
 
-Everything about a worker — identity, which stages it runs, cadence, concurrency, GPU posture, and its one credential — comes from the environment (an `EnvironmentFile`, `/etc/patina/scan-worker.env`). This is what makes a cloud burst worker a config change, not a code change.
+Everything about a worker — its readable identity prefix, which stages it runs, cadence, concurrency, GPU posture, and its one credential — comes from the environment (an `EnvironmentFile`, `/etc/patina/scan-worker.env`). This is what makes a cloud burst worker a config change, not a code change. Runtime lease authority is narrower: each claim batch appends a fresh UUID to the configured prefix.
 
 | Env var | Type | Default | Purpose |
 |---|---|---|---|
-| `WORKER_ID` | string | *(required)* | Identity stamped into `locked_by` and `app.actor` (audit). Unique per running worker (`homelab-1`, `cloud-burst-a`). |
+| `WORKER_ID` | string | *(required)* | Readable audit prefix (`homelab-1`, `cloud-burst-a`). Each claim appends a UUID; that full value is stamped into `locked_by` and used as the matching completion `app.actor`. |
 | `STAGES` | csv | `ingest,solve,drawings` | Which `scan_pipeline.*` stages this worker claims. A cloud worker might run `drawings` only; a P2 GPU worker adds `splat` (§8). |
 | `POLL_SECONDS` | int | `5` | Sleep between polls when a claim returns zero tasks. |
 | `MAX_CONCURRENT` | int | `2` | Claim batch size and max in-flight jobs (`p_batch`). Bounds scratch disk and CPU. |
@@ -293,9 +297,9 @@ All retry logic lives in the queue (00297), not the worker. The worker's job is 
 | Parked `failed`, unattended | — | `groom_agent_tasks` auto-requeues **once** after the failed cooldown (6h), marked `payload.groom_requeued_at` so it never auto-loops. |
 | Deliberate fresh re-run / re-scan | Entry point reserves version + 1 | A new `room_files` row and a new ingest→solve→drawings chain. |
 
-**Inspectability.** Every failed job is a row in `agent_tasks` with `last_error`, `attempts`, `task_type`, `payload` (scan_id, version), and its `parent_task_id` chain; `agent_task_audit` holds the full transition history with `actor = WORKER_ID`; `scan_pipeline_events` holds the per-stage `*.failed` event with a structured `detail`. Item 9's AC — "failed jobs are inspectable and re-runnable" — is satisfied by the queue's own surfaces; no bespoke admin table.
+**Inspectability.** Every failed job is a row in `agent_tasks` with `last_error`, `attempts`, `task_type`, `payload` (scan_id, version), and its `parent_task_id` chain; `agent_task_audit` holds the full transition history with claim/completion actor `WORKER_ID:<claim-uuid>`; `scan_pipeline_events` holds the per-stage `*.failed` event with a structured `detail`. Item 9's AC — "failed jobs are inspectable and re-runnable" — is satisfied by the queue's own surfaces; no bespoke admin table.
 
-**Second-worker AC.** Because `claim_agent_tasks` uses `FOR UPDATE SKIP LOCKED`, a second worker attaching (even a stub) with a different `WORKER_ID` claims disjoint tasks with zero coordination. That is the burst-ready proof (item 9 AC) and it is purely a config act.
+**Second-worker AC.** Because `claim_agent_tasks` uses `FOR UPDATE SKIP LOCKED`, a second worker attaching (even a stub) claims disjoint tasks with zero coordination. Every batch uses a fresh UUID-backed lease owner, so safety does not depend on operators assigning distinct `WORKER_ID` prefixes (distinct prefixes remain useful for audit readability). That is the burst-ready proof (item 9 AC) and it is purely a config act.
 
 ---
 
@@ -371,7 +375,8 @@ ingest ──▶ solve(P1) ──▶ drawings ──▶ delivery        (True La
   mesh; `splat` is a **parallel branch off `refine`** (it needs refined poses +
   keyframe images, not the mesh or the drawings), so it runs concurrently with
   `fuse`+solve on a second GPU lease or serially on one card.
-- Each hop is one `enqueue_agent_task` of the next `scan_pipeline.*` type against
+- Each hop is one `enqueue_agent_successor_if_owned` of the next
+  `scan_pipeline.*` type against
   the **same reserved `room_files` version** (entry-point allocation, 00370; §2.2).
   A P2 run does **not** mint a new version; a **retroactive re-solve** (R114.3) of
   an existing scan mints v+1 per R-f, then runs this same chain against it.
@@ -382,22 +387,31 @@ ingest ──▶ solve(P1) ──▶ drawings ──▶ delivery        (True La
 
 The P1 chain enqueues exactly one successor per stage. P2's `refine → {fuse,
 splat}` fork and the `{solve-upgrade, splat} → present` join need more, but reuse
-the SAME queue primitives (00297) — no barrier, no coordinator, no new table:
+the SAME queue primitives (00297 + the 00378 lease fence) — no barrier, no
+coordinator, no new table:
 
-- **The fork.** `refine`, on success, enqueues BOTH successors —
-  `enqueue_agent_task('scan_pipeline.fuse', …, idempotency_key '{scan}:fuse:{v}')`
-  AND `enqueue_agent_task('scan_pipeline.splat', …, idempotency_key
-  '{scan}:splat:{v}')` — both `p_on_conflict='ignore'`, both `parent_task_id =
-  refine.id`. The two then run independently (concurrently on two GPU leases,
-  serially on one — §10.9). A crash between the two enqueues just re-runs `refine`;
+- **The fork.** `refine`, on success, enqueues BOTH successors through its
+  exact running lease —
+  `enqueue_agent_successor_if_owned(refine.id, 'scan_pipeline.fuse', …,
+  idempotency_key '{scan}:fuse:{v}')` AND
+  `enqueue_agent_successor_if_owned(refine.id, 'scan_pipeline.splat', …,
+  idempotency_key '{scan}:splat:{v}')` — the guarded RPC hardcodes
+  conflict-ignore, and both
+  children have `parent_task_id = refine.id`. The two then run independently
+  (concurrently on two GPU leases, serially on one — §10.9). A crash between
+  the two enqueues just re-runs `refine`;
   the idempotency keys de-dupe both successors (§2.3 crash-safety, unchanged).
-- **The join (the trick).** BOTH terminal branches enqueue `present` on the SAME
-  key: the fuse branch tip (`solve-upgrade`, §10.4) enqueues `scan_pipeline.present`
-  with `'{scan}:present:{v}'`, and `splat` enqueues the identical
-  `'{scan}:present:{v}'` — both `p_on_conflict='ignore'`. The SECOND enqueue is a
+- **The join (the trick).** BOTH terminal branches enqueue `present` through
+  their own exact lease on the SAME key: the fuse branch tip (`solve-upgrade`,
+  §10.4) enqueues `scan_pipeline.present` with `'{scan}:present:{v}'`, and
+  `splat` enqueues the identical `'{scan}:present:{v}'`. The guarded RPC's
+  conflict-ignore makes the SECOND enqueue a
   no-op, so `present` is created **exactly once**, by whichever branch finishes
   first, with zero coordination. That double-enqueue-onto-one-key IS the join;
-  there is no barrier primitive to build or get wrong.
+  there is no barrier primitive to build or get wrong. For I87, each call uses
+  `p_owner_task_id = <that branch-tip task>` for authority while retaining the
+  common `p_parent_task_id = refine.id` for lineage; these IDs must not be
+  conflated.
 - **The wait (present self-gates on the data).** When `present` runs it re-reads
   the `room_files` row and checks BOTH prerequisites: the fuse branch's outputs
   (`dense_mesh_url` **and** `measure_mesh_url` set) **and** the splat branch's

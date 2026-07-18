@@ -120,7 +120,7 @@ export interface NormalizerDeps {
     id: string,
     outcome: 'done' | 'failed',
     patch: { artifacts?: Record<string, unknown>; error?: string; fatal?: boolean },
-  ): Promise<void>;
+  ): Promise<boolean>;
   enqueueTask(input: EnqueueTaskInput): Promise<EnqueuedTask>;
   sweepStrandedBatchIds(): Promise<string[]>;
 
@@ -450,27 +450,29 @@ export async function runNormalizer(deps: NormalizerDeps): Promise<NormalizerSum
     for (const task of tasks) {
       const batchId = task.payload?.batch_id as string | undefined;
       if (!batchId) {
-        await deps.completeTask(task.id, 'failed', {
+        const completed = await deps.completeTask(task.id, 'failed', {
           error: 'normalize_feed task missing payload.batch_id',
           fatal: true,
         });
-        batchesFailed++;
+        if (completed) batchesFailed++;
         continue;
       }
       try {
         const result = await processBatch(deps, batchId);
-        itemsProcessed += result.itemsProcessed;
-        autoTotal += result.autoCount;
-        reviewTotal += result.reviewCount;
-        await deps.completeTask(task.id, 'done', {
+        const completed = await deps.completeTask(task.id, 'done', {
           artifacts: { batch_id: batchId, ...result },
         });
-        batchesOk++;
+        if (completed) {
+          itemsProcessed += result.itemsProcessed;
+          autoTotal += result.autoCount;
+          reviewTotal += result.reviewCount;
+          batchesOk++;
+        }
       } catch (e) {
         const msg = (e as Error)?.message ?? String(e);
         await deps.updateBatch(batchId, { status: 'failed', error: msg });
-        await deps.completeTask(task.id, 'failed', { error: msg });
-        batchesFailed++;
+        const completed = await deps.completeTask(task.id, 'failed', { error: msg });
+        if (completed) batchesFailed++;
       }
     }
   } catch (e) {
