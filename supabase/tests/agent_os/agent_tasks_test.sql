@@ -6,7 +6,9 @@
 --      done row (queued, attempts 0) but leaves a live row untouched.
 --   2. enqueue p_status='awaiting_review' stamps awaiting_review_at; any other
 --      non-queued p_status raises.
---   3. claim flips queued->running (+attempts); a second claim returns nothing.
+--   3. claim flips queued->running (+attempts); a second claim returns nothing;
+--      two GPU workers with the same stage filter claim distinct tasks and
+--      stamp their own WORKER_ID into both the lease and audit trail.
 --   4. a stale running task (locked_at back-dated 16 min) is reclaimed.
 --   5. complete 'failed' backoff walks +1m/+5m/+25m; parks at attempts>=max;
 --      p_fatal parks immediately.
@@ -37,6 +39,10 @@ DECLARE
   v_bid    uuid;   -- task B (live)
   v_hid    uuid;   -- task H (review reject)
   v_iid    uuid;   -- task I (review approve)
+  v_gpu_refine public.agent_tasks;
+  v_gpu_splat  public.agent_tasks;
+  v_claim_a uuid;
+  v_claim_b uuid;
 BEGIN
   -- ── Case 1a: 'ignore' double-enqueue collapses to one row, unchanged. ──
   v_task  := public.enqueue_agent_task(
@@ -103,6 +109,75 @@ BEGIN
   SELECT count(*) INTO v_count FROM public.claim_agent_tasks(
     p_task_types => ARRAY['claim.test'], p_batch => 10, p_worker => 'w1');
   ASSERT v_count = 0, 'FAIL 3: a second claim must return nothing, got ' || v_count;
+
+  -- ── Case 3b: two GPU workers claim two distinct P2 stage tasks. ──
+  -- Fixed old created_at values make the fixture deterministic without touching
+  -- any pre-existing local queue rows. The enclosing transaction rolls back
+  -- both queue and audit rows at the end of the suite.
+  v_gpu_refine := public.enqueue_agent_task(
+    p_task_type => 'scan_pipeline.refine',
+    p_priority => 1,
+    p_idempotency_key => 'queue-proof:p2:refine',
+    p_actor => 'p2-queue-proof-setup');
+  v_gpu_splat := public.enqueue_agent_task(
+    p_task_type => 'scan_pipeline.splat',
+    p_priority => 1,
+    p_idempotency_key => 'queue-proof:p2:splat',
+    p_actor => 'p2-queue-proof-setup');
+
+  PERFORM set_config('app.actor', 'p2-queue-proof-setup', true);
+  UPDATE public.agent_tasks
+     SET created_at = CASE id
+       WHEN v_gpu_refine.id THEN '2000-01-01T00:00:00Z'::timestamptz
+       WHEN v_gpu_splat.id  THEN '2000-01-02T00:00:00Z'::timestamptz
+     END
+   WHERE id IN (v_gpu_refine.id, v_gpu_splat.id);
+
+  SELECT id INTO v_claim_a FROM public.claim_agent_tasks(
+    p_task_types => ARRAY['scan_pipeline.refine', 'scan_pipeline.splat'],
+    p_batch => 1,
+    p_worker => 'p2-gpu-worker-a');
+  SELECT id INTO v_claim_b FROM public.claim_agent_tasks(
+    p_task_types => ARRAY['scan_pipeline.refine', 'scan_pipeline.splat'],
+    p_batch => 1,
+    p_worker => 'p2-gpu-worker-b');
+
+  ASSERT v_claim_a = v_gpu_refine.id,
+    'FAIL 3b: worker A should claim the first GPU task';
+  ASSERT v_claim_b = v_gpu_splat.id,
+    'FAIL 3b: worker B should claim the second GPU task';
+  ASSERT v_claim_a <> v_claim_b,
+    'FAIL 3b: two workers must never receive the same task id';
+
+  SELECT * INTO v_task FROM public.agent_tasks WHERE id = v_claim_a;
+  SELECT * INTO v_task2 FROM public.agent_tasks WHERE id = v_claim_b;
+  ASSERT v_task.status = 'running' AND v_task.attempts = 1
+         AND v_task.locked_by = 'p2-gpu-worker-a',
+    'FAIL 3b: worker A lease must carry its WORKER_ID';
+  ASSERT v_task2.status = 'running' AND v_task2.attempts = 1
+         AND v_task2.locked_by = 'p2-gpu-worker-b',
+    'FAIL 3b: worker B lease must carry its WORKER_ID';
+
+  SELECT count(*) INTO v_count
+    FROM public.agent_task_audit a
+   WHERE (
+          a.task_id = v_claim_a
+          AND a.op = 'UPDATE'
+          AND a.actor = 'p2-gpu-worker-a'
+          AND a.old_row ->> 'status' = 'queued'
+          AND a.new_row ->> 'status' = 'running'
+          AND a.new_row ->> 'locked_by' = 'p2-gpu-worker-a'
+         )
+      OR (
+          a.task_id = v_claim_b
+          AND a.op = 'UPDATE'
+          AND a.actor = 'p2-gpu-worker-b'
+          AND a.old_row ->> 'status' = 'queued'
+          AND a.new_row ->> 'status' = 'running'
+          AND a.new_row ->> 'locked_by' = 'p2-gpu-worker-b'
+         );
+  ASSERT v_count = 2,
+    'FAIL 3b: each GPU claim must have exactly one worker-attributed audit row, got ' || v_count;
 
   -- ── Case 4: a stale running task is reclaimed. ──
   UPDATE public.agent_tasks SET locked_at = now() - interval '16 minutes' WHERE id = v_id;
