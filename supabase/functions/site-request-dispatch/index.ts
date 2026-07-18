@@ -4,12 +4,13 @@
 // only after the gateway-verified caller/action has been checked.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendPartySms } from "../_shared/sms.ts";
+import { isQuietHours, sendPartySms } from "../_shared/sms.ts";
 import {
   DISPATCH_RPC_BY_ACTION,
   handleSiteRequestDispatch,
   type SiteRequestDispatchContext,
   type SiteRequestDispatchDeps,
+  type DeliveryNotificationContext,
   type SiteRequestPrepareAction,
 } from "./core.ts";
 
@@ -80,6 +81,61 @@ const deps: SiteRequestDispatchDeps = {
   callerRole: jwtRole,
   prepare,
   clientPortalUrl: CLIENT_PORTAL_URL,
+  shouldDefer: () =>
+    isQuietHours(
+      new Date(),
+      Deno.env.get("FIELD_TZ") ?? "America/Chicago",
+    ),
+  claimDispatch: async (outboxId) => {
+    const client = admin();
+    const { data: accepted } = await client
+      .from("sms_messages")
+      .select("id, twilio_sid")
+      .eq("site_request_dispatch_outbox_id", outboxId)
+      .in("twilio_status", ["queued", "accepted", "sent", "delivered", "dry_run"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (accepted) {
+      const { error: reconcileError } = await client.rpc(
+        "site_request_complete_dispatch",
+        {
+          p_outbox_id: outboxId,
+          p_status: "sent",
+          p_provider_message_id: accepted.twilio_sid ?? accepted.id,
+          p_error: null,
+          p_now: new Date().toISOString(),
+        },
+      );
+      if (reconcileError) throw new Error("reconcile_dispatch_failed");
+      return null;
+    }
+    const { data, error } = await admin().rpc("site_request_claim_dispatch", {
+      p_outbox_id: outboxId,
+      p_now: new Date().toISOString(),
+    });
+    if (error) throw new Error("claim_dispatch_failed");
+    return (Array.isArray(data) ? data[0] : data) as SiteRequestDispatchContext | null;
+  },
+  completeDispatch: async (outboxId, result) => {
+    const { data, error } = await admin().rpc("site_request_complete_dispatch", {
+      p_outbox_id: outboxId,
+      p_status: result.sent ? "sent" : "retry",
+      p_provider_message_id: result.providerMessageId ?? null,
+      p_error: result.error ?? null,
+      p_now: new Date().toISOString(),
+    });
+    if (error) throw new Error("complete_dispatch_failed");
+    return (Array.isArray(data) ? data[0] : data) as Record<string, unknown>;
+  },
+  pendingDispatches: async (now) => {
+    const { data, error } = await admin().rpc("site_request_pending_dispatches", {
+      p_now: now ?? new Date().toISOString(),
+      p_limit: 25,
+    });
+    if (error) throw new Error("pending_dispatches_failed");
+    return (data ?? []) as string[];
+  },
   sendSms: async (context, input) =>
     sendPartySms(admin(), {
       projectId: context.project_id,
@@ -87,17 +143,10 @@ const deps: SiteRequestDispatchDeps = {
       phone: context.assignee_phone,
       templateKey: input.templateKey,
       body: input.body,
+      auditBody: input.auditBody,
+      deferToCaller: true,
+      siteRequestDispatchOutboxId: context.outbox_id ?? undefined,
     }),
-  markDispatched: async (context, providerMessageId) => {
-    const { data, error } = await admin().rpc("site_request_mark_dispatched", {
-      p_request_id: context.request_id,
-      p_access_id: context.access_id,
-      p_provider_message_id: providerMessageId ?? null,
-      p_dispatched_at: new Date().toISOString(),
-    });
-    if (error) throw new Error("mark_dispatched_failed");
-    return (Array.isArray(data) ? data[0] : data) as Record<string, unknown>;
-  },
   logNotification: async (context, action, result) => {
     // notification_log.user_id is NOT NULL. Reuse it when the party is tied to
     // an account; anonymous pros remain fully represented by sms_messages and
@@ -111,9 +160,9 @@ const deps: SiteRequestDispatchDeps = {
     if (!party?.user_id) return;
     await client.from("notification_log").insert({
       user_id: party.user_id,
-      type: `site_request_${action.replace("-", "_")}`,
+      type: `site_request_${action.replaceAll("-", "_")}`,
       channel: "sms",
-      status: result.sent ? "delivered" : result.deferred ? "queued" : "failed",
+      status: result.sent ? "delivered" : "queued",
       metadata: {
         request_id: context.request_id,
         project_id: context.project_id,
@@ -130,26 +179,68 @@ const deps: SiteRequestDispatchDeps = {
     if (error) throw new Error("process_lifecycle_failed");
     const result = (Array.isArray(data) ? data[0] : data) as {
       expired_count?: number;
-      due_reminders?: SiteRequestDispatchContext[];
     } | null;
     return {
       expired_count: result?.expired_count ?? 0,
-      due_reminders: result?.due_reminders ?? [],
     };
   },
-  recordDispatch: async (context, action, result) => {
-    const { error } = await admin().rpc("site_request_record_dispatch", {
-      p_request_id: context.request_id,
-      p_action: action,
-      p_provider_message_id: result.twilioSid ?? result.messageId ?? null,
-      // The RPC contract intentionally records only terminal send outcomes.
-      // A quiet-hours defer is a durable queue acknowledgement, not a failed
-      // delivery, so represent it as skipped until the shared SMS flusher
-      // advances the underlying sms_messages row.
-      p_status: result.sent ? "sent" : result.deferred ? "skipped" : "failed",
-      p_error: result.reason ?? null,
+  pendingDeliveryNotifications: async (now) => {
+    const { data, error } = await admin().rpc(
+      "site_request_pending_delivery_notifications",
+      { p_now: now ?? new Date().toISOString(), p_limit: 25 },
+    );
+    if (error) throw new Error("pending_delivery_notifications_failed");
+    return (data ?? []) as string[];
+  },
+  claimDeliveryNotification: async (id) => {
+    const { data, error } = await admin().rpc(
+      "site_request_claim_delivery_notification",
+      { p_outbox_id: id, p_now: new Date().toISOString() },
+    );
+    if (error) throw new Error("claim_delivery_notification_failed");
+    return (Array.isArray(data) ? data[0] : data) as DeliveryNotificationContext | null;
+  },
+  sendDeliveryNotification: async (context) => {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/apns-send`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_id: context.user_id,
+        title: context.title,
+        body: context.body,
+        entity_type: context.entity_type,
+        entity_id: context.entity_id,
+        notification_log_id: context.notification_log_id,
+      }),
     });
-    if (error) throw new Error("record_dispatch_failed");
+    const payload = await response.json().catch(() => ({})) as {
+      sent?: number;
+      skipped?: string;
+      error?: string;
+    };
+    if (!response.ok || !(payload.sent && payload.sent > 0)) {
+      return {
+        sent: false,
+        error: payload.skipped ?? payload.error ?? `apns_http_${response.status}`,
+      };
+    }
+    return { sent: true };
+  },
+  completeDeliveryNotification: async (id, result) => {
+    const { error } = await admin().rpc(
+      "site_request_complete_delivery_notification",
+      {
+        p_outbox_id: id,
+        p_sent: result.sent,
+        p_error: result.error ?? null,
+        p_now: new Date().toISOString(),
+      },
+    );
+    if (error) throw new Error("complete_delivery_notification_failed");
   },
 };
 

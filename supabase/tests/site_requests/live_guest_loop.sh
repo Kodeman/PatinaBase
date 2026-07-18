@@ -43,6 +43,10 @@ BEGIN
     SELECT id FROM public.site_deliverables WHERE request_id = ANY(request_ids)
   );
   DELETE FROM public.site_deliverables WHERE request_id = ANY(request_ids);
+  DELETE FROM public.site_request_delivery_notification_outbox
+  WHERE request_id = ANY(request_ids);
+  DELETE FROM public.site_request_dispatch_outbox
+  WHERE request_id = ANY(request_ids);
   DELETE FROM public.site_request_events WHERE request_id = ANY(request_ids);
   DELETE FROM public.site_request_access WHERE request_id = ANY(request_ids);
   UPDATE public.site_request_items SET current_version_id = NULL
@@ -167,12 +171,24 @@ WITH claims AS MATERIALIZED (
     '$REQUEST_ID', now() + interval '3 days'
   ) AS result
   FROM claims
+), claimed AS MATERIALIZED (
+  SELECT public.site_request_claim_dispatch(
+    (sent.result->>'outbox_id')::uuid, now()
+  ) AS result
+  FROM sent
+), completed AS MATERIALIZED (
+  SELECT public.site_request_complete_dispatch(
+    (claimed.result->>'outbox_id')::uuid,
+    'sent', 'live-guest-probe', NULL, now()
+  ) AS result
+  FROM claimed
 )
-SELECT result->>'token' FROM sent;
+SELECT claimed.result->>'token'
+FROM claimed, completed;
 SQL
 )"
 
-if [[ -z "$TOKEN" || -z "$PHOTO_VERSION" || -z "$MEASURE_VERSION" ]]; then
+if [[ ! "$TOKEN" =~ ^sr_[A-Za-z0-9_-]{43}$ || -z "$PHOTO_VERSION" || -z "$MEASURE_VERSION" ]]; then
   echo "Fixture creation did not return the guest contract." >&2
   exit 1
 fi
@@ -273,7 +289,7 @@ upload_photo_attempt() {
       clientAttemptId: $attempt,
       payload: {
         kit_code: "K-02",
-        shots: [{id: "wide", media_id: $media}]
+        shots: [{id: "wide", label: "Wide view", status: "captured", media_id: $media}]
       },
       dimensions: [],
       capturedByName: "Casey Probe",

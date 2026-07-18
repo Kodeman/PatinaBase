@@ -1,4 +1,6 @@
-export const SITE_REQUEST_TOKEN_PATTERN = /^[A-Za-z0-9_-]{32,256}$/;
+// Site Requests intentionally use a distinguishable namespace so universal
+// links can claim /field/sr_* without hijacking legacy 64-hex Field links.
+export const SITE_REQUEST_TOKEN_PATTERN = /^sr_[A-Za-z0-9_-]{43}$/;
 export const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
 const UUID_PATTERN =

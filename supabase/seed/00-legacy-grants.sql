@@ -3276,476 +3276,620 @@ DO $g$ BEGIN
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.site_requests FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.site_request_items FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.site_request_item_versions FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.site_deliverables FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.site_deliverable_media FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.site_deliverable_dimensions FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.site_binder_entries FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.site_request_access FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.site_request_events FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.site_request_dispatch_outbox FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON TABLE public.site_request_delivery_notification_outbox FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON TABLE public.site_binder_current FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT SELECT ON TABLE public.site_requests TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT SELECT ON TABLE public.site_request_items TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT SELECT ON TABLE public.site_request_item_versions TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT SELECT ON TABLE public.site_deliverables TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT SELECT ON TABLE public.site_deliverable_media TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT SELECT ON TABLE public.site_deliverable_dimensions TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT SELECT ON TABLE public.site_binder_entries TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT SELECT ON TABLE public.site_request_access TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT SELECT ON TABLE public.site_request_events TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT SELECT ON TABLE public.site_binder_current TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT ALL ON TABLE public.site_requests TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT ALL ON TABLE public.site_request_items TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT ALL ON TABLE public.site_request_item_versions TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT ALL ON TABLE public.site_deliverables TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT ALL ON TABLE public.site_deliverable_media TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT ALL ON TABLE public.site_deliverable_dimensions TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT ALL ON TABLE public.site_binder_entries TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT ALL ON TABLE public.site_request_access TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT ALL ON TABLE public.site_request_events TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.site_request_dispatch_outbox TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  GRANT ALL ON TABLE public.site_request_delivery_notification_outbox TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT SELECT ON TABLE public.site_binder_current TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._site_request_validate_request() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._site_request_validate_version() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._site_request_immutable_row() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._site_deliverable_guard() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._site_media_guard() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._site_access_guard() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._site_request_designer_authorized(uuid) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._site_request_append_event(uuid,text,text,uuid,text,uuid,uuid,jsonb,text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._site_request_mint_access(uuid,timestamptz,uuid,text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
-  REVOKE ALL ON FUNCTION public._site_request_dispatch_result(uuid,text,uuid,text,boolean,boolean) FROM PUBLIC, anon, authenticated;
+  REVOKE ALL ON FUNCTION public._site_request_dispatch_result(uuid,text,uuid,text,boolean,boolean,uuid) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._site_request_enqueue_dispatch(uuid,text,uuid) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._site_request_queue_delivery_notification(uuid,uuid,timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._site_request_safe_dispatch_error(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public._site_request_safe_provider_message_id(text) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public._site_request_consent_granted_dispatch() FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_builtin_kits() FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_builtin_kits() TO authenticated, service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_create_draft(uuid,uuid,timestamptz,text,text,jsonb) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_revise_item(uuid,text,text,text,uuid,jsonb) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_send(uuid,timestamptz) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_resend(uuid,timestamptz) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_nudge(uuid,text) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_revoke_access(uuid,text) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_close(uuid) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_approve_item(uuid,uuid,uuid) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_redo_item(uuid,text) FROM PUBLIC, anon;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_create_draft(uuid,uuid,timestamptz,text,text,jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_revise_item(uuid,text,text,text,uuid,jsonb) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_send(uuid,timestamptz) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_resend(uuid,timestamptz) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_nudge(uuid,text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_revoke_access(uuid,text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_close(uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_approve_item(uuid,uuid,uuid) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_redo_item(uuid,text) TO authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_guest_bootstrap(text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_guest_create_upload(text,uuid,uuid,text,text,text,bigint) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_guest_ack_upload(text,uuid,text,bigint) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_guest_deliver(text,uuid,uuid,jsonb,jsonb,text,timestamptz) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_dispatch_after_consent(uuid,timestamptz) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_mark_dispatched(uuid,uuid,text,timestamptz) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_dispatch_context(uuid,text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_record_dispatch(uuid,text,text,text,text) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   REVOKE ALL ON FUNCTION public.site_request_process_lifecycle(timestamptz) FROM PUBLIC, anon, authenticated;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.site_request_claim_dispatch(uuid,timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.site_request_complete_dispatch(uuid,text,text,text,timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.site_request_pending_dispatches(timestamptz,integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.site_request_claim_delivery_notification(uuid,timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.site_request_complete_delivery_notification(uuid,boolean,text,timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.site_request_pending_delivery_notifications(timestamptz,integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.site_request_unapproved_media_cleanup_candidates(timestamptz,integer) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  REVOKE ALL ON FUNCTION public.site_request_confirm_media_cleanup(uuid[],timestamptz) FROM PUBLIC, anon, authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_guest_bootstrap(text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_guest_create_upload(text,uuid,uuid,text,text,text,bigint) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_guest_ack_upload(text,uuid,text,bigint) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_guest_deliver(text,uuid,uuid,jsonb,jsonb,text,timestamptz) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_dispatch_after_consent(uuid,timestamptz) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_mark_dispatched(uuid,uuid,text,timestamptz) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_dispatch_context(uuid,text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_record_dispatch(uuid,text,text,text,text) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
 
--- 00373_field_site_request_loop.sql
+-- 00374_field_site_request_loop.sql
 DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_process_lifecycle(timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.site_request_claim_dispatch(uuid,timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.site_request_complete_dispatch(uuid,text,text,text,timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.site_request_pending_dispatches(timestamptz,integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.site_request_claim_delivery_notification(uuid,timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.site_request_complete_delivery_notification(uuid,boolean,text,timestamptz) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.site_request_pending_delivery_notifications(timestamptz,integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.site_request_unapproved_media_cleanup_candidates(timestamptz,integer) TO service_role;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00374_field_site_request_loop.sql
+DO $g$ BEGIN
+  GRANT EXECUTE ON FUNCTION public.site_request_confirm_media_cleanup(uuid[],timestamptz) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
