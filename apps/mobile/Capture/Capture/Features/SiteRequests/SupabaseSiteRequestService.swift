@@ -9,6 +9,9 @@ import Supabase
 import CaptureKit
 
 struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
+    private static let mediaBucket = "site-requests"
+    private static let displayURLLifetime = 10 * 60
+
     let client: SupabaseClient
     let functionBaseURL: URL
     let anonKey: String
@@ -55,7 +58,10 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
 
         let (itemRows, eventRows) = try await currentRows(requestIDs: requestRows.map(\.id))
         let events = eventRows.map(\.event)
-        let binderHistory = binderRows.compactMap(\.entry)
+        let reviewItems = itemRows.compactMap(\.item)
+        let rawBinderHistory = binderRows.compactMap(\.entry)
+        let (signedReviewItems, binderHistory) = await signingMedia(
+            reviewItems: reviewItems, binderHistory: rawBinderHistory)
         let currentBinderEntries = SiteBinderProjection.currentEntries(from: binderHistory)
         return SiteProjectHub(
             projectID: projectID,
@@ -65,13 +71,49 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
                     $0.requestID == row.id && $0.type == "guest_opened"
                 })?.occurredAt)
             },
-            reviewItems: itemRows.compactMap(\.item),
+            reviewItems: signedReviewItems,
             rooms: roomRows.map { $0.room(currentEntries: currentBinderEntries) },
             assignees: partyRows.compactMap(\.assignee),
             events: events,
             binderEntries: binderHistory,
             currentBinderEntries: currentBinderEntries
         )
+    }
+
+    private func signingMedia(
+        reviewItems: [SiteRequestItem], binderHistory: [SiteBinderEntry]
+    ) async -> ([SiteRequestItem], [SiteBinderEntry]) {
+        let displayURLs = await signedDisplayURLs(
+            for: reviewItems.flatMap(\.media) + binderHistory.flatMap(\.media))
+        let signedReviewItems = reviewItems.map { item in
+            item.replacingMedia(item.media.map {
+                $0.withSignedDisplayURL(displayURLs[$0.id])
+            })
+        }
+        let signedBinderHistory = binderHistory.map { entry in
+            entry.replacingMedia(entry.media.map {
+                $0.withSignedDisplayURL(displayURLs[$0.id])
+            })
+        }
+        return (signedReviewItems, signedBinderHistory)
+    }
+
+    private func signedDisplayURLs(for media: [SiteRequestMedia]) async -> [String: URL] {
+        var result: [String: URL] = [:]
+        var attempted = Set<String>()
+        for item in media where attempted.insert(item.id).inserted {
+            let candidates = SiteRequestMediaDisplayPath.candidates(
+                originalPath: item.objectPath, previewPath: item.previewPath)
+            for path in candidates {
+                if let url = try? await client.storage
+                    .from(Self.mediaBucket)
+                    .createSignedURL(path: path, expiresIn: Self.displayURLLifetime) {
+                    result[item.id] = url
+                    break
+                }
+            }
+        }
+        return result
     }
 
     private func currentRows(requestIDs: [String]) async throws
@@ -84,7 +126,7 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
                 + "deliverables:site_deliverables(id,item_version_id,attempt_number,status,"
                 + "captured_by_name,captured_at,delivered_at,"
                 + "dimensions:site_deliverable_dimensions(id,label,value_mm,captured_by_name,captured_at,proof_media_id),"
-                + "media:site_deliverable_media(id,object_path,mime_type,checksum_sha256,upload_state,client_filename))")
+                + "media:site_deliverable_media(id,object_path,mime_type,checksum_sha256,upload_state,client_filename,derivatives))")
             .in("request_id", values: requestIDs)
             .order("sort_order")
             .execute().value
@@ -402,13 +444,17 @@ private struct SiteBinderMediaWire: Decodable {
         SiteRequestMedia(
             id: id, objectPath: objectPath, mimeType: mimeType,
             checksumSHA256: checksumSHA256,
-            derivativePath: derivatives?.display)
+            previewPath: derivatives?.previewPath)
     }
 }
 
 private struct SiteBinderDerivativesWire: Decodable {
-    let display: String?
-    let thumbnail: String?
+    let previewPath: String?
+    let thumbnailPath: String?
+    enum CodingKeys: String, CodingKey {
+        case previewPath = "preview_path"
+        case thumbnailPath = "thumbnail_path"
+    }
 }
 
 private struct ProjectPartyRow: Decodable {
@@ -638,8 +684,9 @@ private struct SiteRequestMediaRow: Decodable {
     let checksumSHA256: String
     let uploadState: String
     let clientFilename: String
+    let derivatives: SiteBinderDerivativesWire?
     enum CodingKeys: String, CodingKey {
-        case id
+        case id, derivatives
         case objectPath = "object_path"
         case mimeType = "mime_type"
         case checksumSHA256 = "checksum_sha256"
@@ -648,7 +695,9 @@ private struct SiteRequestMediaRow: Decodable {
     }
     var media: SiteRequestMedia {
         SiteRequestMedia(id: id, objectPath: objectPath, mimeType: mimeType,
-                         checksumSHA256: checksumSHA256, caption: clientFilename)
+                         checksumSHA256: checksumSHA256,
+                         previewPath: derivatives?.previewPath,
+                         caption: clientFilename)
     }
 }
 
