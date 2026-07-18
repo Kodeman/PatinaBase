@@ -17,11 +17,12 @@ UNREACHABLE = {
 }
 
 
-def test_doctor_reports_all_checks_without_raising():
+def test_doctor_reports_all_checks_without_raising(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))  # writable
     settings = settings_from_env(UNREACHABLE)
     checks = run_checks(settings)
     names = {c.name for c in checks}
-    assert names == {"env", "db", "storage", "gpu", "disk"}
+    assert names == {"env", "db", "storage", "gpu", "disk", "config"}
 
     by_name = {c.name: c for c in checks}
     # env always green (settings_from_env already validated it)
@@ -33,6 +34,18 @@ def test_doctor_reports_all_checks_without_raising():
     assert not by_name["storage"].ok
     # disk on /tmp reports (ok or warn), never raises
     assert by_name["disk"] is not None
+    # XDG config dir writable → OK
+    assert by_name["config"].ok
+
+
+def test_doctor_config_check_catches_unwritable_xdg(tmp_path, monkeypatch):
+    # point XDG_CONFIG_HOME under an existing FILE so makedirs/write EACCES-equivs
+    # (NotADirectory) → the config check goes RED (would have caught the prod bug).
+    blocker = tmp_path / "afile"
+    blocker.write_text("x")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(blocker / "cfg"))
+    checks = {c.name: c for c in run_checks(settings_from_env(UNREACHABLE))}
+    assert checks["config"].ok is False and checks["config"].warn is False
 
 
 def test_gpu_absent_is_warning_not_failure():
