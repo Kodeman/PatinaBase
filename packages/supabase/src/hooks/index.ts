@@ -453,6 +453,25 @@ export {
 } from './use-room-scan-photos';
 export type { RoomScanPhotoRow, RoomScanPhoto } from './use-room-scan-photos';
 export {
+  useRoomFiles,
+  useGeneratedRoomFilesByScan,
+  useRoomFileMeasurements,
+  useScanContextCaptures,
+} from './use-room-files';
+export type {
+  RoomFile,
+  RoomFileStatus,
+  RoomFileDrawings,
+  RoomFileDrawingSheet,
+  RoomFileCertificate,
+  RoomFileCertificateAnchor,
+  RoomFileToleranceModel,
+  RoomFileDimensionCounts,
+  RoomFileMeasurement,
+  ScanContextCapture,
+  ToleranceClass,
+} from './use-room-files';
+export {
   useOpenDesignRequests,
   useClaimDesignRequest,
   useLeadScans,
