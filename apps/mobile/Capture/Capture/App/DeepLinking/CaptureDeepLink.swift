@@ -19,15 +19,15 @@ enum CaptureDeepLink {
                        coordinator: CaptureCoordinator,
                        store: CaptureStore,
                        login: PortalLoginController? = nil) {
-        // https://client.patina.cloud/field/{opaque-token} — the same link the
-        // responsive guest web flow handles when Field is not installed. The
-        // raw token remains request-scoped and goes only to guest Edge calls.
+        // Only the new `sr_` namespace belongs to Site Requests. Legacy Field
+        // Coordination uses 64-hex `/field/{token}` links and must remain web
+        // first even though both products share the route prefix.
         if url.scheme == "https",
            url.host == AppConfiguration.guestSiteBaseURL.host,
            url.pathComponents.count == 3,
            url.pathComponents[1] == "field" {
             let token = url.pathComponents[2]
-            guard !token.isEmpty else { return }
+            guard SiteRequestAccessToken.isNativeSiteRequestToken(token) else { return }
             coordinator.enterGuestRequest(accessToken: token)
             return
         }

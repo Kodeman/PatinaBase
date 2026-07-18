@@ -122,8 +122,82 @@ struct SiteRequestTests {
         #expect(first.restore() == "restored-token")
         first.enter("new-token")
         #expect(GuestAccessSession(store: store).restore() == "new-token")
+        first.bind("new-token", to: "request-a")
+        first.enter("other-token")
+        first.bind("other-token", to: "request-b")
+        #expect(first.accessToken(for: "request-a") == "new-token")
+        #expect(first.accessToken(for: "request-b") == "other-token")
+        first.leave(requestID: "request-b")
+        #expect(first.accessToken(for: "request-a") == "new-token")
+        #expect(first.accessToken(for: "request-b") == nil)
+        first.enter("new-token")
         first.leave()
         #expect(GuestAccessSession(store: store).restore() == nil)
+    }
+
+    @Test func nativeTokenNamespaceDoesNotClaimLegacyCoordinationLinks() {
+        #expect(SiteRequestAccessToken.isNativeSiteRequestToken(
+            "sr_" + String(repeating: "a", count: 43)))
+        #expect(!SiteRequestAccessToken.isNativeSiteRequestToken(
+            String(repeating: "a", count: 64)))
+        #expect(!SiteRequestAccessToken.isNativeSiteRequestToken("sr_too-short"))
+        #expect(!SiteRequestAccessToken.isNativeSiteRequestToken(
+            "sr_" + String(repeating: "/", count: 64)))
+    }
+
+    @Test func binderProjectionKeepsCurrentEntriesWithoutOverwritingHistory() {
+        let now = Date()
+        let prior = SiteBinderEntry(
+            id: "prior", roomID: "room", title: "Opening", kind: .measureSet,
+            sourceDeliverableID: "delivery-1", approvedBy: "Leah", approvedAt: now)
+        let current = SiteBinderEntry(
+            id: "current", roomID: "room", title: "Opening", kind: .measureSet,
+            sourceDeliverableID: "delivery-2", supersedesEntryID: prior.id,
+            approvedBy: "Leah", approvedAt: now.addingTimeInterval(1))
+        let photo = SiteBinderEntry(
+            id: "photo", roomID: "room", title: "Photos", kind: .detailPhotos,
+            sourceDeliverableID: "delivery-3", approvedBy: "Leah", approvedAt: now)
+        let history = [current, prior, photo]
+        let projected = SiteBinderProjection.currentEntries(from: history)
+        #expect(history.count == 3)
+        #expect(Set(projected.map(\.id)) == Set(["current", "photo"]))
+    }
+
+    @Test func photoShotResultsSurviveDurablePayloadRoundTrip() throws {
+        let submission = SiteDeliverySubmission(
+            requestID: "request", itemID: "item", itemVersionID: "version",
+            clientDeliveryID: UUID(), skippedShotLabels: ["Detail"],
+            photoResults: [
+                SiteRequestPhotoResult(id: "wide", label: "Wide", status: .captured),
+                SiteRequestPhotoResult(id: "detail", label: "Detail", status: .skipped,
+                                       skipNote: "Cabinet is wrapped")
+            ])
+        let data = try JSONEncoder().encode(submission)
+        let decoded = try JSONDecoder().decode(SiteDeliverySubmission.self, from: data)
+        #expect(decoded.photoResults == submission.photoResults)
+    }
+
+    @Test func configuredPhotoResultsMapEveryReceivedMediaExactlyOnce() throws {
+        let submission = SiteDeliverySubmission(
+            requestID: "request", itemID: "item", itemVersionID: "version",
+            clientDeliveryID: UUID(), uploadIDs: ["media-wide", "media-detail"],
+            skippedShotLabels: ["Straight on"], photoResults: [
+                SiteRequestPhotoResult(id: "wide_context", label: "Wide context", status: .captured),
+                SiteRequestPhotoResult(id: "straight_on", label: "Straight on", status: .skipped,
+                                       skipNote: "Scaffolding blocks this angle"),
+                SiteRequestPhotoResult(id: "detail", label: "Close detail", status: .captured)
+            ])
+        let results = try #require(submission.resolvedPhotoResults())
+        #expect(results.map(\.id) == ["wide_context", "straight_on", "detail"])
+        #expect(results.compactMap(\.mediaID) == ["media-wide", "media-detail"])
+        #expect(results[1].skipNote == "Scaffolding blocks this angle")
+
+        let extraMedia = SiteDeliverySubmission(
+            requestID: "request", itemID: "item", itemVersionID: "version",
+            clientDeliveryID: UUID(), uploadIDs: ["one", "orphan"],
+            photoResults: [SiteRequestPhotoResult(
+                id: "wide", label: "Wide", status: .captured)])
+        #expect(extraMedia.resolvedPhotoResults() == nil)
     }
 
     @Test func mediaMIMETypeComesFromFilename() {

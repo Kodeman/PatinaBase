@@ -1,8 +1,9 @@
 //  KeychainGuestAccessTokenStore.swift
 //  Capture
 
-//  Persists the active request-scoped opaque guest token across cold launches.
-//  The value never enters UserDefaults, logs, Supabase auth, or direct queries.
+//  Persists the active request-scoped opaque guest token across cold launches
+//  and a separate account per request for durable outbox retries. Values never
+//  enter UserDefaults, logs, Supabase auth, SwiftData, or direct queries.
 
 import Foundation
 import Security
@@ -19,7 +20,31 @@ struct KeychainGuestAccessTokenStore: GuestAccessTokenStoring {
     }
 
     func load() throws -> String? {
-        var query = baseQuery
+        try load(account: account)
+    }
+
+    func save(_ accessToken: String) throws {
+        try save(accessToken, account: account)
+    }
+
+    func clear() throws {
+        try clear(account: account)
+    }
+
+    func load(requestID: String) throws -> String? {
+        try load(account: requestAccount(requestID))
+    }
+
+    func save(_ accessToken: String, requestID: String) throws {
+        try save(accessToken, account: requestAccount(requestID))
+    }
+
+    func clear(requestID: String) throws {
+        try clear(account: requestAccount(requestID))
+    }
+
+    private func load(account: String) throws -> String? {
+        var query = baseQuery(account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
@@ -34,15 +59,15 @@ struct KeychainGuestAccessTokenStore: GuestAccessTokenStoring {
         return token
     }
 
-    func save(_ accessToken: String) throws {
+    private func save(_ accessToken: String, account: String) throws {
         let data = Data(accessToken.utf8)
         let status = SecItemUpdate(
-            baseQuery as CFDictionary,
+            baseQuery(account: account) as CFDictionary,
             [kSecValueData as String: data] as CFDictionary)
         if status == errSecSuccess { return }
         if status != errSecItemNotFound { throw KeychainGuestAccessError(status: status) }
 
-        var item = baseQuery
+        var item = baseQuery(account: account)
         item[kSecValueData as String] = data
         item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         let addStatus = SecItemAdd(item as CFDictionary, nil)
@@ -51,14 +76,18 @@ struct KeychainGuestAccessTokenStore: GuestAccessTokenStoring {
         }
     }
 
-    func clear() throws {
-        let status = SecItemDelete(baseQuery as CFDictionary)
+    private func clear(account: String) throws {
+        let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainGuestAccessError(status: status)
         }
     }
 
-    private var baseQuery: [String: Any] {
+    private func requestAccount(_ requestID: String) -> String {
+        "site-request:\(requestID)"
+    }
+
+    private func baseQuery(account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
