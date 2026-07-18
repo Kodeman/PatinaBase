@@ -1,9 +1,11 @@
 # Field Capture · P2 Build Package — "Presence"
 
-Issued 2026-07-18 · Design authority → Claude Code · **Pre-ruling draft for Kody's session**
+Issued 2026-07-18 · Design authority → Claude Code · **Ruled 2026-07-18 — Part B resolved as R114; build order live.**
 Companion artifacts: `patina-field-capture-architecture.html` (the SC deck — SC-05 thesis, SC-10 reconstruction, SC-11 the Room File, SC-15 the P2 gate), `field-capture-p1-package.md` (the shipped P1 order), `scan-pipeline-worker-design.md` (the worker plumbing; §10 is P2's growth stub), `capture-bundle-spec-v1.md` (the evidence P2 consumes). The deck is the system definition; this package is the build order. **If they conflict, this package wins for P2 scope.**
 
-This document is the **agenda for a ruling session**, not a record of one. P1 shipped after its six rulings were made (R108, appended as Part A of the P1 package). P2's rulings do **not** exist yet — the open questions in Part B are framed with a recommendation each, the way the P1 interview ran. Once Kody rules, the answers append as **R113** via `append_entry.py` (resolve the next `R{n}` from `workstream_state.py`, let the script rewrite the integrity footer — never edit the ledger by hand). No ruling text is pre-filled here.
+**Ruled (R114, 2026-07-18):** the session ran — all six B-questions are ruled, and **Part B now carries each outcome inline**. The answers landed as **R114**, not the R113 this draft predicted (R113 was consumed by the M4-passed close, I85 → R113). The single reversal is **B.1: on-device splat preview is IN** (R114.1, amending R108.3 for P2) — the other five ratified their recommendations verbatim. The pre-ruling framing below is kept as the record of how the session was set up.
+
+This document was the **agenda for a ruling session**, not a record of one. P1 shipped after its six rulings were made (R108, appended as Part A of the P1 package). P2's rulings did **not** exist at draft time — the open questions in Part B were framed with a recommendation each, the way the P1 interview ran, and appended via `append_entry.py` (resolve the next `R{n}` from `workstream_state.py`, let the script rewrite the integrity footer — never edit the ledger by hand).
 
 **Where P1 stands (I85, 2026-07-18):** P1 build is complete, items 1–13 shipped and adversarially reviewed; the first full production run cleared Kody's box in ≈13 s compute (ingest → solve → drawings → delivery); `room_files` v1 generated for scan `95266be1` with an honest certificate (all 3 short-span anchors flagged/excluded, RMS 133.6 mm, 24 dimensions measured ±11%, zero verified). M4 (Leah's device build + flag + pilot day) is the one open P1 gate — **operational, not a build blocker for P2**. See Part F.
 
@@ -13,7 +15,7 @@ This document is the **agenda for a ruling session**, not a record of one. P1 sh
 
 **P2 delivers presence: the room she steps into, and the mesh she measures.** It turns the P1 evidence bundle — already on the box, already checksummed — into (1) a drift-corrected, dense, *measurable* mesh, and (2) a photoreal splat walkthrough in the portal, with click-to-measure rays that hit the hidden mesh and a pinned photo/context registry on both the plan and the walk. It is the deck's **Present Layer** (SC-11) landing on top of P1's **True Layer**, under one truth (SC-05: *the splat is what she sees, the mesh is what she measures*).
 
-P2 is **server + portal + GPU-box** work. iOS is **untouched at P2 start** (see Part B, keyframe cadence) — the P1 capture rig already writes everything P2 needs. That is the single most important scoping fact: P2 does not re-open the long iOS pole.
+P2 is **server + portal + GPU-box** work at its core, **plus one late capture-side item** — the on-device splat *preview* (R114.1, Part E item 12). **iOS is untouched on the critical path:** the server chain (M1/M2) and the portal viewer (M3) re-open nothing on the device, because the P1 capture rig already writes everything those stages need. The one iOS re-entry is the preview, and it is deliberately sequenced **after** the server chain is proven so it never blocks P2-M1/M2 (see Part B.1). The scoping fact still holds where it matters: P2 does not re-open the long iOS pole *for the measurable deliverable* — the preview is an on-site **orientation** artifact (never measured against, never the Room File), so it re-enters iOS additively and late, not on the reconstruction path.
 
 **In P2 (SC-10 steps 1, 3, 4, 5 + SC-11 Present Layer):**
 - **(a) Pose refinement** — SfM / bundle adjustment warm-started from the ARKit trajectory (the drift killer, SC-13: 1–2 % → ~0.2–0.5 %).
@@ -23,7 +25,7 @@ P2 is **server + portal + GPU-box** work. iOS is **untouched at P2 start** (see 
 - **(e) The portal walkthrough viewer** — plain three.js (the R107 discipline — **no react-three-fiber**), browser-native splat rendering, click-to-measure rays against the hidden dense mesh.
 - **(f) The pinned photo / context registry** on the plan and the walkthrough.
 
-**Not in P2 unless Kody rules otherwise (P3, SC-15):** multi-room structures / capture-to-spec continuity; designer-taught finish & fixture tagging seeded by corrections (the learning loop). On-device splat *preview* stays out per R108.3 (see Part B.1). DISTO BLE stays out per R108.1.
+**Not in P2 unless Kody rules otherwise (P3, SC-15):** multi-room structures / capture-to-spec continuity; designer-taught finish & fixture tagging seeded by corrections (the learning loop). DISTO BLE stays out per R108.1. *(On-device splat **preview** was held out per R108.3 in the draft; **R114.1 overruled that and brought it into P2** as a capture-side orientation item — Part E item 12, Part B.1.)*
 
 **The P2 gate (SC-15):** *a maker quotes from the Room File without a site visit.*
 
@@ -76,19 +78,31 @@ R107 already ships plain-three.js photo markers on the orbit view; item-12 alrea
 
 ## Part B — Open questions for Kody's rulings
 
-Each is framed with a recommendation. These are the SC-16 leftovers plus the new P2 forks. Ruled answers append as R113.
+Each was framed with a recommendation. These are the SC-16 leftovers plus the new P2 forks. **RESOLVED — all six ruled by Kody as R114 (2026-07-18).** The recommendation text is kept as the pre-ruling framing; the **Ruled** line under each records the outcome. Five ratified verbatim; **B.1 was overruled** (on-device preview IN).
 
 **B.1 — On-device splat preview vs server-only.** SC-16's open question; R108.3 already ruled *no on-device splat training* for P1 (the on-site question is coverage, answered by the QA mesh gate; Metal training buys neither pillar). Scaniverse proves a ~1-minute phone splat is *possible*. **Recommendation: hold server-only for P2.** A phone preview is a different, lower-fidelity artifact that doesn't feed the measurable deliverable and re-opens the Metal-training cost R108.3 closed. Re-open only on field evidence that designers want on-site gratification. *(No iOS work → protects the P2-start "iOS untouched" property.)*
 
+> **Ruled (R114.1) — OVERRULED: on-device splat preview is IN, preferred for preview.** The recommendation loses. On-device splat training/preview joins the capture flow as an on-site **orientation** tool (the Scaniverse-proven ~1-minute phone splat), **amending R108.3 for P2**. The trust architecture is preserved by a **two-tier framing**: the **device** preview is what the designer sees on site — beauty + coverage orientation, **never measured against, never the deliverable, never labeled a scan**; the **server-trained splat stays the Room File deliverable**, and click-to-measure only ever rays the **hidden dense mesh** (item 9). The **P1 QA coverage scorecard (R108.3) stays the authority** for "did I get everything" — the preview augments it, never replaces it. Consequence: **iOS is no longer untouched in P2** — the preview becomes its own capture-side build item, **Part E item 12**, sequenced *after* the server chain is proven so it never blocks P2-M1/M2. Pro-device only per R108.2.
+
 **B.2 — Splat quality/time budget per room on the 2080 Ti.** The deck says ~10–20 GPU-min. **Recommendation: ratify a ≤10-minute wall-clock target for the full GPU chain (refine + fuse + splat) at pilot quality, with a bounded Gaussian cap (MCMC) so VRAM and time are predictable on 11 GB; amber past ~20 min, and GS-Scale host-offload is the escape hatch for an over-budget large room.** This is a number to nail down because it sets the cap and the cloud-burst economics (B.6).
+
+> **Ruled (R114.2) — RATIFIED verbatim.** ≤10-min wall-clock per room for the full GPU chain (refine + fuse + splat) at pilot quality on the 2080 Ti, bounded MCMC Gaussian-count cap; **amber past ~20 min**; GS-Scale host-offload is the over-budget escape hatch. This is the budget every GPU-stage AC measures against (items 4/6/7).
 
 **B.3 — Does pose refinement upgrade existing P1 measurements retroactively, or new scans only?** The P1 bundle already carries the evidence P2 needs (keyframes + depth + poses + mesh.ply — spec §3/§4), so an existing `room_scans` row can be re-run through refine → fuse → mesh-aware solve, minting `room_files` v+1 with `source='mesh'` and tighter tolerances (per R-f, a re-solve mints a new version — the schema already supports it). **Recommendation: retroactive re-solve is IN — but as an explicit, operator/enqueue-triggered action, not an automatic sweep.** Rationale: Kody's own `95266be1` (RMS 133.6 mm, 24 dims ±11 %, zero verified) is the ideal first retroactive subject and the M2 proof; but auto-re-solving every historical scan is a cost + surprise-versioning event. Ruling needed: which existing scans get re-solved, and on whose button. *(Note: short P1 anchors cap how much a re-solve can tighten `'verified'` — mesh evidence upgrades `'measured'`, the long-span coach is what earns `'verified'` on the next capture.)*
 
+> **Ruled (R114.3) — RATIFIED.** Retroactive re-solve is IN, **operator-triggered** (no auto-sweep). Scan **`95266be1` is the P2-M2 subject** — the dense-mesh re-solve should tighten its honest ±11 % where geometry allows, minting `room_files` v+1 (the D.4 path, proven end-to-end at item 6).
+
 **B.4 — Keyframe cadence / count changes if SfM wants more.** P1 fires 200–400 keyframes (0.5 m / 15°, sharpness-gated); GLOMAP warm-started is happy with that — it needs *well-distributed, sharp, overlapping* frames, not *more* frames, and the bundle budget (300–600 MB) + capture time (≤12 min) are already tight. **Recommendation: no cadence change for P2 start; validate at M2 against real refine output, and if regions come back under-constrained, tighten the coverage coach / sharpness gate rather than raise the raw count.** *(Keeps iOS untouched — the reason this is the recommendation, not just the default.)*
+
+> **Ruled (R114.4) — RATIFIED.** No cadence change at P2 start; **revisit only with P2-M2 reconstruction-quality evidence** (item 4/6 refine output). Note: the R114.1 preview item touches iOS, but the *capture cadence* is unchanged — the preview reads the frames the P1 rig already writes.
 
 **B.5 — The Leah-walk timing (carried).** P1's M4 (Leah retires the tape for one real project) is still open — operational only (device build + flag + pilot day, m4-pilot-checklist.md, I85). **Recommendation: land the P1 Leah pilot before or in parallel with P2-M1/M2 server work, and do not gate P2-M4 (the maker quote) on it** — the two gates test different pillars (drawings-trust vs presence-for-quoting) and the P2 GPU/portal build has no dependency on Leah's P1 pilot completing. Ruling: is the P1 Leah pilot a hard predecessor to *starting* P2, or can server-side P2-M1/M2 begin now against Kody's box and prod bundle?
 
+> **Ruled (R114.5) — RATIFIED.** The P1 Leah pilot runs **in parallel** when she is available; it is **not a predecessor** to P2 server-side work. P2-M1/M2 begin now against Kody's box and prod bundle `95266be1`.
+
 **B.6 — Cloud-burst posture for GPU stages.** R108.4/R109.1's contract — *a cloud worker is a config change, not code; flip trigger = the first non-Leah designer in production* — now meets a real GPU workload (unlike P1's CPU stages, which cost nothing inside existing infra, a GPU burst instance costs money per room). **Recommendation: keep the config-not-code contract unchanged — the burst GPU worker is the same package with the `[splat]` extras, `GPU=auto`, `STAGES=refine,fuse,splat` on a rented cloud GPU (L4 / A10 / 4090-class) — but add a cost ceiling to the flip:** document the burst instance class + a per-room GPU-cost estimate, keep the pilot on Kody's 2080 Ti box, and defer actual cloud provisioning until the flip trigger fires *and* the per-room cost is ruled acceptable. Ruling: confirm the flip trigger stays "first non-Leah designer," and set (or defer) the per-room GPU-cost ceiling.
+
+> **Ruled (R114.6) — RATIFIED.** The R109 config-not-code contract holds unchanged for GPU stages; **flip trigger stays "first non-Leah designer in production."** Add a **per-room GPU-cost ceiling** to the flip (document the burst instance class + per-room estimate; the actual cost ceiling is set when the trigger fires). **Pilot volume stays on Kody's 2080 Ti box.**
 
 ---
 
@@ -139,7 +153,8 @@ Sequence with hard review stops in the P1 style. Per-item ACs are concrete and t
 - **P2-M1** after items 1–2: **pipeline-stage specs + schema review.** No GPU stage code beyond a skeleton until M1 passes.
 - **P2-M2** after item 6: **first refined + fused mesh from Kody's existing prod bundle (`95266be1`), mesh-aware re-solve accuracy compared against the P1 certificate.**
 - **P2-M3** after item 9: **first splat walkthrough in the portal on Kody's room, with click-to-measure against the hidden mesh** (item 8 = the render sub-checkpoint inside it). Slice review against screenshots + a live scene (escalate-class UX ruled here).
-- **P2-M4** after item 12: **the maker-quote pilot — the P2 gate (SC-15).**
+- **P2-M4** after item 13: **the maker-quote pilot — the P2 gate (SC-15).**
+- **Item 12 (on-device splat preview, R114.1) is non-gating** — it lands after P2-M3 (its own device-verification AC), is not a P2-M4 predecessor, and must not block P2-M1/M2.
 
 ### The items
 
@@ -176,17 +191,24 @@ Extend item-12's provenance-resolved context (the real flat dotted-key contract,
 **11 · Telemetry + present-layer query surface.**
 Land D.3: `scan_pipeline_runs` gains `refine_ms/fuse_ms/splat_ms + present_status`; `scan_present_stats` gives the GPU-budget + artifact-size distribution; the end-to-end one-scan timeline now spans all P2 stages. *AC:* the full P2 chain for one scan reads in `created_at` order including `refine/fuse/splat/present`; GPU-minute + SPZ/mesh size + gaussian-count distributions are queryable; both surfaces are admin-gated per the 00372 idiom and certified non-leaking to a non-admin / service-role caller.
 
-**12 · The maker-quote pilot.**
+**12 · Capture-side: on-device splat *preview* (iOS, R114.1).**
+The one P2 iOS item, sequenced **after** the server splat chain proves the artifact (item 7) and the portal viewer proves the experience (items 8–9, P2-M3) — it re-opens nothing on the M1/M2 critical path. At end-of-scan on the Pro device, train a fast, low-fidelity 3DGS **preview** (the Scaniverse-proven ~1-minute phone splat, R114.1) as an **on-site orientation** tool: it shows the designer the beauty and rough coverage of what she just captured. **The two-tier discipline is the whole ruling (R114.1):** the device preview is *never measured against, never uploaded as the deliverable, never labeled a scan* — the **server-trained splat stays the Room File deliverable**, click-to-measure still only rays the hidden dense mesh (item 9), and the **P1 QA coverage scorecard (R108.3) remains the on-site authority** for "did I get everything," which the preview augments and never replaces. **Pro-device only per R108.2** — LiDAR-Pro gates scanning; non-Pro devices stay on the context-capture path and see no preview and no "scan" affordance. **Escalate-class UI strings (Part C):** every label that frames the preview as orientation-not-measurement ("Preview — not measured"; "the measured Room File is built on the server") is designer-visible copy, ruled at the slice review, not settled here.
+
+*Metal / iOS-frameworks survey (state-of-the-art check, 2026-07-18, web).* On-device 3DGS training is a **shipped** capability on A17/A18-class hardware — **Scaniverse (Niantic)** trains a full splat on-device in ~60–90 s and never uploads (iPhone 11 / A14 and up, so every LiDAR-Pro device qualifies); **OpenSplat** and **PocketGS** (arXiv 2601.17354) demonstrate Metal/MLX on-device training off CUDA. Rendering has a mature native substrate: **MetalSplatter** (`scier/MetalSplatter`) renders PLY / SPZ / `.splat` on iOS / iPadOS / visionOS via Metal, with **Apple MLX / Core ML** as the on-device ML surfaces. *Recommendation (bless-class implementation substrate, Part C):* a **Metal-native trainer + renderer** on the Pro device, **SPZ-compatible** so the preview shares the server's format vocabulary, MetalSplatter as the render fallback. This is a **preview-grade** budget (seconds, low Gaussian count) — explicitly **not** the bounded server MCMC chain (item 7). No new server or schema work: the preview is device-local and disposable.
+
+*AC (P1-style, device-verified):* on a **LiDAR-Pro device** (R108.2), an end-of-scan preview trains and renders on-device inside an interactive on-site budget (target ~1–2 min, order-of-Scaniverse) and is walkable on the phone; a **non-Pro device** shows **no** preview and no "scan" affordance (the R108.2 context-only path is intact); the preview is provably **never uploaded** and **never** feeds `room_files` / `room_file_measurements` (the server bundle carries the same evidence it did in P1 — no new artifact in the manifest); the on-site **coverage scorecard (R108.3) is unchanged** and still the gate; every preview surface wears an **orientation-not-measurement** string (escalate-class, ruled at the slice review); a **device pass on Kody's Pro phone** — capture → preview → confirm — reads the two-tier framing honestly. **Not a P2-M4 predecessor:** the maker-quote gate (item 13) tests the server Room File, not the device preview.
+
+**13 · The maker-quote pilot.**
 Put the finished Room File (True + Present layers) in front of a real maker to quote a real piece **without a site visit**. A runbook mirroring `m4-pilot-checklist.md` — prod prerequisites, pilot-day walk against SC-15, rollback lines, owed-items ledger. *AC:* a maker produces a quote from the Room File alone; every dimension the quote relies on is inside its published tolerance; zero site re-visit caused by missing information. **P2-M4 gate — the P2 gate.**
 
 ---
 
 ## Part F — Carried ledger
 
-**The P2 ledger from R112, verbatim** (there is no R113 yet — the next ruling id is this session's; R112 is where the "P2 ledger" was recorded at P1 build-complete). Each item is slotted or parked:
+**The P2 ledger from R112, verbatim** (R112 is where the "P2 ledger" was recorded at P1 build-complete; R113 then closed P1 by ruling M4 passed, and R114 ruled this package's Part B). Each item is slotted or parked:
 
-> *co-designer drawing-download walk before shared access ships* — **parked** (P1 sharing/RLS follow-up; not a P2-presence dependency, revisit with the maker-share surface at item 12).
-> *A3 deep-link gap on shared Room File links* — **parked** (P1 deep-link defect; carry into the item-8/12 portal work if shared walkthrough links reopen it).
+> *co-designer drawing-download walk before shared access ships* — **parked** (P1 sharing/RLS follow-up; not a P2-presence dependency, revisit with the maker-share surface at item 13).
+> *A3 deep-link gap on shared Room File links* — **parked** (P1 deep-link defect; carry into the item-8/13 portal work if shared walkthrough links reopen it).
 > *GIN index on `field_captures.provenance` at inbox scale* — **slotted into item 10** (the registry is the surface that reaches inbox scale; the index is its precondition).
 > *voice-note audio seam* — **slotted into item 10** (the registry surfaces voice notes; the audio playback seam lands with it).
 > *background-upload device edges* — **parked** (iOS P1 device-hardening: airplane-mode resume, 500 MB unattended completion, background-relaunch rehydration — R110's carried edges; not P2-server scope).
@@ -201,7 +223,7 @@ Put the finished Room File (True + Present layers) in front of a real maker to q
 
 ## The kickoff line
 
-> Read `docs/design/field-capture/field-capture-p2-package.md` and the SC deck beside it, rule the six B-questions (they append as R113), run the item-1 audit against Kody's box and prod bundle `95266be1`, and stop at P2-M1 — pipeline-stage specs and schema review — before writing any GPU stage code.
+> Read `docs/design/field-capture/field-capture-p2-package.md` and the SC deck beside it. The six B-questions are **ruled (R114)** — Part B carries each outcome inline, and the plan is now **thirteen items** (the on-device splat preview, R114.1, is the new capture-side item 12, non-gating, sequenced after the P2-M3 viewer). Run the item-1 audit against Kody's box and prod bundle `95266be1`, and stop at P2-M1 — pipeline-stage specs and schema review — before writing any GPU stage code.
 
 ---
 
