@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- 00373 — Field Site Request loop: secure requests, guest delivery, Binder
+-- 00374 — Field Site Request loop: secure requests, guest delivery, Binder
 --
 -- P1 foundation for project-scoped Site Requests. Reuses project_rooms and
 -- project_parties; guests never receive database credentials and can reach one
@@ -2101,7 +2101,8 @@ BEGIN
       USING errcode = 'no_data_found';
   END IF;
 
-  SELECT id, approved_at INTO v_entry_id, v_approved_at
+  SELECT id, approved_at, supersedes_entry_id
+    INTO v_entry_id, v_approved_at, v_prior_entry_id
   FROM public.site_binder_entries
   WHERE deliverable_id = p_deliverable_id;
   IF FOUND THEN
@@ -2212,6 +2213,7 @@ BEGIN
     'item_id', v_item.id,
     'deliverable_id', v_deliverable.id,
     'binder_entry_id', v_entry_id,
+    'supersedes_entry_id', v_prior_entry_id,
     'request_status', (SELECT status FROM public.site_requests WHERE id = v_request.id),
     'approved_at', v_approved_at,
     'idempotent', v_idempotent
@@ -2507,7 +2509,7 @@ SELECT cron.schedule(
 );
 
 DO $$ BEGIN
-  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: see cron.job for the authoritative registry. Field Site Request P1 (00373): site-request-lifecycle every 15 minutes -> invoke_edge_function site-request-dispatch action=lifecycle, which calls site_request_process_lifecycle for expiry and once-only due reminders. Existing Agent OS, fulfillment, Aesthete, scan, and earlier jobs are unchanged.'$C$;
+  EXECUTE $C$COMMENT ON EXTENSION pg_cron IS 'pg_cron schedules: see cron.job for the authoritative registry. Field Site Request P1 (00374): site-request-lifecycle every 15 minutes -> invoke_edge_function site-request-dispatch action=lifecycle, which calls site_request_process_lifecycle for expiry and once-only due reminders. Existing Agent OS, fulfillment, Aesthete, scan, and earlier jobs are unchanged.'$C$;
 EXCEPTION WHEN insufficient_privilege THEN NULL;
 END $$;
 
