@@ -122,23 +122,35 @@ serve(async (req) => {
     }
 
     // Photo-count cross-check: compare photos_manifest ndjson lines to
-    // room_scan_images rows. Non-fatal — surfaced in the response so the
-    // uploader can decide whether to retry missing rows.
+    // room_scan_images rows. Non-fatal AND verdict-independent (B-19): the 409
+    // gate below keys only off `missing` (artifact URLs), never off photo counts,
+    // so an absent or unreadable manifest can NEVER change the pass/fail verdict —
+    // it only populates the informational photosVerified/photosCountMatches fields.
+    //
+    // room-scans is a PRIVATE bucket, but photos_manifest_url is stored as a
+    // PUBLIC-shaped path-carrier URL (same ecosystem convention as every artifact
+    // column — see headOK). A raw GET of that public path 400s "Bucket not found",
+    // so the old count read silently as 0. Instead derive the bucket key and
+    // download via the RLS-gated authenticated object path as the caller (the same
+    // fix as headOK) — honest and owner-scoped.
     let photosVerified = 0;
     const photosManifest = scanRow.photos_manifest_url;
     if (typeof photosManifest === "string" && photosManifest.length > 0) {
-      try {
-        const res = await fetch(photosManifest, {
-          headers: { Authorization: authHeader },
-        });
-        if (res.ok) {
-          const text = await res.text();
-          photosVerified = text
-            .split(/\r?\n/)
-            .filter((l) => l.trim().length > 0).length;
+      const manifestKey = objectKeyFromUrl(photosManifest);
+      if (manifestKey) {
+        try {
+          const { data: manifestBlob } = await supabase.storage
+            .from("room-scans")
+            .download(manifestKey);
+          if (manifestBlob) {
+            const text = await manifestBlob.text();
+            photosVerified = text
+              .split(/\r?\n/)
+              .filter((l) => l.trim().length > 0).length;
+          }
+        } catch {
+          // Swallow — manifest download failure shows up as photosVerified === 0.
         }
-      } catch {
-        // Swallow — manifest fetch failure shows up as photosVerified === 0.
       }
     }
 

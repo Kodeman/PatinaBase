@@ -47,6 +47,36 @@ class DownloadItem:
 
 # ── pure helpers (unit-tested without IO) ────────────────────────────────────
 
+# Pre-B-19 legacy: the iOS assembler listed photos_metadata.json (kind
+# photosManifest) in artifacts[], but it is a DEVICE-LOCAL sidecar the uploader
+# never uploads (spec B-19). A bundle assembled by a pre-B-19 build therefore
+# fatal-fails ingest on MISSING_FILE. Normalization strips ONLY this B-19-known
+# kind — no other kind is special-cased.
+LEGACY_STRIP_KINDS = frozenset({"photosManifest"})
+
+
+def normalize_legacy_manifest(manifest: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Strip legacy non-artifact entries (B-19: photosManifest) from artifacts[].
+    Returns (possibly-new manifest, list of stripped kinds). Empty list == no-op.
+    Only LEGACY_STRIP_KINDS is touched — a genuinely-missing REAL artifact is left
+    in place so the validator still names its MISSING_FILE."""
+    arts = manifest.get("artifacts")
+    if not isinstance(arts, list):
+        return manifest, []
+    stripped = [
+        a.get("kind") for a in arts
+        if isinstance(a, dict) and a.get("kind") in LEGACY_STRIP_KINDS
+    ]
+    if not stripped:
+        return manifest, []
+    out = dict(manifest)
+    out["artifacts"] = [
+        a for a in arts
+        if not (isinstance(a, dict) and a.get("kind") in LEGACY_STRIP_KINDS)
+    ]
+    return out, stripped
+
+
 def plan_downloads(
     manifest: dict[str, Any], manifest_key: str, scan_row: dict[str, Any],
     skipped: list[dict[str, Any]] | None = None,
@@ -305,6 +335,20 @@ class IngestStage(BaseStage):
             raise PermanentError(f"manifest parse: {exc}", token="MANIFEST_PARSE") from exc
         if not isinstance(manifest, dict):
             raise PermanentError("manifest top-level is not an object", token="MANIFEST_PARSE")
+
+        # ── legacy normalization (pre-B-19 bundles): strip photosManifest from
+        # artifacts[] and REWRITE the on-disk manifest, so both the download plan
+        # AND the validator (which reads work/manifest.json from disk) drop the
+        # device-local sidecar the uploader never uploaded. Only the B-19-known
+        # kind is stripped; a real missing artifact still fails MISSING_FILE. ────
+        manifest, stripped = normalize_legacy_manifest(manifest)
+        if stripped:
+            ctx.telemetry.emit(
+                scan_id, "ingest", "ingest.legacy_manifest_normalized", "info",
+                detail={"stripped_kinds": stripped},
+            )
+            with open(manifest_path, "w", encoding="utf-8") as fh:
+                json.dump(manifest, fh)
 
         # ── item-13 telemetry: land the capture + upload metrics the DB has no
         # other record of, from the validated manifest + room_scans columns
