@@ -86,6 +86,7 @@ const nextConfig = {
         : "connect-src 'self' https://bkvcixdmuyejfzcijpdg.supabase.co wss://bkvcixdmuyejfzcijpdg.supabase.co https://api.patina.cloud wss://api.patina.cloud https://*.patina.cloud wss://*.patina.cloud https://*.sanity.io wss://*.sanity.io https://us.i.posthog.com https://us-assets.i.posthog.com https://*.posthog.com",
       "media-src 'self' blob:",
       "object-src 'self' blob:",
+      "frame-src 'self' blob:",
       "base-uri 'self'",
       "form-action 'self'",
       "frame-ancestors 'none'",
