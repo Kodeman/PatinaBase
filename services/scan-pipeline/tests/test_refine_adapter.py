@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import math
 import os
 import stat
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -522,25 +525,125 @@ def test_immutable_publication_is_safe_for_identical_multiprocess_writers(tmp_pa
     assert destination.read_bytes() == payload
     assert set(returncodes) <= {0, 2}
     assert returncodes.count(0) == 1
+    assert list(destination.parent.glob(f".{destination.name}.*")) == []
     with pytest.raises(AdapterError) as exc:
         publish_immutable(destination, b"conflict\n")
     assert exc.value.code == "REFINE_ARTIFACT_CONFLICT"
 
 
-def test_immutable_publication_fsyncs_the_file_and_destination_directory(tmp_path, monkeypatch):
+def test_immutable_publication_fsyncs_missing_ancestry_and_destination(tmp_path, monkeypatch):
     destination = tmp_path / "v2" / "refine" / "adapter-v2.json"
-    fsync_kinds = []
+    fsynced_directories = []
+    real_fsync_directory = adapter._fsync_directory
+
+    def recording_fsync_directory(path):
+        fsynced_directories.append(Path(path))
+        return real_fsync_directory(path)
+
+    monkeypatch.setattr(adapter, "_fsync_directory", recording_fsync_directory)
+    assert publish_immutable(destination, b"{}\n") is True
+
+    # Each missing component is fsynced itself, and its entry is made durable by
+    # fsyncing its parent. The final destination directory is fsynced after link.
+    assert tmp_path in fsynced_directories
+    assert tmp_path / "v2" in fsynced_directories
+    assert tmp_path / "v2" / "refine" in fsynced_directories
+
+
+def test_replay_repairs_an_ancestor_interrupted_before_parent_fsync(tmp_path, monkeypatch):
+    destination = tmp_path / "v2" / "refine" / "adapter-v2.json"
+    payload = b"{}\n"
+    real_fsync_directory = adapter._fsync_directory
+    interrupted = False
+
+    def interrupt_after_first_mkdir(path):
+        nonlocal interrupted
+        path = Path(path)
+        if path == tmp_path and (tmp_path / "v2").is_dir() and not interrupted:
+            interrupted = True
+            raise OSError("synthetic crash before ancestor parent fsync")
+        return real_fsync_directory(path)
+
+    monkeypatch.setattr(adapter, "_fsync_directory", interrupt_after_first_mkdir)
+    with pytest.raises(AdapterError) as exc:
+        publish_immutable(destination, payload)
+    assert exc.value.code == "REFINE_ARTIFACT_IO"
+    assert (tmp_path / "v2").is_dir()
+    assert not (tmp_path / "v2" / "refine").exists()
+
+    repaired = []
+
+    def recording_fsync_directory(path):
+        repaired.append(Path(path))
+        return real_fsync_directory(path)
+
+    monkeypatch.setattr(adapter, "_fsync_directory", recording_fsync_directory)
+    assert publish_immutable(destination, payload) is True
+    assert tmp_path in repaired  # repairs the existing v2 boundary's parent
+    assert destination.read_bytes() == payload
+
+
+def test_identical_immutable_replay_fsyncs_existing_leaf_and_parent(tmp_path, monkeypatch):
+    destination = tmp_path / "v2" / "refine" / "adapter-v2.json"
+    payload = b"{}\n"
+    assert publish_immutable(destination, payload) is True
+    destination_inode = destination.stat().st_ino
+    fsynced = []
     real_fsync = adapter.os.fsync
 
     def recording_fsync(file_descriptor):
-        fsync_kinds.append(stat.S_ISDIR(os.fstat(file_descriptor).st_mode))
+        metadata = os.fstat(file_descriptor)
+        fsynced.append((stat.S_ISDIR(metadata.st_mode), metadata.st_ino))
         return real_fsync(file_descriptor)
 
     monkeypatch.setattr(adapter.os, "fsync", recording_fsync)
-    publish_immutable(destination, b"{}\n")
+    assert publish_immutable(destination, payload) is False
 
-    assert False in fsync_kinds  # temporary file contents
-    assert True in fsync_kinds   # directory entry after atomic link
+    assert (False, destination_inode) in fsynced
+    assert any(is_directory for is_directory, _inode in fsynced)
+
+
+def test_identical_replay_reports_durability_io_separately_from_conflict(tmp_path, monkeypatch):
+    destination = tmp_path / "v2" / "refine" / "adapter-v2.json"
+    payload = b"{}\n"
+    assert publish_immutable(destination, payload) is True
+    destination_inode = destination.stat().st_ino
+    real_fsync = adapter.os.fsync
+
+    def fail_leaf_fsync(file_descriptor):
+        if os.fstat(file_descriptor).st_ino == destination_inode:
+            raise OSError("synthetic leaf fsync failure")
+        return real_fsync(file_descriptor)
+
+    monkeypatch.setattr(adapter.os, "fsync", fail_leaf_fsync)
+    with pytest.raises(AdapterError) as exc:
+        publish_immutable(destination, payload)
+
+    assert exc.value.code == "REFINE_ARTIFACT_IO"
+    assert "synthetic leaf fsync failure" in str(exc.value)
+
+
+def test_identical_replay_repairs_a_winner_interrupted_after_link(tmp_path, monkeypatch):
+    destination = tmp_path / "v2" / "refine" / "adapter-v2.json"
+    destination.parent.mkdir(parents=True)
+    payload = b"{}\n"
+    real_fsync_directory = adapter._fsync_directory
+
+    def interrupt_after_link(path):
+        if Path(path) == destination.parent and destination.exists():
+            raise OSError("synthetic crash before directory fsync")
+        return real_fsync_directory(path)
+
+    monkeypatch.setattr(adapter, "_fsync_directory", interrupt_after_link)
+    with pytest.raises(AdapterError) as exc:
+        publish_immutable(destination, payload)
+    assert exc.value.code == "REFINE_ARTIFACT_IO"
+    assert "synthetic crash" in str(exc.value)
+    assert destination.read_bytes() == payload
+
+    monkeypatch.setattr(adapter, "_fsync_directory", real_fsync_directory)
+    assert publish_immutable(destination, payload) is False
+    assert destination.read_bytes() == payload
 
 
 def test_adapter_rejects_an_unversioned_output_path(tmp_path):
@@ -549,20 +652,42 @@ def test_adapter_rejects_an_unversioned_output_path(tmp_path):
         build_adapter_artifacts(index, tmp_path / "refine", room_file_version=2)
 
 
-def test_subprocess_uses_ratified_budget_and_streams_to_a_bounded_log_tail(tmp_path, monkeypatch):
+class _CompletedPopen:
+    def __init__(self, output: bytes = b"", returncode: int = 0):
+        self.stdout = io.BytesIO(output)
+        self.returncode = None
+        self._completed_returncode = returncode
+        self.killed = False
+        self.wait_timeouts = []
+
+    def wait(self, timeout=None):
+        self.wait_timeouts.append(timeout)
+        self.returncode = -9 if self.killed else self._completed_returncode
+        return self.returncode
+
+    def poll(self):
+        return self.returncode
+
+    def kill(self):
+        self.killed = True
+
+
+def _install_completed_popen(monkeypatch, *, output=b"", returncode=0):
     observed = {}
 
-    class Result:
-        returncode = 0
-
-    def fake_run(command, **kwargs):
+    def fake_popen(command, **kwargs):
         observed["command"] = command
         observed.update(kwargs)
-        kwargs["stdout"].write(b"x" * (COLMAP_LOG_TAIL_BYTES + 200) + b"COLMAP 4.0.2\n")
-        kwargs["stdout"].flush()
-        return Result()
+        process = _CompletedPopen(output, returncode)
+        observed["process"] = process
+        return process
 
-    monkeypatch.setattr(adapter.subprocess, "run", fake_run)
+    monkeypatch.setattr(adapter.subprocess, "Popen", fake_popen)
+    return observed
+
+
+def test_subprocess_uses_ratified_budget_and_pipe_drain(tmp_path, monkeypatch):
+    observed = _install_completed_popen(monkeypatch, output=b"COLMAP 4.0.2\n")
     deadline = RefineDeadline.start(
         now_monotonic_s=100.0,
         lease_expires_at_monotonic_s=1000.0,
@@ -579,24 +704,148 @@ def test_subprocess_uses_ratified_budget_and_streams_to_a_bounded_log_tail(tmp_p
     assert REFINE_STAGE_ENGINE_BUDGET_S == 240
     assert LEASE_COMPLETION_RESERVE_S == 60
     # The stage deadline is start+240; 75 seconds have already elapsed.
-    assert observed["timeout"] == pytest.approx(165.0)
-    assert observed["check"] is False
+    assert observed["process"].returncode == 0
+    assert observed["process"].wait_timeouts == pytest.approx([165.0])
+    assert observed["command"] == ["colmap", "-h"]
+    assert observed["stdout"] is adapter.subprocess.PIPE
     assert observed["stderr"] is adapter.subprocess.STDOUT
-    assert "capture_output" not in observed
-    assert "text" not in observed
+    assert observed["bufsize"] == 0
+    assert "shell" not in observed
+
+
+def test_subprocess_high_volume_log_is_hard_capped_and_reused_path_is_fresh(tmp_path):
+    log_path = tmp_path / "colmap.log"
+    log_path.write_bytes(b"prior-run-must-not-survive\n")
+    deadline = RefineDeadline.start(
+        now_monotonic_s=time.monotonic(),
+        lease_expires_at_monotonic_s=time.monotonic() + 600.0,
+    )
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import os,time; "
+            "[(os.write(1, b'x' * 4096), time.sleep(0.002)) for _ in range(80)]; "
+            "os.write(2, b'FIRST-RUN-END\\n')"
+        ),
+    ]
+    results = []
+    errors = []
+
+    def invoke():
+        try:
+            results.append(
+                adapter.run_colmap_subprocess(command, deadline=deadline, log_path=log_path)
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            errors.append(exc)
+
+    runner = threading.Thread(target=invoke)
+    runner.start()
+    maximum_observed_size = 0
+    while runner.is_alive():
+        if log_path.exists():
+            maximum_observed_size = max(maximum_observed_size, log_path.stat().st_size)
+        time.sleep(0.001)
+    runner.join(timeout=2)
+
+    assert errors == []
+    assert len(results) == 1
+    assert maximum_observed_size <= COLMAP_LOG_TAIL_BYTES
+    assert log_path.stat().st_size <= COLMAP_LOG_TAIL_BYTES
+    assert results[0].output_tail.endswith("FIRST-RUN-END\n")
+    assert "prior-run-must-not-survive" not in results[0].output_tail
+
+    second = adapter.run_colmap_subprocess(
+        [sys.executable, "-c", "import os; os.write(1, b'SECOND-RUN-ONLY\\n')"],
+        deadline=deadline,
+        log_path=log_path,
+    )
+    assert log_path.read_bytes() == b"SECOND-RUN-ONLY\n"
+    assert second.output_tail == "SECOND-RUN-ONLY\n"
+
+
+def test_subprocess_timeout_kills_reaps_and_flushes_the_log(tmp_path):
+    log_path = tmp_path / "timeout.log"
+    pid_path = tmp_path / "child.pid"
+    now = time.monotonic()
+    deadline = RefineDeadline.start(
+        now_monotonic_s=now,
+        lease_expires_at_monotonic_s=now + LEASE_COMPLETION_RESERVE_S + 0.75,
+    )
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import os,pathlib,time; "
+            f"pathlib.Path({str(pid_path)!r}).write_text(str(os.getpid())); "
+            "print('before-timeout', flush=True); time.sleep(30)"
+        ),
+    ]
+
+    with pytest.raises(AdapterError) as exc:
+        adapter.run_colmap_subprocess(command, deadline=deadline, log_path=log_path)
+
+    assert exc.value.code == "REFINE_ENGINE_TIMEOUT"
+    child_pid = int(pid_path.read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(child_pid, 0)
+    assert log_path.read_text().endswith("before-timeout\n")
+    assert log_path.stat().st_size <= COLMAP_LOG_TAIL_BYTES
+
+
+def test_subprocess_propagates_log_drain_errors(tmp_path, monkeypatch):
+    _install_completed_popen(monkeypatch, output=b"output that must be drained")
+
+    def fail_write(_self, _chunk):
+        raise OSError("synthetic bounded-log failure")
+
+    monkeypatch.setattr(adapter._CappedTailLog, "write", fail_write)
+    deadline = RefineDeadline.start(
+        now_monotonic_s=100.0,
+        lease_expires_at_monotonic_s=1000.0,
+    )
+    monkeypatch.setattr(adapter.time, "monotonic", lambda: 175.0)
+
+    with pytest.raises(AdapterError) as exc:
+        adapter.run_colmap_subprocess(
+            ["colmap", "feature_extractor"],
+            deadline=deadline,
+            log_path=tmp_path / "drain-error.log",
+        )
+
+    assert exc.value.code == "REFINE_ENGINE_LOG_IO"
+    assert "synthetic bounded-log failure" in str(exc.value)
+
+
+def test_subprocess_failure_keeps_only_the_bounded_error_tail(tmp_path, monkeypatch):
+    _install_completed_popen(
+        monkeypatch,
+        output=b"discarded-prefix" * 8192 + b"COLMAP terminal error\n",
+        returncode=7,
+    )
+    deadline = RefineDeadline.start(
+        now_monotonic_s=100.0,
+        lease_expires_at_monotonic_s=1000.0,
+    )
+    monkeypatch.setattr(adapter.time, "monotonic", lambda: 175.0)
+    log_path = tmp_path / "failed.log"
+
+    with pytest.raises(AdapterError) as exc:
+        adapter.run_colmap_subprocess(
+            ["colmap", "bundle_adjuster"],
+            deadline=deadline,
+            log_path=log_path,
+        )
+
+    assert exc.value.code == "REFINE_ENGINE_FAILED"
+    assert "COLMAP terminal error" in str(exc.value)
+    assert log_path.stat().st_size == COLMAP_LOG_TAIL_BYTES
+    assert log_path.read_bytes().endswith(b"COLMAP terminal error\n")
 
 
 def test_short_actual_lease_reduces_the_stage_deadline(monkeypatch, tmp_path):
-    observed = {}
-
-    class Result:
-        returncode = 0
-
-    monkeypatch.setattr(
-        adapter.subprocess,
-        "run",
-        lambda _command, **kwargs: observed.update(kwargs) or Result(),
-    )
+    observed = _install_completed_popen(monkeypatch)
     # Only 90 seconds remain on the claimed lease. Reserving 60 gives the
     # engine 30 seconds total, even though the ratified stage budget is 240.
     deadline = RefineDeadline.start(
@@ -612,20 +861,25 @@ def test_short_actual_lease_reduces_the_stage_deadline(monkeypatch, tmp_path):
     )
 
     assert deadline.expires_at_monotonic_s == pytest.approx(130.0)
-    assert observed["timeout"] == pytest.approx(10.0)
+    assert observed["process"].returncode == 0
+    assert observed["process"].wait_timeouts == pytest.approx([10.0])
 
 
 def test_subprocess_deadline_is_shared_across_commands(monkeypatch, tmp_path):
     timeouts = []
 
-    class Result:
-        returncode = 0
+    def fake_popen(_command, **_kwargs):
+        process = _CompletedPopen()
+        real_wait = process.wait
 
-    monkeypatch.setattr(
-        adapter.subprocess,
-        "run",
-        lambda _command, **kwargs: timeouts.append(kwargs["timeout"]) or Result(),
-    )
+        def recording_wait(timeout=None):
+            timeouts.append(timeout)
+            return real_wait(timeout)
+
+        process.wait = recording_wait
+        return process
+
+    monkeypatch.setattr(adapter.subprocess, "Popen", fake_popen)
     deadline = RefineDeadline.start(
         now_monotonic_s=1000.0,
         lease_expires_at_monotonic_s=2000.0,

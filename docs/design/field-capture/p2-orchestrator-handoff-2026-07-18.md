@@ -10,8 +10,9 @@ Read it with, not instead of, the canonical sources below.
    runs (rulings → numbered plan → hard gates). P1 is COMPLETE.
 2. `docs/design/field-capture/field-capture-p2-package.md` — the ACTIVE plan.
    Part B carries Kody's R114 rulings inline; Part E is the numbered plan.
-3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115, I84, I85,
-   I86** are this program's full decision history. R115 is the latest gate.
+3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I87**
+   are this program's full decision history. R115 is the latest gate; I87 is
+   the latest implementation record.
 4. `docs/design/field-capture/scan-pipeline-worker-design.md` — §10 is the
    P2 stage contract (the fork-join in §10.1.1 and budgets in §10.9 are
    implementation law).

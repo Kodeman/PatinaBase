@@ -25,12 +25,14 @@ import json
 import math
 import os
 import re
+import stat
 import subprocess
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, BinaryIO, Iterable, Mapping, Sequence
 
 Vector3 = tuple[float, float, float]
 Matrix3 = tuple[Vector3, Vector3, Vector3]
@@ -41,6 +43,8 @@ ENGINE_QUALIFICATION_STATUS = "unvalidated-pending-field-and-box-fixture"
 REFINE_STAGE_ENGINE_BUDGET_S = 4 * 60
 LEASE_COMPLETION_RESERVE_S = 60
 COLMAP_LOG_TAIL_BYTES = 64 * 1024
+COLMAP_LOG_READ_BYTES = 16 * 1024
+COLMAP_LOG_DRAIN_JOIN_S = 5.0
 
 TEMPORAL_WINDOW = 10
 SPATIAL_RADIUS_M = 1.5
@@ -1086,6 +1090,77 @@ def _fsync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
+def _durable_mkdir_parents(path: Path) -> None:
+    """Create each missing directory and durably link it into its parent.
+
+    ``Path.mkdir(parents=True)`` is race-safe enough for ordinary scratch, but it
+    does not make newly created ancestry crash-durable. Immutable refine
+    artifacts are commit markers, so every missing component is created in
+    order and both the new directory and its parent entry are fsynced. A
+    concurrent creator is treated exactly like our own creation and receives
+    the same durability barrier.
+    """
+
+    missing: list[Path] = []
+    cursor = path
+    while True:
+        try:
+            metadata = cursor.stat()
+        except FileNotFoundError:
+            missing.append(cursor)
+            parent = cursor.parent
+            if parent == cursor:
+                raise AdapterError(
+                    f"cannot find an existing ancestor for refine artifact directory {path}",
+                    "REFINE_ARTIFACT_IO",
+                )
+            cursor = parent
+            continue
+        except OSError as exc:
+            raise AdapterError(
+                f"cannot inspect refine artifact directory ancestry at {cursor}: {exc}",
+                "REFINE_ARTIFACT_IO",
+            ) from exc
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise AdapterError(
+                f"refine artifact directory component is not a directory: {cursor}",
+                "REFINE_ARTIFACT_IO",
+            )
+        break
+
+    # Repair the durability boundary before extending it. A concurrent/prior
+    # writer may have created this first existing component and died between
+    # mkdir/fsync(child) and fsync(parent). Under the ordered loop below, no
+    # deeper component can exist until this boundary's parent entry is durable.
+    try:
+        _fsync_directory(cursor)
+        if cursor.parent != cursor:
+            _fsync_directory(cursor.parent)
+    except OSError as exc:
+        raise AdapterError(
+            f"cannot fsync refine artifact directory boundary at {cursor}: {exc}",
+            "REFINE_ARTIFACT_IO",
+        ) from exc
+
+    for directory in reversed(missing):
+        try:
+            directory.mkdir()
+        except FileExistsError:
+            if not directory.is_dir():
+                raise AdapterError(
+                    f"refine artifact directory component is not a directory: {directory}",
+                    "REFINE_ARTIFACT_IO",
+                )
+        try:
+            _fsync_directory(directory)
+            _fsync_directory(directory.parent)
+        except OSError as exc:
+            raise AdapterError(
+                f"cannot fsync refine artifact directory ancestry at {directory}: {exc}",
+                "REFINE_ARTIFACT_IO",
+            ) from exc
+
+
 def publish_immutable(path: str | os.PathLike[str], payload: bytes) -> bool:
     """Publish once without replacement; identical concurrent writers are no-ops.
 
@@ -1095,7 +1170,7 @@ def publish_immutable(path: str | os.PathLike[str], payload: bytes) -> bool:
     """
 
     destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    _durable_mkdir_parents(destination.parent)
     temp_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -1110,22 +1185,35 @@ def publish_immutable(path: str | os.PathLike[str], payload: bytes) -> bool:
             os.fsync(handle.fileno())
         try:
             os.link(temp_path, destination)
-            _fsync_directory(destination.parent)
-            return True
         except FileExistsError:
             try:
-                existing = destination.read_bytes()
+                with destination.open("rb") as existing_handle:
+                    existing = existing_handle.read()
+                    if existing == payload:
+                        # The winning writer may have crashed after linking but
+                        # before its durability barrier. An identical follower
+                        # repairs both the leaf inode and the directory entry.
+                        os.fsync(existing_handle.fileno())
+                        _fsync_directory(destination.parent)
+                        return False
             except OSError as exc:
                 raise AdapterError(
-                    f"cannot inspect existing refine artifact {destination}: {exc}",
-                    "REFINE_ARTIFACT_CONFLICT",
+                    f"cannot durably inspect existing refine artifact {destination}: {exc}",
+                    "REFINE_ARTIFACT_IO",
                 ) from exc
-            if existing == payload:
-                return False
             raise AdapterError(
                 f"immutable refine artifact conflicts at {destination}",
                 "REFINE_ARTIFACT_CONFLICT",
             )
+        else:
+            try:
+                _fsync_directory(destination.parent)
+            except OSError as exc:
+                raise AdapterError(
+                    f"cannot fsync new refine artifact {destination}: {exc}",
+                    "REFINE_ARTIFACT_IO",
+                ) from exc
+            return True
     finally:
         if temp_path is not None:
             try:
@@ -1250,6 +1338,86 @@ def build_adapter_artifacts(
     return adapter_path, pairs_path, manifest_path
 
 
+class _CappedTailLog:
+    """A fresh on-disk byte tail whose file length never exceeds its cap."""
+
+    def __init__(self, path: Path, cap_bytes: int) -> None:
+        self.path = path
+        self._cap_bytes = cap_bytes
+        self._tail = bytearray()
+        # ``wb`` is deliberate: retries/reused scratch paths must not accumulate
+        # output from an earlier command invocation.
+        self._handle = path.open("w+b")
+        self._closed = False
+
+    def write(self, chunk: bytes) -> None:
+        if not chunk:
+            return
+        if len(chunk) >= self._cap_bytes:
+            self._tail[:] = chunk[-self._cap_bytes :]
+        else:
+            overflow = len(self._tail) + len(chunk) - self._cap_bytes
+            if overflow > 0:
+                del self._tail[:overflow]
+            self._tail.extend(chunk)
+
+        # Truncate before writing the bounded snapshot. At every externally
+        # visible point the file is either shorter than the cap or exactly it;
+        # it never grows unbounded or waits until child exit to be trimmed.
+        self._handle.seek(0)
+        self._handle.truncate(0)
+        self._handle.write(self._tail)
+        self._handle.flush()
+
+    def output_tail(self) -> str:
+        return bytes(self._tail).decode("utf-8", errors="replace")
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        try:
+            self._handle.flush()
+            os.fsync(self._handle.fileno())
+        finally:
+            self._closed = True
+            self._handle.close()
+
+
+def _drain_colmap_output(
+    stream: BinaryIO,
+    sink: _CappedTailLog,
+    errors: list[BaseException],
+) -> None:
+    """Continuously drain one merged stdout/stderr pipe into the capped sink."""
+
+    try:
+        while True:
+            chunk = stream.read(COLMAP_LOG_READ_BYTES)
+            if not chunk:
+                break
+            sink.write(chunk)
+    except BaseException as exc:  # delivered to the owning thread after join
+        errors.append(exc)
+    finally:
+        try:
+            stream.close()
+        except BaseException as exc:
+            errors.append(exc)
+
+
+def _kill_and_reap(process: subprocess.Popen[bytes]) -> None:
+    """Best-effort hard stop that never leaves the direct COLMAP child a zombie."""
+
+    try:
+        if process.poll() is None:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+    finally:
+        process.wait()
+
+
 def run_colmap_subprocess(
     command: Sequence[str],
     *,
@@ -1261,7 +1429,9 @@ def run_colmap_subprocess(
 
     The future handler creates one :class:`RefineDeadline` from the actual claim
     lease at stage start and passes it to every call. Output streams to a scratch
-    log; only its bounded tail is read into memory or attached to an error.
+    log. A reader thread continuously drains the merged pipe into a hard-capped
+    64 KiB on-disk tail; retries start fresh, and only that tail can be attached
+    to an error.
     """
 
     if not command or any(not isinstance(part, str) or not part for part in command):
@@ -1269,41 +1439,86 @@ def run_colmap_subprocess(
     timeout_s = deadline.remaining_seconds()
     destination = Path(log_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
+    sink = _CappedTailLog(destination, COLMAP_LOG_TAIL_BYTES)
     timed_out: subprocess.TimeoutExpired | None = None
-    result: subprocess.CompletedProcess[Any] | None = None
-    with destination.open("ab") as log_handle:
+    process: subprocess.Popen[bytes] | None = None
+    drain_thread: threading.Thread | None = None
+    drain_errors: list[BaseException] = []
+    returncode: int | None = None
+    startup_error: OSError | None = None
+    try:
         try:
-            result = subprocess.run(
+            process = subprocess.Popen(
                 list(command),
                 cwd=cwd,
-                timeout=timeout_s,
-                check=False,
-                stdout=log_handle,
+                stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
+                bufsize=0,
             )
-        except subprocess.TimeoutExpired as exc:
-            timed_out = exc
-        finally:
-            log_handle.flush()
-            os.fsync(log_handle.fileno())
-    with destination.open("rb") as log_handle:
-        log_handle.seek(0, os.SEEK_END)
-        size = log_handle.tell()
-        log_handle.seek(max(0, size - COLMAP_LOG_TAIL_BYTES))
-        output_tail = log_handle.read(COLMAP_LOG_TAIL_BYTES).decode("utf-8", errors="replace")
+        except OSError as exc:
+            startup_error = exc
+        if process is not None:
+            if process.stdout is None:  # defensive: stdout=PIPE must provide it
+                raise AdapterError("COLMAP subprocess did not expose its output pipe")
+            drain_thread = threading.Thread(
+                target=_drain_colmap_output,
+                args=(process.stdout, sink, drain_errors),
+                name="colmap-log-drain",
+                daemon=True,
+            )
+            drain_thread.start()
+            try:
+                returncode = process.wait(timeout=timeout_s)
+            except subprocess.TimeoutExpired as exc:
+                timed_out = exc
+                _kill_and_reap(process)
+                returncode = process.returncode
+    finally:
+        if process is not None and process.poll() is None:
+            _kill_and_reap(process)
+        if drain_thread is not None:
+            drain_thread.join(COLMAP_LOG_DRAIN_JOIN_S)
+            if drain_thread.is_alive():
+                # A dead child closes the pipe. This close is a last-resort
+                # unblock for a broken stream implementation before we fail.
+                if process is not None and process.stdout is not None:
+                    try:
+                        process.stdout.close()
+                    except OSError as exc:
+                        drain_errors.append(exc)
+                drain_thread.join(1.0)
+                if drain_thread.is_alive():
+                    drain_errors.append(RuntimeError("COLMAP log drain did not stop"))
+        try:
+            sink.close()
+        except BaseException as exc:
+            drain_errors.append(exc)
+
+    output_tail = sink.output_tail()
+    if startup_error is not None:
+        raise AdapterError(
+            f"cannot start COLMAP subprocess {command[0]}: {startup_error}",
+            "REFINE_ENGINE_FAILED",
+        ) from startup_error
+    if drain_errors:
+        error = drain_errors[0]
+        raise AdapterError(
+            f"cannot retain bounded COLMAP output: {error}",
+            "REFINE_ENGINE_LOG_IO",
+        ) from error
     if timed_out is not None:
         raise AdapterError(
             f"COLMAP subprocess exceeded {timeout_s} seconds: {command[0]}",
             "REFINE_ENGINE_TIMEOUT",
         ) from timed_out
-    assert result is not None
-    if result.returncode != 0:
+    assert returncode is not None
+    if returncode != 0:
         detail = (output_tail or "no output").strip()[-2000:]
         raise AdapterError(
-            f"COLMAP subprocess failed ({result.returncode}): {detail}",
+            f"COLMAP subprocess failed ({returncode}): {detail}",
             "REFINE_ENGINE_FAILED",
         )
-    return ColmapCommandResult(result.returncode, destination, output_tail)
+    return ColmapCommandResult(returncode, destination, output_tail)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
