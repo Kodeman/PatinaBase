@@ -6,7 +6,8 @@ export type SiteRequestQueueState =
   | "uploading"
   | "awaiting-receipt"
   | "delivered"
-  | "failed";
+  | "failed"
+  | "terminal";
 
 export interface SiteRequestBootstrapDTO {
   access: { id: string; expires_at: string };
@@ -74,6 +75,7 @@ export interface SiteRequestQueuedDelivery {
   retryCount: number;
   nextRetryAt?: string;
   lastError?: string;
+  terminalReason?: "access-ended" | "capture-invalid" | "request-changed";
   deliveredAt?: string;
 }
 

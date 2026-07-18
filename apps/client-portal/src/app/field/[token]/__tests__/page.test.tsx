@@ -75,4 +75,34 @@ describe("/field/[token] compatibility routing", () => {
       FieldLinkPage({ params: Promise.resolve({ token: "a".repeat(64) }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
+
+  it("shows an actionable non-enumerating screen for an ended Site Request link", async () => {
+    render(
+      await FieldLinkPage({
+        params: Promise.resolve({
+          token: "opaque_site_request_token_1234567890abcd",
+        }),
+      }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "This request link is no longer active." }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/ask your designer to resend/i)).toBeInTheDocument();
+  });
+
+  it("distinguishes a temporary bootstrap failure without exposing internals", async () => {
+    (bootstrapSiteRequest as jest.Mock).mockRejectedValue(new Error("edge down"));
+    render(
+      await FieldLinkPage({
+        params: Promise.resolve({
+          token: "opaque_site_request_token_1234567890abcd",
+        }),
+      }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Patina could not open this request." }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/check your connection.*refresh/i)).toBeInTheDocument();
+    expect(screen.queryByText(/edge down/i)).not.toBeInTheDocument();
+  });
 });

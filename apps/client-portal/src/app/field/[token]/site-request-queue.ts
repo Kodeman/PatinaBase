@@ -1,5 +1,6 @@
 import {
   SiteRequestApiError,
+  classifySiteRequestFailure,
   requestSiteRequestGuest,
   sha256Blob,
   uploadToSignedIntent,
@@ -130,6 +131,15 @@ export interface SiteRequestQueueDeps {
   now(): Date;
 }
 
+export interface SiteRequestQueueObserver {
+  serverReceipt?(record: SiteRequestQueuedDelivery): void;
+  delivered?(record: SiteRequestQueuedDelivery): void;
+  error?(
+    record: SiteRequestQueuedDelivery,
+    classification: ReturnType<typeof classifySiteRequestFailure>,
+  ): void;
+}
+
 const defaultDeps: SiteRequestQueueDeps = {
   request: (token, action, body) =>
     requestSiteRequestGuest(token, action, body),
@@ -203,9 +213,10 @@ export async function processQueuedDelivery(
   token: string,
   store: SiteRequestQueueStore,
   deps: SiteRequestQueueDeps = defaultDeps,
+  observer: SiteRequestQueueObserver = {},
 ): Promise<SiteRequestQueuedDelivery> {
   const record = cloneRecord(queued);
-  if (record.state === "delivered") return record;
+  if (record.state === "delivered" || record.state === "terminal") return record;
 
   try {
     for (const asset of record.assets) {
@@ -278,6 +289,7 @@ export async function processQueuedDelivery(
     });
     record.deliveredAt =
       response.delivery?.delivered_at ?? deps.now().toISOString();
+    observer.serverReceipt?.(cloneRecord(record));
     record.retryCount = 0;
     record.nextRetryAt = undefined;
     record.lastError = undefined;
@@ -289,19 +301,32 @@ export async function processQueuedDelivery(
       blob: new Blob([], { type: asset.mimeType }),
     }));
     await saveState(store, record, "delivered");
+    observer.delivered?.(cloneRecord(record));
     return record;
   } catch (error) {
+    const classification = classifySiteRequestFailure(error);
+    record.lastError = classification.safeCode;
+    observer.error?.(cloneRecord(record), classification);
+    if (!classification.retryable) {
+      record.nextRetryAt = undefined;
+      record.terminalReason = classification.errorClass;
+      await saveState(store, record, "terminal");
+      return record;
+    }
+
     record.retryCount += 1;
-    const delayMs = Math.min(
-      60_000,
-      1_000 * 2 ** Math.min(record.retryCount - 1, 6),
-    );
+    const delayMs = Math.min(60_000, 1_000 * 2 ** Math.min(record.retryCount - 1, 6));
     record.nextRetryAt = new Date(deps.now().getTime() + delayMs).toISOString();
-    record.lastError =
-      error instanceof Error ? error.message : "delivery_failed";
+    record.terminalReason = undefined;
     await saveState(store, record, "failed");
     return record;
   }
+}
+
+export function shouldAutomaticallyRetrySiteRequest(
+  record: SiteRequestQueuedDelivery,
+): boolean {
+  return record.state !== "delivered" && record.state !== "terminal";
 }
 
 export async function createQueueAsset(
