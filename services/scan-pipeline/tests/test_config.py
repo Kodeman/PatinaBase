@@ -48,8 +48,26 @@ def test_stages_subset_and_filtering():
 
 def test_unknown_stage_rejected():
     with pytest.raises(ConfigError) as ei:
-        settings_from_env({**BASE, "STAGES": "ingest,splat"})
-    assert "splat" in str(ei.value)
+        settings_from_env({**BASE, "STAGES": "ingest,warp"})
+    assert "warp" in str(ei.value)
+
+
+def test_p2_gpu_stages_are_known():
+    # item 3: the P2 stage names are declared in KNOWN_STAGES so a GPU box can
+    # advertise them ahead of their handlers landing (items 4–7).
+    s = settings_from_env({**BASE, "STAGES": "ingest,refine,fuse,splat,present"})
+    assert s.stages == ("ingest", "refine", "fuse", "splat", "present")
+    assert s.task_types == (
+        "scan_pipeline.ingest", "scan_pipeline.refine", "scan_pipeline.fuse",
+        "scan_pipeline.splat", "scan_pipeline.present",
+    )
+
+
+def test_gpu_stages_constant_and_cpu_default():
+    from patina_scan_worker.config import DEFAULT_STAGES, GPU_STAGES
+    assert GPU_STAGES == frozenset({"refine", "fuse", "splat"})
+    # the default stays CPU-only — a box opts into GPU stages explicitly.
+    assert GPU_STAGES.isdisjoint(DEFAULT_STAGES.split(","))
 
 
 def test_gpu_must_be_legal():

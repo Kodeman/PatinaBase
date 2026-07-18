@@ -8,9 +8,12 @@ Checks:
   * DB reachability — agent_queue_stats() returns (proves the service-role key
     authenticates and the RPCs are reachable over 443).
   * Storage reachability — a list against room-scans succeeds.
-  * GPU visibility — reports a CUDA device; in P1 a red GPU line is a WARNING,
-    not a failure (no P1 stage uses it).
+  * GPU — nvidia-smi + (for splat) torch.cuda. REQUIRED (RED) when STAGES
+    include a GPU stage (refine/fuse/splat); a missing GPU is a WARNING only on
+    a CPU-only worker that lists none.
   * Disk headroom — free space in WORK_DIR vs MAX_CONCURRENT × ~1.5 GB.
+  * Cache writability — the XDG base dirs, plus TORCH_HOME + CUDA_CACHE_PATH on
+    a GPU box (ProtectSystem=strict makes an unconfined cache EACCES).
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 
-from .config import ConfigError, Settings, settings_from_env
+from .config import GPU_STAGES, ConfigError, Settings, settings_from_env
 from .http import build_session
 from .queue import QueueClient
 from .storage import StorageClient
@@ -45,7 +48,7 @@ class Check:
 def _gpu_present() -> tuple[bool, str]:
     exe = shutil.which("nvidia-smi")
     if not exe:
-        return False, "nvidia-smi not found (expected on a CPU-only P1 box)"
+        return False, "nvidia-smi not found on PATH"
     try:
         out = subprocess.run(
             [exe, "--query-gpu=name,memory.total", "--format=csv,noheader"],
@@ -57,6 +60,33 @@ def _gpu_present() -> tuple[bool, str]:
         return False, f"nvidia-smi rc={out.returncode}: {out.stderr.strip()[:120]}"
     line = out.stdout.strip().splitlines()[0] if out.stdout.strip() else "?"
     return True, line
+
+
+def _torch_cuda_ok() -> tuple[bool, str]:
+    """Does torch see a usable CUDA device? Required only when STAGES include the
+    splat stage (the sole torch/CUDA stage). Imported lazily so a CPU worker that
+    never installs `.[splat]` pays nothing and the import failure is a clean
+    RED, not a traceback."""
+    try:
+        import torch  # noqa: PLC0415 — lazy on purpose (GPU-extra-only dep)
+    except Exception as exc:  # noqa: BLE001
+        return False, (
+            f"torch not importable ({exc.__class__.__name__}) — install "
+            f"`.[splat]` with the cu118 index (README box-prep)"
+        )
+    try:
+        if torch.cuda.is_available():
+            n = torch.cuda.device_count()
+            name = torch.cuda.get_device_name(0) if n else "?"
+            cap = ".".join(str(x) for x in torch.cuda.get_device_capability(0)) if n else "?"
+            return True, f"torch {torch.__version__}, cuda {torch.version.cuda} — {n}× {name} (sm_{cap.replace('.', '')})"
+        return False, (
+            f"torch {torch.__version__} installed but torch.cuda.is_available() "
+            f"is False — driver/CUDA-runtime mismatch (Turing needs a cu118 wheel "
+            f"on a CUDA-11.x driver)"
+        )
+    except Exception as exc:  # noqa: BLE001
+        return False, f"torch.cuda probe raised {exc.__class__.__name__}: {exc}"
 
 
 def run_checks(settings: Settings) -> list[Check]:
@@ -88,13 +118,36 @@ def run_checks(settings: Settings) -> list[Check]:
     except Exception as exc:  # noqa: BLE001
         checks.append(Check("storage", False, False, f"storage probe failed: {exc}"))
 
-    # GPU visibility — informational in P1
+    # GPU visibility — REQUIRED (RED, not warn) when this worker's STAGES include
+    # a GPU stage (refine/fuse/splat); warn-only otherwise. A GPU box that lists
+    # splat must additionally satisfy torch.cuda.
+    enabled_gpu_stages = sorted(set(settings.stages) & GPU_STAGES)
+    gpu_required = bool(enabled_gpu_stages)
+    splat_enabled = "splat" in settings.stages
     if settings.gpu == "off":
-        checks.append(Check("gpu", True, False, "GPU=off (dormant in P1)"))
+        if gpu_required:
+            # Contradiction: the worker advertises GPU stages but disables the GPU.
+            checks.append(Check(
+                "gpu", False, False,
+                f"GPU=off but STAGES include GPU stage(s) {enabled_gpu_stages} — "
+                f"those stages cannot run; set GPU=auto or drop them from STAGES",
+            ))
+        else:
+            checks.append(Check("gpu", True, False, "GPU=off (no GPU stage enabled)"))
     else:
         present, detail = _gpu_present()
-        # A missing GPU is a WARNING in P1 (no stage uses it), never a failure.
-        checks.append(Check("gpu", present, warn=not present, detail=detail))
+        # Missing GPU: RED when a GPU stage is enabled, WARN when it is not.
+        checks.append(Check(
+            "gpu", present,
+            warn=(not present and not gpu_required),
+            detail=(f"{detail} [required by STAGES {enabled_gpu_stages}]"
+                    if gpu_required else detail),
+        ))
+        # torch.cuda is a hard requirement only when splat is enabled (the sole
+        # torch stage); refine/fuse use pycolmap/open3d, not torch.
+        if splat_enabled:
+            ok, tdetail = _torch_cuda_ok()
+            checks.append(Check("torch-cuda", ok, warn=False, detail=tdetail))
 
     # Disk headroom
     import os
@@ -117,15 +170,27 @@ def run_checks(settings: Settings) -> list[Check]:
     except OSError as exc:
         checks.append(Check("disk", False, True, f"disk_usage failed: {exc}"))
 
-    # XDG writability — ezdxf (drawings) writes BOTH $XDG_CONFIG_HOME/ezdxf/ AND
-    # $XDG_CACHE_HOME/ezdxf/ on use; a root-owned/absent dir EACCESes the drawings
-    # stage. Preflight ALL four XDG base dirs (env var or its ~-default).
+    # Cache/config writability — ezdxf (drawings) writes BOTH $XDG_CONFIG_HOME/
+    # ezdxf/ AND $XDG_CACHE_HOME/ezdxf/ on use; a root-owned/absent dir EACCESes
+    # the drawings stage. On a GPU box, torch/CUDA add MORE write surfaces that
+    # are NOT all XDG-derived — CUDA_CACHE_PATH defaults to ~/.nv/ComputeCache
+    # (outside XDG), and torch's JIT/hub caches live under TORCH_HOME. The GPU
+    # unit variant confines every one of these under APP_DIR; preflight each.
     xdg = [
         ("XDG_CONFIG_HOME", "~/.config"),
         ("XDG_CACHE_HOME", "~/.cache"),
         ("XDG_DATA_HOME", "~/.local/share"),
         ("XDG_STATE_HOME", "~/.local/state"),
     ]
+    if gpu_required:
+        xdg += [
+            # torch hub/model cache (defaults under XDG_CACHE_HOME, but the unit
+            # sets it explicitly — probe wherever it points).
+            ("TORCH_HOME", "~/.cache/torch"),
+            # nvidia JIT/PTX cache — NON-XDG default; the unit redirects it under
+            # APP_DIR/.cache so ProtectSystem=strict does not EACCES it.
+            ("CUDA_CACHE_PATH", "~/.nv/ComputeCache"),
+        ]
     failing: list[str] = []
     for var, default in xdg:
         d = os.environ.get(var) or os.path.expanduser(default)
@@ -137,15 +202,19 @@ def run_checks(settings: Settings) -> list[Check]:
             os.remove(probe)
         except OSError as exc:
             failing.append(f"{var}={d} ({exc.__class__.__name__})")
+    surfaces = "config/cache/data/state" + ("/torch/cuda" if gpu_required else "")
     if failing:
         checks.append(Check(
             "xdg", False, False,
-            "NOT writable: " + "; ".join(failing) + " — ezdxf (drawings) will "
-            "EACCES; point the XDG_* var(s) at a writable dir (the systemd unit "
-            "does) or re-run install.sh.",
+            "NOT writable: " + "; ".join(failing) + " — ezdxf (drawings) and/or "
+            "torch/CUDA will EACCES; point the var(s) at a writable dir (the "
+            "systemd unit does) or re-run install.sh.",
         ))
     else:
-        checks.append(Check("xdg", True, False, "all 4 XDG base dirs writable (config/cache/data/state)"))
+        checks.append(Check(
+            "xdg", True, False,
+            f"all {len(xdg)} cache/config base dirs writable ({surfaces})",
+        ))
 
     return checks
 

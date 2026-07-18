@@ -12,21 +12,43 @@ license = { text = "UNLICENSED" }
 authors = [{ name = "Patina" }]
 
 # ── Runtime dependencies ────────────────────────────────────────────────────
-# P1 item 9 (this build) implements ONLY the ingest stage; its sole runtime
-# dependency is an HTTP client (PostgREST RPCs + Storage REST), exactly as
-# services/aesthete-inference does. numpy/scipy (least-squares solve, item 10)
-# and ezdxf/cairosvg (layered DXF + PDF, item 11) are NOT pulled in yet — they
-# are declared as optional extras below so a box that will run those stages
-# installs `.[solve]` / `.[drawings]`, and an ingest-only worker stays lean.
+# The core worker (ingest + the P1 solve, which is pure-Python) needs only an
+# HTTP client (PostgREST RPCs + Storage REST), exactly as services/aesthete-
+# inference does. Everything a specific STAGE imports is an OPTIONAL EXTRA below,
+# STAGE-NAMED, so a CPU-only worker never pulls CUDA and each box installs only
+# what its STAGES claim.
 dependencies = [
   "httpx>=0.24,<1.0",
 ]
 
 [project.optional-dependencies]
-# Item 10 — anchor least-squares scale fit lands here.
+# ── P1 stages (shipped) ─────────────────────────────────────────────────────
+# `solve` was declared for the least-squares fit; P1 solve is pure-Python so it
+# stays unused today (kept as shipped). `drawings` = the item-11 SVG/PDF/DXF path.
 solve = ["numpy>=1.26", "scipy>=1.11"]
-# Item 11 — layered DXF (ezdxf) + PDF (cairosvg, per design §9 open question 1).
 drawings = ["ezdxf>=1.1", "cairosvg>=2.7"]
+
+# ── P2 GPU stages (item 3) — each pulls ONLY what its stage imports ──────────
+# refine (§10.2): GLOMAP global SfM warm-started on the ARKit poses; GLOMAP +
+#   COLMAP are SYSTEM binaries (box-prep, apt/build — NOT pip), pycolmap reads/
+#   writes the COLMAP DB + poses. No torch.
+refine = ["pycolmap>=0.6", "numpy>=1.26", "scipy>=1.11"]
+# fuse (§10.3): TSDF dense mesh (Open3D) + decimation + glb export. No torch.
+fuse = ["open3d>=0.18", "trimesh>=4.0", "numpy>=1.26"]
+# splat (§10.5): the ONLY CUDA/torch stage — 3DGS training (gsplat) → SPZ.
+#   TURING PIN REALITY (SM 7.5, 2080 Ti): sm_75 is served by PyTorch's cu118
+#   (CUDA 11.8) wheels — it is NOT dropped from modern torch (the cu118 arch list
+#   still spans sm_37..sm_90). The binding constraint is the BOX's CUDA-11.x-era
+#   driver, which needs the cu118 RUNTIME. So the box installs the +cu118 wheel
+#   via the PyTorch index (README box-prep: `--extra-index-url
+#   https://download.pytorch.org/whl/cu118`); gsplat JIT-compiles CUDA kernels at
+#   install and needs the matching CUDA 11.8 toolkit (nvcc). The torch band below
+#   is the conservative Turing+gsplat-tested ceiling; `doctor`'s torch.cuda check
+#   on the box is the ground truth. (SPZ writer dep lands with item 7.)
+splat = ["torch>=2.2,<2.5", "gsplat>=1.0,<2.0", "numpy>=1.26"]
+# gpu meta-extra — the box's one-line install of all three GPU stages.
+gpu = ["patina-scan-worker[refine,fuse,splat]"]
+
 dev = ["pytest>=7.4"]
 
 [project.scripts]

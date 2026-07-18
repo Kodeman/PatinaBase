@@ -1,0 +1,84 @@
+"""item 3 — the GPU-extras packaging contract.
+
+Locks the shape of pyproject's optional-dependencies so a refactor can't silently
+(a) drop a stage extra, (b) let CUDA leak into a CPU install, or (c) break the
+`[gpu]` meta-extra. These assert the DECLARED extras — the actual CUDA install +
+`import torch` is the operator's box step (there is no GPU here).
+"""
+
+from __future__ import annotations
+
+import tomllib
+from pathlib import Path
+
+PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+
+
+def _extras() -> dict[str, list[str]]:
+    with PYPROJECT.open("rb") as fh:
+        data = tomllib.load(fh)
+    return data["project"]["optional-dependencies"], data["project"]["dependencies"]
+
+
+def test_all_stage_extras_declared():
+    extras, _ = _extras()
+    assert set(extras) == {"solve", "drawings", "refine", "fuse", "splat", "gpu", "dev"}
+
+
+def test_cpu_install_never_pulls_cuda():
+    # The base runtime dep set and the CPU extras must be CUDA-free — a CPU-only
+    # worker (plain install.sh) must never drag in torch/gsplat/CUDA.
+    extras, base = _extras()
+    cuda_markers = ("torch", "gsplat", "pycolmap", "open3d", "cuda", "nvidia")
+    for name in ("solve", "drawings"):
+        joined = " ".join(extras[name]).lower()
+        assert not any(m in joined for m in cuda_markers), f"[{name}] leaked CUDA: {extras[name]}"
+    base_joined = " ".join(base).lower()
+    assert not any(m in base_joined for m in cuda_markers), f"base deps leaked CUDA: {base}"
+
+
+def test_gpu_stage_extras_pull_only_their_imports():
+    extras, _ = _extras()
+    # refine drives GLOMAP/COLMAP (system binaries) via pycolmap — NOT torch.
+    refine = " ".join(extras["refine"]).lower()
+    assert "pycolmap" in refine and "torch" not in refine and "gsplat" not in refine
+    # fuse = Open3D TSDF (+ trimesh export) — NOT torch.
+    fuse = " ".join(extras["fuse"]).lower()
+    assert "open3d" in fuse and "torch" not in fuse
+    # splat is the ONLY torch/CUDA stage.
+    splat = " ".join(extras["splat"]).lower()
+    assert "torch" in splat and "gsplat" in splat
+
+
+def test_splat_pins_a_turing_safe_torch_ceiling():
+    # sm_75 rides PyTorch's cu118 wheels; the box installs +cu118 via the index.
+    # We pin an UPPER bound so a future torch that drops sm_75/cu118 can't be
+    # resolved silently — the pin is the documented ceiling.
+    extras, _ = _extras()
+    torch_spec = next(s for s in extras["splat"] if s.lower().startswith("torch"))
+    assert "<" in torch_spec, f"torch must carry an upper bound (Turing ceiling): {torch_spec!r}"
+
+
+def test_gpu_is_the_meta_extra():
+    # [gpu] is a self-referential meta-extra = refine + fuse + splat (the box's
+    # one-line install) — it must not re-declare concrete packages.
+    extras, _ = _extras()
+    gpu = [d.replace(" ", "").lower() for d in extras["gpu"]]
+    assert gpu == ["patina-scan-worker[refine,fuse,splat]"]
+
+
+def test_every_extra_is_a_valid_pep508_requirement():
+    # network-free "do the extras resolve?" — every dep parses as a PEP 508
+    # requirement, and the [gpu] meta-extra references our own package's three
+    # GPU extras. (The actual CUDA install is the operator's box step.)
+    import pytest
+    Requirement = pytest.importorskip("packaging.requirements").Requirement
+    extras, base = _extras()
+    for dep in base:
+        Requirement(dep)
+    for name, deps in extras.items():
+        for dep in deps:
+            Requirement(dep)  # raises InvalidRequirement on a malformed spec
+    meta = Requirement(extras["gpu"][0])
+    assert meta.name == "patina-scan-worker"
+    assert meta.extras == {"refine", "fuse", "splat"}

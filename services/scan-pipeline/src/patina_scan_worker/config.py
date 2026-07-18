@@ -15,14 +15,29 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
-# The full set of stages this codebase knows about. ingest is implemented
-# (item 9); solve/drawings are registered NOT-IMPLEMENTED stubs (items 10/11).
+# The full set of stages this codebase knows about (design §2.1, §10). The P1
+# CPU stages ingest/solve/drawings are implemented; the P2 stages refine/fuse/
+# splat/present are DECLARED here so a box can advertise them (STAGES=…,splat)
+# and `doctor` can gate on them, ahead of their handlers landing (items 4–7).
+# A worker claiming a declared-but-unregistered stage parks that task cleanly
+# (worker.process_one) — and nothing enqueues the P2 task types yet, so a GPU
+# box that lists them simply claims none until the handler ships.
 # A worker's STAGES must be a subset of these.
-KNOWN_STAGES: tuple[str, ...] = ("ingest", "solve", "drawings")
+KNOWN_STAGES: tuple[str, ...] = (
+    "ingest", "solve", "drawings",       # P1 (implemented)
+    "refine", "fuse", "splat", "present"  # P2 (items 4–7; refine/fuse/splat are GPU)
+)
+
+# The GPU-bearing stages (design §10.2/§10.3/§10.5). `doctor` makes its GPU
+# checks REQUIRED (not warn-only) whenever a worker's STAGES intersect this set,
+# and the GPU systemd unit variant + `install.sh --gpu` exist for exactly these.
+GPU_STAGES: frozenset[str] = frozenset({"refine", "fuse", "splat"})
 
 # task_type namespace — one type per stage (design §2.1).
 TASK_TYPE_PREFIX = "scan_pipeline."
 
+# The DEFAULT stays CPU-only: a box opts into GPU stages explicitly (STAGES=…),
+# so an un-tuned/CPU worker never advertises a GPU task type.
 DEFAULT_STAGES = "ingest,solve,drawings"
 
 

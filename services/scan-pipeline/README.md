@@ -39,18 +39,68 @@ Ubuntu 22.04/24.04 LTS or Debian 12, x86_64, Python 3.11+ with `venv`
 inbound.
 
 ```bash
-sudo ./install.sh                       # venv + pip install . + unit + env template + doctor
+sudo ./install.sh                       # CPU worker: venv + .[drawings] + unit + env template + doctor
 sudo -e /etc/patina/scan-worker.env     # set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, WORKER_ID
 /opt/patina/scan-pipeline/.venv/bin/patina-scan-worker doctor
 sudo systemctl enable --now patina-scan-worker
 journalctl -u patina-scan-worker -f
 ```
 
-CPU is enough for P1 (validate + least-squares fit + SVG/PDF/DXF). A GPU is only
-needed for P2 splat training; `doctor` reports GPU-absent as a **warning**, which
-is expected on a P1 box. Provision **≥ 50–100 GB** on the `WORK_DIR` volume
-(bundles are 300–600 MB; scratch ≈ `MAX_CONCURRENT × ~1.5 GB` + the retention
-window).
+CPU is enough for the P1 stages (validate + least-squares fit + SVG/PDF/DXF) and
+the CPU P2 stages. `install.sh` (no flags) installs **only** the CPU extras —
+never CUDA. On a CPU worker a missing GPU is a `doctor` **warning**; it becomes a
+hard **failure** only when `STAGES` lists a GPU stage (see below). Provision
+**≥ 50–100 GB** on the `WORK_DIR` volume (bundles are 300–600 MB; scratch ≈
+`MAX_CONCURRENT × ~1.5 GB` + the retention window).
+
+### Box prep (GPU)
+
+The GPU stages — `refine` (GLOMAP/COLMAP), `fuse` (Open3D TSDF), `splat` (gsplat
+3DGS → SPZ) — run on an NVIDIA box. **Turing pin reality (target GPU = RTX 2080
+Ti, SM 7.5):** `sm_75` is *not* dropped from modern PyTorch — it stays in the
+**cu118** (CUDA 11.8) wheel's arch list. The binding constraint is the box's
+**CUDA-11.x-era driver**, which needs the cu118 *runtime*, so we install the
+`+cu118` torch wheel via the PyTorch index. `install.sh --gpu` does this for you
+(`--extra-index-url https://download.pytorch.org/whl/cu118`). The torch band is
+pinned in `pyproject.toml` `[splat]`; `doctor`'s `gpu` + `torch-cuda` lines on
+the box are the ground truth.
+
+Prereqs to install **before** `./install.sh --gpu`:
+
+1. **NVIDIA driver** new enough for CUDA 11.8 (≥ 520). Verify: `nvidia-smi`.
+2. **CUDA 11.8 toolkit** (`nvcc`) — gsplat JIT-compiles its CUDA kernels at
+   install against the torch CUDA version, so `nvcc` must be 11.8. Verify:
+   `nvcc --version`.
+3. **GLOMAP + COLMAP** binaries on `PATH` (system packages / build) — these are
+   the `refine` stage's SfM front-end (not pip; `pycolmap` is the Python binding
+   and *is* pulled by `.[refine]`).
+
+Then:
+
+```bash
+sudo ./install.sh --gpu                 # + .[gpu] via cu118 index, + GPU systemd drop-in
+sudo -e /etc/patina/scan-worker.env     # set STAGES to include the GPU stage(s), e.g.
+                                        #   STAGES=ingest,refine,fuse,splat,present
+/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker doctor   # gpu + torch-cuda must pass
+sudo systemctl enable --now patina-scan-worker
+```
+
+`--gpu` also lays down `…/patina-scan-worker.service.d/gpu.conf`, which grants
+`/dev/nvidia*` (flipping systemd to a *closed* device policy — GPU nodes and
+nothing else) and confines `TORCH_HOME` + `CUDA_CACHE_PATH` under `APP_DIR/.cache`
+so `ProtectSystem=strict` never EACCESes the CUDA JIT cache.
+
+### Upgrading a running worker
+
+The worker installs a **copy** of the source into its venv, so `git pull` alone
+does **not** change a running worker's behaviour. The upgrade is two commands
+(add `--gpu` on a GPU box); `--upgrade` rebuilds the venv from the pulled source:
+
+```bash
+git pull
+sudo ./install.sh --upgrade             # (--gpu --upgrade on a GPU box)
+sudo systemctl restart patina-scan-worker
+```
 
 ## The env file (`/etc/patina/scan-worker.env`)
 
@@ -64,10 +114,10 @@ via `EnvironmentFile` so it never appears in `argv`. Full schema: design §3.
 | `WORKER_ID` | *(required)* | identity in `locked_by` + `app.actor` (audit); unique per worker |
 | `SUPABASE_URL` | *(required)* | Strata PostgREST + Storage base |
 | `SUPABASE_SERVICE_ROLE_KEY` | *(required)* | service-role JWT (server-side only) |
-| `STAGES` | `ingest,solve,drawings` | which `scan_pipeline.*` stages this worker claims |
+| `STAGES` | `ingest,solve,drawings` | which `scan_pipeline.*` stages this worker claims. Known: `ingest,solve,drawings` (CPU, live) + `refine,fuse,splat,present` (P2; `refine/fuse/splat` are GPU). Default stays CPU-only — a GPU box lists the GPU stages explicitly |
 | `POLL_SECONDS` | `5` | sleep between empty polls |
 | `MAX_CONCURRENT` | `2` | claim batch size / max in-flight |
-| `GPU` | `auto` | `auto` = detect+report; `off` = never touch (no P1 stage uses it) |
+| `GPU` | `auto` | `auto` = detect+report; `off` = never touch. `doctor` makes the GPU check a hard failure (not a warning) when `STAGES` lists a GPU stage; `GPU=off` + a GPU stage is a contradiction it flags |
 | `VISIBILITY_TIMEOUT` | `60 minutes` | lease length; a dead worker's job is reclaimable after this (a 500 MB bundle on a slow link needs the room; the lost-race guard covers overruns) |
 | `MAX_ATTEMPTS` | `5` | max attempts on enqueued successors (backoff parks here) |
 | `ROOM_SCANS_BUCKET` | `room-scans` | bucket bundles arrive in / drawings write to |
@@ -82,7 +132,7 @@ via `EnvironmentFile` so it never appears in `argv`. Full schema: design §3.
 patina-scan-worker run           # long-lived loop (what systemd starts)
 patina-scan-worker run --once    # claim-and-drain one batch then exit
 patina-scan-worker once          # alias for `run --once`
-patina-scan-worker doctor        # preflight: env / DB / Storage / GPU / disk (no queue interaction)
+patina-scan-worker doctor        # preflight: env / DB / Storage / GPU (+torch-cuda for splat) / disk / caches (no queue interaction)
 ```
 
 ## Operate
@@ -207,13 +257,19 @@ SET LOCAL request.jwt.claims = '{"sub":"a0000000-0000-0000-0000-000000000001","r
 SELECT * FROM public.scan_pipeline_runs LIMIT 5;
 ```
 
-## Stage seam (items 10 / 11)
+## Stage seam (items 10 / 11 → P2 4–7)
 
 `src/patina_scan_worker/stages/__init__.py` is the `task_type → handler` dispatch
-table. Item 10 replaces `stages/solve.py`'s stub (adds the `.[solve]` extra:
-numpy/scipy); item 11 replaces `stages/drawings.py`'s stub (adds the
-`.[drawings]` extra: ezdxf/cairosvg). Nothing else in the worker changes — the
-claim loop, telemetry, queue completion, and burst contract are stage-agnostic.
+table. Item 10 replaced `stages/solve.py`'s stub (`.[solve]`: numpy/scipy); item
+11 replaced `stages/drawings.py`'s stub (`.[drawings]`: ezdxf/cairosvg). The P2
+GPU stages slot in the same way: items 4–7 add handlers for `refine`
+(`.[refine]`: pycolmap + numpy/scipy), `fuse` (`.[fuse]`: open3d/trimesh),
+`splat` (`.[splat]`: torch cu118 + gsplat), and `present`. Those stage names are
+already in `KNOWN_STAGES` so a GPU box can advertise them and `doctor` can gate
+on them ahead of the handlers landing; a stage claimed before its handler exists
+parks cleanly. `.[gpu]` is the box one-liner (= refine+fuse+splat). Nothing else
+in the worker changes — the claim loop, telemetry, queue completion, and burst
+contract are stage-agnostic.
 
 ## The vendored validator
 
