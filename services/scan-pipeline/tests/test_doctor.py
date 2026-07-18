@@ -328,6 +328,28 @@ def test_cpu_worker_probes_only_four_xdg_dirs(tmp_path, monkeypatch):
     assert xdg.ok is True and "4" in xdg.detail and "torch" not in xdg.detail
 
 
+def test_cpu_worker_does_not_import_open3d(monkeypatch):
+    # Keep the real helper wired in, then make any attempted lazy import fatal.
+    # With no fuse stage, run_checks must never enter the helper at all.
+    monkeypatch.setattr(
+        "patina_scan_worker.doctor._open3d_cuda_ok", _open3d_cuda_ok,
+    )
+
+    def fail_open3d_import(module_name):
+        if module_name == "open3d":
+            pytest.fail("CPU-only doctor unexpectedly imported Open3D")
+        raise AssertionError(f"unexpected module import: {module_name}")
+
+    monkeypatch.setattr(
+        "patina_scan_worker.doctor.importlib.import_module", fail_open3d_import,
+    )
+    checks = run_checks(settings_from_env({
+        **UNREACHABLE,
+        "STAGES": "ingest,solve,drawings",
+    }))
+    assert "open3d-cuda" not in {check.name for check in checks}
+
+
 class _FakeTensor:
     def __add__(self, _other):
         return self
@@ -396,32 +418,140 @@ def test_torch_cuda_probe_rejects_a_non_cu118_runtime(monkeypatch):
     assert "11.8" in detail and "12.4" in detail
 
 
-def _fake_open3d(*, available=True, count=1, top_level=False):
+class _FakeOpen3DInputTensor:
+    def __init__(self, state):
+        self._state = state
+
+    def __add__(self, other):
+        self._state.calls.append(("add", other is self))
+        if self._state.kernel_error is not None:
+            raise self._state.kernel_error
+        return _FakeOpen3DResultTensor(self._state)
+
+
+class _FakeOpen3DResultTensor:
+    def __init__(self, state):
+        self._state = state
+
+    def cpu(self):
+        self._state.calls.append(("cpu",))
+        if self._state.copy_error is not None:
+            raise self._state.copy_error
+        return _FakeOpen3DCPUTensor(self._state)
+
+
+class _FakeOpen3DCPUTensor:
+    def __init__(self, state):
+        self._state = state
+
+    def numpy(self):
+        self._state.calls.append(("numpy",))
+        return SimpleNamespace(tolist=lambda: self._state.result)
+
+
+def _fake_open3d(
+    *, version="0.19.0", available=True, count=1, top_level=False,
+    allocation_error=None, kernel_error=None, copy_error=None, result=None,
+):
     cuda = SimpleNamespace(
         is_available=lambda: available,
         device_count=lambda: count,
     )
-    module = SimpleNamespace(__version__="0.19.0")
+    state = SimpleNamespace(
+        calls=[],
+        allocation_error=allocation_error,
+        kernel_error=kernel_error,
+        copy_error=copy_error,
+        result=[2.0] if result is None else result,
+    )
+
+    def device(name):
+        state.calls.append(("device", name))
+        return name
+
+    def tensor(values, *, dtype, device):
+        state.calls.append(("tensor", values, dtype, device))
+        if state.allocation_error is not None:
+            raise state.allocation_error
+        return _FakeOpen3DInputTensor(state)
+
+    core = SimpleNamespace(
+        Device=device,
+        Dtype=SimpleNamespace(Float32="Float32"),
+        Tensor=tensor,
+    )
+    module = SimpleNamespace(__version__=version, core=core, probe_state=state)
     if top_level:
         module.cuda = cuda
-        module.core = SimpleNamespace()
     else:
-        module.core = SimpleNamespace(cuda=cuda)
+        core.cuda = cuda
     return module
 
 
-def test_open3d_cuda_probe_accepts_the_supported_core_cuda_api(monkeypatch):
-    monkeypatch.setitem(sys.modules, "open3d", _fake_open3d())
+@pytest.mark.parametrize("version", ["0.18.0", "0.19.0"])
+def test_open3d_cuda_probe_accepts_the_supported_core_cuda_api(monkeypatch, version):
+    fake = _fake_open3d(version=version)
+    monkeypatch.setitem(sys.modules, "open3d", fake)
     ok, detail = _open3d_cuda_ok()
     assert ok is True
-    assert "1 device" in detail and "0.19.0" in detail
+    assert "1 device" in detail and version in detail and "CUDA op OK" in detail
+    assert fake.probe_state.calls == [
+        ("device", "CUDA:0"),
+        ("tensor", [1.0], "Float32", "CUDA:0"),
+        ("add", True),
+        ("cpu",),
+        ("numpy",),
+    ]
 
 
 def test_open3d_cuda_probe_accepts_the_newer_top_level_cuda_api(monkeypatch):
-    monkeypatch.setitem(sys.modules, "open3d", _fake_open3d(top_level=True))
+    fake = _fake_open3d(top_level=True)
+    monkeypatch.setitem(sys.modules, "open3d", fake)
     ok, detail = _open3d_cuda_ok()
     assert ok is True
-    assert "CUDA ready" in detail
+    assert "CUDA ready" in detail and ("cpu",) in fake.probe_state.calls
+
+
+def test_open3d_cuda_probe_reports_tensor_allocation_failure(monkeypatch):
+    fake = _fake_open3d(
+        allocation_error=RuntimeError("CUDA out of memory during allocation"),
+    )
+    monkeypatch.setitem(sys.modules, "open3d", fake)
+    ok, detail = _open3d_cuda_ok()
+    assert ok is False
+    assert "allocation" in detail.lower()
+    assert "RuntimeError" in detail and "out of memory" in detail
+
+
+def test_open3d_cuda_probe_reports_tensor_addition_failure(monkeypatch):
+    fake = _fake_open3d(
+        kernel_error=RuntimeError("no kernel image is available"),
+    )
+    monkeypatch.setitem(sys.modules, "open3d", fake)
+    ok, detail = _open3d_cuda_ok()
+    assert ok is False
+    assert "addition" in detail.lower()
+    assert "RuntimeError" in detail and "no kernel image" in detail
+
+
+def test_open3d_cuda_probe_reports_cpu_copy_failure(monkeypatch):
+    fake = _fake_open3d(
+        copy_error=RuntimeError("CUDA device-side assert triggered"),
+    )
+    monkeypatch.setitem(sys.modules, "open3d", fake)
+    ok, detail = _open3d_cuda_ok()
+    assert ok is False
+    assert "copy to CPU" in detail
+    assert "RuntimeError" in detail and "device-side assert" in detail
+
+
+def test_open3d_cuda_probe_rejects_invalid_addition_result(monkeypatch):
+    fake = _fake_open3d(result=[1.0])
+    monkeypatch.setitem(sys.modules, "open3d", fake)
+    ok, detail = _open3d_cuda_ok()
+    assert ok is False
+    assert "returned [1.0]" in detail
+    assert "expected [2.0]" in detail
 
 
 def test_open3d_cuda_probe_rejects_a_cpu_only_wheel(monkeypatch):

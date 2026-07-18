@@ -143,7 +143,9 @@ def _open3d_cuda_ok() -> tuple[bool, str]:
 
     Open3D 0.18/0.19 expose the probe under ``open3d.core.cuda`` while newer
     builds also expose ``open3d.cuda``. Support both public layouts because the
-    package constraint intentionally spans the two release lines.
+    package constraint intentionally spans the two release lines. Availability
+    alone is insufficient: allocate on CUDA:0, execute a tensor addition, and
+    copy the exact result back through the public CPU/NumPy APIs.
     """
     try:
         open3d = importlib.import_module("open3d")
@@ -171,9 +173,56 @@ def _open3d_cuda_ok() -> tuple[bool, str]:
     except Exception as exc:  # noqa: BLE001
         return False, f"open3d CUDA probe raised {exc.__class__.__name__}: {exc}"
 
+    core_api = getattr(open3d, "core", None)
+    tensor_type = getattr(core_api, "Tensor", None)
+    device_type = getattr(core_api, "Device", None)
+    dtype = getattr(getattr(core_api, "Dtype", None), "Float32", None)
+    if tensor_type is None or device_type is None or dtype is None:
+        return False, (
+            "open3d CUDA is available but the public core Tensor/Device/Float32 "
+            "API required for the runtime probe is missing"
+        )
+
+    try:
+        device = device_type("CUDA:0")
+        operand = tensor_type([1.0], dtype=dtype, device=device)
+    except Exception as exc:  # noqa: BLE001
+        return False, (
+            "open3d CUDA tensor allocation on CUDA:0 failed "
+            f"({exc.__class__.__name__}: {exc})"
+        )
+
+    try:
+        result = operand + operand
+    except Exception as exc:  # noqa: BLE001
+        return False, (
+            "open3d CUDA tensor addition kernel failed "
+            f"({exc.__class__.__name__}: {exc})"
+        )
+
+    try:
+        cpu_result = result.cpu()
+    except Exception as exc:  # noqa: BLE001
+        return False, (
+            "open3d CUDA tensor result copy to CPU failed "
+            f"({exc.__class__.__name__}: {exc})"
+        )
+
+    try:
+        values = cpu_result.numpy().tolist()
+    except Exception as exc:  # noqa: BLE001
+        return False, (
+            "open3d CUDA tensor CPU result validation failed "
+            f"({exc.__class__.__name__}: {exc})"
+        )
+    if values != [2.0]:
+        return False, (
+            f"open3d CUDA tensor addition returned {values!r}, expected [2.0]"
+        )
+
     return True, (
         f"open3d {getattr(open3d, '__version__', '?')} CUDA ready "
-        f"({count} device(s))"
+        f"({count} device(s); CUDA op OK)"
     )
 
 
