@@ -246,17 +246,33 @@ BEGIN
     FROM public.project_parties WHERE id = 'f3730000-0000-4000-8000-000000000301'
   ), 'send must transition not_asked consent to pending';
 
-  -- Consent grant creates identifier-only durable work; claim mints the raw
-  -- token only at actual send time and completion activates it.
+  -- Consent grant transactionally creates identifier-only durable work before
+  -- its best-effort pg_net wake-up. Even when Edge never handles that wake-up,
+  -- the lifecycle sweep can discover the row; only claim mints a raw token.
   RESET ROLE;
   UPDATE public.project_parties
   SET sms_consent_status = 'granted', sms_consented_at = now()
   WHERE id = 'f3730000-0000-4000-8000-000000000301';
 
-  v_dispatch := public.site_request_dispatch_after_consent(v_request_id);
-  v_outbox_id := (v_dispatch->>'outbox_id')::uuid;
-  ASSERT v_dispatch->>'token' IS NULL,
-    'durable dispatch preparation must never return or persist a raw token';
+  SELECT id INTO v_outbox_id
+  FROM public.site_request_dispatch_outbox
+  WHERE request_id = v_request_id
+    AND action = 'consent-granted'
+    AND status = 'pending';
+  ASSERT v_outbox_id IS NOT NULL,
+    'consent transaction must enqueue durable dispatch before pg_net delivery';
+  ASSERT (
+    SELECT status = 'awaiting_consent'
+    FROM public.site_requests WHERE id = v_request_id
+  ), 'request must await provider acknowledgement, not the consent trigger';
+  ASSERT NOT EXISTS (
+    SELECT 1 FROM public.site_request_access WHERE request_id = v_request_id
+  ), 'consent enqueue must not mint or persist guest access';
+  ASSERT v_outbox_id = ANY(ARRAY(
+    SELECT pending_id
+    FROM public.site_request_pending_dispatches(now(), 25) pending_id
+  )), 'lifecycle sweep must recover consent work after an Edge/pg_net miss';
+
   v_dispatch := public.site_request_claim_dispatch(v_outbox_id, now());
   v_token := v_dispatch->>'token';
   v_access_id := (v_dispatch->>'access_id')::uuid;

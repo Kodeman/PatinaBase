@@ -43,7 +43,6 @@ export type SiteRequestFailureClassification =
 
 const ACCESS_ENDED_CODES = new Set(["invalid_or_expired_link"]);
 const REQUEST_CHANGED_CODES = new Set([
-  "invalid_upload_path",
   "request_conflict",
   "unknown_action",
 ]);

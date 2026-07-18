@@ -6,6 +6,8 @@ import {
 import {
   handleSiteRequestGuest,
   type SiteRequestGuestDeps,
+  SiteRequestGuestDirectiveError,
+  siteRequestGuestRpcDirective,
   type UploadBinding,
 } from "./lib.ts";
 
@@ -133,6 +135,106 @@ Deno.test(
     );
     assertEquals(res.status, 404);
     assertEquals((await res.json()).error, "invalid_or_expired_link");
+  },
+);
+
+Deno.test(
+  "RPC adapter reserves terminal directives for explicit access, immutable, and validation conflicts",
+  () => {
+    const immutable = siteRequestGuestRpcDirective({
+      message: "idempotency key was reused with different delivery data",
+    });
+    assert(immutable instanceof SiteRequestGuestDirectiveError);
+    assertEquals(immutable.status, 409);
+    assertEquals(immutable.code, "request_conflict");
+    assertEquals(
+      siteRequestGuestRpcDirective({
+        message: "invalid or expired site request access",
+      })?.code,
+      "invalid_or_expired_link",
+    );
+    assertEquals(
+      siteRequestGuestRpcDirective({
+        message: "K-01 requires every configured dimension exactly once",
+      })?.code,
+      "invalid_delivery",
+    );
+    assertEquals(
+      siteRequestGuestRpcDirective({ message: "connection pool exhausted" }),
+      null,
+    );
+  },
+);
+
+Deno.test(
+  "explicit immutable conflict returns typed 409 without implementation details",
+  async () => {
+    const res = await handleSiteRequestGuest(
+      request("deliver", {
+        itemVersionId: ITEM_VERSION,
+        clientAttemptId: ATTEMPT,
+        payload: {},
+        dimensions: [],
+      }),
+      deps({
+        deliver: () =>
+          Promise.reject(
+            new SiteRequestGuestDirectiveError(409, "request_conflict"),
+          ),
+      }),
+    );
+    assertEquals(res.status, 409);
+    assertEquals(await res.json(), { error: "request_conflict" });
+  },
+);
+
+Deno.test(
+  "unexpected hash, RPC, Storage signing, verification, and delivery outages return retryable generic 503",
+  async () => {
+    const cases: Array<{
+      req: Request;
+      override: Partial<SiteRequestGuestDeps>;
+    }> = [
+      {
+        req: request("bootstrap"),
+        override: { sha256Hex: () => Promise.reject(new Error("crypto down")) },
+      },
+      {
+        req: request("bootstrap"),
+        override: { bootstrap: () => Promise.reject(new Error("db details")) },
+      },
+      {
+        req: request("upload-intent", uploadBody),
+        override: {
+          signUpload: () => Promise.reject(new Error("storage down")),
+        },
+      },
+      {
+        req: request("receipt", { ...uploadBody, mediaId: MEDIA }),
+        override: {
+          verifyUpload: () => Promise.reject(new Error("storage down")),
+        },
+      },
+      {
+        req: request("deliver", {
+          itemVersionId: ITEM_VERSION,
+          clientAttemptId: ATTEMPT,
+          payload: {},
+          dimensions: [],
+        }),
+        override: { deliver: () => Promise.reject(new Error("db details")) },
+      },
+    ];
+    for (const testCase of cases) {
+      const res = await handleSiteRequestGuest(
+        testCase.req,
+        deps(testCase.override),
+      );
+      assertEquals(res.status, 503);
+      assertEquals(await res.json(), {
+        error: "temporary_service_unavailable",
+      });
+    }
   },
 );
 

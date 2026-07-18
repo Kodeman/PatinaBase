@@ -3404,6 +3404,7 @@ SET search_path TO 'public'
 AS $$
 DECLARE
   v_request record;
+  v_dispatch jsonb;
 BEGIN
   IF NEW.sms_consent_status <> 'granted'
      OR OLD.sms_consent_status = 'granted' THEN
@@ -3417,13 +3418,20 @@ BEGIN
       AND status = 'awaiting_consent'
     ORDER BY created_at
   LOOP
+    -- Durable work is part of the same transaction as the consent update.
+    -- The Edge invocation below is only an eager wake-up: pg_net can miss,
+    -- retry, or arrive after a worker restart without stranding the request in
+    -- awaiting_consent. The lifecycle sweep will claim this identifier-only
+    -- row and mint a raw guest token only when an SMS attempt actually begins.
+    v_dispatch := public.site_request_dispatch_after_consent(v_request.id);
     BEGIN
       PERFORM public.invoke_edge_function(
         'site-request-dispatch',
         jsonb_build_object(
           'action', 'consent-granted',
           'request_id', v_request.id,
-          'party_id', NEW.id
+          'party_id', NEW.id,
+          'outbox_id', v_dispatch->>'outbox_id'
         )
       );
     EXCEPTION WHEN OTHERS THEN
