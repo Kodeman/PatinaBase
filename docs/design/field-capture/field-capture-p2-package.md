@@ -1,7 +1,7 @@
 # Field Capture · P2 Build Package — "Presence"
 
 Issued 2026-07-18 · Design authority → Claude Code · **Ruled 2026-07-18 — Part B resolved as R114; build order live.**
-Companion artifacts: `patina-field-capture-architecture.html` (the SC deck — SC-05 thesis, SC-10 reconstruction, SC-11 the Room File, SC-15 the P2 gate), `field-capture-p1-package.md` (the shipped P1 order), `scan-pipeline-worker-design.md` (the worker plumbing; §10 is P2's growth stub), `capture-bundle-spec-v1.md` (the evidence P2 consumes). The deck is the system definition; this package is the build order. **If they conflict, this package wins for P2 scope.**
+Companion artifacts: `patina-field-capture-architecture.html` (the SC deck — SC-05 thesis, SC-10 reconstruction, SC-11 the Room File, SC-15 the P2 gate), `field-capture-p1-package.md` (the shipped P1 order), `scan-pipeline-worker-design.md` (the worker plumbing; §10 now carries the P2 stage contract, filled at item 1 / I86), `capture-bundle-spec-v1.md` (the evidence P2 consumes). The deck is the system definition; this package is the build order. **If they conflict, this package wins for P2 scope.**
 
 **Ruled (R114, 2026-07-18):** the session ran — all six B-questions are ruled, and **Part B now carries each outcome inline**. The answers landed as **R114**, not the R113 this draft predicted (R113 was consumed by the M4-passed close, I85 → R113). The single reversal is **B.1: on-device splat preview is IN** (R114.1, amending R108.3 for P2) — the other five ratified their recommendations verbatim. The pre-ruling framing below is kept as the record of how the session was set up.
 
@@ -118,7 +118,7 @@ Same split as P1 (the P1 package's authority note + spec §11): the question is 
 
 ## Part D — Additive-schema sketch
 
-Additive only; no modification of existing behavior. 00341 is **deployed to Strata** (I85), so every change is **fix-forward in a new numbered migration**, catalog-guarded (the 00373 idiom) so it is a no-op where already-final. Numbers below are illustrative from the write-time head — **verify free across main + all branches at the moment each file is written** (patina-db-migrations): main head is **00373**; a parallel `field-site-request` branch already holds a colliding `00373` and an `00375`; **00365–00369 remain the BOH soft reservation**. P2 therefore mints from **00376**, re-checked at write time.
+Additive only; no modification of existing behavior. 00341 is **deployed to Strata** (I85), so every change is **fix-forward in a new numbered migration**, catalog-guarded (the 00373 idiom) so it is a no-op where already-final. Numbers were verified free across main + all branches at write time (patina-db-migrations): the `field-site-request` program merged to main (00373 field-capture parity, 00374/00375 site-request), so **main head is 00375**; **00365–00369 remain the BOH soft reservation**. P2 minted **00376** (present schema) + **00377** (present query surface) — the two files below, applied LOCAL-only (I86); prod push is gated on P2-M1 review.
 
 ### D.1 — No migration needed (the schema already anticipated P2)
 - **Task-type namespace is open** (`agent_tasks.task_type` has no CHECK, worker-design §2.1) → `scan_pipeline.refine`, `scan_pipeline.fuse`, `scan_pipeline.splat` need **zero DDL**. They are new `STAGES` values, claimed by config alone (§10).

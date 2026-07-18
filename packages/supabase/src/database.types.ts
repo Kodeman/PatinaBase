@@ -13718,6 +13718,13 @@ export type Database = {
             referencedColumns: ["room_file_id"]
           },
           {
+            foreignKeyName: "room_file_measurements_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "scan_present_stats"
+            referencedColumns: ["room_file_id"]
+          },
+          {
             foreignKeyName: "room_file_measurements_scan_id_fkey"
             columns: ["scan_id"]
             isOneToOne: false
@@ -13766,13 +13773,19 @@ export type Database = {
           anchor_count: number
           certificate: Json
           created_at: string
+          dense_mesh_url: string | null
           drawings: Json
           dxf_url: string | null
           generated_at: string | null
           generation_error: string | null
           id: string
+          measure_mesh_url: string | null
           pdf_url: string | null
+          present: Json
+          present_status: string | null
+          presented_at: string | null
           scan_id: string
+          splat_url: string | null
           status: string
           svg_url: string | null
           tolerance_class: string | null
@@ -13784,13 +13797,19 @@ export type Database = {
           anchor_count?: number
           certificate?: Json
           created_at?: string
+          dense_mesh_url?: string | null
           drawings?: Json
           dxf_url?: string | null
           generated_at?: string | null
           generation_error?: string | null
           id?: string
+          measure_mesh_url?: string | null
           pdf_url?: string | null
+          present?: Json
+          present_status?: string | null
+          presented_at?: string | null
           scan_id: string
+          splat_url?: string | null
           status?: string
           svg_url?: string | null
           tolerance_class?: string | null
@@ -13802,13 +13821,19 @@ export type Database = {
           anchor_count?: number
           certificate?: Json
           created_at?: string
+          dense_mesh_url?: string | null
           drawings?: Json
           dxf_url?: string | null
           generated_at?: string | null
           generation_error?: string | null
           id?: string
+          measure_mesh_url?: string | null
           pdf_url?: string | null
+          present?: Json
+          present_status?: string | null
+          presented_at?: string | null
           scan_id?: string
+          splat_url?: string | null
           status?: string
           svg_url?: string | null
           tolerance_class?: string | null
@@ -14954,6 +14979,13 @@ export type Database = {
             columns: ["room_file_id"]
             isOneToOne: false
             referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["room_file_id"]
+          },
+          {
+            foreignKeyName: "scan_pipeline_events_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "scan_present_stats"
             referencedColumns: ["room_file_id"]
           },
           {
@@ -19437,12 +19469,15 @@ export type Database = {
           event_count: number | null
           failed_events: number | null
           first_event_at: string | null
+          fuse_ms: number | null
           ingest_ms: number | null
           last_error: string | null
           last_event_at: string | null
           last_task_attempts: number | null
           last_task_status: string | null
           last_task_type: string | null
+          present_status: string | null
+          refine_ms: number | null
           room_file_id: string | null
           room_file_status: string | null
           room_file_version: number | null
@@ -19450,6 +19485,7 @@ export type Database = {
           scan_name: string | null
           scan_status: string | null
           solve_ms: number | null
+          splat_ms: number | null
           tolerance_class: string | null
           unverified: boolean | null
           user_id: string | null
@@ -19469,6 +19505,98 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      scan_present_stats: {
+        Row: {
+          gaussian_count: number | null
+          has_dense_mesh: boolean | null
+          has_measure_mesh: boolean | null
+          has_splat: boolean | null
+          masked_frames: number | null
+          mesh_bytes: number | null
+          mesh_vertices: number | null
+          present_status: string | null
+          presented_at: string | null
+          refine_engine: string | null
+          room_file_id: string | null
+          scan_id: string | null
+          sfm_residual_pct: number | null
+          splat_bytes: number | null
+          splat_format: string | null
+          train_seconds: number | null
+          version: number | null
+          vram_peak_mb: number | null
+        }
+        Insert: {
+          gaussian_count?: never
+          has_dense_mesh?: never
+          has_measure_mesh?: never
+          has_splat?: never
+          masked_frames?: never
+          mesh_bytes?: never
+          mesh_vertices?: never
+          present_status?: string | null
+          presented_at?: string | null
+          refine_engine?: never
+          room_file_id?: string | null
+          scan_id?: string | null
+          sfm_residual_pct?: never
+          splat_bytes?: never
+          splat_format?: never
+          train_seconds?: never
+          version?: number | null
+          vram_peak_mb?: never
+        }
+        Update: {
+          gaussian_count?: never
+          has_dense_mesh?: never
+          has_measure_mesh?: never
+          has_splat?: never
+          masked_frames?: never
+          mesh_bytes?: never
+          mesh_vertices?: never
+          present_status?: string | null
+          presented_at?: string | null
+          refine_engine?: never
+          room_file_id?: string | null
+          scan_id?: string | null
+          sfm_residual_pct?: never
+          splat_bytes?: never
+          splat_format?: never
+          train_seconds?: never
+          version?: number | null
+          vram_peak_mb?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_files_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "room_files_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_files_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_files_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
@@ -19497,6 +19625,13 @@ export type Database = {
             columns: ["room_file_id"]
             isOneToOne: false
             referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["room_file_id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "scan_present_stats"
             referencedColumns: ["room_file_id"]
           },
           {

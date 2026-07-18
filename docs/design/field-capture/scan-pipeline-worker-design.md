@@ -341,14 +341,157 @@ Every event names `scan_id`; `solve`/`drawing`/`delivery` events also set `room_
 
 ---
 
-## 10. P2 growth path
+## 10. P2 stage contract — the Present Layer (deck SC-10/SC-11)
 
-P2 (SfM pose refinement, dense fusion, splat training — deck SC-10) slots in **as new stages**, not a new system:
+> **Status:** this section was P1's growth stub; it is now the **P2-M1 stage
+> contract** (field-capture-p2-package.md item 1, ruled R114). P2 ("Presence")
+> lands three new GPU stages + a solve upgrade + a Present lifecycle **as new
+> stages, not a new system** — the same package, the same `agent_tasks` queue,
+> the same telemetry/storage conventions. No new NestJS service, no new bucket.
+> Schema is 00376/00377 (§10.6). Budgets are ratified in **R114.2** (≤10 min
+> wall-clock for the full GPU chain per room on the 2080 Ti, MCMC-capped; amber
+> past ~20 min; GS-Scale host-offload is the over-budget escape hatch).
 
-- **New task types** extend the namespace: e.g. `scan_pipeline.densefuse`, `scan_pipeline.splat`. The chain grows by one enqueue — the point that today ends at `drawings` (or a parallel branch off `solve`) enqueues the GPU stage.
-- **GPU workers are config, not code.** A splat-capable worker is the same package with `GPU=auto` and `STAGES=splat` (or `…,splat`) on the box with the card. CPU-only workers simply don't enable those stages, so they never claim them — `claim_agent_tasks(p_task_types := STAGES)` filters by exactly the stages a worker opted into.
-- **Schema already anticipates it.** `room_file_measurements.source` widens its CHECK to add `'mesh'` (dense-fusion evidence) — noted as P2 in 00341; no structural change. `scan_pipeline_events.stage` and `event` absorb new phases without a migration.
-- **The burst contract is the same contract.** R108.4/R109.1's "cloud worker = config change" applies unchanged to a GPU cloud burst worker: same package, GPU env on, splat stage enabled.
+### 10.1 Topology — how the stages chain
+
+The P1 chain (`ingest → solve → drawings → delivery`) is untouched. P2 appends a
+GPU branch that reads the same bundle the P1 rig already wrote (keyframes + depth
++ ARKit poses + intrinsics + `mesh.ply`; capture-bundle-spec §3/§4):
+
+```
+ingest ──▶ solve(P1) ──▶ drawings ──▶ delivery        (True Layer, P1 — unchanged)
+   │
+   └─▶ refine ──▶ fuse ──▶ solve-upgrade(mesh) ─┐
+                    │                            ├─▶ present (rollup)   (Present Layer, P2)
+                    └─▶ splat ───────────────────┘
+```
+
+- `refine` warm-starts from the bundle's ARKit trajectory; `fuse` needs
+  `refine`'s poses; the **mesh-aware solve upgrade** (item 6) needs `fuse`'s dense
+  mesh; `splat` is a **parallel branch off `refine`** (it needs refined poses +
+  keyframe images, not the mesh or the drawings), so it runs concurrently with
+  `fuse`+solve on a second GPU lease or serially on one card.
+- Each hop is one `enqueue_agent_task` of the next `scan_pipeline.*` type against
+  the **same reserved `room_files` version** (entry-point allocation, 00370; §2.2).
+  A P2 run does **not** mint a new version; a **retroactive re-solve** (R114.3) of
+  an existing scan mints v+1 per R-f, then runs this same chain against it.
+- `present` is a bookkeeping rollup: when `fuse`+solve-upgrade and `splat` have
+  both succeeded it flips `room_files.present_status='ready'` + `presented_at`.
+
+### 10.2 Stage `scan_pipeline.refine` — SfM/BA pose refinement (GPU)
+
+- **Reads:** keyframes (sharp, ~200–400), ARKit per-frame poses + camera
+  intrinsics from the bundle (warm start), the sparse loop.
+- **Engine:** **GLOMAP** global SfM warm-started on the known poses/intrinsics
+  (reuses COLMAP's feature-extraction + matching front-end, same DB format);
+  **COLMAP-incremental pose-prior** fallback behind config (`REFINE_ENGINE`).
+- **Writes (scratch/derived):** refined per-frame poses, a sparse point cloud,
+  per-frame pose deltas. Not a deliverable artifact — consumed by `fuse`/`splat`.
+- **DB:** `present_status='refining'`; `present.refine_engine`, `present.sfm_residual_pct`.
+- **Budget:** GPU; SIFT extraction on-GPU, the global solve is CPU/RAM-bound and
+  VRAM-light on the 11 GB card. Target: the drift residual falls to ~0.2–0.5 %
+  (SC-13) inside the R114.2 chain budget.
+- **Telemetry:** `refine.started` / `refine.succeeded` (`duration_ms`, residual,
+  iterations, `vram_peak_mb`) / `refine.failed`.
+- **Failure classes:** a low-overlap / degenerate single-room loop fails
+  **permanent** (`p_fatal=true`) — it never hangs the lease, never silently ships
+  raw ARKit poses as "refined." OOM / driver blip / transient IO = **transient**
+  (retry with backoff, §7).
+
+### 10.3 Stage `scan_pipeline.fuse` — TSDF dense mesh + web mesh (GPU)
+
+- **Reads:** `refine`'s refined poses + the bundle's per-frame depth.
+- **Method:** TSDF volumetric fusion (Open3D-class) → a full dense mesh; then
+  **decimate** to a browser-sized watertight-ish `measure_mesh.glb`; extract
+  **true ceiling planes/slopes** from the fused geometry (verbatim, not the P1
+  R111.2 corner-height chord synthesis). Bless-class params: voxel size,
+  truncation, decimation target.
+- **Writes (deliverable):** `dense_mesh.(ply|glb)` (measurement source of truth,
+  server-side) + `measure_mesh.glb` (the invisible browser raycast target), both
+  under `room_file/{userId}/{scanId}/v{version}/` (§5.2), sha256 recorded.
+- **DB:** `present_status='fusing'`; `room_files.dense_mesh_url`,
+  `measure_mesh_url`; `present.mesh_vertices`, `present.mesh_bytes`.
+- **Budget:** GPU/RAM for the volume; `measure_mesh.glb` must land under the
+  browser size budget (the item-8 viewer target).
+- **Telemetry:** `fuse.started` / `fuse.succeeded` (`duration_ms`, mesh vertices,
+  decimated bytes, `vram_peak_mb`) / `fuse.failed`.
+- **Failure classes:** insufficient depth coverage / empty volume = **permanent**;
+  transient IO/OOM = **transient**.
+
+### 10.4 Solve upgrade — mesh-aware re-fit, `source='mesh'` (item 6, CPU)
+
+Not a new GPU stage — the P1 anchor-solve widened to re-measure walls / openings /
+ceilings against the **dense mesh**. Emits `room_file_measurements` with
+`source='mesh'` (00376) + tightened `tolerance_mm`; replaces the R111.2 chord
+synthesis with true ceiling geometry where present. **Anchor discipline unchanged:**
+`'verified'` still requires an anchor (`rfm_anchor_source_shape`), so mesh evidence
+tightens `'measured'` — it never manufactures `'verified'` under the short P1
+anchors. The certificate records the source shift + tolerance change honestly.
+Writes the measurement set delete-then-insert under `rfm_element_ref_uniq`.
+
+### 10.5 Stage `scan_pipeline.splat` — 3DGS training → SPZ (GPU)
+
+- **Reads:** `refine`'s refined poses + the keyframe images (parallel to `fuse`).
+- **Trainer:** **gsplat / splatfacto** with a **Gaussian-count-capped (MCMC)**
+  densification — a **predictable VRAM ceiling + time budget** on the 11 GB Turing
+  card (the R114.2 cap is what makes ~10–20 GPU-min *bounded*). Export **SPZ 4**
+  ("JPG for splats," ~10× smaller than PLY). **Transient masking** of people/pets
+  (SC-14): flagged frames are **excluded and logged**, never silently trained on.
+  GS-Scale CPU host-offload is the escape hatch for a room that blows 11 GB.
+- **Writes (deliverable):** `scene.spz` under `room_file/{userId}/{scanId}/v{version}/`,
+  sha256 recorded.
+- **DB:** `present_status='training'`; `room_files.splat_url`;
+  `present.splat_format='spz4'`, `gaussian_count`, `train_seconds`, `vram_peak_mb`,
+  `masked_frames`, `splat_bytes`.
+- **Budget:** the dominant GPU cost; must fit the R114.2 per-room budget on the
+  2080 Ti (preview-grade quality at pilot scale).
+- **Telemetry:** `splat.started` / `splat.succeeded` (`gaussian_count`,
+  `train_seconds`, `vram_peak_mb`, masked count) / `splat.failed`.
+- **Failure classes:** VRAM blow-out past the cap **with** GS-Scale unavailable =
+  **permanent**; transient OOM/driver = **transient**.
+
+### 10.6 Schema — 00376 / 00377 (additive; §D of the P2 package)
+
+- **00376** — `room_file_measurements.source` CHECK `+ 'mesh'`;
+  `scan_pipeline_events.stage` CHECK `+ 'refine','fuse','splat','present'`;
+  `room_files` Present columns (`dense_mesh_url`, `measure_mesh_url`, `splat_url`,
+  `present jsonb NOT NULL DEFAULT '{}'`, `present_status` CHECK
+  `pending|refining|fusing|training|ready|error`, `presented_at`). Additive,
+  idempotent, catalog-guarded; no GRANT change.
+- **00377** — `scan_pipeline_runs` (CREATE OR REPLACE) gains
+  `refine_ms/fuse_ms/splat_ms + present_status`; new **`scan_present_stats`** view
+  (gaussian count, train seconds, VRAM peak, mesh vertices, SPZ+mesh bytes) for
+  the GPU-budget telemetry. Both SECURITY DEFINER + admin-domain gated (00372
+  idiom); the new view's GRANT regenerates the legacy-grants seed.
+- **No migration needed for the task types** — `agent_tasks.task_type` has no
+  CHECK, so `scan_pipeline.refine/fuse/splat` are claimed by config alone (§2.1).
+
+### 10.7 Packaging, workers, and the burst contract
+
+- **GPU workers are config, not code.** A splat-capable worker is the same package
+  with the `[splat]`/`[solve]` extras installed, `GPU=auto`, and
+  `STAGES=…,refine,fuse,splat` on the box with the card. CPU-only workers omit
+  those stages and never claim them — `claim_agent_tasks(p_task_types := STAGES)`
+  filters by exactly the stages a worker opted into.
+- **Extras** (item 3): `[solve]` (pycolmap / GLOMAP bindings-or-CLI, numpy/scipy),
+  `[splat]` (torch cu-xx for Turing SM 7.5, gsplat, SPZ tooling) — a CPU worker
+  never pulls CUDA. `doctor` treats the GPU as **required** when `STAGES` includes
+  a GPU stage (nvidia-smi + torch/CUDA import + every cache dir writable).
+  CUDA/torch caches confine under `APP_DIR` (I85 finding 3, extended to the
+  torch-hub / CUDA-JIT / nvidia cache surfaces).
+- **The burst contract is the same contract (R114.6).** R108.4/R109.1's "cloud
+  worker = config change, not code" holds for the GPU stages: same package, GPU
+  env on, GPU stages enabled, on a rented cloud GPU (L4 / A10 / 4090-class). Flip
+  trigger stays **first non-Leah designer in production**; a **per-room GPU-cost
+  ceiling** attaches to the flip (unlike P1's free CPU stages, a GPU burst costs
+  money per room). Pilot volume stays on Kody's 2080 Ti box.
+
+### 10.8 What P2 does NOT change here
+
+The `present` device **preview** (P2 package item 12, R114.1) is **capture-side
+iOS**, not a worker stage — it is device-local, disposable, and never enters this
+pipeline or the bundle. The server-trained `splat` above stays the Room File
+deliverable; click-to-measure rays only the hidden `measure_mesh.glb`.
 
 ---
 

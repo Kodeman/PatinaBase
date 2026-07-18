@@ -4281,3 +4281,73 @@ holds for GPU stages, same flip trigger, plus a per-room GPU-cost
 ceiling; pilot volume stays on Kody's box.
 
 *Entries add: R114 · last id = R114*
+
+### I86 · Field Capture P2 · item-1 audit + M1 gate deliverables (spec + additive schema) — 2026-07-18
+
+Item 1 of the P2 package (docs/design/field-capture/field-capture-p2-package.md,
+ruled R114), run before any GPU stage code. A repo-grounded audit of the four P2
+surfaces (worker, schema, portal, box), then the two P2-M1 gate deliverables: the
+§10 stage contract and the additive 00376/00377 schema. LOCAL-ONLY — P2-M1 review
+gates the prod push.
+
+**Found / absent by area:**
+
+- **Worker (services/scan-pipeline/): FOUND, P1-complete.** src/patina_scan_worker/
+  with stages/{ingest,solve,solve_math,dimensions,captured_room,drawings,validator,
+  base}.py + drawing/{svg,pdf,dxf,model,units,brand}.py; queue/db/config/telemetry/
+  doctor/storage/keys/http/untar/cli. The three P2 GPU stages refine/fuse/splat are
+  ABSENT — genuinely new. GPU extras ([solve]/[splat]), the GPU systemd variant, and
+  install.sh --upgrade (I85 finding 2) are ABSENT (item 3). §10 was a growth stub;
+  it is now a full stage contract.
+- **Schema: the P1 present-schema base is FOUND.** 00341 (room_files;
+  room_file_measurements.source CHECK anchor|parametric; scan_pipeline_events.stage
+  CHECK capture..delivery), 00372 (scan_pipeline_runs + scan_tolerance_distribution,
+  SECURITY DEFINER + admin-domain gate), 00373 (P1 parity). 00341 ALREADY COMMENTS
+  "P2 widens source to add mesh" — the schema anticipated P2. The Present-Layer
+  columns, source='mesh', stage refine/fuse/splat/present, and scan_present_stats
+  are ABSENT — exactly the 00376/00377 work.
+- **Portal: the reuse targets are FOUND.** R107 Room View orbit is plain three.js
+  (apps/designer-portal/src/components/document/rooms/room-view/orbit/{orbit-canvas,
+  orbit-stage,photo-marker-objects}.ts(x)) — the item-8 walkthrough + item-10 marker
+  reuse target, no react-three-fiber. The item-12 Room File page
+  (apps/designer-portal/src/app/(portal)/portal/projects/[id]/room-file/ +
+  components/room-file/{room-file-view,capture-context-section,measurements-table,
+  certificate-section,drawings-section,room-file-version-strip}.tsx) is the extend
+  target. A Spark/SPZ splat viewer is ABSENT (item 8).
+- **Box / bundle:** Kody's 2080 Ti is live (I85 doctor); Appendix A documents
+  box-prep. Prod bundle 95266be1 = room_files v1, 11 objects under
+  room_file/{uid}/{scanId}/v1/ (I85). A live keyframe/depth/mesh.ply presence +
+  sha256 probe against prod storage is an OPERATOR step for M1 (no prod-storage
+  creds in this build session) — flagged, not blocking the spec/schema.
+
+**M1 gate deliverables (this entry):**
+
+- **§10 of scan-pipeline-worker-design.md** is now the full P2 stage contract:
+  topology (refine → fuse → mesh-solve; splat a parallel branch off refine; present
+  rollup), per-stage I/O + VRAM/time budget (R114.2 ≤10-min, amber ~20-min) +
+  artifact outputs + failure classes (permanent p_fatal vs transient), the
+  mesh-aware solve upgrade (source='mesh', anchor discipline unchanged), packaging/
+  extras, and the R114.6 burst contract.
+- **00376** (present schema): source +'mesh'; stage +refine/fuse/splat/present;
+  room_files Present columns (dense_mesh_url/measure_mesh_url/splat_url/present
+  jsonb/present_status CHECK/presented_at). Additive, idempotent, catalog-guarded,
+  no GRANT change.
+- **00377** (present query surface): scan_pipeline_runs +refine_ms/fuse_ms/splat_ms/
+  present_status; new scan_present_stats view (GPU-budget + artifact-size), both
+  SECURITY DEFINER admin-gated; legacy-grants seed regenerated for the new GRANT.
+- **Verified LOCAL:** pnpm supabase:reset clean; source=mesh + stage=refine accepted,
+  garbage rejected (23514); Present columns + CHECK present; both views carry the new
+  fields and leak 0 rows to a non-admin caller; re-apply of both files is a no-op;
+  pnpm db:generate regenerated database.types.ts (135 insertions, git diff of the
+  generated file is the whole change). NOT pushed to Strata — P2-M1 review is the gate.
+
+**Pre-emptions (before item 3+):**
+
+1. install.sh COPY-install (I85 finding 2) means the GPU extras + --upgrade path
+   (item 3) are how a running worker gains refine/fuse/splat — git pull alone won't.
+2. The prod-bundle evidence probe (keyframes/depth/mesh.ply on 95266be1) is the one
+   operator prerequisite before item 4 refine runs for real (P2-M2 subject, R114.3).
+3. splat is a parallel branch off refine (not off drawings) — the item-7 enqueue
+   point is refine-complete, concurrent with fuse+solve, per §10.1.
+
+*Entries add: I86 · last id = I86*

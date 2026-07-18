@@ -3893,3 +3893,15 @@ DO $g$ BEGIN
   GRANT EXECUTE ON FUNCTION public.site_request_confirm_media_cleanup(uuid[],timestamptz) TO service_role;
 EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
 END $g$;
+
+-- 00377_scan_pipeline_present_query_surface.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.scan_pipeline_runs TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
+
+-- 00377_scan_pipeline_present_query_surface.sql
+DO $g$ BEGIN
+  GRANT SELECT ON public.scan_present_stats TO authenticated;
+EXCEPTION WHEN undefined_function OR undefined_table OR undefined_object OR undefined_column THEN NULL;
+END $g$;
