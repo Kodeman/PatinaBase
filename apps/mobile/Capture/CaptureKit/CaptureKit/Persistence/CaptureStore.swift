@@ -187,9 +187,11 @@ public final class CaptureStore {
                                               to state: SiteRequestOutboxState,
                                               error: String? = nil,
                                               serverDeliverableID: String? = nil,
+                                              terminalReason: SiteRequestOutboxTerminalReason? = nil,
                                               now: Date = Date()) throws {
         try record.transition(to: state, error: error,
-                              serverDeliverableID: serverDeliverableID, now: now)
+                              serverDeliverableID: serverDeliverableID,
+                              terminalReason: terminalReason, now: now)
         try save()
     }
 

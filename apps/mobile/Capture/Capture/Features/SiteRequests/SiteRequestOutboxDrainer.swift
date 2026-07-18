@@ -25,7 +25,8 @@ final class SiteRequestOutboxDrainer {
         defer { isDraining = false }
         let now = Date()
         for record in store.siteRequestOutbox().filter({
-            $0.state != .delivered && ($0.nextAttemptAt == nil || $0.nextAttemptAt! <= now)
+            $0.state != .delivered && $0.state != .terminal
+                && ($0.nextAttemptAt == nil || $0.nextAttemptAt! <= now)
         }) {
             guard let accessToken = accessTokenForRequest(record.requestID) else {
                 continue
@@ -61,8 +62,15 @@ final class SiteRequestOutboxDrainer {
                 record, to: .delivered, serverDeliverableID: receipt.deliverableID)
         } catch {
             if record.state != .delivered {
-                try? store.transitionSiteRequestDelivery(
-                    record, to: .failed, error: error.localizedDescription)
+                if let terminalReason = (error as? SiteRequestRemoteError)?.terminalOutboxReason {
+                    try? store.transitionSiteRequestDelivery(
+                        record, to: .terminal,
+                        error: terminalReason.userMessage,
+                        terminalReason: terminalReason)
+                } else if record.state != .terminal {
+                    try? store.transitionSiteRequestDelivery(
+                        record, to: .failed, error: error.localizedDescription)
+                }
             }
         }
     }

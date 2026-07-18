@@ -6,6 +6,7 @@
 //  the durable outbox.
 
 import Foundation
+import CaptureKit
 
 enum SiteRequestContract {
     enum RPC {
@@ -13,6 +14,7 @@ enum SiteRequestContract {
         static let reviseItem = "site_request_revise_item"
         static let send = "site_request_send"
         static let resend = "site_request_resend"
+        static let revokeAccess = "site_request_revoke_access"
         static let approveItem = "site_request_approve_item"
         static let redoItem = "site_request_redo_item"
         static let close = "site_request_close"
@@ -37,11 +39,18 @@ enum SiteRequestRemoteError: LocalizedError, Sendable {
     case noOpenItem
     case reviewDeliveryRequired
     case invalidResponse
-    case rejected(status: Int, message: String)
+    case rejected(status: Int, code: String)
 
     var invalidatesGuestAccess: Bool {
         guard case let .rejected(status, _) = self else { return false }
         return status == 401 || status == 404
+    }
+
+    var terminalOutboxReason: SiteRequestOutboxTerminalReason? {
+        guard case let .rejected(status, code) = self,
+              case let .terminal(reason) = SiteRequestFailureClassifier.disposition(
+                status: status, code: code) else { return nil }
+        return reason
     }
 
     var errorDescription: String? {
@@ -54,8 +63,12 @@ enum SiteRequestRemoteError: LocalizedError, Sendable {
             return "A server-received delivery is required before review."
         case .invalidResponse:
             return "The site request service returned an unreadable response."
-        case let .rejected(status, message):
-            return "Site request service failed (\(status)): \(message)"
+        case let .rejected(status, code):
+            if case let .terminal(reason) = SiteRequestFailureClassifier.disposition(
+                status: status, code: code) {
+                return reason.userMessage
+            }
+            return "The site request service is temporarily unavailable. It will retry automatically."
         }
     }
 }
