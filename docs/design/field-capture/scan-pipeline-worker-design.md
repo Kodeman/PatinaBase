@@ -256,11 +256,11 @@ room_file/{userId}/{scanId}/v{version}/plan.dxf
 
 The worker writes with the service-role key (bypassing storage RLS on write), but the path must still satisfy 00287 so the **designer read** resolves. `room_files.svg_url/pdf_url/dxf_url` store these object paths; the portal downloads them the same way the spec-pdf edge function does (signed/authorized GET → blob). No new bucket (R-e); the 500 MB object limit and 00077 MIME list govern.
 
-**D2 verdict (settled by evidence — item 12 read depends on it).** The 00287 policy body is:
+**D2 verdict (settled by evidence — the P1 item 12 Room File read depends on it; not the P2 item-12 present preview).** The 00287 policy body is:
 `rs.user_id::text = (storage.foldername(name))[2] AND ( rs.id::text = (…)[3] OR (rs.room_id IS NOT NULL AND rs.room_id::text = (…)[3]) )`.
 The drawings prefix `room_file/{userId}/{scanId}/v{version}/…` puts the **scan id** at segment `[3]`, which satisfies the **first branch** (`rs.id::text = [3]`) — exactly the segment the iOS bundle uploader writes, and the case 00287 was authored to fix. So a designer with an `active`/`full`|`preview` association reads the drawings without a `room_id`-shaped path. No later migration overrides this (00306/00320 touch unrelated storage policies). **`scanId` at `[3]` is correct; the prefix stays as-is.**
 
-**Capture-context resolution (item 12) — provenance is FLAT, not nested.** The Room File page's capture-context list resolves `field_captures` to a scan via `provenance`, because the inbox row does **not** persist project/scan columns (00233/00235). The iOS `ContextCaptureProvenance` contract flattens provenance to a `[String:String]` map with **dotted top-level keys** — the value lives under `"siteScanContext.scanId"`, NOT a nested `{ siteScanContext: { scanId } }` object. Resolve by `@>` containment, never a `->siteScanContext->>scanId` path (that matches nothing and misparses the dot):
+**Capture-context resolution (P1 item 12, the Room File page — distinct from the P2 item-12 present preview) — provenance is FLAT, not nested.** The Room File page's capture-context list resolves `field_captures` to a scan via `provenance`, because the inbox row does **not** persist project/scan columns (00233/00235). The iOS `ContextCaptureProvenance` contract flattens provenance to a `[String:String]` map with **dotted top-level keys** — the value lives under `"siteScanContext.scanId"`, NOT a nested `{ siteScanContext: { scanId } }` object. Resolve by `@>` containment, never a `->siteScanContext->>scanId` path (that matches nothing and misparses the dot):
 `field_captures.provenance @> '{"siteScanContext.scanId":"<scanId>"}'`.
 **P2 scale:** add a GIN index on `field_captures(provenance)` (or an expression index on the `scanId` key) before this runs against a large inbox — the `@>` filter is a seq scan without it (fine at pilot volume).
 
@@ -378,6 +378,57 @@ ingest ──▶ solve(P1) ──▶ drawings ──▶ delivery        (True La
 - `present` is a bookkeeping rollup: when `fuse`+solve-upgrade and `splat` have
   both succeeded it flips `room_files.present_status='ready'` + `presented_at`.
 
+### 10.1.1 Fork-join coordination — enqueue-both, join-on-both (no barrier primitive)
+
+The P1 chain enqueues exactly one successor per stage. P2's `refine → {fuse,
+splat}` fork and the `{solve-upgrade, splat} → present` join need more, but reuse
+the SAME queue primitives (00297) — no barrier, no coordinator, no new table:
+
+- **The fork.** `refine`, on success, enqueues BOTH successors —
+  `enqueue_agent_task('scan_pipeline.fuse', …, idempotency_key '{scan}:fuse:{v}')`
+  AND `enqueue_agent_task('scan_pipeline.splat', …, idempotency_key
+  '{scan}:splat:{v}')` — both `p_on_conflict='ignore'`, both `parent_task_id =
+  refine.id`. The two then run independently (concurrently on two GPU leases,
+  serially on one — §10.9). A crash between the two enqueues just re-runs `refine`;
+  the idempotency keys de-dupe both successors (§2.3 crash-safety, unchanged).
+- **The join (the trick).** BOTH terminal branches enqueue `present` on the SAME
+  key: the fuse branch tip (`solve-upgrade`, §10.4) enqueues `scan_pipeline.present`
+  with `'{scan}:present:{v}'`, and `splat` enqueues the identical
+  `'{scan}:present:{v}'` — both `p_on_conflict='ignore'`. The SECOND enqueue is a
+  no-op, so `present` is created **exactly once**, by whichever branch finishes
+  first, with zero coordination. That double-enqueue-onto-one-key IS the join;
+  there is no barrier primitive to build or get wrong.
+- **The wait (present self-gates on the data).** When `present` runs it re-reads
+  the `room_files` row and checks BOTH prerequisites: the fuse branch's outputs
+  (`dense_mesh_url` **and** `measure_mesh_url` set) **and** the splat branch's
+  output (`splat_url` set). If either is still NULL — the slower branch hasn't
+  landed — `present` raises **`TransientError`** (NOT fatal): `complete_agent_task(
+  outcome='failed', p_fatal=false)` → backoff-requeue on the same key. It never
+  fires early (it reads the actual columns, not a timer), never partially rolls
+  up, and needs no wake-up event. When the slower branch lands, the next `present`
+  attempt sees all three URLs set → flips `present_status='ready' + presented_at`
+  and completes `done`.
+- **Visibility-timeout / cost implications.** A `present` retry is a CHEAP no-op —
+  a single indexed read of three URL columns; no GPU, no download, no lease held
+  between attempts. The backoff (1m/5m/25m keyed on attempts, §7) at the default
+  `max_attempts=5` gives ~80 min of retry headroom, comfortably outlasting the
+  slower branch's R114.2 budget (~20 min), so `present` waits `splat` out without
+  parking. Size `present`'s `max_attempts` to the slower branch's worst-case
+  budget, never below. The slower branch's own enqueue-present stays a
+  conflict-ignore no-op while `present` is still queued/running, so the join never
+  double-runs.
+- **Failure semantics — inspect-and-requeue, by design.** If EITHER branch parks
+  **fatal** (a degenerate `refine`, an empty `fuse` volume, a VRAM blow-out with
+  GS-Scale unavailable — §10.2/10.3/10.5), its URL column never gets set, so
+  `present` keeps transient-failing on backoff until it exhausts `max_attempts`
+  and parks `failed` too. That is the INTENDED posture, not a bug: the parked
+  `present` and the parked branch are both inspectable rows
+  (`agent_tasks.last_error`, `scan_pipeline_events.*.failed`, the `parent_task_id`
+  chain), and the operator fixes the ROOT cause — `requeue_agent_task(<branch>)` —
+  then requeues `present` (or lets the 6-hourly groom auto-requeue it once, 00300).
+  A fatal branch never produces a half-rolled-up Present Layer; the room stays at
+  its last real branch state until a human clears the branch.
+
 ### 10.2 Stage `scan_pipeline.refine` — SfM/BA pose refinement (GPU)
 
 - **Reads:** keyframes (sharp, ~200–400), ARKit per-frame poses + camera
@@ -492,6 +543,40 @@ The `present` device **preview** (P2 package item 12, R114.1) is **capture-side
 iOS**, not a worker stage — it is device-local, disposable, and never enters this
 pipeline or the bundle. The server-trained `splat` above stays the Room File
 deliverable; click-to-measure rays only the hidden `measure_mesh.glb`.
+
+### 10.9 Wall-clock budget — per stage, and the parallel-vs-serial honesty (R114.2)
+
+Per-room budget on Kody's **2080 Ti (11 GB Turing)**, MCMC-capped, at pilot
+quality — realistic against the §10.2–10.5 engine survey:
+
+| stage | resource | per-room budget (2080 Ti) |
+|---|---|---|
+| `refine` (GLOMAP SfM/BA, warm-started, ~200–400 keyframes) | GPU front-end + CPU/RAM solve | **2–4 min** (~3) |
+| `fuse` (TSDF dense mesh + decimate) + `solve-upgrade` (CPU mesh re-fit) | GPU volume + CPU | **3–5 min** (~4 + ~1) |
+| `splat` (MCMC-capped gsplat/splatfacto → SPZ) — the dominant cost | GPU | **6–14 min** (~8–9) |
+| `present` (rollup) | none | **< 0.5 min** |
+
+- **Serial (one card — the pilot).** A single 2080 Ti runs every GPU stage in
+  series: `refine + fuse + solve-upgrade + splat + present` ≈ **~15–24 min**. That
+  is **R114.2's amber band (~15–25 min) BY DESIGN** — amber is the
+  ruled-acceptable pilot outcome, not a miss. One card is the pilot's reality and
+  the honest number.
+- **Parallel (two leases — the ≤10 aspiration).** `splat` is a parallel branch off
+  `refine` (§10.1), so a second GPU lease overlaps it with `fuse+solve-upgrade`.
+  The critical path collapses to `refine + max(fuse+solve, splat) + present` ≈
+  `3 + max(~5, ~8) + 0.5` ≈ **~11–12 min**; on a **faster cloud card** (L4 / A10 /
+  4090-class, R114.6) `splat` itself drops enough to bring the whole chain **under
+  the ≤10-min R114.2 target**. The ≤10 target therefore assumes the branches
+  parallelize across GPU leases — it is *not* reachable on a single 2080 Ti.
+- **The cloud-burst contract (R114.6) is the path back under 10** — the same
+  package on a rented GPU (config, not code — §10.7) both parallelizes the branches
+  AND shortens `splat`. Pilot volume (single-designer, one card) stays amber and
+  accepted; the burst flip (first non-Leah designer) is what buys ≤10, with a
+  per-room GPU-cost ceiling attached.
+- **Watch it live:** `scan_present_stats` (00377) surfaces `train_seconds`,
+  `vram_peak_mb`, `gaussian_count`, and `mesh_vertices` per room — the budget is
+  measured, not assumed; a room drifting toward the GS-Scale escape hatch shows up
+  there before it parks.
 
 ---
 

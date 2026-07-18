@@ -111,6 +111,17 @@ COMMENT ON VIEW public.scan_pipeline_runs IS
   'Telemetry surface (00372 → 00377): per-scan run summary — stage durations (ingest/solve/drawing + P2 refine/fuse/splat ms), wall time, latest room_file version/status/tolerance/present_status, and the last scan_pipeline.* task status/attempts/error. SECURITY DEFINER + admin-domain WHERE gate (house idiom over delegated-RLS event tables).';
 
 -- ─── 2. scan_present_stats — per-deliverable Present-Layer stats (item 11) ───
+-- Cast-robustness note (P2-M1 review, no DDL change): the numeric columns below
+-- cast present->>'key' (jsonb text) to bigint/numeric/int. An ABSENT key yields
+-- SQL NULL → NULL::type is safe (missing stat reads NULL). The load-bearing
+-- assumption is that the WORKER writes each of these as a JSON NUMBER, so ->>
+-- returns clean numeric text; a malformed value (empty string or non-numeric)
+-- would raise on cast and dark-fail the WHOLE view for every row. The worker
+-- (10.2–10.5 telemetry) is the sole writer and emits numbers, so this holds as a
+-- contract. If a future writer could emit '' / non-numeric, wrap each cast as
+-- NULLIF(present->>'key','')::type (or a guarded cast) so one bad manifest value
+-- can never blank the telemetry surface for all deliverables. Flagged, not fixed
+-- (would be a DDL change; the current writer makes it unnecessary).
 CREATE OR REPLACE VIEW public.scan_present_stats
 WITH (security_invoker = false) AS
 SELECT
