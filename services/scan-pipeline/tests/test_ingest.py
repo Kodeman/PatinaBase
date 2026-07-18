@@ -10,6 +10,7 @@ from patina_scan_worker.errors import PermanentError, classify_failures
 from patina_scan_worker.stages import validator
 from patina_scan_worker.stages.ingest import (
     capture_metrics,
+    normalize_legacy_manifest,
     plan_downloads,
     reconcile_artifacts_sha256,
     upload_duration_ms,
@@ -152,6 +153,32 @@ def test_classify_failures_permanent_vs_transient():
 
     with pytest.raises(ValueError):
         classify_failures([], attempts=1)
+
+
+def test_normalize_legacy_manifest_strips_only_photosmanifest(tmp_path):
+    manifest = _fixture_manifest(tmp_path)
+    n_before = len(manifest["artifacts"])
+    # pre-B-19 build: a photosManifest entry pointing at the device-local sidecar
+    manifest["artifacts"].append(
+        {"kind": "photosManifest", "relativePath": "photos_metadata.json", "sha256": "0" * 64}
+    )
+    out, stripped = normalize_legacy_manifest(manifest)
+    assert stripped == ["photosManifest"]
+    assert not any(a.get("kind") == "photosManifest" for a in out["artifacts"])
+    assert len(out["artifacts"]) == n_before          # back to the real set
+    # every REAL artifact survives (a missing one still fails MISSING_FILE later)
+    assert {a["kind"] for a in out["artifacts"]} == {a["kind"] for a in _fixture_manifest(tmp_path)["artifacts"]}
+
+
+def test_normalize_legacy_manifest_noop_and_leaves_other_kinds(tmp_path):
+    manifest = _fixture_manifest(tmp_path)
+    # a clean (post-B-19) manifest → no change
+    out, stripped = normalize_legacy_manifest(manifest)
+    assert stripped == [] and out is manifest
+    # an unrelated unknown kind is NOT special-cased — only photosManifest goes
+    manifest["artifacts"].append({"kind": "somethingElse", "relativePath": "x.bin", "sha256": "0" * 64})
+    out2, stripped2 = normalize_legacy_manifest(manifest)
+    assert stripped2 == [] and any(a.get("kind") == "somethingElse" for a in out2["artifacts"])
 
 
 def test_capture_metrics_from_manifest(tmp_path):
