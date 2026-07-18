@@ -465,6 +465,12 @@ verify_jwt = false
 [functions.site-request-dispatch]
 verify_jwt = true
 
+# Service-only Site Request media worker. Cron invokes it every five minutes to
+# create deterministic JPEG derivatives through the existing Cloudflare
+# inference rail and purge only unapproved evidence past its 90-day deadline.
+[functions.site-request-media-maintenance]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
