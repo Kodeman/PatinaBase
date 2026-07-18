@@ -441,14 +441,19 @@ def test_open3d_cuda_probe_rejects_zero_devices_even_if_available(monkeypatch):
 class _FakeCudaOutput:
     is_cuda = True
 
-    def __init__(self, shape):
+    def __init__(self, shape, *, finite=True, maximum=1.0):
         self.shape = shape
+        self.finite = finite
+        self.maximum = maximum
 
     def numel(self):
         result = 1
         for size in self.shape:
             result *= size
         return result
+
+    def max(self):
+        return SimpleNamespace(item=lambda: self.maximum)
 
 
 class _FakeGsplatTorch:
@@ -460,6 +465,12 @@ class _FakeGsplatTorch:
     @staticmethod
     def tensor(value, **_kwargs):
         return value
+
+    @staticmethod
+    def isfinite(value):
+        return SimpleNamespace(
+            all=lambda: SimpleNamespace(item=lambda: value.finite)
+        )
 
 
 def test_gsplat_probe_executes_public_cuda_rasterization(monkeypatch):
@@ -498,3 +509,49 @@ def test_gsplat_probe_reports_backend_or_jit_failure(monkeypatch):
     assert ok is False
     assert "RuntimeError" in detail
     assert "no kernel image" in detail
+
+
+def test_gsplat_probe_rejects_wrong_public_output_shapes(monkeypatch):
+    monkeypatch.setitem(sys.modules, "torch", _FakeGsplatTorch())
+    monkeypatch.setitem(sys.modules, "gsplat", SimpleNamespace(
+        __version__="1.5.3",
+        rasterization=lambda **_kwargs: (
+            _FakeCudaOutput((16, 16, 3)),
+            _FakeCudaOutput((1, 16, 16, 1)),
+            {},
+        ),
+    ))
+    ok, detail = _gsplat_cuda_ok()
+    assert ok is False
+    assert "shape" in detail
+    assert "(1, 16, 16, 3)" in detail
+
+
+def test_gsplat_probe_rejects_nonfinite_output(monkeypatch):
+    monkeypatch.setitem(sys.modules, "torch", _FakeGsplatTorch())
+    monkeypatch.setitem(sys.modules, "gsplat", SimpleNamespace(
+        __version__="1.5.3",
+        rasterization=lambda **_kwargs: (
+            _FakeCudaOutput((1, 16, 16, 3), finite=False),
+            _FakeCudaOutput((1, 16, 16, 1)),
+            {},
+        ),
+    ))
+    ok, detail = _gsplat_cuda_ok()
+    assert ok is False
+    assert "non-finite" in detail
+
+
+def test_gsplat_probe_requires_positive_rendered_alpha(monkeypatch):
+    monkeypatch.setitem(sys.modules, "torch", _FakeGsplatTorch())
+    monkeypatch.setitem(sys.modules, "gsplat", SimpleNamespace(
+        __version__="1.5.3",
+        rasterization=lambda **_kwargs: (
+            _FakeCudaOutput((1, 16, 16, 3)),
+            _FakeCudaOutput((1, 16, 16, 1), maximum=0.0),
+            {},
+        ),
+    ))
+    ok, detail = _gsplat_cuda_ok()
+    assert ok is False
+    assert "positive alpha" in detail

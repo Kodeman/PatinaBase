@@ -4,6 +4,7 @@
 [Unit]
 Description=Prepare NVIDIA compute devices for Patina scan worker
 Before=patina-scan-worker.service
+Before=patina-scan-worker-doctor.service
 
 [Service]
 Type=oneshot

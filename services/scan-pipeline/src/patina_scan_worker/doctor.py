@@ -277,6 +277,24 @@ def _gsplat_cuda_ok() -> tuple[bool, str]:
             return False, "gsplat rasterization returned alpha on CPU"
         if render_colors.numel() < 1 or render_alphas.numel() < 1:
             return False, "gsplat rasterization returned empty outputs"
+        expected_colors = (1, 16, 16, 3)
+        expected_alphas = (1, 16, 16, 1)
+        if tuple(render_colors.shape) != expected_colors:
+            return False, (
+                f"gsplat color output shape {tuple(render_colors.shape)!r}; "
+                f"expected {expected_colors!r}"
+            )
+        if tuple(render_alphas.shape) != expected_alphas:
+            return False, (
+                f"gsplat alpha output shape {tuple(render_alphas.shape)!r}; "
+                f"expected {expected_alphas!r}"
+            )
+        if not bool(torch.isfinite(render_colors).all().item()):
+            return False, "gsplat color output contains non-finite values"
+        if not bool(torch.isfinite(render_alphas).all().item()):
+            return False, "gsplat alpha output contains non-finite values"
+        if float(render_alphas.max().item()) <= 0.0:
+            return False, "gsplat rasterization produced no positive alpha"
     except Exception as exc:  # noqa: BLE001 — surface backend/JIT failures
         return False, (
             f"gsplat rasterization CUDA probe raised {exc.__class__.__name__}: {exc}"

@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BASE = ROOT / "patina-scan-worker.service"
+DOCTOR = ROOT / "patina-scan-worker-doctor.service"
 GPU = ROOT / "patina-scan-worker.gpu.conf"
 NVIDIA_PREPARE = ROOT / "patina-scan-worker-nvidia-prepare.service"
 
@@ -45,7 +46,7 @@ def _service_kv(path: Path) -> list[tuple[str, str]]:
 
 
 def test_units_and_dropin_use_only_known_service_keys():
-    for path in (BASE, GPU, NVIDIA_PREPARE):
+    for path in (BASE, DOCTOR, GPU, NVIDIA_PREPARE):
         for key, _ in _service_kv(path):
             assert key in KNOWN_SERVICE_KEYS, f"{path.name}: unknown [Service] key {key!r}"
 
@@ -96,6 +97,26 @@ def test_worker_runs_doctor_as_exec_start_pre_in_the_real_service_context():
     assert ("TimeoutStartSec", "15min") in kv
 
 
+def test_doctor_oneshot_inherits_worker_context_and_never_runs_worker_loop():
+    worker = _service_kv(BASE)
+    doctor = _service_kv(DOCTOR)
+    inherited_keys = {
+        "User", "Group", "EnvironmentFile", "Environment", "TimeoutStartSec",
+        "NoNewPrivileges", "ProtectSystem", "ProtectHome", "PrivateTmp",
+        "ReadWritePaths", "StandardOutput", "StandardError",
+    }
+    assert [(key, value) for key, value in doctor if key in inherited_keys] == [
+        (key, value) for key, value in worker if key in inherited_keys
+    ]
+    assert ("Type", "oneshot") in doctor
+    assert [value for key, value in doctor if key == "ExecStart"] == [
+        "/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker doctor"
+    ]
+    assert not any(key == "ExecStartPre" for key, _ in doctor)
+    assert not any("patina-scan-worker run" in value for _, value in doctor)
+    assert not any(key.startswith("Restart") for key, _ in doctor)
+
+
 def test_dropin_is_purely_additive():
     # A drop-in must not redefine the base ExecStart/User etc. — it only ADDS the
     # GPU device policy + cache env (Environment/DeviceAllow/PrivateDevices).
@@ -114,6 +135,7 @@ def test_nvidia_prepare_is_a_root_oneshot_for_compute_and_uvm_nodes():
     text = NVIDIA_PREPARE.read_text()
     kv = _service_kv(NVIDIA_PREPARE)
     assert "Before=patina-scan-worker.service" in text
+    assert "Before=patina-scan-worker-doctor.service" in text
     assert ("Type", "oneshot") in kv
     assert ("RemainAfterExit", "yes") in kv
     assert ("ExecStart", "/usr/bin/nvidia-modprobe -c 0") in kv

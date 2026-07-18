@@ -93,16 +93,18 @@ Then:
 ```bash
 sudo ./install.sh --gpu                 # + .[gpu] via cu118 index, + GPU systemd drop-in
 sudo systemd-analyze verify /etc/systemd/system/patina-scan-worker.service
+sudo systemd-analyze verify /etc/systemd/system/patina-scan-worker-doctor.service
 sudo systemd-analyze verify \
   /etc/systemd/system/patina-scan-worker-nvidia-prepare.service
 sudo systemctl show patina-scan-worker \
   -p User -p Environment -p ReadWritePaths -p PrivateDevices -p DevicePolicy -p DeviceAllow
 ```
 
-`--gpu` lays down a root `patina-scan-worker-nvidia-prepare.service` plus
-`…/patina-scan-worker.service.d/gpu.conf`. The prepare oneshot creates the
-single-card compute/control and UVM nodes at cold boot. The drop-in orders and
-requires it, then grants only `/dev/nvidia0`, `/dev/nvidiactl`, and
+`--gpu` lays down a root `patina-scan-worker-nvidia-prepare.service` plus the
+same `gpu.conf` under both `patina-scan-worker.service.d/` and
+`patina-scan-worker-doctor.service.d/`. The prepare oneshot creates the
+single-card compute/control and UVM nodes at cold boot. Both drop-ins order and
+require it, then grant only `/dev/nvidia0`, `/dev/nvidiactl`, and
 `/dev/nvidia-uvm`; `/dev/nvidia-modeset` and `/dev/nvidia-uvm-tools` are optional
 and intentionally not granted to this headless compute worker. Systemd does not
 expand device-path globs; a future multi-GPU box must add one exact
@@ -111,12 +113,14 @@ expand device-path globs; a future multi-GPU box must add one exact
 `ProtectSystem=strict` never redirects model, kernel, or extension-build caches
 outside the app-owned write surface.
 
-`install.sh` does not run doctor from its root shell. The authoritative doctor is
-`ExecStartPre` in the worker unit, so it inherits `User=patina`, the real
-`EnvironmentFile`, XDG/GPU variables, `DeviceAllow`, `ProtectSystem`, and
-`ReadWritePaths`. Any RED check stops the worker before it can claim a task. A
-manual `patina-scan-worker doctor` remains useful diagnostics, but does not prove
-the systemd sandbox/device policy.
+`install.sh` does not run doctor from its root shell. Normal service activation
+is gated by `ExecStartPre` in the worker unit. A separate
+`patina-scan-worker-doctor.service` oneshot duplicates the worker's
+`User=patina`, real `EnvironmentFile`, XDG/GPU variables, NVIDIA dependency,
+`DeviceAllow`, `ProtectSystem`, and `ReadWritePaths`, but its only command is
+`patina-scan-worker doctor`: it cannot enter `run` or claim a queue task. A
+manual shell invocation remains useful diagnostics, but does not prove the
+systemd sandbox/device policy.
 
 The splat check is intentionally stronger than an import: it calls gsplat's
 public `rasterization` API for one Gaussian on a 16×16 CUDA target. A cold cache
@@ -131,8 +135,8 @@ can preflight their dependencies; their handlers arrive in items 4–7. Leaving
 them enabled could claim and fatally park a matching task. Use this controlled
 window only:
 
-1. In the Strata SQL editor, prove there are no claimable/requeueable GPU-stage
-   tasks. The query must return **zero rows** immediately before the start:
+1. In the Strata SQL editor, capture rollout evidence that there are no
+   claimable/requeueable GPU-stage tasks. The query must return **zero rows**:
 
    ```sql
    SELECT task_type, status, count(*)
@@ -144,20 +148,23 @@ window only:
    GROUP BY task_type, status;
    ```
 
-2. Stop the worker, temporarily set `STAGES=refine,fuse,splat` and `GPU=auto` in
-   `/etc/patina/scan-worker.env`, then start only long enough for ExecStartPre
-   and stop immediately:
+   This is acceptance evidence, not a runtime safety mechanism: the next step
+   is doctor-only and never enters the claim loop.
+
+2. Stop the normal worker before editing its shared env file. Temporarily set
+   `STAGES=refine,fuse,splat` and `GPU=auto`, then run only the doctor oneshot:
 
    ```bash
    sudo systemctl stop patina-scan-worker
-   sudo systemctl start patina-scan-worker && sudo systemctl stop patina-scan-worker
-   sudo journalctl -u patina-scan-worker -n 100 --no-pager
+   sudo systemctl start patina-scan-worker-doctor
+   sudo journalctl -u patina-scan-worker-doctor -n 100 --no-pager
    ```
 
 3. Require green `gpu`, `colmap`, `pycolmap`, `open3d-cuda`, `trimesh`, `nvcc`,
    `torch-cuda`, `gsplat-cuda`, and `xdg` lines. Restore the CPU `STAGES` value
    before restarting normal P1 service, or leave the worker stopped. Do not
-   enable GPU stages persistently until their handlers register.
+   enable GPU stages persistently until their handlers register. The doctor
+   oneshot has no `[Install]` section and must never be enabled.
 
 Optional pre-install resolver evidence on a networked Linux host:
 
@@ -170,16 +177,29 @@ python3 -m pip install --dry-run --report /tmp/patina-gpu-resolve.json \
 
 The worker installs a **copy** of the source into its venv, so `git pull` alone
 does **not** change a running worker's behaviour. `--upgrade` builds a fresh
-immutable `.venv.release.*` and runs `pip check` while the existing worker
-continues. Python venv scripts embed their absolute build path, so the release
-directory is never renamed. Only after the build succeeds does the installer
-stop an active service, preserve the old `.venv` reference as `.venv.previous`,
-and atomically switch the stable `.venv` symlink to the new release. If the new
-service fails its systemd/doctor activation, the installer restores and restarts
-`.venv.previous`. When the service was already inactive, it does not start it;
-the previous venv remains available for operator rollback. The installer also
-fails before touching the venv if a GPU drop-in exists but `--gpu` was omitted,
-preventing an accidental CUDA-dependency downgrade:
+immutable `.venv.release.*`, runs `pip check`, imports the installed package,
+exercises the console entrypoint, stages a complete systemd tree, and requires
+`systemd-analyze verify` on Linux while the existing worker continues. Python
+venv scripts embed their absolute build path, so the release directory is never
+renamed.
+
+The installer then fsyncs a root-only snapshot under
+`/etc/patina/.scan-worker-install-transaction` of every managed unit's installed
+presence/content, the current/previous release references, and a durable state
+marker. Only after that does it stop an active service, atomically
+replace units and the stable `.venv` symlink, reload systemd, and activate. If
+candidate activation fails, it restores every unit and both release references,
+daemon-reloads, and restarts the old worker. If power loss or SIGKILL interrupts
+a switch, the next invocation performs that rollback before doing new work.
+
+A pre-transaction real-directory `.venv` is converted once into the immutable
+release layout while stopped; that exceptional move is marker-backed at every
+step. Failed/abandoned stages are deleted only inside the installer's
+`.venv.release.*` namespace and only when neither `.venv` nor `.venv.previous`
+references them. When the service was already inactive, it is not started; the
+previous release remains available for rollback. Rebuilding also fails before
+activation if a GPU drop-in exists but `--gpu` was omitted, preventing an
+accidental CUDA-dependency downgrade:
 
 ```bash
 git pull
@@ -220,7 +240,7 @@ file access. Full schema: design §3.
 patina-scan-worker run           # long-lived loop (what systemd starts)
 patina-scan-worker run --once    # claim-and-drain one batch then exit
 patina-scan-worker once          # alias for `run --once`
-patina-scan-worker doctor        # diagnostics only; no queue interaction (systemd ExecStartPre is authoritative)
+patina-scan-worker doctor        # shell diagnostics; systemd doctor oneshot proves the real context
 ```
 
 ## Operate
@@ -356,7 +376,8 @@ GPU stages slot in the same way: items 4–7 add handlers for `refine`
 `splat` (`.[splat]`: torch cu118 + gsplat), and `present`. Those stage names are
 already in `KNOWN_STAGES` so `doctor` can gate on them ahead of the handlers
 landing. A stage claimed before its handler exists parks fatally, so item 3 uses
-them only in the controlled empty-queue/immediate-stop preflight above. `.[gpu]`
+them only in the doctor-only preflight above; the empty-queue query is retained
+as rollout evidence, and no `run` process sees those temporary stages. `.[gpu]`
 is the box one-liner (= refine+fuse+splat). Nothing else
 in the worker changes — the claim loop, telemetry, queue completion, and burst
 contract are stage-agnostic.
