@@ -311,10 +311,11 @@ class IngestStage(BaseStage):
         # already in hand (no iOS changes). Emitted once the manifest parses, so
         # even a later-failing bundle contributes end-to-end telemetry. ──────────
         cap = capture_metrics(manifest)
-        cap_ms = int(cap["capture_duration_s"] * 1000) \
-            if isinstance(cap.get("capture_duration_s"), (int, float)) else None
+        # duration_ms stays ONE clock (server stage time); the DEVICE capture
+        # length lives only in detail.capture_duration_s (F1) — never conflated
+        # into the duration_ms column.
         ctx.telemetry.emit(scan_id, "capture", "capture.metrics", "info",
-                           duration_ms=cap_ms, detail=cap)
+                           duration_ms=None, detail=cap)
         ctx.telemetry.emit(scan_id, "upload", "upload.snapshot", "info",
                            duration_ms=upload_duration_ms(scan_row),
                            detail=upload_metrics(scan_row))

@@ -71,6 +71,17 @@ mutation is an explicit, verified act (patina-deploy discipline).
 
 ## B. Pilot-day walk (the P1 gate — the AC)
 
+**Pilot-day probe (run first, before Leah's official walk).** Capture a room
+**with posed photos** on the pilot device build and confirm its `room_files` row
+reaches `status = 'generated'`, **not `error`**. This proves the B-19 iOS
+manifest change — `FieldManifestAssembler` no longer listing `photos_metadata.json`
+as a bundle artifact — is actually on the device build Leah is using, not only in
+the `confirm-scan-bundle` edge-fn fix. A device build that predates B-19 will
+still list the orphan `photosManifest`, and ingest will park the scan `error` on
+its `MISSING_FILE` (worker emits `ingest.kind_skipped` first, then the validator
+names it). If the probe scan errors, the device build is stale — rebuild + reinstall
+before proceeding.
+
 Leah, on her own, in a real project room:
 
 1. **Capture ≤ 12 minutes including anchors.** Open Patina Field → Site Scan →
@@ -117,6 +128,11 @@ The pilot is reversible at every layer; a captured scan is never lost.
 - **No prod migration rollback needed** — the P1 schema is purely additive
   (four new tables + additive columns/views); disabling the flag + stopping the
   worker fully neutralises the feature without a down-migration.
+- **Full abandon (not just pause)** — if pulling the feature entirely, also
+  `SELECT cron.unschedule('scan-pipeline-ingest-sweep');` (00370). Otherwise the
+  ready→ready trigger + the 15-min sweep keep enqueuing `scan_pipeline.ingest`
+  tasks that no running worker claims — harmless (they sit `queued`) but untidy,
+  and they'd resume the moment a worker restarts.
 
 ---
 
@@ -138,3 +154,21 @@ These are known gaps to close (or consciously accept) before the walk:
 None of these block the *reconstruction* pipeline (items 9–13, all green
 locally); they are capture-side field-verification items that the on-device
 pilot itself will exercise. Decide per item: close before, or watch during.
+
+---
+
+## E. P2 / follow-on ledger (record now, resolve later)
+
+Not P1-blocking, but owed before the surfaces they touch ship:
+
+- **Walk co-designer drawing download end-to-end before shared access ships.**
+  The 00287 storage-policy segment rules are *settled for association reads* —
+  its OR branch accepts the **scan id at segment `[3]`** (`rs.id::text = (…)[3]`),
+  which is exactly the `room_file/{uid}/{scanId}/v{n}/…` prefix the drawings write
+  (see the item-13 D2 verdict). That's proven by SQL; it has **not** been walked
+  live by a second (associated) designer downloading the SVG/PDF/DXF. Do that
+  before the shared-Room-File access path ships.
+- **A3 deep-link gap applies to shared Room File links.** The open A3 deep-link
+  issue (a Room File / room link that doesn't resolve on cold open) extends to
+  *shared* Room File links handed to a co-designer — verify the shared-link open
+  path when A3 is closed.

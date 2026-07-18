@@ -147,6 +147,16 @@ WHERE  scan_id = '<uuid>'
 ORDER  BY created_at;
 ```
 
+**Append-only caveat.** `scan_pipeline_events` is append-only and a stage can
+re-run (transient retry, `requeue_agent_task`, the groom auto-requeue), so
+`capture.metrics` and `upload.snapshot` (and every other stage event) **re-emit
+once per ingest attempt** — a scan with N ingest attempts has N `capture.metrics`
+rows. `scan_pipeline_runs` already collapses this (it aggregates with `max(...)
+FILTER` / `min`/`max` per scan), but any consumer *counting captures or uploads*
+directly off the event stream must dedupe — e.g. `DISTINCT ON (scan_id, stage,
+event) … ORDER BY scan_id, stage, event, created_at` (first attempt) or a
+`GROUP BY scan_id` — never a raw `count(*)`.
+
 Both views are SECURITY DEFINER + admin-domain gated (they read past the
 event tables' delegated RLS, then self-restrict to `roles.domain = 'admin'`), so
 they return rows only to an admin caller. To probe them locally, impersonate a
