@@ -39,6 +39,7 @@ public enum CaptureRoute: Hashable, Sendable {
     case qrScan                                          // Q1
     case siteScanSetup                                   // F1
     case siteScan(projectID: String?, projectRoomID: String?)  // F2 (hosts F3/F4)
+    case site(screen: CaptureScreenID, projectID: String?, requestID: String?)
 }
 
 /// Sheets / overlays (presented over the viewfinder or a screen).

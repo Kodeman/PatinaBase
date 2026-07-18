@@ -59,6 +59,7 @@ public extension CaptureRoute {
         case .qrScan: return "qrScan"
         case .siteScanSetup: return "siteScanSetup"
         case .siteScan: return "siteScan"
+        case .site: return "siteRequest"
         }
     }
 }

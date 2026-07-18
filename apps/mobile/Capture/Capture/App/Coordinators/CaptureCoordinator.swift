@@ -17,6 +17,10 @@ public final class CaptureCoordinator: CaptureCoordinating {
     /// When set (0=O1…3=O4), RootView shows that onboarding step over the app
     /// (phase-based flow + the `-CaptureScreen oN.*` verification harness).
     public var onboardingStep: Int?
+    /// Opaque request-scoped token from an HTTPS `/field/{token}` universal
+    /// link. It is held only for the guest Edge session and never exchanged for
+    /// a JWT or placed in a direct Supabase query.
+    public var guestAccessToken: String?
 
     public init(phase: CapturePhase = .ready) {
         self.phase = phase
@@ -27,4 +31,11 @@ public final class CaptureCoordinator: CaptureCoordinating {
     public func dismissSheet() { sheet = nil }
     public func goBack() { if !path.isEmpty { path.removeLast() } }
     public func popToRoot() { path.removeAll() }
+    public func enterGuestRequest(accessToken: String) {
+        dismissSheet()
+        popToRoot()
+        guestAccessToken = accessToken
+    }
+
+    public func leaveGuestRequest() { guestAccessToken = nil }
 }

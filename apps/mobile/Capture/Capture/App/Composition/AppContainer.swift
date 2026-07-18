@@ -41,6 +41,9 @@ public final class AppContainer {
     public let receiving: any ReceivingService
     public let portalAuth: any PortalAuthApprovalService
     public let siteScan: any SiteScanService
+    public let siteRequests: any SiteRequestService
+    public let guestSiteRequests: any GuestSiteRequestService
+    let siteRequestOutboxDrainer: SiteRequestOutboxDrainer
 
     /// S2 inline project creation (real PostgREST insert vs. local-only). App
     /// -internal; nil in mock mode.
@@ -90,6 +93,10 @@ public final class AppContainer {
             self.receiving = ReceivingServiceFactory.make(deps: workDeps)
             self.portalAuth = QRApproveServiceFactory.make(deps: workDeps)
             self.siteScan = SiteScanServiceFactory.make(deps: workDeps)
+            let siteRequests = SiteRequestServiceFactory.make(deps: workDeps)
+            self.siteRequests = siteRequests
+            self.guestSiteRequests = siteRequests
+            self.siteRequestOutboxDrainer = SiteRequestOutboxDrainer(store: store, remote: siteRequests)
 
             #if targetEnvironment(simulator)
             self.camera = MockCameraService()
@@ -101,12 +108,7 @@ public final class AppContainer {
 
             // Identify the restored session for analytics once auth resolves. A
             // fresh sign-in later in the same run is identified on next launch.
-            Task { @MainActor in
-                await session.waitForReady()
-                if let uid = session.userID {
-                    analytics.identify(uid, properties: ["role": "designer", "platform": "ios"])
-                }
-            }
+            Self.identifyRestoredSession(session: session, analytics: analytics)
         } else {
             let analytics = MockCaptureAnalytics()
             self.analytics = analytics
@@ -125,6 +127,22 @@ public final class AppContainer {
             self.receiving = MockReceivingService()
             self.portalAuth = MockPortalAuthApprovalService()
             self.siteScan = MockSiteScanService()
+            let siteRequests = MockSiteRequestService()
+            self.siteRequests = siteRequests
+            self.guestSiteRequests = siteRequests
+            self.siteRequestOutboxDrainer = SiteRequestOutboxDrainer(store: store, remote: siteRequests)
+        }
+    }
+
+    private static func identifyRestoredSession(
+        session: SupabaseSessionService,
+        analytics: any CaptureAnalytics
+    ) {
+        Task { @MainActor in
+            await session.waitForReady()
+            if let uid = session.userID {
+                analytics.identify(uid, properties: ["role": "designer", "platform": "ios"])
+            }
         }
     }
 }

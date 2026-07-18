@@ -29,6 +29,13 @@ public enum AppConfiguration {
         return URL(string: "https://app.patina.cloud")!
     }
 
+    /// Zero-install guest web origin and native universal-link allow-list host.
+    /// The installed Field app claims only `/field/{opaque-token}` links.
+    public static var guestSiteBaseURL: URL {
+        if let raw = launchArgValue("-CaptureGuestSiteBaseURL"), let url = URL(string: raw) { return url }
+        return URL(string: "https://client.patina.cloud")!
+    }
+
     /// Media service origin (receiving photo uploads). Defaults to
     /// production; overridable via `-CaptureMediaBaseURL <url>`.
     public static var mediaBaseURL: URL {
