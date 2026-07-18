@@ -26,21 +26,63 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
             .single()
             .execute().value
         async let requests: [SiteRequestHubRow] = client.from("site_requests")
-            .select("id,project_id,status,due_at,due_context,sent_at,opened_at,"
+            .select("id,project_id,status,note,due_at,due_context,sent_at,"
                 + "assignee_name_snapshot,assignee_phone_snapshot,"
+                + "assignee_trade_snapshot,consent_status_snapshot,"
                 + "items:site_request_items(id,status)")
             .eq("project_id", value: projectID)
             .order("created_at", ascending: false)
             .execute().value
-        let (projectRow, requestRows) = try await (project, requests)
+        async let rooms: [ProjectRoomRow] = client.from("project_rooms")
+            .select("id,name,updated_at")
+            .eq("project_id", value: projectID)
+            .order("sort_order")
+            .execute().value
+        async let parties: [ProjectPartyRow] = client.from("project_parties")
+            .select("id,display_name,company_name,phone,phone_e164,trade,sms_consent_status")
+            .eq("project_id", value: projectID)
+            .order("display_name")
+            .execute().value
+        let (projectRow, requestRows, roomRows, partyRows) =
+            try await (project, requests, rooms, parties)
+
+        let (itemRows, eventRows) = try await currentRows(requestIDs: requestRows.map(\.id))
+        let events = eventRows.map(\.event)
         return SiteProjectHub(
             projectID: projectID,
             projectName: projectRow.name,
-            requests: requestRows.map(\.summary),
-            reviewItems: [],
-            rooms: [],
-            events: []
+            requests: requestRows.map { row in
+                row.summary(openedAt: events.first(where: {
+                    $0.requestID == row.id && $0.type == "guest_opened"
+                })?.occurredAt)
+            },
+            reviewItems: itemRows.compactMap(\.item),
+            rooms: roomRows.map(\.room),
+            assignees: partyRows.compactMap(\.assignee),
+            events: events
         )
+    }
+
+    private func currentRows(requestIDs: [String]) async throws
+        -> ([SiteRequestCurrentItemRow], [SiteRequestEventRow]) {
+        guard !requestIDs.isEmpty else { return ([], []) }
+        async let items: [SiteRequestCurrentItemRow] = client.from("site_request_items")
+            .select("id,request_id,status,redo_note,"
+                + "current_version:site_request_item_versions!site_request_items_current_version_id_fkey("
+                + "id,version_number,kit_code,title,guidance,room_id,room_name_snapshot),"
+                + "deliverables:site_deliverables(id,item_version_id,attempt_number,status,"
+                + "captured_by_name,captured_at,delivered_at,"
+                + "dimensions:site_deliverable_dimensions(id,label,value_mm,captured_by_name,captured_at,proof_media_id),"
+                + "media:site_deliverable_media(id,object_path,mime_type,checksum_sha256,upload_state,client_filename))")
+            .in("request_id", values: requestIDs)
+            .order("sort_order")
+            .execute().value
+        async let events: [SiteRequestEventRow] = client.from("site_request_events")
+            .select("id,request_id,event_type,actor_kind,actor_label,created_at")
+            .in("request_id", values: requestIDs)
+            .order("sequence_no", ascending: false)
+            .execute().value
+        return try await (items, events)
     }
 
     func createDraft(_ draft: SiteRequestDraft) async throws -> String {
@@ -107,34 +149,44 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
     }
 
     func bootstrap(accessToken: String) async throws -> GuestSiteRequest {
-        try await guestCall(function: SiteRequestContract.GuestFunction.bootstrap,
-                            accessToken: accessToken, body: EmptyBody())
+        let response: GuestBootstrapEnvelope = try await guestCall(
+            accessToken: accessToken,
+            body: GuestActionBody(action: SiteRequestContract.GuestAction.bootstrap))
+        return response.request.guestRequest
     }
 
     func createUploadIntent(accessToken: String,
                             request: SiteUploadIntentRequest) async throws -> SiteUploadIntent {
-        try await guestCall(function: SiteRequestContract.GuestFunction.createUpload,
-                            accessToken: accessToken, body: request)
+        let response: GuestUploadIntentWire = try await guestCall(
+            accessToken: accessToken,
+            body: GuestUploadBody(action: SiteRequestContract.GuestAction.createUpload,
+                                  request: request))
+        return try response.intent()
     }
 
     func acknowledgeUpload(accessToken: String, uploadID: String,
-                           checksumSHA256: String) async throws -> SiteUploadReceipt {
-        try await guestCall(function: SiteRequestContract.GuestFunction.acknowledgeUpload,
-                            accessToken: accessToken,
-                            body: AcknowledgeUploadBody(uploadID: uploadID,
-                                                        checksumSHA256: checksumSHA256))
+                           request: SiteUploadIntentRequest) async throws -> SiteUploadReceipt {
+        let response: GuestReceiptEnvelope = try await guestCall(
+            accessToken: accessToken,
+            body: GuestReceiptBody(action: SiteRequestContract.GuestAction.acknowledgeUpload,
+                                   mediaID: uploadID, request: request))
+        return response.receipt.uploadReceipt
     }
 
     func deliver(accessToken: String,
                  submission: SiteDeliverySubmission) async throws -> SiteDeliveryReceipt {
-        try await guestCall(function: SiteRequestContract.GuestFunction.deliver,
-                            accessToken: accessToken, body: submission)
+        let response: GuestDeliveryEnvelope = try await guestCall(
+            accessToken: accessToken,
+            body: GuestDeliveryBody(action: SiteRequestContract.GuestAction.deliver,
+                                    submission: submission))
+        return response.delivery.receipt(clientDeliveryID: submission.clientDeliveryID)
     }
 
     private func guestCall<Body: Encodable, Response: Decodable>(
-        function: String, accessToken: String, body: Body
+        accessToken: String, body: Body
     ) async throws -> Response {
-        var request = URLRequest(url: functionBaseURL.appendingPathComponent(function))
+        var request = URLRequest(
+            url: functionBaseURL.appendingPathComponent(SiteRequestContract.guestFunction))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(anonKey, forHTTPHeaderField: "apikey")
@@ -151,9 +203,7 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
                 status: http.statusCode,
                 message: String(data: data, encoding: .utf8) ?? "Unknown error")
         }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(Response.self, from: data)
+        return try WireDate.decoder.decode(Response.self, from: data)
     }
 
     private func designerDispatch<Response: Decodable>(
@@ -199,55 +249,380 @@ enum SiteRequestServiceFactory {
 }
 
 private enum WireDate {
-    static let formatter: ISO8601DateFormatter = {
+    static let fractionalFormatter: ISO8601DateFormatter = {
         let value = ISO8601DateFormatter()
         value.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return value
     }()
-    static func string(_ date: Date) -> String { formatter.string(from: date) }
-    static func date(_ value: String) -> Date { formatter.date(from: value) ?? Date(timeIntervalSince1970: 0) }
+    static let formatter = ISO8601DateFormatter()
+
+    static var decoder: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+            guard let date = dateIfPresent(value) else {
+                throw DecodingError.dataCorruptedError(
+                    in: container, debugDescription: "Invalid ISO-8601 date")
+            }
+            return date
+        }
+        return decoder
+    }
+
+    static func string(_ date: Date) -> String { fractionalFormatter.string(from: date) }
+    static func dateIfPresent(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        return fractionalFormatter.date(from: value) ?? formatter.date(from: value)
+    }
+    static func date(_ value: String) -> Date {
+        dateIfPresent(value) ?? Date(timeIntervalSince1970: 0)
+    }
 }
 
 private struct ProjectNameRow: Decodable { let id: String; let name: String }
+private struct ProjectRoomRow: Decodable {
+    let id: String
+    let name: String
+    let updatedAt: String?
+    enum CodingKeys: String, CodingKey { case id, name; case updatedAt = "updated_at" }
+
+    var room: SiteBinderRoom {
+        SiteBinderRoom(id: id, name: name, dimensionCount: 0, photoCount: 0,
+                       updatedAt: WireDate.dateIfPresent(updatedAt))
+    }
+}
+
+private struct ProjectPartyRow: Decodable {
+    let id: String
+    let displayName: String
+    let companyName: String?
+    let phone: String?
+    let phoneE164: String?
+    let trade: String?
+    let consentStatus: String
+    enum CodingKeys: String, CodingKey {
+        case id, phone, trade
+        case displayName = "display_name"
+        case companyName = "company_name"
+        case phoneE164 = "phone_e164"
+        case consentStatus = "sms_consent_status"
+    }
+
+    var assignee: SiteRequestAssignee? {
+        guard let normalizedPhone = phoneE164 ?? phone, !normalizedPhone.isEmpty else { return nil }
+        return SiteRequestAssignee(
+            partyID: id, name: displayName, normalizedPhone: normalizedPhone,
+            trade: trade ?? companyName, smsConsentGranted: consentStatus == "granted")
+    }
+}
+
 private struct SiteRequestHubItemRow: Decodable { let id: String; let status: String }
 private struct SiteRequestHubRow: Decodable {
     let id: String
     let projectID: String
     let status: String
+    let note: String?
     let dueAt: String
     let dueContext: String?
     let sentAt: String?
-    let openedAt: String?
-    let assigneeName: String
-    let assigneePhone: String
+    let assigneeName: String?
+    let assigneePhone: String?
+    let assigneeTrade: String?
+    let consentStatus: String
     let items: [SiteRequestHubItemRow]
 
     enum CodingKeys: String, CodingKey {
-        case id, status, items
+        case id, status, note, items
         case projectID = "project_id"
         case dueAt = "due_at"
         case dueContext = "due_context"
         case sentAt = "sent_at"
-        case openedAt = "opened_at"
         case assigneeName = "assignee_name_snapshot"
         case assigneePhone = "assignee_phone_snapshot"
+        case assigneeTrade = "assignee_trade_snapshot"
+        case consentStatus = "consent_status_snapshot"
     }
 
-    var summary: SiteRequestSummary {
+    func summary(openedAt: Date?) -> SiteRequestSummary {
         SiteRequestSummary(
             id: id,
             projectID: projectID,
-            title: dueContext ?? "Site request",
+            title: note ?? dueContext ?? "Site request",
             status: SiteRequestStatus(rawValue: status) ?? .draft,
-            assignee: SiteRequestAssignee(name: assigneeName,
-                                          normalizedPhone: assigneePhone,
-                                          smsConsentGranted: true),
+            assignee: SiteRequestAssignee(name: assigneeName ?? "Project contact",
+                                          normalizedPhone: assigneePhone ?? "",
+                                          trade: assigneeTrade,
+                                          smsConsentGranted: consentStatus == "granted"),
             dueAt: WireDate.date(dueAt),
             dueContext: dueContext,
-            sentAt: sentAt.map(WireDate.date),
-            openedAt: openedAt.map(WireDate.date),
+            sentAt: WireDate.dateIfPresent(sentAt),
+            openedAt: openedAt,
             deliveredItemCount: items.filter { ["delivered", "approved"].contains($0.status) }.count,
             itemCount: items.count)
+    }
+}
+
+private struct SiteRequestCurrentItemRow: Decodable {
+    let id: String
+    let requestID: String
+    let status: String
+    let redoNote: String?
+    let currentVersion: SiteRequestVersionRow?
+    let deliverables: [SiteRequestDeliverableRow]
+    enum CodingKeys: String, CodingKey {
+        case id, status, deliverables
+        case requestID = "request_id"
+        case redoNote = "redo_note"
+        case currentVersion = "current_version"
+    }
+
+    var item: SiteRequestItem? {
+        guard let version = currentVersion,
+              let kit = SiteRequestKit(rawValue: version.kitCode) else { return nil }
+        let delivery = deliverables
+            .filter { $0.status == "delivered" && $0.itemVersionID == version.id }
+            .max { $0.attemptNumber < $1.attemptNumber }
+        return SiteRequestItem(
+            id: id, requestID: requestID, versionID: version.id,
+            version: version.versionNumber, kit: kit, title: version.title,
+            guidance: version.guidance ?? "", roomID: version.roomID,
+            roomName: version.roomName,
+            status: SiteRequestItemStatus(rawValue: status) ?? .pending,
+            dimensions: delivery?.dimensions.map(\.dimension) ?? [],
+            media: delivery?.media.filter { $0.uploadState == "ready" || $0.uploadState == "uploaded" }
+                .map(\.media) ?? [],
+            redoNote: redoNote, deliverableID: delivery?.id)
+    }
+}
+
+private struct SiteRequestVersionRow: Decodable {
+    let id: String
+    let versionNumber: Int
+    let kitCode: String
+    let title: String
+    let guidance: String?
+    let roomID: String?
+    let roomName: String?
+    enum CodingKeys: String, CodingKey {
+        case id, title, guidance
+        case versionNumber = "version_number"
+        case kitCode = "kit_code"
+        case roomID = "room_id"
+        case roomName = "room_name_snapshot"
+    }
+}
+
+private struct SiteRequestDeliverableRow: Decodable {
+    let id: String
+    let itemVersionID: String
+    let attemptNumber: Int
+    let status: String
+    let capturedByName: String?
+    let capturedAt: String?
+    let deliveredAt: String?
+    let dimensions: [SiteRequestDimensionRow]
+    let media: [SiteRequestMediaRow]
+    enum CodingKeys: String, CodingKey {
+        case id, status, dimensions, media
+        case itemVersionID = "item_version_id"
+        case attemptNumber = "attempt_number"
+        case capturedByName = "captured_by_name"
+        case capturedAt = "captured_at"
+        case deliveredAt = "delivered_at"
+    }
+}
+
+private struct SiteRequestDimensionRow: Decodable {
+    let id: String
+    let label: String
+    let valueMM: Int
+    let capturedByName: String?
+    let capturedAt: String
+    let proofMediaID: String?
+    enum CodingKeys: String, CodingKey {
+        case id, label
+        case valueMM = "value_mm"
+        case capturedByName = "captured_by_name"
+        case capturedAt = "captured_at"
+        case proofMediaID = "proof_media_id"
+    }
+    var dimension: SiteRequestDimension {
+        SiteRequestDimension(
+            id: id, label: label, millimetres: valueMM,
+            capturedBy: capturedByName ?? "Guest", capturedAt: WireDate.date(capturedAt),
+            proofAssetPath: proofMediaID)
+    }
+}
+
+private struct SiteRequestMediaRow: Decodable {
+    let id: String
+    let objectPath: String
+    let mimeType: String
+    let checksumSHA256: String
+    let uploadState: String
+    let clientFilename: String
+    enum CodingKeys: String, CodingKey {
+        case id
+        case objectPath = "object_path"
+        case mimeType = "mime_type"
+        case checksumSHA256 = "checksum_sha256"
+        case uploadState = "upload_state"
+        case clientFilename = "client_filename"
+    }
+    var media: SiteRequestMedia {
+        SiteRequestMedia(id: id, objectPath: objectPath, mimeType: mimeType,
+                         checksumSHA256: checksumSHA256, caption: clientFilename)
+    }
+}
+
+private struct SiteRequestEventRow: Decodable {
+    let id: String
+    let requestID: String
+    let eventType: String
+    let actorKind: String
+    let actorLabel: String?
+    let createdAt: String
+    enum CodingKeys: String, CodingKey {
+        case id
+        case requestID = "request_id"
+        case eventType = "event_type"
+        case actorKind = "actor_kind"
+        case actorLabel = "actor_label"
+        case createdAt = "created_at"
+    }
+    var event: SiteRequestEvent {
+        SiteRequestEvent(
+            id: id, requestID: requestID, type: eventType,
+            occurredAt: WireDate.date(createdAt),
+            actorName: actorLabel ?? actorKind.capitalized,
+            message: eventType.replacingOccurrences(of: "_", with: " "))
+    }
+}
+
+private struct GuestBootstrapEnvelope: Decodable { let request: GuestBootstrapWire }
+private struct GuestBootstrapWire: Decodable {
+    let request: GuestRequestWire
+    let assignee: GuestAssigneeWire
+    let items: [GuestItemWire]
+
+    var guestRequest: GuestSiteRequest {
+        let mappedItems = items.compactMap { $0.item(requestID: request.id) }
+        let assignee = SiteRequestAssignee(
+            partyID: self.assignee.id,
+            name: self.assignee.displayName,
+            normalizedPhone: "",
+            trade: self.assignee.trade,
+            smsConsentGranted: true)
+        let summary = SiteRequestSummary(
+            id: request.id, projectID: request.projectID,
+            title: request.note ?? request.dueContext ?? "Site request",
+            status: SiteRequestStatus(rawValue: request.status) ?? .sent,
+            assignee: assignee, dueAt: request.dueAt,
+            dueContext: request.dueContext, deliveredItemCount: mappedItems.filter {
+                $0.status == .delivered || $0.status == .approved
+            }.count, itemCount: mappedItems.count)
+        return GuestSiteRequest(
+            request: summary, designerName: request.designerName,
+            studioName: request.studioName, projectDisplayName: request.siteName,
+            items: mappedItems)
+    }
+}
+
+private struct GuestRequestWire: Decodable {
+    let id: String
+    let projectID: String
+    let status: String
+    let dueAt: Date
+    let dueContext: String?
+    let note: String?
+    let siteName: String
+    let designerName: String
+    let studioName: String
+    enum CodingKeys: String, CodingKey {
+        case id, status, note
+        case projectID = "project_id"
+        case dueAt = "due_at"
+        case dueContext = "due_context"
+        case siteName = "site_name"
+        case designerName = "designer_name"
+        case studioName = "studio_name"
+    }
+}
+
+private struct GuestAssigneeWire: Decodable {
+    let id: String
+    let displayName: String
+    let trade: String?
+    enum CodingKeys: String, CodingKey { case id, trade; case displayName = "display_name" }
+}
+
+private struct GuestItemWire: Decodable {
+    let id: String
+    let status: String
+    let redoNote: String?
+    let version: GuestVersionWire
+    let deliveries: [GuestDeliveryAttemptWire]
+    enum CodingKeys: String, CodingKey { case id, status, version, deliveries; case redoNote = "redo_note" }
+
+    func item(requestID: String) -> SiteRequestItem? {
+        guard let kit = SiteRequestKit(rawValue: version.kitCode) else { return nil }
+        let delivery = deliveries.filter { $0.status == "delivered" }
+            .max { $0.attemptNumber < $1.attemptNumber }
+        return SiteRequestItem(
+            id: id, requestID: requestID, versionID: version.id,
+            version: version.versionNumber, kit: kit, title: version.title,
+            guidance: version.guidance ?? "", roomID: version.roomID,
+            roomName: version.roomName,
+            status: SiteRequestItemStatus(rawValue: status) ?? .pending,
+            media: delivery?.media.map(\.media) ?? [], redoNote: redoNote,
+            deliverableID: delivery?.id)
+    }
+}
+
+private struct GuestVersionWire: Decodable {
+    let id: String
+    let versionNumber: Int
+    let kitCode: String
+    let title: String
+    let guidance: String?
+    let roomID: String?
+    let roomName: String?
+    enum CodingKeys: String, CodingKey {
+        case id, title, guidance
+        case versionNumber = "version_number"
+        case kitCode = "kit_code"
+        case roomID = "room_id"
+        case roomName = "room_name"
+    }
+}
+
+private struct GuestDeliveryAttemptWire: Decodable {
+    let id: String
+    let attemptNumber: Int
+    let status: String
+    let media: [GuestMediaWire]
+    enum CodingKeys: String, CodingKey {
+        case id, status, media
+        case attemptNumber = "attempt_number"
+    }
+}
+
+private struct GuestMediaWire: Decodable {
+    let id: String
+    let filename: String
+    let mimeType: String
+    let uploadState: String
+    let objectPath: String
+    enum CodingKeys: String, CodingKey {
+        case id, filename
+        case mimeType = "mime_type"
+        case uploadState = "upload_state"
+        case objectPath = "object_path"
+    }
+    var media: SiteRequestMedia {
+        SiteRequestMedia(id: id, objectPath: objectPath, mimeType: mimeType,
+                         checksumSHA256: "", caption: filename)
     }
 }
 
@@ -308,10 +683,147 @@ private struct RedoParams: Encodable {
     let itemID: String; let note: String
     enum CodingKeys: String, CodingKey { case itemID = "p_item_id"; case note = "p_note" }
 }
-private struct EmptyBody: Encodable {}
-private struct AcknowledgeUploadBody: Encodable {
-    let uploadID: String; let checksumSHA256: String
-    enum CodingKeys: String, CodingKey { case uploadID = "upload_id"; case checksumSHA256 = "checksum_sha256" }
+
+private struct GuestActionBody: Encodable { let action: String }
+
+private struct GuestUploadBody: Encodable {
+    let action: String
+    let itemVersionId: String
+    let clientAttemptId: UUID
+    let filename: String
+    let mimeType: String
+    let checksumSha256: String
+    let sizeBytes: Int
+
+    init(action: String, request: SiteUploadIntentRequest) {
+        self.action = action
+        itemVersionId = request.itemVersionID
+        clientAttemptId = request.clientDeliveryID
+        filename = request.filename
+        mimeType = request.mimeType
+        checksumSha256 = request.checksumSHA256
+        sizeBytes = request.byteCount
+    }
+}
+
+private struct GuestUploadIntentWire: Decodable {
+    let mediaID: String
+    let deliverableID: String
+    let objectPath: String
+    let uploadURL: String
+    enum CodingKeys: String, CodingKey {
+        case mediaID = "mediaId"
+        case deliverableID = "deliverableId"
+        case objectPath = "objectPath"
+        case uploadURL = "uploadUrl"
+    }
+    func intent() throws -> SiteUploadIntent {
+        guard let signedURL = URL(string: uploadURL) else {
+            throw SiteRequestRemoteError.invalidResponse
+        }
+        return SiteUploadIntent(uploadID: mediaID, objectPath: objectPath,
+                                signedURL: signedURL, expiresAt: Date().addingTimeInterval(900))
+    }
+}
+
+private struct GuestReceiptBody: Encodable {
+    let action: String
+    let mediaId: String
+    let itemVersionId: String
+    let clientAttemptId: UUID
+    let filename: String
+    let mimeType: String
+    let checksumSha256: String
+    let sizeBytes: Int
+
+    init(action: String, mediaID: String, request: SiteUploadIntentRequest) {
+        self.action = action
+        mediaId = mediaID
+        itemVersionId = request.itemVersionID
+        clientAttemptId = request.clientDeliveryID
+        filename = request.filename
+        mimeType = request.mimeType
+        checksumSha256 = request.checksumSHA256
+        sizeBytes = request.byteCount
+    }
+}
+
+private struct GuestReceiptEnvelope: Decodable { let receipt: GuestReceiptWire }
+private struct GuestReceiptWire: Decodable {
+    let mediaID: String
+    let uploadState: String
+    enum CodingKeys: String, CodingKey {
+        case mediaID = "media_id"
+        case uploadState = "upload_state"
+    }
+    var uploadReceipt: SiteUploadReceipt {
+        SiteUploadReceipt(uploadID: mediaID, objectPath: "",
+                          checksumVerified: ["uploaded", "processing", "ready"].contains(uploadState))
+    }
+}
+
+private struct GuestDeliveryBody: Encodable {
+    let action: String
+    let itemVersionId: String
+    let clientAttemptId: UUID
+    let payload: GuestDeliveryPayload
+    let dimensions: [GuestDimensionBody]
+    let capturedByName: String
+    let capturedAt: String
+
+    init(action: String, submission: SiteDeliverySubmission) {
+        self.action = action
+        itemVersionId = submission.itemVersionID
+        clientAttemptId = submission.clientDeliveryID
+        payload = GuestDeliveryPayload(uploadIDs: submission.uploadIDs,
+                                       skippedShotLabels: submission.skippedShotLabels)
+        dimensions = submission.dimensions.map(GuestDimensionBody.init)
+        capturedByName = submission.dimensions.first?.capturedBy ?? "Guest"
+        capturedAt = WireDate.string(submission.dimensions.first?.capturedAt ?? Date())
+    }
+}
+
+private struct GuestDeliveryPayload: Encodable {
+    let uploadIDs: [String]
+    let skippedShotLabels: [String]
+    let skipReason: String?
+    init(uploadIDs: [String], skippedShotLabels: [String]) {
+        self.uploadIDs = uploadIDs
+        self.skippedShotLabels = skippedShotLabels
+        skipReason = skippedShotLabels.first
+    }
+    enum CodingKeys: String, CodingKey {
+        case uploadIDs = "upload_ids"
+        case skippedShotLabels = "skipped_shot_labels"
+        case skipReason = "skip_reason"
+    }
+}
+
+private struct GuestDimensionBody: Encodable {
+    let label: String
+    let valueMM: Int
+    init(_ dimension: SiteRequestDimension) {
+        label = dimension.label
+        valueMM = dimension.millimetres
+    }
+    enum CodingKeys: String, CodingKey { case label; case valueMM = "value_mm" }
+}
+
+private struct GuestDeliveryEnvelope: Decodable { let delivery: GuestDeliveryWire }
+private struct GuestDeliveryWire: Decodable {
+    let deliverableID: String
+    let deliveredAt: Date
+    let idempotent: Bool
+    enum CodingKeys: String, CodingKey {
+        case idempotent
+        case deliverableID = "deliverable_id"
+        case deliveredAt = "delivered_at"
+    }
+    func receipt(clientDeliveryID: UUID) -> SiteDeliveryReceipt {
+        SiteDeliveryReceipt(deliverableID: deliverableID,
+                            clientDeliveryID: clientDeliveryID,
+                            receivedAt: deliveredAt, duplicate: idempotent)
+    }
 }
 private struct DesignerDispatchBody: Encodable {
     let action: String; let requestID: String; let expiresAt: String?
@@ -320,7 +832,7 @@ private struct DesignerDispatchBody: Encodable {
     }
 }
 private struct SendResponse: Decodable {
-    let requestID: String; let status: String; let needsConsent: Bool?
+    let requestID: String?; let status: String; let needsConsent: Bool?
     enum CodingKeys: String, CodingKey { case requestID = "request_id"; case status; case needsConsent = "needs_consent" }
 }
 private struct ApproveResponse: Decodable {

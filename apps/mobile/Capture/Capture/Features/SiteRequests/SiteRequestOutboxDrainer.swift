@@ -43,15 +43,8 @@ final class SiteRequestOutboxDrainer {
             if record.state == .queued {
                 try store.transitionSiteRequestDelivery(record, to: .uploading)
                 let uploadIDs = try await uploadMedia(
-                    record: record, existing: submission.uploadIDs, accessToken: accessToken)
-                submission = SiteDeliverySubmission(
-                    requestID: submission.requestID,
-                    itemID: submission.itemID,
-                    itemVersionID: submission.itemVersionID,
-                    clientDeliveryID: submission.clientDeliveryID,
-                    dimensions: submission.dimensions,
-                    uploadIDs: uploadIDs,
-                    skippedShotLabels: submission.skippedShotLabels)
+                    record: record, submission: submission, accessToken: accessToken)
+                submission = replacingUploadIDs(uploadIDs, in: submission)
                 try saveSubmission(submission, at: record.payloadPath)
                 try store.transitionSiteRequestDelivery(record, to: .awaitingReceipt)
             }
@@ -71,39 +64,65 @@ final class SiteRequestOutboxDrainer {
         }
     }
 
-    private func uploadMedia(record: SiteRequestOutboxRecord, existing: [String],
+    private func uploadMedia(record: SiteRequestOutboxRecord,
+                             submission: SiteDeliverySubmission,
                              accessToken: String) async throws -> [String] {
-        var uploadIDs = existing
+        var uploadIDs = submission.uploadIDs
         for path in record.mediaPaths {
             let url = URL(fileURLWithPath: path)
             let data = try Data(contentsOf: url)
             let checksum = SiteRequestChecksum.sha256(data)
+            let mimeType = SiteRequestMediaMIMEType.value(forFilename: url.lastPathComponent)
+            let intentRequest = SiteUploadIntentRequest(
+                requestID: record.requestID,
+                itemVersionID: record.itemVersionID,
+                clientDeliveryID: record.clientDeliveryID,
+                filename: url.lastPathComponent,
+                mimeType: mimeType,
+                byteCount: data.count,
+                checksumSHA256: checksum)
             let intent = try await remote.createUploadIntent(
                 accessToken: accessToken,
-                request: SiteUploadIntentRequest(
-                    requestID: record.requestID,
-                    itemVersionID: record.itemVersionID,
-                    clientDeliveryID: record.clientDeliveryID,
-                    filename: url.lastPathComponent,
-                    mimeType: "image/heic",
-                    byteCount: data.count,
-                    checksumSHA256: checksum))
-            var request = URLRequest(url: intent.signedURL)
-            request.httpMethod = "PUT"
-            request.setValue("image/heic", forHTTPHeaderField: "Content-Type")
-            let (_, response) = try await URLSession.shared.upload(for: request, from: data)
-            guard let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode) else {
+                request: intentRequest)
+            if uploadIDs.contains(intent.uploadID) { continue }
+
+            // A process may have died after storage accepted the bytes but
+            // before the payload recorded the media id. Receipt-first resumes
+            // that attempt without issuing a second immutable PUT.
+            var receipt = try? await remote.acknowledgeUpload(
+                accessToken: accessToken, uploadID: intent.uploadID, request: intentRequest)
+            if receipt?.checksumVerified != true {
+                var request = URLRequest(url: intent.signedURL)
+                request.httpMethod = "PUT"
+                request.setValue(mimeType, forHTTPHeaderField: "Content-Type")
+                let (_, response) = try await URLSession.shared.upload(for: request, from: data)
+                guard let http = response as? HTTPURLResponse,
+                      (200..<300).contains(http.statusCode) else {
+                    throw SiteRequestRemoteError.invalidResponse
+                }
+                receipt = try await remote.acknowledgeUpload(
+                    accessToken: accessToken, uploadID: intent.uploadID, request: intentRequest)
+            }
+            guard receipt?.checksumVerified == true else {
                 throw SiteRequestRemoteError.invalidResponse
             }
-            let receipt = try await remote.acknowledgeUpload(
-                accessToken: accessToken,
-                uploadID: intent.uploadID,
-                checksumSHA256: checksum)
-            guard receipt.checksumVerified else { throw SiteRequestRemoteError.invalidResponse }
-            uploadIDs.append(intent.uploadID)
+            uploadIDs = SiteRequestUploadIDs.appending(intent.uploadID, to: uploadIDs)
+            try saveSubmission(
+                replacingUploadIDs(uploadIDs, in: submission), at: record.payloadPath)
         }
         return uploadIDs
+    }
+
+    private func replacingUploadIDs(_ uploadIDs: [String],
+                                    in submission: SiteDeliverySubmission) -> SiteDeliverySubmission {
+        SiteDeliverySubmission(
+            requestID: submission.requestID,
+            itemID: submission.itemID,
+            itemVersionID: submission.itemVersionID,
+            clientDeliveryID: submission.clientDeliveryID,
+            dimensions: submission.dimensions,
+            uploadIDs: uploadIDs,
+            skippedShotLabels: submission.skippedShotLabels)
     }
 
     private func loadSubmission(at path: String) throws -> SiteDeliverySubmission {

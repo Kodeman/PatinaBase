@@ -21,9 +21,15 @@ public final class CaptureCoordinator: CaptureCoordinating {
     /// link. It is held only for the guest Edge session and never exchanged for
     /// a JWT or placed in a direct Supabase query.
     public var guestAccessToken: String?
+    private let guestAccessSession: GuestAccessSession
 
-    public init(phase: CapturePhase = .ready) {
+    public init(phase: CapturePhase = .ready,
+                guestAccessStore: (any GuestAccessTokenStoring)? = nil) {
         self.phase = phase
+        let session = GuestAccessSession(
+            store: guestAccessStore ?? KeychainGuestAccessTokenStore())
+        self.guestAccessSession = session
+        self.guestAccessToken = session.restore()
     }
 
     public func navigate(to route: CaptureRoute) { path.append(route) }
@@ -34,8 +40,12 @@ public final class CaptureCoordinator: CaptureCoordinating {
     public func enterGuestRequest(accessToken: String) {
         dismissSheet()
         popToRoot()
+        guestAccessSession.enter(accessToken)
         guestAccessToken = accessToken
     }
 
-    public func leaveGuestRequest() { guestAccessToken = nil }
+    public func leaveGuestRequest() {
+        guestAccessSession.leave()
+        guestAccessToken = nil
+    }
 }
