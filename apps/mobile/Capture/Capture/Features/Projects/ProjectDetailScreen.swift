@@ -107,6 +107,25 @@ struct ProjectDetailScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header(detail.project)
+                Button {
+                    coordinator.navigate(to: .site(
+                        screen: .sr01SiteHub,
+                        projectID: detail.project.id,
+                        requestID: nil))
+                } label: {
+                    HStack {
+                        Image(systemName: "ruler")
+                        Text("Open Site")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
+                }
+                .font(CaptureType.bodyEmph)
+                .foregroundStyle(CaptureColor.verdigrisInk)
+                .padding(16)
+                .background(CaptureColor.paper3)
+                .overlay(Rectangle().stroke(CaptureColor.line))
+                .accessibilityIdentifier("project.openSite")
                 if !detail.phases.isEmpty { phasesSection(detail.phases) }
                 if !detail.milestones.isEmpty { milestonesSection(detail.milestones) }
                 if !detail.ffeItems.isEmpty { ffeSection(detail.ffeItems) }

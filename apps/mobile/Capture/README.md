@@ -11,7 +11,7 @@ read-only pending decisions, a messages inbox, on-site PO receiving,
 Face-ID-gated QR portal-login approval, and a pro LiDAR site-scan flow that
 attaches a scan to a project. The 8 Work flows (18 screens) sit alongside
 the original 8 capture flows (33 screens) — one `CaptureScreenID` enum, one
-harness, one set of dev-loop scripts drives all 51.
+harness, one set of dev-loop scripts drives all 71.
 
 ## Screens
 
@@ -33,9 +33,10 @@ harness, one set of dev-loop scripts drives all 51.
 | 13 | Receiving / goods-in | G1 arriving · G2 inspection · G3 outcome |
 | 14 | QR portal-login approval | Q1 qr-scan · Q2 qr-approve |
 | 15 | Pro site-scan | F1 scan-setup · F2 site-scan · F3 scan-review · F4 scan-upload |
+| 16 | Site Request P1 | SR01 site-hub → SR12 Binder history · SR13 guest-landing → SR20 returned item |
 
 Flows 0–7 are the original 33 screens; flows 8–15 are the 18 Work-flow
-screens added in Phase 2 (51 total). Screen ids are defined once, in
+screens added in Phase 2 plus 20 P1 Site Request screens (71 total). Screen ids are defined once, in
 `CaptureKit/CaptureKit/Support/CaptureScreenID.swift`, and are what
 `capture-run.sh`, `capture-shots.sh`, and the `-CaptureScreen` launch flag
 key off (see Dev loop, below).
@@ -47,7 +48,7 @@ key off (see Dev loop, below).
   Activity attributes). Built by the foundation owner; teams code against it.
 - **`CaptureKitMocks/`** — mock conformer for every seam, so all screens render
   in the Simulator without camera/LiDAR/Speech/network.
-- **`Capture/`** — the app target (all 51 screens, Features/ per flow).
+- **`Capture/`** — the app target (all 71 screens, Features/ per flow).
 - `CaptureShareExtension/`, `CaptureWidgets/` — Team F (Phase 1).
 
 ## Build
@@ -112,11 +113,11 @@ scripts/capture-gate.sh            # or: build | test | lint
 
 # RUN — generate → build → boot sim → install → launch
 scripts/capture-run.sh                    # real entry (viewfinder / onboarding)
-scripts/capture-run.sh C5.specimen-sheet  # jump straight to any of the 51 screens
+scripts/capture-run.sh C5.specimen-sheet  # jump straight to any of the 71 screens
 CAPTURE_SIM="iPhone 17 Pro" scripts/capture-run.sh N3.measure
 
 # SWEEP — screenshot every screen (pure simctl, no MCP) → .build/shots/
-scripts/capture-shots.sh                  # all 51
+scripts/capture-shots.sh                  # all 71
 scripts/capture-shots.sh C5 N1 S3         # subset (prefix match)
 ```
 

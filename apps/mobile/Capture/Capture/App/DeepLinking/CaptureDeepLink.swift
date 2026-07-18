@@ -19,6 +19,19 @@ enum CaptureDeepLink {
                        coordinator: CaptureCoordinator,
                        store: CaptureStore,
                        login: PortalLoginController? = nil) {
+        // https://client.patina.cloud/field/{opaque-token} — the same link the
+        // responsive guest web flow handles when Field is not installed. The
+        // raw token remains request-scoped and goes only to guest Edge calls.
+        if url.scheme == "https",
+           url.host == AppConfiguration.guestSiteBaseURL.host,
+           url.pathComponents.count == 3,
+           url.pathComponents[1] == "field" {
+            let token = url.pathComponents[2]
+            guard !token.isEmpty else { return }
+            coordinator.enterGuestRequest(accessToken: token)
+            return
+        }
+
         guard url.scheme == AppConfiguration.urlScheme else { return }
 
         // field://login?v=1&th=<token_hash> — portal QR sign-in (works from a
@@ -96,6 +109,16 @@ enum CaptureDeepLink {
         case .f1ScanSetup:      coordinator.navigate(to: .siteScanSetup)
         case .f2SiteScan, .f3ScanReview, .f4ScanUpload:
             coordinator.navigate(to: .siteScan(projectID: WorkFixtures.projectID, projectRoomID: nil))
+        case .sr01SiteHub, .sr02Composer, .sr03ItemConfig, .sr04AssignSend,
+             .sr05Tracker, .sr06ReviewInbox, .sr07MeasureReview, .sr08PhotoReview,
+             .sr09Approval, .sr10BinderRooms, .sr11BinderDetail, .sr12BinderHistory,
+             .sr13GuestLanding, .sr14GuestChecklist, .sr15GuestMeasure,
+             .sr16GuestPhoto, .sr17GuestQueue, .sr18GuestReceipt,
+             .sr19GuestDone, .sr20GuestReturned:
+            coordinator.navigate(to: .site(
+                screen: id,
+                projectID: SiteRequestFixtures.projectID,
+                requestID: SiteRequestFixtures.requestID))
         case .o1Welcome:       coordinator.onboardingStep = 0
         case .o2Connect:       coordinator.onboardingStep = 1
         case .o3CameraPriming: coordinator.onboardingStep = 2

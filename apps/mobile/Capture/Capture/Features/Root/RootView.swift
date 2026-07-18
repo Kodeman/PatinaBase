@@ -124,7 +124,12 @@ struct RootView: View {
     }
 
     @ViewBuilder private var rootContent: some View {
-        switch coordinator.phase {
+        if let accessToken = coordinator.guestAccessToken {
+            GuestSiteRequestRootView(
+                accessToken: accessToken,
+                container: container,
+                coordinator: coordinator)
+        } else { switch coordinator.phase {
         case .launching:
             ViewfinderPlaceholder()
         case .auth, .permissionPriming:
@@ -152,6 +157,6 @@ struct RootView: View {
             } else {
                 ViewfinderPlaceholder()
             }
-        }
+        } }
     }
 }

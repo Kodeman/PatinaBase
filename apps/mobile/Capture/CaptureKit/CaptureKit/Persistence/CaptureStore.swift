@@ -27,7 +27,8 @@ public final class CaptureStore {
 
     public static let schema = Schema([
         Specimen.self, CapturePhoto.self, CaptureMeasurement.self, CaptureProjectRef.self,
-        ScanUploadRecord.self   // item 8 — durable resumable upload state (additive)
+        ScanUploadRecord.self,  // item 8 — durable resumable upload state (additive)
+        SiteRequestOutboxRecord.self
     ])
 
     public let container: ModelContainer
@@ -153,6 +154,43 @@ public final class CaptureStore {
         record.statusRaw = status
         record.updatedAt = Date()
         try? save()
+    }
+
+    // ── Site Request guest delivery outbox ──
+
+    public func siteRequestOutbox(requestID: String? = nil) -> [SiteRequestOutboxRecord] {
+        let descriptor = FetchDescriptor<SiteRequestOutboxRecord>(
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)])
+        let records = (try? context.fetch(descriptor)) ?? []
+        guard let requestID else { return records }
+        return records.filter { $0.requestID == requestID }
+    }
+
+    public func siteRequestOutbox(clientDeliveryID: UUID) -> SiteRequestOutboxRecord? {
+        let descriptor = FetchDescriptor<SiteRequestOutboxRecord>(
+            predicate: #Predicate { $0.clientDeliveryID == clientDeliveryID })
+        return try? context.fetch(descriptor).first
+    }
+
+    @discardableResult
+    public func enqueueSiteRequestDelivery(_ record: SiteRequestOutboxRecord) throws
+        -> SiteRequestOutboxRecord {
+        if let existing = siteRequestOutbox(clientDeliveryID: record.clientDeliveryID) {
+            return existing
+        }
+        context.insert(record)
+        try save()
+        return record
+    }
+
+    public func transitionSiteRequestDelivery(_ record: SiteRequestOutboxRecord,
+                                              to state: SiteRequestOutboxState,
+                                              error: String? = nil,
+                                              serverDeliverableID: String? = nil,
+                                              now: Date = Date()) throws {
+        try record.transition(to: state, error: error,
+                              serverDeliverableID: serverDeliverableID, now: now)
+        try save()
     }
 
     /// This visit's captures (drafts + ready), newest first — V1 session tray.
