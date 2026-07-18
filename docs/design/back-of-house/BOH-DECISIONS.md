@@ -618,4 +618,18 @@ Strata: 13 migrations in one linear `db push` — BOH 00350–00354/00358/00360�
 
 ---
 
-*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I14 · R1–R4 · L— · last id = I14 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*
+---
+
+### I15 · First real-use gap — the Directory could not create a vendor — 2026-07-18
+
+Found by Kody minutes into the first authenticated prod walk (I14's owed item), mid Order #1 ("Prodwalk Smokewalk", two unmapped lines needing vendor assignment): `/fulfillment/vendors` had no create affordance, and Strata's `public.vendors` was genuinely empty. The Vendor Directory (S4, spec §7) was always list/edit-only — `VendorDirectoryTable` links straight to the profile editor, but no shipped RPC ever inserted a `vendors` row. Local dev never surfaced this: the dev seed corpus (`seed/vendors.sql`) pre-populates 100+ vendors, so every local/S4 walk-through always had rows to click into. Prod starts empty by design (I14) — the gap was invisible until the first real prod use.
+
+Fixed same-day on `boh/create-vendor` (migration 00371, off Strata's live tip 00370 — Field Capture's `scan_pipeline_ingest_trigger`): `fulfillment_create_vendor(p_name, p_website, p_notes, p_actor)` — same posture as the rest of the 00353 RPC family (SECURITY DEFINER, writer-GUC before the `fulfillment_events` append, `REVOKE`d from public/anon/authenticated, `GRANT`ed to service_role only), actor resolved via the 00297 `agent_tasks` idiom (`COALESCE(p_actor, auth.uid()::text, session_user::text)`) since `p_actor` defaults to NULL. Rejects a blank name and a case-insensitive duplicate with a clear raise; writes a `vendor.created` event into the Run Log; deliberately does NOT touch `vendor_profiles` — the profile editor's own upsert (`fulfillment_update_vendor_profile`, 00353) owns that when the operator saves it.
+
+Admin: an "Add vendor" button in the Directory's `PageHeader` actions (matching the catalog zone's create-button idiom), a plain-modal dialog (matching `EtaChangeDialog`'s idiom — name required, website + notes optional) via a new `POST /api/admin/fulfillment/vendors/create` route, landing on `/fulfillment/vendors/[newId]` on success so the natural flow is create → immediately fill in protocol facts. Verified live as a signed-in admin (local stack): Directory count 104→105, the new row (`Prodwalk Smokewalk Trade`) with the exact name/website/notes typed, a `vendor.created` `fulfillment_events` row with `actor=admin@patina.dev`, and the redirect landing cleanly on the profile editor.
+
+Accepts-when: `supabase db reset` clean; `test:boh-audit` fully green (A1–A7/Q1–Q7/T1–T5/L1–L23/E1–E18 SQL asserts + 68/68 Deno) on the regenerated stack; admin-portal `type-check` + build EXIT 0; fulfillment jest 79/79 (10 suites, incl. the new route + dialog suites); legacy-grants seed regenerated (the new RPC's `REVOKE` needed replaying or a fresh local stack would have left `anon`/`authenticated` with `EXECUTE` via the baseline blanket grant). Shipped to Strata + the admin portal the same day as found.
+
+---
+
+*Entries: D1 · O1 (resolved) · O2 (open) · O3 (near-resolved) · I1–I15 · R1–R4 · L— · last id = I15 · footer maintained manually (append_entry.py targets the-document's DECISIONS.md only — see I1 discussion; this file's footer follows the same cumulative-index convention by hand)*
