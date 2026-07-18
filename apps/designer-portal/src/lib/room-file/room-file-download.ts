@@ -9,6 +9,14 @@
  * `createSignedUrl`, the same resolution `useSignedScanModelUrl` /
  * `useRoomScanPhotos` use), fetches it as a blob, and triggers the browser
  * download — the blob-and-anchor idiom of `spec-pdf-client.ts`.
+ *
+ * SHARED-DESIGNER READ IS NOT BLOCKED (settled, do not re-litigate): the
+ * drawings prefix is `room_file/{userId}/{scanId}/v{n}/…`, which puts the SCAN
+ * id at path segment [3]. Storage policy 00287 ("Designers can read shared scan
+ * artifacts") accepts `rs.id::text = (storage.foldername(name))[3]` as its
+ * FIRST branch — so a designer with an active/full association signs and
+ * downloads these objects without a room_id-shaped path. `createSignedUrl` runs
+ * under the caller's storage RLS, so this is enforced, not assumed.
  */
 
 import { createBrowserClient, publicUrlToPath } from '@patina/supabase';

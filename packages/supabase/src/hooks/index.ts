@@ -460,6 +460,7 @@ export {
 } from './use-room-files';
 export type {
   RoomFile,
+  RoomFileListItem,
   RoomFileStatus,
   RoomFileDrawings,
   RoomFileDrawingSheet,

@@ -114,6 +114,17 @@ export interface RoomFile {
   updated_at: string;
 }
 
+/**
+ * The lean projection the project-page "Room Files" list needs — id + the
+ * grouping/ordering keys + what a row renders (unverified badge, sheet count).
+ * Deliberately omits the heavy `certificate` JSONB (and the url/rollup columns)
+ * so a project with N scans doesn't drag N accuracy certificates over the wire.
+ */
+export type RoomFileListItem = Pick<
+  RoomFile,
+  'id' | 'scan_id' | 'version' | 'status' | 'unverified' | 'drawings'
+>;
+
 /** A `room_file_measurements` row (00341). */
 export interface RoomFileMeasurement {
   id: string;
@@ -202,14 +213,15 @@ export function useRoomFiles(scanId: string | null | undefined) {
  * finished deliverable). Can't call `useRoomFiles` once per tile (a hook in a
  * loop), so this is the batch sibling, mirroring `useRoomScanCovers`.
  *
- * Returns a `Map<scanId, RoomFile>` holding ONLY scans with a generated
+ * Returns a `Map<scanId, RoomFileListItem>` holding ONLY scans with a generated
  * version (newest version wins). A scan with no generated room_file has no
- * entry — callers filter their scan list by key presence.
+ * entry — callers filter their scan list by key presence. The projection is
+ * lean (no `certificate`) so the list stays cheap for a many-scan project.
  */
 export function useGeneratedRoomFilesByScan(scanIds: Array<string | null | undefined>) {
   const ids = Array.from(new Set(scanIds.filter((v): v is string => !!v))).sort();
 
-  return useQuery<Map<string, RoomFile>>({
+  return useQuery<Map<string, RoomFileListItem>>({
     queryKey: ['generated-room-files-by-scan', ids],
     enabled: ids.length > 0,
     queryFn: async () => {
@@ -217,7 +229,7 @@ export function useGeneratedRoomFilesByScan(scanIds: Array<string | null | undef
       const supabase = getSupabase() as any;
       const { data, error } = await supabase
         .from('room_files')
-        .select('*')
+        .select('id, scan_id, version, status, unverified, drawings')
         .in('scan_id', ids)
         .eq('status', 'generated')
         .order('version', { ascending: false });
@@ -225,8 +237,8 @@ export function useGeneratedRoomFilesByScan(scanIds: Array<string | null | undef
       if (error) throw error;
 
       // version-desc → first seen per scan_id is the newest generated version.
-      const byScan = new Map<string, RoomFile>();
-      for (const row of (data ?? []) as RoomFile[]) {
+      const byScan = new Map<string, RoomFileListItem>();
+      for (const row of (data ?? []) as RoomFileListItem[]) {
         if (!byScan.has(row.scan_id)) byScan.set(row.scan_id, row);
       }
       return byScan;
@@ -264,6 +276,15 @@ export function useRoomFileMeasurements(roomFileId: string | null | undefined) {
  * (`"siteScanContext.scanId"` → this scan), NOT a project_id column (inbox
  * rows carry the association only in provenance — 00233/00235). Newest first.
  * Returns `[]` for a scan with no captures, or while `scanId` is unset.
+ *
+ * ⚠ RLS ASYMMETRY (P2): room_files / room_file_measurements DELEGATE their
+ * SELECT to the scan's visibility on room_scans (owner + designer-association +
+ * studio-co-member all compose — 00341). field_captures does NOT: its read
+ * policy is owner (designer_id = auth.uid()) + organization scope (00233), a
+ * different model. So a studio co-member who can see a scan's drawings may see
+ * an EMPTY capture-context list even when captures exist — the two surfaces
+ * don't share a visibility rule. Reconciling them (a delegated read for
+ * scan-pinned captures) is a P2 item, not a v0 blocker.
  */
 export function useScanContextCaptures(scanId: string | null | undefined) {
   return useQuery<ScanContextCapture[]>({

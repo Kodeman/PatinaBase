@@ -48,9 +48,12 @@ export function RoomFileView({ projectId, scanId }: RoomFileViewProps) {
 
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
 
-  const { data: scan } = useRoomScan(scanId);
-  const { data: roomFiles, isLoading: filesLoading } = useRoomFiles(scanId);
-  const { data: captures } = useScanContextCaptures(scanId);
+  // Gate every data fetch on the flag (mirrors room-view.tsx): a flag-off
+  // direct hit — or the brief flag-loading window — fetches nothing. The
+  // disabled scanId is '' / undefined per each hook's own `enabled` guard.
+  const { data: scan } = useRoomScan(enabled ? scanId : '');
+  const { data: roomFiles, isLoading: filesLoading } = useRoomFiles(enabled ? scanId : undefined);
+  const { data: captures } = useScanContextCaptures(enabled ? scanId : undefined);
 
   const versions = roomFiles ?? [];
   // Current = the selected version, else the newest `generated` row, else the

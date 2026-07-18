@@ -28,16 +28,43 @@ function gcd(a: number, b: number): number {
 }
 
 /**
+ * Round half to EVEN (banker's rounding) — the identity guarantee with the
+ * worker. Python's built-in `round()` (what units.py uses) rounds exact ties to
+ * the nearest even integer; JS `Math.round` rounds ties toward +∞. For the
+ * integer-mm inputs this formatter ever sees no genuine IEEE-754 half-tie is
+ * reachable (a 1..40000 mm sweep finds zero cases where the two modes diverge),
+ * so real drawings are unaffected — but matching Python's tie rule here means
+ * the two formatters agree for EVERY float, tie or not, not merely the ones we
+ * happened to sweep. Exercised directly by the exact-half fixture shared with
+ * services/scan-pipeline/.../drawing/__tests__/test_units.py (keep in lockstep).
+ */
+export function roundHalfEven(x: number): number {
+  const floor = Math.floor(x);
+  const diff = x - floor;
+  if (diff < 0.5) return floor;
+  if (diff > 0.5) return floor + 1;
+  // exact .5 → the even neighbour
+  return floor % 2 === 0 ? floor : floor + 1;
+}
+
+/**
  * Integer millimetres → `F'-I"` or `F'-I n/d"`, rounded to the nearest
  * 1/`denom` inch (default eighths). Ports units.py `format_ftin` exactly,
- * including the 12″→+1′ and 8/8→+1″ carries and fraction reduction.
+ * including ties-to-even (roundHalfEven), the 12″→+1′ and 8/8→+1″ carries, and
+ * fraction reduction.
+ *
+ * ⚠ IDENTITY CONTRACT: the mm→ft-in fixture in
+ * `apps/designer-portal/src/lib/room-file/__tests__/format.test.ts` and the one
+ * in `services/scan-pipeline/.../drawing/__tests__/test_units.py` share the SAME
+ * literal (mm → string) rows on purpose — an edit to either formatter that
+ * drifts trips a fixture in one suite, not a dimension on a customer's drawing.
  */
 export function formatFtIn(mm: number, denom = 8): string {
   const totalIn = mm / MM_PER_IN;
   let feet = Math.floor(totalIn / 12);
   const remIn = totalIn - feet * 12;
   let whole = Math.floor(remIn);
-  let fracEighths = Math.round((remIn - whole) * denom);
+  let fracEighths = roundHalfEven((remIn - whole) * denom);
   if (fracEighths === denom) {
     whole += 1;
     fracEighths = 0;
