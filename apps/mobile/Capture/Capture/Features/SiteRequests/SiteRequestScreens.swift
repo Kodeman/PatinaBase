@@ -6,14 +6,74 @@
 //  backed by the SwiftData outbox and an opaque Edge access token.
 
 import SwiftUI
+import Observation
 import CaptureKit
 import CaptureKitMocks
+
+@MainActor
+@Observable
+private final class SiteRequestDraftSession {
+    var requestTitle = ""
+    var measureSelected = true
+    var photoSelected = true
+    var measureRoomID: String?
+    var photoRoomID: String?
+    var measureTitle = ""
+    var measureGuidance = "Measure the requested opening to the nearest 1/16 inch."
+    var photoTitle = ""
+    var photoGuidance = "Capture wide context, straight on, left return, and close detail."
+    var assigneePartyID: String?
+    var dueAt = Date().addingTimeInterval(7 * 86_400)
+    var dueContext = "before drywall"
+    var nudgeNote = ""
+    private var seededProjectID: String?
+
+    var selectedCount: Int { (measureSelected ? 1 : 0) + (photoSelected ? 1 : 0) }
+
+    func seedIfNeeded(from hub: SiteProjectHub) {
+        guard seededProjectID != hub.projectID, !hub.projectID.isEmpty else { return }
+        startNew(from: hub)
+    }
+
+    func startNew(from hub: SiteProjectHub) {
+        seededProjectID = hub.projectID
+        requestTitle = "Site request"
+        measureSelected = true
+        photoSelected = true
+        assigneePartyID = hub.assignees.first?.partyID
+        measureRoomID = hub.rooms.first?.id
+        photoRoomID = hub.rooms.dropFirst().first?.id ?? hub.rooms.first?.id
+        measureTitle = hub.rooms.first.map { "\($0.name) · measure set" } ?? "Measure set"
+        measureGuidance = "Measure the requested opening to the nearest 1/16 inch."
+        let photoRoom = hub.rooms.first(where: { $0.id == photoRoomID })
+        photoTitle = photoRoom.map { "\($0.name) · detail photos" } ?? "Detail photos"
+        photoGuidance = "Capture wide context, straight on, left return, and close detail."
+        dueAt = Date().addingTimeInterval(7 * 86_400)
+        dueContext = "before drywall"
+    }
+
+    func selectedItems() -> [SiteRequestDraftItem] {
+        SiteRequestDraftBuilder.selectedItems(from: [
+            SiteRequestDraftItemChoice(
+                kit: .measureSet, isSelected: measureSelected,
+                title: measureTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+                guidance: measureGuidance.trimmingCharacters(in: .whitespacesAndNewlines),
+                roomID: measureRoomID),
+            SiteRequestDraftItemChoice(
+                kit: .detailPhotos, isSelected: photoSelected,
+                title: photoTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+                guidance: photoGuidance.trimmingCharacters(in: .whitespacesAndNewlines),
+                roomID: photoRoomID)
+        ])
+    }
+}
 
 enum SiteRequestScreens {
     @MainActor
     static func register(into registry: RouteRegistry,
                          container: AppContainer,
                          coordinator: CaptureCoordinator) {
+        let draftSession = SiteRequestDraftSession()
         registry.registerRoute(CaptureRoute.site(
             screen: .sr01SiteHub, projectID: nil, requestID: nil).registryKey) { route in
             guard case let .site(screen, projectID, requestID) = route else {
@@ -24,6 +84,7 @@ enum SiteRequestScreens {
                 projectID: projectID ?? (AppConfiguration.runsRealServices ? "" : SiteRequestFixtures.projectID),
                 requestID: requestID ?? (AppConfiguration.runsRealServices ? "" : SiteRequestFixtures.requestID),
                 accessToken: coordinator.guestAccessToken,
+                draftSession: draftSession,
                 container: container,
                 coordinator: coordinator))
         }
@@ -34,6 +95,7 @@ struct GuestSiteRequestRootView: View {
     let accessToken: String
     let container: AppContainer
     let coordinator: CaptureCoordinator
+    private let draftSession = SiteRequestDraftSession()
 
     var body: some View {
         SiteRequestScreen(
@@ -41,6 +103,7 @@ struct GuestSiteRequestRootView: View {
             projectID: "",
             requestID: "",
             accessToken: accessToken,
+            draftSession: draftSession,
             container: container,
             coordinator: coordinator)
     }
@@ -51,15 +114,16 @@ private struct SiteRequestScreen: View {
     let projectID: String
     let requestID: String
     let accessToken: String?
+    let draftSession: SiteRequestDraftSession
     let container: AppContainer
     let coordinator: CaptureCoordinator
 
-    @State private var hub = SiteRequestFixtures.hub
-    @State private var guest = SiteRequestFixtures.guest
+    @State private var hub: SiteProjectHub
+    @State private var guest: GuestSiteRequest
     @State private var redoNote = AppConfiguration.runsRealServices ? "" : SiteRequestFixtures.redoNote
-    @State private var imperialA = "41 3/8"
-    @State private var imperialB = "25 3/4"
-    @State private var imperialC = "96 1/4"
+    @State private var imperialA: String
+    @State private var imperialB: String
+    @State private var imperialC: String
     @State private var metricEntry = false
     @State private var additionalMeasurements: [String: String] = [:]
     @State private var measurementProofPaths: [String: String] = [:]
@@ -71,6 +135,41 @@ private struct SiteRequestScreen: View {
     @State private var isWorking = false
     @State private var contractLoaded = false
     @State private var contractFailed = false
+
+    init(screen: CaptureScreenID, projectID: String, requestID: String,
+         accessToken: String?, draftSession: SiteRequestDraftSession,
+         container: AppContainer, coordinator: CaptureCoordinator) {
+        self.screen = screen
+        self.projectID = projectID
+        self.requestID = requestID
+        self.accessToken = accessToken
+        self.draftSession = draftSession
+        self.container = container
+        self.coordinator = coordinator
+        if AppConfiguration.runsRealServices {
+            let emptyAssignee = SiteRequestAssignee(
+                name: "Project contact", normalizedPhone: "", smsConsentGranted: false)
+            let emptyRequest = SiteRequestSummary(
+                id: "", projectID: projectID, title: "Site request", status: .draft,
+                assignee: emptyAssignee, dueAt: Date(),
+                deliveredItemCount: 0, itemCount: 0)
+            _hub = State(initialValue: SiteProjectHub(
+                projectID: projectID, projectName: "", requests: [], reviewItems: [],
+                rooms: [], events: []))
+            _guest = State(initialValue: GuestSiteRequest(
+                request: emptyRequest, designerName: "", studioName: "",
+                projectDisplayName: "", items: []))
+            _imperialA = State(initialValue: "")
+            _imperialB = State(initialValue: "")
+            _imperialC = State(initialValue: "")
+        } else {
+            _hub = State(initialValue: SiteRequestFixtures.hub)
+            _guest = State(initialValue: SiteRequestFixtures.guest)
+            _imperialA = State(initialValue: "41 3/8")
+            _imperialB = State(initialValue: "25 3/4")
+            _imperialC = State(initialValue: "96 1/4")
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -188,7 +287,10 @@ private struct SiteRequestScreen: View {
                     }
                 }
             }
-            Button("New site request") { go(.sr02Composer) }.sitePrimary()
+            Button("New site request") {
+                draftSession.startNew(from: hub)
+                go(.sr02Composer)
+            }.sitePrimary()
             Button("Open Site Binder") { go(.sr10BinderRooms) }.siteSecondary()
             sectionLabel("ACTIVITY")
             ForEach(hub.events) { event in
@@ -199,57 +301,122 @@ private struct SiteRequestScreen: View {
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        @Bindable var draft = draftSession
+        return VStack(alignment: .leading, spacing: 18) {
             title("New site request", subtitle: "\(hub.projectName) · rooms preloaded")
+            sectionLabel("REQUEST TITLE")
+            TextField("What is needed on site?", text: $draft.requestTitle)
+                .textFieldStyle(.plain)
+                .font(CaptureType.body)
+                .padding(14)
+                .overlay(Rectangle().stroke(CaptureColor.line2))
+                .accessibilityIdentifier("siteRequest.draftTitle")
             sectionLabel("BUILT-IN KITS")
-            kitRow(.measureSet, detail: "Three dimensions · optional tape proof")
-            kitRow(.detailPhotos, detail: "Four guided angles · reference framing")
-            sectionLabel("DUE")
-            field("In 7 days · before drywall")
-            sectionLabel("ASSIGNEE")
-            if let assignee = hub.assignees.first {
-                field("\(assignee.name) · \(assignee.normalizedPhone)")
-            } else {
-                field("No SMS-capable project party")
+            Toggle(isOn: $draft.measureSelected) {
+                kitLabel(.measureSet, detail: "Three dimensions · optional tape proof")
             }
-            Button("Configure 2 items") { go(.sr03ItemConfig) }.sitePrimary()
+            .toggleStyle(.switch)
+            .accessibilityIdentifier("siteRequest.selectMeasureKit")
+            Toggle(isOn: $draft.photoSelected) {
+                kitLabel(.detailPhotos, detail: "Four guided angles · reference framing")
+            }
+            .toggleStyle(.switch)
+            .accessibilityIdentifier("siteRequest.selectPhotoKit")
+            if draft.selectedCount == 0 {
+                Text("Choose at least one built-in kit.")
+                    .font(CaptureType.footnote).foregroundStyle(CaptureColor.error)
+            }
+            sectionLabel("DUE")
+            DatePicker("Due date and time", selection: $draft.dueAt,
+                       in: Date()..., displayedComponents: [.date, .hourAndMinute])
+                .accessibilityIdentifier("siteRequest.dueAt")
+            TextField("Context, e.g. before drywall", text: $draft.dueContext)
+                .textFieldStyle(.plain)
+                .font(CaptureType.body).padding(14)
+                .overlay(Rectangle().stroke(CaptureColor.line2))
+                .accessibilityIdentifier("siteRequest.dueContext")
+            sectionLabel("ASSIGNEE")
+            Picker("Project contact", selection: $draft.assigneePartyID) {
+                Text("Choose a project contact").tag(String?.none)
+                ForEach(hub.assignees.filter { $0.partyID != nil }, id: \.partyID) { assignee in
+                    Text("\(assignee.name) · \(assignee.normalizedPhone)")
+                        .tag(assignee.partyID)
+                }
+            }
+            .pickerStyle(.menu)
+            .accessibilityIdentifier("siteRequest.assignee")
+            Button("Configure \(draft.selectedCount) item\(draft.selectedCount == 1 ? "" : "s")") {
+                go(.sr03ItemConfig)
+            }
+            .sitePrimary()
+            .disabled(!draftBasicsReady)
         }
     }
 
     private var itemConfig: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        @Bindable var draft = draftSession
+        return VStack(alignment: .leading, spacing: 18) {
             title("Configure items", subtitle: "Definitions freeze at send; later edits create a new version")
-            card {
-                VStack(alignment: .leading, spacing: 9) {
-                    Text(SiteRequestKit.measureSet.title).font(CaptureType.bodyEmph)
-                    Text(hub.rooms.first?.name ?? "Choose a project room").font(CaptureType.title2)
-                    Text("A floor → sill · B sill → head · C run length")
-                        .font(CaptureType.callout).foregroundStyle(CaptureColor.inkSoft)
-                    Text("Inside face to inside face — ignore the trim.")
-                        .font(CaptureType.callout)
+            if draft.measureSelected {
+                card {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(SiteRequestKit.measureSet.title).font(CaptureType.bodyEmph)
+                        Picker("Project room", selection: $draft.measureRoomID) {
+                            Text("Choose a room").tag(String?.none)
+                            ForEach(hub.rooms) { room in Text(room.name).tag(Optional(room.id)) }
+                        }
+                        .pickerStyle(.menu)
+                        .accessibilityIdentifier("siteRequest.measureRoom")
+                        TextField("Item title", text: $draft.measureTitle)
+                            .textFieldStyle(.plain).padding(12)
+                            .overlay(Rectangle().stroke(CaptureColor.line2))
+                            .accessibilityIdentifier("siteRequest.measureTitle")
+                        TextField("Capture guidance", text: $draft.measureGuidance, axis: .vertical)
+                            .textFieldStyle(.plain).padding(12)
+                            .overlay(Rectangle().stroke(CaptureColor.line2))
+                            .accessibilityIdentifier("siteRequest.measureGuidance")
+                        Text("A floor → sill · B sill → head · C run length")
+                            .font(CaptureType.callout).foregroundStyle(CaptureColor.inkSoft)
+                    }
                 }
             }
-            card {
-                VStack(alignment: .leading, spacing: 9) {
-                    Text(SiteRequestKit.detailPhotos.title).font(CaptureType.bodyEmph)
-                    Text(hub.rooms.dropFirst().first?.name ?? hub.rooms.first?.name ?? "Choose a project room")
-                        .font(CaptureType.title2)
-                    Text("Wide context · straight on · left return · grout detail")
-                        .font(CaptureType.callout).foregroundStyle(CaptureColor.inkSoft)
+            if draft.photoSelected {
+                card {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(SiteRequestKit.detailPhotos.title).font(CaptureType.bodyEmph)
+                        Picker("Project room", selection: $draft.photoRoomID) {
+                            Text("Choose a room").tag(String?.none)
+                            ForEach(hub.rooms) { room in Text(room.name).tag(Optional(room.id)) }
+                        }
+                        .pickerStyle(.menu)
+                        .accessibilityIdentifier("siteRequest.photoRoom")
+                        TextField("Item title", text: $draft.photoTitle)
+                            .textFieldStyle(.plain).padding(12)
+                            .overlay(Rectangle().stroke(CaptureColor.line2))
+                            .accessibilityIdentifier("siteRequest.photoTitle")
+                        TextField("Capture guidance", text: $draft.photoGuidance, axis: .vertical)
+                            .textFieldStyle(.plain).padding(12)
+                            .overlay(Rectangle().stroke(CaptureColor.line2))
+                            .accessibilityIdentifier("siteRequest.photoGuidance")
+                        Text("Wide context · straight on · left return · close detail")
+                            .font(CaptureType.callout).foregroundStyle(CaptureColor.inkSoft)
+                    }
                 }
             }
             Text("Custom saved kits and markup arrive after the P1 pilot.")
                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
-            Button("Assign and preview") { go(.sr04AssignSend) }.sitePrimary()
+            Button("Assign and preview") { go(.sr04AssignSend) }
+                .sitePrimary().disabled(!draftItemsReady)
         }
     }
 
     private var assignAndSend: some View {
         VStack(alignment: .leading, spacing: 18) {
-            title("Send request", subtitle: "2 items · due Friday")
+            title(draftSession.requestTitle,
+                  subtitle: "\(draftSession.selectedCount) item\(draftSession.selectedCount == 1 ? "" : "s") · due \(draftSession.dueAt.formatted(date: .abbreviated, time: .shortened))")
             card {
                 VStack(alignment: .leading, spacing: 6) {
-                    let assignee = hub.assignees.first
+                    let assignee = selectedDraftAssignee
                     Text(assignee?.name ?? "No eligible project party").font(CaptureType.bodyEmph)
                     Text("\(assignee?.normalizedPhone ?? "Missing phone") · \(assignee?.trade ?? "Trade")")
                         .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
@@ -261,18 +428,29 @@ private struct SiteRequestScreen: View {
             }
             sectionLabel("EXACT SMS PREVIEW")
             card {
-                Text("Your designer needs 2 site items for \(hub.projectName) — due in 7 days. Open your private checklist: client.patina.cloud/field/••••")
+                Text("Your designer needs \(draftSession.selectedCount) site item\(draftSession.selectedCount == 1 ? "" : "s") for \(hub.projectName) — due \(draftSession.dueAt.formatted(date: .abbreviated, time: .omitted)). Open your private checklist: client.patina.cloud/field/••••")
                     .font(CaptureType.callout)
             }
-            Text("Without consent, this request waits in awaiting consent until \(hub.assignees.first?.name ?? "the project contact") replies YES.")
+            ForEach(Array(draftSession.selectedItems().enumerated()), id: \.offset) { _, item in
+                card {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.title).font(CaptureType.bodyEmph)
+                        Text("\(item.kit.title) · \(roomName(item.roomID ?? ""))")
+                            .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
+                        Text(item.guidance).font(CaptureType.callout)
+                    }
+                }
+            }
+            Text("Without consent, this request waits in awaiting consent until \(selectedDraftAssignee?.name ?? "the project contact") replies YES.")
                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
             Button("Send request") { Task { await createAndSendRequest() } }
-                .sitePrimary().disabled(isWorking || hub.assignees.first == nil || hub.rooms.first == nil)
+                .sitePrimary().disabled(isWorking || !draftReadyToSend)
         }
     }
 
     private var tracker: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        @Bindable var draft = draftSession
+        return VStack(alignment: .leading, spacing: 18) {
             let request = activeRequest
             title(request?.title ?? "Site request",
                   subtitle: "\(request?.assignee.name ?? "Project contact") · \(request?.openedAt == nil ? "not opened" : "opened")")
@@ -289,7 +467,36 @@ private struct SiteRequestScreen: View {
                 Text("\(event.actorName) · \(event.message)").font(CaptureType.callout)
             }
             Button("Review delivery") { go(.sr06ReviewInbox) }.sitePrimary()
-            Button("Nudge available tomorrow") {}.siteSecondary().disabled(true)
+            if let request {
+                if SiteRequestLifecyclePolicy.allows(
+                    .nudge, for: request.status,
+                    hasSMSConsent: request.assignee.smsConsentGranted) {
+                    TextField("Optional nudge note", text: $draft.nudgeNote)
+                        .textFieldStyle(.plain).padding(14)
+                        .overlay(Rectangle().stroke(CaptureColor.line2))
+                        .accessibilityIdentifier("siteRequest.nudgeNote")
+                    Button("Nudge") { Task { await nudge(request) } }
+                        .siteSecondary().disabled(isWorking)
+                }
+                if SiteRequestLifecyclePolicy.allows(
+                    .resend, for: request.status,
+                    hasSMSConsent: request.assignee.smsConsentGranted) {
+                    Button("Resend private link") { Task { await resend(request) } }
+                        .siteSecondary().disabled(isWorking)
+                }
+                if SiteRequestLifecyclePolicy.allows(.revokeAccess, for: request.status) {
+                    Button("Revoke private link", role: .destructive) {
+                        Task { await revokeAccess(request) }
+                    }
+                    .siteSecondary().disabled(isWorking)
+                }
+                if SiteRequestLifecyclePolicy.allows(.close, for: request.status) {
+                    Button("Close request", role: .destructive) {
+                        Task { await close(request) }
+                    }
+                    .siteSecondary().disabled(isWorking)
+                }
+            }
         }
     }
 
@@ -592,49 +799,92 @@ private struct SiteRequestScreen: View {
             ForEach(guestOutboxRecords) { record in
                 queueRow(guest.items.first(where: { $0.id == record.itemID })?.title ?? "Site request item",
                          state: record.state.rawValue.uppercased(),
-                         tint: record.state == .failed ? CaptureColor.error : CaptureColor.verdigrisInk)
+                         detail: record.terminalReason?.userMessage
+                            ?? (record.state == .failed ? "Waiting to retry automatically." : nil),
+                         tint: record.state == .failed || record.state == .terminal
+                            ? CaptureColor.error : CaptureColor.verdigrisInk)
             }
             if guestOutboxRecords.isEmpty {
                 card { Text("No deliveries are queued on this phone.") }
             }
             Text("Retries keep the same client delivery ID and checksum. Duplicate taps cannot create duplicate deliveries.")
                 .font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
-            Button("View receipt state") { go(.sr18GuestReceipt) }.sitePrimary()
+            if matchingDeliveredGuestRecord != nil {
+                Button("View server receipt") { go(.sr18GuestReceipt) }.sitePrimary()
+            } else {
+                Button("Check receipt status") { go(.sr18GuestReceipt) }.siteSecondary()
+            }
         }
     }
 
     private var guestReceipt: some View {
         VStack(alignment: .leading, spacing: 18) {
-            title("Received by Patina", subtitle: "Server receipt recorded")
-            if let receipt = deliveredGuestRecord {
+            if let receipt = matchingDeliveredGuestRecord {
+                title("Received by Patina", subtitle: "Server receipt recorded")
                 card {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Server receipt recorded", systemImage: "checkmark.circle.fill")
-                    if !receipt.mediaPaths.isEmpty {
-                        Label("\(receipt.mediaPaths.count) media checksums verified", systemImage: "checkmark.circle.fill")
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Server receipt recorded", systemImage: "checkmark.circle.fill")
+                        if !receipt.mediaPaths.isEmpty {
+                            Label("\(receipt.mediaPaths.count) media checksums verified", systemImage: "checkmark.circle.fill")
+                        }
+                        Label("Server delivery \(receipt.serverDeliverableID!)", systemImage: "checkmark.circle.fill")
+                        Label("Delivery linked to item version \(receipt.itemVersionID)", systemImage: "link")
                     }
-                    Label("Server delivery \(receipt.serverDeliverableID ?? "recorded")", systemImage: "checkmark.circle.fill")
-                    Label("Delivery linked to item version \(receipt.itemVersionID)", systemImage: "link")
-                }.font(CaptureType.callout).foregroundStyle(CaptureColor.success)
+                    .font(CaptureType.callout).foregroundStyle(CaptureColor.success)
                 }
+                Button("Back to checklist") { go(.sr19GuestDone) }.sitePrimary()
+            } else if let terminal = guestOutboxRecords.last(where: { $0.state == .terminal }) {
+                title("Delivery needs attention", subtitle: "No server receipt was recorded")
+                card {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Not delivered", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(CaptureColor.error)
+                        Text(terminal.terminalReason?.userMessage
+                             ?? "This saved delivery cannot be retried.")
+                            .font(CaptureType.callout)
+                    }
+                }
+                Button("Return to delivery queue") { go(.sr17GuestQueue) }.sitePrimary()
             } else {
-                card { Text("Patina has not returned a delivery receipt on this phone yet.") }
+                title("Receipt pending", subtitle: "Patina has not acknowledged this delivery yet")
+                card {
+                    Text("Your capture remains saved on this phone. Keep this private link and return when you have a connection.")
+                        .font(CaptureType.callout)
+                }
+                Button("Return to delivery queue") { go(.sr17GuestQueue) }.sitePrimary()
             }
-            Button("Back to checklist") { go(.sr19GuestDone) }.sitePrimary()
         }
     }
 
     private var guestDone: some View {
-        VStack(alignment: .center, spacing: 18) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 72)).foregroundStyle(CaptureColor.success)
-            Text("\(guest.items.filter { $0.status == .delivered || $0.status == .approved }.count) of \(guest.items.count) delivered")
-                .font(CaptureType.title)
-            Text("Patina recorded the server receipt. This link stays available for a returned item until the request closes.")
-                .font(CaptureType.callout).foregroundStyle(CaptureColor.inkSoft)
-                .multilineTextAlignment(.center)
-            Button("See returned-item example") { go(.sr20GuestReturned) }.siteSecondary()
-        }.frame(maxWidth: .infinity)
+        Group {
+            if matchingDeliveredGuestRecord != nil {
+                VStack(alignment: .center, spacing: 18) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 72)).foregroundStyle(CaptureColor.success)
+                    Text("Delivery received")
+                        .font(CaptureType.title)
+                    Text("Patina recorded a matching server receipt. This link stays available for a returned item until the request closes.")
+                        .font(CaptureType.callout).foregroundStyle(CaptureColor.inkSoft)
+                        .multilineTextAlignment(.center)
+                    Button("Back to checklist") { go(.sr14GuestChecklist) }.sitePrimary()
+                    if guest.items.contains(where: { $0.status == .redo }) {
+                        Button("View returned item") { go(.sr20GuestReturned) }.siteSecondary()
+                    }
+                }
+            } else {
+                VStack(alignment: .center, spacing: 18) {
+                    Image(systemName: "clock.badge.exclamationmark")
+                        .font(.system(size: 64)).foregroundStyle(CaptureColor.warning)
+                    Text("Receipt not available").font(CaptureType.title)
+                    Text("This phone does not have a matching server receipt yet, so the delivery is not marked complete.")
+                        .font(CaptureType.callout).foregroundStyle(CaptureColor.inkSoft)
+                        .multilineTextAlignment(.center)
+                    Button("Return to delivery queue") { go(.sr17GuestQueue) }.sitePrimary()
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var guestReturned: some View {
@@ -669,6 +919,30 @@ private struct SiteRequestScreen: View {
 
     private var activeRequest: SiteRequestSummary? {
         hub.requests.first(where: { $0.id == activeRequestID }) ?? hub.requests.first
+    }
+
+    private var selectedDraftAssignee: SiteRequestAssignee? {
+        hub.assignees.first { $0.partyID == draftSession.assigneePartyID }
+    }
+
+    private var draftBasicsReady: Bool {
+        !draftSession.requestTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && draftSession.selectedCount > 0
+            && selectedDraftAssignee != nil
+            && draftSession.dueAt > Date()
+    }
+
+    private var draftItemsReady: Bool {
+        draftBasicsReady && !draftSession.selectedItems().isEmpty
+            && draftSession.selectedItems().allSatisfy {
+                $0.roomID != nil
+                    && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    && !$0.guidance.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+    }
+
+    private var draftReadyToSend: Bool {
+        draftItemsReady && selectedDraftAssignee?.partyID != nil
     }
 
     private var itemsForActiveRequest: [SiteRequestItem] {
@@ -769,8 +1043,11 @@ private struct SiteRequestScreen: View {
             .sorted { $0.createdAt < $1.createdAt }
     }
 
-    private var deliveredGuestRecord: SiteRequestOutboxRecord? {
-        guestOutboxRecords.last(where: { $0.state == .delivered })
+    private var matchingDeliveredGuestRecord: SiteRequestOutboxRecord? {
+        guestOutboxRecords.last(where: { record in
+            SiteRequestReceiptEvidence.matches(
+                record, requestID: guest.request.id, items: guest.items)
+        })
     }
 
     private func selectedReviewItem(kit: SiteRequestKit) -> SiteRequestItem? {
@@ -829,32 +1106,22 @@ private struct SiteRequestScreen: View {
         isWorking = true
         defer { isWorking = false }
         do {
-            guard let assignee = hub.assignees.first,
-                  let firstRoom = hub.rooms.first else {
+            guard draftReadyToSend,
+                  let assignee = selectedDraftAssignee else {
                 throw SiteRequestRemoteError.assigneePartyRequired
             }
-            let secondRoom = hub.rooms.dropFirst().first ?? firstRoom
-            let dueAt = Date().addingTimeInterval(7 * 86_400)
+            let dueContext = draftSession.dueContext.trimmingCharacters(
+                in: .whitespacesAndNewlines)
             let draft = SiteRequestDraft(
-                projectID: hub.projectID, title: "Site request",
-                assignee: assignee, dueAt: dueAt,
-                dueContext: "before drywall",
-                items: [
-                    SiteRequestDraftItem(
-                        kit: .measureSet, title: "\(firstRoom.name) · measure set",
-                        guidance: "Measure the requested opening to the nearest 1/16 inch.",
-                        roomID: firstRoom.id, sortOrder: 0,
-                        measureDefinitions: SiteRequestMeasureDefinition.p1MeasureSet),
-                    SiteRequestDraftItem(
-                        kit: .detailPhotos, title: "\(secondRoom.name) · detail photos",
-                        guidance: "Capture wide context, straight on, left return, and detail.",
-                        roomID: secondRoom.id, sortOrder: 1,
-                        photoShots: SiteRequestPhotoShot.p1DetailPhotos)
-                ])
+                projectID: hub.projectID,
+                title: draftSession.requestTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+                assignee: assignee, dueAt: draftSession.dueAt,
+                dueContext: dueContext.isEmpty ? nil : dueContext,
+                items: draftSession.selectedItems())
             let newRequestID = try await container.siteRequests.createDraft(draft)
             try await container.siteRequests.send(
                 requestID: newRequestID,
-                expiresAt: dueAt.addingTimeInterval(30 * 86_400))
+                expiresAt: draftSession.dueAt.addingTimeInterval(30 * 86_400))
             actionMessage = assignee.smsConsentGranted
                 ? "Request accepted for dispatch"
                 : "Request created · awaiting SMS consent"
@@ -872,6 +1139,7 @@ private struct SiteRequestScreen: View {
                 await resumeGuestOutbox()
             } else if !isGuest {
                 hub = try await container.siteRequests.hub(projectID: projectID)
+                draftSession.seedIfNeeded(from: hub)
                 contractLoaded = true
             } else {
                 contractLoaded = true
@@ -936,6 +1204,51 @@ private struct SiteRequestScreen: View {
             try await container.siteRequests.redo(itemID: item.id, note: redoNote)
             actionMessage = "Returned verbatim · only \(item.title) reopened"
         } catch { actionMessage = error.localizedDescription }
+    }
+
+    private func resend(_ request: SiteRequestSummary) async {
+        await performDesignerAction(success: "Private link accepted for resend") {
+            try await container.siteRequests.resend(
+                requestID: request.id,
+                expiresAt: max(request.dueAt.addingTimeInterval(7 * 86_400),
+                               Date().addingTimeInterval(7 * 86_400)))
+        }
+    }
+
+    private func nudge(_ request: SiteRequestSummary) async {
+        let note = draftSession.nudgeNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        await performDesignerAction(success: "Nudge accepted for dispatch") {
+            try await container.siteRequests.nudge(
+                requestID: request.id, note: note.isEmpty ? nil : note)
+        }
+    }
+
+    private func revokeAccess(_ request: SiteRequestSummary) async {
+        await performDesignerAction(success: "Private access revoked") {
+            try await container.siteRequests.revokeAccess(
+                requestID: request.id, reason: "Revoked from Patina Field")
+        }
+    }
+
+    private func close(_ request: SiteRequestSummary) async {
+        await performDesignerAction(success: "Request closed and private access revoked") {
+            try await container.siteRequests.close(requestID: request.id)
+        }
+    }
+
+    private func performDesignerAction(success: String,
+                                       operation: () async throws -> Void) async {
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await operation()
+            actionMessage = success
+            if let refreshed = try? await container.siteRequests.hub(projectID: activeProjectID) {
+                hub = refreshed
+            }
+        } catch {
+            actionMessage = error.localizedDescription
+        }
     }
 
     private func queueMeasurement() async {
@@ -1063,12 +1376,10 @@ private struct SiteRequestScreen: View {
             .overlay(Rectangle().stroke(CaptureColor.line2))
     }
 
-    private func kitRow(_ kit: SiteRequestKit, detail: String) -> some View {
-        card {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(kit.title).font(CaptureType.bodyEmph)
-                Text(detail).font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
-            }
+    private func kitLabel(_ kit: SiteRequestKit, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(kit.title).font(CaptureType.bodyEmph)
+            Text(detail).font(CaptureType.footnote).foregroundStyle(CaptureColor.inkSoft)
         }
     }
 
@@ -1221,11 +1532,17 @@ private struct SiteRequestScreen: View {
         }
     }
 
-    private func queueRow(_ title: String, state: String, tint: Color) -> some View {
+    private func queueRow(_ title: String, state: String, detail: String? = nil,
+                          tint: Color) -> some View {
         card {
-            HStack {
-                Text(title).font(CaptureType.bodyEmph)
-                Spacer(); Text(state).font(CaptureType.eyebrow).foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(title).font(CaptureType.bodyEmph)
+                    Spacer(); Text(state).font(CaptureType.eyebrow).foregroundStyle(tint)
+                }
+                if let detail {
+                    Text(detail).font(CaptureType.footnote).foregroundStyle(tint)
+                }
             }
         }
     }

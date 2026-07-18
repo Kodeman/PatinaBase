@@ -48,6 +48,35 @@ struct SiteRequestTests {
         }
     }
 
+    @Test func deliveredStateRequiresConcreteServerReceiptID() throws {
+        let record = makeRecord()
+        try record.transition(to: .uploading)
+        try record.transition(to: .awaitingReceipt)
+        #expect(throws: SiteRequestOutboxError.serverReceiptRequired) {
+            try record.transition(to: .delivered)
+        }
+        #expect(record.state == .awaitingReceipt)
+    }
+
+    @Test func receiptEvidenceMustMatchRequestItemVersionAndServerID() throws {
+        let record = makeRecord()
+        try record.transition(to: .uploading)
+        try record.transition(to: .awaitingReceipt)
+        try record.transition(to: .delivered, serverDeliverableID: "delivery-1")
+        let matchingItem = SiteRequestItem(
+            id: record.itemID, versionID: record.itemVersionID,
+            kit: .measureSet, title: "Opening", guidance: "Inside face")
+        #expect(SiteRequestReceiptEvidence.matches(
+            record, requestID: record.requestID, items: [matchingItem]))
+        #expect(!SiteRequestReceiptEvidence.matches(
+            record, requestID: "another-request", items: [matchingItem]))
+        let changedVersion = SiteRequestItem(
+            id: record.itemID, versionID: "new-version",
+            kit: .measureSet, title: "Opening", guidance: "Inside face")
+        #expect(!SiteRequestReceiptEvidence.matches(
+            record, requestID: record.requestID, items: [changedVersion]))
+    }
+
     @Test func failedRetryPreservesIdempotencyAndSchedulesBackoff() throws {
         let id = UUID()
         let record = makeRecord(id: id)
@@ -59,6 +88,64 @@ struct SiteRequestTests {
         try record.transition(to: .queued)
         #expect(record.clientDeliveryID == id)
         #expect(record.nextAttemptAt == nil)
+    }
+
+    @Test func terminalFailureStopsRetryAndPersistsActionableReason() throws {
+        let record = makeRecord()
+        try record.transition(to: .uploading)
+        try record.transition(
+            to: .terminal,
+            error: SiteRequestOutboxTerminalReason.requestChanged.userMessage,
+            terminalReason: .requestChanged)
+        #expect(record.state == .terminal)
+        #expect(record.terminalReason == .requestChanged)
+        #expect(record.nextAttemptAt == nil)
+        #expect(!record.state.canTransition(to: .queued))
+    }
+
+    @Test func guestFailureClassificationSeparatesPermanentFromTransient() {
+        #expect(SiteRequestFailureClassifier.disposition(
+            status: 401, code: "invalid_or_expired_link") == .terminal(.invalidAccess))
+        #expect(SiteRequestFailureClassifier.disposition(
+            status: 404, code: "invalid_or_expired_link") == .terminal(.invalidAccess))
+        #expect(SiteRequestFailureClassifier.disposition(
+            status: 404, code: "not_found") == .terminal(.requestUnavailable))
+        #expect(SiteRequestFailureClassifier.disposition(
+            status: 409, code: "request_conflict") == .terminal(.requestChanged))
+        #expect(SiteRequestFailureClassifier.disposition(
+            status: 409, code: "receipt_checksum_mismatch") == .terminal(.checksumMismatch))
+        #expect(SiteRequestFailureClassifier.disposition(
+            status: 409, code: "receipt_not_ready") == .transient)
+        #expect(SiteRequestFailureClassifier.disposition(
+            status: 502, code: "upload_intent_failed") == .transient)
+    }
+
+    @Test func draftBuilderCreatesExactlySelectedBuiltInItems() {
+        let choices = [
+            SiteRequestDraftItemChoice(
+                kit: .measureSet, isSelected: false, title: "Kitchen opening",
+                guidance: "Inside face", roomID: "room-kitchen"),
+            SiteRequestDraftItemChoice(
+                kit: .detailPhotos, isSelected: true, title: "Bath detail",
+                guidance: "Include sconce", roomID: "room-bath")
+        ]
+        let items = SiteRequestDraftBuilder.selectedItems(from: choices)
+        #expect(items.count == 1)
+        #expect(items[0].kit == .detailPhotos)
+        #expect(items[0].roomID == "room-bath")
+        #expect(items[0].sortOrder == 0)
+        #expect(items[0].measureDefinitions.isEmpty)
+        #expect(items[0].photoShots == SiteRequestPhotoShot.p1DetailPhotos)
+    }
+
+    @Test func lifecyclePolicyExposesOnlyServerSupportedActions() {
+        #expect(SiteRequestLifecyclePolicy.allows(.resend, for: .sent, hasSMSConsent: true))
+        #expect(!SiteRequestLifecyclePolicy.allows(.resend, for: .sent, hasSMSConsent: false))
+        #expect(SiteRequestLifecyclePolicy.allows(.nudge, for: .inProgress))
+        #expect(!SiteRequestLifecyclePolicy.allows(.nudge, for: .awaitingConsent))
+        #expect(SiteRequestLifecyclePolicy.allows(.revokeAccess, for: .delivered))
+        #expect(!SiteRequestLifecyclePolicy.allows(.close, for: .expired))
+        #expect(!SiteRequestLifecyclePolicy.allows(.close, for: .closed))
     }
 
     @MainActor

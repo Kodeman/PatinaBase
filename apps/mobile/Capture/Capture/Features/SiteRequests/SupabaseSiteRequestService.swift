@@ -147,7 +147,7 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
             assigneePartyID: partyID,
             dueAt: WireDate.string(draft.dueAt),
             dueContext: draft.dueContext,
-            note: draft.note,
+            note: draft.title.trimmingCharacters(in: .whitespacesAndNewlines),
             items: draft.items.map(DraftItemWire.init)
         )
         return try await client.rpc(SiteRequestContract.RPC.createDraft, params: params)
@@ -176,6 +176,18 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
     func resend(requestID: String, expiresAt: Date) async throws {
         let _: SendResponse = try await designerDispatch(
             action: "resend", requestID: requestID, expiresAt: expiresAt)
+    }
+
+    func nudge(requestID: String, note: String?) async throws {
+        let _: SendResponse = try await designerDispatch(
+            action: "nudge", requestID: requestID, expiresAt: nil, note: note)
+    }
+
+    func revokeAccess(requestID: String, reason: String?) async throws {
+        let _: RevokeAccessResponse = try await client.rpc(
+            SiteRequestContract.RPC.revokeAccess,
+            params: RevokeAccessParams(requestID: requestID, reason: reason))
+            .execute().value
     }
 
     func approve(itemID: String, deliverableID: String, roomID: String?) async throws {
@@ -258,13 +270,13 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
         guard (200..<300).contains(http.statusCode) else {
             throw SiteRequestRemoteError.rejected(
                 status: http.statusCode,
-                message: String(data: data, encoding: .utf8) ?? "Unknown error")
+                code: edgeErrorCode(data))
         }
         return try WireDate.decoder.decode(Response.self, from: data)
     }
 
     private func designerDispatch<Response: Decodable>(
-        action: String, requestID: String, expiresAt: Date?
+        action: String, requestID: String, expiresAt: Date?, note: String? = nil
     ) async throws -> Response {
         let userAccessToken = try await client.auth.session.accessToken
         return try await edgeCall(
@@ -273,7 +285,8 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
             body: DesignerDispatchBody(
                 action: action,
                 requestID: requestID,
-                expiresAt: expiresAt.map(WireDate.string)))
+                expiresAt: expiresAt.map(WireDate.string),
+                note: note))
     }
 
     private func edgeCall<Body: Encodable, Response: Decodable>(
@@ -292,9 +305,14 @@ struct SupabaseSiteRequestService: SiteRequestService, GuestSiteRequestService {
         guard (200..<300).contains(http.statusCode) else {
             throw SiteRequestRemoteError.rejected(
                 status: http.statusCode,
-                message: String(data: data, encoding: .utf8) ?? "Unknown error")
+                code: edgeErrorCode(data))
         }
         return try JSONDecoder().decode(Response.self, from: data)
+    }
+
+    private func edgeErrorCode(_ data: Data) -> String {
+        (try? JSONDecoder().decode(EdgeErrorEnvelope.self, from: data).error)
+            ?? "unknown_error"
     }
 }
 
@@ -940,6 +958,14 @@ private struct RequestOnlyParams: Encodable {
     let requestID: String
     enum CodingKeys: String, CodingKey { case requestID = "p_request_id" }
 }
+private struct RevokeAccessParams: Encodable {
+    let requestID: String
+    let reason: String?
+    enum CodingKeys: String, CodingKey {
+        case requestID = "p_request_id"
+        case reason = "p_reason"
+    }
+}
 private struct ApproveParams: Encodable {
     let itemID: String; let deliverableID: String; let roomID: String?
     enum CodingKeys: String, CodingKey {
@@ -1124,9 +1150,9 @@ private struct GuestDeliveryWire: Decodable {
     }
 }
 private struct DesignerDispatchBody: Encodable {
-    let action: String; let requestID: String; let expiresAt: String?
+    let action: String; let requestID: String; let expiresAt: String?; let note: String?
     enum CodingKeys: String, CodingKey {
-        case action; case requestID = "request_id"; case expiresAt = "expires_at"
+        case action, note; case requestID = "request_id"; case expiresAt = "expires_at"
     }
 }
 private struct SendResponse: Decodable {
@@ -1141,3 +1167,12 @@ private struct ApproveResponse: Decodable {
 }
 private struct RedoResponse: Decodable { let itemID: String; enum CodingKeys: String, CodingKey { case itemID = "item_id" } }
 private struct CloseResponse: Decodable { let requestID: String; enum CodingKeys: String, CodingKey { case requestID = "request_id" } }
+private struct RevokeAccessResponse: Decodable {
+    let requestID: String
+    let revokedCount: Int
+    enum CodingKeys: String, CodingKey {
+        case requestID = "request_id"
+        case revokedCount = "revoked_count"
+    }
+}
+private struct EdgeErrorEnvelope: Decodable { let error: String }

@@ -148,13 +148,16 @@ public enum SiteRequestFixtures {
 
 public actor MockSiteRequestService: SiteRequestService, GuestSiteRequestService {
     private var currentHub = SiteRequestFixtures.hub
+    private var recordedDrafts: [SiteRequestDraft] = []
+    private var recordedActions: [String] = []
 
     public init() {}
 
     public func hub(projectID _: String) async throws -> SiteProjectHub { currentHub }
 
     public func createDraft(_ draft: SiteRequestDraft) async throws -> String {
-        "draft-\(draft.projectID)"
+        recordedDrafts.append(draft)
+        return "draft-\(draft.projectID)"
     }
 
     public func reviseItem(requestID _: String, itemID: String,
@@ -162,9 +165,24 @@ public actor MockSiteRequestService: SiteRequestService, GuestSiteRequestService
         "\(itemID)-v2"
     }
 
-    public func send(requestID _: String, expiresAt _: Date) async throws {}
-    public func resend(requestID _: String, expiresAt _: Date) async throws {}
-    public func close(requestID _: String) async throws {}
+    public func send(requestID: String, expiresAt _: Date) async throws {
+        recordedActions.append("send:\(requestID)")
+    }
+    public func resend(requestID: String, expiresAt _: Date) async throws {
+        recordedActions.append("resend:\(requestID)")
+    }
+    public func nudge(requestID: String, note: String?) async throws {
+        recordedActions.append("nudge:\(requestID):\(note ?? "")")
+    }
+    public func revokeAccess(requestID: String, reason: String?) async throws {
+        recordedActions.append("revoke:\(requestID):\(reason ?? "")")
+    }
+    public func close(requestID: String) async throws {
+        recordedActions.append("close:\(requestID)")
+    }
+
+    public func drafts() -> [SiteRequestDraft] { recordedDrafts }
+    public func actions() -> [String] { recordedActions }
 
     public func approve(itemID: String, deliverableID _: String, roomID _: String?) async throws {
         currentHub = replacingStatus(itemID: itemID, with: .approved)

@@ -489,6 +489,38 @@ public struct SiteRequestDraftItem: Codable, Hashable, Sendable {
     }
 }
 
+public struct SiteRequestDraftItemChoice: Codable, Hashable, Sendable {
+    public let kit: SiteRequestKit
+    public let isSelected: Bool
+    public let title: String
+    public let guidance: String
+    public let roomID: String?
+
+    public init(kit: SiteRequestKit, isSelected: Bool, title: String,
+                guidance: String, roomID: String?) {
+        self.kit = kit
+        self.isSelected = isSelected
+        self.title = title
+        self.guidance = guidance
+        self.roomID = roomID
+    }
+}
+
+public enum SiteRequestDraftBuilder {
+    public static func selectedItems(from choices: [SiteRequestDraftItemChoice])
+        -> [SiteRequestDraftItem] {
+        choices.filter(\.isSelected).enumerated().map { sortOrder, choice in
+            SiteRequestDraftItem(
+                kit: choice.kit, title: choice.title, guidance: choice.guidance,
+                roomID: choice.roomID, sortOrder: sortOrder,
+                measureDefinitions: choice.kit == .measureSet
+                    ? SiteRequestMeasureDefinition.p1MeasureSet : [],
+                photoShots: choice.kit == .detailPhotos
+                    ? SiteRequestPhotoShot.p1DetailPhotos : [])
+        }
+    }
+}
+
 public struct SiteRequestDraft: Codable, Hashable, Sendable {
     public let projectID: String
     public let title: String
@@ -662,9 +694,35 @@ public protocol SiteRequestService: Sendable {
                     revision: SiteRequestDraftItem) async throws -> String
     func send(requestID: String, expiresAt: Date) async throws
     func resend(requestID: String, expiresAt: Date) async throws
+    func nudge(requestID: String, note: String?) async throws
+    func revokeAccess(requestID: String, reason: String?) async throws
     func approve(itemID: String, deliverableID: String, roomID: String?) async throws
     func redo(itemID: String, note: String) async throws
     func close(requestID: String) async throws
+}
+
+public enum SiteRequestLifecycleAction: String, CaseIterable, Sendable {
+    case resend
+    case nudge
+    case revokeAccess = "revoke_access"
+    case close
+}
+
+public enum SiteRequestLifecyclePolicy {
+    public static func allows(_ action: SiteRequestLifecycleAction,
+                              for status: SiteRequestStatus,
+                              hasSMSConsent: Bool = true) -> Bool {
+        switch action {
+        case .resend:
+            return hasSMSConsent && [.sent, .inProgress, .delivered].contains(status)
+        case .nudge:
+            return [.sent, .inProgress, .delivered].contains(status)
+        case .revokeAccess:
+            return [.awaitingConsent, .sent, .inProgress, .delivered].contains(status)
+        case .close:
+            return status != .closed && status != .expired
+        }
+    }
 }
 
 public protocol GuestSiteRequestService: Sendable {
@@ -675,6 +733,20 @@ public protocol GuestSiteRequestService: Sendable {
                            request: SiteUploadIntentRequest) async throws -> SiteUploadReceipt
     func deliver(accessToken: String,
                  submission: SiteDeliverySubmission) async throws -> SiteDeliveryReceipt
+}
+
+public enum SiteRequestReceiptEvidence {
+    public static func matches(_ record: SiteRequestOutboxRecord,
+                               requestID: String,
+                               items: [SiteRequestItem]) -> Bool {
+        guard record.requestID == requestID,
+              record.state == .delivered,
+              record.serverDeliverableID?.trimmingCharacters(
+                in: .whitespacesAndNewlines).isEmpty == false else { return false }
+        return items.contains {
+            $0.id == record.itemID && $0.versionID == record.itemVersionID
+        }
+    }
 }
 
 public extension GuestSiteRequest {
