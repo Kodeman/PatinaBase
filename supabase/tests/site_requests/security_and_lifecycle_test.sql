@@ -537,6 +537,29 @@ BEGIN
   END;
   ASSERT v_raised, 'Binder history must reject delete';
 
+  -- Media that retention already removed can never be approved into Binder.
+  RESET ROLE;
+  UPDATE public.site_deliverable_media
+  SET deleted_at = now()
+  WHERE id = v_media_id;
+  PERFORM pg_temp.assume_user('f3730000-0000-4000-8000-000000000001');
+  v_raised := false;
+  BEGIN
+    PERFORM public.site_request_approve_item(
+      v_item_photo,
+      (v_delivery_photo->>'deliverable_id')::uuid,
+      'f3730000-0000-4000-8000-000000000202'
+    );
+  EXCEPTION WHEN SQLSTATE '55000' THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'approval must reject already-purged media evidence';
+  RESET ROLE;
+  UPDATE public.site_deliverable_media
+  SET deleted_at = NULL
+  WHERE id = v_media_id;
+  PERFORM pg_temp.assume_user('f3730000-0000-4000-8000-000000000001');
+
   -- One nudge per calendar day.
   v_dispatch := public.site_request_nudge(v_request_id, 'Checking in.');
   v_outbox_id := (v_dispatch->>'outbox_id')::uuid;
@@ -634,6 +657,19 @@ BEGIN
     SELECT upload_state <> 'deleted'
     FROM public.site_deliverable_media WHERE id = v_media_id
   ), 'candidate enumeration must never fake Storage deletion';
+  PERFORM pg_temp.assume_user('f3730000-0000-4000-8000-000000000001');
+  v_raised := false;
+  BEGIN
+    PERFORM public.site_request_approve_item(
+      v_item_photo,
+      (v_delivery_photo->>'deliverable_id')::uuid,
+      'f3730000-0000-4000-8000-000000000202'
+    );
+  EXCEPTION WHEN SQLSTATE '55000' THEN
+    v_raised := true;
+  END;
+  ASSERT v_raised, 'expired requests must reject new Binder approvals';
+  RESET ROLE;
 
   -- Event sequence is gap-free and append-only for this request.
   ASSERT NOT EXISTS (

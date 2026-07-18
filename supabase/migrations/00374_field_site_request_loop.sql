@@ -2694,8 +2694,21 @@ BEGIN
   IF FOUND THEN
     v_idempotent := true;
   ELSE
+    IF v_request.status IN ('closed', 'expired') THEN
+      RAISE EXCEPTION 'request in % cannot accept a new approval', v_request.status
+        USING errcode = '55000';
+    END IF;
     IF v_item.status <> 'delivered' THEN
       RAISE EXCEPTION 'item in % cannot be approved', v_item.status USING errcode = '55000';
+    END IF;
+    IF EXISTS (
+      SELECT 1
+      FROM public.site_deliverable_media media
+      WHERE media.deliverable_id = v_deliverable.id
+        AND (media.deleted_at IS NOT NULL OR media.upload_state = 'deleted')
+    ) THEN
+      RAISE EXCEPTION 'delivery evidence was already removed and cannot be approved'
+        USING errcode = '55000';
     END IF;
     v_room_id := COALESCE(p_room_id, v_version.room_id);
     IF v_room_id IS NULL OR NOT EXISTS (

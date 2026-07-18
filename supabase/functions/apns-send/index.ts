@@ -31,8 +31,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { importPKCS8, SignJWT } from "https://deno.land/x/jose@v5.2.0/index.ts";
 import {
-  type ApnsSendInput,
   apnsDeviceUrl,
+  type ApnsSendInput,
+  bearerRole,
   buildApnsPayload,
   isDeadTokenResponse,
   normalizePkcs8Pem,
@@ -74,6 +75,13 @@ async function providerJwt(
 }
 
 Deno.serve(async (req) => {
+  if (req.method !== "POST") {
+    return json({ error: "method_not_allowed" }, 405);
+  }
+  if (bearerRole(req.headers.get("Authorization")) !== "service_role") {
+    return json({ error: "service_role_required" }, 403);
+  }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -101,7 +109,10 @@ Deno.serve(async (req) => {
   if (!authKey || !keyId || !teamId || !topic) {
     console.log(
       "[apns-send] APNS_* secrets not configured; skipping push",
-      { user_id: input.user_id ?? null, log_id: input.notification_log_id ?? null },
+      {
+        user_id: input.user_id ?? null,
+        log_id: input.notification_log_id ?? null,
+      },
     );
     return json({ skipped: "apns_not_configured" });
   }
@@ -112,12 +123,17 @@ Deno.serve(async (req) => {
     let unresolved: string[] = [];
 
     if (input.tokens?.length) {
-      const plain = input.tokens.map((t) => (typeof t === "string" ? t : t.token));
+      const plain = input.tokens.map((
+        t,
+      ) => (typeof t === "string" ? t : t.token));
       const { data: rows } = await supabase
         .from("device_push_tokens")
         .select("token, environment")
         .in("token", plain);
-      ({ resolved: targets, unresolved } = resolveTokens(input.tokens, rows ?? []));
+      ({ resolved: targets, unresolved } = resolveTokens(
+        input.tokens,
+        rows ?? [],
+      ));
     } else {
       const { data: rows, error } = await supabase
         .from("device_push_tokens")
@@ -131,7 +147,10 @@ Deno.serve(async (req) => {
     }
 
     if (unresolved.length) {
-      console.warn("[apns-send] dropping tokens with unknown environment", unresolved);
+      console.warn(
+        "[apns-send] dropping tokens with unknown environment",
+        unresolved,
+      );
     }
     if (!targets.length) {
       return json({ sent: 0, skipped: "no_tokens" });
@@ -142,7 +161,8 @@ Deno.serve(async (req) => {
 
     let successes = 0;
     let providerId: string | undefined;
-    const failures: Array<{ token: string; status: number; reason?: string }> = [];
+    const failures: Array<{ token: string; status: number; reason?: string }> =
+      [];
 
     for (const target of targets) {
       try {
@@ -175,7 +195,10 @@ Deno.serve(async (req) => {
         failures.push({ token: target.token, status: res.status, reason });
 
         if (isDeadTokenResponse(res.status, reason)) {
-          await supabase.from("device_push_tokens").delete().eq("token", target.token);
+          await supabase.from("device_push_tokens").delete().eq(
+            "token",
+            target.token,
+          );
           console.log("[apns-send] deleted dead token", {
             status: res.status,
             reason: reason ?? null,
@@ -207,7 +230,9 @@ Deno.serve(async (req) => {
           .update({
             status: "failed",
             error: `apns: 0/${targets.length} accepted — ${
-              failures.map((f) => `${f.status}${f.reason ? `:${f.reason}` : ""}`).join(", ")
+              failures.map((f) =>
+                `${f.status}${f.reason ? `:${f.reason}` : ""}`
+              ).join(", ")
             }`.slice(0, 500),
           })
           .eq("id", input.notification_log_id);
@@ -222,6 +247,9 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error("[apns-send] error", err);
-    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    return json(
+      { error: err instanceof Error ? err.message : String(err) },
+      500,
+    );
   }
 });

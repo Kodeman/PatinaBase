@@ -471,6 +471,12 @@ verify_jwt = true
 [functions.site-request-media-maintenance]
 verify_jwt = true
 
+# Shared APNs provider boundary. Only service-role server/cron callers may
+# select a user or token and supply notification copy; the function enforces
+# the service-role claim again in-code before reading the request body.
+[functions.apns-send]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

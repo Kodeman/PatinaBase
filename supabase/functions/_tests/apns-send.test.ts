@@ -9,15 +9,36 @@
 // network, no jose. Run:
 //   deno test --allow-all --config supabase/functions/deno.json supabase/functions/_tests/apns-send.test.ts
 
-import { assert, assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
+import {
+  assert,
+  assertEquals,
+} from "https://deno.land/std@0.168.0/testing/asserts.ts";
 import {
   apnsDeviceUrl,
   apnsHostFor,
+  bearerRole,
   buildApnsPayload,
   isDeadTokenResponse,
   normalizePkcs8Pem,
   resolveTokens,
 } from "../apns-send/core.ts";
+
+function fakeJwt(role: string): string {
+  const encode = (value: object) =>
+    btoa(JSON.stringify(value)).replaceAll("+", "-").replaceAll("/", "_")
+      .replaceAll("=", "");
+  return `${encode({ alg: "none" })}.${encode({ role })}.signature`;
+}
+
+Deno.test("apns-send service boundary distinguishes service and user JWT roles", () => {
+  assertEquals(bearerRole(`Bearer ${fakeJwt("service_role")}`), "service_role");
+  assertEquals(
+    bearerRole(`Bearer ${fakeJwt("authenticated")}`),
+    "authenticated",
+  );
+  assertEquals(bearerRole(null), null);
+  assertEquals(bearerRole("Bearer malformed"), null);
+});
 
 Deno.test("apnsHostFor picks the host PER TOKEN environment (I66)", () => {
   assertEquals(apnsHostFor("production"), "https://api.push.apple.com");
@@ -58,7 +79,10 @@ Deno.test("buildApnsPayload carries alert + routing refs", () => {
 });
 
 Deno.test("buildApnsPayload nulls absent routing refs (never undefined keys)", () => {
-  const payload = buildApnsPayload({ title: "t", body: "b" }) as Record<string, unknown>;
+  const payload = buildApnsPayload({ title: "t", body: "b" }) as Record<
+    string,
+    unknown
+  >;
   assertEquals(payload.entity_type, null);
   assertEquals(payload.entity_id, null);
   assertEquals(payload.notification_log_id, null);

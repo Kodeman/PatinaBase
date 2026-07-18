@@ -24,6 +24,25 @@ export interface ResolvedToken {
   environment: ApnsEnvironment;
 }
 
+/**
+ * Reads the role claim only after the Edge gateway has verified the JWT.
+ * `apns-send` uses this as a second, explicit service-role boundary so an
+ * ordinary authenticated user cannot target another user's device tokens.
+ */
+export function bearerRole(header: string | null): string | null {
+  if (!header?.startsWith("Bearer ")) return null;
+  const parts = header.slice(7).split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const encoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = encoded + "=".repeat((4 - encoded.length % 4) % 4);
+    const value = JSON.parse(atob(padded)) as { role?: unknown };
+    return typeof value.role === "string" ? value.role : null;
+  } catch {
+    return null;
+  }
+}
+
 /** I66: the APNs host is chosen PER TOKEN from its registration environment —
  *  today's builds sign as Apple Development, so expect sandbox tokens until a
  *  true distribution archive ships. */
@@ -39,7 +58,9 @@ export function apnsDeviceUrl(t: ResolvedToken): string {
 
 /** The push payload: a standard alert + the routing refs the iOS
  *  NotificationRouter expects (mirrors notification_log metadata keys). */
-export function buildApnsPayload(input: ApnsSendInput): Record<string, unknown> {
+export function buildApnsPayload(
+  input: ApnsSendInput,
+): Record<string, unknown> {
   return {
     aps: {
       alert: { title: input.title, body: input.body },
@@ -116,5 +137,7 @@ export function normalizePkcs8Pem(raw: string): string {
   for (let i = 0; i < body.length; i += 64) {
     lines.push(body.slice(i, i + 64));
   }
-  return `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----`;
+  return `-----BEGIN PRIVATE KEY-----\n${
+    lines.join("\n")
+  }\n-----END PRIVATE KEY-----`;
 }

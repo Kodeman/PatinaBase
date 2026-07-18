@@ -253,6 +253,8 @@ async function purgeExpiredUnapproved(
         continue;
       }
       const marked = await admin.from("site_deliverable_media").update({
+        upload_state: "deleted",
+        deleted_at: now,
         purged_at: now,
         derivatives: { ...(media.derivatives ?? {}), purged_at: now },
         processing_error: null,
