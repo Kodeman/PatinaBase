@@ -1755,6 +1755,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "client_discovery_room_scan_id_fkey"
+            columns: ["room_scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
+          {
             foreignKeyName: "client_discovery_seeded_proposal_id_fkey"
             columns: ["seeded_proposal_id"]
             isOneToOne: false
@@ -6914,6 +6921,13 @@ export type Database = {
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "lead_room_scans_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
         ]
       }
       leads: {
@@ -7044,6 +7058,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_room_scan_id_fkey"
+            columns: ["room_scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
@@ -13619,6 +13640,13 @@ export type Database = {
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "room_features_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
         ]
       }
       room_file_measurements: {
@@ -13683,6 +13711,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "room_file_measurements_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["room_file_id"]
+          },
+          {
             foreignKeyName: "room_file_measurements_scan_id_fkey"
             columns: ["scan_id"]
             isOneToOne: false
@@ -13702,6 +13737,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
           {
             foreignKeyName: "room_file_measurements_verified_by_fkey"
@@ -13795,6 +13837,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_files_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
@@ -13934,6 +13983,13 @@ export type Database = {
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "room_scan_associations_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
         ]
       }
       room_scan_geometry: {
@@ -14024,6 +14080,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scan_geometry_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: true
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
@@ -14139,6 +14202,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scan_geometry_elements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
           {
             foreignKeyName: "room_scan_geometry_elements_wall_element_id_fkey"
@@ -14310,6 +14380,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scan_images_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
@@ -14821,6 +14898,13 @@ export type Database = {
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "scan_anchors_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
+          },
         ]
       }
       scan_pipeline_events: {
@@ -14866,6 +14950,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "scan_pipeline_events_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["room_file_id"]
+          },
+          {
             foreignKeyName: "scan_pipeline_events_scan_id_fkey"
             columns: ["scan_id"]
             isOneToOne: false
@@ -14885,6 +14976,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "room_scans_v2"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scan_pipeline_events_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
@@ -18481,6 +18579,105 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "user_engagement_scores"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      scan_pipeline_runs: {
+        Row: {
+          anchor_count: number | null
+          drawing_ms: number | null
+          event_count: number | null
+          failed_events: number | null
+          first_event_at: string | null
+          ingest_ms: number | null
+          last_error: string | null
+          last_event_at: string | null
+          last_task_attempts: number | null
+          last_task_status: string | null
+          last_task_type: string | null
+          room_file_id: string | null
+          room_file_status: string | null
+          room_file_version: number | null
+          scan_id: string | null
+          scan_name: string | null
+          scan_status: string | null
+          solve_ms: number | null
+          tolerance_class: string | null
+          unverified: boolean | null
+          user_id: string | null
+          wall_seconds: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_scans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_scans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_engagement_scores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scan_tolerance_distribution: {
+        Row: {
+          max_tolerance_mm: number | null
+          measurement_count: number | null
+          min_tolerance_mm: number | null
+          p50_tolerance_mm: number | null
+          p95_tolerance_mm: number | null
+          room_file_id: string | null
+          scan_id: string | null
+          tolerance_class: string | null
+          with_tolerance: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_file_measurements_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "room_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_room_file_id_fkey"
+            columns: ["room_file_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["room_file_id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scan_documents"
+            referencedColumns: ["scan_id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "room_scans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_file_measurements_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scan_pipeline_runs"
+            referencedColumns: ["scan_id"]
           },
         ]
       }
