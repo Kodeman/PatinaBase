@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@patina/design-system";
+import { siteRequestGuestEvents } from "@/lib/analytics/site-request-events";
 import {
   IndexedDbSiteRequestQueueStore,
   createQueueAsset,
   processQueuedDelivery,
+  shouldAutomaticallyRetrySiteRequest,
+  type SiteRequestQueueStore,
 } from "./site-request-queue";
 import {
   dueLabel,
@@ -21,6 +24,7 @@ import {
 interface SiteRequestGuestProps {
   token: string;
   initial: SiteRequestBootstrapDTO;
+  queueStore?: SiteRequestQueueStore;
 }
 
 const deliveredStatuses = new Set(["delivered", "approved", "closed"]);
@@ -40,6 +44,12 @@ function queueCopy(
       return "Delivered · received by Patina";
     case "failed":
       return "Could not finish delivery · your capture is still saved";
+    case "terminal":
+      if (record.terminalReason === "access-ended")
+        return "This link is no longer active · ask your designer for a new link";
+      if (record.terminalReason === "request-changed")
+        return "The request changed before delivery · reload the latest checklist";
+      return "Patina could not verify this capture · review it and capture again";
   }
 }
 
@@ -65,6 +75,15 @@ function MeasureCapture({
   const [proofs, setProofs] = useState<Record<string, File | undefined>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
 
   function update(
     id: string,
@@ -86,7 +105,6 @@ function MeasureCapture({
     setError(null);
     setSaving(true);
     try {
-      const attemptId = crypto.randomUUID();
       const assets = [];
       const dimensions = [];
       for (const definition of definitions) {
@@ -116,7 +134,7 @@ function MeasureCapture({
         });
       }
       await onQueue({
-        id: attemptId,
+        id: crypto.randomUUID(),
         requestId: dto.request.id,
         itemId: item.id,
         itemVersionId: item.current_version_id,
@@ -147,7 +165,12 @@ function MeasureCapture({
     <section aria-labelledby="measure-title" className="space-y-5">
       <div>
         <p className="type-meta">K-01 · Measure set</p>
-        <h2 id="measure-title" className="type-page-title mt-1">
+        <h2
+          ref={headingRef}
+          id="measure-title"
+          tabIndex={-1}
+          className="type-page-title mt-1 outline-none"
+        >
           {item.version.title}
         </h2>
         {item.version.room_name && (
@@ -161,6 +184,7 @@ function MeasureCapture({
       </div>
 
       <div
+        role="group"
         className="flex rounded-full border border-[var(--border-default)] p-1"
         aria-label="Measurement units"
       >
@@ -168,6 +192,7 @@ function MeasureCapture({
           <button
             key={choice}
             type="button"
+            aria-pressed={unit === choice}
             onClick={() => setUnit(choice)}
             className={`min-h-[44px] flex-1 rounded-full px-3 text-sm ${unit === choice ? "bg-[var(--color-pearl)]" : ""}`}
           >
@@ -273,7 +298,9 @@ function MeasureCapture({
       ))}
       {error && (
         <p
+          ref={errorRef}
           role="alert"
+          tabIndex={-1}
           className="type-body-small text-[var(--color-terracotta)]"
         >
           {error}
@@ -313,6 +340,15 @@ function PhotoCapture({
   const [skipNotes, setSkipNotes] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
 
   async function submit() {
     setError(null);
@@ -371,7 +407,12 @@ function PhotoCapture({
     <section aria-labelledby="photo-title" className="space-y-5">
       <div>
         <p className="type-meta">K-02 · Detail photos</p>
-        <h2 id="photo-title" className="type-page-title mt-1">
+        <h2
+          ref={headingRef}
+          id="photo-title"
+          tabIndex={-1}
+          className="type-page-title mt-1 outline-none"
+        >
           {item.version.title}
         </h2>
         {item.version.room_name && (
@@ -443,7 +484,9 @@ function PhotoCapture({
       ))}
       {error && (
         <p
+          ref={errorRef}
           role="alert"
+          tabIndex={-1}
           className="type-body-small text-[var(--color-terracotta)]"
         >
           {error}
@@ -467,9 +510,13 @@ function PhotoCapture({
   );
 }
 
-export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
-  const store = useMemo(() => new IndexedDbSiteRequestQueueStore(), []);
+export function SiteRequestGuest({ token, initial, queueStore }: SiteRequestGuestProps) {
+  const indexedDbStore = useMemo(() => new IndexedDbSiteRequestQueueStore(), []);
+  const store = queueStore ?? indexedDbStore;
   const processing = useRef(new Set<string>());
+  const bootstrapTracked = useRef(false);
+  const receiptTracked = useRef(new Set<string>());
+  const deliveredTracked = useRef(new Set<string>());
   const [opened, setOpened] = useState(false);
   const [activeItem, setActiveItem] = useState<SiteRequestItem | null>(null);
   const [records, setRecords] = useState<SiteRequestQueuedDelivery[]>([]);
@@ -477,6 +524,7 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
     () => typeof navigator === "undefined" || navigator.onLine,
   );
   const [queueError, setQueueError] = useState<string | null>(null);
+  const queueErrorRef = useRef<HTMLParagraphElement>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -509,7 +557,38 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
           record,
           token,
           observedStore,
+          undefined,
+          {
+            serverReceipt: (received) => {
+              if (receiptTracked.current.has(received.id)) return;
+              receiptTracked.current.add(received.id);
+              siteRequestGuestEvents.serverReceipt({
+                kitCode: received.kitCode,
+                retryCount: received.retryCount,
+              });
+            },
+            delivered: (delivered) => {
+              if (deliveredTracked.current.has(delivered.id)) return;
+              deliveredTracked.current.add(delivered.id);
+              siteRequestGuestEvents.delivered({
+                kitCode: delivered.kitCode,
+                retryCount: delivered.retryCount,
+              });
+            },
+            error: (failed, classification) => {
+              siteRequestGuestEvents.error({
+                kitCode: failed.kitCode,
+                errorClass: classification.errorClass,
+                retryable: classification.retryable,
+              });
+            },
+          },
         );
+        if (result.state === "terminal" && result.terminalReason === "access-ended") {
+          setQueueError(
+            "This link is no longer active. Your saved capture remains on this phone; ask your designer for a new link.",
+          );
+        }
         setRecords((current) => [
           ...current.filter((candidate) => candidate.id !== result.id),
           result,
@@ -522,8 +601,16 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
   );
 
   useEffect(() => {
+    if (bootstrapTracked.current) return;
+    bootstrapTracked.current = true;
+    siteRequestGuestEvents.bootstrap(initial.items.length);
+  }, [initial.items.length]);
+  useEffect(() => {
     void refresh();
   }, [refresh]);
+  useEffect(() => {
+    if (queueError) queueErrorRef.current?.focus();
+  }, [queueError]);
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
     window.addEventListener("online", update);
@@ -537,7 +624,7 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
     if (!online) return;
     const ready = records.filter(
       (record) =>
-        record.state !== "delivered" &&
+        shouldAutomaticallyRetrySiteRequest(record) &&
         (!record.nextRetryAt || Date.parse(record.nextRetryAt) <= Date.now()),
     );
     ready.forEach((record) => {
@@ -558,6 +645,10 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
 
   async function queue(record: SiteRequestQueuedDelivery) {
     await store.put(record);
+    siteRequestGuestEvents.captureQueued({
+      kitCode: record.kitCode,
+      assetCount: record.assets.length,
+    });
     setRecords((current) => [
       ...current.filter((candidate) => candidate.id !== record.id),
       record,
@@ -565,6 +656,15 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
     setActiveItem(null);
     setOpened(true);
     if (online) void run(record);
+  }
+
+  async function discardAndRecapture(
+    record: SiteRequestQueuedDelivery,
+    item: SiteRequestItem,
+  ) {
+    await store.delete(record.id);
+    setRecords((current) => current.filter((candidate) => candidate.id !== record.id));
+    setActiveItem(item);
   }
 
   if (!opened) {
@@ -625,6 +725,9 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
       deliveredStatuses.has(item.status) ||
       byItem.get(item.id)?.state === "delivered",
   ).length;
+  const progressPercent = initial.items.length
+    ? Math.round((deliveredCount / initial.items.length) * 100)
+    : 0;
   return (
     <main className="mx-auto min-h-screen max-w-lg px-4 py-8 sm:px-6">
       <header className="mb-7">
@@ -645,12 +748,19 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
         <p className="type-body mt-4">
           {deliveredCount} of {initial.items.length} delivered
         </p>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--border-subtle)]">
+        <div
+          role="progressbar"
+          aria-label="Delivery progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progressPercent}
+          aria-valuetext={`${deliveredCount} of ${initial.items.length} delivered`}
+          className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--border-subtle)]"
+        >
           <div
+            aria-hidden="true"
             className="h-full bg-[var(--accent-primary)]"
-            style={{
-              width: `${initial.items.length ? (deliveredCount / initial.items.length) * 100 : 0}%`,
-            }}
+            style={{ width: `${progressPercent}%` }}
           />
         </div>
       </header>
@@ -664,7 +774,9 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
       )}
       {queueError && (
         <p
+          ref={queueErrorRef}
           role="alert"
+          tabIndex={-1}
           className="type-body-small mb-4 text-[var(--color-terracotta)]"
         >
           {queueError}
@@ -709,7 +821,12 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
                     </p>
                   )}
                   {queueCopy(local) && (
-                    <p className="type-body-small mt-2 text-[var(--accent-primary)]">
+                    <p
+                      role={local?.state === "terminal" ? "alert" : "status"}
+                      aria-live={local?.state === "terminal" ? "assertive" : "polite"}
+                      aria-atomic="true"
+                      className="type-body-small mt-2 text-[var(--accent-primary)]"
+                    >
                       {queueCopy(local)}
                     </p>
                   )}
@@ -735,6 +852,28 @@ export function SiteRequestGuest({ token, initial }: SiteRequestGuestProps) {
                   Try delivery again
                 </Button>
               )}
+              {local?.state === "terminal" &&
+                local.terminalReason === "capture-invalid" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="mt-3 min-h-[44px] w-full"
+                    onClick={() => void discardAndRecapture(local, item)}
+                  >
+                    Review and capture again
+                  </Button>
+                )}
+              {local?.state === "terminal" &&
+                local.terminalReason === "request-changed" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="mt-3 min-h-[44px] w-full"
+                    onClick={() => window.location.reload()}
+                  >
+                    Reload latest checklist
+                  </Button>
+                )}
             </li>
           );
         })}

@@ -1,7 +1,7 @@
 import posthog from 'posthog-js';
 import { isAnalyticsEnabled } from './posthog';
 
-function track(
+export function track(
   event: string,
   properties?: Record<string, unknown>,
   options?: { transport?: 'XHR' | 'sendBeacon' }

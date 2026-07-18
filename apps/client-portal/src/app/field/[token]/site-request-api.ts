@@ -24,6 +24,81 @@ export class SiteRequestApiError extends Error {
   }
 }
 
+export type SiteRequestTerminalReason =
+  | "access-ended"
+  | "capture-invalid"
+  | "request-changed";
+
+export type SiteRequestFailureClassification =
+  | {
+      retryable: false;
+      errorClass: SiteRequestTerminalReason;
+      safeCode: string;
+    }
+  | {
+      retryable: true;
+      errorClass: "transient";
+      safeCode: string;
+    };
+
+const ACCESS_ENDED_CODES = new Set(["invalid_or_expired_link"]);
+const REQUEST_CHANGED_CODES = new Set([
+  "invalid_upload_path",
+  "request_conflict",
+  "unknown_action",
+]);
+const CAPTURE_INVALID_CODES = new Set([
+  "invalid_upload",
+  "invalid_receipt",
+  "invalid_delivery",
+  "receipt_checksum_mismatch",
+  "payload_too_large",
+  "invalid_json",
+]);
+
+/** Keep immutable/access failures out of the automatic retry loop. */
+export function classifySiteRequestFailure(
+  error: unknown,
+): SiteRequestFailureClassification {
+  if (!(error instanceof SiteRequestApiError)) {
+    return { retryable: true, errorClass: "transient", safeCode: "network" };
+  }
+  if (
+    ACCESS_ENDED_CODES.has(error.code) ||
+    (error.code !== "signed_upload_failed" &&
+      [401, 403, 404, 410].includes(error.status))
+  ) {
+    return {
+      retryable: false,
+      errorClass: "access-ended",
+      safeCode: "access_ended",
+    };
+  }
+  if (REQUEST_CHANGED_CODES.has(error.code)) {
+    return {
+      retryable: false,
+      errorClass: "request-changed",
+      safeCode: "request_changed",
+    };
+  }
+  if (
+    CAPTURE_INVALID_CODES.has(error.code) ||
+    [400, 405, 413, 422].includes(error.status) ||
+    (error.status === 409 && error.code !== "receipt_not_ready")
+  ) {
+    return {
+      retryable: false,
+      errorClass: "capture-invalid",
+      safeCode: "capture_invalid",
+    };
+  }
+  return {
+    retryable: true,
+    errorClass: "transient",
+    safeCode: "temporary_delivery_failure",
+  };
+}
+
 function config(options: SiteRequestApiOptions) {
   const baseUrl = (
     options.baseUrl ??

@@ -1,4 +1,4 @@
-import posthog from 'posthog-js';
+import posthog, { type CaptureResult } from 'posthog-js';
 
 declare global {
   interface Window {
@@ -7,6 +7,52 @@ declare global {
 }
 
 let initialized = false;
+
+const FIELD_BEARER_IN_URL = /\/field\/[A-Za-z0-9_-]{32,256}(?![A-Za-z0-9_-])/g;
+
+function sanitizeAnalyticsValue(value: unknown, seen: WeakMap<object, unknown>): unknown {
+  if (typeof value === 'string') {
+    return value.replace(FIELD_BEARER_IN_URL, '/field/[redacted]');
+  }
+  if (!value || typeof value !== 'object') return value;
+
+  if (typeof URL !== 'undefined' && value instanceof URL) {
+    return value.toString().replace(FIELD_BEARER_IN_URL, '/field/[redacted]');
+  }
+  if (value instanceof Date || value instanceof RegExp) return value;
+
+  const prior = seen.get(value);
+  if (prior) return prior;
+
+  if (Array.isArray(value)) {
+    const sanitized: unknown[] = [];
+    seen.set(value, sanitized);
+    value.forEach((entry) => sanitized.push(sanitizeAnalyticsValue(entry, seen)));
+    return sanitized;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;
+
+  const sanitized: Record<string, unknown> = {};
+  seen.set(value, sanitized);
+  for (const [key, entry] of Object.entries(value)) {
+    const sanitizedKey = key.replace(FIELD_BEARER_IN_URL, '/field/[redacted]');
+    sanitized[sanitizedKey] = sanitizeAnalyticsValue(entry, seen);
+  }
+  return sanitized;
+}
+
+/**
+ * Last-mile privacy boundary for every PostHog event, including SDK-generated
+ * autocapture properties and URLs added after an SPA navigation. Field guest
+ * bearer credentials are valid path segments, so no event may leave the
+ * browser with one embedded in a URL, referrer, element href, or nested value.
+ */
+export function sanitizePostHogEvent(event: CaptureResult | null): CaptureResult | null {
+  if (!event) return null;
+  return sanitizeAnalyticsValue(event, new WeakMap()) as CaptureResult;
+}
 
 export function initPostHog(): void {
   if (initialized || typeof window === 'undefined') return;
@@ -29,6 +75,7 @@ export function initPostHog(): void {
     respect_dnt: true,
     ip: false,
     persistence: 'localStorage+cookie',
+    before_send: sanitizePostHogEvent,
     loaded: (ph) => {
       if (process.env.NODE_ENV === 'development') {
         ph.debug();

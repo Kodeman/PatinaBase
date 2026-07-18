@@ -44,8 +44,34 @@ export default async function FieldLinkPage({ params }: { params: Promise<{ toke
   }
 
   if (!dto?.party?.id) {
-    const siteRequest = await bootstrapSiteRequest(token).catch(() => null);
-    if (!siteRequest?.request?.id) notFound();
+    let siteRequest = null;
+    let temporarilyUnavailable = false;
+    try {
+      siteRequest = await bootstrapSiteRequest(token);
+    } catch {
+      temporarilyUnavailable = true;
+    }
+    if (!siteRequest?.request?.id) {
+      // Preserve the legacy hex-token rail's indistinguishable 404. A valid
+      // Site Request credential uses the base64url form, so its guest gets an
+      // actionable but still non-enumerating error screen.
+      if (isLikelyFieldToken(token)) notFound();
+      return (
+        <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center px-5 py-10">
+          <p className="type-meta">Patina · Site Request</p>
+          <h1 className="type-page-title mt-2">
+            {temporarilyUnavailable
+              ? 'Patina could not open this request.'
+              : 'This request link is no longer active.'}
+          </h1>
+          <p className="type-body mt-4 text-[var(--text-muted)]">
+            {temporarilyUnavailable
+              ? 'Check your connection, then refresh this page. Your designer can resend the link if the problem continues.'
+              : 'Ask your designer to resend the request. For privacy, expired, revoked, and unknown links all look the same.'}
+          </p>
+        </main>
+      );
+    }
     return <SiteRequestGuest token={token} initial={siteRequest} />;
   }
 

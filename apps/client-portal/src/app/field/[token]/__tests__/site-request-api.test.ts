@@ -1,6 +1,7 @@
 import {
   SiteRequestApiError,
   bootstrapSiteRequest,
+  classifySiteRequestFailure,
   requestSiteRequestGuest,
   uploadToSignedIntent,
 } from "../site-request-api";
@@ -64,6 +65,54 @@ describe("site request guest API", () => {
         { ...options, fetchImpl },
       ),
     ).rejects.toEqual(new SiteRequestApiError(409, "receipt_not_ready"));
+  });
+
+  it("classifies ended access and immutable conflicts as terminal", () => {
+    expect(
+      classifySiteRequestFailure(
+        new SiteRequestApiError(404, "invalid_or_expired_link"),
+      ),
+    ).toEqual({
+      retryable: false,
+      errorClass: "access-ended",
+      safeCode: "access_ended",
+    });
+    expect(
+      classifySiteRequestFailure(
+        new SiteRequestApiError(409, "receipt_checksum_mismatch"),
+      ),
+    ).toEqual({
+      retryable: false,
+      errorClass: "capture-invalid",
+      safeCode: "capture_invalid",
+    });
+    expect(
+      classifySiteRequestFailure(new SiteRequestApiError(409, "request_conflict")),
+    ).toEqual({
+      retryable: false,
+      errorClass: "request-changed",
+      safeCode: "request_changed",
+    });
+  });
+
+  it("keeps network, receipt propagation, and server failures retryable", () => {
+    expect(classifySiteRequestFailure(new Error("offline"))).toMatchObject({
+      retryable: true,
+      errorClass: "transient",
+    });
+    expect(
+      classifySiteRequestFailure(
+        new SiteRequestApiError(409, "receipt_not_ready"),
+      ),
+    ).toMatchObject({ retryable: true, errorClass: "transient" });
+    expect(
+      classifySiteRequestFailure(new SiteRequestApiError(503, "request_failed")),
+    ).toMatchObject({ retryable: true, errorClass: "transient" });
+    expect(
+      classifySiteRequestFailure(
+        new SiteRequestApiError(403, "signed_upload_failed"),
+      ),
+    ).toMatchObject({ retryable: true, errorClass: "transient" });
   });
 
   it("uploads a Blob only to the server-minted signed URL without upsert", async () => {
