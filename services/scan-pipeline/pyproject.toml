@@ -29,10 +29,12 @@ solve = ["numpy>=1.26", "scipy>=1.11"]
 drawings = ["ezdxf>=1.1", "cairosvg>=2.7"]
 
 # ── P2 GPU stages (item 3) — each pulls ONLY what its stage imports ──────────
-# refine (§10.2): GLOMAP global SfM warm-started on the ARKit poses; GLOMAP +
-#   COLMAP are SYSTEM binaries (box-prep, apt/build — NOT pip), pycolmap reads/
-#   writes the COLMAP DB + poses. No torch.
-refine = ["pycolmap>=0.6", "numpy>=1.26", "scipy>=1.11"]
+# refine (§10.2 / I87): target COLMAP 4.0.2 known-pose triangulation + BA;
+#   position-prior mapper fallback. The CLI and binding MUST both report 4.0.2
+#   in the still-owed box fixture; the exact binding pin prevents a silent DB/
+#   model API mismatch. This is a target, not a completed runtime qualification.
+#   No standalone GLOMAP package and no torch.
+refine = ["pycolmap==4.0.2", "numpy>=1.26", "scipy>=1.11"]
 # fuse (§10.3): TSDF dense mesh (Open3D) + decimation + glb export. No torch.
 fuse = ["open3d>=0.18", "trimesh>=4.0", "numpy>=1.26"]
 # splat (§10.5): the ONLY CUDA/torch stage — 3DGS training (gsplat) → SPZ.

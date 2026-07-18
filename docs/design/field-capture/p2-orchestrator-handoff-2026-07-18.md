@@ -29,19 +29,27 @@ Read it with, not instead of, the canonical sources below.
 - **P2 (presence)**: ruled (R114), P2-M1 passed (R115), schema **00376/00377
   live on Strata**, items 1–2 done (item 2 was verified-not-rebuilt — its
   deliverable landed inside item 1's commit `9db080d2`; recorded honestly).
-- **Item 3 was IN FLIGHT when this pause happened**: GPU extras + box
-  hardening (stage-named extras `[refine]/[fuse]/[splat]` + `[gpu]` meta,
-  Turing/SM 7.5 pin-reality check, torch/CUDA cache confinement, GPU systemd
-  variant, `install.sh --upgrade`, doctor GPU checks). **Your first action:
-  `git log --oneline -10 main`** — if a commit like
-  `feat(scan-pipeline): P2 item 3 — GPU extras + box hardening` exists, run
-  the adversarial review next (cadence below); if not, re-dispatch item 3
-  per the package's own AC plus the rulings in the previous sentence.
-- Next after item 3: **item 4 (GLOMAP refine stage)** — the evidence probe
-  already confirmed scan `95266be1`'s inputs all exist in prod storage
-  (keyframes.tar under `bundle/` per B-18, depth.tar + indexes,
-  captured_room, manifest; `mesh.ply` correctly ABSENT — it is the fuse
-  stage's OUTPUT). Then fuse/solve-upgrade, splat, present → **P2-M2**.
+- **Item 3 code landed at `3a435d9f`**: stage-named extras
+  `[refine]/[fuse]/[splat]` + `[gpu]`, Turing/cu118 pin, cache confinement,
+  GPU systemd variant, `install.sh --upgrade`, doctor gates. Treat package
+  resolution and local doctor tests as code evidence only; the real box/CUDA
+  acceptance remains an operator gate.
+- **Item 4 engine decision is corrected by I87** (decision record:
+  `p2-item4-colmap-adapter-spike-2026-07-18.md`): exact pilot target is COLMAP
+  CLI 4.0.2 + `pycolmap==4.0.2`; primary = known-pose seed model → point
+  triangulation → BA; fallback = position-prior mapper; integrated
+  `global_mapper` is diagnostic-only and standalone GLOMAP is archived. This
+  target is **unvalidated** until the CLI/binding/API/GPU fixture and real
+  Field/Core Image raster/materializer fixture pass. COLMAP 4.1.1 is current;
+  newer 4.x needs separate qualification.
+- The adapter/geometry prototype is executable, but the production queue
+  handler is still NOT built. Handler development is open; before handler
+  enablement/deployment or any real run, prove comparable
+  reprojection/registration/verified-loop evidence (unchanged evidence cannot
+  pass; trajectory shape is diagnostic-only), use the actual lease-aware
+  4-minute deadline, and preserve the canonical
+  refine → {fuse→mesh-solve, splat} → Present four-manifest join. Scan
+  `95266be1` remains the local-scratch proof subject before any DB/storage run.
 
 ## The operating cadence (do not drop it)
 

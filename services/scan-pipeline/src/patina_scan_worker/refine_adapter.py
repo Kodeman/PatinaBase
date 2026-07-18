@@ -1,12 +1,15 @@
 """P2 refine adapter/geometry proof, deliberately independent of the queue.
 
-This module proves the format-sensitive pieces of the future refine stage:
+This module exercises the proposed format-sensitive pieces of the future refine
+stage. Field/Core Image raster semantics and the box materializer remain
+unqualified until the explicit fixture described in the item-4 design record:
 
-* Field's HEIC pixels are already physically rotated right. Intrinsics and the
-  camera basis are transformed to match; source image bytes are never rotated.
+* Source inspection says Field physically rotates HEIC pixels right. The
+  proposed intrinsics/camera-basis transform is executable; source bytes are
+  never rotated by this adapter.
 * ARKit camera-to-world poses are converted to COLMAP world-to-camera poses.
-* Refined camera centres can be aligned back to ARKit metres with a Sim(3), with
-  an exact, cadence-independent residual definition.
+* Refined camera centres and orientations can be aligned back to ARKit metres
+  with a Sim(3). Shape change is explicitly diagnostic, not quality evidence.
 * The temporal/spatial match graph and low-overlap verdict are deterministic.
 * Adapter artifacts are immutable, checksummed, versioned, and manifest-last.
 
@@ -21,6 +24,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -31,11 +35,12 @@ from typing import Any, Iterable, Mapping, Sequence
 Vector3 = tuple[float, float, float]
 Matrix3 = tuple[Vector3, Vector3, Vector3]
 
-ADAPTER_SCHEMA_VERSION = 1
-COLMAP_VALIDATED_VERSION = "4.0.2"
-LEASE_VISIBILITY_TIMEOUT_S = 60 * 60
-REFINE_STAGE_ENGINE_BUDGET_S = 50 * 60
-LEASE_COMPLETION_RESERVE_S = LEASE_VISIBILITY_TIMEOUT_S - REFINE_STAGE_ENGINE_BUDGET_S
+ADAPTER_SCHEMA_VERSION = 2
+COLMAP_TARGET_VERSION = "4.0.2"
+ENGINE_QUALIFICATION_STATUS = "unvalidated-pending-field-and-box-fixture"
+REFINE_STAGE_ENGINE_BUDGET_S = 4 * 60
+LEASE_COMPLETION_RESERVE_S = 60
+COLMAP_LOG_TAIL_BYTES = 64 * 1024
 
 TEMPORAL_WINDOW = 10
 SPATIAL_RADIUS_M = 1.5
@@ -43,6 +48,7 @@ SPATIAL_MIN_BASELINE_M = 0.25
 MAX_SPATIAL_NEIGHBORS = 8
 MIN_VERIFIED_INLIERS = 30
 MIN_CONNECTED_FRACTION = 0.80
+MIN_REFINEMENT_RELATIVE_IMPROVEMENT = 0.01
 POSE_PRIOR_STD_M = 0.10
 
 # ARKit camera: +X right, +Y up, camera looks down -Z. Native CV/COLMAP:
@@ -64,7 +70,7 @@ PRIMARY_PIPELINE = (
     "seed_known_pose_sparse_model",
     "point_triangulator",
     "bundle_adjuster",
-    "sim3_metric_alignment",
+    "sim3_world_alignment",
 )
 FALLBACK_PIPELINE = (
     "extract_features_per_image",
@@ -73,7 +79,7 @@ FALLBACK_PIPELINE = (
     "match_temporal_spatial_pairs",
     "pose_prior_mapper",
     "bundle_adjuster",
-    "sim3_metric_alignment",
+    "sim3_world_alignment",
 )
 
 
@@ -114,16 +120,30 @@ class PositionPrior:
 
 @dataclass(frozen=True)
 class RefineDeadline:
-    """One absolute deadline shared by every engine subprocess in the stage."""
+    """One lease-aware absolute deadline shared by every engine command."""
 
     expires_at_monotonic_s: float
 
     @classmethod
-    def start(cls, *, now_monotonic_s: float | None = None) -> "RefineDeadline":
+    def start(
+        cls,
+        *,
+        lease_expires_at_monotonic_s: float,
+        now_monotonic_s: float | None = None,
+    ) -> "RefineDeadline":
         now = time.monotonic() if now_monotonic_s is None else now_monotonic_s
-        if not math.isfinite(now):
-            raise AdapterError("refine deadline needs a finite monotonic start")
-        return cls(now + REFINE_STAGE_ENGINE_BUDGET_S)
+        if not math.isfinite(now) or not math.isfinite(lease_expires_at_monotonic_s):
+            raise AdapterError("refine deadline needs finite monotonic timestamps")
+        deadline = min(
+            now + REFINE_STAGE_ENGINE_BUDGET_S,
+            lease_expires_at_monotonic_s - LEASE_COMPLETION_RESERVE_S,
+        )
+        if deadline <= now:
+            raise AdapterError(
+                "claimed lease has no engine time after the completion reserve",
+                "REFINE_ENGINE_TIMEOUT",
+            )
+        return cls(deadline)
 
     def remaining_seconds(self, *, now_monotonic_s: float | None = None) -> float:
         now = time.monotonic() if now_monotonic_s is None else now_monotonic_s
@@ -131,6 +151,22 @@ class RefineDeadline:
         if not math.isfinite(remaining) or remaining <= 0:
             raise AdapterError("refine stage engine deadline is exhausted", "REFINE_ENGINE_TIMEOUT")
         return remaining
+
+
+@dataclass(frozen=True)
+class EngineQualification:
+    """Result produced by the future real CLI+binding qualification fixture."""
+
+    target_version: str
+    cli_version: str
+    binding_version: str
+
+
+@dataclass(frozen=True)
+class ColmapCommandResult:
+    returncode: int
+    log_path: Path
+    output_tail: str
 
 
 @dataclass(frozen=True)
@@ -169,12 +205,57 @@ class Sim3:
 
 
 @dataclass(frozen=True)
-class AlignmentMetrics:
-    rmse_m: float
-    trajectory_rms_radius_m: float
-    sfm_residual_pct: float
-    mean_translation_drift_pct: float
-    max_translation_drift_m: float
+class TrajectoryShapeChangeMetrics:
+    """Similarity-invariant change from raw ARKit, never an accuracy score."""
+
+    shape_change_rmse_m: float
+    raw_keyframe_rms_radius_m: float
+    trajectory_shape_change_pct: float
+    mean_keyframe_displacement_pct: float
+    max_keyframe_displacement_m: float
+    certification_role: str = "diagnostic-only"
+
+
+@dataclass(frozen=True)
+class RefinementEvidence:
+    """Comparable before/after evidence evaluated on the same feature tracks."""
+
+    input_images: int
+    registered_images_before: int
+    registered_images_after: int
+    common_observations: int
+    common_observation_set_sha256: str
+    reprojection_rmse_px_before: float
+    reprojection_rmse_px_after: float
+    verified_loop_edges: int
+    verified_loop_set_sha256: str
+    loop_rotation_rmse_deg_before: float
+    loop_rotation_rmse_deg_after: float
+    loop_translation_direction_rmse_deg_before: float
+    loop_translation_direction_rmse_deg_after: float
+    external_error_m_before: float | None = None
+    external_error_m_after: float | None = None
+    external_evidence_kind: str | None = None
+    external_evidence_ref: str | None = None
+
+
+@dataclass(frozen=True)
+class RefinementEvidenceVerdict:
+    refinement_evidenced: bool
+    absolute_accuracy_certified: bool
+    code: str | None
+    reason: str
+    registration_coverage_before: float
+    registration_coverage_after: float
+
+
+@dataclass(frozen=True)
+class PresentEnqueueContract:
+    task_type: str
+    idempotency_key: str
+    payload: dict[str, Any]
+    parent_task_id: str
+    on_conflict: str = "ignore"
 
 
 @dataclass(frozen=True)
@@ -201,6 +282,87 @@ def _positive_int(value: Any, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise AdapterError(f"{label} must be a positive integer")
     return value
+
+
+def qualify_colmap_versions(cli_output: str, binding_version: str) -> EngineQualification:
+    """Require the future box fixture's CLI and binding to match the target.
+
+    Calling this function is only one assertion inside that fixture; it does not
+    make this repository or adapter artifact "validated" by itself.
+    """
+
+    cli_match = re.search(r"(?<!\d)(\d+\.\d+\.\d+)(?!\d)", cli_output)
+    binding_match = re.fullmatch(r"(\d+\.\d+\.\d+)", binding_version.strip())
+    cli_version = cli_match.group(1) if cli_match else "unparseable"
+    parsed_binding = binding_match.group(1) if binding_match else "unparseable"
+    if cli_version != COLMAP_TARGET_VERSION or parsed_binding != COLMAP_TARGET_VERSION:
+        raise AdapterError(
+            "COLMAP CLI/PyCOLMAP mismatch: "
+            f"target={COLMAP_TARGET_VERSION}, cli={cli_version}, binding={parsed_binding}",
+            "REFINE_ENGINE_VERSION_MISMATCH",
+        )
+    return EngineQualification(COLMAP_TARGET_VERSION, cli_version, parsed_binding)
+
+
+def _stable_identifier(value: Any, label: str) -> str:
+    if not isinstance(value, str) or not value or value in (".", "..") or "/" in value or "\\" in value:
+        raise AdapterError(f"{label} must be a stable path-safe identifier")
+    return value
+
+
+def build_present_enqueue_contract(
+    *,
+    scan_id: str,
+    room_file_id: str,
+    room_file_version: int,
+    user_id: str,
+    refine_task_id: str,
+) -> PresentEnqueueContract:
+    """Return the one order-independent enqueue used by both terminal branches.
+
+    No branch-specific artifact pointer belongs in this payload. Present derives
+    all canonical manifest keys from these stable identifiers and verifies them.
+    Both branch tips use the common refine task as parent, so first-finisher order
+    cannot change the durable queue row.
+    """
+
+    scan = _stable_identifier(scan_id, "scan_id")
+    room_file = _stable_identifier(room_file_id, "room_file_id")
+    user = _stable_identifier(user_id, "user_id")
+    refine_task = _stable_identifier(refine_task_id, "refine_task_id")
+    version = _positive_int(room_file_version, "room_file_version")
+    payload = {
+        "scan_id": scan,
+        "room_file_id": room_file,
+        "room_file_version": version,
+        "user_id": user,
+        "refine_task_id": refine_task,
+    }
+    return PresentEnqueueContract(
+        task_type="scan_pipeline.present",
+        idempotency_key=f"{scan}:present:{version}",
+        payload=payload,
+        parent_task_id=refine_task,
+    )
+
+
+def canonical_present_manifest_keys(
+    user_id: str,
+    scan_id: str,
+    room_file_version: int,
+) -> dict[str, str]:
+    """Manifest locations Present derives; mesh solve is a required branch tip."""
+
+    user = _stable_identifier(user_id, "user_id")
+    scan = _stable_identifier(scan_id, "scan_id")
+    version = _positive_int(room_file_version, "room_file_version")
+    prefix = f"room_file/{user}/{scan}/v{version}"
+    return {
+        "refine": f"{prefix}/refine/refine-manifest-v1.json",
+        "fuse": f"{prefix}/fuse/fuse-manifest-v1.json",
+        "meshSolve": f"{prefix}/solve-upgrade/mesh-solve-manifest-v1.json",
+        "splat": f"{prefix}/splat/splat-manifest-v1.json",
+    }
 
 
 def _point(value: Sequence[float], label: str) -> Vector3:
@@ -524,6 +686,9 @@ def classify_overlap(
     verified_inliers: Mapping[tuple[str, str], int],
     *,
     temporal_window: int = TEMPORAL_WINDOW,
+    spatial_radius_m: float = SPATIAL_RADIUS_M,
+    spatial_min_baseline_m: float = SPATIAL_MIN_BASELINE_M,
+    max_spatial_neighbors: int = MAX_SPATIAL_NEIGHBORS,
     minimum_inliers: int = MIN_VERIFIED_INLIERS,
     minimum_connected_fraction: float = MIN_CONNECTED_FRACTION,
 ) -> OverlapVerdict:
@@ -532,6 +697,15 @@ def classify_overlap(
     ordered = sorted(frames, key=lambda frame: (frame.frame_timestamp_s, frame.image_name))
     if len(ordered) < 3:
         return OverlapVerdict(False, True, "REFINE_LOW_OVERLAP", "fewer_than_three_frames", 0, 0, 0.0)
+    candidate_pairs = set(
+        build_pair_graph(
+            ordered,
+            temporal_window=temporal_window,
+            spatial_radius_m=spatial_radius_m,
+            spatial_min_baseline_m=spatial_min_baseline_m,
+            max_spatial_neighbors=max_spatial_neighbors,
+        )
+    )
     positions = {frame.image_name: index for index, frame in enumerate(ordered)}
     adjacency = {frame.image_name: set() for frame in ordered}
     verified_edges = 0
@@ -541,7 +715,13 @@ def classify_overlap(
         if len(pair) != 2 or pair[0] not in positions or pair[1] not in positions or pair[0] == pair[1]:
             continue
         canonical = _canonical_pair(pair[0], pair[1])
-        if canonical in seen or isinstance(inliers, bool) or not isinstance(inliers, int) or inliers < minimum_inliers:
+        if (
+            canonical not in candidate_pairs
+            or canonical in seen
+            or isinstance(inliers, bool)
+            or not isinstance(inliers, int)
+            or inliers < minimum_inliers
+        ):
             continue
         seen.add(canonical)
         verified_edges += 1
@@ -685,41 +865,167 @@ def estimate_sim3(source: Sequence[Sequence[float]], target: Sequence[Sequence[f
     return Sim3(scale=scale, rotation=rotation, translation=translation)  # type: ignore[arg-type]
 
 
-def alignment_metrics(
+def trajectory_shape_change_metrics(
     source: Sequence[Sequence[float]],
     target: Sequence[Sequence[float]],
     transform: Sim3,
-) -> AlignmentMetrics:
-    """Exact refine drift contract.
+) -> TrajectoryShapeChangeMetrics:
+    """Similarity-invariant change between refined and raw keyframe centres.
 
-    `sfm_residual_pct = 100 * RMSE(aligned refined centre, ARKit centre) /
-    RMS_radius(ARKit trajectory)`. The RMS radius, unlike total path length, is
-    independent of keyframe cadence. Mean drift uses the same denominator.
+    This says how much trajectory *shape* changed after the best Sim(3). A no-op
+    is exactly zero, so this can never establish reconstruction quality. The RMS
+    radius weights captured keyframes equally and is therefore cadence-sensitive.
     """
 
     if len(source) != len(target) or not source:
-        raise AdapterError("alignment metrics need equal non-empty point sets")
-    source_points = [_point(point, "alignment source point") for point in source]
-    target_points = [_point(point, "alignment target point") for point in target]
+        raise AdapterError("shape-change metrics need equal non-empty point sets")
+    source_points = [_point(point, "shape-change source point") for point in source]
+    target_points = [_point(point, "shape-change target point") for point in target]
     target_centroid = _centroid(target_points)
     radius = math.sqrt(
         sum(_dot(tuple(point[i] - target_centroid[i] for i in range(3)), tuple(point[i] - target_centroid[i] for i in range(3))) for point in target_points)
         / len(target_points)
     )
     if radius <= 1e-12:
-        raise AdapterError("alignment target trajectory must have non-zero RMS radius")
+        raise AdapterError("raw keyframe trajectory must have non-zero RMS radius")
     residuals = [
         _norm(tuple(target_point[i] - transform.apply(source_point)[i] for i in range(3)))
         for source_point, target_point in zip(source_points, target_points)
     ]
     rmse = math.sqrt(sum(residual * residual for residual in residuals) / len(residuals))
     mean = sum(residuals) / len(residuals)
-    return AlignmentMetrics(
-        rmse_m=rmse,
-        trajectory_rms_radius_m=radius,
-        sfm_residual_pct=100.0 * rmse / radius,
-        mean_translation_drift_pct=100.0 * mean / radius,
-        max_translation_drift_m=max(residuals),
+    return TrajectoryShapeChangeMetrics(
+        shape_change_rmse_m=rmse,
+        raw_keyframe_rms_radius_m=radius,
+        trajectory_shape_change_pct=100.0 * rmse / radius,
+        mean_keyframe_displacement_pct=100.0 * mean / radius,
+        max_keyframe_displacement_m=max(residuals),
+    )
+
+
+def _relative_improvement(before: float, after: float) -> float:
+    if before <= 1e-12:
+        return 0.0
+    return (before - after) / before
+
+
+def _relative_gain(before: float, after: float) -> float:
+    if before <= 1e-12:
+        return 1.0 if after > before else 0.0
+    return (after - before) / before
+
+
+def evaluate_refinement_evidence(evidence: RefinementEvidence) -> RefinementEvidenceVerdict:
+    """Evaluate comparable geometric evidence without claiming absolute accuracy.
+
+    Reprojection values must use identical feature tracks/observations before and
+    after. Loop values compare trajectory relative poses with the same verified
+    non-temporal two-view geometries. Optional external errors are retained as
+    evidence, but no absolute-accuracy threshold is ratified here, so this
+    function never sets ``absolute_accuracy_certified``. The separate trajectory
+    shape-change diagnostic is intentionally not an input and cannot grant or
+    veto this verdict.
+    """
+
+    integer_fields = {
+        "input_images": evidence.input_images,
+        "registered_images_before": evidence.registered_images_before,
+        "registered_images_after": evidence.registered_images_after,
+        "common_observations": evidence.common_observations,
+        "verified_loop_edges": evidence.verified_loop_edges,
+    }
+    if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in integer_fields.values()):
+        raise AdapterError("refinement evidence counts must be non-negative integers")
+    if evidence.input_images <= 0 or evidence.common_observations <= 0:
+        raise AdapterError("refinement evidence needs input images and common observations")
+    if max(evidence.registered_images_before, evidence.registered_images_after) > evidence.input_images:
+        raise AdapterError("registered image count cannot exceed input image count")
+    for label, digest in (
+        ("common_observation_set_sha256", evidence.common_observation_set_sha256),
+        ("verified_loop_set_sha256", evidence.verified_loop_set_sha256),
+    ):
+        if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise AdapterError(f"{label} must be a lowercase sha256")
+    metrics = (
+        evidence.reprojection_rmse_px_before,
+        evidence.reprojection_rmse_px_after,
+        evidence.loop_rotation_rmse_deg_before,
+        evidence.loop_rotation_rmse_deg_after,
+        evidence.loop_translation_direction_rmse_deg_before,
+        evidence.loop_translation_direction_rmse_deg_after,
+    )
+    if any(not math.isfinite(value) or value < 0 for value in metrics):
+        raise AdapterError("refinement evidence errors must be finite and non-negative")
+    external_pair = (evidence.external_error_m_before, evidence.external_error_m_after)
+    if (external_pair[0] is None) != (external_pair[1] is None):
+        raise AdapterError("external error evidence needs both before and after")
+    if any(value is not None and (not math.isfinite(value) or value < 0) for value in external_pair):
+        raise AdapterError("external errors must be finite and non-negative")
+    external_metadata = (evidence.external_evidence_kind, evidence.external_evidence_ref)
+    if external_pair[0] is None:
+        if any(value is not None for value in external_metadata):
+            raise AdapterError("external evidence metadata requires before/after errors")
+    elif any(not isinstance(value, str) or not value.strip() for value in external_metadata):
+        raise AdapterError("external errors require evidence kind and provenance reference")
+
+    coverage_before = evidence.registered_images_before / evidence.input_images
+    coverage_after = evidence.registered_images_after / evidence.input_images
+    if evidence.verified_loop_edges < 1:
+        return RefinementEvidenceVerdict(
+            False, False, "REFINE_LOW_OVERLAP", "no_verified_loop_evidence", coverage_before, coverage_after
+        )
+    if coverage_after < MIN_CONNECTED_FRACTION or coverage_after < coverage_before:
+        return RefinementEvidenceVerdict(
+            False,
+            False,
+            "REFINE_EVIDENCE_REGRESSION",
+            "registration_coverage_regressed_or_below_floor",
+            coverage_before,
+            coverage_after,
+        )
+    regressions = (
+        evidence.reprojection_rmse_px_after > evidence.reprojection_rmse_px_before,
+        evidence.loop_rotation_rmse_deg_after > evidence.loop_rotation_rmse_deg_before,
+        evidence.loop_translation_direction_rmse_deg_after
+        > evidence.loop_translation_direction_rmse_deg_before,
+        external_pair[0] is not None and external_pair[1] > external_pair[0],
+    )
+    if any(regressions):
+        return RefinementEvidenceVerdict(
+            False,
+            False,
+            "REFINE_EVIDENCE_REGRESSION",
+            "comparable_geometric_evidence_regressed",
+            coverage_before,
+            coverage_after,
+        )
+    improvements = [
+        _relative_improvement(evidence.reprojection_rmse_px_before, evidence.reprojection_rmse_px_after),
+        _relative_improvement(evidence.loop_rotation_rmse_deg_before, evidence.loop_rotation_rmse_deg_after),
+        _relative_improvement(
+            evidence.loop_translation_direction_rmse_deg_before,
+            evidence.loop_translation_direction_rmse_deg_after,
+        ),
+        _relative_gain(coverage_before, coverage_after),
+    ]
+    if external_pair[0] is not None:
+        improvements.append(_relative_improvement(external_pair[0], external_pair[1]))  # type: ignore[arg-type]
+    if max(improvements, default=0.0) < MIN_REFINEMENT_RELATIVE_IMPROVEMENT:
+        return RefinementEvidenceVerdict(
+            False,
+            False,
+            "REFINE_NO_MEASURABLE_IMPROVEMENT",
+            "unchanged_or_below_measurable_improvement_floor",
+            coverage_before,
+            coverage_after,
+        )
+    return RefinementEvidenceVerdict(
+        True,
+        False,
+        None,
+        "internal_geometric_refinement_evidenced_absolute_accuracy_unproven",
+        coverage_before,
+        coverage_after,
     )
 
 
@@ -771,6 +1077,15 @@ def _json_bytes(value: Any) -> bytes:
     return (encoded + "\n").encode("utf-8")
 
 
+def _fsync_directory(path: Path) -> None:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def publish_immutable(path: str | os.PathLike[str], payload: bytes) -> bool:
     """Publish once without replacement; identical concurrent writers are no-ops.
 
@@ -795,6 +1110,7 @@ def publish_immutable(path: str | os.PathLike[str], payload: bytes) -> bool:
             os.fsync(handle.fileno())
         try:
             os.link(temp_path, destination)
+            _fsync_directory(destination.parent)
             return True
         except FileExistsError:
             try:
@@ -883,8 +1199,9 @@ def build_adapter_artifacts(
     adapter_document = {
         "schemaVersion": ADAPTER_SCHEMA_VERSION,
         "roomFileVersion": room_file_version,
-        "colmapValidatedVersion": COLMAP_VALIDATED_VERSION,
-        "sourceImagePolicy": "physical-right-raster-do-not-rotate-again",
+        "targetColmapVersion": COLMAP_TARGET_VERSION,
+        "qualificationStatus": ENGINE_QUALIFICATION_STATUS,
+        "sourceImageHypothesis": "physical-right-raster-do-not-rotate-again-pending-fixture",
         "coordinateContract": {
             "source": "ARKit camera-to-world metres; +x right, +y up, forward -z",
             "target": "COLMAP cam-from-world; +x right, +y down, forward +z",
@@ -904,13 +1221,13 @@ def build_adapter_artifacts(
     }
     adapter_payload = _json_bytes(adapter_document)
     pair_payload = "".join(f"{first} {second}\n" for first, second in pairs).encode("utf-8")
-    adapter_path = output / "adapter-v1.json"
-    pairs_path = output / "pairs-v1.txt"
-    manifest_path = output / "adapter-manifest-v1.json"
+    adapter_path = output / "adapter-v2.json"
+    pairs_path = output / "pairs-v2.txt"
+    manifest_path = output / "adapter-manifest-v2.json"
     manifest_document = {
         "schemaVersion": ADAPTER_SCHEMA_VERSION,
         "roomFileVersion": room_file_version,
-        "engineContract": "colmap-4-known-pose-primary-position-prior-fallback",
+        "engineContract": "colmap-4.0.2-target-known-pose-primary-position-prior-fallback-unvalidated",
         "inputs": [
             {
                 "name": index_path.name,
@@ -925,7 +1242,7 @@ def build_adapter_artifacts(
     }
     manifest_payload = _json_bytes(manifest_document)
 
-    # `adapter-manifest-v1.json` is the commit marker. A crash before it leaves
+    # `adapter-manifest-v2.json` is the commit marker. A crash before it leaves
     # inspectable immutable parts, never a falsely-complete artifact set.
     publish_immutable(adapter_path, adapter_payload)
     publish_immutable(pairs_path, pair_payload)
@@ -937,44 +1254,60 @@ def run_colmap_subprocess(
     command: Sequence[str],
     *,
     deadline: RefineDeadline,
+    log_path: str | os.PathLike[str],
     cwd: str | os.PathLike[str] | None = None,
-) -> subprocess.CompletedProcess[str]:
+) -> ColmapCommandResult:
     """Run one argv-only command using what remains of the shared stage budget.
 
-    The future handler creates one :class:`RefineDeadline` at stage start and
-    passes it to every call. It must not create a fresh deadline per command.
-    The 3,000-second engine budget leaves 600 seconds of the 60-minute lease for
-    checksums, uploads, fork enqueue, and the final queue transition.
+    The future handler creates one :class:`RefineDeadline` from the actual claim
+    lease at stage start and passes it to every call. Output streams to a scratch
+    log; only its bounded tail is read into memory or attached to an error.
     """
 
     if not command or any(not isinstance(part, str) or not part for part in command):
         raise AdapterError("COLMAP command must be a non-empty argv sequence")
     timeout_s = deadline.remaining_seconds()
-    try:
-        result = subprocess.run(
-            list(command),
-            cwd=cwd,
-            timeout=timeout_s,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.TimeoutExpired as exc:
+    destination = Path(log_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    timed_out: subprocess.TimeoutExpired | None = None
+    result: subprocess.CompletedProcess[Any] | None = None
+    with destination.open("ab") as log_handle:
+        try:
+            result = subprocess.run(
+                list(command),
+                cwd=cwd,
+                timeout=timeout_s,
+                check=False,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+            )
+        except subprocess.TimeoutExpired as exc:
+            timed_out = exc
+        finally:
+            log_handle.flush()
+            os.fsync(log_handle.fileno())
+    with destination.open("rb") as log_handle:
+        log_handle.seek(0, os.SEEK_END)
+        size = log_handle.tell()
+        log_handle.seek(max(0, size - COLMAP_LOG_TAIL_BYTES))
+        output_tail = log_handle.read(COLMAP_LOG_TAIL_BYTES).decode("utf-8", errors="replace")
+    if timed_out is not None:
         raise AdapterError(
             f"COLMAP subprocess exceeded {timeout_s} seconds: {command[0]}",
             "REFINE_ENGINE_TIMEOUT",
-        ) from exc
+        ) from timed_out
+    assert result is not None
     if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "no output").strip()[-2000:]
+        detail = (output_tail or "no output").strip()[-2000:]
         raise AdapterError(
             f"COLMAP subprocess failed ({result.returncode}): {detail}",
             "REFINE_ENGINE_FAILED",
         )
-    return result
+    return ColmapCommandResult(result.returncode, destination, output_tail)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Build P2 COLMAP adapter-v1 artifacts")
+    parser = argparse.ArgumentParser(description="Build P2 COLMAP adapter-v2 artifacts")
     parser.add_argument("--keyframe-index", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--room-file-version", required=True, type=int)
