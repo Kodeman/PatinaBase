@@ -9,10 +9,11 @@ Checks:
     authenticates and the RPCs are reachable over 443).
   * Storage reachability — a list against room-scans succeeds.
   * GPU — nvidia-smi plus stage-scoped runtime checks. refine requires COLMAP's
-    known-pose/fallback command set + pycolmap; fuse requires open3d + trimesh;
-    splat requires nvcc + torch CUDA (sm_75 wheel + a real device op) + gsplat.
-    These are RED only when the corresponding GPU stage is listed; CPU-only
-    installs do not import or require them.
+    known-pose/fallback command set + pycolmap; fuse requires an Open3D CUDA
+    build/device + trimesh; splat requires nvcc + torch's CUDA 11.8 runtime
+    (sm_75 wheel + a real device op) + a public gsplat CUDA rasterization. These
+    are RED only when the corresponding GPU stage is listed; CPU-only installs
+    do not import or require them.
   * Disk headroom — free space in WORK_DIR vs MAX_CONCURRENT × ~1.5 GB.
   * Cache writability — the XDG base dirs, plus TORCH_HOME, CUDA_CACHE_PATH, and
     TORCH_EXTENSIONS_DIR on a GPU box.
@@ -137,6 +138,45 @@ def _python_module_ok(module_name: str) -> tuple[bool, str]:
     return True, f"{module_name} import OK" + (f" ({version})" if version else "")
 
 
+def _open3d_cuda_ok() -> tuple[bool, str]:
+    """Require the fuse runtime to be a CUDA-capable Open3D build.
+
+    Open3D 0.18/0.19 expose the probe under ``open3d.core.cuda`` while newer
+    builds also expose ``open3d.cuda``. Support both public layouts because the
+    package constraint intentionally spans the two release lines.
+    """
+    try:
+        open3d = importlib.import_module("open3d")
+    except Exception as exc:  # noqa: BLE001 — report native-link/import errors
+        return False, f"open3d not importable ({exc.__class__.__name__}: {exc})"
+
+    cuda_api = getattr(open3d, "cuda", None)
+    if cuda_api is None:
+        cuda_api = getattr(getattr(open3d, "core", None), "cuda", None)
+    if cuda_api is None:
+        return False, (
+            "open3d has no CUDA availability API; install the full CUDA-enabled "
+            "Open3D wheel/build (not open3d-cpu)"
+        )
+
+    try:
+        if not cuda_api.is_available():
+            return False, (
+                f"open3d {getattr(open3d, '__version__', '?')} is CPU-only or "
+                "cannot see a compatible CUDA device"
+            )
+        count = int(cuda_api.device_count())
+        if count < 1:
+            return False, "open3d CUDA is_available() passed but device_count() returned 0"
+    except Exception as exc:  # noqa: BLE001
+        return False, f"open3d CUDA probe raised {exc.__class__.__name__}: {exc}"
+
+    return True, (
+        f"open3d {getattr(open3d, '__version__', '?')} CUDA ready "
+        f"({count} device(s))"
+    )
+
+
 def _torch_cuda_ok() -> tuple[bool, str]:
     """Does torch see a usable CUDA device? Required only when STAGES include the
     splat stage (the sole torch/CUDA stage). Imported lazily so a CPU worker that
@@ -150,6 +190,12 @@ def _torch_cuda_ok() -> tuple[bool, str]:
             f"`.[splat]` with the cu118 index (README box-prep)"
         )
     try:
+        runtime = getattr(getattr(torch, "version", None), "cuda", None)
+        if runtime != "11.8":
+            return False, (
+                f"torch {torch.__version__} reports CUDA runtime {runtime!r}; "
+                "splat requires the cu118 (CUDA 11.8) runtime"
+            )
         if not torch.cuda.is_available():
             return False, (
                 f"torch {torch.__version__} installed but torch.cuda.is_available() "
@@ -180,6 +226,65 @@ def _torch_cuda_ok() -> tuple[bool, str]:
         )
     except Exception as exc:  # noqa: BLE001
         return False, f"torch.cuda probe raised {exc.__class__.__name__}: {exc}"
+
+
+def _gsplat_cuda_ok() -> tuple[bool, str]:
+    """Run gsplat's public rasterizer on one CUDA gaussian.
+
+    Import-only checks miss an unavailable extension backend and a failed first
+    JIT build. This deliberately invokes the documented public
+    ``gsplat.rasterization`` API on a tiny 16×16 image. The first invocation may
+    compile the extension; the systemd startup timeout is sized accordingly.
+    """
+    try:
+        torch = importlib.import_module("torch")
+        gsplat = importlib.import_module("gsplat")
+        rasterization = getattr(gsplat, "rasterization")
+    except Exception as exc:  # noqa: BLE001
+        return False, (
+            f"gsplat runtime not importable ({exc.__class__.__name__}: {exc})"
+        )
+
+    tensor_args = {"device": "cuda", "dtype": torch.float32}
+    try:
+        render_colors, render_alphas, _meta = rasterization(
+            means=torch.tensor([[0.0, 0.0, 2.0]], **tensor_args),
+            quats=torch.tensor([[1.0, 0.0, 0.0, 0.0]], **tensor_args),
+            scales=torch.tensor([[0.25, 0.25, 0.25]], **tensor_args),
+            opacities=torch.tensor([0.9], **tensor_args),
+            colors=torch.tensor([[1.0, 0.25, 0.0]], **tensor_args),
+            viewmats=torch.tensor(
+                [[[1.0, 0.0, 0.0, 0.0],
+                  [0.0, 1.0, 0.0, 0.0],
+                  [0.0, 0.0, 1.0, 0.0],
+                  [0.0, 0.0, 0.0, 1.0]]],
+                **tensor_args,
+            ),
+            Ks=torch.tensor(
+                [[[12.0, 0.0, 8.0],
+                  [0.0, 12.0, 8.0],
+                  [0.0, 0.0, 1.0]]],
+                **tensor_args,
+            ),
+            width=16,
+            height=16,
+            packed=False,
+        )
+        torch.cuda.synchronize()
+        if not getattr(render_colors, "is_cuda", False):
+            return False, "gsplat rasterization returned colors on CPU"
+        if not getattr(render_alphas, "is_cuda", False):
+            return False, "gsplat rasterization returned alpha on CPU"
+        if render_colors.numel() < 1 or render_alphas.numel() < 1:
+            return False, "gsplat rasterization returned empty outputs"
+    except Exception as exc:  # noqa: BLE001 — surface backend/JIT failures
+        return False, (
+            f"gsplat rasterization CUDA probe raised {exc.__class__.__name__}: {exc}"
+        )
+
+    return True, (
+        f"gsplat {getattr(gsplat, '__version__', '?')} public rasterization CUDA op OK"
+    )
 
 
 def run_checks(settings: Settings) -> list[Check]:
@@ -246,16 +351,17 @@ def run_checks(settings: Settings) -> list[Check]:
             ok, pdetail = _python_module_ok("pycolmap")
             checks.append(Check("pycolmap", ok, warn=False, detail=pdetail))
         if fuse_enabled:
-            for module_name in ("open3d", "trimesh"):
-                ok, mdetail = _python_module_ok(module_name)
-                checks.append(Check(module_name, ok, warn=False, detail=mdetail))
+            ok, odetail = _open3d_cuda_ok()
+            checks.append(Check("open3d-cuda", ok, warn=False, detail=odetail))
+            ok, mdetail = _python_module_ok("trimesh")
+            checks.append(Check("trimesh", ok, warn=False, detail=mdetail))
         if splat_enabled:
             ok, ndetail = _nvcc_ok()
             checks.append(Check("nvcc", ok, warn=False, detail=ndetail))
             ok, tdetail = _torch_cuda_ok()
             checks.append(Check("torch-cuda", ok, warn=False, detail=tdetail))
-            ok, gdetail = _python_module_ok("gsplat")
-            checks.append(Check("gsplat", ok, warn=False, detail=gdetail))
+            ok, gdetail = _gsplat_cuda_ok()
+            checks.append(Check("gsplat-cuda", ok, warn=False, detail=gdetail))
 
     # Disk headroom
     import os

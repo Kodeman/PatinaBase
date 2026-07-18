@@ -10,7 +10,9 @@ import pytest
 from patina_scan_worker.config import settings_from_env
 from patina_scan_worker.doctor import (
     _colmap_command_set_ok,
+    _gsplat_cuda_ok,
     _nvcc_ok,
+    _open3d_cuda_ok,
     _torch_cuda_ok,
     run_checks,
 )
@@ -28,7 +30,7 @@ UNREACHABLE = {
 
 
 @pytest.fixture(autouse=True)
-def _isolate_doctor_tests_from_host_gpu_stack(monkeypatch):
+def _isolate_doctor_tests_from_host_gpu_stack(monkeypatch, tmp_path):
     """No run_checks test may depend on the developer machine's GPU/packages.
 
     Direct helper tests below call their already-imported function objects, so
@@ -42,8 +44,19 @@ def _isolate_doctor_tests_from_host_gpu_stack(monkeypatch):
                         lambda: (True, "nvcc 11.8 ready"))
     monkeypatch.setattr("patina_scan_worker.doctor._torch_cuda_ok",
                         lambda: (True, "torch CUDA ready"))
+    monkeypatch.setattr("patina_scan_worker.doctor._open3d_cuda_ok",
+                        lambda: (True, "Open3D CUDA ready"))
+    monkeypatch.setattr("patina_scan_worker.doctor._gsplat_cuda_ok",
+                        lambda: (True, "gsplat CUDA ready"))
     monkeypatch.setattr("patina_scan_worker.doctor._python_module_ok",
                         lambda name: (True, f"{name} ready"))
+    for var, sub in (
+        ("XDG_CONFIG_HOME", "config"), ("XDG_CACHE_HOME", "cache"),
+        ("XDG_DATA_HOME", "data"), ("XDG_STATE_HOME", "state"),
+        ("TORCH_HOME", "torch"), ("CUDA_CACHE_PATH", "cuda"),
+        ("TORCH_EXTENSIONS_DIR", "torch-extensions"),
+    ):
+        monkeypatch.setenv(var, str(tmp_path / sub))
 
 
 def _all_xdg_writable(tmp_path, monkeypatch):
@@ -150,6 +163,10 @@ def test_readiness_checks_are_scoped_to_the_enabled_gpu_stage(monkeypatch):
                         lambda: (True, "nvcc ready"))
     monkeypatch.setattr("patina_scan_worker.doctor._torch_cuda_ok",
                         lambda: (True, "torch ready"))
+    monkeypatch.setattr("patina_scan_worker.doctor._open3d_cuda_ok",
+                        lambda: (True, "Open3D CUDA ready"))
+    monkeypatch.setattr("patina_scan_worker.doctor._gsplat_cuda_ok",
+                        lambda: (True, "gsplat CUDA ready"))
     monkeypatch.setattr("patina_scan_worker.doctor._python_module_ok",
                         lambda name: (True, f"{name} ready"))
 
@@ -164,12 +181,44 @@ def test_readiness_checks_are_scoped_to_the_enabled_gpu_stage(monkeypatch):
     assert {"open3d", "trimesh", "nvcc", "torch-cuda", "gsplat"}.isdisjoint(refine)
 
     fuse = names("fuse")
-    assert {"open3d", "trimesh"} <= fuse
-    assert {"colmap", "pycolmap", "nvcc", "torch-cuda", "gsplat"}.isdisjoint(fuse)
+    assert {"open3d-cuda", "trimesh"} <= fuse
+    assert {"colmap", "pycolmap", "nvcc", "torch-cuda", "gsplat-cuda"}.isdisjoint(fuse)
 
     splat = names("splat")
-    assert {"nvcc", "torch-cuda", "gsplat"} <= splat
-    assert {"colmap", "pycolmap", "open3d", "trimesh"}.isdisjoint(splat)
+    assert {"nvcc", "torch-cuda", "gsplat-cuda"} <= splat
+    assert {"colmap", "pycolmap", "open3d-cuda", "trimesh"}.isdisjoint(splat)
+
+
+def test_open3d_cuda_failure_is_red_only_for_fuse(monkeypatch):
+    monkeypatch.setattr("patina_scan_worker.doctor._gpu_present",
+                        lambda: (True, "present"))
+    monkeypatch.setattr("patina_scan_worker.doctor._open3d_cuda_ok",
+                        lambda: (False, "CPU-only wheel"))
+    fuse = {c.name: c for c in run_checks(settings_from_env({
+        **UNREACHABLE, "GPU": "auto", "STAGES": "fuse",
+    }))}
+    assert fuse["open3d-cuda"].ok is False
+    assert fuse["open3d-cuda"].warn is False
+    refine = {c.name for c in run_checks(settings_from_env({
+        **UNREACHABLE, "GPU": "auto", "STAGES": "refine",
+    }))}
+    assert "open3d-cuda" not in refine
+
+
+def test_gsplat_cuda_failure_is_red_only_for_splat(monkeypatch):
+    monkeypatch.setattr("patina_scan_worker.doctor._gpu_present",
+                        lambda: (True, "present"))
+    monkeypatch.setattr("patina_scan_worker.doctor._gsplat_cuda_ok",
+                        lambda: (False, "backend unavailable"))
+    splat = {c.name: c for c in run_checks(settings_from_env({
+        **UNREACHABLE, "GPU": "auto", "STAGES": "splat",
+    }))}
+    assert splat["gsplat-cuda"].ok is False
+    assert splat["gsplat-cuda"].warn is False
+    fuse = {c.name for c in run_checks(settings_from_env({
+        **UNREACHABLE, "GPU": "auto", "STAGES": "fuse",
+    }))}
+    assert "gsplat-cuda" not in fuse
 
 
 def test_colmap_probe_requires_known_pose_and_fallback_commands(monkeypatch):
@@ -311,11 +360,11 @@ class _FakeCuda:
         self.synchronized = True
 
 
-def _fake_torch(arches=("sm_75",)):
+def _fake_torch(arches=("sm_75",), runtime="11.8"):
     cuda = _FakeCuda(arches)
     return SimpleNamespace(
         __version__="2.4.0+cu118",
-        version=SimpleNamespace(cuda="11.8"),
+        version=SimpleNamespace(cuda=runtime),
         cuda=cuda,
         ones=lambda *_args, **kwargs: (
             _FakeTensor() if kwargs.get("device") == "cuda" else None
@@ -337,3 +386,115 @@ def test_torch_cuda_probe_rejects_a_wheel_without_sm75(monkeypatch):
     ok, detail = _torch_cuda_ok()
     assert ok is False
     assert "sm_75" in detail
+
+
+def test_torch_cuda_probe_rejects_a_non_cu118_runtime(monkeypatch):
+    monkeypatch.setitem(sys.modules, "torch", _fake_torch(runtime="12.4"))
+    ok, detail = _torch_cuda_ok()
+    assert ok is False
+    assert "runtime" in detail.lower()
+    assert "11.8" in detail and "12.4" in detail
+
+
+def _fake_open3d(*, available=True, count=1, top_level=False):
+    cuda = SimpleNamespace(
+        is_available=lambda: available,
+        device_count=lambda: count,
+    )
+    module = SimpleNamespace(__version__="0.19.0")
+    if top_level:
+        module.cuda = cuda
+        module.core = SimpleNamespace()
+    else:
+        module.core = SimpleNamespace(cuda=cuda)
+    return module
+
+
+def test_open3d_cuda_probe_accepts_the_supported_core_cuda_api(monkeypatch):
+    monkeypatch.setitem(sys.modules, "open3d", _fake_open3d())
+    ok, detail = _open3d_cuda_ok()
+    assert ok is True
+    assert "1 device" in detail and "0.19.0" in detail
+
+
+def test_open3d_cuda_probe_accepts_the_newer_top_level_cuda_api(monkeypatch):
+    monkeypatch.setitem(sys.modules, "open3d", _fake_open3d(top_level=True))
+    ok, detail = _open3d_cuda_ok()
+    assert ok is True
+    assert "CUDA ready" in detail
+
+
+def test_open3d_cuda_probe_rejects_a_cpu_only_wheel(monkeypatch):
+    monkeypatch.setitem(sys.modules, "open3d", _fake_open3d(available=False, count=0))
+    ok, detail = _open3d_cuda_ok()
+    assert ok is False
+    assert "CPU-only" in detail
+
+
+def test_open3d_cuda_probe_rejects_zero_devices_even_if_available(monkeypatch):
+    monkeypatch.setitem(sys.modules, "open3d", _fake_open3d(available=True, count=0))
+    ok, detail = _open3d_cuda_ok()
+    assert ok is False
+    assert "device_count" in detail
+
+
+class _FakeCudaOutput:
+    is_cuda = True
+
+    def __init__(self, shape):
+        self.shape = shape
+
+    def numel(self):
+        result = 1
+        for size in self.shape:
+            result *= size
+        return result
+
+
+class _FakeGsplatTorch:
+    float32 = "float32"
+
+    def __init__(self):
+        self.cuda = SimpleNamespace(synchronize=lambda: None)
+
+    @staticmethod
+    def tensor(value, **_kwargs):
+        return value
+
+
+def test_gsplat_probe_executes_public_cuda_rasterization(monkeypatch):
+    called = {}
+
+    def rasterization(*args, **kwargs):
+        called["args"] = args
+        called["kwargs"] = kwargs
+        return (
+            _FakeCudaOutput((1, 16, 16, 3)),
+            _FakeCudaOutput((1, 16, 16, 1)),
+            {},
+        )
+
+    monkeypatch.setitem(sys.modules, "torch", _FakeGsplatTorch())
+    monkeypatch.setitem(sys.modules, "gsplat", SimpleNamespace(
+        __version__="1.5.3", rasterization=rasterization,
+    ))
+    ok, detail = _gsplat_cuda_ok()
+    assert ok is True
+    assert called["kwargs"]["width"] == 16
+    assert called["kwargs"]["height"] == 16
+    assert called["kwargs"]["packed"] is False
+    assert "rasterization CUDA op OK" in detail
+
+
+def test_gsplat_probe_reports_backend_or_jit_failure(monkeypatch):
+    def rasterization(*_args, **_kwargs):
+        raise RuntimeError("no kernel image is available")
+
+    monkeypatch.setitem(sys.modules, "torch", _FakeGsplatTorch())
+    monkeypatch.setitem(sys.modules, "gsplat", SimpleNamespace(
+        __version__="1.5.3", rasterization=rasterization,
+    ))
+    ok, detail = _gsplat_cuda_ok()
+    assert ok is False
+    assert "RuntimeError" in detail
+    assert "no kernel image" in detail

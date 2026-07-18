@@ -68,33 +68,45 @@ doctor is the ground truth.
 Prereqs to install **before** `./install.sh --gpu`:
 
 1. **NVIDIA driver** new enough for CUDA 11.8 (≥ 520). Verify: `nvidia-smi`.
-2. **CUDA 11.8 toolkit** (`nvcc`) — gsplat JIT-compiles its CUDA kernels at
-   install against the torch CUDA version, so `nvcc` must be 11.8. Verify:
-   `nvcc --version`.
-3. **COLMAP** on `PATH` with `feature_extractor`, `sequential_matcher`,
+2. **`nvidia-modprobe` at `/usr/bin/nvidia-modprobe`** — the GPU install fails
+   before making changes if it is absent. A root oneshot uses `-c 0` and `-u`
+   on cold boot to create the compute/control and UVM device nodes before the
+   unprivileged worker starts; modeset is not required.
+3. **CUDA 11.8 toolkit** (`nvcc`) — gsplat may JIT-compile its CUDA kernels on
+   the first public rasterization (the doctor deliberately triggers it) against
+   the torch CUDA version, so `nvcc` must be 11.8. Verify: `nvcc --version`.
+4. **COLMAP** on `PATH` with `feature_extractor`, `sequential_matcher`,
    `exhaustive_matcher`, `point_triangulator`, `bundle_adjuster`, and
    `pose_prior_mapper`. These are the `refine` stage's known-pose path and
    fallback (not pip; `pycolmap` is pulled by `.[refine]`). `global_mapper` is
-   reported when available but is not treated as a full-pose warm start.
+   reported when available but is not treated as a full-pose warm start. The
+   engine contract is owned by
+   `docs/design/field-capture/p2-item4-colmap-adapter-spike-2026-07-18.md`, which
+   supersedes the handoff's stale standalone-GLOMAP wording; item 3 deliberately
+   keeps a COLMAP-only command set.
+5. **Full Open3D wheel/build with CUDA**, not `open3d-cpu`. `doctor` requires
+   Open3D's public CUDA availability probe and at least one visible device for
+   `fuse`; an importable CPU-only wheel is a failure.
 
 Then:
 
 ```bash
 sudo ./install.sh --gpu                 # + .[gpu] via cu118 index, + GPU systemd drop-in
-sudo -e /etc/patina/scan-worker.env     # set STAGES to include the GPU stage(s), e.g.
-                                        #   STAGES=ingest,refine,fuse,splat,present
-sudo systemctl enable --now patina-scan-worker  # ExecStartPre must pass before claims
-systemctl status patina-scan-worker
-journalctl -u patina-scan-worker -n 100 --no-pager
 sudo systemd-analyze verify /etc/systemd/system/patina-scan-worker.service
+sudo systemd-analyze verify \
+  /etc/systemd/system/patina-scan-worker-nvidia-prepare.service
 sudo systemctl show patina-scan-worker \
   -p User -p Environment -p ReadWritePaths -p PrivateDevices -p DevicePolicy -p DeviceAllow
 ```
 
-`--gpu` also lays down `…/patina-scan-worker.service.d/gpu.conf`, which grants
-the accepted single-2080-Ti box's exact `/dev/nvidia0`, control, UVM, and modeset
-nodes. Systemd does not expand device-path globs; a future multi-GPU box must add
-one exact `/dev/nvidiaN` line per card. The drop-in also confines `TORCH_HOME`,
+`--gpu` lays down a root `patina-scan-worker-nvidia-prepare.service` plus
+`…/patina-scan-worker.service.d/gpu.conf`. The prepare oneshot creates the
+single-card compute/control and UVM nodes at cold boot. The drop-in orders and
+requires it, then grants only `/dev/nvidia0`, `/dev/nvidiactl`, and
+`/dev/nvidia-uvm`; `/dev/nvidia-modeset` and `/dev/nvidia-uvm-tools` are optional
+and intentionally not granted to this headless compute worker. Systemd does not
+expand device-path globs; a future multi-GPU box must add one exact
+`/dev/nvidiaN` line per card. The drop-in also confines `TORCH_HOME`,
 `CUDA_CACHE_PATH`, and `TORCH_EXTENSIONS_DIR` under `APP_DIR/.cache` so
 `ProtectSystem=strict` never redirects model, kernel, or extension-build caches
 outside the app-owned write surface.
@@ -106,6 +118,47 @@ outside the app-owned write surface.
 manual `patina-scan-worker doctor` remains useful diagnostics, but does not prove
 the systemd sandbox/device policy.
 
+The splat check is intentionally stronger than an import: it calls gsplat's
+public `rasterization` API for one Gaussian on a 16×16 CUDA target. A cold cache
+may spend several minutes compiling the extension. The unit allows **15 minutes**
+for startup; do not interrupt the first start, and confirm the subsequent warm
+start is materially faster.
+
+#### Item-3-only GPU acceptance (handlers not registered yet)
+
+At item 3, `refine`, `fuse`, and `splat` are valid config names solely so doctor
+can preflight their dependencies; their handlers arrive in items 4–7. Leaving
+them enabled could claim and fatally park a matching task. Use this controlled
+window only:
+
+1. In the Strata SQL editor, prove there are no claimable/requeueable GPU-stage
+   tasks. The query must return **zero rows** immediately before the start:
+
+   ```sql
+   SELECT task_type, status, count(*)
+   FROM public.agent_tasks
+   WHERE task_type IN (
+     'scan_pipeline.refine', 'scan_pipeline.fuse', 'scan_pipeline.splat'
+   )
+     AND status IN ('queued', 'running', 'failed')
+   GROUP BY task_type, status;
+   ```
+
+2. Stop the worker, temporarily set `STAGES=refine,fuse,splat` and `GPU=auto` in
+   `/etc/patina/scan-worker.env`, then start only long enough for ExecStartPre
+   and stop immediately:
+
+   ```bash
+   sudo systemctl stop patina-scan-worker
+   sudo systemctl start patina-scan-worker && sudo systemctl stop patina-scan-worker
+   sudo journalctl -u patina-scan-worker -n 100 --no-pager
+   ```
+
+3. Require green `gpu`, `colmap`, `pycolmap`, `open3d-cuda`, `trimesh`, `nvcc`,
+   `torch-cuda`, `gsplat-cuda`, and `xdg` lines. Restore the CPU `STAGES` value
+   before restarting normal P1 service, or leave the worker stopped. Do not
+   enable GPU stages persistently until their handlers register.
+
 Optional pre-install resolver evidence on a networked Linux host:
 
 ```bash
@@ -116,31 +169,40 @@ python3 -m pip install --dry-run --report /tmp/patina-gpu-resolve.json \
 ### Upgrading a running worker
 
 The worker installs a **copy** of the source into its venv, so `git pull` alone
-does **not** change a running worker's behaviour. `--upgrade` rebuilds the venv
-from the pulled source. It fails before touching the venv if a GPU drop-in exists
-but `--gpu` was omitted, preventing an accidental CUDA-dependency downgrade:
+does **not** change a running worker's behaviour. `--upgrade` builds a fresh
+immutable `.venv.release.*` and runs `pip check` while the existing worker
+continues. Python venv scripts embed their absolute build path, so the release
+directory is never renamed. Only after the build succeeds does the installer
+stop an active service, preserve the old `.venv` reference as `.venv.previous`,
+and atomically switch the stable `.venv` symlink to the new release. If the new
+service fails its systemd/doctor activation, the installer restores and restarts
+`.venv.previous`. When the service was already inactive, it does not start it;
+the previous venv remains available for operator rollback. The installer also
+fails before touching the venv if a GPU drop-in exists but `--gpu` was omitted,
+preventing an accidental CUDA-dependency downgrade:
 
 ```bash
 git pull
 sudo ./install.sh --upgrade             # CPU worker
 # or, on the accepted GPU box:
 sudo ./install.sh --gpu --upgrade
-sudo systemctl restart patina-scan-worker
 ```
 
 ## The env file (`/etc/patina/scan-worker.env`)
 
 See `scan-worker.env.example`. Required (no default): `WORKER_ID`,
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. The service-role key is the worker's
-**only** write credential — mode `0600`, owned by the `patina` user, delivered
-via `EnvironmentFile` so it never appears in `argv`. Full schema: design §3.
+**only** write credential — mode `0600`, owned by `root:root`, delivered via
+`EnvironmentFile` so it never appears in `argv`. The system manager (PID 1)
+reads it before launching `User=patina`; the worker process does not need direct
+file access. Full schema: design §3.
 
 | var | default | purpose |
 |---|---|---|
 | `WORKER_ID` | *(required)* | identity in `locked_by` + `app.actor` (audit); unique per worker |
 | `SUPABASE_URL` | *(required)* | Strata PostgREST + Storage base |
 | `SUPABASE_SERVICE_ROLE_KEY` | *(required)* | service-role JWT (server-side only) |
-| `STAGES` | `ingest,solve,drawings` | which `scan_pipeline.*` stages this worker claims. Known: `ingest,solve,drawings` (CPU, live) + `refine,fuse,splat,present` (P2; `refine/fuse/splat` are GPU). Default stays CPU-only — a GPU box lists the GPU stages explicitly |
+| `STAGES` | `ingest,solve,drawings` | which `scan_pipeline.*` stages this worker claims. Known: `ingest,solve,drawings` (CPU, live) + `refine,fuse,splat,present` (P2; `refine/fuse/splat` are GPU). Default stays CPU-only. Before items 4–7 register handlers, GPU names are allowed only for the controlled empty-queue item-3 preflight above, never persistent operation |
 | `POLL_SECONDS` | `5` | sleep between empty polls |
 | `MAX_CONCURRENT` | `2` | claim batch size / max in-flight |
 | `GPU` | `auto` | `auto` = detect+report; `off` = never touch. `doctor` makes the GPU check a hard failure (not a warning) when `STAGES` lists a GPU stage; `GPU=off` + a GPU stage is a contradiction it flags |
@@ -292,9 +354,10 @@ table. Item 10 replaced `stages/solve.py`'s stub (`.[solve]`: numpy/scipy); item
 GPU stages slot in the same way: items 4–7 add handlers for `refine`
 (`.[refine]`: pycolmap + numpy/scipy), `fuse` (`.[fuse]`: open3d/trimesh),
 `splat` (`.[splat]`: torch cu118 + gsplat), and `present`. Those stage names are
-already in `KNOWN_STAGES` so a GPU box can advertise them and `doctor` can gate
-on them ahead of the handlers landing; a stage claimed before its handler exists
-parks cleanly. `.[gpu]` is the box one-liner (= refine+fuse+splat). Nothing else
+already in `KNOWN_STAGES` so `doctor` can gate on them ahead of the handlers
+landing. A stage claimed before its handler exists parks fatally, so item 3 uses
+them only in the controlled empty-queue/immediate-stop preflight above. `.[gpu]`
+is the box one-liner (= refine+fuse+splat). Nothing else
 in the worker changes — the claim loop, telemetry, queue completion, and burst
 contract are stage-agnostic.
 

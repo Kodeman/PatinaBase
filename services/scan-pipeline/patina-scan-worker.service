@@ -27,9 +27,10 @@ Environment=XDG_STATE_HOME=/opt/patina/scan-pipeline/.state
 # A RED check stops the worker before it can claim a queue task.
 ExecStartPre=/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker doctor
 ExecStart=/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker run
-# Two bounded remote probes plus GPU imports can exceed systemd's 90 s default
-# on a degraded link; keep startup bounded while allowing doctor to finish.
-TimeoutStartSec=180
+# Two bounded remote probes plus a cold gsplat CUDA extension JIT can exceed
+# systemd's 90 s default. Keep startup bounded, but allow the one-time first
+# compile to finish; warm-cache starts should be much faster.
+TimeoutStartSec=15min
 Restart=always
 RestartSec=5
 # hardening — an outbound-only worker needs no privilege and no host write beyond

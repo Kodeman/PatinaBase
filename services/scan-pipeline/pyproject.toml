@@ -41,8 +41,9 @@ fuse = ["open3d>=0.18", "trimesh>=4.0", "numpy>=1.26"]
 #   still spans sm_37..sm_90). The binding constraint is the BOX's CUDA-11.x-era
 #   driver, which needs the cu118 RUNTIME. So the box installs the +cu118 wheel
 #   via the PyTorch index (README box-prep: `--extra-index-url
-#   https://download.pytorch.org/whl/cu118`); gsplat JIT-compiles CUDA kernels at
-#   install and needs the matching CUDA 11.8 toolkit (nvcc). The torch band below
+#   https://download.pytorch.org/whl/cu118`); gsplat may JIT-compile CUDA kernels
+#   on first rasterization and needs the matching CUDA 11.8 toolkit (nvcc). The
+#   torch band below
 #   is the conservative Turing+gsplat-tested ceiling; `doctor`'s torch.cuda check
 #   on the box is the ground truth. (SPZ writer dep lands with item 7.)
 splat = ["torch>=2.2,<2.5", "gsplat>=1.0,<2.0", "numpy>=1.26"]

@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BASE = ROOT / "patina-scan-worker.service"
 GPU = ROOT / "patina-scan-worker.gpu.conf"
+NVIDIA_PREPARE = ROOT / "patina-scan-worker-nvidia-prepare.service"
 
 # The systemd [Service] directives this project uses. A key outside this set in a
 # unit file is almost always a typo (systemd would silently ignore it).
@@ -21,7 +22,7 @@ KNOWN_SERVICE_KEYS = {
     "TimeoutStartSec",
     "Restart", "RestartSec", "NoNewPrivileges", "ProtectSystem", "ProtectHome",
     "PrivateTmp", "PrivateDevices", "DeviceAllow", "ReadWritePaths",
-    "StandardOutput", "StandardError", "SyslogIdentifier",
+    "StandardOutput", "StandardError", "SyslogIdentifier", "RemainAfterExit",
 }
 
 
@@ -43,8 +44,8 @@ def _service_kv(path: Path) -> list[tuple[str, str]]:
     return out
 
 
-def test_base_and_dropin_use_only_known_service_keys():
-    for path in (BASE, GPU):
+def test_units_and_dropin_use_only_known_service_keys():
+    for path in (BASE, GPU, NVIDIA_PREPARE):
         for key, _ in _service_kv(path):
             assert key in KNOWN_SERVICE_KEYS, f"{path.name}: unknown [Service] key {key!r}"
 
@@ -58,8 +59,6 @@ def test_dropin_grants_nvidia_and_keeps_devices_visible():
         "/dev/nvidia0 rw",
         "/dev/nvidiactl rw",
         "/dev/nvidia-uvm rw",
-        "/dev/nvidia-uvm-tools rw",
-        "/dev/nvidia-modeset rw",
     ]
     assert not any("*" in value for value in device_allow)
     # PrivateDevices MUST be off, or a private /dev would hide the nvidia nodes.
@@ -93,7 +92,8 @@ def test_worker_runs_doctor_as_exec_start_pre_in_the_real_service_context():
     assert ("ProtectSystem", "strict") in kv
     assert ("ProtectHome", "true") in kv
     assert ("PrivateTmp", "true") in kv
-    assert ("TimeoutStartSec", "180") in kv
+    # A cold gsplat cache JIT-compiles on the first public rasterization probe.
+    assert ("TimeoutStartSec", "15min") in kv
 
 
 def test_dropin_is_purely_additive():
@@ -101,3 +101,23 @@ def test_dropin_is_purely_additive():
     # GPU device policy + cache env (Environment/DeviceAllow/PrivateDevices).
     added_keys = {k for k, _ in _service_kv(GPU)}
     assert added_keys <= {"DeviceAllow", "PrivateDevices", "Environment"}, added_keys
+
+
+def test_gpu_dropin_requires_root_nvidia_prepare_before_worker():
+    text = GPU.read_text()
+    assert "[Unit]" in text
+    assert "Requires=patina-scan-worker-nvidia-prepare.service" in text
+    assert "After=patina-scan-worker-nvidia-prepare.service" in text
+
+
+def test_nvidia_prepare_is_a_root_oneshot_for_compute_and_uvm_nodes():
+    text = NVIDIA_PREPARE.read_text()
+    kv = _service_kv(NVIDIA_PREPARE)
+    assert "Before=patina-scan-worker.service" in text
+    assert ("Type", "oneshot") in kv
+    assert ("RemainAfterExit", "yes") in kv
+    assert ("ExecStart", "/usr/bin/nvidia-modprobe -c 0") in kv
+    assert ("ExecStart", "/usr/bin/nvidia-modprobe -u") in kv
+    assert not any(key in {"User", "Group"} for key, _ in kv)
+    exec_values = [value for key, value in kv if key == "ExecStart"]
+    assert not any(value.endswith(" -m") for value in exec_values)
