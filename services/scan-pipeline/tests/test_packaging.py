@@ -39,7 +39,7 @@ def test_cpu_install_never_pulls_cuda():
 
 def test_gpu_stage_extras_pull_only_their_imports():
     extras, _ = _extras()
-    # refine drives GLOMAP/COLMAP (system binaries) via pycolmap — NOT torch.
+    # refine drives the exact COLMAP target via pycolmap — NOT torch.
     refine = " ".join(extras["refine"]).lower()
     assert "pycolmap" in refine and "torch" not in refine and "gsplat" not in refine
     # fuse = Open3D TSDF (+ trimesh export) — NOT torch.
@@ -48,6 +48,12 @@ def test_gpu_stage_extras_pull_only_their_imports():
     # splat is the ONLY torch/CUDA stage.
     splat = " ".join(extras["splat"]).lower()
     assert "torch" in splat and "gsplat" in splat
+
+
+def test_refine_pins_the_target_pycolmap_binding_exactly():
+    extras, _ = _extras()
+    pycolmap = next(dep.replace(" ", "").lower() for dep in extras["refine"] if dep.lower().startswith("pycolmap"))
+    assert pycolmap == "pycolmap==4.0.2"
 
 
 def test_splat_pins_a_turing_safe_torch_ceiling():

@@ -365,9 +365,9 @@ GPU branch that reads the same bundle the P1 rig already wrote (keyframes + dept
 ```
 ingest ──▶ solve(P1) ──▶ drawings ──▶ delivery        (True Layer, P1 — unchanged)
    │
-   └─▶ refine ──▶ fuse ──▶ solve-upgrade(mesh) ─┐
-                    │                            ├─▶ present (rollup)   (Present Layer, P2)
-                    └─▶ splat ───────────────────┘
+   └─▶ refine ─┬─▶ fuse ──▶ solve-upgrade(mesh) ─┐
+               └─▶ splat ─────────────────────────┴─▶ present (rollup)
+                                                    (Present Layer, P2)
 ```
 
 - `refine` warm-starts from the bundle's ARKit trajectory; `fuse` needs
@@ -380,8 +380,9 @@ ingest ──▶ solve(P1) ──▶ drawings ──▶ delivery        (True La
   the **same reserved `room_files` version** (entry-point allocation, 00370; §2.2).
   A P2 run does **not** mint a new version; a **retroactive re-solve** (R114.3) of
   an existing scan mints v+1 per R-f, then runs this same chain against it.
-- `present` is a bookkeeping rollup: when `fuse`+solve-upgrade and `splat` have
-  both succeeded it flips `room_files.present_status='ready'` + `presented_at`.
+- `present` is a bookkeeping rollup: after it derives and verifies canonical
+  refine, fuse, mesh-solve, and splat manifests, it alone composes
+  `room_files.present` and flips `present_status='ready'` + `presented_at`.
 
 ### 10.1.1 Fork-join coordination — enqueue-both, join-on-both (no barrier primitive)
 
@@ -390,40 +391,49 @@ splat}` fork and the `{solve-upgrade, splat} → present` join need more, but re
 the SAME queue primitives (00297 + the 00378 lease fence) — no barrier, no
 coordinator, no new table:
 
-- **The fork.** `refine`, on success, enqueues BOTH successors through its
-  exact running lease —
+- **The fork.** `refine`, on success, enqueues BOTH successors through its exact
+  running lease —
   `enqueue_agent_successor_if_owned(refine.id, 'scan_pipeline.fuse', …,
   idempotency_key '{scan}:fuse:{v}')` AND
   `enqueue_agent_successor_if_owned(refine.id, 'scan_pipeline.splat', …,
-  idempotency_key '{scan}:splat:{v}')` — the guarded RPC hardcodes
-  conflict-ignore, and both
-  children have `parent_task_id = refine.id`. The two then run independently
-  (concurrently on two GPU leases, serially on one — §10.9). A crash between
-  the two enqueues just re-runs `refine`;
-  the idempotency keys de-dupe both successors (§2.3 crash-safety, unchanged).
-- **The join (the trick).** BOTH terminal branches enqueue `present` through
-  their own exact lease on the SAME key: the fuse branch tip (`solve-upgrade`,
-  §10.4) enqueues `scan_pipeline.present` with `'{scan}:present:{v}'`, and
-  `splat` enqueues the identical `'{scan}:present:{v}'`. The guarded RPC's
-  conflict-ignore makes the SECOND enqueue a
-  no-op, so `present` is created **exactly once**, by whichever branch finishes
-  first, with zero coordination. That double-enqueue-onto-one-key IS the join;
-  there is no barrier primitive to build or get wrong. For I87, each call uses
+  idempotency_key '{scan}:splat:{v}')`. The guarded RPC hardcodes
+  conflict-ignore; both children have `parent_task_id = refine.id`, and both
+  stable payloads carry the same immutable refine manifest key + sha256. The two
+  then run independently (concurrently on two GPU leases, serially on one —
+  §10.9). A crash between enqueues re-runs `refine`; deterministic artifacts and
+  idempotency keys converge.
+- **The mesh branch tip is solve-upgrade, never Fuse.** Fuse publishes its own
+  canonical manifest and enqueues mesh solve-upgrade. Solve-upgrade commits the
+  measurement set/certificate and atomically publishes
+  `solve-upgrade/mesh-solve-manifest-v1.json` before it can join. Fuse cannot
+  bypass this durable evidence and enqueue Present itself.
+- **The join payload is identical and order-independent.** BOTH terminal branches
+  (mesh solve-upgrade and Splat) call the same constructor through their own
+  exact leases. Payload is stable IDs only:
+  `{scan_id, room_file_id, room_file_version, user_id, refine_task_id}`; task key
+  is `'{scan}:present:{v}'`. Each guarded call uses
   `p_owner_task_id = <that branch-tip task>` for authority while retaining the
-  common `p_parent_task_id = refine.id` for lineage; these IDs must not be
-  conflated.
-- **The wait (present self-gates on the data).** When `present` runs it re-reads
-  the `room_files` row and checks BOTH prerequisites: the fuse branch's outputs
-  (`dense_mesh_url` **and** `measure_mesh_url` set) **and** the splat branch's
-  output (`splat_url` set). If either is still NULL — the slower branch hasn't
-  landed — `present` raises **`TransientError`** (NOT fatal): `complete_agent_task(
-  outcome='failed', p_fatal=false)` → backoff-requeue on the same key. It never
-  fires early (it reads the actual columns, not a timer), never partially rolls
-  up, and needs no wake-up event. When the slower branch lands, the next `present`
-  attempt sees all three URLs set → flips `present_status='ready' + presented_at`
-  and completes `done`.
+  common `p_parent_task_id = refine_task_id` for lineage. Branch task IDs,
+  manifest keys/checksums, timestamps, and results are forbidden from the
+  payload. The guarded RPC's conflict-ignore makes the second enqueue a no-op,
+  so the durable Present row is identical whichever branch finishes first.
+- **The wait derives canonical evidence.** Present derives four manifest keys
+  from the stable IDs: `refine/refine-manifest-v1.json`,
+  `fuse/fuse-manifest-v1.json`,
+  `solve-upgrade/mesh-solve-manifest-v1.json`, and
+  `splat/splat-manifest-v1.json`. It verifies every manifest checksum and their
+  cross-references plus the three URL columns. Missing/uncommitted/inconsistent
+  evidence raises **`TransientError`** while a branch is outstanding; URL
+  presence alone never makes the layer ready. Only after all four agree does
+  Present compose `room_files.present` once, set `ready`/`presented_at`, and
+  complete.
+- **No parallel read-modify-write.** Refine may set scalar `refining` once. Fuse,
+  Splat, and solve-upgrade write dedicated URL/measurement columns, immutable
+  manifests, and events; they never merge `room_files.present` and never race
+  `present_status` through `fusing`/`training`. Only a fatal path may set `error`;
+  only Present may set `ready`.
 - **Visibility-timeout / cost implications.** A `present` retry is a CHEAP no-op —
-  a single indexed read of three URL columns; no GPU, no download, no lease held
+  canonical manifest heads/reads plus one indexed row read; no GPU, no lease held
   between attempts. The backoff (1m/5m/25m keyed on attempts, §7) at the default
   `max_attempts=5` gives ~80 min of retry headroom, comfortably outlasting the
   slower branch's R114.2 budget (~20 min), so `present` waits `splat` out without
@@ -446,22 +456,51 @@ coordinator, no new table:
 ### 10.2 Stage `scan_pipeline.refine` — SfM/BA pose refinement (GPU)
 
 - **Reads:** keyframes (sharp, ~200–400), ARKit per-frame poses + camera
-  intrinsics from the bundle (warm start), the sparse loop.
-- **Engine:** **GLOMAP** global SfM warm-started on the known poses/intrinsics
-  (reuses COLMAP's feature-extraction + matching front-end, same DB format);
-  **COLMAP-incremental pose-prior** fallback behind config (`REFINE_ENGINE`).
-- **Writes (scratch/derived):** refined per-frame poses, a sparse point cloud,
-  per-frame pose deltas. Not a deliverable artifact — consumed by `fuse`/`splat`.
-- **DB:** `present_status='refining'`; `present.refine_engine`, `present.sfm_residual_pct`.
-- **Budget:** GPU; SIFT extraction on-GPU, the global solve is CPU/RAM-bound and
-  VRAM-light on the 11 GB card. Target: the drift residual falls to ~0.2–0.5 %
-  (SC-13) inside the R114.2 chain budget.
-- **Telemetry:** `refine.started` / `refine.succeeded` (`duration_ms`, residual,
-  iterations, `vram_peak_mb`) / `refine.failed`.
+  intrinsics from the bundle, plus the deterministic temporal + ARKit-spatial
+  candidate graph. The Field/Core Image raster transform remains unqualified
+  until the real capture/materializer fixture (I87).
+- **Exact pilot target (I87):** COLMAP CLI **4.0.2** and
+  `pycolmap==4.0.2`, exact parity required. 4.1.1 is current as of 2026-07-18;
+  4.0.2 is a qualification pin, not a claim of currency or validation. Any
+  newer 4.x requires a separate CLI/binding/API/GPU fixture.
+- **Primary:** per-image corrected PINHOLE cameras + full converted ARKit poses
+  in a registered seed model → `point_triangulator` → `bundle_adjuster` → Sim(3)
+  world rebase of centres, points, **and orientations**. **Fallback:** Cartesian
+  centre/covariance priors → `pose_prior_mapper` → BA; rotations are explicitly
+  discarded. COLMAP 4 `global_mapper` (integrated GLOMAP) is diagnostic-only
+  because it has no supported full-pose warm-start surface; standalone GLOMAP is
+  archived and not installed.
+- **Writes (derived, versioned):** corrected adapter + candidate pairs, database,
+  seed/aligned sparse model, refined poses, pose deltas, diagnostic trajectory
+  shape change, separate comparable refinement evidence, bounded command logs,
+  and `refine/refine-manifest-v1.json` last, all checksummed. Consumed by
+  `fuse`/`splat` through the immutable manifest contract.
+- **Evidence, not self-comparison:** similarity-aligned distance back to raw
+  ARKit is `trajectory_shape_change_pct`, keyframe-weighted and diagnostic-only;
+  a no-op is zero, but this diagnostic can neither grant nor veto the verdict.
+  Actual refinement evidence uses the same observations/verified loops before
+  and after: registration coverage,
+  observation/loop-set SHA-256s, reprojection RMSE px, loop-relative rotation and translation-direction error,
+  plus optional anchor/ground-truth error. Coverage must be ≥80% and
+  non-regressing; no metric regresses; at least one improves ≥1% relative; an
+  unchanged evidence set is `REFINE_NO_MEASURABLE_IMPROVEMENT`. No 0.2–0.5
+  target or acceptance gate attaches to shape change.
+- **DB/concurrency:** may set `present_status='refining'` once; never touches P1
+  `status`, read-modify-writes `present`, or marks ready. Refine telemetry lives
+  in events/manifests until Present composes the row.
+- **Deadline:** one absolute deadline per task:
+  `min(stage monotonic start + 4 min, actual claimed lease expiry - 60 s)`.
+  Every engine command consumes the remaining deadline, streams output to a log,
+  and retains only a bounded 64 KiB tail. No static lease length assumption.
+- **Telemetry:** `refine.started` / `refine.succeeded` (`duration_ms`, engine +
+  target/actual versions, registration before/after, reprojection RMSE before/
+  after, loop errors before/after, diagnostic shape change, iterations,
+  `vram_peak_mb`) / `refine.failed`.
 - **Failure classes:** a low-overlap / degenerate single-room loop fails
   **permanent** (`p_fatal=true`) — it never hangs the lease, never silently ships
-  raw ARKit poses as "refined." OOM / driver blip / transient IO = **transient**
-  (retry with backoff, §7).
+  raw ARKit/no-op poses as "refined." Invalid input/version mismatch/artifact
+  conflict are permanent; OOM, driver blip, transient I/O, or exhausted
+  lease-aware deadline are transient (retry with backoff, §7).
 
 ### 10.3 Stage `scan_pipeline.fuse` — TSDF dense mesh + web mesh (GPU)
 
@@ -474,8 +513,9 @@ coordinator, no new table:
 - **Writes (deliverable):** `dense_mesh.(ply|glb)` (measurement source of truth,
   server-side) + `measure_mesh.glb` (the invisible browser raycast target), both
   under `room_file/{userId}/{scanId}/v{version}/` (§5.2), sha256 recorded.
-- **DB:** `present_status='fusing'`; `room_files.dense_mesh_url`,
-  `measure_mesh_url`; `present.mesh_vertices`, `present.mesh_bytes`.
+- **DB/concurrency:** writes only `room_files.dense_mesh_url` and
+  `measure_mesh_url`, plus its immutable canonical fuse manifest and events. It
+  never writes `present`, scalar progress, ready, or `presented_at`.
 - **Budget:** GPU/RAM for the volume; `measure_mesh.glb` must land under the
   browser size budget (the item-8 viewer target).
 - **Telemetry:** `fuse.started` / `fuse.succeeded` (`duration_ms`, mesh vertices,
@@ -492,7 +532,10 @@ synthesis with true ceiling geometry where present. **Anchor discipline unchange
 `'verified'` still requires an anchor (`rfm_anchor_source_shape`), so mesh evidence
 tightens `'measured'` — it never manufactures `'verified'` under the short P1
 anchors. The certificate records the source shift + tolerance change honestly.
-Writes the measurement set delete-then-insert under `rfm_element_ref_uniq`.
+Writes the measurement set delete-then-insert under `rfm_element_ref_uniq`, then
+publishes canonical `solve-upgrade/mesh-solve-manifest-v1.json` last with the
+measurement/certificate checksums. Only this durable branch tip may enqueue the
+stable-ID Present task; Fuse itself cannot bypass solve-upgrade.
 
 ### 10.5 Stage `scan_pipeline.splat` — 3DGS training → SPZ (GPU)
 
@@ -505,9 +548,10 @@ Writes the measurement set delete-then-insert under `rfm_element_ref_uniq`.
   GS-Scale CPU host-offload is the escape hatch for a room that blows 11 GB.
 - **Writes (deliverable):** `scene.spz` under `room_file/{userId}/{scanId}/v{version}/`,
   sha256 recorded.
-- **DB:** `present_status='training'`; `room_files.splat_url`;
-  `present.splat_format='spz4'`, `gaussian_count`, `train_seconds`, `vram_peak_mb`,
-  `masked_frames`, `splat_bytes`.
+- **DB/concurrency:** writes only `room_files.splat_url`, its immutable canonical
+  splat manifest, and events. It never merges `present`, writes scalar progress/
+  ready, or sets `presented_at`. After its manifest is durable it enqueues the
+  exact same stable-ID Present contract as mesh solve-upgrade (§10.1.1).
 - **Budget:** the dominant GPU cost; must fit the R114.2 per-room budget on the
   2080 Ti (preview-grade quality at pilot scale).
 - **Telemetry:** `splat.started` / `splat.succeeded` (`gaussian_count`,
@@ -528,20 +572,28 @@ Writes the measurement set delete-then-insert under `rfm_element_ref_uniq`.
   (gaussian count, train seconds, VRAM peak, mesh vertices, SPZ+mesh bytes) for
   the GPU-budget telemetry. Both SECURITY DEFINER + admin-domain gated (00372
   idiom); the new view's GRANT regenerates the legacy-grants seed.
+- **I87 runtime correction (no DDL in item 4):** `present` is free-form JSON, so
+  handlers write the honest `trajectory_shape_change_pct` plus explicit
+  before/after refinement evidence; the planned/comment-era
+  `sfm_residual_pct` remains null. Fuse/Splat do not use the CHECK-allowed
+  `fusing`/`training` scalar values because their parallel writes would race;
+  events/manifests carry progress, only Present writes ready, fatal paths error.
 - **No migration needed for the task types** — `agent_tasks.task_type` has no
   CHECK, so `scan_pipeline.refine/fuse/splat` are claimed by config alone (§2.1).
 
 ### 10.7 Packaging, workers, and the burst contract
 
 - **GPU workers are config, not code.** A splat-capable worker is the same package
-  with the `[splat]`/`[solve]` extras installed, `GPU=auto`, and
+  with the `[gpu]` meta-extra installed, `GPU=auto`, and
   `STAGES=…,refine,fuse,splat` on the box with the card. CPU-only workers omit
   those stages and never claim them — `claim_agent_tasks(p_task_types := STAGES)`
   filters by exactly the stages a worker opted into.
-- **Extras** (item 3): `[solve]` (pycolmap / GLOMAP bindings-or-CLI, numpy/scipy),
-  `[splat]` (torch cu-xx for Turing SM 7.5, gsplat, SPZ tooling) — a CPU worker
-  never pulls CUDA. `doctor` treats the GPU as **required** when `STAGES` includes
-  a GPU stage (nvidia-smi + torch/CUDA import + every cache dir writable).
+- **Extras** (item 3/I87): `[refine]` (`pycolmap==4.0.2`, numpy/scipy),
+  `[fuse]` (Open3D/trimesh), `[splat]` (torch cu118 for Turing SM 7.5 + gsplat),
+  `[gpu] = refine+fuse+splat` — a CPU worker never pulls CUDA. Package resolution
+  does not qualify the engine: item 4 must prove exact CLI/binding 4.0.2 parity,
+  API calls, GPU SIFT, and the Field raster/materializer fixture. `doctor` treats
+  the GPU as **required** when `STAGES` includes a GPU stage.
   CUDA/torch caches confine under `APP_DIR` (I85 finding 3, extended to the
   torch-hub / CUDA-JIT / nvidia cache surfaces).
 - **The burst contract is the same contract (R114.6).** R108.4/R109.1's "cloud
@@ -565,7 +617,7 @@ quality — realistic against the §10.2–10.5 engine survey:
 
 | stage | resource | per-room budget (2080 Ti) |
 |---|---|---|
-| `refine` (GLOMAP SfM/BA, warm-started, ~200–400 keyframes) | GPU front-end + CPU/RAM solve | **2–4 min** (~3) |
+| `refine` (COLMAP 4.0.2 known-pose triangulation + BA, ~200–400 keyframes) | GPU front-end + CPU/RAM solve | **2–4 min** (~3) |
 | `fuse` (TSDF dense mesh + decimate) + `solve-upgrade` (CPU mesh re-fit) | GPU volume + CPU | **3–5 min** (~4 + ~1) |
 | `splat` (MCMC-capped gsplat/splatfacto → SPZ) — the dominant cost | GPU | **6–14 min** (~8–9) |
 | `present` (rollup) | none | **< 0.5 min** |
@@ -587,6 +639,10 @@ quality — realistic against the §10.2–10.5 engine survey:
   AND shortens `splat`. Pilot volume (single-designer, one card) stays amber and
   accepted; the burst flip (first non-Leah designer) is what buys ≤10, with a
   per-room GPU-cost ceiling attached.
+- **Refine lease guard.** The 4-minute row is the hard engine ceiling used by
+  item 4. Its actual deadline is the smaller of start+4 minutes and the claimed
+  lease expiry minus a 60-second publication/completion reserve; no handler
+  assumes a fixed visibility timeout.
 - **Watch it live:** `scan_present_stats` (00377) surfaces `train_seconds`,
   `vram_peak_mb`, `gaussian_count`, and `mesh_vertices` per room — the budget is
   measured, not assumed; a room drifting toward the GS-Scale escape hatch shows up

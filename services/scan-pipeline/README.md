@@ -64,7 +64,7 @@ hard **failure** only when `STAGES` lists a GPU stage (see below). Provision
 
 ### Box prep (GPU)
 
-The GPU stages — `refine` (GLOMAP/COLMAP), `fuse` (Open3D TSDF), `splat` (gsplat
+The GPU stages — `refine` (COLMAP), `fuse` (Open3D TSDF), `splat` (gsplat
 3DGS → SPZ) — run on an NVIDIA box. **Turing pin reality (target GPU = RTX 2080
 Ti, SM 7.5):** `sm_75` is *not* dropped from modern PyTorch — it stays in the
 **cu118** (CUDA 11.8) wheel's arch list. The binding constraint is the box's
@@ -80,9 +80,13 @@ Prereqs to install **before** `./install.sh --gpu`:
 2. **CUDA 11.8 toolkit** (`nvcc`) — gsplat JIT-compiles its CUDA kernels at
    install against the torch CUDA version, so `nvcc` must be 11.8. Verify:
    `nvcc --version`.
-3. **GLOMAP + COLMAP** binaries on `PATH` (system packages / build) — these are
-   the `refine` stage's SfM front-end (not pip; `pycolmap` is the Python binding
-   and *is* pulled by `.[refine]`).
+3. **COLMAP CLI 4.0.2** on `PATH`, exactly matching `pycolmap==4.0.2` from
+   `.[refine]`. This is the I87 pilot qualification target, not the current
+   release or a completed validation (COLMAP 4.1.1 is current as of 2026-07-18).
+   The still-owed item-4 fixture must prove CLI/binding parity, exact DB/model
+   APIs, GPU SIFT, and the real Field/Core Image raster materializer. Standalone
+   GLOMAP is archived and is not a prerequisite; integrated `global_mapper` is
+   diagnostic-only, not the full-pose primary.
 
 Then:
 
@@ -134,6 +138,10 @@ via `EnvironmentFile` so it never appears in `argv`. Full schema: design §3.
 | `RETENTION_HOURS` | `48` | how long scratch lingers before the janitor prunes it |
 | `HTTP_TIMEOUT_S` | `30` | per-request timeout |
 | `LOG_LEVEL` | `info` | journald verbosity |
+
+`refine` never treats the configured visibility default as its command timeout.
+Item 4 derives the actual claimed lease expiry and shares one deadline across
+engine commands: `min(stage start + 4 minutes, actual lease expiry - 60 seconds)`.
 
 ## Commands
 
@@ -275,7 +283,8 @@ SELECT * FROM public.scan_pipeline_runs LIMIT 5;
 table. Item 10 replaced `stages/solve.py`'s stub (`.[solve]`: numpy/scipy); item
 11 replaced `stages/drawings.py`'s stub (`.[drawings]`: ezdxf/cairosvg). The P2
 GPU stages slot in the same way: items 4–7 add handlers for `refine`
-(`.[refine]`: pycolmap + numpy/scipy), `fuse` (`.[fuse]`: open3d/trimesh),
+(`.[refine]`: exactly pycolmap 4.0.2 + numpy/scipy; known-pose triangulation/BA),
+`fuse` (`.[fuse]`: open3d/trimesh),
 `splat` (`.[splat]`: torch cu118 + gsplat), and `present`. Those stage names are
 already in `KNOWN_STAGES` so a GPU box can advertise them and `doctor` can gate
 on them ahead of the handlers landing; a stage claimed before its handler exists

@@ -18,7 +18,10 @@ This document was the **agenda for a ruling session**, not a record of one. P1 s
 P2 is **server + portal + GPU-box** work at its core, **plus one late capture-side item** — the on-device splat *preview* (R114.1, Part E item 12). **iOS is untouched on the critical path:** the server chain (M1/M2) and the portal viewer (M3) re-open nothing on the device, because the P1 capture rig already writes everything those stages need. The one iOS re-entry is the preview, and it is deliberately sequenced **after** the server chain is proven so it never blocks P2-M1/M2 (see Part B.1). The scoping fact still holds where it matters: P2 does not re-open the long iOS pole *for the measurable deliverable* — the preview is an on-site **orientation** artifact (never measured against, never the Room File), so it re-enters iOS additively and late, not on the reconstruction path.
 
 **In P2 (SC-10 steps 1, 3, 4, 5 + SC-11 Present Layer):**
-- **(a) Pose refinement** — SfM / bundle adjustment warm-started from the ARKit trajectory (the drift killer, SC-13: 1–2 % → ~0.2–0.5 %).
+- **(a) Pose refinement** — SfM / bundle adjustment seeded from the ARKit
+  trajectory. Acceptance is comparable reprojection, registration, and verified
+  loop evidence before/after (plus external anchor/ground truth when available),
+  never similarity-aligned distance back to the same raw ARKit trajectory.
 - **(b) Dense fusion** — TSDF over the refined depth → a dense, measurable mesh of the actual room.
 - **(c) Parametric re-fit against dense evidence** — re-measure walls, openings, and **true ceiling planes / slopes** against the mesh; upgrades P1's corner-height chord synthesis (R111.2) to real geometry. Keep RoomPlan's semantics, replace its geometry.
 - **(d) Splat training** — 3D Gaussian splatting → a compact web format.
@@ -35,12 +38,25 @@ P2 is **server + portal + GPU-box** work at its core, **plus one late capture-si
 
 The deck named its stack in **draft, 2026-era** (SC-10/SC-11/SC-16 SOURCES: COLMAP, nerfstudio splatfacto / gsplat, Niantic SPZ, Spark). Each was re-checked against the 2026 state of the art below; the currency verdict is stated per line. All library/pipeline picks are **bless-class** (Part C) — logged, reversible, designer-invisible.
 
-### (a) Pose refinement — **recommend GLOMAP**, COLMAP incremental (pose-prior) as the proven fallback
+### (a) Pose refinement — **COLMAP 4.0.2 known-pose primary**, position-prior fallback (I87)
 
-The deck said "COLMAP-class, fast because it starts warm." That instinct is right; the specific engine has moved on.
+The deck said "COLMAP-class, fast because it starts warm." I87 corrects the
+pre-build survey after the executable adapter probe:
 
-- **✅ GLOMAP** (ECCV '24, "Global Structure-from-Motion Revisited", from the COLMAP authors) — **the recommendation.** Global SfM: solves camera translations and 3D points in one global step instead of COLMAP's incremental Gauss-Newton loop, so it is **1–2 orders of magnitude faster** (~3.5× in the common case) at **on-par or better accuracy** (+~8 % recall, +8–9 AUC pts). It reuses COLMAP's mature feature-extraction + matching front-end and the **same database format**, so it slots straight onto a warm ARKit start (known intrinsics, ~200–400 keyframes, a single-room loop). VRAM-light on an 11 GB 2080 Ti: SIFT feature extraction runs on the GPU; the global solve is CPU/RAM-bound. Rationale: fastest path to the SC-13 drift residual at room scale, minimal integration risk (COLMAP-compatible), and it directly consumes the P1 bundle.
-- COLMAP incremental with the **pose-prior mapper** — the conservative fallback; the exact "COLMAP-class" the deck named. Slower, but battle-tested, and the natural degrade if GLOMAP's rotation/translation averaging destabilizes on a sparse single-room loop.
+- **Primary: COLMAP 4.0.2 known-pose sparse model → `point_triangulator` →
+  `bundle_adjuster`.** It preserves the full corrected ARKit rotations and camera
+  centres while using COLMAP's supported database/model path. Exact pilot pin:
+  CLI 4.0.2 and `pycolmap==4.0.2`; both must match in the still-owed box fixture.
+- **Fallback: COLMAP 4.0.2 `pose_prior_mapper`.** It consumes metric camera
+  positions + covariance but intentionally discards ARKit rotations. Selection
+  is explicit and cannot hide deterministic low overlap.
+- **`global_mapper` is diagnostic-only.** Standalone GLOMAP was archived
+  2026-03-09 and moved into COLMAP. COLMAP's integrated global mapper has no
+  supported full-pose warm-start surface, so it cannot satisfy this item as the
+  primary engine.
+- COLMAP 4.1.1 is current as of 2026-07-18; 4.0.2 is a deliberately exact pilot
+  qualification target, not the current or already-validated release. Any newer
+  4.x needs its own CLI/binding/API/GPU fixture and explicit pin change.
 - FastMap (arXiv 2505.04612, 2025) — first-order, GPU-accelerated, up to ~10× faster than COLMAP/GLOMAP at comparable accuracy; newer, less proven — a watch-item, not a pilot dependency.
 - VGGSfM / deep SfM — learning-based, heavier VRAM, overkill for warm-started room-scale.
 
@@ -72,7 +88,11 @@ Hard constraint from **R107 (Room View, the shipped precedent):** the orbit view
 
 R107 already ships plain-three.js photo markers on the orbit view; item-12 already resolves capture context via the **real flat dotted-key provenance contract** (`field_captures.provenance @> '{"siteScanContext.scanId":"…"}'`). P2 pins those same context items as 3D markers in the walkthrough and on the plan — reuse, not invention.
 
-**State-of-the-art check performed 2026-07-18** (web): GLOMAP/FastMap SfM; FastGS/GS-Scale/Taming-3DGS training; SPZ 4 + SOGS formats; Spark/GaussianSplats3D/SuperSplat renderers. The deck's draft names hold up — SPZ, gsplat, Spark are current; the one substantive move is **GLOMAP over incremental COLMAP** for pose refinement. Sources footnoted at the end.
+**State-of-the-art check performed 2026-07-18** (web), corrected by I87 after
+the adapter probe: GLOMAP is now integrated into COLMAP, but the supported
+full-pose path for this warm start is the COLMAP 4.0.2 known-pose model flow;
+`global_mapper` remains diagnostic-only. SPZ, gsplat, and Spark remain current.
+Sources are footnoted at the end.
 
 ---
 
@@ -92,7 +112,7 @@ Each was framed with a recommendation. These are the SC-16 leftovers plus the ne
 
 > **Ruled (R114.3) — RATIFIED.** Retroactive re-solve is IN, **operator-triggered** (no auto-sweep). Scan **`95266be1` is the P2-M2 subject** — the dense-mesh re-solve should tighten its honest ±11 % where geometry allows, minting `room_files` v+1 (the D.4 path, proven end-to-end at item 6).
 
-**B.4 — Keyframe cadence / count changes if SfM wants more.** P1 fires 200–400 keyframes (0.5 m / 15°, sharpness-gated); GLOMAP warm-started is happy with that — it needs *well-distributed, sharp, overlapping* frames, not *more* frames, and the bundle budget (300–600 MB) + capture time (≤12 min) are already tight. **Recommendation: no cadence change for P2 start; validate at M2 against real refine output, and if regions come back under-constrained, tighten the coverage coach / sharpness gate rather than raise the raw count.** *(Keeps iOS untouched — the reason this is the recommendation, not just the default.)*
+**B.4 — Keyframe cadence / count changes if SfM wants more.** P1 fires 200–400 keyframes (0.5 m / 15°, sharpness-gated); the COLMAP known-pose path needs *well-distributed, sharp, overlapping* frames, not merely *more* frames, and the bundle budget (300–600 MB) + capture time (≤12 min) are already tight. **Recommendation: no cadence change for P2 start; validate at M2 against real refine output, and if regions come back under-constrained, tighten the coverage coach / sharpness gate rather than raise the raw count.** *(Keeps iOS untouched — the reason this is the recommendation, not just the default.)*
 
 > **Ruled (R114.4) — RATIFIED.** No cadence change at P2 start; **revisit only with P2-M2 reconstruction-quality evidence** (item 4/6 refine output). Note: the R114.1 preview item touches iOS, but the *capture cadence* is unchanged — the preview reads the frames the P1 rig already writes.
 
@@ -110,7 +130,7 @@ Each was framed with a recommendation. These are the SC-16 leftovers plus the ne
 
 Same split as P1 (the P1 package's authority note + spec §11): the question is *would a designer or a maker notice?*
 
-**Claude Code blesses** (code-only; log as I-entries with rationale): the SfM engine (GLOMAP) and its fallback; the fusion method + voxel/truncation/decimation params; the splat trainer (gsplat/splatfacto) + densification cap + SPZ export; the renderer *library* (Spark) as an implementation substrate; task-stage names (`scan_pipeline.refine/fuse/splat`); migration numbering; artifact packaging, storage prefixes, and MIME transport; worker `STAGES` / extras layout; GPU scheduling and cache confinement; transient-frame masking mechanics.
+**Claude Code blesses** (code-only; log as I-entries with rationale): the SfM engine (I87: COLMAP 4.0.2 known-pose primary + position-prior fallback, conditionally gated on the box/Field fixtures); the fusion method + voxel/truncation/decimation params; the splat trainer (gsplat/splatfacto) + densification cap + SPZ export; the renderer *library* (Spark) as an implementation substrate; task-stage names (`scan_pipeline.refine/fuse/splat`); migration numbering; artifact packaging, storage prefixes, and MIME transport; worker `STAGES` / extras layout; GPU scheduling and cache confinement; transient-frame masking mechanics.
 
 **Claude Code escalates** (designer/maker-visible): the walkthrough page layout and camera behavior; the **measure-tool interaction and its wording** (how a distance is invoked, shown, and labeled); how a measured readout reconciles to the tolerance badge triad (`verified / measured ± x / estimated`); the **registry presentation** (marker look, what a tap reveals, plan↔walk linkage); any splat quality-vs-load tradeoff the designer *perceives* (visible artifacting, load spinner behavior); how mesh/splat visual disagreement is surfaced; the SLOPED/true-ceiling labeling change in drawings. Portal surfaces follow the brand grain: typography-first, **no box shadows on content** (D4). These are decided at the M3 slice review against screenshots and a live scene, not settled here.
 
@@ -131,8 +151,13 @@ Additive only; no modification of existing behavior. 00341 is **deployed to Stra
   - `dense_mesh_url text` — the measurement-grade fused mesh (server/derived pointer).
   - `measure_mesh_url text` — the decimated glb the browser raycasts against.
   - `splat_url text` — the SPZ walkthrough asset.
-  - `present jsonb NOT NULL DEFAULT '{}'` — Present-Layer manifest: `{ splat_format:'spz4', gaussian_count, train_seconds, vram_peak_mb, mesh_vertices, refine_engine, sfm_residual_pct, masked_frames }`.
-  - `present_status text CHECK (present_status IN ('pending','refining','fusing','training','ready','error'))` — the Present-Layer lifecycle, **independent of `status`** (the True-Layer/drawings lifecycle), so drawings can be `generated` while the splat is still training.
+  - `present jsonb NOT NULL DEFAULT '{}'` — Present-Layer manifest composed once
+    by Present from canonical branch manifests. I87 runtime keys replace the
+    misleading planned `sfm_residual_pct` with diagnostic
+    `trajectory_shape_change_pct` plus explicit before/after reprojection,
+    registration, and verified-loop evidence. `sfm_residual_pct` remains an
+    unused free-form/comment-era key; no handler writes it.
+  - `present_status text CHECK (present_status IN ('pending','refining','fusing','training','ready','error'))` — the Present-Layer lifecycle, **independent of `status`** (the True-Layer/drawings lifecycle). Because Fuse/Splat are parallel, branch progress is events/manifests: they do not race the scalar through `fusing`/`training`; only Present writes `ready`/`presented_at`, and a fatal path may write `error`.
   - `presented_at timestamptz`.
   - Column adds inherit table grants (no GRANT change → legacy-grants seed unaffected).
 
@@ -165,21 +190,36 @@ Audit prod state: the deployed P1 worker (`services/scan-pipeline/`); what evide
 Part D, minted from the verified-free head. *AC:* `pnpm supabase:reset` applies clean; `source` accepts `'mesh'` and rejects garbage; `stage` accepts `refine/fuse/splat/present`; the `room_files` Present columns + `present_status` CHECK exist; a re-run against an existing version is idempotent; `pnpm db:generate` regenerates `database.types.ts` with no hand edits; catalog-guarded clauses are no-ops on an already-final schema. Reviewed at **M1**.
 
 **3 · Worker packaging: GPU extras + box hardening (I85-respecting).**
-`pyproject` optional extras — `[solve]` (pycolmap / GLOMAP bindings-or-CLI, numpy/scipy) and `[splat]` (torch cu-xx for Turing SM 7.5, gsplat, SPZ tooling) — so a CPU-only worker never pulls CUDA. Extend the XDG/cache confinement (I85 finding 3) to the CUDA/torch surfaces (torch hub, CUDA JIT/kernel cache, matplotlib, nvidia caches) under `APP_DIR` via `ReadWritePaths`. A GPU systemd unit variant: `DeviceAllow` for `/dev/nvidia*`, **no** `PrivateDevices`, GPU cache dirs writable. `doctor` treats GPU as **required** when `STAGES` includes a GPU stage (nvidia-smi + torch/CUDA import + every cache dir writable), warning otherwise. Document the **re-run-`install.sh` upgrade path** (I85 finding 2: a COPY pip-install means `git pull` alone never updates a running worker) and add an `install.sh --upgrade` that rebuilds the venv. *AC:* on Kody's box, `install.sh` + `[splat]` → `doctor` green including GPU and all cache dirs; a CPU-only worker with default `STAGES=ingest,solve,drawings` stays green (GPU absent = warning); a deliberate `git pull` without re-install is proven **not** to change worker behavior, and `--upgrade` is proven to; a second worker (`WORKER_ID` distinct) claims disjoint GPU tasks by config alone.
+`pyproject` stage extras — `[refine]` (`pycolmap==4.0.2`, numpy/scipy), `[fuse]` (Open3D/trimesh), `[splat]` (torch cu118/gsplat), plus `[gpu] = refine+fuse+splat` — so a CPU-only worker never pulls CUDA. Extend the XDG/cache confinement (I85 finding 3) to the CUDA/torch surfaces (torch hub, CUDA JIT/kernel cache, matplotlib, nvidia caches) under `APP_DIR` via `ReadWritePaths`. A GPU systemd unit variant: `DeviceAllow` for `/dev/nvidia*`, **no** `PrivateDevices`, GPU cache dirs writable. `doctor` treats GPU as **required** when `STAGES` includes a GPU stage (nvidia-smi + torch/CUDA import + every cache dir writable), warning otherwise. Document the **re-run-`install.sh` upgrade path** (I85 finding 2: a COPY pip-install means `git pull` alone never updates a running worker) and add an `install.sh --upgrade` that rebuilds the venv. *AC:* exact COLMAP CLI/PyCOLMAP 4.0.2 parity is an item-4 qualification gate, not claimed by package resolution; on Kody's box, `install.sh --gpu` → operational doctor green including GPU and all cache dirs; a CPU-only worker with default `STAGES=ingest,solve,drawings` stays green; `--upgrade` is proven to replace the copied install; a second worker claims disjoint GPU tasks.
 
-> **DELIVERED (item 3, 2026-07-18). Blessed deviation — extras naming.** This section's `[solve]`/`[splat]` two-extra shape was **superseded by a stage-named layout** (coordinator ruling): the P1 `[solve]`/`[drawings]` extras are kept as shipped, and the P2 GPU stages get **one extra each** — `[refine]` (pycolmap; GLOMAP/COLMAP are box-prep binaries, not pip), `[fuse]` (open3d/trimesh), `[splat]` (torch **cu118** + gsplat) — plus a `[gpu]` **meta-extra** (`= refine+fuse+splat`) for the box one-liner. Rationale: "each extra pulls only what its stage imports" (refine/fuse are torch-free), and `[gpu]` gives `install.sh --gpu` a single install target. **Turing pin reality:** `sm_75` is *not* dropped from modern torch — it stays in the cu118 arch list; the binding constraint is the box's CUDA-11.x driver → cu118 runtime, installed via `--extra-index-url https://download.pytorch.org/whl/cu118`. `[splat]` carries an upper torch bound as the documented ceiling; `doctor`'s `torch-cuda` line on the box is ground truth. GPU-required doctor gating, XDG+`TORCH_HOME`+`CUDA_CACHE_PATH` confinement, the `gpu.conf` systemd drop-in (`DeviceAllow=/dev/nvidia*`, `PrivateDevices=false`), and `install.sh --gpu/--upgrade` all landed. Local verification (extras PEP 508-resolve, doctor logic, unit lint) is green (130 tests); the actual CUDA install + `doctor` GPU-green is the operator's box step (commands in the item-3 report).
+> **DELIVERED (item 3, 2026-07-18). Blessed deviation — extras naming; engine pin corrected by I87.** This section's `[solve]`/`[splat]` two-extra shape was **superseded by a stage-named layout** (coordinator ruling): the P1 `[solve]`/`[drawings]` extras are kept as shipped, and the P2 GPU stages get **one extra each** — `[refine]` (`pycolmap==4.0.2`, exact pilot target; COLMAP CLI 4.0.2 must match in the unpassed box fixture; no standalone GLOMAP runtime), `[fuse]` (open3d/trimesh), `[splat]` (torch **cu118** + gsplat) — plus a `[gpu]` **meta-extra** (`= refine+fuse+splat`) for the box one-liner. Rationale: "each extra pulls only what its stage imports" (refine/fuse are torch-free), and `[gpu]` gives `install.sh --gpu` a single install target. **Turing pin reality:** `sm_75` is *not* dropped from modern torch — it stays in the cu118 arch list; the binding constraint is the box's CUDA-11.x driver → cu118 runtime, installed via `--extra-index-url https://download.pytorch.org/whl/cu118`. `[splat]` carries an upper torch bound as the documented ceiling; `doctor`'s `torch-cuda` line on the box is ground truth. GPU-required doctor gating, XDG+`TORCH_HOME`+`CUDA_CACHE_PATH` confinement, the `gpu.conf` systemd drop-in (`DeviceAllow=/dev/nvidia*`, `PrivateDevices=false`), and `install.sh --gpu/--upgrade` all landed. Local verification was green; actual CUDA plus the exact COLMAP/PyCOLMAP API/GPU/Field-raster qualification remain operator gates.
 
 **4 · Stage `scan_pipeline.refine` — SfM/BA pose refinement.**
-GLOMAP warm-started from the bundle's ARKit poses + intrinsics over the keyframes; outputs refined poses + a sparse cloud + per-frame pose deltas into scratch/derived storage; COLMAP-incremental (pose-prior) fallback behind config. GPU-bound; runs on the box. *AC:* on `95266be1`, refine completes inside the ratified GPU-minute budget (B.2); refined-trajectory drift vs raw ARKit is reported (target ~0.2–0.5 %, SC-13); `refine.*` telemetry (residual, iterations, duration, VRAM); a low-overlap / degenerate room fails **permanent** (`p_fatal=true`), never hangs the lease.
+COLMAP 4.0.2 known-pose model → point triangulation → BA, with full corrected
+ARKit pose/intrinsics; position-prior mapper fallback behind explicit config.
+Outputs aligned poses/orientations, sparse cloud, pose deltas, diagnostic shape
+change, and separate comparable refinement evidence. Handler code/test
+development is open; *enablement AC:* exact CLI/binding 4.0.2 parity and
+GPU/API/Field-raster fixture pass before the stage is advertised or run; one lease-aware deadline
+is `min(start+4 min, actual lease expiry-60 s)`; on local scratch `95266be1`,
+after-registration coverage is ≥80% and non-regressing, same-track reprojection
+RMSE and verified-loop rotation/translation-direction consistency do not regress
+and at least one improves ≥1% relative; an unchanged evidence set is
+non-certifying; any available anchor/ground-truth error is reported separately;
+shape change is diagnostic-only, never grants/vetoes the verdict, and is never
+called accuracy or compared to 0.2–0.5%; output is versioned/checksummed/manifest-last;
+low overlap is permanent, while I/O/driver/deadline failure is transient. Refine
+sets no P1 status/Present JSON/ready state and forks Fuse+Splat only after durable
+refine artifacts.
 
 **5 · Stage `scan_pipeline.fuse` — TSDF dense mesh + web mesh.**
 TSDF over refined depth+poses → dense mesh; decimate to a browser-sized `measure_mesh.glb`; extract true ceiling planes/slopes. *AC:* dense mesh + decimated glb produced and stored under `room_file/…/v{version}/` with sha256 recorded; `measure_mesh.glb` under the browser size budget; ceiling plane/slope surfaces present where the geometry supports them (verbatim, not chord-synthesized); `fuse.*` telemetry.
 
 **6 · Stage: solve upgrade — mesh-aware re-fit, `source='mesh'`, true ceilings.**
-Widen the P1 anchor-solve to re-measure walls/openings/ceilings against the dense mesh; emit `room_file_measurements` with `source='mesh'` + tightened `tolerance_mm`; replace the R111.2 corner-height chord synthesis with true ceiling geometry where present; UNVERIFIED / anchor discipline unchanged. *AC:* on `95266be1`, mesh-sourced dimensions replace the P1 `parametric`/`estimated` ones where evidence supports; the certificate shows the source shift and the tolerance change **honestly** (tightening where anchors/geometry allow, no false precision under the short P1 anchors); `rfm_anchor_source_shape` still holds; the re-solve mints `room_files` v+1 (the retroactive path from B.3, proven end-to-end). **P2-M2 gate = first refined+fused mesh + accuracy vs the P1 certificate.**
+Widen the P1 anchor-solve to re-measure walls/openings/ceilings against the dense mesh; emit `room_file_measurements` with `source='mesh'` + tightened `tolerance_mm`; replace the R111.2 corner-height chord synthesis with true ceiling geometry where present; UNVERIFIED / anchor discipline unchanged. *AC:* on `95266be1`, mesh-sourced dimensions replace the P1 `parametric`/`estimated` ones where evidence supports; the certificate shows the source shift and the tolerance change **honestly** (tightening where anchors/geometry allow, no false precision under the short P1 anchors); `rfm_anchor_source_shape` still holds; the re-solve mints `room_files` v+1; a durable canonical `solve-upgrade/mesh-solve-manifest-v1.json` commits the measurement/certificate branch before it may enqueue Present. **P2-M2 gate = first refined+fused mesh + accuracy vs the P1 certificate.**
 
 **7 · Stage `scan_pipeline.splat` — Gaussian training → SPZ.**
-gsplat/splatfacto from refined poses + keyframe images; **Gaussian-count-capped (MCMC)** densification for the 11 GB / time budget; export **SPZ 4**; transient masking of people/pets (SC-14) — flagged frames excluded, never silently used. A parallel branch off `fuse` (needs refined poses + images, not the drawings). *AC:* splat trains inside the ratified per-room budget (B.2) on the 2080 Ti; the SPZ loads in the item-8 renderer; masked frames are excluded and logged; `splat.*` telemetry (`gaussian_count`, `train_seconds`, `vram_peak_mb`); `scene.spz` under `room_file/…/v{version}/`, sha256 recorded; `room_files.present` + `present_status='ready'` written.
+gsplat/splatfacto from refined poses + keyframe images; **Gaussian-count-capped (MCMC)** densification for the 11 GB / time budget; export **SPZ 4**; transient masking of people/pets (SC-14) — flagged frames excluded, never silently used. A parallel branch off **refine** (needs refined poses + images, not Fuse or drawings). *AC:* splat trains inside the ratified per-room budget (B.2) on the 2080 Ti; the SPZ loads in the item-8 renderer; masked frames are excluded and logged; `splat.*` telemetry (`gaussian_count`, `train_seconds`, `vram_peak_mb`); `scene.spz` + canonical splat manifest under `room_file/…/v{version}/`, sha256 recorded. Splat never merges `room_files.present` or writes scalar progress/ready; it and mesh solve enqueue the identical stable-ID-only Present task, and only Present composes JSON + ready after verifying all four canonical manifests.
 
 **8 · Portal: the walkthrough viewer (plain three.js, Spark, NO fiber).**
 Mount a Spark `SplatMesh` in a **vanilla three.js** scene (the R107 discipline — imperative mount, no `@react-three/fiber`); load the SPZ; overlay the invisible `measure_mesh.glb` as a hidden `THREE.Mesh`; orbit + first-person camera; mobile-capable. *AC:* renders Kody's room SPZ at interactive FPS on desktop **and** a phone (SC-11); a static check confirms **zero** react-three-fiber imports in the P2 portal code; the hidden mesh loads but never renders; a console/Playwright probe confirms a WebGL2 context and no fiber reconciler on the page.
@@ -191,7 +231,7 @@ Raycast clicks against the hidden dense mesh only; two-tap distance readout in f
 Extend item-12's provenance-resolved context (the real flat dotted-key contract, `provenance @> '{"siteScanContext.scanId":"…"}'`) to **3D markers pinned in the walkthrough at their capture pose** (reuse the R107 orbit photo-marker precedent) and on the plan; tap a wall / marker → its photos + voice note. *AC:* a keyframe / detail photo / voice note captured during the scan appears as a marker in the walkthrough at its pose **and** on the plan; tapping opens it; the resolve uses the containment contract with the **GIN index on `field_captures.provenance`** applied first (carried from the R112 ledger — required before inbox scale, and this is the surface that scales it).
 
 **11 · Telemetry + present-layer query surface.**
-Land D.3: `scan_pipeline_runs` gains `refine_ms/fuse_ms/splat_ms + present_status`; `scan_present_stats` gives the GPU-budget + artifact-size distribution; the end-to-end one-scan timeline now spans all P2 stages. *AC:* the full P2 chain for one scan reads in `created_at` order including `refine/fuse/splat/present`; GPU-minute + SPZ/mesh size + gaussian-count distributions are queryable; both surfaces are admin-gated per the 00372 idiom and certified non-leaking to a non-admin / service-role caller.
+Land D.3: `scan_pipeline_runs` gains `refine_ms/fuse_ms/splat_ms + present_status`; `scan_present_stats` gives the GPU-budget + artifact-size distribution; the end-to-end one-scan timeline now spans all P2 stages. I87 follow-up: expose the diagnostic trajectory-shape key under its honest name plus comparable registration/reprojection/verified-loop evidence; the legacy planned `sfm_residual_pct` stays null. *AC:* the full P2 chain for one scan reads in `created_at` order including `refine/fuse/splat/present`; GPU-minute + SPZ/mesh size + gaussian-count distributions are queryable; both surfaces are admin-gated per the 00372 idiom and certified non-leaking to a non-admin / service-role caller.
 
 **12 · Capture-side: on-device splat *preview* (iOS, R114.1).**
 The one P2 iOS item, sequenced **after** the server splat chain proves the artifact (item 7) and the portal viewer proves the experience (items 8–9, P2-M3) — it re-opens nothing on the M1/M2 critical path. At end-of-scan on the Pro device, train a fast, low-fidelity 3DGS **preview** (the Scaniverse-proven ~1-minute phone splat, R114.1) as an **on-site orientation** tool: it shows the designer the beauty and rough coverage of what she just captured. **The two-tier discipline is the whole ruling (R114.1):** the device preview is *never measured against, never uploaded as the deliverable, never labeled a scan* — the **server-trained splat stays the Room File deliverable**, click-to-measure still only rays the hidden dense mesh (item 9), and the **P1 QA coverage scorecard (R108.3) remains the on-site authority** for "did I get everything," which the preview augments and never replaces. **Pro-device only per R108.2** — LiDAR-Pro gates scanning; non-Pro devices stay on the context-capture path and see no preview and no "scan" affordance. **Escalate-class UI strings (Part C):** every label that frames the preview as orientation-not-measurement ("Preview — not measured"; "the measured Room File is built on the server") is designer-visible copy, ruled at the slice review, not settled here.
