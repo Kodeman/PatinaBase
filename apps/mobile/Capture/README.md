@@ -153,3 +153,45 @@ These are device-only (simulator renders the UI/fallbacks). One-time setup:
 2. blitz-iphone `setup_device <udid>` builds + installs WebDriverAgent
    (1–3 min) on "Kody's Phone" (dev-mode already on); then drive it exactly
    like the simulator, passing that device's `udid`.
+
+### DEBUG Field raster qualification fixture
+
+The Settings screen exposes a **Diagnostics → Raster fixture** row only in a
+Debug build. It exports the exact production keyframe raster path as three local
+evidence files (HEIC, canonical native BGRA, and JSON dimensions/intrinsics/
+marker coordinates/hashes). It does not capture a room, call the backend, or
+exist in a Release build.
+
+Use an explicit physical-device UDID throughout — never `booted` or a device
+name when a Simulator may also be present:
+
+```bash
+cd apps/mobile/Capture
+xcrun devicectl list devices
+export FIELD_DEVICE_UDID='<physical-device-UDID>'
+test -n "$FIELD_DEVICE_UDID"
+
+# One-time prerequisite: set the Capture target's signing team in Xcode.
+export FIELD_RASTER_DERIVED="$PWD/.build/raster-fixture-$FIELD_DEVICE_UDID"
+xcodebuild build -project Capture.xcodeproj -scheme Capture \
+  -configuration Debug \
+  -destination "platform=iOS,id=$FIELD_DEVICE_UDID" \
+  -derivedDataPath "$FIELD_RASTER_DERIVED" \
+  -allowProvisioningUpdates
+
+xcrun devicectl device install app \
+  --device "$FIELD_DEVICE_UDID" \
+  "$FIELD_RASTER_DERIVED/Build/Products/Debug-iphoneos/Capture.app"
+
+xcrun devicectl device process launch \
+  --terminate-existing \
+  --device "$FIELD_DEVICE_UDID" \
+  cloud.patina.field \
+  -CaptureUseMocks -CaptureScreen T1.settings
+```
+
+On that physical device, tap **Generate**, then **Share**, and AirDrop or Save to
+Files all three `field-core-image-raster-v1*` artifacts together. If automation
+drives those buttons, every blitz-iphone call must also pass the same explicit
+`FIELD_DEVICE_UDID`. The exported JSON hashes the BGRA and HEIC bytes; compare
+those values after copying before using the fixture as Linux decoder evidence.

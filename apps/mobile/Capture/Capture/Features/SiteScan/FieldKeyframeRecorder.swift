@@ -40,8 +40,6 @@ import os.log
 import ARKit
 import CoreImage
 import CoreVideo
-import ImageIO
-import UniformTypeIdentifiers
 import simd
 
 @MainActor
@@ -256,10 +254,7 @@ private final class KeyframeBundleWriter: @unchecked Sendable {
     /// Serial write counter (queue-confined) — the collision-proof half of the K3
     /// filename key.
     private var sequence = 0
-    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
-    /// HEIC quality. 0.75 — HEIC at this quality is ~half a JPEG's bytes for the
-    /// same look, keeping 200–400 full-res keyframes inside the 300–600 MB budget.
-    private let heicQuality: CGFloat = 0.75
+    private let rasterContext = CIContext(options: [.useSoftwareRenderer: false])
     private let logger = Logger(subsystem: "cloud.patina.field", category: "KeyframeRecorder")
 
     init?(bundleDir: URL) {
@@ -306,14 +301,15 @@ private final class KeyframeBundleWriter: @unchecked Sendable {
         let heicName = "\(stem).heic"
 
         // Full-res HEIC (bin/HEIC BEFORE the index line).
-        let ciImage = CIImage(cvPixelBuffer: snap.pixelBuffer).oriented(.right)
-        guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent),
-              let heicData = encodeHEIC(cgImage) else {
+        guard let raster = FieldRasterEncoder.encodeHEIC(
+            pixelBuffer: snap.pixelBuffer,
+            using: rasterContext
+        ) else {
             logger.error("Keyframe HEIC encode failed")
             return
         }
         do {
-            try heicData.write(to: keyframesDir.appendingPathComponent(heicName), options: .atomic)
+            try raster.data.write(to: keyframesDir.appendingPathComponent(heicName), options: .atomic)
         } catch {
             logger.error("Keyframe HEIC write failed: \(error.localizedDescription)")
             return
@@ -346,23 +342,12 @@ private final class KeyframeBundleWriter: @unchecked Sendable {
                 imageHeight: Int(snap.imageResolution.height)
             ),
             sharpness: snap.sharpness,
-            width: cgImage.width,
-            height: cgImage.height,
+            width: raster.width,
+            height: raster.height,
             hasDepth: depthPath != nil,
             smoothedDepth: snap.smoothedDepth
         )
         appendIndex(entry)
-    }
-
-    private func encodeHEIC(_ cgImage: CGImage) -> Data? {
-        let mutable = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(
-            mutable, UTType.heic.identifier as CFString, 1, nil
-        ) else { return nil }
-        let options: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: heicQuality]
-        CGImageDestinationAddImage(dest, cgImage, options as CFDictionary)
-        guard CGImageDestinationFinalize(dest) else { return nil }
-        return mutable as Data
     }
 
     private func appendIndex(_ entry: KeyframeIndexEntry) {

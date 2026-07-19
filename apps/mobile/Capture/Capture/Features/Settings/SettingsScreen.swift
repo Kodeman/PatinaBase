@@ -69,6 +69,11 @@ struct SettingsScreen: View {
     @AppStorage(CapturePrefs.Key.multiShotHold, store: CapturePrefs.store) private var multiShotHold = 0.4
     @AppStorage(CapturePrefs.Key.largePhotos, store: CapturePrefs.store) private var largePhotosRaw = CapturePrefs.LargePhotos.wifi.rawValue
 
+    #if DEBUG
+    @State private var rasterFixtureExport: FieldRasterFixtureExporter.Export?
+    @State private var rasterFixtureError: String?
+    #endif
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -111,6 +116,37 @@ struct SettingsScreen: View {
                         }
                     }
                 }
+
+                #if DEBUG
+                section("Diagnostics") {
+                    rowChrome("Raster fixture") {
+                        Button("Generate") { generateRasterFixture() }
+                            .font(CaptureType.callout.weight(.semibold))
+                            .foregroundStyle(CaptureColor.verdigris)
+                            .accessibilityIdentifier("T1.raster-fixture.generate")
+                    }
+                    if let rasterFixtureExport {
+                        divider
+                        rowChrome("Evidence files") {
+                            ShareLink(items: rasterFixtureExport.artifactURLs) {
+                                Label("Share", systemImage: "square.and.arrow.up")
+                            }
+                            .font(CaptureType.callout.weight(.semibold))
+                            .foregroundStyle(CaptureColor.verdigris)
+                            .accessibilityIdentifier("T1.raster-fixture.share")
+                        }
+                    }
+                    if let rasterFixtureError {
+                        divider
+                        Text(rasterFixtureError)
+                            .font(CaptureType.footnote)
+                            .foregroundStyle(CaptureColor.error)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .accessibilityIdentifier("T1.raster-fixture.error")
+                    }
+                }
+                #endif
 
                 Text("Privacy controls — camera, microphone, location — live in iOS Settings.")
                     .font(CaptureType.footnote)
@@ -211,6 +247,29 @@ struct SettingsScreen: View {
         return set
     }
     private func format(_ d: Double) -> String { String(format: "%.1f", d) }
+
+    #if DEBUG
+    private func generateRasterFixture() {
+        do {
+            let documents = try FileManager.default.url(
+                for: .documentDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let directory = documents.appendingPathComponent(
+                FieldRasterFixtureExporter.fixtureID,
+                isDirectory: true
+            )
+            rasterFixtureExport = try FieldRasterFixtureExporter.export(to: directory)
+            rasterFixtureError = nil
+        } catch {
+            rasterFixtureExport = nil
+            rasterFixtureError = error.localizedDescription
+        }
+    }
+    #endif
+
     private var holdString: String { format(multiShotHold) }
     private var defaultSaveLabel: String { (CapturePrefs.DefaultSave(rawValue: defaultSaveRaw) ?? .ask).label }
     private var unitsLabel: String { (CapturePrefs.Units(rawValue: unitsRaw) ?? .inches).label }
