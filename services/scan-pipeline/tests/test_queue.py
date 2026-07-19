@@ -10,7 +10,7 @@ import pytest
 
 from patina_scan_worker.config import settings_from_env
 from patina_scan_worker.errors import TransientError
-from patina_scan_worker.queue import QueueClient
+from patina_scan_worker.queue import QueueClient, claimed_task_lease_expires_monotonic_s
 from patina_scan_worker.worker import process_one
 
 BASE = {
@@ -249,6 +249,85 @@ def test_same_task_in_overlapping_claim_batches_keeps_immutable_lease_owners():
         "test-worker:batch-a",
         "test-worker:batch-b",
     ]
+
+
+def test_claim_stamps_one_conservative_expiry_before_response_latency():
+    class _Clock:
+        now = 100.0
+
+        def monotonic(self):
+            return self.now
+
+    class _LatencySession:
+        def post(self, path, json=None):
+            assert path.endswith("/claim_agent_tasks")
+            clock.now += 12.0
+            return _Resp(
+                200,
+                json_data=[
+                    {"id": "task-a", "task_type": "scan_pipeline.refine"},
+                    {"id": "task-b", "task_type": "scan_pipeline.refine"},
+                ],
+            )
+
+    clock = _Clock()
+    client = QueueClient(
+        _LatencySession(),
+        settings_from_env({**BASE, "VISIBILITY_TIMEOUT": "90 seconds"}),
+        lease_id_factory=lambda: "batch-a",
+        monotonic=clock.monotonic,
+    )
+
+    tasks = client.claim()
+
+    assert clock.now == 112.0
+    assert [task["_lease_expires_monotonic_s"] for task in tasks] == [190.0, 190.0]
+    assert {task["_lease_owner"] for task in tasks} == {"test-worker:batch-a"}
+
+
+def test_successive_claims_get_fresh_owners_and_expiry_bounds():
+    class _BatchSession:
+        def post(self, path, json=None):
+            return _Resp(
+                200,
+                json_data=[{"id": "task-shared", "task_type": "scan_pipeline.refine"}],
+            )
+
+    suffixes = iter(("batch-a", "batch-b"))
+    starts = iter((100.0, 125.0))
+    client = QueueClient(
+        _BatchSession(),
+        settings_from_env({**BASE, "VISIBILITY_TIMEOUT": "2 minutes"}),
+        lease_id_factory=lambda: next(suffixes),
+        monotonic=lambda: next(starts),
+    )
+
+    first = client.claim()[0]
+    second = client.claim()[0]
+
+    assert first["_lease_owner"] == "test-worker:batch-a"
+    assert second["_lease_owner"] == "test-worker:batch-b"
+    assert first["_lease_expires_monotonic_s"] == 220.0
+    assert second["_lease_expires_monotonic_s"] == 245.0
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, True, "190", float("nan"), float("inf"), 100.0],
+)
+def test_claimed_lease_expiry_accessor_rejects_missing_invalid_or_expired(value):
+    with pytest.raises(RuntimeError, match="lease expiry"):
+        claimed_task_lease_expires_monotonic_s(
+            {"_lease_expires_monotonic_s": value},
+            now_monotonic_s=100.0,
+        )
+
+
+def test_claimed_lease_expiry_accessor_accepts_a_finite_future_bound():
+    assert claimed_task_lease_expires_monotonic_s(
+        {"_lease_expires_monotonic_s": 190.0},
+        now_monotonic_s=100.0,
+    ) == 190.0
 
 
 def test_process_one_reports_lease_lost_instead_of_a_durable_outcome():

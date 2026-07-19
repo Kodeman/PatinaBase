@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 import patina_scan_worker.refine_adapter as adapter
+from patina_scan_worker.queue import claimed_task_lease_expires_monotonic_s
 from patina_scan_worker.refine_adapter import (
     ADAPTER_SCHEMA_VERSION,
     COLMAP_LOG_TAIL_BYTES,
@@ -863,6 +864,31 @@ def test_short_actual_lease_reduces_the_stage_deadline(monkeypatch, tmp_path):
     assert deadline.expires_at_monotonic_s == pytest.approx(130.0)
     assert observed["process"].returncode == 0
     assert observed["process"].wait_timeouts == pytest.approx([10.0])
+
+
+def test_claimed_task_expiry_feeds_refine_deadline_and_reserve_fails_closed():
+    task = {"_lease_expires_monotonic_s": 190.0}
+    lease_expiry = claimed_task_lease_expires_monotonic_s(
+        task,
+        now_monotonic_s=100.0,
+    )
+    deadline = RefineDeadline.start(
+        now_monotonic_s=100.0,
+        lease_expires_at_monotonic_s=lease_expiry,
+    )
+    assert deadline.expires_at_monotonic_s == pytest.approx(130.0)
+
+    short_task = {"_lease_expires_monotonic_s": 159.0}
+    short_expiry = claimed_task_lease_expires_monotonic_s(
+        short_task,
+        now_monotonic_s=100.0,
+    )
+    with pytest.raises(AdapterError) as exc:
+        RefineDeadline.start(
+            now_monotonic_s=100.0,
+            lease_expires_at_monotonic_s=short_expiry,
+        )
+    assert exc.value.code == "REFINE_ENGINE_TIMEOUT"
 
 
 def test_subprocess_deadline_is_shared_across_commands(monkeypatch, tmp_path):
