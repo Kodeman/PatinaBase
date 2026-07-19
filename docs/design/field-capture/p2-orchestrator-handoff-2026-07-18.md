@@ -30,11 +30,32 @@ Read it with, not instead of, the canonical sources below.
 - **P2 (presence)**: ruled (R114), P2-M1 passed (R115), schema **00376/00377
   live on Strata**, items 1–2 done (item 2 was verified-not-rebuilt — its
   deliverable landed inside item 1's commit `9db080d2`; recorded honestly).
-- **Item 3 code landed at `3a435d9f`**: stage-named extras
-  `[refine]/[fuse]/[splat]` + `[gpu]`, Turing/cu118 pin, cache confinement,
-  GPU systemd variant, `install.sh --upgrade`, doctor gates. Treat package
-  resolution and local doctor tests as code evidence only; the real box/CUDA
-  acceptance remains an operator gate.
+- **Wave-0 pickup is integrated locally on
+  `field-capture/p2-wave0-integration` at merge `5a38b9db`.** It has not been
+  merged to main, deployed, or applied to Strata. Queue lease ownership, the
+  item-4 adapter/evidence spike, and the item-3 installer closeout were developed
+  in isolated worktrees and adversarially reviewed before integration.
+- **Local integration receipt:** 290 scan-pipeline Python tests, 46 affected
+  Deno tests, 20 `@patina/agent-queue` tests, queue + Supabase typechecks, all
+  agent-task SQL cases inside an outer transaction/rollback, and a two-session
+  `SKIP LOCKED` run with distinct claims and zero residue passed. The generated
+  legacy-grants seed was byte-identical. A Linux two-UID hostile-umask race probe
+  also passed. None of this is Kody-box, real fixture, or production evidence.
+- **Queue ownership hardening is code-complete but local-only**:
+  `00378_agent_task_lease_ownership.sql` makes claim owners fresh UUIDs and
+  fences completion plus successor enqueue to the exact live lease owner. The
+  generated Supabase/client types, edge callers, worker wrapper, SQL transaction
+  tests, and two-session `SKIP LOCKED` runner are included. Strata remains at
+  00377; do not apply 00378 without an explicit production migration request.
+- **Item 3 local closeout is at `23949c05` and merged by `5a38b9db`**:
+  stage-named extras `[refine]/[fuse]/[splat]` + `[gpu]`, Turing/cu118 pin,
+  cache confinement, GPU systemd/doctor-only units, and transactional
+  `install.sh --upgrade`. The privileged installer now uses a separate
+  root-owned source snapshot, keeps candidate releases sealed through build,
+  fsyncs them before publication, and has power-loss recovery coverage. Treat
+  package resolution, local tests, and Linux container probes as code evidence
+  only; real PID1/CUDA/Open3D/gsplat/COLMAP and second-worker acceptance remain
+  Kody-box operator gates.
 - **Item 4 engine decision is corrected by I87** (decision record:
   `p2-item4-colmap-adapter-spike-2026-07-18.md`): exact pilot target is COLMAP
   CLI 4.0.2 + `pycolmap==4.0.2`; primary = known-pose seed model → point
@@ -51,6 +72,11 @@ Read it with, not instead of, the canonical sources below.
   4-minute deadline, and preserve the canonical
   refine → {fuse→mesh-solve, splat} → Present four-manifest join. Scan
   `95266be1` remains the local-scratch proof subject before any DB/storage run.
+- **Next safe execution packet:** keep the live worker's persistent `STAGES`
+  unchanged; run the README's ephemeral doctor-only box acceptance, qualify the
+  exact COLMAP 4.0.2 CLI/binding plus real Field raster fixture, then implement
+  the full lease-aware refine handler. Do not claim GPU-stage queue tasks or run
+  `95266be1` through DB/storage until those gates pass.
 
 ## The operating cadence (do not drop it)
 
