@@ -167,9 +167,19 @@ Prereqs to install **before** `./install.sh --gpu`:
    normal sudo-capable operator, **not** with `sudo`:
 
    ```bash
+   install -d -m 0700 /mnt/ada-data/Patina/.patina-builds
    /opt/patina/scan-pipeline-source/install-colmap-4.0.2.sh \
+     --work-dir "/mnt/ada-data/Patina/.patina-builds/patina-colmap-4.0.2-$UID" \
      --acknowledge-experimental-ubuntu-24.04
    ```
+
+   The custom parent must be precreated as a real, canonical directory owned by
+   the operator with mode `0700`; the installer securely creates the exact
+   `patina-colmap-4.0.2-$UID` leaf. It rejects symlinks, mount-root targets,
+   group/world-writable leaves, and filesystems mounted `noexec`. Omitting
+   `--work-dir` preserves the default
+   `/var/tmp/patina-colmap-4.0.2-$UID`. The same 30 GiB free-space gate applies
+   to whichever filesystem is selected.
 
    It hard-gates Noble/amd64, `/usr/local/cuda-11.8`, GCC/G++ 11, a real SM 7.5
    compile/run probe, 30 GiB of free build space, the exact tag commit, required
@@ -180,10 +190,10 @@ Prereqs to install **before** `./install.sh --gpu`:
    packages and the final checked-tree copy; CMake configure/build/install runs
    unprivileged.
 
-   Builds resume in `/var/tmp/patina-colmap-4.0.2-$UID`; every build attempt
-   after the host gates appends to `install.log`, and failures retain source,
-   build, staged install, and logs. Re-run the same command after correcting a
-   failure. Afterwards, the non-mutating verification command is:
+   Builds resume in the selected work directory; every build attempt after the
+   host gates appends to its `install.log`, and failures retain source, build,
+   staged install, and logs. Re-run the same command after correcting a failure.
+   Afterwards, the non-mutating verification command is:
 
    ```bash
    /opt/patina/scan-pipeline-source/install-colmap-4.0.2.sh --verify-only
