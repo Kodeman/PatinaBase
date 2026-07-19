@@ -26,6 +26,7 @@ ENV_EXAMPLE = Path(__file__).resolve().parent.parent / "scan-worker.env.example"
 
 INSTALL_SOURCE_FILES = (
     "README.md",
+    "install-colmap-4.0.2.sh",
     "install-path-guard.py",
     "install-venv-lib.sh",
     "install.sh",
@@ -1024,7 +1025,11 @@ def _write_minimal_installer_source(source: Path) -> None:
         path = source / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f"fixture {name}\n")
-        path.chmod(0o755 if name == "install.sh" else 0o644)
+        path.chmod(
+            0o755
+            if name in {"install.sh", "install-colmap-4.0.2.sh"}
+            else 0o644
+        )
 
 
 def _principal_can_write(path: Path, *, uid: int, gid: int) -> bool:
@@ -1389,6 +1394,7 @@ def test_documented_staging_replaces_stale_inputs_in_separate_source_tree():
     assert "--ignore-times" in staging
     assert "--chown=root:root" in staging
     assert "--chmod=Dgo-w,Fgo-w" in staging
+    assert "--include='/install-colmap-4.0.2.sh'" in staging
     harden = "sudo chmod -R go-w -- /opt/patina/scan-pipeline-source"
     assert harden in staging
     assert staging.index("sudo rsync") < staging.index(harden)
