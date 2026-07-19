@@ -90,6 +90,13 @@ def test_gpu_install_fails_before_changes_without_nvidia_modprobe():
     assert "nvidia-modprobe" in script[script.index(check):script.index("# 0. native libs")]
 
 
+def test_gpu_install_ensures_ninja_for_gsplat_jit():
+    script = INSTALL.read_text()
+    native_libs = script[script.index("# 0. native libs") : script.index("# 1. service user")]
+    assert 'if [ "$GPU" -eq 1 ]' in native_libs
+    assert "ninja-build" in native_libs
+
+
 def test_candidate_is_checked_smoked_and_verified_before_transaction_activation():
     script = INSTALL.read_text()
     assert 'generate-release-path --app-dir "$APP_DIR"' in script
@@ -1381,6 +1388,13 @@ def test_documented_staging_replaces_stale_inputs_in_separate_source_tree():
     assert "--delete-excluded" in staging
     assert "--ignore-times" in staging
     assert "--chown=root:root" in staging
+    assert "--chmod=Dgo-w,Fgo-w" in staging
+    harden = "sudo chmod -R go-w -- /opt/patina/scan-pipeline-source"
+    assert harden in staging
+    assert staging.index("sudo rsync") < staging.index(harden)
+    assert staging.index(harden) < staging.index(
+        "sudo /opt/patina/scan-pipeline-source/install.sh"
+    )
     assert "pgrep -u patina" in readme
     assert staging.index("pgrep -u patina") < staging.index("sudo rsync")
     assert "stop every patina process" in staging
@@ -2481,6 +2495,16 @@ def test_gpu_candidates_include_prepare_and_both_context_dropins():
     assert 'patina-scan-worker-doctor.service.d/gpu.conf' in script
 
 
+def test_gpu_dropin_selects_the_qualified_cuda_toolkit_for_both_contexts():
+    dropin = (INSTALL.parent / "patina-scan-worker.gpu.conf").read_text()
+    assert "Environment=CUDA_HOME=/usr/local/cuda-11.8" in dropin
+    assert (
+        "Environment=PATH=/opt/patina/scan-pipeline/.venv/bin:"
+        "/usr/local/cuda-11.8/bin:" in dropin
+    )
+    assert "TORCH_CUDA_ARCH_LIST" not in dropin
+
+
 def test_emitted_gpu_acceptance_uses_ephemeral_doctor_only_env_override():
     script = INSTALL.read_text()
     acceptance = script[script.index("Next (item-3 GPU acceptance") :]
@@ -2492,6 +2516,7 @@ def test_emitted_gpu_acceptance_uses_ephemeral_doctor_only_env_override():
     doctor = acceptance.index("sudo systemctl start patina-scan-worker-doctor")
 
     assert stop < copy < append < dropin < reload < doctor
+    assert "TORCH_CUDA_ARCH_LIST=7.5" in acceptance
     assert "restore_item3_gpu()" in acceptance
     assert 'if [ "\\$WORKER_WAS_ACTIVE" = active ]' in acceptance
     assert "sudo systemctl start $WORKER_SERVICE" in acceptance

@@ -87,6 +87,13 @@ def _colmap_command_set_ok() -> tuple[bool, str]:
             if combined.strip() else "no output"
         )
         return False, f"colmap -h rc={out.returncode}: {first}"
+    version_match = re.search(
+        r"(?m)^\s*COLMAP\s+(\S+)\s+--(?:\s|$)", combined, re.IGNORECASE,
+    )
+    if version_match is None or version_match.group(1) != "4.0.2":
+        return False, "COLMAP CLI must report exact pilot version 4.0.2 in colmap -h"
+    if re.search(r"\bwith\s+CUDA\b", combined, re.IGNORECASE) is None:
+        return False, "COLMAP 4.0.2 must report a CUDA-enabled build in colmap -h"
     required = (
         "feature_extractor", "sequential_matcher", "exhaustive_matcher",
         "point_triangulator", "bundle_adjuster", "pose_prior_mapper",
@@ -98,7 +105,8 @@ def _colmap_command_set_ok() -> tuple[bool, str]:
         "available" if "global_mapper" in combined else "unavailable (optional)"
     )
     return True, (
-        f"COLMAP known-pose/fallback command set ready; global_mapper={global_mapper}"
+        "COLMAP 4.0.2 CUDA known-pose/fallback command set ready; "
+        f"global_mapper={global_mapper}"
     )
 
 
@@ -124,8 +132,10 @@ def _nvcc_ok() -> tuple[bool, str]:
         return False, "nvcc version output did not contain a CUDA release"
     release = match.group(1)
     if release != "11.8":
-        return False, f"nvcc reports CUDA {release}; cu118/gsplat requires 11.8"
-    return True, f"nvcc CUDA {release} ready"
+        return False, (
+            f"{exe} reports CUDA {release}; cu118/gsplat requires 11.8"
+        )
+    return True, f"{exe} reports CUDA {release}; ready"
 
 
 def _python_module_ok(module_name: str) -> tuple[bool, str]:
@@ -152,9 +162,21 @@ def _open3d_cuda_ok() -> tuple[bool, str]:
     except Exception as exc:  # noqa: BLE001 — report native-link/import errors
         return False, f"open3d not importable ({exc.__class__.__name__}: {exc})"
 
-    cuda_api = getattr(open3d, "cuda", None)
-    if cuda_api is None:
-        cuda_api = getattr(getattr(open3d, "core", None), "cuda", None)
+    # Real 0.18/0.19 CUDA wheels expose both namespaces: ``open3d.cuda`` is a
+    # package namespace, while the availability bindings live under
+    # ``open3d.core.cuda``. Prefer the binding location and accept either only
+    # when it exposes the complete public probe API.
+    core_cuda_api = getattr(getattr(open3d, "core", None), "cuda", None)
+    top_level_cuda_api = getattr(open3d, "cuda", None)
+    cuda_api = next(
+        (
+            candidate
+            for candidate in (core_cuda_api, top_level_cuda_api)
+            if callable(getattr(candidate, "is_available", None))
+            and callable(getattr(candidate, "device_count", None))
+        ),
+        None,
+    )
     if cuda_api is None:
         return False, (
             "open3d has no CUDA availability API; install the full CUDA-enabled "

@@ -277,6 +277,14 @@ if command -v apt-get >/dev/null 2>&1; then
   apt-get install -y --no-install-recommends libcairo2 >/dev/null 2>&1 || \
     echo "   (could not apt-get libcairo2 — install it manually if PDF rendering fails)"
 fi
+if [ "$GPU" -eq 1 ] && ! command -v ninja >/dev/null 2>&1; then
+  if ! command -v apt-get >/dev/null 2>&1 || \
+     ! apt-get install -y --no-install-recommends ninja-build >/dev/null 2>&1; then
+    echo "ERROR: --gpu requires Ninja for gsplat's CUDA extension JIT." >&2
+    echo "       Install the distro's ninja-build package, then rerun." >&2
+    exit 2
+  fi
+fi
 if [ "$GPU" -eq 1 ] && ! command -v nvidia-smi >/dev/null 2>&1; then
   echo "   WARNING: --gpu given but nvidia-smi not found. Install the NVIDIA driver"
   echo "            + CUDA 11.8 toolkit (nvcc, for gsplat's JIT build) first."
@@ -500,7 +508,8 @@ Next (item-3 GPU acceptance; ephemeral doctor override, never the queue worker):
   sudo systemctl stop $WORKER_SERVICE
   sudo install -d -o root -g root -m 0755 /run/patina "\$ITEM3_DROPIN_DIR"
   sudo install -o root -g root -m 0600 "$ENV_FILE" "\$ITEM3_ENV"
-  printf '\nSTAGES=refine,fuse,splat\nGPU=auto\n' | sudo tee -a "\$ITEM3_ENV" >/dev/null
+  printf '\nSTAGES=refine,fuse,splat\nGPU=auto\nTORCH_CUDA_ARCH_LIST=7.5\n' | \
+    sudo tee -a "\$ITEM3_ENV" >/dev/null
   printf '[Service]\nEnvironmentFile=\nEnvironmentFile=%s\n' "\$ITEM3_ENV" | \
     sudo install -o root -g root -m 0644 /dev/stdin "\$ITEM3_DROPIN"
   sudo systemctl daemon-reload
