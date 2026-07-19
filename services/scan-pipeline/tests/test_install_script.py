@@ -12,6 +12,7 @@ import os
 import stat
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -107,6 +108,28 @@ def test_candidate_is_checked_smoked_and_verified_before_transaction_activation(
     assert script.index('"$SMOKE_VENV/bin/patina-scan-worker" --help') < script.index(
         "begin_install_transaction"
     )
+    build = script[script.index("# 2. immutable Python candidate") : script.index(
+        "# 3. stage a complete candidate systemd tree"
+    )]
+    harden = build.index(
+        '_path_guard harden-release --app-dir "$APP_DIR" --path "$STAGED_VENV"'
+    )
+    build_lines = build.splitlines()
+    candidate_invocations = [
+        offset
+        for offset, line in enumerate(build_lines)
+        if line.lstrip().startswith("_run_candidate_python ")
+    ]
+    harden_line = next(
+        offset
+        for offset, line in enumerate(build_lines)
+        if line.lstrip().startswith("_path_guard harden-release ")
+    )
+    assert len(candidate_invocations) == 4
+    assert build.index('_run_privileged_python -m venv "$STAGED_VENV"') < harden
+    assert all(invocation < harden_line for invocation in candidate_invocations)
+    assert "_run_candidate_python" not in build[harden:]
+    assert harden < build.index('_run_as_service_user "$SMOKE_VENV/bin/python"')
     # Stop/swap lives only in the helper, after all candidate checks.
     assert not any(
         line.strip() == "systemctl stop patina-scan-worker"
@@ -116,6 +139,7 @@ def test_candidate_is_checked_smoked_and_verified_before_transaction_activation(
 
 def test_release_namespace_and_candidate_contents_stay_root_owned():
     script = INSTALL.read_text()
+    assert script.index("umask 077") < script.index('for arg in "$@"')
     assert 'ensure-trusted-dir' in script
     assert '"$APP_DIR"' in script
     assert 'generate-release-path' in script
@@ -123,6 +147,13 @@ def test_release_namespace_and_candidate_contents_stay_root_owned():
     assert 'harden-release' in script
     assert 'chown -R "$SVC_USER:$SVC_USER" "$STAGED_VENV"' not in script
     assert 'install -d -o "$SVC_USER" -g "$SVC_USER" "$APP_DIR"' not in script
+    live_checks = script[
+        script.index("# Existing stable/previous symlinks") : script.index(
+            "# A fresh install, explicit upgrade"
+        )
+    ]
+    assert "validate-release" in live_checks
+    assert "harden-release" not in live_checks
 
 
 def test_candidate_and_existing_release_smoke_runs_as_service_user():
@@ -578,7 +609,7 @@ def test_release_path_is_unpredictable_recordable_then_atomically_created(tmp_pa
 
     _path_guard(tmp_path, "create-release", "--app-dir", str(app), "--path", first)
     assert Path(first).is_dir()
-    assert stat.S_IMODE(Path(first).stat().st_mode) == 0o755
+    assert stat.S_IMODE(Path(first).stat().st_mode) == 0o700
     duplicate = _path_guard(
         tmp_path,
         "create-release",
@@ -589,6 +620,190 @@ def test_release_path_is_unpredictable_recordable_then_atomically_created(tmp_pa
         expected_ok=False,
     )
     assert "exists" in duplicate.stderr.lower()
+
+
+def test_hostile_umask_concurrent_service_cannot_inject_root_candidate(
+    tmp_path, monkeypatch
+):
+    app = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(app),
+        "--mode",
+        "0755",
+    )
+    release = app / ".venv.release.hostile-umask"
+    guard = _load_path_guard_module()
+    previous_umask = os.umask(0)
+    try:
+        guard.create_release(
+            str(app),
+            str(release),
+            anchor=str(tmp_path / "trusted"),
+            uid=os.getuid(),
+            gid=os.getgid(),
+        )
+        bin_dir = release / "bin"
+        bin_dir.mkdir(mode=0o777)
+        (bin_dir / "python").symlink_to(sys.executable)
+        site_packages = release / "lib" / "python" / "site-packages"
+        site_packages.mkdir(parents=True, mode=0o777)
+        payload = site_packages / "payload.py"
+        payload.write_text("result.write_text('trusted')\n")
+        launcher = site_packages / "candidate.py"
+        launcher.write_text(
+            "from pathlib import Path\n"
+            "import sys\n"
+            "result = Path(sys.argv[1])\n"
+            "print('READY', flush=True)\n"
+            "sys.stdin.readline()\n"
+            "exec(Path(sys.argv[0]).with_name('payload.py').read_text())\n"
+        )
+    finally:
+        os.umask(previous_umask)
+
+    service_uid = os.getuid() + 1000
+    service_gid = os.getgid() + 1000
+    attempts: list[bool] = []
+
+    def service_can_overwrite() -> bool:
+        return all(
+            _principal_has_mode(path, uid=service_uid, gid=service_gid, bits=0b001)
+            for path in (release, release / "lib", release / "lib" / "python", site_packages)
+        ) and _principal_can_write(payload, uid=service_uid, gid=service_gid)
+
+    def concurrent_service_writer() -> None:
+        permitted = service_can_overwrite()
+        attempts.append(permitted)
+        if permitted:
+            payload.write_text("result.write_text('service-controlled')\n")
+
+    def run_candidate_while_service_writes(result: Path) -> None:
+        process = subprocess.Popen(
+            [str(bin_dir / "python"), "-I", str(launcher), str(result)],
+            text=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        assert process.stdout is not None
+        assert process.stdout.readline().strip() == "READY"
+        writer = threading.Thread(target=concurrent_service_writer)
+        writer.start()
+        writer.join(timeout=5)
+        assert not writer.is_alive()
+        stdout, stderr = process.communicate("\n", timeout=5)
+        assert process.returncode == 0, f"{stdout}\n{stderr}"
+
+    # Exercise an actual privileged-candidate-shaped Python process while a
+    # modeled distinct service identity tries to replace code it will import.
+    # Hostile child modes alone are insufficient: traversal of the 0700 release
+    # root must deny the concurrent writer.
+    assert stat.S_IMODE(release.stat().st_mode) == 0o700
+    assert stat.S_IMODE(site_packages.stat().st_mode) == 0o777
+    assert stat.S_IMODE(payload.stat().st_mode) == 0o666
+    private_result = tmp_path / "private-result"
+    run_candidate_while_service_writes(private_result)
+    assert attempts == [False]
+    assert private_result.read_text() == "trusted"
+
+    # Pause the first descendant harden operation and run the same writer in
+    # parallel. This deterministically catches publishing the root as 0755
+    # before broad descendants are normalized.
+    guard = _load_path_guard_module()
+    original_harden_entry = guard._harden_entry
+    original_validate_release_tree = guard._validate_release_tree
+    original_fsync = guard.os.fsync
+    first_entry = True
+    validation_root_modes: list[int] = []
+    fsync_events: list[tuple[int, int]] = []
+    release_inode = release.stat().st_ino
+    payload_inode = payload.stat().st_ino
+
+    def harden_entry_with_concurrent_writer(*args, **kwargs):
+        nonlocal first_entry
+        if first_entry:
+            first_entry = False
+            writer = threading.Thread(target=concurrent_service_writer)
+            writer.start()
+            writer.join(timeout=5)
+            assert not writer.is_alive()
+        return original_harden_entry(*args, **kwargs)
+
+    def validate_release_tree_with_mode_observation(path, **kwargs):
+        validation_root_modes.append(stat.S_IMODE(Path(path).stat().st_mode))
+        return original_validate_release_tree(path, **kwargs)
+
+    def fsync_with_inode_observation(fd):
+        info = os.fstat(fd)
+        fsync_events.append((info.st_ino, stat.S_IMODE(info.st_mode)))
+        return original_fsync(fd)
+
+    monkeypatch.setattr(guard, "_harden_entry", harden_entry_with_concurrent_writer)
+    monkeypatch.setattr(
+        guard, "_validate_release_tree", validate_release_tree_with_mode_observation
+    )
+    monkeypatch.setattr(guard.os, "fsync", fsync_with_inode_observation)
+    guard.harden_release(
+        str(app),
+        str(release),
+        stable_link=False,
+        anchor=str(tmp_path / "trusted"),
+        uid=os.getuid(),
+        gid=os.getgid(),
+    )
+    assert attempts == [False, False]
+    assert validation_root_modes == [0o700, 0o755]
+    payload_sync = next(
+        offset for offset, event in enumerate(fsync_events) if event == (payload_inode, 0o644)
+    )
+    publication_sync = next(
+        offset for offset, event in enumerate(fsync_events) if event == (release_inode, 0o755)
+    )
+    assert payload_sync < publication_sync
+    assert stat.S_IMODE(release.stat().st_mode) == 0o755
+    assert stat.S_IMODE(site_packages.stat().st_mode) == 0o755
+    assert stat.S_IMODE(payload.stat().st_mode) == 0o644
+    published_result = tmp_path / "published-result"
+    run_candidate_while_service_writes(published_result)
+    assert attempts == [False, False, False]
+    assert published_result.read_text() == "trusted"
+
+
+def test_harden_release_failure_leaves_candidate_root_sealed(tmp_path, monkeypatch):
+    app = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(app),
+        "--mode",
+        "0755",
+    )
+    release = app / ".venv.release.harden-failure"
+    _path_guard(tmp_path, "create-release", "--app-dir", str(app), "--path", str(release))
+    child = release / "candidate.py"
+    child.write_text("pass\n")
+
+    guard = _load_path_guard_module()
+
+    def fail_hardening(*_args, **_kwargs):
+        raise OSError("injected descendant harden failure")
+
+    monkeypatch.setattr(guard, "_harden_entry", fail_hardening)
+    with pytest.raises(OSError, match="injected descendant harden failure"):
+        guard.harden_release(
+            str(app),
+            str(release),
+            stable_link=False,
+            anchor=str(tmp_path / "trusted"),
+            uid=os.getuid(),
+            gid=os.getgid(),
+        )
+
+    assert stat.S_IMODE(release.stat().st_mode) == 0o700
 
 
 def test_release_validation_rejects_escape_and_untrusted_targets(tmp_path):
@@ -673,6 +888,60 @@ def test_harden_release_removes_service_write_without_following_symlinks(tmp_pat
     assert stat.S_IMODE(writable.stat().st_mode) & 0o022 == 0
     assert stat.S_IMODE(entrypoint.stat().st_mode) & 0o022 == 0
     assert stat.S_IMODE(outside.stat().st_mode) == 0o666
+
+
+def test_stable_release_check_never_chmods_active_release(tmp_path, monkeypatch):
+    app = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(app),
+        "--mode",
+        "0755",
+    )
+    release = app / ".venv.release.active"
+    release.mkdir(mode=0o755)
+    module = release / "worker.py"
+    module.write_text("pass\n")
+    module.chmod(0o644)
+    stable = app / ".venv"
+    stable.symlink_to(release.name)
+
+    guard = _load_path_guard_module()
+    chmod_calls: list[tuple[int, int]] = []
+
+    def forbidden_fchmod(fd: int, mode: int) -> None:
+        chmod_calls.append((fd, mode))
+        raise AssertionError("stable release validation must not chmod")
+
+    monkeypatch.setattr(guard.os, "fchmod", forbidden_fchmod)
+    resolved = guard.harden_release(
+        str(app),
+        str(stable),
+        stable_link=True,
+        anchor=str(tmp_path / "trusted"),
+        uid=os.getuid(),
+        gid=os.getgid(),
+    )
+
+    assert resolved == str(release)
+    assert chmod_calls == []
+    assert stat.S_IMODE(release.stat().st_mode) == 0o755
+    assert stat.S_IMODE(module.stat().st_mode) == 0o644
+
+    module.chmod(0o666)
+    with pytest.raises(guard.GuardError, match="group/world writable"):
+        guard.harden_release(
+            str(app),
+            str(stable),
+            stable_link=True,
+            anchor=str(tmp_path / "trusted"),
+            uid=os.getuid(),
+            gid=os.getgid(),
+        )
+    assert stat.S_IMODE(release.stat().st_mode) == 0o755
+    assert stat.S_IMODE(module.stat().st_mode) == 0o666
 
 
 def test_trusted_directory_validation_rejects_group_world_writable_state(tmp_path):

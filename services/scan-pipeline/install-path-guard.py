@@ -581,11 +581,15 @@ def create_release(
     name = _release_name(path, app_dir)
     app_fd = _open_directory(_absolute(app_dir))
     try:
-        os.mkdir(name, 0o755, dir_fd=app_fd)
+        # Keep an unpublished candidate untraversable by the live service while
+        # root creates the venv and runs pip inside it. ``harden-release`` is
+        # the sole publication boundary that later converts directories to
+        # 0755 after dependency validation has completed.
+        os.mkdir(name, 0o700, dir_fd=app_fd)
         release_fd = _open_child_directory(app_fd, name)
         try:
             os.fchown(release_fd, uid, gid)
-            os.fchmod(release_fd, 0o755)
+            os.fchmod(release_fd, 0o700)
             os.fsync(release_fd)
         finally:
             os.close(release_fd)
@@ -713,6 +717,11 @@ def _harden_entry(parent_fd: int, name: str, *, uid: int, gid: int) -> None:
         else:
             hardened_mode = 0o644
         os.fchmod(entry_fd, hardened_mode)
+        # pip has only closed these files; closing does not make their data or
+        # normalized metadata durable. Flush every regular file/directory
+        # before the release root can be published and the transaction can
+        # later reach its durable committed state.
+        os.fsync(entry_fd)
     finally:
         os.close(entry_fd)
 
@@ -1243,26 +1252,67 @@ def harden_release(
     target = _resolve_release_target(
         app_dir, path, stable_link=stable_link, uid=uid, gid=gid
     )
+    if stable_link:
+        # A stable link can name the release an active worker is currently
+        # traversing. Never transiently seal or rewrite that live tree here;
+        # require it to already satisfy the immutable-release contract and fail
+        # closed without changing its modes if it does not.
+        info = os.lstat(target)
+        _require_trusted_directory(target, info, uid=uid, gid=gid)
+        _validate_release_tree(target, uid=uid, gid=gid)
+        return target
+
     name = _release_name(target, app_dir)
     app_fd = _open_directory(_absolute(app_dir))
+    release_fd = -1
     try:
         info = os.stat(name, dir_fd=app_fd, follow_symlinks=False)
         if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
             raise GuardError(f"release target is not a real directory: {target}")
         release_fd = _open_child_directory(app_fd, name)
-        try:
-            os.fchown(release_fd, uid, gid)
-            os.fchmod(release_fd, 0o755)
-        finally:
-            os.close(release_fd)
+        opened = os.fstat(release_fd)
+        if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+            raise GuardError(f"release target changed during open: {target}")
+
+        # Seal first and publish last. In particular, a newly built candidate
+        # must remain untraversable by the live service while permissive modes
+        # inherited from a hostile umask are normalized below. On any failure,
+        # the still-open release root deliberately remains 0700.
+        os.fchown(release_fd, uid, gid)
+        os.fchmod(release_fd, 0o700)
+        os.fsync(release_fd)
+
+        for _current, directories, files, current_fd in os.fwalk(
+            target, topdown=True, follow_symlinks=False
+        ):
+            for entry in (*directories, *files):
+                _harden_entry(current_fd, entry, uid=uid, gid=gid)
+            # This also makes symlink entries durable; symlinks cannot be
+            # opened portably for fsync, so their containing directory is the
+            # durability boundary.
+            os.fsync(current_fd)
+        _validate_release_tree(target, uid=uid, gid=gid)
+
+        current = os.stat(name, dir_fd=app_fd, follow_symlinks=False)
+        opened = os.fstat(release_fd)
+        if (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino):
+            raise GuardError(f"release target changed before publication: {target}")
+        if not stat.S_ISDIR(current.st_mode) or stat.S_ISLNK(current.st_mode):
+            raise GuardError(f"release target is not a real directory: {target}")
+
+        # This one chmod is the publication boundary. Descendants have already
+        # been hardened and validated, and both the release and parent metadata
+        # are flushed before success is reported.
+        os.fchmod(release_fd, 0o755)
+        os.fsync(release_fd)
+        os.fsync(app_fd)
     finally:
+        if release_fd >= 0:
+            os.close(release_fd)
         os.close(app_fd)
 
-    for _current, directories, files, current_fd in os.fwalk(
-        target, topdown=True, follow_symlinks=False
-    ):
-        for entry in (*directories, *files):
-            _harden_entry(current_fd, entry, uid=uid, gid=gid)
+    # Re-open by name after publication so success also proves the live path is
+    # the validated inode, not merely the descriptor retained above.
     _validate_release_tree(target, uid=uid, gid=gid)
     return target
 

@@ -18,6 +18,10 @@
 #   4. failed activation restores every unit + release, reloads, and restarts.
 #   5. a durable marker lets the next invocation recover power loss/SIGKILL.
 set -euo pipefail
+# Never inherit a permissive caller umask into root-built Python or systemd
+# candidates. The staged release root stays 0700 until dependency validation
+# completes, so the live service cannot race-write code that root will import.
+umask 077
 INSTALL_SECURE_PATH=/usr/sbin:/usr/bin:/sbin:/bin
 PATH="$INSTALL_SECURE_PATH"
 export PATH
@@ -314,13 +318,15 @@ if [ "$GPU" -eq 1 ]; then
 fi
 
 # Existing stable/previous symlinks must stay inside the managed immutable
-# namespace. Harden old installer releases before any service-user execution;
-# the no-follow guard revokes patina writes without traversing internal links.
+# namespace. They may name a release the active worker is still traversing, so
+# validate them without chmod/chown; an insecure live tree fails closed and is
+# never transiently made 0700 while the worker remains active.
 if [ -L "$VENV" ]; then
-  _path_guard harden-release --app-dir "$APP_DIR" --path "$VENV" --stable-link >/dev/null
+  _path_guard validate-release --app-dir "$APP_DIR" --path "$VENV" \
+    --stable-link --require-executables >/dev/null
 fi
 if [ -L "$PREVIOUS_VENV" ]; then
-  _path_guard harden-release --app-dir "$APP_DIR" --path "$PREVIOUS_VENV" \
+  _path_guard validate-release --app-dir "$APP_DIR" --path "$PREVIOUS_VENV" \
     --stable-link >/dev/null
 fi
 
