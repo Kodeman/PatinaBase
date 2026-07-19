@@ -215,14 +215,26 @@ accident: `[solve]` (numpy/scipy), `[drawings]` (ezdxf/cairosvg), `[refine]`
 cu118 torch + gsplat band). `[gpu]` is only the box convenience meta-extra for
 `refine+fuse+splat`; it is not a new execution mode.
 
-The supported first-run path stages an operator-reviewed snapshot at `APP_DIR`
-with root ownership. That copy is the explicit bootstrap trust event. Before
-sourcing either helper, `install.sh` uses only fixed `/usr/bin/python3` plus
-no-follow dirfd opens to adopt a legacy APP_DIR snapshot once and revoke service
-writes from the installer/guard/transaction files. The guard then locks every
-install-time package/unit/env input and `src/**`; a non-APP source must already
-have a symlink-free root-owned ancestry. Runtime XDG dirs/releases are excluded
-from source hardening. Future invocations use the managed root-owned copy.
+The supported first-run path quiesces every `patina` process, then stages an
+operator-reviewed snapshot at `/opt/patina/scan-pipeline-source` with root
+ownership, `rsync --delete --delete-excluded --ignore-times`, and a closed
+top-level include set. The fresh inodes and single-link requirement remove
+legacy open-FD/hardlink aliases; deletion removes stale setuptools and
+Python-startup controls (`setup.py`, `setup.cfg`, `MANIFEST.in`,
+`sitecustomize.py`). Before sourcing either helper, `install.sh` enters Bash
+privileged mode, fixes `PATH`, and uses fixed `/usr/bin/python3 -I -S` plus
+no-follow dirfd opens to validate its bootstrap files. The guard then validates
+the exact top-level snapshot and recursively accepts only root-owned,
+non-writable, regular, single-linked Python modules beneath
+`src/patina_scan_worker`. All privileged Python snippets and venv creation run
+with a scrubbed environment plus `-I -S`; pip runs through the candidate
+interpreter with a scrubbed environment plus `-I`. Runtime `APP_DIR` is never
+source, and any legacy `APP_DIR/install.sh` is atomically replaced by a
+root-owned fail-closed stub. Every later invocation revalidates this contract.
+The quiescence requirement is limited to that first migration from a potentially
+service-controlled tree. Routine root-owned source restaging occurs while the
+worker continues from its immutable venv, allowing upgrade activation to
+snapshot and preserve the active posture.
 
 `install.sh` builds an immutable candidate release, runs `pip check`, an
 installed-package import/entrypoint smoke as `User=patina`, and—on
@@ -233,18 +245,30 @@ a high-entropy direct-child name that is marker-backed before atomic creation,
 and stable release links are resolved no-follow and must remain directly
 contained by `APP_DIR`. It then fsyncs a root-only snapshot at
 `/etc/patina/.scan-worker-install-transaction` of installed unit
-presence/content and current/previous release references. Recovery accepts only
-a symlink-free root-owned transaction tree, no-follow regular marker files, and
-unit targets exactly in `MANAGED_UNIT_TARGETS`. `ActiveState` must be stable;
+presence/content and canonical absolute current/previous release references
+(relative stable links resolve against `APP_DIR`, never process cwd). Recovery
+accepts only a symlink-free root-owned transaction tree, no-follow regular
+marker files, and unit targets exactly in `MANAGED_UNIT_TARGETS`. `ActiveState`
+must be stable;
 `activating`, `deactivating`, and `reloading` fail closed. Unit replacement and
 the normal `.venv` symlink switch are same-filesystem atomic renames after an
 active worker is stopped and confirmed quiescent. A failed activation restores
 all unit/release snapshots, daemon-reloads, and restarts the prior service; a
 durable transaction marker makes the next invocation recover an interrupted
 switch, while `committed` recovery only finishes cleanup. A legacy real `.venv`
-is converted once while stopped, normalized to root-owned `0755` directories /
-executables and `0644` modules, and remains rollback-safe. The installer never
-runs doctor from its root shell.
+is converted once while stopped and with no remaining `patina` process. The
+transaction records fresh materialized/quarantine paths, copies regular files to
+independent root-owned inodes, admits only internal lexical symlinks plus trusted
+`bin/python*` interpreter terminals, normalizes modes, validates, service-user
+smokes, and fsyncs the fresh tree before the durable one-way raw quarantine
+rename. Ready is written only after that rename. Pre-quarantine recovery discards
+an unready copy and retries; post-quarantine recovery uses only the validated
+fresh tree, so rollback/current and previous never alias or restore raw legacy
+inodes. Raw quarantine is deleted after durable rollback/commit cleanup. A real
+`.venv.previous` fails closed for manual archive outside `APP_DIR`. A
+prepared first-install transaction treats `LoadState=not-found` as already
+quiescent, so it can restore absent units without an impossible stop. The
+installer never runs doctor from its root shell.
 
 ---
 
@@ -299,6 +323,11 @@ The doctor oneshot duplicates the worker's `User`/`Group`, `EnvironmentFile`,
 XDG environment, timeout, sandbox, and `ReadWritePaths`; its only `ExecStart` is
 `patina-scan-worker doctor`. It has no `run`, restart policy, or `[Install]`
 section, so item-3 GPU acceptance cannot claim queue work or be enabled.
+Item-3 acceptance leaves the persistent worker env untouched: a root-only
+temporary env and doctor-only `EnvironmentFile=` reset drop-in live under
+`/run`, are refused if pre-existing, and are removed with a daemon reload by the
+acceptance trap. Reboot clears them, so the enabled queue worker can boot only
+with its normal registered CPU stages even if acceptance loses power mid-run.
 
 ### 5.2 Storage path convention
 
@@ -676,14 +705,17 @@ What the Linux box needs to run P1 (and to be P2-ready):
 - **Disk** — bundles are 300–600 MB each; scratch sizing ≈ `MAX_CONCURRENT × ~1.5 GB` (download + render headroom) plus the retention window. Provision **≥ 50–100 GB** on the `WORK_DIR` volume; `RETENTION_HOURS` prunes downloaded bundles and rendered sets. (P2 splat outputs will want considerably more — size that when P2 lands.)
 - **Network** — **outbound 443 only**. No inbound ports, no forwarding, no reverse proxy in front of the worker. The firewall may deny all inbound. `cloudflared` (Kody's tunnel) is a separate, optional install for SSH/ops in — independent of the worker.
 - **Time** — `chrony`/NTP so `scan_pipeline_events` and audit timestamps are sane.
-- **Files** — `/etc/patina/scan-worker.env` at `0600` owned by `root:root`;
+- **Files** — reviewed installer source at
+  `/opt/patina/scan-pipeline-source` in the closed root-owned layout above;
+  `/etc/patina/scan-worker.env` at `0600` owned by `root:root`;
   root-owned stable venv symlink at `/opt/patina/scan-pipeline/.venv`;
   root-owned, non-service-writable immutable releases beside it; only the XDG
   cache/state dirs below `APP_DIR` and scratch at `/var/lib/patina/scan-work`
   are owned by `patina`.
 
-Bring-up: stage reviewed source root-owned at `APP_DIR` →
-`sudo /opt/patina/scan-pipeline/install.sh` → edit
+Bring-up: stop the worker/service UID and stage reviewed source root-owned at
+`/opt/patina/scan-pipeline-source` with the README's delete/fresh-inode rsync →
+`sudo /opt/patina/scan-pipeline-source/install.sh` → edit
 `/etc/patina/scan-worker.env` (URL, key,
 `WORKER_ID`) → `systemctl start patina-scan-worker-doctor` for a context-accurate
 preflight → `systemctl enable --now patina-scan-worker` → watch

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import secrets
 import stat
 import sys
@@ -20,6 +21,24 @@ from pathlib import PurePath
 
 class GuardError(RuntimeError):
     """A managed path failed the installer's trust contract."""
+
+
+SOURCE_REQUIRED_DIRECTORIES = frozenset({"src", "src/patina_scan_worker"})
+SOURCE_TOP_LEVEL_FILES = frozenset(
+    {
+        "README.md",
+        "install-path-guard.py",
+        "install-venv-lib.sh",
+        "install.sh",
+        "patina-scan-worker-doctor.service",
+        "patina-scan-worker-nvidia-prepare.service",
+        "patina-scan-worker.gpu.conf",
+        "patina-scan-worker.service",
+        "pyproject.toml",
+        "scan-worker.env.example",
+    }
+)
+SOURCE_PACKAGE_ROOT = "src/patina_scan_worker"
 
 
 def _octal_mode(value: str) -> int:
@@ -62,6 +81,22 @@ def _open_directory(path: str) -> int:
 def _open_child_directory(parent_fd: int, name: str) -> int:
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     return os.open(name, flags, dir_fd=parent_fd)
+
+
+def _fd_mount_id(file_fd: int) -> int | None:
+    """Return Linux's mount ID for an fd; fail closed if Linux hides fdinfo."""
+
+    if not sys.platform.startswith("linux"):
+        return None
+    try:
+        with open(f"/proc/self/fdinfo/{file_fd}", encoding="ascii") as fdinfo:
+            for line in fdinfo:
+                key, separator, value = line.partition(":")
+                if separator and key == "mnt_id":
+                    return int(value.strip())
+    except (OSError, ValueError) as exc:
+        raise GuardError(f"cannot inspect mount identity for fd {file_fd}") from exc
+    raise GuardError(f"Linux fdinfo omitted mount identity for fd {file_fd}")
 
 
 def _require_trusted_directory(
@@ -305,6 +340,26 @@ def _release_name(path: str, app_dir: str) -> str:
     return name
 
 
+def _quarantine_name(path: str, app_dir: str) -> str:
+    app_abs = _absolute(app_dir)
+    path_abs = _absolute(path)
+    if os.path.dirname(path_abs) != app_abs:
+        raise GuardError(
+            f"legacy quarantine is not contained directly by {app_abs}: {path_abs}"
+        )
+    name = os.path.basename(path_abs)
+    prefix = ".venv.quarantine."
+    if not name.startswith(prefix) or len(name) <= len(prefix):
+        raise GuardError(f"unmanaged legacy quarantine name: {name!r}")
+    if any(
+        character
+        not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+        for character in name
+    ):
+        raise GuardError(f"unsafe legacy quarantine name: {name!r}")
+    return name
+
+
 def generate_release_path(app_dir: str, *, anchor: str, uid: int, gid: int) -> str:
     _validate_trusted_tree(anchor, app_dir, uid=uid, gid=gid)
     for _ in range(128):
@@ -312,6 +367,206 @@ def generate_release_path(app_dir: str, *, anchor: str, uid: int, gid: int) -> s
         if not os.path.lexists(candidate):
             return candidate
     raise GuardError("could not allocate a unique release name")
+
+
+def generate_quarantine_path(
+    app_dir: str, *, anchor: str, uid: int, gid: int
+) -> str:
+    _validate_trusted_tree(anchor, app_dir, uid=uid, gid=gid)
+    for _ in range(128):
+        candidate = os.path.join(
+            _absolute(app_dir), f".venv.quarantine.{secrets.token_hex(12)}"
+        )
+        if not os.path.lexists(candidate):
+            return candidate
+    raise GuardError("could not allocate a unique legacy quarantine name")
+
+
+def quarantine_legacy_release(
+    app_dir: str,
+    source: str,
+    quarantine: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> str:
+    """Durably move exact legacy .venv aside without ever trusting its contents."""
+
+    _validate_trusted_tree(anchor, app_dir, uid=uid, gid=gid)
+    app_abs = _absolute(app_dir)
+    source_abs = _absolute(source)
+    if source_abs != os.path.join(app_abs, ".venv"):
+        raise GuardError(f"legacy source must be the exact stable .venv path: {source_abs}")
+    quarantine_name = _quarantine_name(quarantine, app_abs)
+    app_fd = _open_directory(app_abs)
+    source_fd = -1
+    try:
+        source_info = os.stat(".venv", dir_fd=app_fd, follow_symlinks=False)
+        if stat.S_ISLNK(source_info.st_mode) or not stat.S_ISDIR(source_info.st_mode):
+            raise GuardError(f"legacy source is not a real directory: {source_abs}")
+        try:
+            os.stat(quarantine_name, dir_fd=app_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            raise GuardError(f"legacy quarantine already exists: {quarantine}")
+        source_fd = _open_child_directory(app_fd, ".venv")
+        opened = os.fstat(source_fd)
+        if (opened.st_dev, opened.st_ino) != (source_info.st_dev, source_info.st_ino):
+            raise GuardError("legacy source changed during ownership handoff")
+        app_info = os.fstat(app_fd)
+        if opened.st_dev != app_info.st_dev or _fd_mount_id(
+            source_fd
+        ) != _fd_mount_id(app_fd):
+            raise GuardError("legacy source is a mounted filesystem")
+        # Seal the exact directory inode before rename. A crash on either side
+        # of rename therefore leaves a fail-closed root that a later service-UID
+        # process cannot traverse or use to move descendants during cleanup.
+        os.fchown(source_fd, uid, gid)
+        os.fchmod(source_fd, 0o700)
+        os.fsync(source_fd)
+        os.rename(
+            ".venv",
+            quarantine_name,
+            src_dir_fd=app_fd,
+            dst_dir_fd=app_fd,
+        )
+        moved = os.stat(quarantine_name, dir_fd=app_fd, follow_symlinks=False)
+        if (moved.st_dev, moved.st_ino) != (source_info.st_dev, source_info.st_ino):
+            raise GuardError("legacy quarantine changed during rename")
+        still_open = os.fstat(source_fd)
+        if (still_open.st_dev, still_open.st_ino) != (moved.st_dev, moved.st_ino):
+            raise GuardError("legacy quarantine changed across rename")
+        os.fsync(app_fd)
+    finally:
+        if source_fd >= 0:
+            os.close(source_fd)
+        os.close(app_fd)
+    return os.path.join(app_abs, quarantine_name)
+
+
+def remove_legacy_quarantine(
+    app_dir: str,
+    quarantine: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> None:
+    """Durably remove only a validated, unreferenced raw legacy quarantine."""
+
+    _validate_trusted_tree(anchor, app_dir, uid=uid, gid=gid)
+    app_abs = _absolute(app_dir)
+    quarantine_name = _quarantine_name(quarantine, app_abs)
+    app_fd = _open_directory(app_abs)
+    try:
+        try:
+            info = os.stat(quarantine_name, dir_fd=app_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            # Absence may be the observable half of an interrupted prior rmdir.
+            # Flush the parent before the transaction marker can be discarded.
+            os.fsync(app_fd)
+            return
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise GuardError(
+                f"legacy quarantine is not a real directory: {quarantine}"
+            )
+        if info.st_uid != uid or info.st_gid != gid or stat.S_IMODE(info.st_mode) != 0o700:
+            raise GuardError(
+                f"legacy quarantine root is not trusted-owner mode 0700: {quarantine}"
+            )
+        _remove_tree_entry(app_fd, quarantine_name, quarantine)
+        os.fsync(app_fd)
+    finally:
+        os.close(app_fd)
+
+
+def seal_legacy_quarantine(
+    app_dir: str,
+    quarantine: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> None:
+    """Idempotently seal an inferred post-rename quarantine before readiness."""
+
+    _validate_trusted_tree(anchor, app_dir, uid=uid, gid=gid)
+    app_abs = _absolute(app_dir)
+    quarantine_name = _quarantine_name(quarantine, app_abs)
+    app_fd = _open_directory(app_abs)
+    quarantine_fd = -1
+    try:
+        info = os.stat(quarantine_name, dir_fd=app_fd, follow_symlinks=False)
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise GuardError(
+                f"legacy quarantine is not a real directory: {quarantine}"
+            )
+        quarantine_fd = _open_child_directory(app_fd, quarantine_name)
+        opened = os.fstat(quarantine_fd)
+        if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+            raise GuardError("legacy quarantine changed during sealing")
+        app_info = os.fstat(app_fd)
+        if opened.st_dev != app_info.st_dev or _fd_mount_id(
+            quarantine_fd
+        ) != _fd_mount_id(app_fd):
+            raise GuardError("legacy quarantine is a mounted filesystem")
+        os.fchown(quarantine_fd, uid, gid)
+        os.fchmod(quarantine_fd, 0o700)
+        os.fsync(quarantine_fd)
+        os.fsync(app_fd)
+    finally:
+        if quarantine_fd >= 0:
+            os.close(quarantine_fd)
+        os.close(app_fd)
+
+
+def _remove_tree_entry(
+    parent_fd: int,
+    name: str,
+    display: str,
+    *,
+    expected_device: int | None = None,
+    expected_mount_id: int | None = None,
+) -> None:
+    """Delete an untrusted tree with no-follow dirfds (Python 3.10 compatible)."""
+
+    info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    if expected_device is None:
+        expected_device = info.st_dev
+    elif info.st_dev != expected_device:
+        raise GuardError(
+            f"legacy quarantine crosses a mounted filesystem: {display}"
+        )
+    if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        os.unlink(name, dir_fd=parent_fd)
+        return
+
+    child_fd = _open_child_directory(parent_fd, name)
+    try:
+        opened = os.fstat(child_fd)
+        if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+            raise GuardError(f"legacy quarantine changed during cleanup: {display}")
+        mount_id = _fd_mount_id(child_fd)
+        if expected_mount_id is None:
+            expected_mount_id = mount_id
+        elif mount_id != expected_mount_id:
+            raise GuardError(
+                f"legacy quarantine crosses a mounted filesystem: {display}"
+            )
+        for child in sorted(os.listdir(child_fd)):
+            _remove_tree_entry(
+                child_fd,
+                child,
+                os.path.join(display, child),
+                expected_device=expected_device,
+                expected_mount_id=expected_mount_id,
+            )
+        os.fsync(child_fd)
+    finally:
+        os.close(child_fd)
+    os.rmdir(name, dir_fd=parent_fd)
 
 
 def create_release(
@@ -336,6 +591,60 @@ def create_release(
             os.close(release_fd)
         os.fsync(app_fd)
     finally:
+        os.close(app_fd)
+
+
+def install_runtime_stub(
+    app_dir: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> None:
+    """Atomically neutralize a legacy co-located installer with a fresh inode."""
+
+    _validate_trusted_tree(anchor, app_dir, uid=uid, gid=gid)
+    app_fd = _open_directory(_absolute(app_dir))
+    temporary = f".install.sh.runtime-only.{secrets.token_hex(12)}"
+    stub = (
+        b"#!/bin/bash -p\n"
+        b"printf '%s\\n' 'ERROR: runtime APP_DIR is not installer source.' >&2\n"
+        b"printf '%s\\n' 'Run /opt/patina/scan-pipeline-source/install.sh instead.' >&2\n"
+        b"exit 2\n"
+    )
+    stub_fd = -1
+    try:
+        stub_fd = os.open(
+            temporary,
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=app_fd,
+        )
+        os.fchown(stub_fd, uid, gid)
+        os.fchmod(stub_fd, 0o755)
+        written = 0
+        while written < len(stub):
+            written += os.write(stub_fd, stub[written:])
+        os.fsync(stub_fd)
+        os.close(stub_fd)
+        stub_fd = -1
+        os.replace(
+            temporary,
+            "install.sh",
+            src_dir_fd=app_fd,
+            dst_dir_fd=app_fd,
+        )
+        os.fsync(app_fd)
+    finally:
+        if stub_fd >= 0:
+            os.close(stub_fd)
+        try:
+            os.unlink(temporary, dir_fd=app_fd)
+        except FileNotFoundError:
+            pass
         os.close(app_fd)
 
 
@@ -364,6 +673,26 @@ def _resolve_release_target(
     return target
 
 
+def resolve_release_link(
+    app_dir: str,
+    path: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> str:
+    """Canonicalize a stable release symlink without trusting process cwd."""
+
+    _validate_trusted_tree(anchor, app_dir, uid=uid, gid=gid)
+    return _resolve_release_target(
+        app_dir,
+        path,
+        stable_link=True,
+        uid=uid,
+        gid=gid,
+    )
+
+
 def _harden_entry(parent_fd: int, name: str, *, uid: int, gid: int) -> None:
     info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
     if stat.S_ISLNK(info.st_mode):
@@ -388,62 +717,103 @@ def _harden_entry(parent_fd: int, name: str, *, uid: int, gid: int) -> None:
         os.close(entry_fd)
 
 
-def _harden_source_entry(parent_fd: int, name: str, *, uid: int, gid: int) -> None:
+def _require_source_entry(
+    parent_fd: int,
+    name: str,
+    display: str,
+    *,
+    directory: bool,
+    uid: int,
+    gid: int,
+) -> None:
     info = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
     if stat.S_ISLNK(info.st_mode):
-        raise GuardError(f"installer source entry is a symlink: {name}")
-    if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
-        raise GuardError(f"installer source contains unsupported object: {name}")
+        raise GuardError(f"installer source entry is a symlink: {display}")
+    expected_type = stat.S_ISDIR if directory else stat.S_ISREG
+    if not expected_type(info.st_mode):
+        expected = "directory" if directory else "regular file"
+        raise GuardError(f"installer source entry is not a {expected}: {display}")
+    if info.st_uid != uid or info.st_gid != gid:
+        raise GuardError(
+            f"installer source entry is not owned by {uid}:{gid}: {display}"
+        )
+    if stat.S_IMODE(info.st_mode) & 0o022:
+        raise GuardError(f"installer source entry is group/world writable: {display}")
+    if not directory and info.st_nlink != 1:
+        raise GuardError(f"installer source file has a hardlink: {display}")
+
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    if stat.S_ISDIR(info.st_mode):
+    if directory:
         flags |= getattr(os, "O_DIRECTORY", 0)
     entry_fd = os.open(name, flags, dir_fd=parent_fd)
     try:
-        os.fchown(entry_fd, uid, gid)
-        os.fchmod(entry_fd, stat.S_IMODE(info.st_mode) & ~0o022)
+        opened = os.fstat(entry_fd)
+        if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+            raise GuardError(f"installer source entry changed during open: {display}")
     finally:
         os.close(entry_fd)
 
 
-def harden_source_tree(
+def validate_source_tree(
     source_dir: str,
     *,
     anchor: str,
     uid: int,
     gid: int,
 ) -> None:
-    """Lock every install-time input while leaving runtime write dirs alone."""
+    """Require a closed, immutable snapshot of every install/build input."""
 
     _validate_trusted_tree(anchor, source_dir, uid=uid, gid=gid)
-    required_files = (
-        "install.sh",
-        "install-path-guard.py",
-        "install-venv-lib.sh",
-        "pyproject.toml",
-        "patina-scan-worker.service",
-        "patina-scan-worker-doctor.service",
-        "patina-scan-worker.gpu.conf",
-        "patina-scan-worker-nvidia-prepare.service",
-        "scan-worker.env.example",
-    )
-    source_fd = _open_directory(_absolute(source_dir))
-    try:
-        for name in required_files:
-            _harden_source_entry(source_fd, name, uid=uid, gid=gid)
-        _harden_source_entry(source_fd, "src", uid=uid, gid=gid)
-    finally:
-        os.close(source_fd)
-
-    package_root = os.path.join(_absolute(source_dir), "src")
+    source_abs = _absolute(source_dir)
+    seen_required_directories: set[str] = set()
+    seen_top_level_files: set[str] = set()
+    seen_package_init = False
     for current, directories, files, current_fd in os.fwalk(
-        package_root, topdown=True, follow_symlinks=False
+        source_abs, topdown=True, follow_symlinks=False
     ):
-        for entry in (*directories, *files):
-            try:
-                _harden_source_entry(current_fd, entry, uid=uid, gid=gid)
-            except GuardError as exc:
-                raise GuardError(f"{exc} ({os.path.join(current, entry)})") from exc
-    _validate_release_tree(package_root, uid=uid, gid=gid)
+        relative_root = os.path.relpath(current, source_abs)
+        for name in directories:
+            relative = name if relative_root == "." else os.path.join(relative_root, name)
+            if relative in SOURCE_REQUIRED_DIRECTORIES:
+                seen_required_directories.add(relative)
+            elif relative.startswith(f"{SOURCE_PACKAGE_ROOT}{os.sep}") and name.isidentifier():
+                pass
+            else:
+                raise GuardError(f"unexpected installer source directory: {relative}")
+            _require_source_entry(
+                current_fd,
+                name,
+                relative,
+                directory=True,
+                uid=uid,
+                gid=gid,
+            )
+        for name in files:
+            relative = name if relative_root == "." else os.path.join(relative_root, name)
+            if relative_root == "." and relative in SOURCE_TOP_LEVEL_FILES:
+                seen_top_level_files.add(relative)
+            elif relative.startswith(f"{SOURCE_PACKAGE_ROOT}{os.sep}") and name.endswith(".py"):
+                if relative == f"{SOURCE_PACKAGE_ROOT}{os.sep}__init__.py":
+                    seen_package_init = True
+            else:
+                raise GuardError(f"unexpected installer source file: {relative}")
+            _require_source_entry(
+                current_fd,
+                name,
+                relative,
+                directory=False,
+                uid=uid,
+                gid=gid,
+            )
+    missing_directories = sorted(
+        SOURCE_REQUIRED_DIRECTORIES - seen_required_directories
+    )
+    missing_files = sorted(SOURCE_TOP_LEVEL_FILES - seen_top_level_files)
+    if not seen_package_init:
+        missing_files.append(f"{SOURCE_PACKAGE_ROOT}/__init__.py")
+    if missing_directories or missing_files:
+        missing = ", ".join((*missing_directories, *missing_files))
+        raise GuardError(f"installer source snapshot is incomplete: {missing}")
 
 
 def _validate_release_tree(path: str, *, uid: int, gid: int) -> None:
@@ -457,6 +827,407 @@ def _validate_release_tree(path: str, *, uid: int, gid: int) -> None:
                 raise GuardError(f"release entry is not trusted-owner: {display}")
             if not stat.S_ISLNK(info.st_mode) and stat.S_IMODE(info.st_mode) & 0o022:
                 raise GuardError(f"release entry is group/world writable: {display}")
+
+
+_PYTHON_LAUNCHER = re.compile(r"python(?:\d+(?:\.\d+)*)?")
+
+
+def _snapshot_identity(info: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    """Fields a service-controlled source cannot change without detection."""
+
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_mode,
+        info.st_size,
+        info.st_mtime_ns,
+        info.st_ctime_ns,
+    )
+
+
+def _write_all(file_fd: int, data: bytes) -> None:
+    offset = 0
+    while offset < len(data):
+        written = os.write(file_fd, data[offset:])
+        if written <= 0:
+            raise GuardError("short write while materializing legacy release")
+        offset += written
+
+
+def _is_python_launcher(relative_path: str) -> bool:
+    parent, name = os.path.split(relative_path)
+    return parent == "bin" and _PYTHON_LAUNCHER.fullmatch(name) is not None
+
+
+def _materialized_symlink_target(
+    relative_path: str,
+    raw_target: str,
+    *,
+    interpreter: str,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> tuple[str, str]:
+    """Return (target-to-create, lexical-kind) for one legacy symlink."""
+
+    if not raw_target:
+        raise GuardError(f"legacy release contains an empty symlink: {relative_path}")
+    if os.path.isabs(raw_target):
+        if not _is_python_launcher(relative_path):
+            raise GuardError(
+                f"legacy release symlink escapes the release: {relative_path} -> {raw_target}"
+            )
+        resolved = validate_trusted_executable(
+            raw_target,
+            anchor=anchor,
+            uid=uid,
+            gid=gid,
+        )
+        if resolved != interpreter:
+            raise GuardError(
+                "legacy Python launcher does not resolve to the selected trusted "
+                f"interpreter: {relative_path} -> {resolved} (expected {interpreter})"
+            )
+        # Remove a second alias race: the materialized link points straight at
+        # the already-canonical, trusted executable rather than retaining a
+        # potentially mutable intermediate path such as /usr/bin/python3.
+        return interpreter, "external-interpreter"
+
+    parent = os.path.dirname(relative_path)
+    normalized = os.path.normpath(os.path.join(parent, raw_target))
+    if normalized == os.pardir or normalized.startswith(f"{os.pardir}{os.sep}"):
+        raise GuardError(
+            f"legacy release symlink escapes lexically: {relative_path} -> {raw_target}"
+        )
+    return raw_target, "internal"
+
+
+def _copy_legacy_regular(
+    source_fd: int,
+    destination_fd: int,
+    name: str,
+    display: str,
+    initial: os.stat_result,
+    *,
+    uid: int,
+    gid: int,
+    source_mount_id: int | None,
+) -> None:
+    source_file = os.open(
+        name,
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0),
+        dir_fd=source_fd,
+    )
+    destination_file = -1
+    try:
+        opened = os.fstat(source_file)
+        if not stat.S_ISREG(opened.st_mode) or (
+            opened.st_dev,
+            opened.st_ino,
+        ) != (initial.st_dev, initial.st_ino):
+            raise GuardError(f"legacy release file changed during open: {display}")
+        if _fd_mount_id(source_file) != source_mount_id:
+            raise GuardError(
+                f"legacy release crosses a mounted filesystem: {display}"
+            )
+
+        mode = 0o755 if stat.S_IMODE(initial.st_mode) & 0o111 else 0o644
+        destination_file = os.open(
+            name,
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            mode,
+            dir_fd=destination_fd,
+        )
+        os.fchown(destination_file, uid, gid)
+        os.fchmod(destination_file, mode)
+
+        copied = 0
+        while copied <= initial.st_size:
+            chunk = os.read(source_file, min(1024 * 1024, initial.st_size - copied + 1))
+            if not chunk:
+                break
+            copied += len(chunk)
+            if copied > initial.st_size:
+                raise GuardError(f"legacy release file grew during copy: {display}")
+            _write_all(destination_file, chunk)
+
+        final = os.fstat(source_file)
+        if copied != initial.st_size or _snapshot_identity(final) != _snapshot_identity(initial):
+            raise GuardError(f"legacy release file changed during copy: {display}")
+        destination_info = os.fstat(destination_file)
+        if destination_info.st_nlink != 1:
+            raise GuardError(f"materialized release file is not a fresh inode: {display}")
+        os.fsync(destination_file)
+    finally:
+        if destination_file >= 0:
+            os.close(destination_file)
+        os.close(source_file)
+
+
+def _copy_legacy_directory(
+    source_fd: int,
+    destination_fd: int,
+    relative_root: str,
+    symlinks: list[tuple[str, str]],
+    *,
+    interpreter: str,
+    anchor: str,
+    uid: int,
+    gid: int,
+    source_device: int,
+    source_mount_id: int | None,
+) -> None:
+    initial_directory = os.fstat(source_fd)
+    if not stat.S_ISDIR(initial_directory.st_mode):
+        raise GuardError(f"legacy release component is not a directory: {relative_root or '.'}")
+    if initial_directory.st_dev != source_device:
+        raise GuardError(
+            f"legacy release crosses a mounted filesystem: {relative_root or '.'}"
+        )
+    if _fd_mount_id(source_fd) != source_mount_id:
+        raise GuardError(
+            f"legacy release crosses a mounted filesystem: {relative_root or '.'}"
+        )
+
+    initial_names = sorted(os.listdir(source_fd))
+    for name in initial_names:
+        if name in ("", ".", "..") or os.sep in name:
+            raise GuardError(f"unsafe legacy release entry name: {name!r}")
+        relative = name if not relative_root else os.path.join(relative_root, name)
+        initial = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
+        if not stat.S_ISLNK(initial.st_mode) and initial.st_dev != source_device:
+            raise GuardError(
+                f"legacy release crosses a mounted filesystem: {relative}"
+            )
+
+        if stat.S_ISDIR(initial.st_mode):
+            os.mkdir(name, 0o700, dir_fd=destination_fd)
+            child_source = _open_child_directory(source_fd, name)
+            child_destination = _open_child_directory(destination_fd, name)
+            try:
+                opened = os.fstat(child_source)
+                if (opened.st_dev, opened.st_ino) != (initial.st_dev, initial.st_ino):
+                    raise GuardError(
+                        f"legacy release directory changed during open: {relative}"
+                    )
+                os.fchown(child_destination, uid, gid)
+                os.fchmod(child_destination, 0o700)
+                _copy_legacy_directory(
+                    child_source,
+                    child_destination,
+                    relative,
+                    symlinks,
+                    interpreter=interpreter,
+                    anchor=anchor,
+                    uid=uid,
+                    gid=gid,
+                    source_device=source_device,
+                    source_mount_id=source_mount_id,
+                )
+                os.fchmod(child_destination, 0o755)
+                os.fsync(child_destination)
+            finally:
+                os.close(child_destination)
+                os.close(child_source)
+        elif stat.S_ISREG(initial.st_mode):
+            _copy_legacy_regular(
+                source_fd,
+                destination_fd,
+                name,
+                relative,
+                initial,
+                uid=uid,
+                gid=gid,
+                source_mount_id=source_mount_id,
+            )
+        elif stat.S_ISLNK(initial.st_mode):
+            raw_target = os.readlink(name, dir_fd=source_fd)
+            created_target, link_kind = _materialized_symlink_target(
+                relative,
+                raw_target,
+                interpreter=interpreter,
+                anchor=anchor,
+                uid=uid,
+                gid=gid,
+            )
+            final = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
+            if (final.st_dev, final.st_ino) != (initial.st_dev, initial.st_ino) or os.readlink(
+                name, dir_fd=source_fd
+            ) != raw_target:
+                raise GuardError(f"legacy release symlink changed during copy: {relative}")
+            os.symlink(created_target, name, dir_fd=destination_fd)
+            os.chown(
+                name,
+                uid,
+                gid,
+                dir_fd=destination_fd,
+                follow_symlinks=False,
+            )
+            symlinks.append((relative, link_kind))
+        else:
+            raise GuardError(
+                f"legacy release contains unsupported filesystem object: {relative}"
+            )
+
+    final_names = sorted(os.listdir(source_fd))
+    if final_names != initial_names:
+        raise GuardError(
+            f"legacy release directory entries changed during copy: {relative_root or '.'}"
+        )
+    final_directory = os.fstat(source_fd)
+    initial_identity = (
+        initial_directory.st_dev,
+        initial_directory.st_ino,
+        initial_directory.st_mode,
+        initial_directory.st_mtime_ns,
+        initial_directory.st_ctime_ns,
+    )
+    final_identity = (
+        final_directory.st_dev,
+        final_directory.st_ino,
+        final_directory.st_mode,
+        final_directory.st_mtime_ns,
+        final_directory.st_ctime_ns,
+    )
+    if final_identity != initial_identity:
+        raise GuardError(
+            f"legacy release directory changed during copy: {relative_root or '.'}"
+        )
+    os.fsync(destination_fd)
+
+
+def _validate_materialized_symlinks(
+    release: str,
+    symlinks: list[tuple[str, str]],
+    *,
+    interpreter: str,
+) -> None:
+    release_abs = _absolute(release)
+    for relative, link_kind in symlinks:
+        path = os.path.join(release_abs, relative)
+        try:
+            terminal = os.path.realpath(path)
+        except (OSError, RuntimeError) as exc:
+            raise GuardError(f"materialized release has dangling/looped symlink: {relative}") from exc
+        if not os.path.exists(terminal):
+            raise GuardError(f"materialized release has dangling/looped symlink: {relative}")
+        contained = os.path.commonpath((release_abs, terminal)) == release_abs
+        if contained:
+            continue
+        if not _is_python_launcher(relative) or terminal != interpreter:
+            raise GuardError(
+                f"materialized release symlink has an external terminal: {relative} -> {terminal}"
+            )
+        if link_kind not in ("internal", "external-interpreter"):
+            raise GuardError(f"unknown materialized symlink policy for {relative}")
+
+
+def materialize_legacy_release(
+    app_dir: str,
+    source: str,
+    destination: str,
+    interpreter: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> str:
+    """Copy a service-controlled legacy venv into fresh trusted inodes."""
+
+    _validate_trusted_tree(anchor, app_dir, uid=uid, gid=gid)
+    app_abs = _absolute(app_dir)
+    source_abs = _absolute(source)
+    if source_abs == os.path.join(app_abs, ".venv"):
+        source_name = ".venv"
+    else:
+        source_name = _quarantine_name(source_abs, app_abs)
+    canonical_interpreter = validate_trusted_executable(
+        interpreter,
+        anchor=anchor,
+        uid=uid,
+        gid=gid,
+    )
+    destination_name = _release_name(destination, app_abs)
+    app_fd = _open_directory(app_abs)
+    source_fd = -1
+    destination_fd = -1
+    symlinks: list[tuple[str, str]] = []
+    try:
+        source_info = os.stat(source_name, dir_fd=app_fd, follow_symlinks=False)
+        if stat.S_ISLNK(source_info.st_mode) or not stat.S_ISDIR(source_info.st_mode):
+            raise GuardError(f"legacy source is not a real directory: {source_abs}")
+        source_fd = _open_child_directory(app_fd, source_name)
+        opened_source = os.fstat(source_fd)
+        if (opened_source.st_dev, opened_source.st_ino) != (
+            source_info.st_dev,
+            source_info.st_ino,
+        ):
+            raise GuardError("legacy source changed during open")
+        app_info = os.fstat(app_fd)
+        if opened_source.st_dev != app_info.st_dev:
+            raise GuardError("legacy source is a mounted filesystem")
+        app_mount_id = _fd_mount_id(app_fd)
+        source_mount_id = _fd_mount_id(source_fd)
+        if app_mount_id != source_mount_id:
+            raise GuardError("legacy source is a mounted filesystem")
+
+        os.mkdir(destination_name, 0o700, dir_fd=app_fd)
+        destination_fd = _open_child_directory(app_fd, destination_name)
+        os.fchown(destination_fd, uid, gid)
+        os.fchmod(destination_fd, 0o700)
+        _copy_legacy_directory(
+            source_fd,
+            destination_fd,
+            "",
+            symlinks,
+            interpreter=canonical_interpreter,
+            anchor=anchor,
+            uid=uid,
+            gid=gid,
+            source_device=opened_source.st_dev,
+            source_mount_id=source_mount_id,
+        )
+        os.fchmod(destination_fd, 0o755)
+        os.fsync(destination_fd)
+        os.fsync(app_fd)
+    finally:
+        if destination_fd >= 0:
+            os.close(destination_fd)
+        if source_fd >= 0:
+            os.close(source_fd)
+        os.close(app_fd)
+
+    destination_abs = os.path.join(app_abs, destination_name)
+    _validate_materialized_symlinks(
+        destination_abs,
+        symlinks,
+        interpreter=canonical_interpreter,
+    )
+    _validate_release_tree(destination_abs, uid=uid, gid=gid)
+    validate_release(
+        app_abs,
+        destination_abs,
+        stable_link=False,
+        require_executables=True,
+        anchor=anchor,
+        uid=uid,
+        gid=gid,
+    )
+    final_fd = _open_directory(destination_abs)
+    app_fd = _open_directory(app_abs)
+    try:
+        os.fsync(final_fd)
+        os.fsync(app_fd)
+    finally:
+        os.close(app_fd)
+        os.close(final_fd)
+    return destination_abs
 
 
 def harden_release(
@@ -567,8 +1338,8 @@ def _parser() -> argparse.ArgumentParser:
     validate_executable = subparsers.add_parser("validate-trusted-executable")
     validate_executable.add_argument("--path", required=True)
 
-    harden_source = subparsers.add_parser("harden-source-tree")
-    harden_source.add_argument("--source-dir", required=True)
+    validate_source = subparsers.add_parser("validate-source-tree")
+    validate_source.add_argument("--source-dir", required=True)
 
     owned = subparsers.add_parser("ensure-owned-dir")
     owned.add_argument("--app-dir", required=True)
@@ -580,13 +1351,46 @@ def _parser() -> argparse.ArgumentParser:
     generate = subparsers.add_parser("generate-release-path")
     generate.add_argument("--app-dir", required=True)
 
+    generate_quarantine = subparsers.add_parser("generate-quarantine-path")
+    generate_quarantine.add_argument("--app-dir", required=True)
+
     validate_name = subparsers.add_parser("validate-release-name")
     validate_name.add_argument("--app-dir", required=True)
     validate_name.add_argument("--path", required=True)
 
+    validate_quarantine_name = subparsers.add_parser("validate-quarantine-name")
+    validate_quarantine_name.add_argument("--app-dir", required=True)
+    validate_quarantine_name.add_argument("--path", required=True)
+
+    resolve_link = subparsers.add_parser("resolve-release-link")
+    resolve_link.add_argument("--app-dir", required=True)
+    resolve_link.add_argument("--path", required=True)
+
     create = subparsers.add_parser("create-release")
     create.add_argument("--app-dir", required=True)
     create.add_argument("--path", required=True)
+
+    runtime_stub = subparsers.add_parser("install-runtime-stub")
+    runtime_stub.add_argument("--app-dir", required=True)
+
+    materialize = subparsers.add_parser("materialize-legacy-release")
+    materialize.add_argument("--app-dir", required=True)
+    materialize.add_argument("--source", required=True)
+    materialize.add_argument("--destination", required=True)
+    materialize.add_argument("--interpreter", required=True)
+
+    quarantine = subparsers.add_parser("quarantine-legacy-release")
+    quarantine.add_argument("--app-dir", required=True)
+    quarantine.add_argument("--source", required=True)
+    quarantine.add_argument("--quarantine", required=True)
+
+    remove_quarantine = subparsers.add_parser("remove-legacy-quarantine")
+    remove_quarantine.add_argument("--app-dir", required=True)
+    remove_quarantine.add_argument("--quarantine", required=True)
+
+    seal_quarantine = subparsers.add_parser("seal-legacy-quarantine")
+    seal_quarantine.add_argument("--app-dir", required=True)
+    seal_quarantine.add_argument("--quarantine", required=True)
 
     for command in ("harden-release", "validate-release"):
         release = subparsers.add_parser(command)
@@ -633,8 +1437,8 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.buffer.write(data)
         elif args.command == "validate-trusted-executable":
             print(validate_trusted_executable(args.path, **common))
-        elif args.command == "harden-source-tree":
-            harden_source_tree(args.source_dir, **common)
+        elif args.command == "validate-source-tree":
+            validate_source_tree(args.source_dir, **common)
         elif args.command == "ensure-owned-dir":
             ensure_owned_directory(
                 args.app_dir,
@@ -647,6 +1451,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "generate-release-path":
             print(generate_release_path(args.app_dir, **common))
+        elif args.command == "generate-quarantine-path":
+            print(generate_quarantine_path(args.app_dir, **common))
         elif args.command == "validate-release-name":
             _validate_trusted_tree(
                 args.anchor,
@@ -655,8 +1461,51 @@ def main(argv: list[str] | None = None) -> int:
                 gid=args.trusted_gid,
             )
             _release_name(args.path, args.app_dir)
+        elif args.command == "validate-quarantine-name":
+            _validate_trusted_tree(
+                args.anchor,
+                args.app_dir,
+                uid=args.trusted_uid,
+                gid=args.trusted_gid,
+            )
+            _quarantine_name(args.path, args.app_dir)
+        elif args.command == "resolve-release-link":
+            print(resolve_release_link(args.app_dir, args.path, **common))
         elif args.command == "create-release":
             create_release(args.app_dir, args.path, **common)
+        elif args.command == "install-runtime-stub":
+            install_runtime_stub(args.app_dir, **common)
+        elif args.command == "materialize-legacy-release":
+            print(
+                materialize_legacy_release(
+                    args.app_dir,
+                    args.source,
+                    args.destination,
+                    args.interpreter,
+                    **common,
+                )
+            )
+        elif args.command == "quarantine-legacy-release":
+            print(
+                quarantine_legacy_release(
+                    args.app_dir,
+                    args.source,
+                    args.quarantine,
+                    **common,
+                )
+            )
+        elif args.command == "remove-legacy-quarantine":
+            remove_legacy_quarantine(
+                args.app_dir,
+                args.quarantine,
+                **common,
+            )
+        elif args.command == "seal-legacy-quarantine":
+            seal_legacy_quarantine(
+                args.app_dir,
+                args.quarantine,
+                **common,
+            )
         elif args.command == "harden-release":
             print(
                 harden_release(
@@ -678,7 +1527,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:  # pragma: no cover - argparse guarantees a known command
             raise GuardError(f"unknown command: {args.command}")
-    except (GuardError, FileExistsError, FileNotFoundError, NotADirectoryError, PermissionError) as exc:
+    except (GuardError, OSError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     return 0

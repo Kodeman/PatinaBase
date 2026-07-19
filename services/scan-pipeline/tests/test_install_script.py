@@ -7,10 +7,13 @@ a running systemd manager.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import stat
 import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -18,6 +21,50 @@ import pytest
 INSTALL = Path(__file__).resolve().parent.parent / "install.sh"
 VENV_LIB = Path(__file__).resolve().parent.parent / "install-venv-lib.sh"
 PATH_GUARD = Path(__file__).resolve().parent.parent / "install-path-guard.py"
+ENV_EXAMPLE = Path(__file__).resolve().parent.parent / "scan-worker.env.example"
+
+INSTALL_SOURCE_FILES = (
+    "README.md",
+    "install-path-guard.py",
+    "install-venv-lib.sh",
+    "install.sh",
+    "patina-scan-worker-doctor.service",
+    "patina-scan-worker-nvidia-prepare.service",
+    "patina-scan-worker.gpu.conf",
+    "patina-scan-worker.service",
+    "pyproject.toml",
+    "scan-worker.env.example",
+    "src/patina_scan_worker/__init__.py",
+    "src/patina_scan_worker/__main__.py",
+    "src/patina_scan_worker/cli.py",
+    "src/patina_scan_worker/config.py",
+    "src/patina_scan_worker/db.py",
+    "src/patina_scan_worker/doctor.py",
+    "src/patina_scan_worker/drawing/__init__.py",
+    "src/patina_scan_worker/drawing/brand.py",
+    "src/patina_scan_worker/drawing/dxf.py",
+    "src/patina_scan_worker/drawing/model.py",
+    "src/patina_scan_worker/drawing/pdf.py",
+    "src/patina_scan_worker/drawing/svg.py",
+    "src/patina_scan_worker/drawing/units.py",
+    "src/patina_scan_worker/errors.py",
+    "src/patina_scan_worker/http.py",
+    "src/patina_scan_worker/keys.py",
+    "src/patina_scan_worker/queue.py",
+    "src/patina_scan_worker/stages/__init__.py",
+    "src/patina_scan_worker/stages/base.py",
+    "src/patina_scan_worker/stages/captured_room.py",
+    "src/patina_scan_worker/stages/dimensions.py",
+    "src/patina_scan_worker/stages/drawings.py",
+    "src/patina_scan_worker/stages/ingest.py",
+    "src/patina_scan_worker/stages/solve.py",
+    "src/patina_scan_worker/stages/solve_math.py",
+    "src/patina_scan_worker/stages/validator.py",
+    "src/patina_scan_worker/storage.py",
+    "src/patina_scan_worker/telemetry.py",
+    "src/patina_scan_worker/untar.py",
+    "src/patina_scan_worker/worker.py",
+)
 
 
 def test_upgrade_refuses_to_rebuild_gpu_install_as_cpu_by_omission():
@@ -46,15 +93,14 @@ def test_candidate_is_checked_smoked_and_verified_before_transaction_activation(
     script = INSTALL.read_text()
     assert 'generate-release-path --app-dir "$APP_DIR"' in script
     assert 'create-release --app-dir "$APP_DIR" --path "$STAGED_VENV"' in script
-    assert '"$STAGED_VENV/bin/pip" check' in script
+    pip_check = '_run_candidate_python "$STAGED_VENV/bin/python" -m pip check'
+    assert pip_check in script
     assert 'import patina_scan_worker' in script
     assert '"$SMOKE_VENV/bin/patina-scan-worker" --help' in script
     assert "verify_candidate_units" in script
     assert 'SYSTEMD_UNIT_PATH="$CANDIDATE_SYSTEMD_DIR:"' in script
     assert "systemd-analyze verify" in script
-    assert script.index('"$STAGED_VENV/bin/pip" check') < script.index(
-        "begin_install_transaction"
-    )
+    assert script.index(pip_check) < script.index("begin_install_transaction")
     assert script.index("verify_candidate_units") < script.index(
         "begin_install_transaction"
     )
@@ -62,7 +108,10 @@ def test_candidate_is_checked_smoked_and_verified_before_transaction_activation(
         "begin_install_transaction"
     )
     # Stop/swap lives only in the helper, after all candidate checks.
-    assert "systemctl stop patina-scan-worker" not in script
+    assert not any(
+        line.strip() == "systemctl stop patina-scan-worker"
+        for line in script.splitlines()
+    )
 
 
 def test_release_namespace_and_candidate_contents_stay_root_owned():
@@ -99,7 +148,9 @@ def _path_guard(
     anchor.mkdir(mode=0o700, exist_ok=True)
     result = subprocess.run(
         [
-            "python3",
+            sys.executable,
+            "-I",
+            "-S",
             str(PATH_GUARD),
             "--anchor",
             str(anchor),
@@ -118,6 +169,303 @@ def _path_guard(
     else:
         assert result.returncode != 0
     return result
+
+
+def _load_path_guard_module():
+    spec = importlib.util.spec_from_file_location(
+        "patina_install_path_guard_test", PATH_GUARD
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_stock_legacy_venv(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+    """Build the Debian-style interpreter-link shape seen in a stock venv."""
+
+    app = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(app),
+        "--mode",
+        "0755",
+    )
+    interpreter_dir = tmp_path / "trusted" / "usr" / "bin"
+    interpreter_dir.mkdir(parents=True)
+    canonical = interpreter_dir / "python3.11"
+    canonical.write_text("#!/bin/sh\nexit 0\n")
+    canonical.chmod(0o755)
+    alias = interpreter_dir / "python3"
+    alias.symlink_to(canonical.name)
+
+    legacy = app / ".venv"
+    bin_dir = legacy / "bin"
+    lib_dir = legacy / "lib"
+    bin_dir.mkdir(parents=True)
+    lib_dir.mkdir()
+    (bin_dir / "python3").symlink_to(alias)
+    (bin_dir / "python").symlink_to("python3")
+    (bin_dir / "python3.11").symlink_to("python3")
+    entrypoint = bin_dir / "patina-scan-worker"
+    entrypoint.write_text("#!/bin/sh\nexit 0\n")
+    entrypoint.chmod(0o755)
+    (legacy / "lib64").symlink_to("lib")
+    (legacy / "marker").write_text("legacy bytes\n")
+    return app, legacy, alias, canonical
+
+
+def _materialize_legacy(
+    tmp_path: Path,
+    app: Path,
+    legacy: Path,
+    interpreter: Path,
+    *,
+    name: str = ".venv.release.materialized",
+    expected_ok: bool = True,
+) -> tuple[Path, subprocess.CompletedProcess[str]]:
+    destination = app / name
+    result = _path_guard(
+        tmp_path,
+        "materialize-legacy-release",
+        "--app-dir",
+        str(app),
+        "--source",
+        str(legacy),
+        "--destination",
+        str(destination),
+        "--interpreter",
+        str(interpreter),
+        expected_ok=expected_ok,
+    )
+    return destination, result
+
+
+def test_legacy_materialization_uses_fresh_independent_inodes(tmp_path):
+    app, legacy, _alias, canonical = _write_stock_legacy_venv(tmp_path)
+    outside = tmp_path / "service-controlled-hardlink"
+    outside.write_text("shared source bytes\n")
+    first_link = legacy / "lib" / "shared.py"
+    second_link = legacy / "lib" / "shared-copy.py"
+    first_link.hardlink_to(outside)
+    second_link.hardlink_to(outside)
+    marker = legacy / "marker"
+    old_marker_inode = marker.stat().st_ino
+    held_writer = os.open(marker, os.O_WRONLY)
+    try:
+        quarantine = app / ".venv.quarantine.fixture"
+        _path_guard(
+            tmp_path,
+            "quarantine-legacy-release",
+            "--app-dir",
+            str(app),
+            "--source",
+            str(legacy),
+            "--quarantine",
+            str(quarantine),
+        )
+        assert not legacy.exists()
+        quarantine.chmod(0o777)  # simulate inferred post-rename unsealed state
+        _path_guard(
+            tmp_path,
+            "seal-legacy-quarantine",
+            "--app-dir",
+            str(app),
+            "--quarantine",
+            str(quarantine),
+        )
+        assert stat.S_IMODE(quarantine.stat().st_mode) == 0o700
+        destination, _result = _materialize_legacy(
+            tmp_path, app, quarantine, canonical
+        )
+        os.lseek(held_writer, 0, os.SEEK_SET)
+        os.write(held_writer, b"attacker bytes")
+        outside.write_text("changed through outside hardlink\n")
+    finally:
+        os.close(held_writer)
+
+    copied_marker = destination / "marker"
+    copied_first = destination / "lib" / "shared.py"
+    copied_second = destination / "lib" / "shared-copy.py"
+    assert copied_marker.read_text() == "legacy bytes\n"
+    assert copied_marker.stat().st_ino != old_marker_inode
+    assert copied_marker.stat().st_nlink == 1
+    assert copied_first.read_text() == "shared source bytes\n"
+    assert copied_second.read_text() == "shared source bytes\n"
+    assert copied_first.stat().st_ino != copied_second.stat().st_ino
+    assert copied_first.stat().st_nlink == copied_second.stat().st_nlink == 1
+
+    _path_guard(
+        tmp_path,
+        "remove-legacy-quarantine",
+        "--app-dir",
+        str(app),
+        "--quarantine",
+        str(quarantine),
+    )
+    assert not quarantine.exists()
+
+
+def test_legacy_materialization_accepts_stock_interpreter_links_only(tmp_path):
+    app, legacy, alias, canonical = _write_stock_legacy_venv(tmp_path)
+
+    destination, _result = _materialize_legacy(
+        tmp_path, app, legacy, canonical
+    )
+
+    assert (destination / "bin" / "python3").readlink() == canonical
+    assert (destination / "bin" / "python").readlink() == Path("python3")
+    assert (destination / "bin" / "python3.11").readlink() == Path("python3")
+    assert (destination / "lib64").readlink() == Path("lib")
+    assert (destination / "bin" / "python").resolve() == canonical
+    assert alias.resolve() == canonical
+
+
+def test_legacy_materialization_rejects_external_non_interpreter_symlink(tmp_path):
+    app, legacy, _alias, canonical = _write_stock_legacy_venv(tmp_path)
+    external = tmp_path / "external-library.py"
+    external.write_text("unsafe = True\n")
+    (legacy / "lib" / "escape.py").symlink_to(external)
+
+    _destination, result = _materialize_legacy(
+        tmp_path, app, legacy, canonical, expected_ok=False
+    )
+
+    assert "escapes the release" in result.stderr
+
+
+def test_legacy_materialization_rejects_internal_link_with_external_terminal(tmp_path):
+    app, legacy, _alias, canonical = _write_stock_legacy_venv(tmp_path)
+    (legacy / "lib" / "python-view").symlink_to("../bin/python3")
+
+    _destination, result = _materialize_legacy(
+        tmp_path, app, legacy, canonical, expected_ok=False
+    )
+
+    assert "external terminal" in result.stderr
+
+
+def test_legacy_materialization_rejects_different_trusted_interpreter(tmp_path):
+    app, legacy, _alias, canonical = _write_stock_legacy_venv(tmp_path)
+    other = canonical.with_name("python3.12")
+    other.write_text("#!/bin/sh\nexit 0\n")
+    other.chmod(0o755)
+
+    _destination, result = _materialize_legacy(
+        tmp_path, app, legacy, other, expected_ok=False
+    )
+
+    assert "does not resolve to the selected trusted interpreter" in result.stderr
+
+
+def test_legacy_materialization_rejects_special_files(tmp_path):
+    app, legacy, _alias, canonical = _write_stock_legacy_venv(tmp_path)
+    os.mkfifo(legacy / "service-runtime.pipe")
+
+    _destination, result = _materialize_legacy(
+        tmp_path, app, legacy, canonical, expected_ok=False
+    )
+
+    assert "unsupported filesystem object" in result.stderr
+
+
+def test_legacy_materialization_rejects_unmanaged_source_directory(tmp_path):
+    app, legacy, _alias, canonical = _write_stock_legacy_venv(tmp_path)
+    unmanaged = app / ".venv.unmanaged"
+    legacy.rename(unmanaged)
+
+    _destination, result = _materialize_legacy(
+        tmp_path, app, unmanaged, canonical, expected_ok=False
+    )
+
+    assert "unmanaged legacy quarantine name" in result.stderr
+
+
+@pytest.mark.parametrize("operation", ["copy", "cleanup"])
+def test_legacy_tree_operations_reject_cross_device_mounts(monkeypatch, operation):
+    guard = _load_path_guard_module()
+    mounted_directory = SimpleNamespace(st_mode=stat.S_IFDIR | 0o755, st_dev=2)
+    if operation == "copy":
+        monkeypatch.setattr(guard.os, "fstat", lambda _fd: mounted_directory)
+        def call():
+            guard._copy_legacy_directory(
+                10,
+                11,
+                "mounted",
+                [],
+                interpreter="/trusted/python",
+                anchor="/trusted",
+                uid=os.getuid(),
+                gid=os.getgid(),
+                source_device=1,
+                source_mount_id=None,
+            )
+    else:
+        monkeypatch.setattr(
+            guard.os,
+            "stat",
+            lambda *_args, **_kwargs: mounted_directory,
+        )
+        def call():
+            guard._remove_tree_entry(
+                10,
+                "mounted",
+                "/quarantine/mounted",
+                expected_device=1,
+            )
+
+    with pytest.raises(guard.GuardError, match="mounted filesystem"):
+        call()
+
+
+@pytest.mark.parametrize("operation", ["copy", "cleanup"])
+def test_legacy_tree_operations_reject_same_device_bind_mounts(
+    monkeypatch, operation
+):
+    guard = _load_path_guard_module()
+    directory = SimpleNamespace(
+        st_mode=stat.S_IFDIR | 0o755,
+        st_dev=1,
+        st_ino=42,
+    )
+    monkeypatch.setattr(guard, "_fd_mount_id", lambda _fd: 2)
+    monkeypatch.setattr(guard.os, "fstat", lambda _fd: directory)
+    if operation == "copy":
+        def call():
+            guard._copy_legacy_directory(
+                10,
+                11,
+                "bind-mounted",
+                [],
+                interpreter="/trusted/python",
+                anchor="/trusted",
+                uid=os.getuid(),
+                gid=os.getgid(),
+                source_device=1,
+                source_mount_id=1,
+            )
+    else:
+        monkeypatch.setattr(
+            guard.os,
+            "stat",
+            lambda *_args, **_kwargs: directory,
+        )
+        monkeypatch.setattr(guard, "_open_child_directory", lambda *_args: 12)
+        monkeypatch.setattr(guard.os, "close", lambda _fd: None)
+
+        def call():
+            guard._remove_tree_entry(
+                10,
+                "bind-mounted",
+                "/quarantine/bind-mounted",
+                expected_device=1,
+                expected_mount_id=1,
+            )
+
+    with pytest.raises(guard.GuardError, match="mounted filesystem"):
+        call()
 
 
 def test_path_guard_adopts_only_the_final_real_directory(tmp_path):
@@ -396,25 +744,11 @@ def test_marker_read_requires_trusted_regular_nonwritable_file(tmp_path):
 
 def _write_minimal_installer_source(source: Path) -> None:
     source.mkdir(parents=True, exist_ok=True)
-    for name in (
-        "install.sh",
-        "install-path-guard.py",
-        "install-venv-lib.sh",
-        "pyproject.toml",
-        "patina-scan-worker.service",
-        "patina-scan-worker-doctor.service",
-        "patina-scan-worker.gpu.conf",
-        "patina-scan-worker-nvidia-prepare.service",
-        "scan-worker.env.example",
-    ):
+    for name in INSTALL_SOURCE_FILES:
         path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f"fixture {name}\n")
-        path.chmod(0o766)
-    package = source / "src" / "patina_scan_worker"
-    package.mkdir(parents=True)
-    module = package / "__init__.py"
-    module.write_text("fixture = True\n")
-    module.chmod(0o666)
+        path.chmod(0o755 if name == "install.sh" else 0o644)
 
 
 def _principal_can_write(path: Path, *, uid: int, gid: int) -> bool:
@@ -439,7 +773,7 @@ def _principal_has_mode(path: Path, *, uid: int, gid: int, bits: int) -> bool:
     return granted & bits == bits
 
 
-def test_source_hardening_revokes_service_write_from_installer_and_package(tmp_path):
+def test_source_validation_accepts_only_complete_root_owned_snapshot(tmp_path):
     source = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
     _path_guard(
         tmp_path,
@@ -451,7 +785,7 @@ def test_source_hardening_revokes_service_write_from_installer_and_package(tmp_p
     )
     _write_minimal_installer_source(source)
 
-    _path_guard(tmp_path, "harden-source-tree", "--source-dir", str(source))
+    _path_guard(tmp_path, "validate-source-tree", "--source-dir", str(source))
 
     service_uid = os.getuid() + 1000
     service_gid = os.getgid() + 1000
@@ -469,7 +803,7 @@ def test_source_hardening_revokes_service_write_from_installer_and_package(tmp_p
     )
 
 
-def test_source_hardening_rejects_symlinked_package_content(tmp_path):
+def test_source_validation_rejects_symlinked_package_content(tmp_path):
     source = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
     _path_guard(
         tmp_path,
@@ -489,7 +823,7 @@ def test_source_hardening_rejects_symlinked_package_content(tmp_path):
 
     result = _path_guard(
         tmp_path,
-        "harden-source-tree",
+        "validate-source-tree",
         "--source-dir",
         str(source),
         expected_ok=False,
@@ -497,6 +831,91 @@ def test_source_hardening_rejects_symlinked_package_content(tmp_path):
 
     assert "symlink" in result.stderr.lower()
     assert stat.S_IMODE(outside.stat().st_mode) == 0o666
+
+
+@pytest.mark.parametrize(
+    "unexpected",
+    ["setup.py", "setup.cfg", "MANIFEST.in", "sitecustomize.py", "usercustomize.py"],
+)
+def test_source_validation_rejects_stale_executable_build_inputs(
+    tmp_path, unexpected
+):
+    source = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline-source"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(source),
+        "--mode",
+        "0755",
+    )
+    _write_minimal_installer_source(source)
+    sentinel = tmp_path / "unexpected-build-input-ran"
+    injected = source / unexpected
+    injected.write_text(
+        f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n"
+    )
+    injected.chmod(0o644)
+
+    result = _path_guard(
+        tmp_path,
+        "validate-source-tree",
+        "--source-dir",
+        str(source),
+        expected_ok=False,
+    )
+
+    assert "unexpected installer source" in result.stderr.lower()
+    assert not sentinel.exists()
+
+
+def test_source_validation_rejects_hardlinked_privileged_input(tmp_path):
+    source = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline-source"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(source),
+        "--mode",
+        "0755",
+    )
+    _write_minimal_installer_source(source)
+    alternate = tmp_path / "alternate-pyproject.toml"
+    alternate.hardlink_to(source / "pyproject.toml")
+
+    result = _path_guard(
+        tmp_path,
+        "validate-source-tree",
+        "--source-dir",
+        str(source),
+        expected_ok=False,
+    )
+
+    assert "hardlink" in result.stderr.lower()
+    assert alternate.read_text() == "fixture pyproject.toml\n"
+
+
+def test_source_validation_accepts_a_new_trusted_package_module(tmp_path):
+    source = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline-source"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(source),
+        "--mode",
+        "0755",
+    )
+    _write_minimal_installer_source(source)
+    adapter = source / "src" / "patina_scan_worker" / "refine_adapter.py"
+    adapter.write_text("SAFE_ADAPTER = True\n")
+    adapter.chmod(0o644)
+
+    _path_guard(
+        tmp_path,
+        "validate-source-tree",
+        "--source-dir",
+        str(source),
+    )
 
 
 def test_restrictive_legacy_release_becomes_service_readable_and_executable(tmp_path):
@@ -566,27 +985,112 @@ def test_restrictive_legacy_release_becomes_service_readable_and_executable(tmp_
 
 def test_source_bootstrap_precedes_every_sourced_or_executed_helper():
     script = INSTALL.read_text()
-    bootstrap = script.index('"$PATH_GUARD_PYTHON" - "$SRC_DIR" "$APP_DIR"')
-    harden = script.index('_path_guard harden-source-tree --source-dir "$SRC_DIR"')
+    bootstrap = script.index(
+        '"$PATH_GUARD_PYTHON" -I -S - "$SRC_DIR" "$APP_DIR"'
+    )
+    validate = script.index('_path_guard validate-source-tree --source-dir "$SRC_DIR"')
     source_lib = script.index('. "$SRC_DIR/install-venv-lib.sh"')
     recovery = script.index("recover_install_transaction")
 
-    assert bootstrap < harden < source_lib < recovery
-    assert "source == app" in script[bootstrap:harden]
-    assert "any other source must" in script[:bootstrap]
+    assert bootstrap < validate < source_lib < recovery
+    bootstrap_body = script[bootstrap:validate]
+    assert "source == app" in bootstrap_body
+    assert "must be staged separately" in bootstrap_body
+    assert "os.fchown" not in bootstrap_body
+    assert "os.fchmod" not in bootstrap_body
+    assert "st_nlink != 1" in bootstrap_body
 
 
 def test_bootstrap_never_invokes_a_service_writable_guard_or_library():
     script = INSTALL.read_text()
-    bootstrap = script.index('"$PATH_GUARD_PYTHON" - "$SRC_DIR" "$APP_DIR"')
-    harden = script.index('_path_guard harden-source-tree --source-dir "$SRC_DIR"')
-    pre_harden = script[bootstrap:harden]
+    bootstrap = script.index(
+        '"$PATH_GUARD_PYTHON" -I -S - "$SRC_DIR" "$APP_DIR"'
+    )
+    validate = script.index('_path_guard validate-source-tree --source-dir "$SRC_DIR"')
+    pre_validate = script[bootstrap:validate]
 
     # One occurrence is the inert function body; no call happens until the
-    # harden-source-tree invocation at the slice boundary.
-    assert pre_harden.count('"$PATH_GUARD_PYTHON" "$PATH_GUARD"') == 1
-    assert '. "$SRC_DIR/install-venv-lib.sh"' not in pre_harden
-    assert "O_NOFOLLOW" in pre_harden
+    # validate-source-tree invocation at the slice boundary.
+    guard_call = '"$PATH_GUARD_PYTHON" -I -S "$PATH_GUARD"'
+    assert pre_validate.count(guard_call) == 1
+    assert '. "$SRC_DIR/install-venv-lib.sh"' not in pre_validate
+    assert "O_NOFOLLOW" in pre_validate
+
+
+def test_privileged_entrypoint_ignores_hostile_path_and_bash_env(tmp_path):
+    sentinel = tmp_path / "bash-env-ran"
+    bash_env = tmp_path / "hostile-bash-env"
+    bash_env.write_text(f"printf ran > {sentinel!s}\n")
+    hostile_bin = tmp_path / "hostile-bin"
+    hostile_bin.mkdir()
+    fake_sed_sentinel = tmp_path / "fake-sed-ran"
+    fake_sed = hostile_bin / "sed"
+    fake_sed.write_text(f"#!/bin/sh\nprintf ran > {fake_sed_sentinel!s}\n")
+    fake_sed.chmod(0o755)
+
+    result = subprocess.run(
+        [str(INSTALL), "--help"],
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "BASH_ENV": str(bash_env),
+            "PATH": str(hostile_bin),
+        },
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Usage:" in result.stdout
+    assert not sentinel.exists()
+    assert not fake_sed_sentinel.exists()
+
+
+def test_all_privileged_python_paths_are_isolated_and_environment_scrubbed(tmp_path):
+    installer = INSTALL.read_text()
+    activation = VENV_LIB.read_text()
+    assert installer.startswith("#!/bin/bash -p\n")
+    assert installer.index("PATH=/usr/sbin:/usr/bin:/sbin:/bin") < installer.index(
+        'for arg in "$@"'
+    )
+    assert "/usr/bin/sed -n" in installer
+    assert '$(dirname "${BASH_SOURCE[0]}")' not in installer
+    assert '"$PATH_GUARD_PYTHON" -I -S - ' in installer
+    assert '"$PATH_GUARD_PYTHON" -I -S "$PATH_GUARD"' in installer
+    assert '_run_privileged_python -m venv "$STAGED_VENV"' in installer
+    assert '"$STAGED_VENV/bin/pip"' not in installer
+    assert '_run_candidate_python "$STAGED_VENV/bin/python" -m pip' in installer
+    assert '"${PYTHON:-python3}" -c' not in activation
+    assert "_run_privileged_python -c" in activation
+
+    sentinel = tmp_path / "sitecustomize-ran"
+    injection = tmp_path / "injection"
+    injection.mkdir()
+    (injection / "sitecustomize.py").write_text(
+        f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n"
+    )
+    shell = r'''
+set -euo pipefail
+source "$1"
+PYTHON="$2"
+INSTALL_SECURE_PATH=/usr/sbin:/usr/bin:/sbin:/bin
+_run_privileged_python -c 'print("isolated")'
+'''
+    result = subprocess.run(
+        ["bash", "-c", shell, "python-isolation", str(VENV_LIB), sys.executable],
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(injection),
+            "PYTHONHOME": str(tmp_path / "invalid-home"),
+            "PYTHONSTARTUP": str(injection / "sitecustomize.py"),
+        },
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "isolated"
+    assert not sentinel.exists()
 
 
 def test_installer_validates_python_override_before_sourcing_helper():
@@ -595,6 +1099,66 @@ def test_installer_validates_python_override_before_sourcing_helper():
     source_helper = '. "$SRC_DIR/install-venv-lib.sh"'
     assert validate in script
     assert script.index(validate) < script.index(source_helper)
+
+
+def test_documented_staging_replaces_stale_inputs_in_separate_source_tree():
+    readme = (INSTALL.parent / "README.md").read_text()
+    staging = readme[
+        readme.index("# Stop the worker") : readme.index("CPU is enough")
+    ]
+    assert "/opt/patina/scan-pipeline-source" in staging
+    assert "/opt/patina/scan-pipeline/install.sh" not in staging
+    assert "--delete" in staging
+    assert "--delete-excluded" in staging
+    assert "--ignore-times" in staging
+    assert "--chown=root:root" in staging
+    assert "pgrep -u patina" in readme
+    assert staging.index("pgrep -u patina") < staging.index("sudo rsync")
+    assert "stop every patina process" in staging
+    assert "exit 1" in staging
+    assert "setup.py" in readme
+
+
+def test_routine_upgrade_preserves_active_posture_without_pre_stop():
+    readme = (INSTALL.parent / "README.md").read_text()
+    upgrade = readme[
+        readme.index("### Upgrading a running worker") : readme.index(
+            "## The env file"
+        )
+    ]
+    assert "while the worker remains active" in upgrade
+    assert "do not pre-stop worker" in upgrade
+    assert "systemctl stop patina-scan-worker" not in upgrade
+
+
+def test_runtime_app_installer_is_atomically_neutralized():
+    script = INSTALL.read_text()
+    assert '_path_guard install-runtime-stub --app-dir "$APP_DIR"' in script
+
+
+def test_runtime_installer_stub_replaces_legacy_hardlink_with_fresh_inode(tmp_path):
+    app = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(app),
+        "--mode",
+        "0755",
+    )
+    legacy = app / "install.sh"
+    legacy.write_text("legacy attacker-controlled bytes\n")
+    alternate = tmp_path / "alternate-install.sh"
+    alternate.hardlink_to(legacy)
+    old_inode = legacy.stat().st_ino
+
+    _path_guard(tmp_path, "install-runtime-stub", "--app-dir", str(app))
+
+    assert legacy.stat().st_ino != old_inode
+    assert legacy.stat().st_nlink == 1
+    assert stat.S_IMODE(legacy.stat().st_mode) == 0o755
+    assert "runtime APP_DIR is not installer source" in legacy.read_text()
+    assert alternate.read_text() == "legacy attacker-controlled bytes\n"
 
 
 def test_units_are_staged_instead_of_overwriting_live_paths_early():
@@ -631,6 +1195,28 @@ def test_transaction_snapshots_units_and_recovers_on_next_install():
     assert "os.replace" in activation
 
 
+def test_legacy_commit_boundary_is_copy_smoke_quarantine_then_ready():
+    activation = VENV_LIB.read_text()
+    prepare = activation[
+        activation.index("_prepare_legacy_materialization()") : activation.index(
+            "_cleanup_legacy_quarantine()"
+        )
+    ]
+    no_processes = prepare.index("_require_no_service_processes")
+    copy = prepare.index("_path_guard materialize-legacy-release")
+    smoke = prepare.index('_smoke_legacy_materialized_release "$materialized"', copy)
+    post_smoke_process_check = prepare.index("_require_no_service_processes", smoke)
+    quarantine = prepare.index("_path_guard quarantine-legacy-release")
+    ready = prepare.rindex("_transaction_value_write legacy_materialized_ready 1")
+
+    assert no_processes < copy < smoke < post_smoke_process_check < quarantine < ready
+    assert '"$release/bin/python" -I "$release/bin/patina-scan-worker" --help' in activation
+    activate = activation[activation.index("activate_install_transaction()") :]
+    assert activate.index('systemctl stop "$WORKER_SERVICE"') < activate.index(
+        "_prepare_legacy_materialization"
+    )
+
+
 def _write_fake_systemctl(tmp_path: Path) -> Path:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir(exist_ok=True)
@@ -641,7 +1227,14 @@ set -eu
 echo "$*" >> "$SYSTEMCTL_LOG"
 case "$1" in
   show)
-    cat "$SYSTEMCTL_STATE_FILE"
+    state="$(cat "$SYSTEMCTL_STATE_FILE")"
+    if [ "$state" = not-found ]; then
+      case "$*" in
+        *LoadState*) printf 'not-found\n'; exit 0 ;;
+        *) exit 4 ;;
+      esac
+    fi
+    printf '%s\n' "$state"
     exit 0
     ;;
   stop)
@@ -674,7 +1267,9 @@ exit 2
     return fake_bin
 
 
-def _setup_transaction_tree(tmp_path: Path, *, legacy_live: bool = False):
+def _setup_transaction_tree(
+    tmp_path: Path, *, legacy_live: bool = False, relative_live: bool = False
+):
     app = tmp_path / "app"
     transaction_parent = tmp_path / "etc"
     units = tmp_path / "systemd"
@@ -683,6 +1278,9 @@ def _setup_transaction_tree(tmp_path: Path, *, legacy_live: bool = False):
     transaction_parent.mkdir(mode=0o750)
     units.mkdir()
     candidates.mkdir()
+    trusted_interpreter = tmp_path / "python3.11"
+    trusted_interpreter.write_text("#!/bin/sh\nexit 0\n")
+    trusted_interpreter.chmod(0o755)
 
     old_release = app / ".venv.release.old"
     old_release.mkdir()
@@ -691,12 +1289,21 @@ def _setup_transaction_tree(tmp_path: Path, *, legacy_live: bool = False):
     if legacy_live:
         live.mkdir()
         (live / "marker").write_text("old")
+        legacy_bin = live / "bin"
+        (live / "lib").mkdir()
+        legacy_bin.mkdir()
+        (legacy_bin / "python").symlink_to(trusted_interpreter)
+        entrypoint = legacy_bin / "patina-scan-worker"
+        entrypoint.write_text("#!/bin/sh\nexit 0\n")
+        entrypoint.chmod(0o755)
     else:
-        live.symlink_to(old_release)
+        live.symlink_to(old_release.name if relative_live else old_release)
     older_release = app / ".venv.release.older"
     older_release.mkdir()
     (older_release / "marker").write_text("older")
-    (app / ".venv.previous").symlink_to(older_release)
+    (app / ".venv.previous").symlink_to(
+        older_release.name if relative_live else older_release
+    )
 
     staged = app / ".venv.release.new"
     staged.mkdir()
@@ -746,6 +1353,8 @@ FAILED_VENV="$2/.venv.failed"
 TRANSACTION_PARENT="$(dirname "$2")/etc"
 TRANSACTION_DIR="$TRANSACTION_PARENT/.scan-worker-install-transaction"
 WORKER_SERVICE=patina-scan-worker
+SVC_USER=patina
+PYTHON="$2/../python3.11"
 BUILD_VENV=1
 PATH_GUARD_SCRIPT="$3"
 INSTALL_PATH_GUARD_SCRIPT="$PATH_GUARD_SCRIPT"
@@ -753,10 +1362,20 @@ INSTALL_PATH_GUARD_PYTHON=python3
 INSTALL_TRUST_ANCHOR="$(dirname "$APP_DIR")"
 INSTALL_TRUSTED_UID="$(id -u)"
 INSTALL_TRUSTED_GID="$(id -g)"
+_run_privileged_python() {{ python3 -I -S "$@"; }}
 _harden_managed_release() {{
+  if [ "${{INTERRUPT_DURING_HARDEN:-0}}" = 1 ] && \
+     [ ! -e "${{HARDEN_INTERRUPTED_FILE:?}}" ]; then
+    chmod 0755 "$1"
+    chmod 0600 "$1/marker"
+    : > "$HARDEN_INTERRUPTED_FILE"
+    exit 97
+  fi
   _path_guard \
     harden-release --app-dir "$APP_DIR" --path "$1" >/dev/null
 }}
+_require_no_service_processes() {{ return 0; }}
+_smoke_legacy_materialized_release() {{ return 0; }}
 MANAGED_UNIT_TARGETS=({target_args})
 CANDIDATE_UNIT_PATHS=({candidate_args})
 _transaction_hook() {{
@@ -765,6 +1384,7 @@ _transaction_hook() {{
 }}
 prepare_install_transaction
 begin_install_transaction
+if [ "${{INTERRUPT_AFTER_PREPARED:-0}}" = 1 ]; then exit 97; fi
 activate_install_transaction
 """
 
@@ -781,15 +1401,20 @@ FAILED_VENV="$2/.venv.failed"
 TRANSACTION_PARENT="$(dirname "$2")/etc"
 TRANSACTION_DIR="$TRANSACTION_PARENT/.scan-worker-install-transaction"
 WORKER_SERVICE=patina-scan-worker
+SVC_USER=patina
+PYTHON="$2/../python3.11"
 INSTALL_PATH_GUARD_SCRIPT="$3"
 INSTALL_PATH_GUARD_PYTHON=python3
 INSTALL_TRUST_ANCHOR="$(dirname "$APP_DIR")"
 INSTALL_TRUSTED_UID="$(id -u)"
 INSTALL_TRUSTED_GID="$(id -g)"
 MANAGED_UNIT_TARGETS=({target_args})
+_run_privileged_python() {{ python3 -I -S "$@"; }}
 _harden_managed_release() {{
   _path_guard harden-release --app-dir "$APP_DIR" --path "$1" >/dev/null
 }}
+_require_no_service_processes() {{ return 0; }}
+_smoke_legacy_materialized_release() {{ return 0; }}
 recover_install_transaction
 """
 
@@ -809,14 +1434,41 @@ def _run_transaction(
     fail_rollback_start: bool = False,
     fail_stop: bool = False,
     restrictive_legacy: bool = False,
+    interrupt_after_prepared: bool = False,
+    fresh_install: bool = False,
+    relative_live: bool = False,
+    crash_at: str | None = None,
+    mutate_legacy_aliases_after_activation: bool = False,
+    real_previous: bool = False,
+    legacy_external_symlink: bool = False,
 ):
     app, units, candidates, staged, targets, candidate_paths = _setup_transaction_tree(
-        tmp_path, legacy_live=legacy_live
+        tmp_path, legacy_live=legacy_live, relative_live=relative_live
     )
+    if real_previous:
+        (app / ".venv.previous").unlink()
+        (app / ".venv.previous").mkdir()
+        (app / ".venv.previous" / "marker").write_text("obsolete raw backup")
+    if legacy_external_symlink:
+        assert legacy_live
+        outside = tmp_path / "outside-legacy-module"
+        outside.write_text("unsafe = True\n")
+        (app / ".venv" / "lib" / "escape.py").symlink_to(outside)
     if restrictive_legacy:
         assert legacy_live
         (app / ".venv" / "marker").chmod(0o600)
         (app / ".venv").chmod(0o700)
+    held_legacy_writer: int | None = None
+    if mutate_legacy_aliases_after_activation:
+        assert legacy_live
+        raw_marker = app / ".venv" / "marker"
+        (tmp_path / "legacy-marker-hardlink").hardlink_to(raw_marker)
+        held_legacy_writer = os.open(raw_marker, os.O_WRONLY)
+    if fresh_install:
+        (app / ".venv").unlink()
+        (app / ".venv.previous").unlink()
+        for target in targets:
+            target.unlink()
     fake_bin = _write_fake_systemctl(tmp_path)
     log = tmp_path / "systemctl.log"
     state_file = tmp_path / "systemctl.state"
@@ -834,6 +1486,7 @@ def _run_transaction(
         "FAIL_ROLLBACK_START": "1" if fail_rollback_start else "0",
         "FAIL_STOP": "1" if fail_stop else "0",
         "LIVE_WORKER_UNIT": str(targets[0]),
+        "INTERRUPT_AFTER_PREPARED": "1" if interrupt_after_prepared else "0",
     }
     result = subprocess.run(
         [
@@ -843,7 +1496,9 @@ def _run_transaction(
                 targets,
                 candidate_paths,
                 interrupt_point=(
-                    f"after_unit_{interrupt_after_unit}"
+                    crash_at
+                    if crash_at is not None
+                    else f"after_unit_{interrupt_after_unit}"
                     if interrupt_after_unit is not None
                     else "after_commit" if interrupt_after_commit
                     else "after_previous" if interrupt_after_previous
@@ -861,6 +1516,15 @@ def _run_transaction(
         env=env,
         check=False,
     )
+    if held_legacy_writer is not None:
+        try:
+            os.lseek(held_legacy_writer, 0, os.SEEK_SET)
+            os.write(held_legacy_writer, b"BAD")
+            (tmp_path / "legacy-marker-hardlink").write_text(
+                "changed through outside hardlink\n"
+            )
+        finally:
+            os.close(held_legacy_writer)
     return result, env, app, units, staged, targets, candidate_paths
 
 
@@ -998,11 +1662,26 @@ def test_candidate_unit_start_failure_restores_release_and_every_unit(tmp_path):
         "show --property=ActiveState --value patina-scan-worker",
         "daemon-reload",
         "start patina-scan-worker",
-        "stop patina-scan-worker",
         "show --property=ActiveState --value patina-scan-worker",
         "daemon-reload",
         "start patina-scan-worker",
     ]
+
+
+def test_relative_release_links_are_canonicalized_for_upgrade_rollback(tmp_path):
+    result, _env, app, _units, staged, targets, _candidates = _run_transaction(
+        tmp_path,
+        active=True,
+        fail_new_unit=True,
+        relative_live=True,
+    )
+
+    assert result.returncode == 1
+    assert (app / ".venv").is_symlink()
+    assert (app / ".venv" / "marker").read_text() == "old"
+    assert (app / ".venv.previous" / "marker").read_text() == "older"
+    assert targets[0].read_text() == "old-worker-unit\n"
+    assert not staged.exists()
 
 
 def test_interrupted_switch_is_recovered_by_a_fresh_installer_process(tmp_path):
@@ -1115,53 +1794,330 @@ def test_interruption_after_previous_link_change_restores_older_previous(tmp_pat
 
 def test_legacy_real_venv_is_converted_once_and_retained_as_previous(tmp_path):
     result, _env, app, _units, _staged, _targets, _candidates = _run_transaction(
-        tmp_path, active=False, legacy_live=True
+        tmp_path,
+        active=False,
+        legacy_live=True,
+        mutate_legacy_aliases_after_activation=True,
     )
     assert result.returncode == 0, result.stderr
     assert (app / ".venv").is_symlink()
     assert (app / ".venv" / "marker").read_text() == "new"
     assert (app / ".venv.previous").is_symlink()
     assert (app / ".venv.previous" / "marker").read_text() == "old"
+    assert (app / ".venv.previous" / "marker").stat().st_nlink == 1
+    assert (tmp_path / "legacy-marker-hardlink").read_text() == (
+        "changed through outside hardlink\n"
+    )
+    assert not list(app.glob(".venv.quarantine.*"))
 
 
-def test_restrictive_legacy_real_venv_survives_activation_rollback(tmp_path):
+def test_real_previous_directory_fails_closed_with_actionable_archive_step(tmp_path):
+    result, _env, app, _units, staged, targets, _candidates = _run_transaction(
+        tmp_path,
+        active=True,
+        legacy_live=True,
+        real_previous=True,
+    )
+
+    assert result.returncode != 0
+    assert "move/archive that backup outside" in result.stderr
+    assert "nothing was deleted" in result.stderr
+    assert (app / ".venv").is_dir() and not (app / ".venv").is_symlink()
+    assert (app / ".venv.previous" / "marker").read_text() == "obsolete raw backup"
+    assert staged.exists()
+    assert targets[0].read_text() == "old-worker-unit\n"
+
+
+def test_legacy_policy_failure_keeps_raw_prestate_stopped_and_unquarantined(tmp_path):
+    result, _env, app, _units, staged, targets, _candidates = _run_transaction(
+        tmp_path,
+        active=True,
+        legacy_live=True,
+        legacy_external_symlink=True,
+    )
+
+    assert result.returncode != 0
+    assert "raw release was not restarted" in result.stderr
+    transaction = app.parent / "etc" / ".scan-worker-install-transaction"
+    materialized = Path(
+        (transaction / "legacy_materialized_release").read_text().strip()
+    )
+    assert (transaction / "state").read_text().strip() == "prepared"
+    assert (app / ".venv").is_dir() and not (app / ".venv").is_symlink()
+    assert not materialized.exists()
+    assert not list(app.glob(".venv.quarantine.*"))
+    assert (tmp_path / "systemctl.state").read_text().strip() == "inactive"
+    assert targets[0].read_text() == "old-worker-unit\n"
+    assert staged.exists(), "failed transaction evidence is intentionally retained"
+
+
+def test_restrictive_legacy_rollback_uses_fresh_alias_isolated_release(tmp_path):
     result, _env, app, _units, staged, targets, _candidates = _run_transaction(
         tmp_path,
         active=True,
         fail_new_unit=True,
         legacy_live=True,
         restrictive_legacy=True,
+        mutate_legacy_aliases_after_activation=True,
     )
 
     assert result.returncode == 1
-    assert (app / ".venv").is_dir() and not (app / ".venv").is_symlink()
+    assert (app / ".venv").is_symlink()
     assert (app / ".venv" / "marker").read_text() == "old"
     assert stat.S_IMODE((app / ".venv").stat().st_mode) == 0o755
     assert stat.S_IMODE((app / ".venv" / "marker").stat().st_mode) == 0o644
+    assert (app / ".venv" / "marker").stat().st_nlink == 1
+    assert (tmp_path / "legacy-marker-hardlink").read_text() == (
+        "changed through outside hardlink\n"
+    )
     assert targets[0].read_text() == "old-worker-unit\n"
     assert not staged.exists()
+    assert not list(app.glob(".venv.quarantine.*"))
 
 
-def test_interrupted_legacy_conversion_recovers_real_venv(tmp_path):
+def test_crash_before_legacy_quarantine_discards_and_recopies_fresh_release(tmp_path):
     result, env, app, _units, staged, targets, _candidates = _run_transaction(
         tmp_path,
         active=True,
-        interrupt=True,
         legacy_live=True,
         restrictive_legacy=True,
+        crash_at="before_legacy_quarantine",
     )
     assert result.returncode == 97
-    assert (app / ".venv").is_symlink()
-    assert (app / ".venv" / "marker").read_text() == "new"
+    transaction = app.parent / "etc" / ".scan-worker-install-transaction"
+    materialized = Path(
+        (transaction / "legacy_materialized_release").read_text().strip()
+    )
+    first_inode = (materialized / "marker").stat().st_ino
+    assert (app / ".venv").is_dir() and not (app / ".venv").is_symlink()
+    assert not list(app.glob(".venv.quarantine.*"))
+    assert not (transaction / "legacy_materialized_ready").exists()
+    assert targets[0].read_text() == "old-worker-unit\n"
 
     recovered = _run_recovery({**env, "FAIL_NEW_UNIT": "0"}, app, targets)
 
     assert recovered.returncode == 0, recovered.stderr
-    assert (app / ".venv").is_dir() and not (app / ".venv").is_symlink()
+    assert (app / ".venv").is_symlink()
     assert (app / ".venv" / "marker").read_text() == "old"
-    assert stat.S_IMODE((app / ".venv").stat().st_mode) == 0o755
-    assert stat.S_IMODE((app / ".venv" / "marker").stat().st_mode) == 0o644
+    assert (app / ".venv" / "marker").stat().st_ino != first_inode
+    assert not list(app.glob(".venv.quarantine.*"))
     assert not staged.exists()
+
+
+def test_crash_after_quarantine_before_ready_recovers_only_fresh_release(tmp_path):
+    result, env, app, _units, staged, targets, _candidates = _run_transaction(
+        tmp_path,
+        active=True,
+        legacy_live=True,
+        restrictive_legacy=True,
+        crash_at="after_legacy_quarantine",
+    )
+    assert result.returncode == 97
+    transaction = app.parent / "etc" / ".scan-worker-install-transaction"
+    materialized = Path(
+        (transaction / "legacy_materialized_release").read_text().strip()
+    )
+    quarantine = Path((transaction / "legacy_quarantine").read_text().strip())
+    assert materialized.is_dir()
+    assert quarantine.is_dir()
+    assert stat.S_IMODE(quarantine.stat().st_mode) == 0o700
+    assert stat.S_IMODE((materialized / "marker").stat().st_mode) == 0o644
+    assert not (app / ".venv").exists()
+    assert not (transaction / "legacy_materialized_ready").exists()
+    assert targets[0].read_text() == "old-worker-unit\n"
+    quarantine.chmod(0o777)  # inferred-rename recovery must seal before ready
+
+    recovered = _run_recovery({**env, "FAIL_NEW_UNIT": "0"}, app, targets)
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert (app / ".venv").is_symlink()
+    assert (app / ".venv" / "marker").read_text() == "old"
+    assert stat.S_IMODE((app / ".venv" / "marker").stat().st_mode) == 0o644
+    assert not quarantine.exists()
+    assert not staged.exists()
+    assert not transaction.exists()
+
+
+def test_prepared_legacy_crash_materializes_before_restoring_active_posture(tmp_path):
+    result, env, app, _units, staged, targets, _candidates = _run_transaction(
+        tmp_path,
+        active=True,
+        legacy_live=True,
+        interrupt_after_prepared=True,
+    )
+    assert result.returncode == 97
+    transaction = app.parent / "etc" / ".scan-worker-install-transaction"
+    assert (transaction / "state").read_text().strip() == "prepared"
+    assert (app / ".venv").is_dir() and not (app / ".venv").is_symlink()
+    assert not (transaction / "legacy_quarantine").exists()
+
+    recovered = _run_recovery(env, app, targets)
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert (app / ".venv").is_symlink()
+    assert (app / ".venv" / "marker").read_text() == "old"
+    assert not staged.exists()
+    assert not transaction.exists()
+    assert (tmp_path / "systemctl.state").read_text().strip() == "active"
+
+
+def test_partial_unready_materialization_is_discarded_and_retried(tmp_path):
+    result, env, app, _units, staged, targets, _candidates = _run_transaction(
+        tmp_path,
+        active=True,
+        legacy_live=True,
+        interrupt_after_prepared=True,
+    )
+    assert result.returncode == 97
+    transaction = app.parent / "etc" / ".scan-worker-install-transaction"
+    materialized = app / ".venv.release.partial"
+    quarantine = app / ".venv.quarantine.partial"
+    materialized.mkdir()
+    partial_marker = materialized / "marker"
+    partial_marker.write_text("partial")
+    (tmp_path / "partial-marker-alias").hardlink_to(partial_marker)
+    partial_inode = partial_marker.stat().st_ino
+    markers = {
+        "legacy_materialized_release": materialized,
+        "legacy_quarantine": quarantine,
+        "legacy_interpreter": tmp_path / "python3.11",
+    }
+    for name, value in markers.items():
+        marker = transaction / name
+        marker.write_text(f"{value}\n")
+        marker.chmod(0o600)
+
+    recovered = _run_recovery(env, app, targets)
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert (app / ".venv").is_symlink()
+    assert (app / ".venv" / "marker").read_text() == "old"
+    assert (app / ".venv" / "marker").stat().st_ino != partial_inode
+    assert not quarantine.exists()
+    assert not staged.exists()
+    assert not transaction.exists()
+
+
+@pytest.mark.parametrize(
+    ("crash_at", "expect_new_units", "expect_candidate_link"),
+    [
+        ("after_legacy_ready", False, False),
+        ("after_candidate_units", True, False),
+        ("after_release_link", True, True),
+    ],
+)
+def test_legacy_pre_switch_crash_states_recover_fresh_rollback(
+    tmp_path, crash_at, expect_new_units, expect_candidate_link
+):
+    result, env, app, _units, staged, targets, candidates = _run_transaction(
+        tmp_path,
+        active=True,
+        legacy_live=True,
+        crash_at=crash_at,
+    )
+    assert result.returncode == 97
+    transaction = app.parent / "etc" / ".scan-worker-install-transaction"
+    assert (transaction / "state").read_text().strip() == "prepared"
+    assert (transaction / "legacy_materialized_ready").read_text().strip() == "1"
+    assert [path.read_text() for path in targets] == (
+        [path.read_text() for path in candidates]
+        if expect_new_units
+        else ["old-worker-unit\n", "old-1\n", "old-2\n", "old-3\n", "old-4\n"]
+    )
+    if expect_candidate_link:
+        assert (app / ".venv").is_symlink()
+        assert (app / ".venv" / "marker").read_text() == "new"
+    else:
+        assert not (app / ".venv").exists()
+
+    recovered = _run_recovery(env, app, targets)
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert (app / ".venv").is_symlink()
+    assert (app / ".venv" / "marker").read_text() == "old"
+    assert not list(app.glob(".venv.quarantine.*"))
+    assert not staged.exists()
+    assert not transaction.exists()
+
+
+def test_legacy_committed_recovery_keeps_new_and_cleans_raw_quarantine(tmp_path):
+    result, env, app, _units, _staged, targets, _candidates = _run_transaction(
+        tmp_path,
+        active=True,
+        legacy_live=True,
+        crash_at="after_commit",
+    )
+    assert result.returncode == 97
+    transaction = app.parent / "etc" / ".scan-worker-install-transaction"
+    quarantine = Path((transaction / "legacy_quarantine").read_text().strip())
+    assert (transaction / "state").read_text().strip() == "committed"
+    assert quarantine.is_dir()
+    assert (app / ".venv" / "marker").read_text() == "new"
+    assert (app / ".venv.previous" / "marker").read_text() == "old"
+
+    recovered = _run_recovery(env, app, targets)
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert (app / ".venv" / "marker").read_text() == "new"
+    assert (app / ".venv.previous" / "marker").read_text() == "old"
+    assert not quarantine.exists()
+    assert not transaction.exists()
+
+
+@pytest.mark.parametrize("fail_new_unit", [False, True])
+def test_interrupted_quarantine_cleanup_is_idempotently_recovered(
+    tmp_path, fail_new_unit
+):
+    result, env, app, _units, staged, targets, _candidates = _run_transaction(
+        tmp_path,
+        active=True,
+        fail_new_unit=fail_new_unit,
+        legacy_live=True,
+        crash_at="after_legacy_quarantine_cleanup",
+    )
+    transaction = app.parent / "etc" / ".scan-worker-install-transaction"
+    expected_state = "rolled_back" if fail_new_unit else "committed"
+    assert result.returncode in (1, 97)
+    assert (transaction / "state").read_text().strip() == expected_state
+    assert not list(app.glob(".venv.quarantine.*"))
+
+    recovered = _run_recovery({**env, "FAIL_NEW_UNIT": "0"}, app, targets)
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert (app / ".venv").is_symlink()
+    assert (app / ".venv" / "marker").read_text() == (
+        "old" if fail_new_unit else "new"
+    )
+    assert not transaction.exists()
+    if fail_new_unit:
+        assert not staged.exists()
+
+
+def test_prepared_fresh_install_recovers_when_unit_is_not_found(tmp_path):
+    result, env, app, _units, staged, targets, _candidates = _run_transaction(
+        tmp_path,
+        active=False,
+        initial_state="not-found",
+        interrupt_after_prepared=True,
+        fresh_install=True,
+    )
+    assert result.returncode == 97
+    transaction = app.parent / "etc" / ".scan-worker-install-transaction"
+    assert (transaction / "state").read_text().strip() == "prepared"
+    assert not any(target.exists() for target in targets)
+
+    recovered = _run_recovery(env, app, targets)
+
+    assert recovered.returncode == 0, recovered.stderr
+    assert not (app / ".venv").exists()
+    assert not any(target.exists() for target in targets)
+    assert not staged.exists()
+    assert not transaction.exists()
+    log = (tmp_path / "systemctl.log").read_text().splitlines()
+    assert "stop patina-scan-worker" not in log
+    assert log.count(
+        "show --property=LoadState --value patina-scan-worker"
+    ) == 2
 
 
 def test_interruption_after_durable_commit_keeps_new_release_on_recovery(tmp_path):
@@ -1256,21 +2212,51 @@ def test_gpu_candidates_include_prepare_and_both_context_dropins():
     assert 'patina-scan-worker-doctor.service.d/gpu.conf' in script
 
 
-def test_emitted_gpu_acceptance_stops_before_env_edit_and_restores_posture():
+def test_emitted_gpu_acceptance_uses_ephemeral_doctor_only_env_override():
     script = INSTALL.read_text()
     acceptance = script[script.index("Next (item-3 GPU acceptance") :]
     stop = acceptance.index("sudo systemctl stop $WORKER_SERVICE")
-    backup = acceptance.index('sudo install -o root -g root -m 0600 "$ENV_FILE"')
-    edit = acceptance.index('sudoedit "$ENV_FILE"')
+    copy = acceptance.index('sudo install -o root -g root -m 0600 "$ENV_FILE"')
+    append = acceptance.index("STAGES=refine,fuse,splat")
+    dropin = acceptance.index("EnvironmentFile=\\nEnvironmentFile=%s")
+    reload = acceptance.index("sudo systemctl daemon-reload", dropin)
     doctor = acceptance.index("sudo systemctl start patina-scan-worker-doctor")
 
-    assert stop < backup < edit < doctor
-    assert "restore_item3_env()" in acceptance
+    assert stop < copy < append < dropin < reload < doctor
+    assert "restore_item3_gpu()" in acceptance
     assert 'if [ "\\$WORKER_WAS_ACTIVE" = active ]' in acceptance
     assert "sudo systemctl start $WORKER_SERVICE" in acceptance
-    assert 'sudo rm -f -- "\\$ITEM3_ENV_BACKUP"' in acceptance
+    assert 'sudo rm -f -- "\\$ITEM3_DROPIN" "\\$ITEM3_ENV"' in acceptance
+    assert acceptance.count("sudo systemctl start patina-scan-worker-doctor") == 2
+    assert "/run/systemd/system/patina-scan-worker-doctor.service.d" in acceptance
+    assert "sudoedit" not in acceptance
+    assert ".item3-backup" not in acceptance
+    assert "systemctl enable patina-scan-worker-doctor" not in acceptance
+
+
+def test_emitted_gpu_acceptance_refuses_preexisting_run_override_before_stop():
+    script = INSTALL.read_text()
+    acceptance = script[script.index("Next (item-3 GPU acceptance") :]
+    refuse = 'if [ -e "\\$ITEM3_ENV" ] || [ -L "\\$ITEM3_ENV" ]'
+
+    assert refuse in acceptance
+    assert '[ -e "\\$ITEM3_DROPIN" ] || [ -L "\\$ITEM3_DROPIN" ]' in acceptance
+    assert "refusing pre-existing item-3 /run override" in acceptance
+    assert acceptance.index(refuse) < acceptance.index("sudo systemctl stop $WORKER_SERVICE")
+    assert acceptance.index(refuse) < acceptance.index(
+        'sudo install -o root -g root -m 0600 "$ENV_FILE"'
+    )
 
 
 def test_env_file_is_installed_root_owned_0600():
     script = INSTALL.read_text()
     assert 'install -o root -g root -m 0600 "$SRC_DIR/scan-worker.env.example" "$ENV_FILE"' in script
+
+
+def test_env_template_routes_gpu_preflight_to_doctor_only_unit():
+    template = ENV_EXAMPLE.read_text()
+    assert "doctor-only" in template
+    assert "patina-scan-worker-doctor" in template
+    assert "never start the queue worker" in template
+    assert "start the service only long enough for ExecStartPre" not in template
+    assert "GPU names may be listed temporarily" not in template

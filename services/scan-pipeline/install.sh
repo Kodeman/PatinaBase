@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 # install.sh — bring up the Patina scan-pipeline worker natively on a Linux box
 # (R109.1: native systemd, no Docker required to operate).
 #
@@ -18,6 +18,12 @@
 #   4. failed activation restores every unit + release, reloads, and restarts.
 #   5. a durable marker lets the next invocation recover power loss/SIGKILL.
 set -euo pipefail
+INSTALL_SECURE_PATH=/usr/sbin:/usr/bin:/sbin:/bin
+PATH="$INSTALL_SECURE_PATH"
+export PATH
+unset BASH_ENV ENV
+CDPATH=
+IFS=$' \t\n'
 
 GPU=0
 UPGRADE=0
@@ -26,7 +32,7 @@ for arg in "$@"; do
     --gpu)     GPU=1 ;;
     --upgrade) UPGRADE=1 ;;
     -h|--help)
-      sed -n '2,19p' "$0"; exit 0 ;;
+      /usr/bin/sed -n '2,19p' "$0"; exit 0 ;;
     *) echo "unknown flag: $arg (see --help)" >&2; exit 2 ;;
   esac
 done
@@ -53,7 +59,14 @@ NVIDIA_PREPARE_UNIT="$SYSTEMD_DIR/patina-scan-worker-nvidia-prepare.service"
 NVIDIA_MODPROBE=/usr/bin/nvidia-modprobe
 WORKER_SERVICE=patina-scan-worker
 SVC_USER=patina
-SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+SOURCE_PATH="${BASH_SOURCE[0]}"
+SOURCE_PARENT="${SOURCE_PATH%/*}"
+if [ "$SOURCE_PARENT" = "$SOURCE_PATH" ]; then
+  SOURCE_PARENT=.
+elif [ -z "$SOURCE_PARENT" ]; then
+  SOURCE_PARENT=/
+fi
+SRC_DIR="$(builtin cd -P -- "$SOURCE_PARENT" && builtin pwd -P)"
 PYTHON="${PYTHON:-/usr/bin/python3}"
 PATH_GUARD_PYTHON=/usr/bin/python3
 PATH_GUARD="$SRC_DIR/install-path-guard.py"
@@ -72,7 +85,7 @@ MANAGED_UNIT_TARGETS=(
   "$NVIDIA_PREPARE_UNIT"
 )
 
-if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+if [ "$EUID" -ne 0 ]; then
   echo "ERROR: install.sh must run as root (use sudo)." >&2
   exit 2
 fi
@@ -81,13 +94,12 @@ if [ ! -x "$PATH_GUARD_PYTHON" ]; then
   exit 2
 fi
 
-# Bootstrap boundary: the first invocation necessarily trusts the operator's
-# supplied install.sh bytes. Before sourcing or executing any sibling helper,
-# revoke service-user writes on the source directory and the three executable
-# installer inputs using only fixed /usr/bin/python3 and no-follow dirfd opens.
-# A legacy rsync snapshot at APP_DIR may be adopted once; any other source must
-# already have a root-owned, non-writable, symlink-free ancestry.
-"$PATH_GUARD_PYTHON" - "$SRC_DIR" "$APP_DIR" <<'PY'
+# Bootstrap boundary: the first invocation necessarily trusts the reviewed
+# install.sh bytes. Every sibling input must already be in the separate fresh,
+# root-owned source snapshot; legacy APP_DIR source is never adopted. Fixed
+# isolated Python validates three bootstrap inputs before any is executed.
+/usr/bin/env -i HOME=/root PATH="$INSTALL_SECURE_PATH" \
+  "$PATH_GUARD_PYTHON" -I -S - "$SRC_DIR" "$APP_DIR" <<'PY'
 import os
 import stat
 import sys
@@ -105,46 +117,44 @@ def require_directory(path, info):
     if stat.S_IMODE(info.st_mode) & 0o022:
         raise SystemExit(f"ERROR: installer source ancestry is group/world writable: {path}")
 
-def validate_ancestry(path, *, exclude_final=False):
+def validate_ancestry(path):
     components = path.strip(os.sep).split(os.sep) if path != os.sep else []
     current = os.sep
-    limit = len(components) - (1 if exclude_final else 0)
     require_directory(current, os.lstat(current))
-    for component in components[:limit]:
+    for component in components:
         current = os.path.join(current, component)
         require_directory(current, os.lstat(current))
 
 if source == app:
-    validate_ancestry(source, exclude_final=True)
-    info = os.lstat(source)
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
-        raise SystemExit(f"ERROR: legacy APP_DIR source is not a real directory: {source}")
-    source_fd = os.open(
-        source,
-        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+    raise SystemExit(
+        "ERROR: installer source must be staged separately from runtime APP_DIR"
     )
-    os.fchown(source_fd, trusted_uid, trusted_gid)
-    os.fchmod(source_fd, 0o755)
-else:
-    validate_ancestry(source)
-    source_fd = os.open(
-        source,
-        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
-    )
+validate_ancestry(source)
+source_fd = os.open(
+    source,
+    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+)
 
 try:
     for name in ("install.sh", "install-path-guard.py", "install-venv-lib.sh"):
         info = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
         if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
             raise SystemExit(f"ERROR: installer bootstrap input is not regular: {source}/{name}")
+        if info.st_uid != trusted_uid or info.st_gid != trusted_gid:
+            raise SystemExit(f"ERROR: installer bootstrap input is not root-owned: {source}/{name}")
+        if stat.S_IMODE(info.st_mode) & 0o022:
+            raise SystemExit(f"ERROR: installer bootstrap input is group/world writable: {source}/{name}")
+        if info.st_nlink != 1:
+            raise SystemExit(f"ERROR: installer bootstrap input st_nlink != 1: {source}/{name}")
         fd = os.open(
             name,
             os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
             dir_fd=source_fd,
         )
         try:
-            os.fchown(fd, trusted_uid, trusted_gid)
-            os.fchmod(fd, stat.S_IMODE(info.st_mode) & ~0o022)
+            opened = os.fstat(fd)
+            if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                raise SystemExit(f"ERROR: installer bootstrap input changed: {source}/{name}")
         finally:
             os.close(fd)
 finally:
@@ -154,7 +164,8 @@ validate_ancestry(source)
 PY
 
 _path_guard() {
-  "$PATH_GUARD_PYTHON" "$PATH_GUARD" \
+  /usr/bin/env -i HOME=/root PATH="$INSTALL_SECURE_PATH" \
+    "$PATH_GUARD_PYTHON" -I -S "$PATH_GUARD" \
     --anchor "$INSTALL_TRUST_ANCHOR" \
     --trusted-uid "$INSTALL_TRUSTED_UID" \
     --trusted-gid "$INSTALL_TRUSTED_GID" \
@@ -167,7 +178,7 @@ _harden_managed_release() {
 
 _run_as_service_user() {
   "$RUNUSER" --user "$SVC_USER" -- \
-    env -i \
+    /usr/bin/env -i \
       HOME="$APP_DIR" \
       PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
       XDG_CONFIG_HOME="$APP_DIR/.config" \
@@ -182,13 +193,25 @@ if [ ! -f "$PATH_GUARD" ]; then
   echo "ERROR: installer path guard unavailable: $PATH_GUARD" >&2
   exit 2
 fi
-_path_guard harden-source-tree --source-dir "$SRC_DIR"
+_path_guard validate-source-tree --source-dir "$SRC_DIR"
 
 # PYTHON is intentionally operator-selectable because Ubuntu 22.04's default
 # interpreter can be older than the worker's Python 3.11 floor. Treat that
 # environment value as privileged input: require a root-owned executable under
 # a symlink-free, non-writable ancestry, then use only its canonical path.
 PYTHON="$(_path_guard validate-trusted-executable --path "$PYTHON")"
+
+_run_privileged_python() {
+  /usr/bin/env -i HOME=/root PATH="$INSTALL_SECURE_PATH" \
+    "$PYTHON" -I -S "$@"
+}
+
+_run_candidate_python() {
+  local candidate_python="$1"
+  shift
+  /usr/bin/env -i HOME=/root PATH="$INSTALL_SECURE_PATH" \
+    "$candidate_python" -I "$@"
+}
 
 # Only now are helper bytes root-owned, non-service-writable, and reached
 # through a trusted ancestry.
@@ -223,7 +246,7 @@ recover_install_transaction
 # Python dependencies.
 if [ "$UPGRADE" -eq 1 ] && [ "$GPU" -eq 0 ] && [ -f "$DROPIN_DIR/gpu.conf" ]; then
   echo "ERROR: refusing to rebuild an existing GPU worker as CPU-only by omission." >&2
-  echo "       Re-run with: sudo ./install.sh --gpu --upgrade" >&2
+  echo "       Re-run with: sudo /opt/patina/scan-pipeline-source/install.sh --gpu --upgrade" >&2
   exit 2
 fi
 if [ "$GPU" -eq 0 ] && [ -f "$DROPIN_DIR/gpu.conf" ] && \
@@ -263,12 +286,16 @@ fi
 SVC_UID="$(id -u "$SVC_USER")"
 SVC_GID="$(id -g "$SVC_USER")"
 
-# /opt/patina and APP_DIR are an executable trust boundary. The one-time
-# --adopt-final transition accepts the old installer-created real APP_DIR, but
-# never a symlink and never an untrusted parent. All future release entries are
-# created below the root-owned, non-writable namespace.
-_path_guard ensure-trusted-dir --path "$(dirname "$APP_DIR")" --mode 0755
+# /opt/patina and runtime APP_DIR are an executable trust boundary. The
+# --adopt-final transition accepts only the final old runtime directory, never
+# a symlink or untrusted parent. Source has already been validated separately.
+_path_guard ensure-trusted-dir --path "${APP_DIR%/*}" --mode 0755
 _path_guard ensure-trusted-dir --path "$APP_DIR" --mode 0755 --adopt-final
+
+# APP_DIR is runtime-only. Atomically replace any legacy co-located installer
+# with a root-owned fail-closed stub so an old operational runbook cannot sudo a
+# stale service-controlled copy after source moved to its separate trust tree.
+_path_guard install-runtime-stub --app-dir "$APP_DIR"
 _path_guard ensure-trusted-dir --path "$WORK_PARENT" --mode 0755
 _path_guard ensure-owned-dir --app-dir "$WORK_PARENT" --path "$WORK_DIR" \
   --owner-uid "$SVC_UID" --owner-gid "$SVC_GID" --mode 0750
@@ -327,19 +354,21 @@ install -d "$CANDIDATE_SYSTEMD_DIR"
 SMOKE_VENV="$VENV"
 if [ "$BUILD_VENV" -eq 1 ]; then
   _path_guard create-release --app-dir "$APP_DIR" --path "$STAGED_VENV"
-  echo "-- building staged venv at $STAGED_VENV ($($PYTHON --version 2>&1))"
-  "$PYTHON" -m venv "$STAGED_VENV"
-  "$STAGED_VENV/bin/pip" install --upgrade pip >/dev/null
+  echo "-- building staged venv at $STAGED_VENV ($(_run_privileged_python --version 2>&1))"
+  _run_privileged_python -m venv "$STAGED_VENV"
+  _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
+    install --upgrade pip >/dev/null
   if [ "$GPU" -eq 1 ]; then
     echo "-- pip install $SRC_DIR[drawings,gpu] via PyTorch cu118 index"
-    "$STAGED_VENV/bin/pip" install \
+    _run_candidate_python "$STAGED_VENV/bin/python" -m pip install \
       --extra-index-url https://download.pytorch.org/whl/cu118 \
       "$SRC_DIR[drawings,gpu]"
   else
     echo "-- pip install $SRC_DIR[drawings] (CPU-only)"
-    "$STAGED_VENV/bin/pip" install "$SRC_DIR[drawings]"
+    _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
+      install "$SRC_DIR[drawings]"
   fi
-  "$STAGED_VENV/bin/pip" check
+  _run_candidate_python "$STAGED_VENV/bin/python" -m pip check
   _path_guard harden-release --app-dir "$APP_DIR" --path "$STAGED_VENV" >/dev/null
   SMOKE_VENV="$STAGED_VENV"
 else
@@ -353,7 +382,7 @@ else
     --require-executables >/dev/null
 fi
 echo "-- smoke-checking package imports and console entrypoint"
-_run_as_service_user "$SMOKE_VENV/bin/python" -c \
+_run_as_service_user "$SMOKE_VENV/bin/python" -I -c \
   'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor'
 _run_as_service_user "$SMOKE_VENV/bin/patina-scan-worker" --help >/dev/null
 
@@ -430,40 +459,56 @@ if [ "$GPU" -eq 1 ]; then
   echo "-- identical GPU context installed for worker + doctor-only units"
   cat <<EOF
 
-Next (item-3 GPU acceptance; doctor only, never the queue worker):
+Next (item-3 GPU acceptance; ephemeral doctor override, never the queue worker):
   1. retain the README empty-GPU-queue query as rollout evidence
-  2. copy/paste this as one subshell; it stops the queue worker BEFORE editing
-     the shared env and restores both env + prior active/inactive posture:
+  2. copy/paste this as one subshell; the persistent worker env is never edited.
+     A /run-only doctor drop-in disappears on reboot, so the enabled queue worker
+     can boot only with its normal CPU stages:
 
 (
   set -eu
-  ITEM3_ENV_BACKUP="$ENV_FILE.item3-backup"
+  ITEM3_ENV=/run/patina/scan-worker-item3-gpu.env
+  ITEM3_DROPIN_DIR=/run/systemd/system/patina-scan-worker-doctor.service.d
+  ITEM3_DROPIN=\$ITEM3_DROPIN_DIR/90-item3-gpu-acceptance.conf
+  if [ -e "\$ITEM3_ENV" ] || [ -L "\$ITEM3_ENV" ] || \
+     [ -e "\$ITEM3_DROPIN" ] || [ -L "\$ITEM3_DROPIN" ]; then
+    echo "refusing pre-existing item-3 /run override; inspect and remove it first" >&2
+    exit 1
+  fi
   WORKER_WAS_ACTIVE="\$(systemctl show --property=ActiveState --value $WORKER_SERVICE)"
   case "\$WORKER_WAS_ACTIVE" in
     active|inactive|failed) ;;
     *) echo "refusing transitional worker state: \$WORKER_WAS_ACTIVE" >&2; exit 1 ;;
   esac
-  restore_item3_env() {
+  restore_item3_gpu() {
     trap - EXIT INT TERM
-    if [ -f "\$ITEM3_ENV_BACKUP" ]; then
-      sudo install -o root -g root -m 0600 "\$ITEM3_ENV_BACKUP" "$ENV_FILE"
-      sudo rm -f -- "\$ITEM3_ENV_BACKUP"
-    fi
+    sudo systemctl stop patina-scan-worker-doctor >/dev/null 2>&1 || true
+    sudo rm -f -- "\$ITEM3_DROPIN" "\$ITEM3_ENV"
+    sudo rmdir "\$ITEM3_DROPIN_DIR" /run/patina 2>/dev/null || true
+    sudo systemctl daemon-reload
     if [ "\$WORKER_WAS_ACTIVE" = active ]; then
       sudo systemctl start $WORKER_SERVICE
     fi
   }
-  trap restore_item3_env EXIT INT TERM
+  trap restore_item3_gpu EXIT INT TERM
   sudo systemctl stop $WORKER_SERVICE
-  sudo install -o root -g root -m 0600 "$ENV_FILE" "\$ITEM3_ENV_BACKUP"
-  sudoedit "$ENV_FILE"  # temporarily set STAGES=refine,fuse,splat and GPU=auto
+  sudo install -d -o root -g root -m 0755 /run/patina "\$ITEM3_DROPIN_DIR"
+  sudo install -o root -g root -m 0600 "$ENV_FILE" "\$ITEM3_ENV"
+  printf '\nSTAGES=refine,fuse,splat\nGPU=auto\n' | sudo tee -a "\$ITEM3_ENV" >/dev/null
+  printf '[Service]\nEnvironmentFile=\nEnvironmentFile=%s\n' "\$ITEM3_ENV" | \
+    sudo install -o root -g root -m 0644 /dev/stdin "\$ITEM3_DROPIN"
+  sudo systemctl daemon-reload
+  echo '-- cold item-3 GPU doctor'
   sudo systemctl start patina-scan-worker-doctor
   sudo journalctl -u patina-scan-worker-doctor -n 100 --no-pager
-  restore_item3_env
+  echo '-- warm item-3 GPU doctor'
+  sudo systemctl start patina-scan-worker-doctor
+  sudo journalctl -u patina-scan-worker-doctor -n 100 --no-pager
+  restore_item3_gpu
 )
 
-  3. require every README GPU line green; the block always restores normal
-     STAGES and never starts the queue worker with temporary GPU handlers
+  3. require every README GPU line green; the block removes only /run state and
+     never exposes temporary GPU stages to the queue worker
 EOF
 else
   cat <<EOF
@@ -473,6 +518,6 @@ Next:
   2. systemctl enable --now patina-scan-worker
   3. systemctl status patina-scan-worker
   4. journalctl -u patina-scan-worker -f
-  (GPU worker? re-run: sudo ./install.sh --gpu)
+  (GPU worker? re-run: sudo /opt/patina/scan-pipeline-source/install.sh --gpu)
 EOF
 fi
