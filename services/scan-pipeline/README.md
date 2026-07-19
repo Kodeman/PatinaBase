@@ -65,6 +65,7 @@ sudo install -d -o root -g root -m 0755 /opt/patina/scan-pipeline-source
 sudo rsync -a --delete --delete-excluded --ignore-times \
   --chown=root:root --chmod=Dgo-w,Fgo-w \
   --include='/README.md' \
+  --include='/install-colmap-4.0.2.sh' \
   --include='/install.sh' \
   --include='/install-path-guard.py' \
   --include='/install-venv-lib.sh' \
@@ -160,6 +161,38 @@ Prereqs to install **before** `./install.sh --gpu`:
    diagnostic-only, not the full-pose primary. The engine contract is owned by
    `docs/design/field-capture/p2-item4-colmap-adapter-spike-2026-07-18.md`, which
    supersedes the handoff's stale standalone-GLOMAP wording.
+
+   DeskDev's Ubuntu 24.04 experiment has a repository-owned installer for the
+   exact `d927f7e518fc20afa33390712c4cc20d85b730b8` source commit. Run it as the
+   normal sudo-capable operator, **not** with `sudo`:
+
+   ```bash
+   /opt/patina/scan-pipeline-source/install-colmap-4.0.2.sh \
+     --acknowledge-experimental-ubuntu-24.04
+   ```
+
+   It hard-gates Noble/amd64, `/usr/local/cuda-11.8`, GCC/G++ 11, a real SM 7.5
+   compile/run probe, 30 GiB of free build space, the exact tag commit, required
+   commands, and the CUDA build header. It installs an immutable tree at
+   `/opt/colmap/4.0.2` and creates `/usr/local/bin/colmap` only when that path is
+   absent or already resolves to the exact tree. It does not install or switch
+   the driver or global CUDA selection. The script uses scoped sudo only for OS
+   packages and the final checked-tree copy; CMake configure/build/install runs
+   unprivileged.
+
+   Builds resume in `/var/tmp/patina-colmap-4.0.2-$UID`; every build attempt
+   after the host gates appends to `install.log`, and failures retain source,
+   build, staged install, and logs. Re-run the same command after correcting a
+   failure. Afterwards, the non-mutating verification command is:
+
+   ```bash
+   /opt/patina/scan-pipeline-source/install-colmap-4.0.2.sh --verify-only
+   ```
+
+   A green installer closes only the pinned CLI/toolchain installation gate.
+   It does **not** qualify item 4; the PyCOLMAP/GPU-SIFT/real-fixture evidence
+   below is still required.
+
 5. **Full Open3D wheel/build with CUDA**, not `open3d-cpu`. `doctor` requires
    Open3D's public CUDA availability probe and at least one visible device for
    `fuse`; an importable CPU-only wheel is a failure.

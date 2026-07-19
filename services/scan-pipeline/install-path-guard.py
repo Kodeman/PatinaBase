@@ -27,6 +27,7 @@ SOURCE_REQUIRED_DIRECTORIES = frozenset({"src", "src/patina_scan_worker"})
 SOURCE_TOP_LEVEL_FILES = frozenset(
     {
         "README.md",
+        "install-colmap-4.0.2.sh",
         "install-path-guard.py",
         "install-venv-lib.sh",
         "install.sh",
