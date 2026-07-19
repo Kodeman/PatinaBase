@@ -400,6 +400,25 @@ python3 -m pip install --dry-run --report /tmp/patina-gpu-resolve.json \
   --extra-index-url https://download.pytorch.org/whl/cu118 '.[gpu]'
 ```
 
+### Item 4A — exact COLMAP/PyCOLMAP qualification
+
+After the cold and warm Item 3 doctor runs pass, keep the queue worker stopped
+and run the repository-owned local-only qualification harness. It exercises
+the pinned CLI and exact PyCOLMAP 4.0.2 database/model APIs against a
+deterministic five-view PNG fixture: CUDA SIFT, per-image camera IDs and
+in-place PINHOLE rewrite, explicit-pair matching, trivial rig/frame known-pose
+seed construction, point triangulation, and bundle adjustment. It retains
+hard-capped 64 KiB engine-log tails and publishes a canonical evidence receipt
+last. CLI `bundle_adjuster` is a compatibility probe; the pass/fail verdict
+comes from the exact PyCOLMAP solver API's affirmative solution summary rather
+than the CLI's unreliable zero exit status. It never imports the task queue,
+Strata client, or Storage client, and it does not register a stage.
+
+Use the exact environment-isolated operator packet and receipt criteria in
+[`p2-item4a-colmap-qualification-runbook.md`](../../docs/design/field-capture/p2-item4a-colmap-qualification-runbook.md).
+A green receipt closes only the tiny-fixture CLI/binding/API/GPU gate; the real
+Field raster and real-room qualification gates remain open.
+
 ### Upgrading a running worker
 
 The worker installs a **copy** of the source into its venv, so `git pull` alone

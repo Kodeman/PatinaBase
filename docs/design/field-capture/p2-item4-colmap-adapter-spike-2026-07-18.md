@@ -459,7 +459,11 @@ The following are hard gates before deployment:
    default remains `/var/tmp/patina-colmap-4.0.2-$UID`. Retain the selected
    work directory's `install.log`, and rerun with `--verify-only` for the
    installed CLI contract. Installer success alone does not qualify item 4.
-   Then execute the exact PyCOLMAP database/model calls above on a tiny fixture.
+   Then execute the repository-owned, local-only
+   `patina_scan_worker.colmap_qualification` harness on the deterministic tiny
+   multiview fixture using
+   `p2-item4a-colmap-qualification-runbook.md`. The harness contains the exact
+   PyCOLMAP database/model calls above and remains unregistered from the worker.
    Save
    the `colmap -h` version/build header, `pycolmap.__version__`, mismatch
    rejection, GPU SIFT
