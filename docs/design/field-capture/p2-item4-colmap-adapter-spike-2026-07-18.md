@@ -49,8 +49,8 @@ As of 2026-07-18, official COLMAP **4.1.1** is the current release. The package
 nonetheless pins `pycolmap==4.0.2` as the **pilot qualification target** so the
 CLI and binding can be proven at exact parity against the adapter/API fixture;
 this is not a claim that 4.0.2 is current or already validated. The future box
-fixture must prove that both
-`colmap --version` and `pycolmap.__version__` report exactly 4.0.2 before it
+fixture must prove that both the first `colmap -h` header line and
+`pycolmap.__version__` report exactly 4.0.2 before it
 touches a real scan; CLI/binding mismatch is `REFINE_ENGINE_VERSION_MISMATCH`.
 The artifact says `targetColmapVersion` and
 `qualificationStatus=unvalidated-pending-field-and-box-fixture`. A later 4.x
@@ -443,7 +443,8 @@ The following are hard gates before deployment:
 
 1. **COLMAP 4.0.2 box probe:** install/qualify the exact pilot target and
    execute the exact PyCOLMAP database/model calls above on a tiny fixture. Save
-   `colmap --version`, `pycolmap.__version__`, mismatch rejection, GPU SIFT
+   the `colmap -h` version/build header, `pycolmap.__version__`, mismatch
+   rejection, GPU SIFT
    result, IDs before/after camera rewrite, and the triangulated model as
    evidence. No artifact may say validated before this passes.
 2. **Field/Core Image materialization probe:** capture a known off-centre raster

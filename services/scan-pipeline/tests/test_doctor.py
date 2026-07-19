@@ -222,7 +222,8 @@ def test_gsplat_cuda_failure_is_red_only_for_splat(monkeypatch):
 
 
 def test_colmap_probe_requires_known_pose_and_fallback_commands(monkeypatch):
-    commands = """
+    commands = """COLMAP 4.0.2 -- Structure-from-Motion and Multi-View Stereo
+      (Commit d927f7e5 on 2026-06-25 with CUDA)
       feature_extractor
       sequential_matcher
       exhaustive_matcher
@@ -247,11 +248,45 @@ def test_colmap_probe_names_missing_required_commands(monkeypatch):
                         lambda name: f"/usr/bin/{name}")
     monkeypatch.setattr("patina_scan_worker.doctor.subprocess.run",
                         lambda *_args, **_kwargs: SimpleNamespace(
-                            returncode=0, stdout="feature_extractor", stderr="",
+                            returncode=0,
+                            stdout=(
+                                "COLMAP 4.0.2 -- Structure-from-Motion\n"
+                                "(Commit d927f7e5 with CUDA)\nfeature_extractor"
+                            ),
+                            stderr="",
                         ))
     ok, detail = _colmap_command_set_ok()
     assert ok is False
     assert "point_triangulator" in detail and "pose_prior_mapper" in detail
+
+
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [
+        ("COLMAP 4.1.1 -- local build (with CUDA)", "4.0.2"),
+        ("COLMAP 4.0.2-dev -- local build (with CUDA)", "4.0.2"),
+        ("COLMAP 4.0.2+local -- local build (with CUDA)", "4.0.2"),
+        ("COLMAP 4.0.2.1 -- local build (with CUDA)", "4.0.2"),
+        ("COLMAP 4.0.2 -- local build (without CUDA)", "CUDA"),
+    ],
+)
+def test_colmap_probe_rejects_wrong_version_or_cpu_build(monkeypatch, header, expected):
+    commands = " ".join((
+        "feature_extractor", "sequential_matcher", "exhaustive_matcher",
+        "point_triangulator", "bundle_adjuster", "pose_prior_mapper",
+    ))
+    monkeypatch.setattr(
+        "patina_scan_worker.doctor.shutil.which", lambda name: f"/usr/bin/{name}"
+    )
+    monkeypatch.setattr(
+        "patina_scan_worker.doctor.subprocess.run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0, stdout=f"{header}\n{commands}", stderr="",
+        ),
+    )
+    ok, detail = _colmap_command_set_ok()
+    assert ok is False
+    assert expected in detail
 
 
 def test_nvcc_probe_requires_cuda_11_8_toolkit(monkeypatch):
@@ -506,6 +541,16 @@ def test_open3d_cuda_probe_accepts_the_supported_core_cuda_api(monkeypatch, vers
 
 def test_open3d_cuda_probe_accepts_the_newer_top_level_cuda_api(monkeypatch):
     fake = _fake_open3d(top_level=True)
+    monkeypatch.setitem(sys.modules, "open3d", fake)
+    ok, detail = _open3d_cuda_ok()
+    assert ok is True
+    assert "CUDA ready" in detail and ("cpu",) in fake.probe_state.calls
+
+
+def test_open3d_cuda_probe_ignores_an_incomplete_top_level_namespace(monkeypatch):
+    """Real CUDA wheels expose both namespaces, but only core.cuda owns the probes."""
+    fake = _fake_open3d()
+    fake.cuda = SimpleNamespace()
     monkeypatch.setitem(sys.modules, "open3d", fake)
     ok, detail = _open3d_cuda_ok()
     assert ok is True

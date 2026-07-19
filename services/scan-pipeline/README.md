@@ -44,8 +44,11 @@ so those items only replace a stub body.
 ## Install on a Linux box
 
 Ubuntu 22.04/24.04 LTS or Debian 12, x86_64, Python 3.11+ with `venv`
-(`apt install python3-venv`). Outbound 443 only — the host firewall may deny all
-inbound.
+(`apt install python3-venv`). Those bases support CPU workers. The CUDA 11.8
+GPU pilot is officially qualified only on Ubuntu 22.04; Ubuntu 24.04 and Debian
+12 GPU installs remain explicit qualification experiments and must not claim
+GPU-stage tasks before the doctor and real fixtures pass. Outbound 443 only —
+the host firewall may deny all inbound.
 
 ```bash
 # Stop the worker and fail unless the service UID holds no old source inode.
@@ -59,7 +62,8 @@ fi
 
 # Stage only reviewed build inputs in a separate root-owned trust tree.
 sudo install -d -o root -g root -m 0755 /opt/patina/scan-pipeline-source
-sudo rsync -a --delete --delete-excluded --ignore-times --chown=root:root \
+sudo rsync -a --delete --delete-excluded --ignore-times \
+  --chown=root:root --chmod=Dgo-w,Fgo-w \
   --include='/README.md' \
   --include='/install.sh' \
   --include='/install-path-guard.py' \
@@ -76,6 +80,7 @@ sudo rsync -a --delete --delete-excluded --ignore-times --chown=root:root \
   --include='/src/patina_scan_worker/**/*.py' \
   --exclude='*' \
   ./ /opt/patina/scan-pipeline-source/
+sudo chmod -R go-w -- /opt/patina/scan-pipeline-source
 sudo /opt/patina/scan-pipeline-source/install.sh  # CPU + drawings + units
 )
 sudo -e /etc/patina/scan-worker.env        # set URL/key/WORKER_ID
@@ -92,6 +97,9 @@ accepts an exact top-level file set and recursively accepts only trusted Python
 modules below `src/patina_scan_worker`; every file must be root-owned,
 non-group/world-writable, non-symlinked, regular, and single-linked. It validates
 that closed snapshot before sourcing a helper or invoking the build backend.
+Archive-mode rsync also copies the checkout directory's mode onto the staged
+tree. `--chmod=Dgo-w,Fgo-w` removes unsafe write bits during transfer; the
+explicit `chmod -R go-w` repeats that hardening as defense-in-depth.
 
 `/opt/patina/scan-pipeline` is runtime-only: immutable venv releases and the
 service's delegated cache/state directories live there, never installer source.
@@ -136,6 +144,10 @@ Prereqs to install **before** `./install.sh --gpu`:
 3. **CUDA 11.8 toolkit** (`nvcc`) — gsplat may JIT-compile its CUDA kernels on
    the first public rasterization (the doctor deliberately triggers it) against
    the torch CUDA version, so `nvcc` must be 11.8. Verify: `nvcc --version`.
+   The managed GPU drop-in selects `/usr/local/cuda-11.8` for both worker and
+   doctor without changing the host's global CUDA selection. Architecture
+   selection stays box-local so the same package can serve Turing, Ampere, and
+   Ada workers; the DeskDev acceptance override below pins `7.5` explicitly.
 4. **COLMAP CLI 4.0.2** on `PATH`, exactly matching `pycolmap==4.0.2` from
    `.[refine]`, with `feature_extractor`, `sequential_matcher`,
    `exhaustive_matcher`, `point_triangulator`, `bundle_adjuster`, and
@@ -253,7 +265,8 @@ window only:
      sudo systemctl stop patina-scan-worker
      sudo install -d -o root -g root -m 0755 /run/patina "$item3_dropin_dir"
      sudo install -o root -g root -m 0600 "$env_file" "$item3_env"
-     printf '\nSTAGES=refine,fuse,splat\nGPU=auto\n' | sudo tee -a "$item3_env" >/dev/null
+     printf '\nSTAGES=refine,fuse,splat\nGPU=auto\nTORCH_CUDA_ARCH_LIST=7.5\n' | \
+       sudo tee -a "$item3_env" >/dev/null
      printf '[Service]\nEnvironmentFile=\nEnvironmentFile=%s\n' "$item3_env" | \
        sudo install -o root -g root -m 0644 /dev/stdin "$item3_dropin"
      sudo systemctl daemon-reload
@@ -303,8 +316,8 @@ scripts embed their absolute build path, so a high-entropy final release name is
 durably recorded before its atomic directory creation and is never renamed.
 After the one-time legacy migration, the source tree is permanently root-owned
 and never consumed by the running worker. For routine upgrades, repeat only the
-root-owned `rsync --delete --delete-excluded --ignore-times` staging command
-above while the worker remains active—do **not** repeat the first-run
+root-owned `rsync --delete --delete-excluded --ignore-times` plus
+`chmod -R go-w` staging block above while the worker remains active—do **not** repeat the first-run
 `systemctl stop`/`pgrep` block. The transaction will observe and restore the
 worker's active posture.
 
