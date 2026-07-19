@@ -477,18 +477,35 @@ Next (item-3 GPU acceptance; ephemeral doctor override, never the queue worker):
   1. retain the README empty-GPU-queue query as rollout evidence
   2. copy/paste this as one subshell; the persistent worker env is never edited.
      A /run-only doctor drop-in disappears on reboot, so the enabled queue worker
-     can boot only with its normal CPU stages:
+     can boot only with its normal CPU stages. The temporary clone pins DeskDev's
+     GCC 11/CUDA 11.8 JIT inputs without changing the host toolchain. If another
+     doctor /run *.conf exists, this rejects it without deleting it:
 
 (
   set -eu
   ITEM3_ENV=/run/patina/scan-worker-item3-gpu.env
   ITEM3_DROPIN_DIR=/run/systemd/system/patina-scan-worker-doctor.service.d
   ITEM3_DROPIN=\$ITEM3_DROPIN_DIR/90-item3-gpu-acceptance.conf
-  if [ -e "\$ITEM3_ENV" ] || [ -L "\$ITEM3_ENV" ] || \
-     [ -e "\$ITEM3_DROPIN" ] || [ -L "\$ITEM3_DROPIN" ]; then
-    echo "refusing pre-existing item-3 /run override; inspect and remove it first" >&2
+  assert_no_item3_runtime_dropins() {
+    if [ -L "\$ITEM3_DROPIN_DIR" ] || \
+       { [ -e "\$ITEM3_DROPIN_DIR" ] && [ ! -d "\$ITEM3_DROPIN_DIR" ]; }; then
+      echo "refusing unsafe doctor /run drop-in directory: \$ITEM3_DROPIN_DIR" >&2
+      return 1
+    fi
+    if [ -d "\$ITEM3_DROPIN_DIR" ]; then
+      ITEM3_CONFLICT="\$(sudo /usr/bin/find -P "\$ITEM3_DROPIN_DIR" \
+        -mindepth 1 -maxdepth 1 -name '*.conf' -print -quit)"
+      if [ -n "\$ITEM3_CONFLICT" ]; then
+        echo "refusing pre-existing doctor /run drop-in: \$ITEM3_CONFLICT" >&2
+        return 1
+      fi
+    fi
+  }
+  if [ -e "\$ITEM3_ENV" ] || [ -L "\$ITEM3_ENV" ]; then
+    echo "refusing pre-existing item-3 /run env: \$ITEM3_ENV" >&2
     exit 1
   fi
+  assert_no_item3_runtime_dropins
   WORKER_WAS_ACTIVE="\$(systemctl show --property=ActiveState --value $WORKER_SERVICE)"
   case "\$WORKER_WAS_ACTIVE" in
     active|inactive|failed) ;;
@@ -504,21 +521,53 @@ Next (item-3 GPU acceptance; ephemeral doctor override, never the queue worker):
       sudo systemctl start $WORKER_SERVICE
     fi
   }
+  run_item3_doctor() {
+    ITEM3_LABEL=\$1
+    echo "-- \$ITEM3_LABEL item-3 GPU doctor"
+    sudo journalctl --sync
+    ITEM3_CURSOR="\$(sudo journalctl -n 1 --show-cursor --no-pager --quiet | \
+      sed -n 's/^-- cursor: //p')"
+    if [ -z "\$ITEM3_CURSOR" ]; then
+      echo "could not capture journal cursor for \$ITEM3_LABEL doctor" >&2
+      return 1
+    fi
+    if sudo systemctl start patina-scan-worker-doctor; then
+      ITEM3_DOCTOR_STATUS=0
+    else
+      ITEM3_DOCTOR_STATUS=\$?
+    fi
+    sudo journalctl -u patina-scan-worker-doctor \
+      --after-cursor="\$ITEM3_CURSOR" --no-pager --full -o cat
+    return "\$ITEM3_DOCTOR_STATUS"
+  }
   trap restore_item3_gpu EXIT INT TERM
   sudo systemctl stop $WORKER_SERVICE
+  sudo systemctl stop patina-scan-worker-doctor
+  ITEM3_DOCTOR_STATE="\$(systemctl show --property=ActiveState --value \
+    patina-scan-worker-doctor)"
+  case "\$ITEM3_DOCTOR_STATE" in
+    inactive|failed) ;;
+    *) echo "refusing non-quiescent doctor state: \$ITEM3_DOCTOR_STATE" >&2; exit 1 ;;
+  esac
+  assert_no_item3_runtime_dropins
   sudo install -d -o root -g root -m 0755 /run/patina "\$ITEM3_DROPIN_DIR"
   sudo install -o root -g root -m 0600 "$ENV_FILE" "\$ITEM3_ENV"
-  printf '\nSTAGES=refine,fuse,splat\nGPU=auto\nTORCH_CUDA_ARCH_LIST=7.5\n' | \
+  printf '%s\n' \
+    '' \
+    'STAGES=refine,fuse,splat' \
+    'GPU=auto' \
+    'CC=/usr/bin/gcc-11' \
+    'CXX=/usr/bin/g++-11' \
+    'CUDAHOSTCXX=/usr/bin/g++-11' \
+    'LD_LIBRARY_PATH=/usr/local/cuda-11.8/lib64' \
+    'TORCH_CUDA_ARCH_LIST=7.5' \
+    'MAX_JOBS=4' | \
     sudo tee -a "\$ITEM3_ENV" >/dev/null
   printf '[Service]\nEnvironmentFile=\nEnvironmentFile=%s\n' "\$ITEM3_ENV" | \
     sudo install -o root -g root -m 0644 /dev/stdin "\$ITEM3_DROPIN"
   sudo systemctl daemon-reload
-  echo '-- cold item-3 GPU doctor'
-  sudo systemctl start patina-scan-worker-doctor
-  sudo journalctl -u patina-scan-worker-doctor -n 100 --no-pager
-  echo '-- warm item-3 GPU doctor'
-  sudo systemctl start patina-scan-worker-doctor
-  sudo journalctl -u patina-scan-worker-doctor -n 100 --no-pager
+  run_item3_doctor cold
+  run_item3_doctor warm
   restore_item3_gpu
 )
 

@@ -20,6 +20,7 @@ import pytest
 
 
 INSTALL = Path(__file__).resolve().parent.parent / "install.sh"
+README = Path(__file__).resolve().parent.parent / "README.md"
 VENV_LIB = Path(__file__).resolve().parent.parent / "install-venv-lib.sh"
 PATH_GUARD = Path(__file__).resolve().parent.parent / "install-path-guard.py"
 ENV_EXAMPLE = Path(__file__).resolve().parent.parent / "scan-worker.env.example"
@@ -2509,6 +2510,14 @@ def test_gpu_dropin_selects_the_qualified_cuda_toolkit_for_both_contexts():
         "/usr/local/cuda-11.8/bin:" in dropin
     )
     assert "TORCH_CUDA_ARCH_LIST" not in dropin
+    for doctor_only_name in (
+        "CC",
+        "CXX",
+        "CUDAHOSTCXX",
+        "LD_LIBRARY_PATH",
+        "MAX_JOBS",
+    ):
+        assert f"Environment={doctor_only_name}=" not in dropin
 
 
 def test_emitted_gpu_acceptance_uses_ephemeral_doctor_only_env_override():
@@ -2519,7 +2528,7 @@ def test_emitted_gpu_acceptance_uses_ephemeral_doctor_only_env_override():
     append = acceptance.index("STAGES=refine,fuse,splat")
     dropin = acceptance.index("EnvironmentFile=\\nEnvironmentFile=%s")
     reload = acceptance.index("sudo systemctl daemon-reload", dropin)
-    doctor = acceptance.index("sudo systemctl start patina-scan-worker-doctor")
+    doctor = acceptance.index("run_item3_doctor cold")
 
     assert stop < copy < append < dropin < reload < doctor
     assert "TORCH_CUDA_ARCH_LIST=7.5" in acceptance
@@ -2527,25 +2536,143 @@ def test_emitted_gpu_acceptance_uses_ephemeral_doctor_only_env_override():
     assert 'if [ "\\$WORKER_WAS_ACTIVE" = active ]' in acceptance
     assert "sudo systemctl start $WORKER_SERVICE" in acceptance
     assert 'sudo rm -f -- "\\$ITEM3_DROPIN" "\\$ITEM3_ENV"' in acceptance
-    assert acceptance.count("sudo systemctl start patina-scan-worker-doctor") == 2
+    assert acceptance.count("sudo systemctl start patina-scan-worker-doctor") == 1
+    assert acceptance.count("run_item3_doctor cold") == 1
+    assert acceptance.count("run_item3_doctor warm") == 1
     assert "/run/systemd/system/patina-scan-worker-doctor.service.d" in acceptance
     assert "sudoedit" not in acceptance
     assert ".item3-backup" not in acceptance
     assert "systemctl enable patina-scan-worker-doctor" not in acceptance
 
 
-def test_emitted_gpu_acceptance_refuses_preexisting_run_override_before_stop():
+def test_emitted_gpu_acceptance_pins_deskdev_jit_toolchain_only_in_temp_env():
     script = INSTALL.read_text()
     acceptance = script[script.index("Next (item-3 GPU acceptance") :]
-    refuse = 'if [ -e "\\$ITEM3_ENV" ] || [ -L "\\$ITEM3_ENV" ]'
+    required = {
+        "CC": "/usr/bin/gcc-11",
+        "CXX": "/usr/bin/g++-11",
+        "CUDAHOSTCXX": "/usr/bin/g++-11",
+        "LD_LIBRARY_PATH": "/usr/local/cuda-11.8/lib64",
+        "TORCH_CUDA_ARCH_LIST": "7.5",
+        "MAX_JOBS": "4",
+    }
 
-    assert refuse in acceptance
-    assert '[ -e "\\$ITEM3_DROPIN" ] || [ -L "\\$ITEM3_DROPIN" ]' in acceptance
-    assert "refusing pre-existing item-3 /run override" in acceptance
-    assert acceptance.index(refuse) < acceptance.index("sudo systemctl stop $WORKER_SERVICE")
-    assert acceptance.index(refuse) < acceptance.index(
+    for name, value in required.items():
+        assert f"{name}={value}" in acceptance
+
+    persistent_write = 'sudo tee -a "$ENV_FILE"'
+    assert persistent_write not in acceptance
+    assert acceptance.index("CC=/usr/bin/gcc-11") > acceptance.index(
         'sudo install -o root -g root -m 0600 "$ENV_FILE"'
     )
+
+
+def test_emitted_gpu_acceptance_prints_only_each_current_doctor_run():
+    script = INSTALL.read_text()
+    acceptance = script[script.index("Next (item-3 GPU acceptance") :]
+    function = acceptance[
+        acceptance.index("run_item3_doctor()") : acceptance.index(
+            "run_item3_doctor cold"
+        )
+    ]
+
+    sync = function.index("sudo journalctl --sync")
+    cursor = function.index("--show-cursor")
+    start = function.index("sudo systemctl start patina-scan-worker-doctor")
+    status = function.index("ITEM3_DOCTOR_STATUS=", start)
+    journal = function.index('--after-cursor="\\$ITEM3_CURSOR"')
+    returned = function.index('return "\\$ITEM3_DOCTOR_STATUS"')
+
+    assert sync < cursor < start < status < journal < returned
+    assert "ITEM3_DOCTOR_STATUS=\\$?" in function
+    assert 'if [ -z "\\$ITEM3_CURSOR" ]' in function
+    assert acceptance.count("run_item3_doctor cold") == 1
+    assert acceptance.count("run_item3_doctor warm") == 1
+    assert "journalctl -u patina-scan-worker-doctor -n 100" not in acceptance
+
+
+def test_readme_gpu_acceptance_matches_jit_and_journal_isolation_contract():
+    readme = README.read_text()
+    acceptance = readme[
+        readme.index("#### Item-3-only GPU acceptance") : readme.index(
+            "Optional pre-install resolver evidence"
+        )
+    ]
+    required = {
+        "CC": "/usr/bin/gcc-11",
+        "CXX": "/usr/bin/g++-11",
+        "CUDAHOSTCXX": "/usr/bin/g++-11",
+        "LD_LIBRARY_PATH": "/usr/local/cuda-11.8/lib64",
+        "TORCH_CUDA_ARCH_LIST": "7.5",
+        "MAX_JOBS": "4",
+    }
+
+    for name, value in required.items():
+        assert f"{name}={value}" in acceptance
+
+    assert "run_item3_doctor cold" in acceptance
+    assert "run_item3_doctor warm" in acceptance
+    assert 'journalctl --sync' in acceptance
+    assert '--after-cursor="$item3_cursor"' in acceptance
+    assert "journalctl -u patina-scan-worker-doctor -n 100" not in acceptance
+    assert 'sudo tee -a "$env_file"' not in acceptance
+    assert '/usr/bin/find -P "$item3_dropin_dir"' in acceptance
+    assert "-name '*.conf'" in acceptance
+    assert "refusing pre-existing doctor /run drop-in" in acceptance
+    trap = acceptance.index("trap restore_item3_gpu EXIT INT TERM")
+    worker_stop = acceptance.index("sudo systemctl stop patina-scan-worker", trap)
+    doctor_stop = acceptance.index(
+        "sudo systemctl stop patina-scan-worker-doctor", worker_stop
+    )
+    doctor_state = acceptance.index(
+        "systemctl show --property=ActiveState --value \\",
+        doctor_stop,
+    )
+    install_override = acceptance.index(
+        'sudo install -o root -g root -m 0600 "$env_file"', doctor_state
+    )
+    assert worker_stop < doctor_stop < doctor_state < install_override
+
+
+def test_emitted_gpu_acceptance_rejects_every_preexisting_runtime_dropin_before_stop():
+    script = INSTALL.read_text()
+    acceptance = script[script.index("Next (item-3 GPU acceptance") :]
+    validator = acceptance.index("assert_no_item3_runtime_dropins()")
+    validator_end = acceptance.index("\n  }", validator)
+    preflight = acceptance.index("assert_no_item3_runtime_dropins", validator_end)
+    worker_stop = acceptance.index("sudo systemctl stop $WORKER_SERVICE")
+
+    assert '/usr/bin/find -P "\\$ITEM3_DROPIN_DIR"' in acceptance
+    assert "-name '*.conf'" in acceptance
+    assert "refusing pre-existing doctor /run drop-in" in acceptance
+    assert acceptance.count("assert_no_item3_runtime_dropins") == 3
+    assert 'rm -f -- "\\$ITEM3_DROPIN_DIR"/*.conf' not in acceptance
+    assert validator < validator_end < preflight < worker_stop
+    assert preflight < acceptance.index(
+        'sudo install -o root -g root -m 0600 "$ENV_FILE"'
+    )
+
+
+def test_emitted_gpu_acceptance_stops_and_proves_doctor_quiescent_before_override():
+    script = INSTALL.read_text()
+    acceptance = script[script.index("Next (item-3 GPU acceptance") :]
+    trap = acceptance.index("trap restore_item3_gpu EXIT INT TERM")
+    worker_stop = acceptance.index("sudo systemctl stop $WORKER_SERVICE", trap)
+    doctor_stop = acceptance.index(
+        "sudo systemctl stop patina-scan-worker-doctor", worker_stop
+    )
+    doctor_state = acceptance.index(
+        "systemctl show --property=ActiveState --value \\",
+        doctor_stop,
+    )
+    recheck = acceptance.index("assert_no_item3_runtime_dropins", doctor_state)
+    install_override = acceptance.index(
+        'sudo install -o root -g root -m 0600 "$ENV_FILE"', recheck
+    )
+
+    assert trap < worker_stop < doctor_stop < doctor_state < recheck < install_override
+    assert "inactive|failed" in acceptance[doctor_state:recheck]
+    assert "refusing non-quiescent doctor state" in acceptance[doctor_state:recheck]
 
 
 def test_env_file_is_installed_root_owned_0600():
