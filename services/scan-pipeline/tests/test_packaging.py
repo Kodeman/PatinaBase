@@ -8,10 +8,16 @@ Locks the shape of pyproject's optional-dependencies so a refactor can't silentl
 
 from __future__ import annotations
 
+import shutil
+import subprocess
+import sys
+import tarfile
 import tomllib
+import zipfile
 from pathlib import Path
 
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+SERVICE_ROOT = PYPROJECT.parent
 
 
 def _extras() -> dict[str, list[str]]:
@@ -113,3 +119,42 @@ def test_every_extra_is_a_valid_pep508_requirement():
     meta = Requirement(extras["gpu"][0])
     assert meta.name == "patina-scan-worker"
     assert meta.extras == {"refine", "fuse", "splat"}
+
+
+def test_field_raster_helper_survives_real_wheel_and_sdist_builds(tmp_path):
+    isolated_source = tmp_path / "source"
+    isolated_source.mkdir()
+    shutil.copy2(SERVICE_ROOT / "pyproject.toml", isolated_source)
+    shutil.copy2(SERVICE_ROOT / "README.md", isolated_source)
+    shutil.copytree(SERVICE_ROOT / "src", isolated_source / "src")
+    distribution_dir = tmp_path / "dist"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "build",
+            "--no-isolation",
+            "--wheel",
+            "--sdist",
+            "--outdir",
+            str(distribution_dir),
+        ],
+        cwd=isolated_source,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    assert result.returncode == 0, result.stdout
+
+    wheel = next(distribution_dir.glob("*.whl"))
+    with zipfile.ZipFile(wheel) as archive:
+        wheel_names = set(archive.namelist())
+    assert "patina_scan_worker/field_raster_libheif.c" in wheel_names
+    assert "patina_scan_worker/field_raster_qualification.py" in wheel_names
+
+    source_distribution = next(distribution_dir.glob("*.tar.gz"))
+    with tarfile.open(source_distribution, "r:gz") as archive:
+        source_names = set(archive.getnames())
+    assert any(name.endswith("/field_raster_libheif.c") for name in source_names)
+    assert any(name.endswith("/field_raster_qualification.py") for name in source_names)

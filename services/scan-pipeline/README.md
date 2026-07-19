@@ -77,6 +77,7 @@ sudo rsync -a --delete --delete-excluded --ignore-times \
   --include='/scan-worker.env.example' \
   --include='/src/' --include='/src/patina_scan_worker/' \
   --include='/src/patina_scan_worker/*.py' \
+  --include='/src/patina_scan_worker/*.c' \
   --include='/src/patina_scan_worker/**/' \
   --include='/src/patina_scan_worker/**/*.py' \
   --exclude='*' \
@@ -94,8 +95,9 @@ That staging is the explicit first-run bootstrap trust event. Review the source,
 stop every `patina` process, and let `--ignore-times` create fresh destination
 inodes while `--delete --delete-excluded` removes stale inputs such as
 `setup.py`, `setup.cfg`, `MANIFEST.in`, or `sitecustomize.py`. The installer
-accepts an exact top-level file set and recursively accepts only trusted Python
-modules below `src/patina_scan_worker`; every file must be root-owned,
+accepts an exact top-level file set, trusted Python modules below
+`src/patina_scan_worker`, and the one packaged
+`field_raster_libheif.c` qualification helper; every file must be root-owned,
 non-group/world-writable, non-symlinked, regular, and single-linked. It validates
 that closed snapshot before sourcing a helper or invoking the build backend.
 Archive-mode rsync also copies the checkout directory's mode onto the staged
@@ -418,6 +420,82 @@ Use the exact environment-isolated operator packet and receipt criteria in
 [`p2-item4a-colmap-qualification-runbook.md`](../../docs/design/field-capture/p2-item4a-colmap-qualification-runbook.md).
 A green receipt closes only the tiny-fixture CLI/binding/API/GPU gate; the real
 Field raster and real-room qualification gates remain open.
+
+### P2 item 4A Field/Core Image raster qualification
+
+This is a **standalone, local, non-mutating qualification gate**, not a worker
+stage. It accepts only the three files produced by the physical-device Debug
+fixture `field-core-image-raster-v1`, creates a deterministic P6 RGB raster and
+canonical JSON receipt in a new local directory, and has no queue, database,
+Storage, or Supabase imports. Keep `patina-scan-worker` stopped throughout the
+run. Do not point it at arbitrary uploads.
+
+The Noble `openimageio-tools` package is not used: its 2.4.17 HEIF reader lets
+libheif apply transformations and then erases `Orientation`, which cannot prove
+the raw stored raster. Instead, the Python gate copies the already-hash-verified
+HEIC bytes to private `0700` scratch, compiles the packaged C helper
+unprivileged with `/usr/bin/cc` and `/usr/bin/pkg-config`, and uses the public
+system-libheif API. The helper requires the public file-type probe to report
+exactly `image/heic` (HEIF using H.265), requires zero `irot`/`imir`/`clap`
+properties, enumerates the public HEVC decoder descriptors and requires exactly
+one available `libde265` descriptor, then decodes strict RGB twice (raw
+`ignore_transformations=1` and default `ignore_transformations=0`) with that
+descriptor's ID and requires byte identity. It also requires zero attached
+metadata blocks, so no unseen Exif/XMP
+orientation survives the gate. The asymmetric markers independently prove
+exactly one physical clockwise rotation, and the materialized PPM deliberately
+carries no metadata. HEIC marker matching is deliberately narrow and recorded
+in the receipt: search radius `3 px`, maximum absolute error `64` in each RGB
+channel. See the upstream
+[libheif decode API](https://raw.githubusercontent.com/strukturag/libheif/v1.17.6/libheif/heif.h),
+[transform-property API](https://raw.githubusercontent.com/strukturag/libheif/v1.17.6/libheif/heif_properties.h),
+and [Ubuntu USN-8526-2](https://ubuntu.com/security/notices/USN-8526-2).
+
+On Ubuntu 24.04, `install.sh --gpu` directly installs `build-essential`,
+`pkg-config`, `zlib1g-dev` (required by Noble's `libheif.pc`), `libheif1`,
+`libheif-dev`, and
+`libheif-plugin-libde265`, then fails unless all three libheif packages match
+and are at least `1.17.6-1ubuntu4.6`. If apt metadata is stale, run
+`sudo apt-get update` and rerun the GPU install. The qualifier repeats the OS,
+package-status, revision, header/runtime-version, and decoder checks and records
+their exact evidence in its receipt.
+
+After staging this commit and completing `install.sh --gpu --upgrade`, export
+the fixture per `apps/mobile/Capture/README.md`. Then run the root-owned,
+immutable installed package as the normal operator—never with `sudo`. The
+receipt binds both installed Python harness and packaged C-helper source hashes:
+
+```bash
+cd /mnt/ada-data/Patina/PatinaBase
+
+FIELD_RASTER_FIXTURE_DIR=/absolute/path/to/field-core-image-raster-v1-export
+FIELD_RASTER_OUTPUT_DIR="/mnt/ada-data/Patina/.patina-builds/field-raster-qualification-v1-$UID"
+FIELD_RASTER_PYTHON=/opt/patina/scan-pipeline/.venv/bin/python
+
+if [ "$(systemctl is-active patina-scan-worker || true)" != inactive ]; then
+  echo 'ERROR: stop patina-scan-worker before qualification.' >&2
+  exit 1
+fi
+test ! -e "$FIELD_RASTER_OUTPUT_DIR"
+test -x "$FIELD_RASTER_PYTHON"
+
+"$FIELD_RASTER_PYTHON" -m patina_scan_worker.field_raster_qualification \
+  --manifest "$FIELD_RASTER_FIXTURE_DIR/field-core-image-raster-v1.json" \
+  --native-bgra "$FIELD_RASTER_FIXTURE_DIR/field-core-image-raster-v1-native.bgra" \
+  --heic "$FIELD_RASTER_FIXTURE_DIR/field-core-image-raster-v1.heic" \
+  --output-dir "$FIELD_RASTER_OUTPUT_DIR"
+
+python3 -m json.tool \
+  "$FIELD_RASTER_OUTPUT_DIR/field-raster-qualification-receipt-v1.json"
+sha256sum "$FIELD_RASTER_OUTPUT_DIR"/*
+systemctl is-active patina-scan-worker || true
+```
+
+Success prints `Field raster qualification: PASS`; the final service status
+must remain `inactive`. Mac protocol/fake-tool tests prove fail-closed behavior
+and canonicalization, but they do not close item 4A: retain the real exported
+HEIC/BGRA/manifest, materialized PPM, receipt, package versions, and command
+output from DeskDev as the qualification evidence packet.
 
 ### Upgrading a running worker
 

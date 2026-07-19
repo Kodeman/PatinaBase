@@ -40,6 +40,13 @@ SOURCE_TOP_LEVEL_FILES = frozenset(
     }
 )
 SOURCE_PACKAGE_ROOT = "src/patina_scan_worker"
+SOURCE_REQUIRED_PACKAGE_FILES = frozenset(
+    {
+        f"{SOURCE_PACKAGE_ROOT}/__init__.py",
+        f"{SOURCE_PACKAGE_ROOT}/field_raster_libheif.c",
+        f"{SOURCE_PACKAGE_ROOT}/field_raster_qualification.py",
+    }
+)
 
 
 def _octal_mode(value: str) -> int:
@@ -777,7 +784,7 @@ def validate_source_tree(
     source_abs = _absolute(source_dir)
     seen_required_directories: set[str] = set()
     seen_top_level_files: set[str] = set()
-    seen_package_init = False
+    seen_required_package_files: set[str] = set()
     for current, directories, files, current_fd in os.fwalk(
         source_abs, topdown=True, follow_symlinks=False
     ):
@@ -802,9 +809,12 @@ def validate_source_tree(
             relative = name if relative_root == "." else os.path.join(relative_root, name)
             if relative_root == "." and relative in SOURCE_TOP_LEVEL_FILES:
                 seen_top_level_files.add(relative)
-            elif relative.startswith(f"{SOURCE_PACKAGE_ROOT}{os.sep}") and name.endswith(".py"):
-                if relative == f"{SOURCE_PACKAGE_ROOT}{os.sep}__init__.py":
-                    seen_package_init = True
+            elif relative.startswith(f"{SOURCE_PACKAGE_ROOT}{os.sep}") and (
+                name.endswith(".py")
+                or relative == f"{SOURCE_PACKAGE_ROOT}{os.sep}field_raster_libheif.c"
+            ):
+                if relative in SOURCE_REQUIRED_PACKAGE_FILES:
+                    seen_required_package_files.add(relative)
             else:
                 raise GuardError(f"unexpected installer source file: {relative}")
             _require_source_entry(
@@ -819,8 +829,9 @@ def validate_source_tree(
         SOURCE_REQUIRED_DIRECTORIES - seen_required_directories
     )
     missing_files = sorted(SOURCE_TOP_LEVEL_FILES - seen_top_level_files)
-    if not seen_package_init:
-        missing_files.append(f"{SOURCE_PACKAGE_ROOT}/__init__.py")
+    missing_files.extend(
+        sorted(SOURCE_REQUIRED_PACKAGE_FILES - seen_required_package_files)
+    )
     if missing_directories or missing_files:
         missing = ", ".join((*missing_directories, *missing_files))
         raise GuardError(f"installer source snapshot is incomplete: {missing}")

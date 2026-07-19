@@ -51,6 +51,8 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/drawing/svg.py",
     "src/patina_scan_worker/drawing/units.py",
     "src/patina_scan_worker/errors.py",
+    "src/patina_scan_worker/field_raster_libheif.c",
+    "src/patina_scan_worker/field_raster_qualification.py",
     "src/patina_scan_worker/http.py",
     "src/patina_scan_worker/keys.py",
     "src/patina_scan_worker/queue.py",
@@ -97,6 +99,28 @@ def test_gpu_install_ensures_ninja_for_gsplat_jit():
     native_libs = script[script.index("# 0. native libs") : script.index("# 1. service user")]
     assert 'if [ "$GPU" -eq 1 ]' in native_libs
     assert "ninja-build" in native_libs
+
+
+def test_gpu_install_ensures_direct_field_raster_libheif_toolchain():
+    script = INSTALL.read_text()
+    native_libs = script[script.index("# 0. native libs") : script.index("# 1. service user")]
+    for dependency in (
+        "build-essential",
+        "pkg-config",
+        "zlib1g-dev",
+        "libheif1",
+        "libheif-dev",
+        "libheif-plugin-libde265",
+    ):
+        assert dependency in native_libs
+    assert 'VERSION_ID="?24\\.04"?' in native_libs
+    assert "/usr/bin/cc" in native_libs
+    assert "/usr/bin/pkg-config --exists libheif" in native_libs
+    assert "/usr/bin/dpkg-query -W" in native_libs
+    assert "1.17.6-1ubuntu4.6" in native_libs
+    assert '/usr/bin/dpkg --compare-versions "$raster_package_version" ge' in native_libs
+    assert "apt-get update" in native_libs
+    assert "PKG_CONFIG_LIBDIR=/usr/lib/x86_64-linux-gnu/pkgconfig" in native_libs
 
 
 def test_candidate_is_checked_smoked_and_verified_before_transaction_activation():
@@ -1198,6 +1222,32 @@ def test_source_validation_accepts_a_new_trusted_package_module(tmp_path):
         "--source-dir",
         str(source),
     )
+
+
+def test_source_validation_rejects_unreviewed_native_package_source(tmp_path):
+    source = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline-source"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(source),
+        "--mode",
+        "0755",
+    )
+    _write_minimal_installer_source(source)
+    unreviewed = source / "src" / "patina_scan_worker" / "unreviewed.c"
+    unreviewed.write_text("int unreviewed(void) { return 1; }\n")
+    unreviewed.chmod(0o644)
+
+    result = _path_guard(
+        tmp_path,
+        "validate-source-tree",
+        "--source-dir",
+        str(source),
+        expected_ok=False,
+    )
+
+    assert "unexpected installer source" in result.stderr.lower()
 
 
 def test_restrictive_legacy_release_becomes_service_readable_and_executable(tmp_path):

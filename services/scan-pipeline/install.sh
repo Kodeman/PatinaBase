@@ -285,6 +285,51 @@ if [ "$GPU" -eq 1 ] && ! command -v ninja >/dev/null 2>&1; then
     exit 2
   fi
 fi
+if [ "$GPU" -eq 1 ] && \
+   /usr/bin/grep -Eq '^ID=ubuntu$' /etc/os-release && \
+   /usr/bin/grep -Eq '^VERSION_ID="?24\.04"?$' /etc/os-release; then
+  echo "-- ensuring the Field raster qualification C/libheif toolchain"
+  if ! command -v apt-get >/dev/null 2>&1 || \
+     ! apt-get install -y --no-install-recommends \
+       build-essential pkg-config zlib1g-dev libheif1 libheif-dev \
+       libheif-plugin-libde265 >/dev/null 2>&1; then
+    echo "ERROR: Noble --gpu requires the compiler/pkg-config/zlib/libheif packages" >&2
+    echo "       for the local Field/Core Image raster qualification gate." >&2
+    exit 2
+  fi
+  if [ ! -x /usr/bin/cc ] || [ ! -x /usr/bin/pkg-config ] || \
+     ! /usr/bin/env -i \
+       PATH=/usr/bin:/bin \
+       PKG_CONFIG_LIBDIR=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig \
+       /usr/bin/pkg-config --exists libheif; then
+    echo "ERROR: the installed Field raster qualification toolchain is incomplete." >&2
+    exit 2
+  fi
+  raster_min_libheif_version=1.17.6-1ubuntu4.6
+  raster_reference_libheif_version=
+  for raster_package in libheif1 libheif-dev libheif-plugin-libde265; do
+    if [ "$(/usr/bin/dpkg-query -W -f='${db:Status-Abbrev}' \
+      "$raster_package" 2>/dev/null)" != "ii " ]; then
+      echo "ERROR: required Field raster package is not installed: $raster_package" >&2
+      exit 2
+    fi
+    raster_package_version="$(/usr/bin/dpkg-query -W -f='${Version}' \
+      "$raster_package" 2>/dev/null)"
+    if ! /usr/bin/dpkg --compare-versions "$raster_package_version" ge \
+      "$raster_min_libheif_version"; then
+      echo "ERROR: $raster_package $raster_package_version is older than the" >&2
+      echo "       required Noble security revision $raster_min_libheif_version." >&2
+      echo "       Run apt-get update, then rerun this --gpu install." >&2
+      exit 2
+    fi
+    if [ -z "$raster_reference_libheif_version" ]; then
+      raster_reference_libheif_version="$raster_package_version"
+    elif [ "$raster_package_version" != "$raster_reference_libheif_version" ]; then
+      echo "ERROR: Noble libheif runtime/dev/plugin package versions do not match." >&2
+      exit 2
+    fi
+  done
+fi
 if [ "$GPU" -eq 1 ] && ! command -v nvidia-smi >/dev/null 2>&1; then
   echo "   WARNING: --gpu given but nvidia-smi not found. Install the NVIDIA driver"
   echo "            + CUDA 11.8 toolkit (nvcc, for gsplat's JIT build) first."

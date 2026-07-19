@@ -53,7 +53,7 @@ splat = ["torch>=2.2,<2.5", "gsplat>=1.0,<2.0", "numpy>=1.26"]
 # gpu meta-extra — the box's one-line install of all three GPU stages.
 gpu = ["patina-scan-worker[refine,fuse,splat]"]
 
-dev = ["pytest>=7.4"]
+dev = ["pytest>=7.4", "build>=1.2,<2", "setuptools>=68", "wheel>=0.41"]
 
 [project.scripts]
 patina-scan-worker = "patina_scan_worker.cli:main"
@@ -62,9 +62,9 @@ patina-scan-worker = "patina_scan_worker.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-# The vendored validator is a byte-identical copy of scripts/validate_capture_bundle.py
-# (single canonical source stays scripts/); ship it verbatim.
-patina_scan_worker = ["stages/validator.py"]
+# Ship the byte-identical validator plus the reviewed libheif helper source used
+# by the standalone Field raster qualification gate.
+patina_scan_worker = ["stages/validator.py", "field_raster_libheif.c"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
