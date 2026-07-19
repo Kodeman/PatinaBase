@@ -446,11 +446,14 @@ The following are hard gates before deployment:
    experiment to install commit
    `d927f7e518fc20afa33390712c4cc20d85b730b8`, CUDA 11.8, GCC/G++ 11, and
    SM 7.5. Invoke it as the normal operator with
-   `--acknowledge-experimental-ubuntu-24.04`; retain
-   `/var/tmp/patina-colmap-4.0.2-$UID/install.log`, and rerun with
-   `--verify-only` for the installed CLI contract. Installer success alone does
-   not qualify item 4. Then execute the exact PyCOLMAP database/model calls
-   above on a tiny fixture. Save
+   `--acknowledge-experimental-ubuntu-24.04`. DeskDev may use
+   `--work-dir /mnt/ada-data/Patina/.patina-builds/patina-colmap-4.0.2-$UID`
+   after precreating the parent as operator-owned mode `0700`; otherwise the
+   default remains `/var/tmp/patina-colmap-4.0.2-$UID`. Retain the selected
+   work directory's `install.log`, and rerun with `--verify-only` for the
+   installed CLI contract. Installer success alone does not qualify item 4.
+   Then execute the exact PyCOLMAP database/model calls above on a tiny fixture.
+   Save
    the `colmap -h` version/build header, `pycolmap.__version__`, mismatch
    rejection, GPU SIFT
    result, IDs before/after camera rewrite, and the triangulated model as

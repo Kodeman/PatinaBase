@@ -36,6 +36,61 @@ def test_installer_is_valid_bash_and_help_is_unprivileged():
     assert "--verify-only" in help_result.stdout
 
 
+def test_help_exposes_custom_work_dir_and_paths_are_derived_after_parse():
+    selected = (
+        "/mnt/ada-data/Patina/.patina-builds/"
+        f"patina-colmap-4.0.2-{os.geteuid()}"
+    )
+    help_result = subprocess.run(
+        ["bash", "-p", str(INSTALLER), "--work-dir", selected, "--help"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert help_result.returncode == 0, help_result.stderr
+    assert "--work-dir PATH" in help_result.stdout
+    assert f"Resumable build state: {selected}" in help_result.stdout
+    assert f"Append-only run log:   {selected}/install.log" in help_result.stdout
+
+    script = _script()
+    parse = script.index('while [ "$#" -gt 0 ]')
+    work_dir_case = script.index("--work-dir)", parse)
+    log_derivation = script.index('readonly LOG_FILE="$WORK_DIR/install.log"')
+    lock_derivation = script.index('readonly LOCK_FILE="$WORK_DIR/install.lock"')
+    assert parse < work_dir_case < log_derivation
+    assert parse < work_dir_case < lock_derivation
+
+
+def test_custom_work_dir_is_a_safe_executable_dedicated_leaf():
+    script = _script()
+    assert '[[ "$WORK_DIR" = /* ]]' in script
+    assert "dangerous work directory" in script
+    assert 'realpath -e -- "$WORK_DIR"' in script
+    assert "refusing symlinked build directory" in script
+    assert "build directory is not owned by uid $EUID" in script
+    assert "build directory is group/world writable" in script
+    assert 'mkdir -m 0700 -- "$WORK_DIR"' in script
+    assert "findmnt" in script
+    assert "noexec" in script
+    assert "work directory must be below the filesystem mount point" in script
+
+
+def test_global_lock_serializes_activation_across_selectable_work_dirs():
+    script = _script()
+    assignment = next(
+        line for line in script.splitlines() if line.startswith("readonly GLOBAL_LOCK_FILE=")
+    )
+    assert "/var/tmp/patina-colmap-4.0.2-${EUID}.global.lock" in assignment
+    assert "$WORK_DIR" not in assignment
+    assert "validate_lock_file" in script
+    assert "multiple hard links" in script
+    assert script.index("flock -n 8") < script.index("\nprepare_work_dir\n")
+    assert script.index("flock -n 8") < script.index("flock -n 9")
+    assert script.index("flock -n 8") < script.index(
+        'phase "install immutable versioned prefix"'
+    )
+
+
 def test_installer_pins_the_exact_engine_toolchain_and_target():
     script = _script()
     assert "d927f7e518fc20afa33390712c4cc20d85b730b8" in script

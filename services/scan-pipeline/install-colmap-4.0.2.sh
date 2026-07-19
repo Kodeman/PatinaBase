@@ -21,9 +21,8 @@ readonly COLMAP_PREFIX=/opt/colmap/4.0.2
 readonly COLMAP_LINK=/usr/local/bin/colmap
 readonly EXPECTED_HEADER="COLMAP 4.0.2 -- Structure-from-Motion and Multi-View Stereo"
 readonly EXPECTED_BUILD="(Commit d927f7e on 2026-03-18 with CUDA)"
-readonly WORK_DIR="/var/tmp/patina-colmap-4.0.2-${EUID}"
-readonly LOG_FILE="$WORK_DIR/install.log"
-readonly LOCK_FILE="$WORK_DIR/install.lock"
+readonly DEFAULT_WORK_DIR="/var/tmp/patina-colmap-4.0.2-${EUID}"
+readonly GLOBAL_LOCK_FILE="/var/tmp/patina-colmap-4.0.2-${EUID}.global.lock"
 readonly MIN_FREE_KIB=$((30 * 1024 * 1024))
 
 readonly REQUIRED_COMMANDS=(
@@ -62,6 +61,9 @@ readonly APT_PACKAGES=(
 
 ACKNOWLEDGE_NOBLE_EXPERIMENT=0
 VERIFY_ONLY=0
+SHOW_HELP=0
+CUSTOM_WORK_DIR=0
+WORK_DIR="$DEFAULT_WORK_DIR"
 JOBS=4
 
 usage() {
@@ -75,6 +77,9 @@ usage() {
     '  --acknowledge-experimental-ubuntu-24.04' \
     '      Required for a build. CUDA 11.8 does not officially support Noble.' \
     '  --jobs N       Ninja parallelism (default: 4).' \
+    '  --work-dir PATH' \
+    '      Build/resume in PATH (must end in patina-colmap-4.0.2-<uid>).' \
+    '      Parent must be canonical, operator-owned mode 0700; noexec is rejected.' \
     '  --verify-only  Verify the installed prefix/link without changing state.' \
     '  -h, --help     Show this help.' \
     '' \
@@ -150,6 +155,94 @@ verify_privileged_directory() {
     die "privileged directory is group/world writable: $directory"
 }
 
+validate_work_dir_argument() {
+  if [ "$CUSTOM_WORK_DIR" -eq 1 ]; then
+    [[ "$WORK_DIR" = /* ]] ||
+      die "--work-dir must be an absolute path"
+    [ "$WORK_DIR" != / ] ||
+      die "dangerous work directory: refusing filesystem root"
+    [ "${WORK_DIR##*/}" = "patina-colmap-4.0.2-${EUID}" ] ||
+      die "dangerous work directory: custom leaf must be patina-colmap-4.0.2-${EUID}"
+    case "$WORK_DIR" in
+      *$'\n'*|*$'\r'*|*$'\t'*)
+        die "dangerous work directory: control characters are not allowed"
+        ;;
+    esac
+  fi
+}
+
+prepare_work_dir() {
+  local parent parent_mode resolved mount_target mount_options work_mode
+
+  if [ "$CUSTOM_WORK_DIR" -eq 1 ]; then
+    parent="${WORK_DIR%/*}"
+    [ -n "$parent" ] || parent=/
+    [ ! -L "$parent" ] ||
+      die "custom work-directory parent is a symlink: $parent"
+    [ -d "$parent" ] ||
+      die "precreate custom work-directory parent mode 0700: $parent"
+    resolved="$(realpath -e -- "$parent")" ||
+      die "cannot resolve custom work-directory parent: $parent"
+    [ "$resolved" = "$parent" ] ||
+      die "custom work-directory parent must be an absolute canonical path: $parent"
+    [ "$(stat -c '%u' "$parent")" = "$EUID" ] ||
+      die "custom work-directory parent is not owned by uid $EUID: $parent"
+    parent_mode="$(stat -c '%a' "$parent")"
+    [ "$parent_mode" = 700 ] ||
+      die "custom work-directory parent must be mode 0700: $parent"
+  fi
+
+  if [ -L "$WORK_DIR" ]; then
+    die "refusing symlinked build directory: $WORK_DIR"
+  fi
+  if [ -e "$WORK_DIR" ]; then
+    [ -d "$WORK_DIR" ] || die "build path is not a directory: $WORK_DIR"
+  else
+    mkdir -m 0700 -- "$WORK_DIR" ||
+      die "could not securely create build directory: $WORK_DIR"
+  fi
+
+  resolved="$(realpath -e -- "$WORK_DIR")" ||
+    die "cannot resolve build directory: $WORK_DIR"
+  [ "$resolved" = "$WORK_DIR" ] ||
+    die "work directory must be an absolute canonical path without symlinks: $WORK_DIR"
+  [ "$(stat -c '%u' "$WORK_DIR")" = "$EUID" ] ||
+    die "build directory is not owned by uid $EUID: $WORK_DIR"
+  work_mode="$(stat -c '%a' "$WORK_DIR")"
+  (( (8#$work_mode & 0022) == 0 )) ||
+    die "build directory is group/world writable: $WORK_DIR"
+
+  mount_target="$(findmnt -n -o TARGET --target "$WORK_DIR")" ||
+    die "cannot resolve filesystem mount for $WORK_DIR"
+  [ "$mount_target" != "$WORK_DIR" ] ||
+    die "work directory must be below the filesystem mount point: $WORK_DIR"
+  mount_options="$(findmnt -n -o OPTIONS --target "$WORK_DIR")" ||
+    die "cannot inspect filesystem options for $WORK_DIR"
+  case ",$mount_options," in
+    *,noexec,*)
+      die "work-directory filesystem is mounted noexec: $WORK_DIR"
+      ;;
+  esac
+}
+
+validate_lock_file() {
+  local lock_file="$1"
+  local lock_name="$2"
+  local lock_mode
+
+  [ ! -L "$lock_file" ] || die "refusing symlinked $lock_name: $lock_file"
+  if [ -e "$lock_file" ]; then
+    [ -f "$lock_file" ] || die "$lock_name is not a regular file: $lock_file"
+    [ "$(stat -c '%u' "$lock_file")" = "$EUID" ] ||
+      die "$lock_name is not owned by uid $EUID: $lock_file"
+    [ "$(stat -c '%h' "$lock_file")" = 1 ] ||
+      die "$lock_name has multiple hard links: $lock_file"
+    lock_mode="$(stat -c '%a' "$lock_file")"
+    (( (8#$lock_mode & 0022) == 0 )) ||
+      die "$lock_name is group/world writable: $lock_file"
+  fi
+}
+
 verify_installed_contract() {
   verify_privileged_directory /opt
   verify_privileged_directory /opt/colmap
@@ -184,9 +277,14 @@ while [ "$#" -gt 0 ]; do
       JOBS="$2"
       shift
       ;;
+    --work-dir)
+      [ "$#" -ge 2 ] || die "--work-dir requires an absolute path"
+      WORK_DIR="$2"
+      CUSTOM_WORK_DIR=1
+      shift
+      ;;
     -h|--help)
-      usage
-      exit 0
+      SHOW_HELP=1
       ;;
     *)
       die "unknown argument: $1"
@@ -195,11 +293,22 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+readonly WORK_DIR
+readonly LOG_FILE="$WORK_DIR/install.log"
+readonly LOCK_FILE="$WORK_DIR/install.lock"
+
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || die "--jobs requires a positive integer"
+
+if [ "$SHOW_HELP" -eq 1 ]; then
+  usage
+  exit 0
+fi
 
 if [ "$EUID" -eq 0 ]; then
   die "run this installer as a normal sudo-capable user, not root"
 fi
+
+validate_work_dir_argument
 
 if [ "$VERIFY_ONLY" -eq 1 ]; then
   verify_installed_contract
@@ -221,32 +330,18 @@ grep -Eq '^VERSION_ID="?24\.04"?$' /etc/os-release ||
 command -v nvidia-smi >/dev/null 2>&1 || die "nvidia-smi not found"
 command -v sudo >/dev/null 2>&1 || die "sudo not found"
 command -v flock >/dev/null 2>&1 || die "flock not found"
+command -v realpath >/dev/null 2>&1 || die "realpath not found"
+command -v findmnt >/dev/null 2>&1 || die "findmnt not found"
 
-if [ -L "$WORK_DIR" ]; then
-  die "refusing symlinked build directory: $WORK_DIR"
-fi
-if [ -e "$WORK_DIR" ]; then
-  [ -d "$WORK_DIR" ] || die "build path is not a directory: $WORK_DIR"
-  [ "$(stat -c '%u' "$WORK_DIR")" = "$EUID" ] ||
-    die "build directory is not owned by uid $EUID: $WORK_DIR"
-  work_mode="$(stat -c '%a' "$WORK_DIR")"
-  (( (8#$work_mode & 0022) == 0 )) ||
-    die "build directory is group/world writable: $WORK_DIR"
-else
-  mkdir -m 0700 -- "$WORK_DIR"
-fi
-[ ! -L "$LOCK_FILE" ] || die "refusing symlinked lock file: $LOCK_FILE"
-if [ -e "$LOCK_FILE" ]; then
-  [ -f "$LOCK_FILE" ] || die "lock path is not a regular file: $LOCK_FILE"
-  [ "$(stat -c '%u' "$LOCK_FILE")" = "$EUID" ] ||
-    die "lock file is not owned by uid $EUID: $LOCK_FILE"
-  [ "$(stat -c '%h' "$LOCK_FILE")" = 1 ] ||
-    die "lock file has multiple hard links: $LOCK_FILE"
-  lock_mode="$(stat -c '%a' "$LOCK_FILE")"
-  (( (8#$lock_mode & 0022) == 0 )) ||
-    die "lock file is group/world writable: $LOCK_FILE"
-fi
+validate_lock_file "$GLOBAL_LOCK_FILE" "global installer lock"
+exec 8>>"$GLOBAL_LOCK_FILE"
+validate_lock_file "$GLOBAL_LOCK_FILE" "global installer lock"
+flock -n 8 || die "another COLMAP installer is active for uid $EUID"
+
+prepare_work_dir
+validate_lock_file "$LOCK_FILE" "work-directory lock"
 exec 9>>"$LOCK_FILE"
+validate_lock_file "$LOCK_FILE" "work-directory lock"
 flock -n 9 || die "another COLMAP installer is using $WORK_DIR"
 [ ! -L "$LOG_FILE" ] || die "refusing symlinked log file: $LOG_FILE"
 touch "$LOG_FILE"
