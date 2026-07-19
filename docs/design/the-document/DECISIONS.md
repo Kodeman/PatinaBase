@@ -4434,3 +4434,37 @@ evidence (including no-op rejection), queue replay/order/race tests, and aligned
 pose consumer contracts for Fuse/Splat pass.
 
 *Entries add: I87 · last id = I87*
+
+### I88 · Field Capture P2 item 3 · DeskDev GPU box acceptance — 2026-07-19
+
+P2 item 3's real-box gate passed on `DeskDev` without exposing a GPU-stage claim
+set to the queue worker. Full receipt:
+`docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md`.
+
+**Runtime evidence:** Ubuntu 24.04.3, RTX 2080 Ti (`sm_75`, driver 580.159.03),
+isolated CUDA 11.8 with GCC/G++ 11, and a real CUDA compile/runtime smoke passed.
+COLMAP 4.0.2 commit `d927f7e` built with CUDA, activated under
+`/opt/colmap/4.0.2`, and exposed the six required known-pose/fallback commands.
+The doctor-only systemd twin ran temporary `STAGES=refine,fuse,splat` under the
+installed sandbox. Cold and warm passes were fully green for GPU visibility,
+COLMAP/PyCOLMAP parity, Open3D CUDA tensor execution, nvcc 11.8, torch cu118
+`sm_75`, gsplat public rasterization, and all confined caches. The cold gsplat
+extension setup reported 130.11 s; the warm doctor reported 7.383 s of systemd
+CPU consumption. Cleanup completed and the queue worker remained inactive with
+its persistent CPU stage contract unchanged.
+
+**Rollout evidence:** the read-only Strata query for refine/fuse/splat tasks in
+queued/running/failed states returned zero rows. No DB or Storage row was
+mutated. Main `14b01e89` now emits the exact temporary GCC11/CUDA11.8 acceptance
+environment, isolates each doctor's journal by cursor, rejects pre-existing
+runtime drop-ins, proves the doctor quiescent, and restores worker posture
+fail-safe. Focused tests passed 7/7; prior full evidence was 94 installer and
+310 scan-pipeline tests; independent adversarial review passed.
+
+**Boundary:** this closes item 3 dependency/sandbox qualification only. Item 4
+remains blocked on exact PyCOLMAP database/model API + GPU-SIFT reconstruction
+evidence and a physical Field/Core Image HEIC/Linux-materializer fixture. GPU
+stages stay unregistered and must not be enabled; scan `95266be1` remains
+local-scratch-only until those gates pass.
+
+*Entries add: I88 · last id = I88*
