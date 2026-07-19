@@ -384,7 +384,7 @@ file access. Full schema: design §3.
 | `POLL_SECONDS` | `5` | sleep between empty polls |
 | `MAX_CONCURRENT` | `2` | claim batch size / max in-flight |
 | `GPU` | `auto` | `auto` = detect+report; `off` = never touch. `doctor` makes the GPU check a hard failure (not a warning) when `STAGES` lists a GPU stage; `GPU=off` + a GPU stage is a contradiction it flags |
-| `VISIBILITY_TIMEOUT` | `60 minutes` | lease length; a dead worker's job is reclaimable after this (a 500 MB bundle on a slow link needs the room; the lost-race guard covers overruns) |
+| `VISIBILITY_TIMEOUT` | `60 minutes` | lease length as one positive seconds/minutes/hours value; a dead worker's job is reclaimable after this. Each claim carries a conservative monotonic expiry bounded from request start, so response latency consumes rather than extends the engine budget |
 | `MAX_ATTEMPTS` | `5` | max attempts on enqueued successors (backoff parks here) |
 | `ROOM_SCANS_BUCKET` | `room-scans` | bucket bundles arrive in / drawings write to |
 | `WORK_DIR` | `/var/lib/patina/scan-work` | scratch root (on the `ReadWritePaths` allowlist) |
@@ -393,8 +393,11 @@ file access. Full schema: design §3.
 | `LOG_LEVEL` | `info` | journald verbosity |
 
 `refine` never treats the configured visibility default as its command timeout.
-Item 4 derives the actual claimed lease expiry and shares one deadline across
-engine commands: `min(stage start + 4 minutes, actual lease expiry - 60 seconds)`.
+Each claimed task carries the immutable request-start monotonic lower bound for
+that claim's expiry. Item 4 shares one deadline across engine commands:
+`min(stage start + 4 minutes, claimed lease bound - 60 seconds)`. Starting the
+bound before the RPC is deliberately conservative: network/response time can
+only reduce the remaining engine budget, never overrun the database lease.
 
 ## Commands
 

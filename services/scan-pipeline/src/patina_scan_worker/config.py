@@ -13,7 +13,9 @@ refuses to start without them (the ``INFERENCE_TOKEN`` precedent).
 
 from __future__ import annotations
 
+import math
 import os
+import re
 from dataclasses import dataclass, field
 
 # The full set of stages this codebase knows about (design §2.1, §10). The P1
@@ -43,10 +45,58 @@ TASK_TYPE_PREFIX = "scan_pipeline."
 # so an un-tuned/CPU worker never advertises a GPU task type.
 DEFAULT_STAGES = "ingest,solve,drawings"
 
+_VISIBILITY_TIMEOUT_RE = re.compile(
+    r"^(?P<amount>\d+(?:\.\d+)?)\s*"
+    r"(?P<unit>seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h)$",
+    re.IGNORECASE,
+)
+_VISIBILITY_TIMEOUT_FACTORS = {
+    "s": 1.0,
+    "sec": 1.0,
+    "secs": 1.0,
+    "second": 1.0,
+    "seconds": 1.0,
+    "m": 60.0,
+    "min": 60.0,
+    "mins": 60.0,
+    "minute": 60.0,
+    "minutes": 60.0,
+    "h": 3600.0,
+    "hr": 3600.0,
+    "hrs": 3600.0,
+    "hour": 3600.0,
+    "hours": 3600.0,
+}
+
 
 class ConfigError(RuntimeError):
     """Raised when the environment is incomplete or invalid — the worker
     refuses to start rather than run half-configured."""
+
+
+def _parse_visibility_timeout(raw: str) -> float:
+    """Normalize the deliberately narrow lease interval grammar to seconds.
+
+    PostgreSQL accepts a much broader interval language, but the worker must
+    convert the exact claim interval into a monotonic deadline. Restricting the
+    environment contract to positive seconds/minutes/hours prevents the client
+    and database from assigning different meanings to an ambiguous interval.
+    """
+
+    match = _VISIBILITY_TIMEOUT_RE.fullmatch(raw.strip())
+    if match is None:
+        raise ConfigError(
+            "VISIBILITY_TIMEOUT must be one positive seconds/minutes/hours "
+            f"interval, got {raw!r}"
+        )
+    amount = float(match.group("amount"))
+    factor = _VISIBILITY_TIMEOUT_FACTORS[match.group("unit").lower()]
+    seconds = amount * factor
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise ConfigError(
+            f"VISIBILITY_TIMEOUT must resolve to positive finite seconds, got {raw!r}"
+        )
+    return seconds
 
 
 @dataclass(frozen=True)
@@ -73,6 +123,16 @@ class Settings:
 
     # Derived: the fully-qualified task types this worker claims.
     task_types: tuple[str, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        # Keep the PostgreSQL interval and monotonic duration one source of
+        # truth even for direct construction/dataclasses.replace in tests or
+        # future callers outside settings_from_env().
+        _parse_visibility_timeout(self.visibility_timeout)
+
+    @property
+    def visibility_timeout_seconds(self) -> float:
+        return _parse_visibility_timeout(self.visibility_timeout)
 
     def with_task_types(self) -> "Settings":
         tts = tuple(f"{TASK_TYPE_PREFIX}{s}" for s in self.stages)
@@ -150,6 +210,8 @@ def settings_from_env(env: dict[str, str] | None = None) -> Settings:
         except ValueError as exc:
             raise ConfigError(f"{name} must be a number, got {raw!r}") from exc
 
+    visibility_timeout = (src.get("VISIBILITY_TIMEOUT") or "60 minutes").strip()
+
     s = Settings(
         worker_id=worker_id,
         supabase_url=supabase_url,
@@ -158,7 +220,7 @@ def settings_from_env(env: dict[str, str] | None = None) -> Settings:
         poll_seconds=_int_src("POLL_SECONDS", 5),
         max_concurrent=_int_src("MAX_CONCURRENT", 2),
         gpu=gpu,
-        visibility_timeout=(src.get("VISIBILITY_TIMEOUT") or "60 minutes").strip(),
+        visibility_timeout=visibility_timeout,
         max_attempts=_int_src("MAX_ATTEMPTS", 5),
         room_scans_bucket=(src.get("ROOM_SCANS_BUCKET") or "room-scans").strip(),
         work_dir=(src.get("WORK_DIR") or "/var/lib/patina/scan-work").strip(),

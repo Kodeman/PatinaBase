@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
-from patina_scan_worker.config import ConfigError, settings_from_env
+from patina_scan_worker.config import ConfigError, Settings, settings_from_env
 
 BASE = {
     "WORKER_ID": "homelab-1",
@@ -34,6 +36,7 @@ def test_defaults_and_task_types():
     assert s.max_concurrent == 2
     assert s.gpu == "auto"
     assert s.visibility_timeout == "60 minutes"
+    assert s.visibility_timeout_seconds == 60 * 60
     assert s.room_scans_bucket == "room-scans"
 
 
@@ -86,6 +89,58 @@ def test_numeric_fields_parse_and_validate():
         settings_from_env({**BASE, "MAX_CONCURRENT": "0"})
     with pytest.raises(ConfigError):
         settings_from_env({**BASE, "POLL_SECONDS": "not-an-int"})
+
+
+@pytest.mark.parametrize(
+    ("raw", "seconds"),
+    [
+        ("90 seconds", 90.0),
+        ("1.5 minutes", 90.0),
+        ("2 hours", 7200.0),
+        ("1 SEC", 1.0),
+        ("2 mins", 120.0),
+        ("0.5 hr", 1800.0),
+    ],
+)
+def test_visibility_timeout_normalizes_supported_intervals(raw, seconds):
+    settings = settings_from_env({**BASE, "VISIBILITY_TIMEOUT": raw})
+    assert settings.visibility_timeout == raw
+    assert settings.visibility_timeout_seconds == pytest.approx(seconds)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "0 seconds",
+        "-1 minute",
+        "nan seconds",
+        "inf hours",
+        "1 day",
+        "1 month",
+        "1 hour 30 minutes",
+        "15",
+        "15 minutes; select 1",
+    ],
+)
+def test_visibility_timeout_rejects_unsafe_or_ambiguous_intervals(raw):
+    with pytest.raises(ConfigError, match="VISIBILITY_TIMEOUT"):
+        settings_from_env({**BASE, "VISIBILITY_TIMEOUT": raw})
+
+
+def test_visibility_timeout_has_one_source_of_truth_for_direct_settings():
+    settings = Settings(
+        worker_id="direct-worker",
+        supabase_url="https://example.supabase.co",
+        service_role_key="svc-key",
+        visibility_timeout="2 minutes",
+    )
+    assert settings.visibility_timeout_seconds == 120.0
+
+    updated = replace(settings, visibility_timeout="90 seconds")
+    assert updated.visibility_timeout_seconds == 90.0
+
+    with pytest.raises(ConfigError, match="VISIBILITY_TIMEOUT"):
+        replace(settings, visibility_timeout="1 day")
 
 
 def test_url_trailing_slash_trimmed():

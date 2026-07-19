@@ -17,6 +17,8 @@ warning naming both workers, and let the loop continue.
 from __future__ import annotations
 
 import logging
+import math
+import time
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -60,16 +62,50 @@ class LostRaceError(RuntimeError):
     the loop."""
 
 
+def claimed_task_lease_expires_monotonic_s(
+    task: dict[str, Any],
+    *,
+    now_monotonic_s: float | None = None,
+) -> float:
+    """Return the immutable conservative expiry carried by ``claim()``.
+
+    A stage calls this at handler entry before starting a shared engine
+    deadline. It is intentionally not reconstructed from wall-clock timestamps
+    or the current configuration, either of which can drift after the claim.
+    This queue-layer seam stays importable by stage modules without creating a
+    worker → registry → stage → worker cycle.
+    """
+
+    expiry = task.get("_lease_expires_monotonic_s")
+    if (
+        isinstance(expiry, bool)
+        or not isinstance(expiry, (int, float))
+        or not math.isfinite(expiry)
+    ):
+        raise RuntimeError("claimed task is missing a finite monotonic lease expiry")
+    now = time.monotonic() if now_monotonic_s is None else now_monotonic_s
+    if (
+        isinstance(now, bool)
+        or not isinstance(now, (int, float))
+        or not math.isfinite(now)
+        or float(expiry) <= float(now)
+    ):
+        raise RuntimeError("claimed task lease expiry is not in the future")
+    return float(expiry)
+
+
 class QueueClient:
     def __init__(
         self,
         session: httpx.Client,
         settings: Settings,
         lease_id_factory: Callable[[], str] | None = None,
+        monotonic: Callable[[], float] | None = None,
     ):
         self._s = session
         self._cfg = settings
         self._lease_id_factory = lease_id_factory or (lambda: str(uuid.uuid4()))
+        self._monotonic = monotonic or time.monotonic
 
     def _new_lease_owner(self) -> str:
         raw_suffix = self._lease_id_factory()
@@ -131,6 +167,22 @@ class QueueClient:
         call creates a fresh, base-prefixed lease owner and carries it on each
         returned task for exact completion."""
         lease_owner = self._new_lease_owner()
+        # PostgreSQL cannot establish this lease before the request begins, so
+        # request-start + the exact interval passed to the RPC is a conservative
+        # lower bound on the real DB expiry. Response latency consumes the bound;
+        # it can never extend the refine engine's available time.
+        claim_started_monotonic_s = self._monotonic()
+        if (
+            isinstance(claim_started_monotonic_s, bool)
+            or not isinstance(claim_started_monotonic_s, (int, float))
+            or not math.isfinite(claim_started_monotonic_s)
+        ):
+            raise RuntimeError("monotonic clock returned an invalid claim timestamp")
+        lease_expires_monotonic_s = (
+            float(claim_started_monotonic_s) + self._cfg.visibility_timeout_seconds
+        )
+        if not math.isfinite(lease_expires_monotonic_s):
+            raise RuntimeError("queue lease expiry is not finite")
         rows = self._rpc(
             "claim_agent_tasks",
             {
@@ -143,7 +195,14 @@ class QueueClient:
         # Carry the immutable authority on each returned task. Do not look it
         # up later by task id: the same id may be reclaimed under a newer token
         # while an old task object is still finishing.
-        return [{**row, "_lease_owner": lease_owner} for row in (rows or [])]
+        return [
+            {
+                **row,
+                "_lease_owner": lease_owner,
+                "_lease_expires_monotonic_s": lease_expires_monotonic_s,
+            }
+            for row in (rows or [])
+        ]
 
     # ── complete (lost-race-guarded) ──────────────────────────────────────────
     def complete_done(
