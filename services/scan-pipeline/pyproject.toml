@@ -33,7 +33,8 @@ drawings = ["ezdxf>=1.1", "cairosvg>=2.7"]
 #   position-prior mapper fallback. The CLI and binding MUST both report 4.0.2
 #   in the still-owed box fixture; the exact binding pin prevents a silent DB/
 #   model API mismatch. This is a target, not a completed runtime qualification.
-#   No standalone GLOMAP package and no torch.
+#   COLMAP is a system binary (box prep, not pip); pycolmap reads/writes its DB
+#   and models. No standalone GLOMAP package and no torch.
 refine = ["pycolmap==4.0.2", "numpy>=1.26", "scipy>=1.11"]
 # fuse (§10.3): TSDF dense mesh (Open3D) + decimation + glb export. No torch.
 fuse = ["open3d>=0.18", "trimesh>=4.0", "numpy>=1.26"]
@@ -43,8 +44,9 @@ fuse = ["open3d>=0.18", "trimesh>=4.0", "numpy>=1.26"]
 #   still spans sm_37..sm_90). The binding constraint is the BOX's CUDA-11.x-era
 #   driver, which needs the cu118 RUNTIME. So the box installs the +cu118 wheel
 #   via the PyTorch index (README box-prep: `--extra-index-url
-#   https://download.pytorch.org/whl/cu118`); gsplat JIT-compiles CUDA kernels at
-#   install and needs the matching CUDA 11.8 toolkit (nvcc). The torch band below
+#   https://download.pytorch.org/whl/cu118`); gsplat may JIT-compile CUDA kernels
+#   on first rasterization and needs the matching CUDA 11.8 toolkit (nvcc). The
+#   torch band below
 #   is the conservative Turing+gsplat-tested ceiling; `doctor`'s torch.cuda check
 #   on the box is the ground truth. (SPZ writer dep lands with item 7.)
 splat = ["torch>=2.2,<2.5", "gsplat>=1.0,<2.0", "numpy>=1.26"]

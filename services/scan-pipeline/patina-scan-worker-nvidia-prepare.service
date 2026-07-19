@@ -1,0 +1,15 @@
+# /etc/systemd/system/patina-scan-worker-nvidia-prepare.service
+# GPU-only root preparation for the Patina scan worker. Installed by
+# `install.sh --gpu`; CPU installs never install or require it.
+[Unit]
+Description=Prepare NVIDIA compute devices for Patina scan worker
+Before=patina-scan-worker.service
+Before=patina-scan-worker-doctor.service
+
+[Service]
+Type=oneshot
+# NVIDIA documents -c N for the compute/ctl device and -u for Unified Memory.
+# Root is intentional: the worker itself remains User=patina and unprivileged.
+ExecStart=/usr/bin/nvidia-modprobe -c 0
+ExecStart=/usr/bin/nvidia-modprobe -u
+RemainAfterExit=yes

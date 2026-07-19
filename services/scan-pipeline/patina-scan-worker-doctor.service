@@ -1,0 +1,29 @@
+# /etc/systemd/system/patina-scan-worker-doctor.service
+# Readiness-only twin of patina-scan-worker.service. It intentionally duplicates
+# the worker execution context so a successful start proves the real sandbox,
+# credentials, cache paths, NVIDIA preparation, and DeviceAllow policy without
+# ever executing the queue-claiming `run` command.
+[Unit]
+Description=Patina Field Capture scan-pipeline readiness check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=patina
+Group=patina
+EnvironmentFile=/etc/patina/scan-worker.env
+Environment=XDG_CONFIG_HOME=/opt/patina/scan-pipeline/.config
+Environment=XDG_CACHE_HOME=/opt/patina/scan-pipeline/.cache
+Environment=XDG_DATA_HOME=/opt/patina/scan-pipeline/.data
+Environment=XDG_STATE_HOME=/opt/patina/scan-pipeline/.state
+ExecStart=/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker doctor
+TimeoutStartSec=15min
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/patina/scan-work /opt/patina/scan-pipeline/.config /opt/patina/scan-pipeline/.cache /opt/patina/scan-pipeline/.data /opt/patina/scan-pipeline/.state
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=patina-scan-worker-doctor

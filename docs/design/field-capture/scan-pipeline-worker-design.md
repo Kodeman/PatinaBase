@@ -175,9 +175,14 @@ Repo home `services/scan-pipeline/`. Python 3.11+, `pyproject.toml`, console ent
 services/scan-pipeline/
   pyproject.toml                 # deps + [project.scripts] patina-scan-worker = "patina_scan_worker.cli:main"
   README.md                      # box-prep + run instructions (appendix A, mirrored)
-  install.sh                     # create venv, pip install ., install unit + env template, enable service
+  install.sh                     # stage/verify/smoke, transactionally activate venv + units
+  install-path-guard.py          # no-follow ownership/containment guard for root install
+  install-venv-lib.sh            # durable snapshot/switch/rollback/recovery state machine
   patina-scan-worker.service     # systemd unit (§5)
-  scan-worker.env.example        # config template → copied to /etc/patina/scan-worker.env (0600)
+  patina-scan-worker-doctor.service # doctor-only acceptance oneshot (§5/§6)
+  patina-scan-worker.gpu.conf    # identical worker + doctor GPU drop-in
+  patina-scan-worker-nvidia-prepare.service # GPU-only root device-node oneshot
+  scan-worker.env.example        # → /etc/patina/scan-worker.env (root:root 0600)
   Dockerfile                     # OPTIONAL — future cloud-burst artifact; NOT used for native operation
   src/patina_scan_worker/
     __init__.py
@@ -208,7 +213,66 @@ services/scan-pipeline/
 - `once` — claim-and-drain one batch, then exit (cron-style / manual re-drain / debugging).
 - `doctor` — preflight, no queue interaction (§6).
 
-Dependencies are ordinary PyPI wheels: a Supabase/PostgREST HTTP client (or `httpx` + hand-rolled RPC calls, as `aesthete-inference` does), `numpy`/`scipy` (least-squares fit), `ezdxf` (DXF), and the chosen PDF path. `install.sh` builds the venv, `pip install .`, drops the unit and env template, and prints the doctor result — the same venv-bootstrap shape as `aesthete-inference/Makefile`.
+Dependencies are stage-named extras, so a CPU worker never resolves CUDA by
+accident: `[solve]` (numpy/scipy), `[drawings]` (ezdxf/cairosvg), `[refine]`
+(pycolmap + numpy/scipy), `[fuse]` (Open3D/trimesh), and `[splat]` (the pinned
+cu118 torch + gsplat band). `[gpu]` is only the box convenience meta-extra for
+`refine+fuse+splat`; it is not a new execution mode.
+
+The supported first-run path quiesces every `patina` process, then stages an
+operator-reviewed snapshot at `/opt/patina/scan-pipeline-source` with root
+ownership, `rsync --delete --delete-excluded --ignore-times`, and a closed
+top-level include set. The fresh inodes and single-link requirement remove
+legacy open-FD/hardlink aliases; deletion removes stale setuptools and
+Python-startup controls (`setup.py`, `setup.cfg`, `MANIFEST.in`,
+`sitecustomize.py`). Before sourcing either helper, `install.sh` enters Bash
+privileged mode, fixes `PATH`, and uses fixed `/usr/bin/python3 -I -S` plus
+no-follow dirfd opens to validate its bootstrap files. The guard then validates
+the exact top-level snapshot and recursively accepts only root-owned,
+non-writable, regular, single-linked Python modules beneath
+`src/patina_scan_worker`. All privileged Python snippets and venv creation run
+with a scrubbed environment plus `-I -S`; pip runs through the candidate
+interpreter with a scrubbed environment plus `-I`. Runtime `APP_DIR` is never
+source, and any legacy `APP_DIR/install.sh` is atomically replaced by a
+root-owned fail-closed stub. Every later invocation revalidates this contract.
+The quiescence requirement is limited to that first migration from a potentially
+service-controlled tree. Routine root-owned source restaging occurs while the
+worker continues from its immutable venv, allowing upgrade activation to
+snapshot and preserve the active posture.
+
+`install.sh` builds an immutable candidate release, runs `pip check`, an
+installed-package import/entrypoint smoke as `User=patina`, and—on
+Linux—`systemd-analyze verify` against a staged unit tree. `/opt/patina` and
+`APP_DIR` are a root-owned, non-service-writable executable namespace; only the
+four XDG directories and `WORK_DIR` are delegated to `patina`. New releases use
+a high-entropy direct-child name that is marker-backed before atomic creation,
+and stable release links are resolved no-follow and must remain directly
+contained by `APP_DIR`. It then fsyncs a root-only snapshot at
+`/etc/patina/.scan-worker-install-transaction` of installed unit
+presence/content and canonical absolute current/previous release references
+(relative stable links resolve against `APP_DIR`, never process cwd). Recovery
+accepts only a symlink-free root-owned transaction tree, no-follow regular
+marker files, and unit targets exactly in `MANAGED_UNIT_TARGETS`. `ActiveState`
+must be stable;
+`activating`, `deactivating`, and `reloading` fail closed. Unit replacement and
+the normal `.venv` symlink switch are same-filesystem atomic renames after an
+active worker is stopped and confirmed quiescent. A failed activation restores
+all unit/release snapshots, daemon-reloads, and restarts the prior service; a
+durable transaction marker makes the next invocation recover an interrupted
+switch, while `committed` recovery only finishes cleanup. A legacy real `.venv`
+is converted once while stopped and with no remaining `patina` process. The
+transaction records fresh materialized/quarantine paths, copies regular files to
+independent root-owned inodes, admits only internal lexical symlinks plus trusted
+`bin/python*` interpreter terminals, normalizes modes, validates, service-user
+smokes, and fsyncs the fresh tree before the durable one-way raw quarantine
+rename. Ready is written only after that rename. Pre-quarantine recovery discards
+an unready copy and retries; post-quarantine recovery uses only the validated
+fresh tree, so rollback/current and previous never alias or restore raw legacy
+inodes. Raw quarantine is deleted after durable rollback/commit cleanup. A real
+`.venv.previous` fails closed for manual archive outside `APP_DIR`. A
+prepared first-install transaction treats `LoadState=not-found` as already
+quiescent, so it can restore absent units without an impossible stop. The
+installer never runs doctor from its root shell.
 
 ---
 
@@ -228,7 +292,13 @@ Type=simple
 User=patina
 Group=patina
 EnvironmentFile=/etc/patina/scan-worker.env
+Environment=XDG_CONFIG_HOME=/opt/patina/scan-pipeline/.config
+Environment=XDG_CACHE_HOME=/opt/patina/scan-pipeline/.cache
+Environment=XDG_DATA_HOME=/opt/patina/scan-pipeline/.data
+Environment=XDG_STATE_HOME=/opt/patina/scan-pipeline/.state
+ExecStartPre=/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker doctor
 ExecStart=/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker run
+TimeoutStartSec=15min
 Restart=always
 RestartSec=5
 # hardening — outbound-only worker needs no privilege and no host write beyond scratch
@@ -236,7 +306,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/patina/scan-work
+ReadWritePaths=/var/lib/patina/scan-work /opt/patina/scan-pipeline/.config /opt/patina/scan-pipeline/.cache /opt/patina/scan-pipeline/.data /opt/patina/scan-pipeline/.state
 # logs to journald
 StandardOutput=journal
 StandardError=journal
@@ -247,6 +317,21 @@ WantedBy=multi-user.target
 ```
 
 `Restart=always` makes a crash self-healing; combined with the queue's visibility timeout, a job the worker died mid-way through is reclaimed and re-run without operator action.
+
+GPU installs apply one identical additive drop-in to this worker and to a
+separate `patina-scan-worker-doctor.service` oneshot. The drop-in requires the
+root `patina-scan-worker-nvidia-prepare.service`, grants the exact single-card
+compute/control/UVM nodes, disables `PrivateDevices` for those allowed nodes,
+and confines torch/CUDA/JIT caches under the base unit's writable `.cache`.
+The doctor oneshot duplicates the worker's `User`/`Group`, `EnvironmentFile`,
+XDG environment, timeout, sandbox, and `ReadWritePaths`; its only `ExecStart` is
+`patina-scan-worker doctor`. It has no `run`, restart policy, or `[Install]`
+section, so item-3 GPU acceptance cannot claim queue work or be enabled.
+Item-3 acceptance leaves the persistent worker env untouched: a root-only
+temporary env and doctor-only `EnvironmentFile=` reset drop-in live under
+`/run`, are refused if pre-existing, and are removed with a daemon reload by the
+acceptance trap. Reboot clears them, so the enabled queue worker can boot only
+with its normal registered CPU stages even if acceptance loses power mid-run.
 
 ### 5.2 Storage path convention
 
@@ -277,10 +362,25 @@ The drawings prefix `room_file/{userId}/{scanId}/v{version}/…` puts the **scan
 - **Env completeness** — every `*(required)*` var present; `STAGES` values are known; `GPU` is a legal value.
 - **DB reachability** — `agent_queue_stats()` returns (proves the service-role key authenticates and the RPCs are reachable over 443).
 - **Storage reachability** — a HEAD/list against `room-scans` succeeds.
-- **GPU visibility** — reports whether a CUDA device is present (`nvidia-smi` / driver query). In P1 this is **informational** — a red GPU line is a warning, not a failure, because no P1 stage uses it. At P2 a splat-enabled worker treats it as required.
+- **GPU visibility and stage runtime** — GPU absence is informational for a CPU
+  stage set and red for `refine`/`fuse`/`splat`. Readiness is scoped to enabled
+  stages: the refine command/module surface is a preflight only (runtime engine
+  qualification belongs to the item-4 decision record); fuse requires Open3D's
+  public CUDA availability/device probe plus a deterministic CUDA tensor
+  allocate/kernel/CPU-copy result of `2.0`; splat requires CUDA 11.8 `nvcc`, a
+  cu118 torch wheel with `sm_75` plus a real CUDA arithmetic op, and gsplat's
+  public rasterizer returning the expected CUDA shapes, finite values, and a
+  positive alpha. See
+  `p2-item4-colmap-adapter-spike-2026-07-18.md` for the refine runtime decision.
 - **Disk headroom** — free space in `WORK_DIR` against `MAX_CONCURRENT × ~1.5 GB` plus the retention window; warns below headroom.
 
-`doctor` is what `install.sh` runs last and what Kody runs after any env change.
+`install.sh` never invokes doctor as root. Normal worker activation runs it as
+`ExecStartPre`, which inherits the exact service user, root-read
+`EnvironmentFile`, XDG/cache paths, filesystem sandbox, and—on GPU installs—the
+NVIDIA dependency and `DeviceAllow`. For acceptance before GPU handlers are
+registered, Kody starts `patina-scan-worker-doctor.service`; that oneshot inherits
+the same context but can never execute `run`. The empty GPU-queue query is kept
+as rollout evidence only, not as a race-prone safety gate.
 
 ---
 
@@ -336,9 +436,20 @@ Every event names `scan_id`; `solve`/`drawing`/`delivery` events also set `room_
 
 ## 9. Security posture
 
-- **One credential, server-side.** The worker's only secret is `SUPABASE_SERVICE_ROLE_KEY`, held in `/etc/patina/scan-worker.env` (mode `0600`, owned by the `patina` service user, delivered via `EnvironmentFile` so it never appears in `argv` or the unit file). It lives on the Kody-managed box, never on any client (house rule: `service_role` stays server-side).
+- **One credential, server-side.** The worker's only secret is
+  `SUPABASE_SERVICE_ROLE_KEY`, held in `/etc/patina/scan-worker.env` as
+  **`root:root` mode `0600`**. PID 1 reads `EnvironmentFile` before launching
+  `User=patina`; the unprivileged process neither needs nor receives file access,
+  and the secret never appears in `argv` or the unit file. It lives on the
+  Kody-managed box, never on any client (house rule: `service_role` stays
+  server-side).
 - **Zero-ingress.** All traffic is outbound HTTPS/443 to Strata (PostgREST + Storage). The worker opens no socket. The host firewall can deny all inbound. Kody's **Cloudflare Tunnel is ops access** (SSH/monitoring), an independent process (`cloudflared`); the worker neither requires nor uses it — the pipeline drains with the tunnel stopped.
-- **systemd hardening** — `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, and a `ReadWritePaths` allowlist scoped to the scratch dir (§5.1). The worker needs no privilege and no host write beyond scratch.
+- **systemd hardening** — `NoNewPrivileges`, `ProtectSystem=strict`,
+  `ProtectHome`, `PrivateTmp`, and a `ReadWritePaths` allowlist scoped to scratch
+  plus the four app-owned XDG directories (§5.1). GPU policy grants only the
+  accepted card's compute/control/UVM nodes and redirects all CUDA/JIT caches
+  under the allowed app cache. The root NVIDIA oneshot prepares device nodes;
+  worker and doctor processes remain unprivileged.
 - **Storage discipline** — writes only under the `room_file/{userId}/{scanId}/v{version}/…` prefix so 00287 designer-read RLS resolves; reads only the `room-scans` bucket.
 
 **Hardening follow-up (not P1 scope).** The service-role key is broad — it can read and write every table. A P2/hardening option is to replace it with a **least-privilege LOGIN role** or a **scoped JWT** minted for the worker, granted only: `EXECUTE` on the five queue RPCs it calls; write on the three server-generated tables (`room_files`, `room_file_measurements`, `scan_pipeline_events`); read on `room_scans` + `scan_anchors`; and Storage read/write on `room-scans`. This is a documented follow-up, not a P1 blocker — P1 accepts the service-role key on a single trusted box.
@@ -655,15 +766,33 @@ quality — realistic against the §10.2–10.5 engine survey:
 What the Linux box needs to run P1 (and to be P2-ready):
 
 - **Distro** — Ubuntu 22.04/24.04 LTS or Debian 12, x86_64. A service user `patina` and `systemd` (present on all three).
-- **Python** — 3.11 or newer, with `venv` (`apt install python3.11-venv`). `install.sh` builds the venv; no system-wide Python packages.
+- **Python** — 3.11 or newer, with `venv` (`apt install python3.11-venv`). `install.sh` builds the venv; no system-wide Python packages. If the distro's `/usr/bin/python3` is older, pass an absolute `PYTHON=/usr/bin/python3.11`; the installer accepts only a canonical root-owned executable reached through root-owned, non-group/world-writable ancestry.
 - **CPU only for P1** — the three P1 stages (validate, least-squares scale fit, SVG/PDF/DXF) are CPU-bound. No GPU driver is needed to run P1. `doctor` will report GPU absent as a warning, which is expected.
-- **Optional NVIDIA for P2** — the proprietary NVIDIA driver + a CUDA toolkit matching the card (the 2080 Ti is Turing; a newer card is fine). `nvidia-smi` should list the device; then `doctor` reports the GPU green. Only needed when a splat stage is enabled.
+- **Optional NVIDIA for P2** — the proprietary NVIDIA driver, CUDA 11.8 toolkit,
+  and `/usr/bin/nvidia-modprobe` for the accepted RTX 2080 Ti/cu118 stack.
+  `nvidia-smi` and the stage-scoped systemd doctor must both pass before any GPU
+  stage is enabled.
 - **Disk** — bundles are 300–600 MB each; scratch sizing ≈ `MAX_CONCURRENT × ~1.5 GB` (download + render headroom) plus the retention window. Provision **≥ 50–100 GB** on the `WORK_DIR` volume; `RETENTION_HOURS` prunes downloaded bundles and rendered sets. (P2 splat outputs will want considerably more — size that when P2 lands.)
 - **Network** — **outbound 443 only**. No inbound ports, no forwarding, no reverse proxy in front of the worker. The firewall may deny all inbound. `cloudflared` (Kody's tunnel) is a separate, optional install for SSH/ops in — independent of the worker.
 - **Time** — `chrony`/NTP so `scan_pipeline_events` and audit timestamps are sane.
-- **Files** — `/etc/patina/scan-worker.env` at `0600` owned by `patina`; venv at `/opt/patina/scan-pipeline/.venv`; scratch at `/var/lib/patina/scan-work`.
+- **Files** — reviewed installer source at
+  `/opt/patina/scan-pipeline-source` in the closed root-owned layout above;
+  `/etc/patina/scan-worker.env` at `0600` owned by `root:root`;
+  root-owned stable venv symlink at `/opt/patina/scan-pipeline/.venv`;
+  root-owned, non-service-writable immutable releases beside it; only the XDG
+  cache/state dirs below `APP_DIR` and scratch at `/var/lib/patina/scan-work`
+  are owned by `patina`.
 
-Bring-up: `sudo ./install.sh` → edit `/etc/patina/scan-worker.env` (URL, key, `WORKER_ID`) → `patina-scan-worker doctor` → `systemctl enable --now patina-scan-worker` → watch `journalctl -u patina-scan-worker -f`.
+Bring-up: stop the worker/service UID and stage reviewed source root-owned at
+`/opt/patina/scan-pipeline-source` with the README's delete/fresh-inode rsync →
+`sudo /opt/patina/scan-pipeline-source/install.sh` → edit
+`/etc/patina/scan-worker.env` (URL, key,
+`WORKER_ID`) → `systemctl start patina-scan-worker-doctor` for a context-accurate
+preflight → `systemctl enable --now patina-scan-worker` → watch
+`journalctl -u patina-scan-worker -f`. Item-3 GPU-only acceptance stops at the
+doctor unit: its documented subshell stops the queue worker before the shared
+env edit and restores the env plus prior active/inactive posture afterward, so
+it never starts the queue worker with unregistered GPU stages.
 
 ---
 

@@ -73,6 +73,31 @@ def test_gpu_is_the_meta_extra():
     assert gpu == ["patina-scan-worker[refine,fuse,splat]"]
 
 
+def test_gpu_meta_extra_expands_to_all_concrete_stage_requirements():
+    """Resolver-shaped proof: recursively expand our self-extra and ensure it
+    terminates in the concrete requirements for all three GPU stages."""
+    import pytest
+    Requirement = pytest.importorskip("packaging.requirements").Requirement
+    extras, _ = _extras()
+
+    expanded: set[str] = set()
+    pending = [Requirement(dep) for dep in extras["gpu"]]
+    seen_extras: set[str] = set()
+    while pending:
+        requirement = pending.pop()
+        if requirement.name == "patina-scan-worker":
+            for extra in requirement.extras:
+                assert extra in extras
+                if extra not in seen_extras:
+                    seen_extras.add(extra)
+                    pending.extend(Requirement(dep) for dep in extras[extra])
+        else:
+            expanded.add(requirement.name.lower())
+
+    assert seen_extras == {"refine", "fuse", "splat"}
+    assert {"pycolmap", "scipy", "open3d", "trimesh", "torch", "gsplat", "numpy"} <= expanded
+
+
 def test_every_extra_is_a_valid_pep508_requirement():
     # network-free "do the extras resolve?" — every dep parses as a PEP 508
     # requirement, and the [gpu] meta-extra references our own package's three
