@@ -17,9 +17,12 @@ import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supa
 import { createInferenceClient } from '../_shared/aesthete.ts';
 import {
   claimAgentTasks,
-  completeAgentTask,
   enqueueAgentTask,
 } from '../_shared/agent-queue.ts';
+import {
+  completeAgentTaskIfOwned,
+  createLeaseOwner,
+} from '../_shared/agent-queue-lease.ts';
 import { runNormalizer, type NormalizerDeps } from './core.ts';
 import type { ExistingProductFields } from './normalize-row.ts';
 
@@ -34,6 +37,9 @@ function json(body: unknown, status = 200): Response {
 }
 
 function buildDeps(admin: SupabaseClient, inference: ReturnType<typeof createInferenceClient>): NormalizerDeps {
+  // buildDeps runs once per request. The UUID prevents concurrent requests to
+  // this deployment from acquiring interchangeable completion authority.
+  const leaseOwner = createLeaseOwner(FN);
   return {
     now: () => new Date(),
 
@@ -41,21 +47,28 @@ function buildDeps(admin: SupabaseClient, inference: ReturnType<typeof createInf
       const tasks = await claimAgentTasks(admin as unknown as Parameters<typeof claimAgentTasks>[0], {
         taskTypes: ['normalize_feed'],
         batch: 5,
-        worker: FN,
+        worker: leaseOwner,
         visibilityTimeout: '10 minutes',
       });
       return tasks.map((t) => ({ id: t.id, payload: t.payload }));
     },
 
     completeTask: async (id, outcome, patch) => {
-      await completeAgentTask(admin as unknown as Parameters<typeof completeAgentTask>[0], {
-        id,
-        outcome,
-        artifacts: patch.artifacts,
-        error: patch.error ?? null,
-        fatal: patch.fatal,
-        actor: FN,
-      });
+      const completed = await completeAgentTaskIfOwned(
+        admin as unknown as Parameters<typeof completeAgentTaskIfOwned>[0],
+        {
+          id,
+          outcome,
+          artifacts: patch.artifacts,
+          error: patch.error ?? null,
+          fatal: patch.fatal,
+          actor: leaseOwner,
+        },
+      );
+      if (!completed) {
+        console.warn('catalog-normalizer: lease lost before completion', id, leaseOwner);
+      }
+      return completed;
     },
 
     enqueueTask: async (input) => {
@@ -70,7 +83,7 @@ function buildDeps(admin: SupabaseClient, inference: ReturnType<typeof createInf
         summary: input.summary,
         payload: input.payload,
         onConflict: 'ignore',
-        actor: FN,
+        actor: leaseOwner,
       });
       return { id: task.id };
     },

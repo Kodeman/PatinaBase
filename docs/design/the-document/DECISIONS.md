@@ -4370,3 +4370,67 @@ subject through P2-M2 (first dense mesh vs the P1 certificate) and
 P2-M3 (walkthrough + click-to-measure).
 
 *Entries add: R115 · last id = R115*
+
+### I87 · Field Capture P2 item 4 · COLMAP known-pose engine + evidence correction — 2026-07-18
+
+Item-4 executable adapter probe and adversarial correction, before any queue
+handler, DB/storage mutation, box operation, or production scan run. This entry
+fixes the GLOMAP/full-pose assumption in I86/§10 and blesses the supported pilot
+direction conditionally; it does not claim runtime qualification.
+
+**Engine blessing (conditional):** exact pilot target = COLMAP CLI 4.0.2 plus
+`pycolmap==4.0.2`. Primary path: per-image corrected intrinsics and full converted
+ARKit poses in a registered seed model → `point_triangulator` →
+`bundle_adjuster` → Sim(3) world rebase of points, camera centres, and camera
+orientations. Fallback: Cartesian camera-centre priors with covariance →
+`pose_prior_mapper` → BA; fallback rotations are explicitly discarded.
+Standalone GLOMAP was archived 2026-03-09 and moved into COLMAP; integrated
+`global_mapper` has no supported full-pose warm-start surface, so it is
+diagnostic-only. COLMAP 4.1.1 is current as of 2026-07-18; 4.0.2 is deliberately
+the exact CLI/binding pilot-qualification pin, not the current or validated
+release. Any newer 4.x needs its own parity/API/GPU fixture and explicit pin.
+
+**Qualification remains open:** before handler/deploy, a box fixture must prove
+both version surfaces report 4.0.2, the exact PyCOLMAP database/model APIs,
+database ID preservation, GPU SIFT, triangulation/BA, and deliberate
+CLI/binding-mismatch rejection. A real Field/Core Image capture fixture must
+also prove the `.oriented(.right)` encoded raster and Linux materializer pixel
+mapping. Swift source inspection plus synthetic ray math is not that proof;
+artifacts say `targetColmapVersion` and
+`unvalidated-pending-field-and-box-fixture`, never “validated.”
+
+**Evidence correction:** Sim(3)-aligned distance back to the same raw ARKit
+trajectory is renamed `trajectory_shape_change_pct`. It is keyframe-weighted,
+cadence-sensitive, diagnostic-only, and cannot establish quality because a
+no-op scores 0%. The planned `sfm_residual_pct` key stays unwritten; the old
+0.2–0.5% aspiration has no item-4 acceptance role. Actual refinement evidence
+uses identical feature tracks and verified non-temporal loop geometries before/
+after: registration coverage, reprojection RMSE px, loop-relative rotation error,
+loop-relative translation-direction error, plus optional independent anchor/
+ground-truth error. Coverage must be at least 80% and non-regressing; no
+comparable metric regresses; at least one improves by 1%; unchanged/no-op output
+is `REFINE_NO_MEASURABLE_IMPROVEMENT` and is not certifying. Internal geometry
+improvement still does not certify absolute room accuracy without validated
+external evidence.
+
+**Runtime + concurrency contract:** one engine deadline is
+`min(stage monotonic start + 4 min, actual claimed lease expiry - 60 s)`; every
+command consumes its remainder and streams output to scratch with only a bounded
+64 KiB tail retained. Verified overlap counts only edges from the deterministic
+temporal/ARKit-spatial candidate graph. Artifacts are create-only,
+checksummed/versioned, fsynced, and manifest-last. Refine may set scalar
+`refining` but never mutates P1 status/Present JSON/ready. It forks Fuse and Splat
+after the durable refine manifest. Fuse must pass through mesh solve-upgrade and
+its durable solve manifest. Mesh-solve and Splat enqueue one identical
+stable-ID-only Present task with a common refine parent; Present derives and
+verifies canonical refine/fuse/mesh-solve/splat manifests, composes Present JSON
+once, and alone writes ready/presented_at. Parallel branches use events/manifests,
+never competing JSON/scalar progress writes.
+
+**Implementation gate:** the pure adapter/tests and canonical documents make
+this a go for handler development only. Deployment and scan `95266be1` remain
+no-go until the version/API/GPU/Field-raster fixture, local-scratch real-scan
+evidence (including no-op rejection), queue replay/order/race tests, and aligned
+pose consumer contracts for Fuse/Splat pass.
+
+*Entries add: I87 · last id = I87*

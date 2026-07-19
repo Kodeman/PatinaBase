@@ -26,10 +26,13 @@
 
 import {
   claimAgentTasks,
-  completeAgentTask,
   type AgentTask,
   type RpcClient,
 } from '../_shared/agent-queue.ts';
+import {
+  completeAgentTaskIfOwned,
+  createLeaseOwner,
+} from '../_shared/agent-queue-lease.ts';
 
 // Re-export so callers/tests can name the claimed-task type from this module.
 export type { AgentTask } from '../_shared/agent-queue.ts';
@@ -111,6 +114,7 @@ export interface ProcessorDeps {
   /** Re-fetch a Stripe object by type + id (index.ts wires the real SDK). */
   fetchStripeObject(objectType: string | null, objectId: string | null): Promise<StripeObject>;
   now(): Date;
+  /** Full, unique lease identity. Tests may inject one; production generates it. */
   worker?: string;
 }
 
@@ -684,7 +688,7 @@ async function finishJobRun(
 // ─── The run ──────────────────────────────────────────────────────────────────
 
 export async function runProcessor(deps: ProcessorDeps): Promise<ProcessorSummary> {
-  const worker = deps.worker ?? WORKER;
+  const worker = deps.worker ?? createLeaseOwner(WORKER);
   const startedAt = deps.now().toISOString();
   const runId = await insertJobRun(deps, startedAt);
 
@@ -707,24 +711,32 @@ export async function runProcessor(deps: ProcessorDeps): Promise<ProcessorSummar
         // Pre-formed evidence task (payment_discrepancy / damage_claim_escalation,
         // arriving in W2.3): no event_type → pass the payload through to review.
         if (payload.event_type == null) {
-          await completeAgentTask(deps.supabase, {
+          const completed = await completeAgentTaskIfOwned(deps.supabase, {
             id: task.id,
             outcome: 'awaiting_review',
             artifacts: { passthrough: true, source_task_type: task.task_type, evidence: payload },
             actor: worker,
           });
+          if (!completed) {
+            console.warn('stripe-event-processor: lease lost before passthrough completion', task.id, worker);
+            continue;
+          }
           counts.passthrough++;
           continue;
         }
 
         const result = await processStripeEventTask(deps, task);
-        await completeAgentTask(deps.supabase, {
+        const completed = await completeAgentTaskIfOwned(deps.supabase, {
           id: task.id,
           outcome: result.outcome,
           artifacts: result.artifacts as unknown as Record<string, unknown>,
           confidence: result.confidence,
           actor: worker,
         });
+        if (!completed) {
+          console.warn('stripe-event-processor: lease lost before completion', task.id, worker);
+          continue;
+        }
         if (result.outcome === 'done') counts.done++;
         else counts.awaiting_review++;
       } catch (taskErr) {
@@ -732,13 +744,17 @@ export async function runProcessor(deps: ProcessorDeps): Promise<ProcessorSummar
         // task never sinks the batch.
         const message = (taskErr as Error)?.message ?? String(taskErr);
         try {
-          await completeAgentTask(deps.supabase, {
+          const completed = await completeAgentTaskIfOwned(deps.supabase, {
             id: task.id,
             outcome: 'failed',
             fatal: false,
             error: message,
             actor: worker,
           });
+          if (!completed) {
+            console.warn('stripe-event-processor: lease lost before failed completion', task.id, worker);
+            continue;
+          }
         } catch (completeErr) {
           console.error('stripe-event-processor: failed to mark task failed', task.id, completeErr);
         }

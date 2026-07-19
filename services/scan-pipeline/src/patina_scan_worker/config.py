@@ -1,9 +1,10 @@
 """Runtime settings for the scan-pipeline worker.
 
-Everything about a worker — identity, which stages it runs, cadence, concurrency,
-GPU posture, and its one credential — comes from the environment (an
-``EnvironmentFile``, ``/etc/patina/scan-worker.env``). This is what makes a cloud
-burst worker a config change, not a code change (design §3, R108.4/R109.1).
+Everything about a worker — its readable identity prefix, which stages it runs,
+cadence, concurrency, GPU posture, and its one credential — comes from the
+environment (an ``EnvironmentFile``, ``/etc/patina/scan-worker.env``). This is
+what makes a cloud burst worker a config change, not a code change (design §3,
+R108.4/R109.1).
 
 Mirrors services/aesthete-inference/app/config.py: a frozen dataclass built by
 ``settings_from_env()``; the three required values have no default — the worker
@@ -20,8 +21,10 @@ from dataclasses import dataclass, field
 # splat/present are DECLARED here so a box can advertise them (STAGES=…,splat)
 # and `doctor` can gate on them, ahead of their handlers landing (items 4–7).
 # A worker claiming a declared-but-unregistered stage parks that task cleanly
-# (worker.process_one) — and nothing enqueues the P2 task types yet, so a GPU
-# box that lists them simply claims none until the handler ships.
+# (worker.process_one). Therefore item-3 readiness may advertise the GPU stages
+# only inside a controlled empty-queue preflight window, followed by an immediate
+# service stop. Production workers must not leave them listed until their item
+# 4–7 handlers register.
 # A worker's STAGES must be a subset of these.
 KNOWN_STAGES: tuple[str, ...] = (
     "ingest", "solve", "drawings",       # P1 (implemented)
@@ -49,6 +52,7 @@ class ConfigError(RuntimeError):
 @dataclass(frozen=True)
 class Settings:
     # ── identity / behaviour (design §3) ────────────────────────────────────
+    # Readable prefix only. QueueClient appends a UUID for every claim batch.
     worker_id: str
     supabase_url: str
     service_role_key: str

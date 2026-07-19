@@ -10,13 +10,23 @@
 // delegates straight to the RPC, so a re-delivered PaymentIntent (or a
 // re-posted seed payload) is a pure no-op that returns the SAME order_id it
 // returned the first time.
-import { claimAgentTasks, completeAgentTask, type RpcClient } from '../_shared/agent-queue.ts';
+import {
+  claimAgentTasks,
+  type RpcClient,
+} from '../_shared/agent-queue.ts';
+import {
+  completeAgentTaskIfOwned,
+  createLeaseOwner,
+} from '../_shared/agent-queue-lease.ts';
+
+const WORKER_LABEL = 'fulfillment-intake';
 
 export interface IntakeDeps {
   supabase: RpcClient & { rpc: RpcClient['rpc'] };
   // worker path only: re-fetch a PI fresh from Stripe by id
   fetchPaymentIntent?(id: string): Promise<Record<string, unknown>>;
   now(): Date;
+  /** Full, unique lease identity. Tests may inject one; production generates it. */
   worker?: string;
 }
 
@@ -62,10 +72,11 @@ export async function intakeInlinePI(
 
 /** Worker path: claim fulfillment_intake tasks, re-fetch each PI, call the RPC, complete the task. */
 export async function runIntakeWorker(deps: IntakeDeps): Promise<{ processed: number; failed: number }> {
+  const worker = deps.worker ?? createLeaseOwner(WORKER_LABEL);
   const tasks = await claimAgentTasks(deps.supabase, {
     taskTypes: ['fulfillment_intake'],
     batch: 20,
-    worker: deps.worker ?? 'fulfillment-intake',
+    worker,
     visibilityTimeout: '60 seconds',
   });
   let processed = 0,
@@ -78,21 +89,29 @@ export async function runIntakeWorker(deps: IntakeDeps): Promise<{ processed: nu
       // Idempotent: if this PI already produced an order (redelivery, or a
       // retried task after a partial prior failure), the RPC returns the
       // SAME order_id and writes nothing further — this branch is a no-op.
-      const orderId = await intakeInlinePI(deps, pi, 'fulfillment-intake');
-      await completeAgentTask(deps.supabase, {
+      const orderId = await intakeInlinePI(deps, pi, worker);
+      const completed = await completeAgentTaskIfOwned(deps.supabase, {
         id: t.id,
         outcome: 'done',
         artifacts: { order_id: orderId },
-        actor: 'fulfillment-intake',
+        actor: worker,
       });
+      if (!completed) {
+        console.warn('fulfillment-intake: lease lost before done completion', t.id, worker);
+        continue;
+      }
       processed++;
     } catch (err) {
-      await completeAgentTask(deps.supabase, {
+      const completed = await completeAgentTaskIfOwned(deps.supabase, {
         id: t.id,
         outcome: 'failed',
         error: String(err),
-        actor: 'fulfillment-intake',
+        actor: worker,
       });
+      if (!completed) {
+        console.warn('fulfillment-intake: lease lost before failed completion', t.id, worker);
+        continue;
+      }
       failed++;
     }
   }

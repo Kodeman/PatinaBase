@@ -22,7 +22,15 @@ Environment=XDG_CONFIG_HOME=/opt/patina/scan-pipeline/.config
 Environment=XDG_CACHE_HOME=/opt/patina/scan-pipeline/.cache
 Environment=XDG_DATA_HOME=/opt/patina/scan-pipeline/.data
 Environment=XDG_STATE_HOME=/opt/patina/scan-pipeline/.state
+# The authoritative preflight runs as the service user with this exact
+# EnvironmentFile, sandbox, ReadWritePaths and (on a GPU install) DeviceAllow.
+# A RED check stops the worker before it can claim a queue task.
+ExecStartPre=/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker doctor
 ExecStart=/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker run
+# Two bounded remote probes plus a cold gsplat CUDA extension JIT can exceed
+# systemd's 90 s default. Keep startup bounded, but allow the one-time first
+# compile to finish; warm-cache starts should be much faster.
+TimeoutStartSec=15min
 Restart=always
 RestartSec=5
 # hardening — an outbound-only worker needs no privilege and no host write beyond

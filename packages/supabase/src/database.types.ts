@@ -20864,6 +20864,62 @@ export type Database = {
         Args: { p_milestone_id: string }
         Returns: string
       }
+      enqueue_agent_successor_if_owned: {
+        Args: {
+          p_actor?: string
+          p_artifacts?: Json
+          p_assignee?: string
+          p_confidence?: number
+          p_entity_id?: string
+          p_entity_type?: string
+          p_idempotency_key?: string
+          p_max_attempts?: number
+          p_owner_task_id: string
+          p_parent_task_id?: string
+          p_payload?: Json
+          p_priority?: number
+          p_run_after?: string
+          p_source?: string
+          p_status?: string
+          p_summary?: string
+          p_task_type: string
+        }
+        Returns: {
+          artifacts: Json
+          assignee: string | null
+          attempts: number
+          awaiting_review_at: string | null
+          completed_at: string | null
+          confidence: number | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          flagged_stale_at: string | null
+          id: string
+          idempotency_key: string | null
+          last_error: string | null
+          locked_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          parent_task_id: string | null
+          payload: Json
+          priority: number
+          review_state: Json | null
+          run_after: string
+          source: string
+          started_at: string | null
+          status: string
+          summary: string
+          task_type: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_tasks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       enqueue_agent_task: {
         Args: {
           p_actor?: string

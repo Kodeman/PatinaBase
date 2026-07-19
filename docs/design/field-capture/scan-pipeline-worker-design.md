@@ -47,7 +47,10 @@ Every task in the chain carries:
 - `source = 'scan-pipeline'`.
 - `idempotency_key = '{scan_id}:{stage}:{room_file_version}'` — e.g. `…:solve:2`.
 - `payload = { scan_id, room_file_version, room_file_id?, user_id }` (`room_file_id` known from solve onward; `user_id` = `room_scans.user_id`, needed for storage paths).
-- `parent_task_id` = the id of the stage that enqueued it (ingest→solve→drawings forms a traceable chain in `agent_tasks`).
+- `parent_task_id` = lineage/provenance (ingest→solve→drawings forms a
+  traceable chain; a fork/join may deliberately retain the common fork task).
+  It is distinct from guarded enqueue's `p_owner_task_id`, which must always be
+  the currently running task whose exact lease authorizes the write.
 
 **Agent-OS baggage — explicitly unused.** `agent_tasks` carries fields for the human-review workflow it was built for. These mechanical jobs do **not** use them:
 - `assignee` (CHECK `kody | leah`) is left **NULL** — a scan job has no human owner.
@@ -69,13 +72,14 @@ The worker holds a **service-role** Supabase client (the queue RPCs are granted 
 
 ```
 # ── poll ────────────────────────────────────────────────────────────────────
+LEASE_OWNER := WORKER_ID || ':' || random_uuid()  # fresh for this claim batch
 rows = claim_agent_tasks(
     p_task_types        := ARRAY[<enabled STAGES>],   # e.g. {'scan_pipeline.ingest','scan_pipeline.solve','scan_pipeline.drawings'}
     p_batch             := MAX_CONCURRENT,
-    p_worker            := WORKER_ID,
+    p_worker            := LEASE_OWNER,
     p_visibility_timeout := VISIBILITY_TIMEOUT        # default '15 minutes'
 )
-# → each returned row is now status='running', attempts+1, locked_by=WORKER_ID.
+# → each returned row is status='running', attempts+1, locked_by=LEASE_OWNER.
 # If rows is empty: sleep POLL_SECONDS, poll again.
 
 # ── per claimed task (dispatched by task.task_type) ─────────────────────────
@@ -96,7 +100,8 @@ try:
     INSERT room_file_measurements (...)                                    # one row per dimension
 
     # enqueue successor — idempotent on its own key
-    enqueue_agent_task(
+    enqueue_agent_successor_if_owned(
+        p_owner_task_id  := task.id,
         p_task_type      := 'scan_pipeline.drawings',
         p_payload        := {scan_id, room_file_id, room_file_version},
         p_source         := 'scan-pipeline',
@@ -104,26 +109,25 @@ try:
         p_entity_id      := scan_id,
         p_idempotency_key := '{scan_id}:drawings:{room_file_version}',
         p_parent_task_id := task.id,
-        p_on_conflict    := 'ignore',
-        p_actor          := WORKER_ID
+        p_actor          := LEASE_OWNER
     )
 
     scan_pipeline_events.insert(..., event='solve.succeeded', status='succeeded',
                                 duration_ms=..., detail={tolerance_counts, mean_residual_mm})
     complete_agent_task(p_id := task.id, p_outcome := 'done',
                         p_artifacts := {room_file_id, tolerance_counts},
-                        p_actor := WORKER_ID)
+                        p_actor := LEASE_OWNER)
 
 except TransientError as e:      # storage blip, network, lock contention
     scan_pipeline_events.insert(..., event='solve.failed', status='failed', detail={error})
     complete_agent_task(task.id, 'failed', p_error := str(e), p_fatal := False,
-                        p_actor := WORKER_ID)          # → backoff requeue, SAME version
+                        p_actor := LEASE_OWNER)        # → backoff requeue, SAME version
 
 except PermanentError as e:      # unsolvable inputs, corrupt geometry, poison
     UPDATE room_files SET status='error', generation_error := str(e) WHERE id = room_file_id
     scan_pipeline_events.insert(..., event='solve.failed', status='failed', detail={error, fatal:true})
     complete_agent_task(task.id, 'failed', p_error := str(e), p_fatal := True,
-                        p_actor := WORKER_ID)          # → parked failed, no more retries
+                        p_actor := LEASE_OWNER)        # → parked failed, no more retries
 ```
 
 Ordering note: the successor is enqueued **before** `complete_agent_task('done')`, and the successor enqueue is idempotent. A crash between the two leaves the job `running`; the visibility timeout reclaims it, the stage re-runs (writes are idempotent by `(scan_id, version)`), the successor enqueue de-dupes on its key, and the job completes. A crash *before* the enqueue simply re-runs the whole stage. Every path converges.
@@ -140,11 +144,11 @@ The ingest stage is the server half of the integrity contract (spec §7, §10). 
 
 ## 3. Configuration schema
 
-Everything about a worker — identity, which stages it runs, cadence, concurrency, GPU posture, and its one credential — comes from the environment (an `EnvironmentFile`, `/etc/patina/scan-worker.env`). This is what makes a cloud burst worker a config change, not a code change.
+Everything about a worker — its readable identity prefix, which stages it runs, cadence, concurrency, GPU posture, and its one credential — comes from the environment (an `EnvironmentFile`, `/etc/patina/scan-worker.env`). This is what makes a cloud burst worker a config change, not a code change. Runtime lease authority is narrower: each claim batch appends a fresh UUID to the configured prefix.
 
 | Env var | Type | Default | Purpose |
 |---|---|---|---|
-| `WORKER_ID` | string | *(required)* | Identity stamped into `locked_by` and `app.actor` (audit). Unique per running worker (`homelab-1`, `cloud-burst-a`). |
+| `WORKER_ID` | string | *(required)* | Readable audit prefix (`homelab-1`, `cloud-burst-a`). Each claim appends a UUID; that full value is stamped into `locked_by` and used as the matching completion `app.actor`. |
 | `STAGES` | csv | `ingest,solve,drawings` | Which `scan_pipeline.*` stages this worker claims. A cloud worker might run `drawings` only; a P2 GPU worker adds `splat` (§8). |
 | `POLL_SECONDS` | int | `5` | Sleep between polls when a claim returns zero tasks. |
 | `MAX_CONCURRENT` | int | `2` | Claim batch size and max in-flight jobs (`p_batch`). Bounds scratch disk and CPU. |
@@ -171,9 +175,14 @@ Repo home `services/scan-pipeline/`. Python 3.11+, `pyproject.toml`, console ent
 services/scan-pipeline/
   pyproject.toml                 # deps + [project.scripts] patina-scan-worker = "patina_scan_worker.cli:main"
   README.md                      # box-prep + run instructions (appendix A, mirrored)
-  install.sh                     # create venv, pip install ., install unit + env template, enable service
+  install.sh                     # stage/verify/smoke, transactionally activate venv + units
+  install-path-guard.py          # no-follow ownership/containment guard for root install
+  install-venv-lib.sh            # durable snapshot/switch/rollback/recovery state machine
   patina-scan-worker.service     # systemd unit (§5)
-  scan-worker.env.example        # config template → copied to /etc/patina/scan-worker.env (0600)
+  patina-scan-worker-doctor.service # doctor-only acceptance oneshot (§5/§6)
+  patina-scan-worker.gpu.conf    # identical worker + doctor GPU drop-in
+  patina-scan-worker-nvidia-prepare.service # GPU-only root device-node oneshot
+  scan-worker.env.example        # → /etc/patina/scan-worker.env (root:root 0600)
   Dockerfile                     # OPTIONAL — future cloud-burst artifact; NOT used for native operation
   src/patina_scan_worker/
     __init__.py
@@ -204,7 +213,66 @@ services/scan-pipeline/
 - `once` — claim-and-drain one batch, then exit (cron-style / manual re-drain / debugging).
 - `doctor` — preflight, no queue interaction (§6).
 
-Dependencies are ordinary PyPI wheels: a Supabase/PostgREST HTTP client (or `httpx` + hand-rolled RPC calls, as `aesthete-inference` does), `numpy`/`scipy` (least-squares fit), `ezdxf` (DXF), and the chosen PDF path. `install.sh` builds the venv, `pip install .`, drops the unit and env template, and prints the doctor result — the same venv-bootstrap shape as `aesthete-inference/Makefile`.
+Dependencies are stage-named extras, so a CPU worker never resolves CUDA by
+accident: `[solve]` (numpy/scipy), `[drawings]` (ezdxf/cairosvg), `[refine]`
+(pycolmap + numpy/scipy), `[fuse]` (Open3D/trimesh), and `[splat]` (the pinned
+cu118 torch + gsplat band). `[gpu]` is only the box convenience meta-extra for
+`refine+fuse+splat`; it is not a new execution mode.
+
+The supported first-run path quiesces every `patina` process, then stages an
+operator-reviewed snapshot at `/opt/patina/scan-pipeline-source` with root
+ownership, `rsync --delete --delete-excluded --ignore-times`, and a closed
+top-level include set. The fresh inodes and single-link requirement remove
+legacy open-FD/hardlink aliases; deletion removes stale setuptools and
+Python-startup controls (`setup.py`, `setup.cfg`, `MANIFEST.in`,
+`sitecustomize.py`). Before sourcing either helper, `install.sh` enters Bash
+privileged mode, fixes `PATH`, and uses fixed `/usr/bin/python3 -I -S` plus
+no-follow dirfd opens to validate its bootstrap files. The guard then validates
+the exact top-level snapshot and recursively accepts only root-owned,
+non-writable, regular, single-linked Python modules beneath
+`src/patina_scan_worker`. All privileged Python snippets and venv creation run
+with a scrubbed environment plus `-I -S`; pip runs through the candidate
+interpreter with a scrubbed environment plus `-I`. Runtime `APP_DIR` is never
+source, and any legacy `APP_DIR/install.sh` is atomically replaced by a
+root-owned fail-closed stub. Every later invocation revalidates this contract.
+The quiescence requirement is limited to that first migration from a potentially
+service-controlled tree. Routine root-owned source restaging occurs while the
+worker continues from its immutable venv, allowing upgrade activation to
+snapshot and preserve the active posture.
+
+`install.sh` builds an immutable candidate release, runs `pip check`, an
+installed-package import/entrypoint smoke as `User=patina`, and—on
+Linux—`systemd-analyze verify` against a staged unit tree. `/opt/patina` and
+`APP_DIR` are a root-owned, non-service-writable executable namespace; only the
+four XDG directories and `WORK_DIR` are delegated to `patina`. New releases use
+a high-entropy direct-child name that is marker-backed before atomic creation,
+and stable release links are resolved no-follow and must remain directly
+contained by `APP_DIR`. It then fsyncs a root-only snapshot at
+`/etc/patina/.scan-worker-install-transaction` of installed unit
+presence/content and canonical absolute current/previous release references
+(relative stable links resolve against `APP_DIR`, never process cwd). Recovery
+accepts only a symlink-free root-owned transaction tree, no-follow regular
+marker files, and unit targets exactly in `MANAGED_UNIT_TARGETS`. `ActiveState`
+must be stable;
+`activating`, `deactivating`, and `reloading` fail closed. Unit replacement and
+the normal `.venv` symlink switch are same-filesystem atomic renames after an
+active worker is stopped and confirmed quiescent. A failed activation restores
+all unit/release snapshots, daemon-reloads, and restarts the prior service; a
+durable transaction marker makes the next invocation recover an interrupted
+switch, while `committed` recovery only finishes cleanup. A legacy real `.venv`
+is converted once while stopped and with no remaining `patina` process. The
+transaction records fresh materialized/quarantine paths, copies regular files to
+independent root-owned inodes, admits only internal lexical symlinks plus trusted
+`bin/python*` interpreter terminals, normalizes modes, validates, service-user
+smokes, and fsyncs the fresh tree before the durable one-way raw quarantine
+rename. Ready is written only after that rename. Pre-quarantine recovery discards
+an unready copy and retries; post-quarantine recovery uses only the validated
+fresh tree, so rollback/current and previous never alias or restore raw legacy
+inodes. Raw quarantine is deleted after durable rollback/commit cleanup. A real
+`.venv.previous` fails closed for manual archive outside `APP_DIR`. A
+prepared first-install transaction treats `LoadState=not-found` as already
+quiescent, so it can restore absent units without an impossible stop. The
+installer never runs doctor from its root shell.
 
 ---
 
@@ -224,7 +292,13 @@ Type=simple
 User=patina
 Group=patina
 EnvironmentFile=/etc/patina/scan-worker.env
+Environment=XDG_CONFIG_HOME=/opt/patina/scan-pipeline/.config
+Environment=XDG_CACHE_HOME=/opt/patina/scan-pipeline/.cache
+Environment=XDG_DATA_HOME=/opt/patina/scan-pipeline/.data
+Environment=XDG_STATE_HOME=/opt/patina/scan-pipeline/.state
+ExecStartPre=/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker doctor
 ExecStart=/opt/patina/scan-pipeline/.venv/bin/patina-scan-worker run
+TimeoutStartSec=15min
 Restart=always
 RestartSec=5
 # hardening — outbound-only worker needs no privilege and no host write beyond scratch
@@ -232,7 +306,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/patina/scan-work
+ReadWritePaths=/var/lib/patina/scan-work /opt/patina/scan-pipeline/.config /opt/patina/scan-pipeline/.cache /opt/patina/scan-pipeline/.data /opt/patina/scan-pipeline/.state
 # logs to journald
 StandardOutput=journal
 StandardError=journal
@@ -243,6 +317,21 @@ WantedBy=multi-user.target
 ```
 
 `Restart=always` makes a crash self-healing; combined with the queue's visibility timeout, a job the worker died mid-way through is reclaimed and re-run without operator action.
+
+GPU installs apply one identical additive drop-in to this worker and to a
+separate `patina-scan-worker-doctor.service` oneshot. The drop-in requires the
+root `patina-scan-worker-nvidia-prepare.service`, grants the exact single-card
+compute/control/UVM nodes, disables `PrivateDevices` for those allowed nodes,
+and confines torch/CUDA/JIT caches under the base unit's writable `.cache`.
+The doctor oneshot duplicates the worker's `User`/`Group`, `EnvironmentFile`,
+XDG environment, timeout, sandbox, and `ReadWritePaths`; its only `ExecStart` is
+`patina-scan-worker doctor`. It has no `run`, restart policy, or `[Install]`
+section, so item-3 GPU acceptance cannot claim queue work or be enabled.
+Item-3 acceptance leaves the persistent worker env untouched: a root-only
+temporary env and doctor-only `EnvironmentFile=` reset drop-in live under
+`/run`, are refused if pre-existing, and are removed with a daemon reload by the
+acceptance trap. Reboot clears them, so the enabled queue worker can boot only
+with its normal registered CPU stages even if acceptance loses power mid-run.
 
 ### 5.2 Storage path convention
 
@@ -273,10 +362,25 @@ The drawings prefix `room_file/{userId}/{scanId}/v{version}/…` puts the **scan
 - **Env completeness** — every `*(required)*` var present; `STAGES` values are known; `GPU` is a legal value.
 - **DB reachability** — `agent_queue_stats()` returns (proves the service-role key authenticates and the RPCs are reachable over 443).
 - **Storage reachability** — a HEAD/list against `room-scans` succeeds.
-- **GPU visibility** — reports whether a CUDA device is present (`nvidia-smi` / driver query). In P1 this is **informational** — a red GPU line is a warning, not a failure, because no P1 stage uses it. At P2 a splat-enabled worker treats it as required.
+- **GPU visibility and stage runtime** — GPU absence is informational for a CPU
+  stage set and red for `refine`/`fuse`/`splat`. Readiness is scoped to enabled
+  stages: the refine command/module surface is a preflight only (runtime engine
+  qualification belongs to the item-4 decision record); fuse requires Open3D's
+  public CUDA availability/device probe plus a deterministic CUDA tensor
+  allocate/kernel/CPU-copy result of `2.0`; splat requires CUDA 11.8 `nvcc`, a
+  cu118 torch wheel with `sm_75` plus a real CUDA arithmetic op, and gsplat's
+  public rasterizer returning the expected CUDA shapes, finite values, and a
+  positive alpha. See
+  `p2-item4-colmap-adapter-spike-2026-07-18.md` for the refine runtime decision.
 - **Disk headroom** — free space in `WORK_DIR` against `MAX_CONCURRENT × ~1.5 GB` plus the retention window; warns below headroom.
 
-`doctor` is what `install.sh` runs last and what Kody runs after any env change.
+`install.sh` never invokes doctor as root. Normal worker activation runs it as
+`ExecStartPre`, which inherits the exact service user, root-read
+`EnvironmentFile`, XDG/cache paths, filesystem sandbox, and—on GPU installs—the
+NVIDIA dependency and `DeviceAllow`. For acceptance before GPU handlers are
+registered, Kody starts `patina-scan-worker-doctor.service`; that oneshot inherits
+the same context but can never execute `run`. The empty GPU-queue query is kept
+as rollout evidence only, not as a race-prone safety gate.
 
 ---
 
@@ -293,9 +397,9 @@ All retry logic lives in the queue (00297), not the worker. The worker's job is 
 | Parked `failed`, unattended | — | `groom_agent_tasks` auto-requeues **once** after the failed cooldown (6h), marked `payload.groom_requeued_at` so it never auto-loops. |
 | Deliberate fresh re-run / re-scan | Entry point reserves version + 1 | A new `room_files` row and a new ingest→solve→drawings chain. |
 
-**Inspectability.** Every failed job is a row in `agent_tasks` with `last_error`, `attempts`, `task_type`, `payload` (scan_id, version), and its `parent_task_id` chain; `agent_task_audit` holds the full transition history with `actor = WORKER_ID`; `scan_pipeline_events` holds the per-stage `*.failed` event with a structured `detail`. Item 9's AC — "failed jobs are inspectable and re-runnable" — is satisfied by the queue's own surfaces; no bespoke admin table.
+**Inspectability.** Every failed job is a row in `agent_tasks` with `last_error`, `attempts`, `task_type`, `payload` (scan_id, version), and its `parent_task_id` chain; `agent_task_audit` holds the full transition history with claim/completion actor `WORKER_ID:<claim-uuid>`; `scan_pipeline_events` holds the per-stage `*.failed` event with a structured `detail`. Item 9's AC — "failed jobs are inspectable and re-runnable" — is satisfied by the queue's own surfaces; no bespoke admin table.
 
-**Second-worker AC.** Because `claim_agent_tasks` uses `FOR UPDATE SKIP LOCKED`, a second worker attaching (even a stub) with a different `WORKER_ID` claims disjoint tasks with zero coordination. That is the burst-ready proof (item 9 AC) and it is purely a config act.
+**Second-worker AC.** Because `claim_agent_tasks` uses `FOR UPDATE SKIP LOCKED`, a second worker attaching (even a stub) claims disjoint tasks with zero coordination. Every batch uses a fresh UUID-backed lease owner, so safety does not depend on operators assigning distinct `WORKER_ID` prefixes (distinct prefixes remain useful for audit readability). That is the burst-ready proof (item 9 AC) and it is purely a config act.
 
 ---
 
@@ -332,9 +436,20 @@ Every event names `scan_id`; `solve`/`drawing`/`delivery` events also set `room_
 
 ## 9. Security posture
 
-- **One credential, server-side.** The worker's only secret is `SUPABASE_SERVICE_ROLE_KEY`, held in `/etc/patina/scan-worker.env` (mode `0600`, owned by the `patina` service user, delivered via `EnvironmentFile` so it never appears in `argv` or the unit file). It lives on the Kody-managed box, never on any client (house rule: `service_role` stays server-side).
+- **One credential, server-side.** The worker's only secret is
+  `SUPABASE_SERVICE_ROLE_KEY`, held in `/etc/patina/scan-worker.env` as
+  **`root:root` mode `0600`**. PID 1 reads `EnvironmentFile` before launching
+  `User=patina`; the unprivileged process neither needs nor receives file access,
+  and the secret never appears in `argv` or the unit file. It lives on the
+  Kody-managed box, never on any client (house rule: `service_role` stays
+  server-side).
 - **Zero-ingress.** All traffic is outbound HTTPS/443 to Strata (PostgREST + Storage). The worker opens no socket. The host firewall can deny all inbound. Kody's **Cloudflare Tunnel is ops access** (SSH/monitoring), an independent process (`cloudflared`); the worker neither requires nor uses it — the pipeline drains with the tunnel stopped.
-- **systemd hardening** — `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, and a `ReadWritePaths` allowlist scoped to the scratch dir (§5.1). The worker needs no privilege and no host write beyond scratch.
+- **systemd hardening** — `NoNewPrivileges`, `ProtectSystem=strict`,
+  `ProtectHome`, `PrivateTmp`, and a `ReadWritePaths` allowlist scoped to scratch
+  plus the four app-owned XDG directories (§5.1). GPU policy grants only the
+  accepted card's compute/control/UVM nodes and redirects all CUDA/JIT caches
+  under the allowed app cache. The root NVIDIA oneshot prepares device nodes;
+  worker and doctor processes remain unprivileged.
 - **Storage discipline** — writes only under the `room_file/{userId}/{scanId}/v{version}/…` prefix so 00287 designer-read RLS resolves; reads only the `room-scans` bucket.
 
 **Hardening follow-up (not P1 scope).** The service-role key is broad — it can read and write every table. A P2/hardening option is to replace it with a **least-privilege LOGIN role** or a **scoped JWT** minted for the worker, granted only: `EXECUTE` on the five queue RPCs it calls; write on the three server-generated tables (`room_files`, `room_file_measurements`, `scan_pipeline_events`); read on `room_scans` + `scan_anchors`; and Storage read/write on `room-scans`. This is a documented follow-up, not a P1 blocker — P1 accepts the service-role key on a single trusted box.
@@ -361,9 +476,9 @@ GPU branch that reads the same bundle the P1 rig already wrote (keyframes + dept
 ```
 ingest ──▶ solve(P1) ──▶ drawings ──▶ delivery        (True Layer, P1 — unchanged)
    │
-   └─▶ refine ──▶ fuse ──▶ solve-upgrade(mesh) ─┐
-                    │                            ├─▶ present (rollup)   (Present Layer, P2)
-                    └─▶ splat ───────────────────┘
+   └─▶ refine ─┬─▶ fuse ──▶ solve-upgrade(mesh) ─┐
+               └─▶ splat ─────────────────────────┴─▶ present (rollup)
+                                                    (Present Layer, P2)
 ```
 
 - `refine` warm-starts from the bundle's ARKit trajectory; `fuse` needs
@@ -371,45 +486,65 @@ ingest ──▶ solve(P1) ──▶ drawings ──▶ delivery        (True La
   mesh; `splat` is a **parallel branch off `refine`** (it needs refined poses +
   keyframe images, not the mesh or the drawings), so it runs concurrently with
   `fuse`+solve on a second GPU lease or serially on one card.
-- Each hop is one `enqueue_agent_task` of the next `scan_pipeline.*` type against
+- Each hop is one `enqueue_agent_successor_if_owned` of the next
+  `scan_pipeline.*` type against
   the **same reserved `room_files` version** (entry-point allocation, 00370; §2.2).
   A P2 run does **not** mint a new version; a **retroactive re-solve** (R114.3) of
   an existing scan mints v+1 per R-f, then runs this same chain against it.
-- `present` is a bookkeeping rollup: when `fuse`+solve-upgrade and `splat` have
-  both succeeded it flips `room_files.present_status='ready'` + `presented_at`.
+- `present` is a bookkeeping rollup: after it derives and verifies canonical
+  refine, fuse, mesh-solve, and splat manifests, it alone composes
+  `room_files.present` and flips `present_status='ready'` + `presented_at`.
 
 ### 10.1.1 Fork-join coordination — enqueue-both, join-on-both (no barrier primitive)
 
 The P1 chain enqueues exactly one successor per stage. P2's `refine → {fuse,
 splat}` fork and the `{solve-upgrade, splat} → present` join need more, but reuse
-the SAME queue primitives (00297) — no barrier, no coordinator, no new table:
+the SAME queue primitives (00297 + the 00378 lease fence) — no barrier, no
+coordinator, no new table:
 
-- **The fork.** `refine`, on success, enqueues BOTH successors —
-  `enqueue_agent_task('scan_pipeline.fuse', …, idempotency_key '{scan}:fuse:{v}')`
-  AND `enqueue_agent_task('scan_pipeline.splat', …, idempotency_key
-  '{scan}:splat:{v}')` — both `p_on_conflict='ignore'`, both `parent_task_id =
-  refine.id`. The two then run independently (concurrently on two GPU leases,
-  serially on one — §10.9). A crash between the two enqueues just re-runs `refine`;
-  the idempotency keys de-dupe both successors (§2.3 crash-safety, unchanged).
-- **The join (the trick).** BOTH terminal branches enqueue `present` on the SAME
-  key: the fuse branch tip (`solve-upgrade`, §10.4) enqueues `scan_pipeline.present`
-  with `'{scan}:present:{v}'`, and `splat` enqueues the identical
-  `'{scan}:present:{v}'` — both `p_on_conflict='ignore'`. The SECOND enqueue is a
-  no-op, so `present` is created **exactly once**, by whichever branch finishes
-  first, with zero coordination. That double-enqueue-onto-one-key IS the join;
-  there is no barrier primitive to build or get wrong.
-- **The wait (present self-gates on the data).** When `present` runs it re-reads
-  the `room_files` row and checks BOTH prerequisites: the fuse branch's outputs
-  (`dense_mesh_url` **and** `measure_mesh_url` set) **and** the splat branch's
-  output (`splat_url` set). If either is still NULL — the slower branch hasn't
-  landed — `present` raises **`TransientError`** (NOT fatal): `complete_agent_task(
-  outcome='failed', p_fatal=false)` → backoff-requeue on the same key. It never
-  fires early (it reads the actual columns, not a timer), never partially rolls
-  up, and needs no wake-up event. When the slower branch lands, the next `present`
-  attempt sees all three URLs set → flips `present_status='ready' + presented_at`
-  and completes `done`.
+- **The fork.** `refine`, on success, enqueues BOTH successors through its exact
+  running lease —
+  `enqueue_agent_successor_if_owned(refine.id, 'scan_pipeline.fuse', …,
+  idempotency_key '{scan}:fuse:{v}')` AND
+  `enqueue_agent_successor_if_owned(refine.id, 'scan_pipeline.splat', …,
+  idempotency_key '{scan}:splat:{v}')`. The guarded RPC hardcodes
+  conflict-ignore; both children have `parent_task_id = refine.id`, and both
+  stable payloads carry the same immutable refine manifest key + sha256. The two
+  then run independently (concurrently on two GPU leases, serially on one —
+  §10.9). A crash between enqueues re-runs `refine`; deterministic artifacts and
+  idempotency keys converge.
+- **The mesh branch tip is solve-upgrade, never Fuse.** Fuse publishes its own
+  canonical manifest and enqueues mesh solve-upgrade. Solve-upgrade commits the
+  measurement set/certificate and atomically publishes
+  `solve-upgrade/mesh-solve-manifest-v1.json` before it can join. Fuse cannot
+  bypass this durable evidence and enqueue Present itself.
+- **The join payload is identical and order-independent.** BOTH terminal branches
+  (mesh solve-upgrade and Splat) call the same constructor through their own
+  exact leases. Payload is stable IDs only:
+  `{scan_id, room_file_id, room_file_version, user_id, refine_task_id}`; task key
+  is `'{scan}:present:{v}'`. Each guarded call uses
+  `p_owner_task_id = <that branch-tip task>` for authority while retaining the
+  common `p_parent_task_id = refine_task_id` for lineage. Branch task IDs,
+  manifest keys/checksums, timestamps, and results are forbidden from the
+  payload. The guarded RPC's conflict-ignore makes the second enqueue a no-op,
+  so the durable Present row is identical whichever branch finishes first.
+- **The wait derives canonical evidence.** Present derives four manifest keys
+  from the stable IDs: `refine/refine-manifest-v1.json`,
+  `fuse/fuse-manifest-v1.json`,
+  `solve-upgrade/mesh-solve-manifest-v1.json`, and
+  `splat/splat-manifest-v1.json`. It verifies every manifest checksum and their
+  cross-references plus the three URL columns. Missing/uncommitted/inconsistent
+  evidence raises **`TransientError`** while a branch is outstanding; URL
+  presence alone never makes the layer ready. Only after all four agree does
+  Present compose `room_files.present` once, set `ready`/`presented_at`, and
+  complete.
+- **No parallel read-modify-write.** Refine may set scalar `refining` once. Fuse,
+  Splat, and solve-upgrade write dedicated URL/measurement columns, immutable
+  manifests, and events; they never merge `room_files.present` and never race
+  `present_status` through `fusing`/`training`. Only a fatal path may set `error`;
+  only Present may set `ready`.
 - **Visibility-timeout / cost implications.** A `present` retry is a CHEAP no-op —
-  a single indexed read of three URL columns; no GPU, no download, no lease held
+  canonical manifest heads/reads plus one indexed row read; no GPU, no lease held
   between attempts. The backoff (1m/5m/25m keyed on attempts, §7) at the default
   `max_attempts=5` gives ~80 min of retry headroom, comfortably outlasting the
   slower branch's R114.2 budget (~20 min), so `present` waits `splat` out without
@@ -432,22 +567,51 @@ the SAME queue primitives (00297) — no barrier, no coordinator, no new table:
 ### 10.2 Stage `scan_pipeline.refine` — SfM/BA pose refinement (GPU)
 
 - **Reads:** keyframes (sharp, ~200–400), ARKit per-frame poses + camera
-  intrinsics from the bundle (warm start), the sparse loop.
-- **Engine:** **GLOMAP** global SfM warm-started on the known poses/intrinsics
-  (reuses COLMAP's feature-extraction + matching front-end, same DB format);
-  **COLMAP-incremental pose-prior** fallback behind config (`REFINE_ENGINE`).
-- **Writes (scratch/derived):** refined per-frame poses, a sparse point cloud,
-  per-frame pose deltas. Not a deliverable artifact — consumed by `fuse`/`splat`.
-- **DB:** `present_status='refining'`; `present.refine_engine`, `present.sfm_residual_pct`.
-- **Budget:** GPU; SIFT extraction on-GPU, the global solve is CPU/RAM-bound and
-  VRAM-light on the 11 GB card. Target: the drift residual falls to ~0.2–0.5 %
-  (SC-13) inside the R114.2 chain budget.
-- **Telemetry:** `refine.started` / `refine.succeeded` (`duration_ms`, residual,
-  iterations, `vram_peak_mb`) / `refine.failed`.
+  intrinsics from the bundle, plus the deterministic temporal + ARKit-spatial
+  candidate graph. The Field/Core Image raster transform remains unqualified
+  until the real capture/materializer fixture (I87).
+- **Exact pilot target (I87):** COLMAP CLI **4.0.2** and
+  `pycolmap==4.0.2`, exact parity required. 4.1.1 is current as of 2026-07-18;
+  4.0.2 is a qualification pin, not a claim of currency or validation. Any
+  newer 4.x requires a separate CLI/binding/API/GPU fixture.
+- **Primary:** per-image corrected PINHOLE cameras + full converted ARKit poses
+  in a registered seed model → `point_triangulator` → `bundle_adjuster` → Sim(3)
+  world rebase of centres, points, **and orientations**. **Fallback:** Cartesian
+  centre/covariance priors → `pose_prior_mapper` → BA; rotations are explicitly
+  discarded. COLMAP 4 `global_mapper` (integrated GLOMAP) is diagnostic-only
+  because it has no supported full-pose warm-start surface; standalone GLOMAP is
+  archived and not installed.
+- **Writes (derived, versioned):** corrected adapter + candidate pairs, database,
+  seed/aligned sparse model, refined poses, pose deltas, diagnostic trajectory
+  shape change, separate comparable refinement evidence, bounded command logs,
+  and `refine/refine-manifest-v1.json` last, all checksummed. Consumed by
+  `fuse`/`splat` through the immutable manifest contract.
+- **Evidence, not self-comparison:** similarity-aligned distance back to raw
+  ARKit is `trajectory_shape_change_pct`, keyframe-weighted and diagnostic-only;
+  a no-op is zero, but this diagnostic can neither grant nor veto the verdict.
+  Actual refinement evidence uses the same observations/verified loops before
+  and after: registration coverage,
+  observation/loop-set SHA-256s, reprojection RMSE px, loop-relative rotation and translation-direction error,
+  plus optional anchor/ground-truth error. Coverage must be ≥80% and
+  non-regressing; no metric regresses; at least one improves ≥1% relative; an
+  unchanged evidence set is `REFINE_NO_MEASURABLE_IMPROVEMENT`. No 0.2–0.5
+  target or acceptance gate attaches to shape change.
+- **DB/concurrency:** may set `present_status='refining'` once; never touches P1
+  `status`, read-modify-writes `present`, or marks ready. Refine telemetry lives
+  in events/manifests until Present composes the row.
+- **Deadline:** one absolute deadline per task:
+  `min(stage monotonic start + 4 min, actual claimed lease expiry - 60 s)`.
+  Every engine command consumes the remaining deadline, streams output to a log,
+  and retains only a bounded 64 KiB tail. No static lease length assumption.
+- **Telemetry:** `refine.started` / `refine.succeeded` (`duration_ms`, engine +
+  target/actual versions, registration before/after, reprojection RMSE before/
+  after, loop errors before/after, diagnostic shape change, iterations,
+  `vram_peak_mb`) / `refine.failed`.
 - **Failure classes:** a low-overlap / degenerate single-room loop fails
   **permanent** (`p_fatal=true`) — it never hangs the lease, never silently ships
-  raw ARKit poses as "refined." OOM / driver blip / transient IO = **transient**
-  (retry with backoff, §7).
+  raw ARKit/no-op poses as "refined." Invalid input/version mismatch/artifact
+  conflict are permanent; OOM, driver blip, transient I/O, or exhausted
+  lease-aware deadline are transient (retry with backoff, §7).
 
 ### 10.3 Stage `scan_pipeline.fuse` — TSDF dense mesh + web mesh (GPU)
 
@@ -460,8 +624,9 @@ the SAME queue primitives (00297) — no barrier, no coordinator, no new table:
 - **Writes (deliverable):** `dense_mesh.(ply|glb)` (measurement source of truth,
   server-side) + `measure_mesh.glb` (the invisible browser raycast target), both
   under `room_file/{userId}/{scanId}/v{version}/` (§5.2), sha256 recorded.
-- **DB:** `present_status='fusing'`; `room_files.dense_mesh_url`,
-  `measure_mesh_url`; `present.mesh_vertices`, `present.mesh_bytes`.
+- **DB/concurrency:** writes only `room_files.dense_mesh_url` and
+  `measure_mesh_url`, plus its immutable canonical fuse manifest and events. It
+  never writes `present`, scalar progress, ready, or `presented_at`.
 - **Budget:** GPU/RAM for the volume; `measure_mesh.glb` must land under the
   browser size budget (the item-8 viewer target).
 - **Telemetry:** `fuse.started` / `fuse.succeeded` (`duration_ms`, mesh vertices,
@@ -478,7 +643,10 @@ synthesis with true ceiling geometry where present. **Anchor discipline unchange
 `'verified'` still requires an anchor (`rfm_anchor_source_shape`), so mesh evidence
 tightens `'measured'` — it never manufactures `'verified'` under the short P1
 anchors. The certificate records the source shift + tolerance change honestly.
-Writes the measurement set delete-then-insert under `rfm_element_ref_uniq`.
+Writes the measurement set delete-then-insert under `rfm_element_ref_uniq`, then
+publishes canonical `solve-upgrade/mesh-solve-manifest-v1.json` last with the
+measurement/certificate checksums. Only this durable branch tip may enqueue the
+stable-ID Present task; Fuse itself cannot bypass solve-upgrade.
 
 ### 10.5 Stage `scan_pipeline.splat` — 3DGS training → SPZ (GPU)
 
@@ -491,9 +659,10 @@ Writes the measurement set delete-then-insert under `rfm_element_ref_uniq`.
   GS-Scale CPU host-offload is the escape hatch for a room that blows 11 GB.
 - **Writes (deliverable):** `scene.spz` under `room_file/{userId}/{scanId}/v{version}/`,
   sha256 recorded.
-- **DB:** `present_status='training'`; `room_files.splat_url`;
-  `present.splat_format='spz4'`, `gaussian_count`, `train_seconds`, `vram_peak_mb`,
-  `masked_frames`, `splat_bytes`.
+- **DB/concurrency:** writes only `room_files.splat_url`, its immutable canonical
+  splat manifest, and events. It never merges `present`, writes scalar progress/
+  ready, or sets `presented_at`. After its manifest is durable it enqueues the
+  exact same stable-ID Present contract as mesh solve-upgrade (§10.1.1).
 - **Budget:** the dominant GPU cost; must fit the R114.2 per-room budget on the
   2080 Ti (preview-grade quality at pilot scale).
 - **Telemetry:** `splat.started` / `splat.succeeded` (`gaussian_count`,
@@ -514,20 +683,28 @@ Writes the measurement set delete-then-insert under `rfm_element_ref_uniq`.
   (gaussian count, train seconds, VRAM peak, mesh vertices, SPZ+mesh bytes) for
   the GPU-budget telemetry. Both SECURITY DEFINER + admin-domain gated (00372
   idiom); the new view's GRANT regenerates the legacy-grants seed.
+- **I87 runtime correction (no DDL in item 4):** `present` is free-form JSON, so
+  handlers write the honest `trajectory_shape_change_pct` plus explicit
+  before/after refinement evidence; the planned/comment-era
+  `sfm_residual_pct` remains null. Fuse/Splat do not use the CHECK-allowed
+  `fusing`/`training` scalar values because their parallel writes would race;
+  events/manifests carry progress, only Present writes ready, fatal paths error.
 - **No migration needed for the task types** — `agent_tasks.task_type` has no
   CHECK, so `scan_pipeline.refine/fuse/splat` are claimed by config alone (§2.1).
 
 ### 10.7 Packaging, workers, and the burst contract
 
 - **GPU workers are config, not code.** A splat-capable worker is the same package
-  with the `[splat]`/`[solve]` extras installed, `GPU=auto`, and
+  with the `[gpu]` meta-extra installed, `GPU=auto`, and
   `STAGES=…,refine,fuse,splat` on the box with the card. CPU-only workers omit
   those stages and never claim them — `claim_agent_tasks(p_task_types := STAGES)`
   filters by exactly the stages a worker opted into.
-- **Extras** (item 3): `[solve]` (pycolmap / GLOMAP bindings-or-CLI, numpy/scipy),
-  `[splat]` (torch cu-xx for Turing SM 7.5, gsplat, SPZ tooling) — a CPU worker
-  never pulls CUDA. `doctor` treats the GPU as **required** when `STAGES` includes
-  a GPU stage (nvidia-smi + torch/CUDA import + every cache dir writable).
+- **Extras** (item 3/I87): `[refine]` (`pycolmap==4.0.2`, numpy/scipy),
+  `[fuse]` (Open3D/trimesh), `[splat]` (torch cu118 for Turing SM 7.5 + gsplat),
+  `[gpu] = refine+fuse+splat` — a CPU worker never pulls CUDA. Package resolution
+  does not qualify the engine: item 4 must prove exact CLI/binding 4.0.2 parity,
+  API calls, GPU SIFT, and the Field raster/materializer fixture. `doctor` treats
+  the GPU as **required** when `STAGES` includes a GPU stage.
   CUDA/torch caches confine under `APP_DIR` (I85 finding 3, extended to the
   torch-hub / CUDA-JIT / nvidia cache surfaces).
 - **The burst contract is the same contract (R114.6).** R108.4/R109.1's "cloud
@@ -551,7 +728,7 @@ quality — realistic against the §10.2–10.5 engine survey:
 
 | stage | resource | per-room budget (2080 Ti) |
 |---|---|---|
-| `refine` (GLOMAP SfM/BA, warm-started, ~200–400 keyframes) | GPU front-end + CPU/RAM solve | **2–4 min** (~3) |
+| `refine` (COLMAP 4.0.2 known-pose triangulation + BA, ~200–400 keyframes) | GPU front-end + CPU/RAM solve | **2–4 min** (~3) |
 | `fuse` (TSDF dense mesh + decimate) + `solve-upgrade` (CPU mesh re-fit) | GPU volume + CPU | **3–5 min** (~4 + ~1) |
 | `splat` (MCMC-capped gsplat/splatfacto → SPZ) — the dominant cost | GPU | **6–14 min** (~8–9) |
 | `present` (rollup) | none | **< 0.5 min** |
@@ -573,6 +750,10 @@ quality — realistic against the §10.2–10.5 engine survey:
   AND shortens `splat`. Pilot volume (single-designer, one card) stays amber and
   accepted; the burst flip (first non-Leah designer) is what buys ≤10, with a
   per-room GPU-cost ceiling attached.
+- **Refine lease guard.** The 4-minute row is the hard engine ceiling used by
+  item 4. Its actual deadline is the smaller of start+4 minutes and the claimed
+  lease expiry minus a 60-second publication/completion reserve; no handler
+  assumes a fixed visibility timeout.
 - **Watch it live:** `scan_present_stats` (00377) surfaces `train_seconds`,
   `vram_peak_mb`, `gaussian_count`, and `mesh_vertices` per room — the budget is
   measured, not assumed; a room drifting toward the GS-Scale escape hatch shows up
@@ -585,15 +766,33 @@ quality — realistic against the §10.2–10.5 engine survey:
 What the Linux box needs to run P1 (and to be P2-ready):
 
 - **Distro** — Ubuntu 22.04/24.04 LTS or Debian 12, x86_64. A service user `patina` and `systemd` (present on all three).
-- **Python** — 3.11 or newer, with `venv` (`apt install python3.11-venv`). `install.sh` builds the venv; no system-wide Python packages.
+- **Python** — 3.11 or newer, with `venv` (`apt install python3.11-venv`). `install.sh` builds the venv; no system-wide Python packages. If the distro's `/usr/bin/python3` is older, pass an absolute `PYTHON=/usr/bin/python3.11`; the installer accepts only a canonical root-owned executable reached through root-owned, non-group/world-writable ancestry.
 - **CPU only for P1** — the three P1 stages (validate, least-squares scale fit, SVG/PDF/DXF) are CPU-bound. No GPU driver is needed to run P1. `doctor` will report GPU absent as a warning, which is expected.
-- **Optional NVIDIA for P2** — the proprietary NVIDIA driver + a CUDA toolkit matching the card (the 2080 Ti is Turing; a newer card is fine). `nvidia-smi` should list the device; then `doctor` reports the GPU green. Only needed when a splat stage is enabled.
+- **Optional NVIDIA for P2** — the proprietary NVIDIA driver, CUDA 11.8 toolkit,
+  and `/usr/bin/nvidia-modprobe` for the accepted RTX 2080 Ti/cu118 stack.
+  `nvidia-smi` and the stage-scoped systemd doctor must both pass before any GPU
+  stage is enabled.
 - **Disk** — bundles are 300–600 MB each; scratch sizing ≈ `MAX_CONCURRENT × ~1.5 GB` (download + render headroom) plus the retention window. Provision **≥ 50–100 GB** on the `WORK_DIR` volume; `RETENTION_HOURS` prunes downloaded bundles and rendered sets. (P2 splat outputs will want considerably more — size that when P2 lands.)
 - **Network** — **outbound 443 only**. No inbound ports, no forwarding, no reverse proxy in front of the worker. The firewall may deny all inbound. `cloudflared` (Kody's tunnel) is a separate, optional install for SSH/ops in — independent of the worker.
 - **Time** — `chrony`/NTP so `scan_pipeline_events` and audit timestamps are sane.
-- **Files** — `/etc/patina/scan-worker.env` at `0600` owned by `patina`; venv at `/opt/patina/scan-pipeline/.venv`; scratch at `/var/lib/patina/scan-work`.
+- **Files** — reviewed installer source at
+  `/opt/patina/scan-pipeline-source` in the closed root-owned layout above;
+  `/etc/patina/scan-worker.env` at `0600` owned by `root:root`;
+  root-owned stable venv symlink at `/opt/patina/scan-pipeline/.venv`;
+  root-owned, non-service-writable immutable releases beside it; only the XDG
+  cache/state dirs below `APP_DIR` and scratch at `/var/lib/patina/scan-work`
+  are owned by `patina`.
 
-Bring-up: `sudo ./install.sh` → edit `/etc/patina/scan-worker.env` (URL, key, `WORKER_ID`) → `patina-scan-worker doctor` → `systemctl enable --now patina-scan-worker` → watch `journalctl -u patina-scan-worker -f`.
+Bring-up: stop the worker/service UID and stage reviewed source root-owned at
+`/opt/patina/scan-pipeline-source` with the README's delete/fresh-inode rsync →
+`sudo /opt/patina/scan-pipeline-source/install.sh` → edit
+`/etc/patina/scan-worker.env` (URL, key,
+`WORKER_ID`) → `systemctl start patina-scan-worker-doctor` for a context-accurate
+preflight → `systemctl enable --now patina-scan-worker` → watch
+`journalctl -u patina-scan-worker -f`. Item-3 GPU-only acceptance stops at the
+doctor unit: its documented subshell stops the queue worker before the shared
+env edit and restores the env plus prior active/inactive posture afterward, so
+it never starts the queue worker with unregistered GPU stages.
 
 ---
 

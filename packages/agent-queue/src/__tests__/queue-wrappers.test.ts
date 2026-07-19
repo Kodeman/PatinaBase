@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createAgentQueue } from '../index';
+import { AgentTaskLeaseLostError, createAgentQueue, createLeaseOwner } from '../index';
 
 /** Minimal mock: records the last rpc(name, params) and returns a fixture. */
 function mockRpcClient(data: unknown = { id: 'task-1' }, error: unknown = null) {
@@ -26,6 +26,27 @@ function mockFromClient(result: { data?: unknown; error?: unknown; count?: numbe
 }
 
 describe('createAgentQueue — request shapes', () => {
+  it('creates distinct readable lease owners and supports deterministic unique suffixes', () => {
+    const first = createLeaseOwner('worker');
+    const second = createLeaseOwner('worker');
+    expect(first).toMatch(/^worker:[0-9a-f-]{36}$/);
+    expect(second).toMatch(/^worker:[0-9a-f-]{36}$/);
+    expect(first).not.toBe(second);
+    expect(createLeaseOwner(' worker ', 'batch-a')).toBe('worker:batch-a');
+    expect(() => createLeaseOwner(' ', 'batch-a')).toThrow(/baseLabel/);
+    expect(() => createLeaseOwner('worker', ' ')).toThrow(/uniqueId/);
+  });
+
+  it('requires the completion actor at the TypeScript boundary', () => {
+    const { client } = mockRpcClient(null);
+    const q = createAgentQueue(client);
+    if (false) {
+      // @ts-expect-error Completion identity is the lease-owner contract.
+      void q.complete({ id: 't1', outcome: 'done' });
+    }
+    expect(q).toBeDefined();
+  });
+
   it('enqueue maps camelCase input onto p_* RPC args', async () => {
     const { client, rpc } = mockRpcClient({ id: 't1', status: 'queued' });
     const q = createAgentQueue(client);
@@ -90,6 +111,24 @@ describe('createAgentQueue — request shapes', () => {
       p_fatal: true,
       p_actor: 'w1',
     });
+  });
+
+  it('complete exposes a typed error for a stable lease-lost rejection', async () => {
+    const { client } = mockRpcClient(null, {
+      message:
+        'complete_agent_task: lease ownership rejected for task t1 (locked_by worker:b, p_actor worker:a)',
+    });
+    const q = createAgentQueue(client);
+    await expect(q.complete({ id: 't1', outcome: 'done', actor: 'worker:a' })).rejects.toBeInstanceOf(
+      AgentTaskLeaseLostError,
+    );
+  });
+
+  it('complete preserves unrelated RPC failures', async () => {
+    const rpcError = { message: 'permission denied for function' };
+    const { client } = mockRpcClient(null, rpcError);
+    const q = createAgentQueue(client);
+    await expect(q.complete({ id: 't1', outcome: 'done', actor: 'worker:a' })).rejects.toBe(rpcError);
   });
 
   it('review maps to review_agent_task', async () => {

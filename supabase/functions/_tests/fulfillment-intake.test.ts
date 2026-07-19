@@ -15,7 +15,7 @@
 //   deno test --no-check -A --config supabase/functions/deno.json \
 //     supabase/functions/_tests/fulfillment-intake.test.ts
 
-import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert, assertEquals, assertNotEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { createFakeSupabase } from './fake-supabase.ts';
 import { normalizeIntakePayload, intakeInlinePI, runIntakeWorker, type IntakeDeps } from '../fulfillment-intake/core.ts';
 
@@ -198,6 +198,7 @@ Deno.test('idempotent re-delivery: two intakeInlinePI calls for the same PI both
 // ─── runIntakeWorker (worker path: claim → fetch → RPC → complete) ──────────
 
 Deno.test('runIntakeWorker: claims fulfillment_intake tasks, re-fetches the PI, calls the RPC, completes done', async () => {
+  const claims: Array<Record<string, unknown>> = [];
   const completions: Array<Record<string, unknown>> = [];
   const claimedTasks = [
     {
@@ -211,7 +212,10 @@ Deno.test('runIntakeWorker: claims fulfillment_intake tasks, re-fetches the PI, 
   const sb = createFakeSupabase(
     {},
     {
-      claim_agent_tasks: () => ({ data: claimedTasks, error: null }),
+      claim_agent_tasks: (args) => {
+        claims.push(args);
+        return { data: claimedTasks, error: null };
+      },
       complete_agent_task: (args) => {
         completions.push(args);
         return { data: null, error: null };
@@ -227,14 +231,17 @@ Deno.test('runIntakeWorker: claims fulfillment_intake tasks, re-fetches the PI, 
       return Promise.resolve(minimalPi(id, 9900));
     },
     now: () => new Date(),
+    worker: 'fulfillment-intake-test-worker',
   };
 
   const result = await runIntakeWorker(deps);
 
   assertEquals(result, { processed: 1, failed: 0 });
   assertEquals(fetched, ['pi_worker_1']);
+  assertEquals(claims[0].p_worker, 'fulfillment-intake-test-worker');
   assertEquals(completions.length, 1);
   assertEquals(completions[0].p_outcome, 'done');
+  assertEquals(completions[0].p_actor, 'fulfillment-intake-test-worker');
   assertEquals((completions[0].p_artifacts as Record<string, unknown>).order_id, 'order-uuid-1');
 });
 
@@ -253,12 +260,17 @@ Deno.test('runIntakeWorker: a task claimed without fetchPaymentIntent wired comp
       },
     },
   );
-  const deps: IntakeDeps = { supabase: sb as unknown as IntakeDeps['supabase'], now: () => new Date() };
+  const deps: IntakeDeps = {
+    supabase: sb as unknown as IntakeDeps['supabase'],
+    now: () => new Date(),
+    worker: 'fulfillment-intake-failure-worker',
+  };
 
   const result = await runIntakeWorker(deps);
 
   assertEquals(result, { processed: 0, failed: 1 });
   assertEquals(completions[0].p_outcome, 'failed');
+  assertEquals(completions[0].p_actor, 'fulfillment-intake-failure-worker');
 });
 
 Deno.test('runIntakeWorker: no claimed tasks → processed/failed both 0, no RPC calls', async () => {
@@ -266,4 +278,100 @@ Deno.test('runIntakeWorker: no claimed tasks → processed/failed both 0, no RPC
   const deps: IntakeDeps = { supabase: sb as unknown as IntakeDeps['supabase'], now: () => new Date() };
   const result = await runIntakeWorker(deps);
   assertEquals(result, { processed: 0, failed: 0 });
+});
+
+Deno.test('runIntakeWorker: overlapping invocations use distinct base-prefixed lease owners through completion', async () => {
+  function invocation(label: string) {
+    const claims: Array<Record<string, unknown>> = [];
+    const completions: Array<Record<string, unknown>> = [];
+    const sb = createFakeSupabase(
+      {},
+      {
+        claim_agent_tasks: (args) => {
+          claims.push(args);
+          return {
+            data: [
+              {
+                id: `task_${label}`,
+                task_type: 'fulfillment_intake',
+                status: 'running',
+                payload: { payment_intent_id: `pi_${label}` },
+                artifacts: {},
+              },
+            ],
+            error: null,
+          };
+        },
+        complete_agent_task: (args) => {
+          completions.push(args);
+          return { data: null, error: null };
+        },
+        fulfillment_intake_order: () => ({ data: `order_${label}`, error: null }),
+      },
+    );
+    return {
+      claims,
+      completions,
+      run: () =>
+        runIntakeWorker({
+          supabase: sb as unknown as IntakeDeps['supabase'],
+          fetchPaymentIntent: (id) => Promise.resolve(minimalPi(id, 1000)),
+          now: () => new Date(),
+        }),
+    };
+  }
+
+  const first = invocation('first');
+  const second = invocation('second');
+  await Promise.all([first.run(), second.run()]);
+
+  const firstOwner = first.claims[0].p_worker as string;
+  const secondOwner = second.claims[0].p_worker as string;
+  assert(firstOwner.startsWith('fulfillment-intake:'));
+  assert(secondOwner.startsWith('fulfillment-intake:'));
+  assertNotEquals(firstOwner, secondOwner);
+  assertEquals(first.completions[0].p_actor, firstOwner);
+  assertEquals(second.completions[0].p_actor, secondOwner);
+});
+
+Deno.test('runIntakeWorker: a stale completion is a benign lease loss, not a retry or invocation failure', async () => {
+  let completionCalls = 0;
+  const sb = createFakeSupabase(
+    {},
+    {
+      claim_agent_tasks: () => ({
+        data: [
+          {
+            id: 'task_stale',
+            task_type: 'fulfillment_intake',
+            status: 'running',
+            payload: { payment_intent_id: 'pi_stale' },
+            artifacts: {},
+          },
+        ],
+        error: null,
+      }),
+      fulfillment_intake_order: () => ({ data: 'order_stale', error: null }),
+      complete_agent_task: () => {
+        completionCalls++;
+        return {
+          data: null,
+          error: {
+            message:
+              'complete_agent_task: lease ownership rejected for task task_stale (locked_by fulfillment-intake:new, p_actor fulfillment-intake:old)',
+          },
+        };
+      },
+    },
+  );
+
+  const result = await runIntakeWorker({
+    supabase: sb as unknown as IntakeDeps['supabase'],
+    fetchPaymentIntent: (id) => Promise.resolve(minimalPi(id, 1000)),
+    now: () => new Date(),
+    worker: 'fulfillment-intake:old',
+  });
+
+  assertEquals(result, { processed: 0, failed: 0 });
+  assertEquals(completionCalls, 1, 'must not retry completion as a failed outcome after losing the lease');
 });
