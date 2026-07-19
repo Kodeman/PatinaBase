@@ -4468,3 +4468,37 @@ stages stay unregistered and must not be enabled; scan `95266be1` remains
 local-scratch-only until those gates pass.
 
 *Entries add: I88 · last id = I88*
+
+### I89 · Field Capture P2 item 4 · conservative lease-deadline prerequisite — 2026-07-19
+
+The lease-budget prerequisite is integrated on remote `main` at `c92c4190`.
+This is prerequisite plumbing for Refine, not a stage enablement or fixture
+qualification.
+
+**Contract:** `VISIBILITY_TIMEOUT` now has one strict positive
+seconds/minutes/hours grammar and one parsed source of truth. Each claim batch
+captures request-start monotonic time before the RPC and carries that timestamp
+plus the exact validated visibility interval as an immutable conservative
+expiry bound on every returned task. PostgreSQL cannot establish the lease
+before request start, so ordinary request/response latency consumes rather than
+extends the engine budget. The stage-facing accessor fails closed on missing,
+boolean, non-finite, or expired metadata and supplies the existing Refine
+deadline: `min(stage monotonic start + 4 min, claimed lease bound - 60 s)`.
+
+**Verification:** 83 focused config/queue/refine/registry tests passed, followed
+by all 333 scan-pipeline tests. Independent adversarial review returned **PASS**.
+
+**Boundary and suspend caveat:** no GPU stage was registered or enabled. Item
+4A's exact COLMAP/PyCOLMAP GPU-SIFT qualifier and physical Field/Core Image
+raster/materializer fixture remain in development; the queue worker's persistent
+GPU stages remain disabled. Item 3's real second-runtime-worker/disjoint
+GPU-task claim operator AC also remains open: only the local two-session
+`SKIP LOCKED` code proof exists, and no live claim may be attempted until
+registered handlers and safe fixture tasks make it legal. Python's Linux
+monotonic clock does not advance through system suspend, while the PostgreSQL
+lease does. The conservative bound therefore assumes an awake host: disable
+automatic and manual suspend on DeskDev before enabling Refine, or first move
+to a suspend-aware clock/live lease revalidation contract. Scan `95266be1`
+remains local-scratch-only until the remaining item-4 gates pass.
+
+*Entries add: I89 · last id = I89*

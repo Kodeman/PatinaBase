@@ -1,4 +1,4 @@
-# Field Capture — orchestrator handoff — paused 2026-07-18
+# Field Capture — orchestrator handoff — active 2026-07-19
 
 You are picking up the Field Capture program mid-P2. This document is the
 working state an orchestrator needs beyond what the repo already records.
@@ -10,15 +10,19 @@ Read it with, not instead of, the canonical sources below.
    runs (rulings → numbered plan → hard gates). P1 is COMPLETE.
 2. `docs/design/field-capture/field-capture-p2-package.md` — the ACTIVE plan.
    Part B carries Kody's R114 rulings inline; Part E is the numbered plan.
-3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I87**
-   are this program's full decision history. R115 is the latest gate; I87 is
+3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I89**
+   are this program's full decision history. R115 is the latest gate; I89 is
    the latest implementation record.
-4. `docs/design/field-capture/scan-pipeline-worker-design.md` — §10 is the
+4. `docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md` — the
+   completed real-DeskDev dependency/sandbox receipt (I88).
+5. `docs/design/field-capture/p2-item4-colmap-adapter-spike-2026-07-18.md` —
+   item 4's exact engine/API/fixture decision and remaining proof boundary.
+6. `docs/design/field-capture/scan-pipeline-worker-design.md` — §10 is the
    P2 stage contract (the fork-join in §10.1.1 and budgets in §10.9 are
    implementation law).
-5. Auto-memory `project_field_capture_p1.md` — the compressed ledger with
+7. Auto-memory `project_field_capture_p1.md` — the compressed ledger with
    every warning flag.
-6. `docs/design/field-capture/m4-pilot-checklist.md` — the still-owed Leah
+8. `docs/design/field-capture/m4-pilot-checklist.md` — the still-owed Leah
    pilot runbook.
 
 ## Exact position (as of this handoff)
@@ -30,53 +34,80 @@ Read it with, not instead of, the canonical sources below.
 - **P2 (presence)**: ruled (R114), P2-M1 passed (R115), schema **00376/00377
   live on Strata**, items 1–2 done (item 2 was verified-not-rebuilt — its
   deliverable landed inside item 1's commit `9db080d2`; recorded honestly).
-- **Wave-0 pickup is integrated locally on
-  `field-capture/p2-wave0-integration` at merge `5a38b9db`.** It has not been
-  merged to main, deployed, or applied to Strata. Queue lease ownership, the
-  item-4 adapter/evidence spike, and the item-3 installer closeout were developed
-  in isolated worktrees and adversarially reviewed before integration.
-- **Local integration receipt:** 290 scan-pipeline Python tests, 46 affected
+- **Wave 0 and queue lease migration 00378 shipped 2026-07-18.** Integration
+  `636acf75` reached remote `main` in merge `59abd0f5`; both commits are
+  ancestors of current `origin/main`. Migration
+  `00378_agent_task_lease_ownership.sql` was applied surgically with its ledger
+  row in one transaction. At that production receipt unrelated 00374/00375
+  remained absent, so no blanket `supabase db push` was used. The affected
+  `catalog-normalizer`, `fulfillment-intake`, and `stripe-event-processor`
+  bundles deployed at versions 8, 2, and 8 with JWT verification preserved;
+  natural cron runs for the latter two succeeded with zero failures, while
+  catalog's nightly business run was not forced.
+- **Wave-0 pre-deploy integration receipt:** 290 scan-pipeline Python tests, 46 affected
   Deno tests, 20 `@patina/agent-queue` tests, queue + Supabase typechecks, all
   agent-task SQL cases inside an outer transaction/rollback, and a two-session
   `SKIP LOCKED` run with distinct claims and zero residue passed. The generated
   legacy-grants seed was byte-identical. A Linux two-UID hostile-umask race probe
-  also passed. None of this is Kody-box, real fixture, or production evidence.
-- **Queue ownership hardening is code-complete but local-only**:
+  also passed. This remains code/integration evidence, not item-4 fixture proof.
+- **Queue ownership hardening is live on Strata**:
   `00378_agent_task_lease_ownership.sql` makes claim owners fresh UUIDs and
   fences completion plus successor enqueue to the exact live lease owner. The
   generated Supabase/client types, edge callers, worker wrapper, SQL transaction
-  tests, and two-session `SKIP LOCKED` runner are included. Strata remains at
-  00377; do not apply 00378 without an explicit production migration request.
-- **Item 3 local closeout is at `23949c05` and merged by `5a38b9db`**:
-  stage-named extras `[refine]/[fuse]/[splat]` + `[gpu]`, Turing/cu118 pin,
-  cache confinement, GPU systemd/doctor-only units, and transactional
-  `install.sh --upgrade`. The privileged installer now uses a separate
-  root-owned source snapshot, keeps candidate releases sealed through build,
-  fsyncs them before publication, and has power-loss recovery coverage. Treat
-  package resolution, local tests, and Linux container probes as code evidence
-  only; real PID1/CUDA/Open3D/gsplat/COLMAP and second-worker acceptance remain
-  Kody-box operator gates.
+  tests, and two-session `SKIP LOCKED` runner are included. Live RPC definitions
+  contain both actor/owner guards and remain executable only by `service_role`.
+- **Item 3's real-DeskDev dependency/sandbox qualification is complete and
+  recorded by I88.** The full receipt is
+  `p2-item3-gpu-box-acceptance-2026-07-19.md`; acceptance hardening
+  is on main at `14b01e89` and the receipt at `70ac232e`. A CUDA 11.8 compile/run
+  smoke passed on the RTX 2080 Ti; COLMAP/PyCOLMAP 4.0.2, Open3D CUDA, torch
+  cu118, and gsplat rasterization passed cold and warm doctor-only systemd runs.
+  Cleanup left `patina-scan-worker` inactive with its persistent CPU stage set
+  unchanged. This closes item 3 dependency/sandbox qualification, not item 4's
+  database/model API, GPU-SIFT reconstruction, or physical Field-raster fixture.
+  Item 3's real second-runtime-worker/disjoint GPU-task claim operator AC is
+  still open; only the local two-session `SKIP LOCKED` code proof exists. Do not
+  attempt that live claim until registered handlers and safe fixture tasks make
+  it legal.
+- **Item 4's lease-deadline prerequisite is integrated on current main at
+  `c92c4190` and recorded by I89.** Claims now carry one immutable conservative
+  monotonic expiry bound from request start plus the exact strictly validated
+  visibility interval. The stage accessor fails closed on missing, non-finite,
+  or expired metadata and feeds `min(stage start + 4 min, bound - 60 s)`.
+  Verification passed 83 focused tests and all 333 scan-pipeline tests;
+  independent adversarial review passed. The guarantee assumes the Linux host
+  stays awake because its monotonic clock does not include suspend time: disable
+  automatic and manual suspend before enabling Refine, or first replace/recheck
+  the clock/lease contract with a suspend-aware design.
 - **Item 4 engine decision is corrected by I87** (decision record:
   `p2-item4-colmap-adapter-spike-2026-07-18.md`): exact pilot target is COLMAP
   CLI 4.0.2 + `pycolmap==4.0.2`; primary = known-pose seed model → point
   triangulation → BA; fallback = position-prior mapper; integrated
   `global_mapper` is diagnostic-only and standalone GLOMAP is archived. This
-  target is **unvalidated** until the CLI/binding/API/GPU fixture and real
-  Field/Core Image raster/materializer fixture pass. COLMAP 4.1.1 is current;
-  newer 4.x needs separate qualification.
-- The adapter/geometry prototype is executable, but the production queue
-  handler is still NOT built. Handler development is open; before handler
-  enablement/deployment or any real run, prove comparable
+  runtime dependency surface passed item 3, but the target remains
+  **unqualified for item 4** until the exact database/model API + GPU-SIFT
+  reconstruction fixture and real Field/Core Image raster/materializer fixture
+  pass. Newer 4.x needs separate qualification.
+- **Item 4A qualification is currently in development**, split between the
+  isolated `field-capture/item4a-colmap-qualification` and
+  `field-capture/p2-ios-raster-fixture` worktrees. Neither fixture has an
+  acceptance receipt or integrated commit yet. The adapter/geometry prototype
+  is executable, but the production queue handler is still NOT built. Before
+  handler enablement/deployment or any real run, prove comparable
   reprojection/registration/verified-loop evidence (unchanged evidence cannot
-  pass; trajectory shape is diagnostic-only), use the actual lease-aware
+  pass; trajectory shape is diagnostic-only), use the carried lease-aware
   4-minute deadline, and preserve the canonical
   refine → {fuse→mesh-solve, splat} → Present four-manifest join. Scan
   `95266be1` remains the local-scratch proof subject before any DB/storage run.
-- **Next safe execution packet:** keep the live worker's persistent `STAGES`
-  unchanged; run the README's ephemeral doctor-only box acceptance, qualify the
-  exact COLMAP 4.0.2 CLI/binding plus real Field raster fixture, then implement
-  the full lease-aware refine handler. Do not claim GPU-stage queue tasks or run
-  `95266be1` through DB/storage until those gates pass.
+- **GPU stages remain disabled and unregistered.** The observed queue-worker
+  posture after I88 is inactive; its persistent `STAGES` remains the safe CPU
+  set. Do not add `refine`, `fuse`, or `splat`, and do not start a GPU-stage
+  worker merely because the doctor passed.
+- **Next safe execution packet:** finish and independently review both Item 4A
+  fixtures, integrate their evidence on top of current main, disable DeskDev
+  suspend, then build/prove the full Refine handler locally. Do not claim a GPU
+  queue task or run `95266be1` through production DB/Storage until those gates
+  pass.
 
 ## The operating cadence (do not drop it)
 
@@ -104,18 +135,21 @@ Read it with, not instead of, the canonical sources below.
 
 - **Git**: explicit pathspecs only, never `git add -A`, never
   `reset --hard`. The main checkout carries Kody's unrelated dirty files +
-  a stash — untouchable. Parallel agents get worktrees under
-  `.claude/worktrees/`. Conflicts in GENERATED files (pbxproj, legacy-grants
+  a stash — untouchable. Harness-managed agents use isolated
+  `.claude/worktrees/agent-*` worktrees; operator-managed Codex worktrees use
+  isolated lowercase `.codex/worktrees/...` paths. Never execute task writes
+  from the dirty shared main checkout. Conflicts in GENERATED files (pbxproj, legacy-grants
   seed, database.types.ts) are resolved by RE-RUNNING the generator
   (`generate_project.rb`, `scripts/generate-legacy-grants.py`,
   `pnpm db:generate` vs LOCAL only), never hand-spliced.
 - **Migrations**: hand-numbered; the ledger is a battlefield of parallel
-  programs. Strata remote head is **00377**. `00374`/`00375` exist unpushed
-  on the `field-site-request` branch; BOH owns earlier ranges. **NEVER run
-  blanket `supabase db push`** — it would drag other programs' migrations.
-  The proven surgical path: MCP `execute_sql` of the file's DDL + a bare
-  `(version, name)` ledger INSERT in the same transaction (00372/00373/
-  00376/00377 precedent). Verify numbers free across branches at write time.
+  programs. Field Capture's Strata queue head is **00378**. The Wave-0 receipt
+  found unrelated 00374/00375 absent and therefore applied 00378 surgically;
+  re-query the live ledger rather than assuming that historical absence.
+  **NEVER run blanket `supabase db push`** when it would drag another program's
+  migrations. The proven surgical path is the file's DDL plus a bare
+  `(version, name)` ledger INSERT in the same transaction. Verify numbers free
+  across branches and the live ledger at execution time.
 - **The box** (Kody's Linux GPU machine, worker id `DeskDevProcess-1`,
   app at `/opt/patina/scan-pipeline`): `install.sh` does a **COPY pip
   install** — `git pull` alone NEVER updates a running worker; and the box's
@@ -123,7 +157,9 @@ Read it with, not instead of, the canonical sources below.
   `ProtectSystem=strict` — every writable surface (all four XDG dirs, and
   for P2 the torch/CUDA caches) must be confined to APP_DIR **and** listed
   in `ReadWritePaths`; `doctor` probes them preflight. Upgrade story: update
-  source copy → `sudo ./install.sh` → `systemctl restart`.
+  source copy → `sudo ./install.sh` → `systemctl restart`. Keep the worker
+  inactive/GPU stages absent during qualification, and disable host suspend
+  before Refine is ever enabled.
 - **Storage/schema invariants**: B-18 (bundle spec) is the storage layout
   contract — per-kind folders `{folder}/{uid}/{room}/{file}`, deliverables
   under `room_file/{uid}/{scanId}/v{n}/`. The worker service key bypasses
@@ -135,7 +171,9 @@ Read it with, not instead of, the canonical sources below.
   MIME lives in the manifest (B-17).
 - **Prod ops**: read-only SQL via Supabase MCP is always fine; mutations
   only via sanctioned RPCs (`requeue_agent_task` for parked jobs) or
-  explicitly authorized deploys. Edge fn confirm-scan-bundle is at v21.
+  explicitly authorized deploys. Edge fn confirm-scan-bundle is at v21; the
+  Wave-0 receipt recorded catalog-normalizer/fulfillment-intake/
+  stripe-event-processor at v8/v2/v8.
   Verify deploys by probes, never version strings.
 
 ## Parked / owed ledger

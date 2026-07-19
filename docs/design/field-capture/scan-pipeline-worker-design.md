@@ -600,9 +600,16 @@ coordinator, no new table:
   `status`, read-modify-writes `present`, or marks ready. Refine telemetry lives
   in events/manifests until Present composes the row.
 - **Deadline:** one absolute deadline per task:
-  `min(stage monotonic start + 4 min, actual claimed lease expiry - 60 s)`.
+  `min(stage monotonic start + 4 min, claimed lease bound - 60 s)`. The bound
+  is request-start monotonic time plus the exact validated visibility interval;
+  because PostgreSQL cannot establish the lease before the request begins,
+  response latency only shortens the safe budget. The bound is carried on the
+  claimed task and never reconstructed from mutable config or wall-clock time.
   Every engine command consumes the remaining deadline, streams output to a log,
   and retains only a bounded 64 KiB tail. No static lease length assumption.
+  Linux suspend is outside this monotonic-clock guarantee, so host suspend must
+  be disabled before Refine is enabled unless the lease clock is made
+  suspend-aware or revalidated.
 - **Telemetry:** `refine.started` / `refine.succeeded` (`duration_ms`, engine +
   target/actual versions, registration before/after, reprojection RMSE before/
   after, loop errors before/after, diagnostic shape change, iterations,
@@ -752,8 +759,8 @@ quality — realistic against the §10.2–10.5 engine survey:
   per-room GPU-cost ceiling attached.
 - **Refine lease guard.** The 4-minute row is the hard engine ceiling used by
   item 4. Its actual deadline is the smaller of start+4 minutes and the claimed
-  lease expiry minus a 60-second publication/completion reserve; no handler
-  assumes a fixed visibility timeout.
+  task's conservative lease bound minus a 60-second publication/completion
+  reserve; no handler re-reads a fixed visibility timeout after claiming.
 - **Watch it live:** `scan_present_stats` (00377) surfaces `train_seconds`,
   `vram_peak_mb`, `gaussian_count`, and `mesh_vertices` per room — the budget is
   measured, not assumed; a room drifting toward the GS-Scale escape hatch shows up
