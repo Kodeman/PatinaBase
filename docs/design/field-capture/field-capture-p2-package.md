@@ -138,7 +138,7 @@ Same split as P1 (the P1 package's authority note + spec §11): the question is 
 
 ## Part D — Additive-schema sketch
 
-Additive only; no modification of existing behavior. 00341 is **deployed to Strata** (I85), so every change is **fix-forward in a new numbered migration**, catalog-guarded (the 00373 idiom) so it is a no-op where already-final. Numbers were verified free across main + all branches at write time (patina-db-migrations): the `field-site-request` program merged to main (00373 field-capture parity, 00374/00375 site-request), so **main head is 00375**; **00365–00369 remain the BOH soft reservation**. P2 minted **00376** (present schema) + **00377** (present query surface) — the two files below, applied LOCAL-only (I86); prod push is gated on P2-M1 review.
+Additive only; no modification of existing behavior. 00341 is **deployed to Strata** (I85), so every change is **fix-forward in a new numbered migration**, catalog-guarded (the 00373 idiom) so it is a no-op where already-final. Numbers were verified free across main + all branches at write time (patina-db-migrations): the `field-site-request` program put 00373–00375 on main, and **00365–00369 remain the BOH soft reservation**. P2 then minted **00376** (present schema) + **00377** (present query surface), and queue hardening added **00378**. Main carries all three P2 migrations; Strata has 00376–00378 live after P2-M1 passed, while unrelated 00374/00375 remain absent. Production migration work must therefore stay surgical rather than using blanket `supabase db push`.
 
 ### D.1 — No migration needed (the schema already anticipated P2)
 - **Task-type namespace is open** (`agent_tasks.task_type` has no CHECK, worker-design §2.1) → `scan_pipeline.refine`, `scan_pipeline.fuse`, `scan_pipeline.splat` need **zero DDL**. They are new `STAGES` values, claimed by config alone (§10).
@@ -201,7 +201,9 @@ Outputs aligned poses/orientations, sparse cloud, pose deltas, diagnostic shape
 change, and separate comparable refinement evidence. Handler code/test
 development is open; *enablement AC:* exact CLI/binding 4.0.2 parity and
 GPU/API/Field-raster fixture pass before the stage is advertised or run; one lease-aware deadline
-is `min(start+4 min, actual lease expiry-60 s)`; on local scratch `95266be1`,
+is `min(start+4 min, immutable conservative claim bound-60 s)`; the bound is
+request-start monotonic time plus the exact validated visibility interval, so
+response latency cannot extend the engine budget; on local scratch `95266be1`,
 after-registration coverage is ≥80% and non-regressing, same-track reprojection
 RMSE and verified-loop rotation/translation-direction consistency do not regress
 and at least one improves ≥1% relative; an unchanged evidence set is

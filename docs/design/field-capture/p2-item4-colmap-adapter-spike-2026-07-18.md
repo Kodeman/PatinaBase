@@ -151,9 +151,13 @@ share. The relevant current bindings are in the official
 pair encoding follow the official [database format](https://colmap.github.io/database.html),
 and sparse outputs follow the official [model format](https://colmap.github.io/format.html).
 
-1. **Start one lease-aware stage deadline.** Convert the claimed task's actual
-   lease expiry to the same monotonic clock at handler entry, then set
-   `deadline = min(start + 240 seconds, actual lease expiry - 60 seconds)`.
+1. **Start one lease-aware stage deadline.** At claim-request start, capture a
+   monotonic timestamp and add the exact validated `VISIBILITY_TIMEOUT` sent to
+   PostgreSQL. Carry that immutable conservative expiry bound on the claimed
+   task. PostgreSQL cannot establish the lease before the request begins, so
+   response latency can only shorten this bound, never extend it beyond the
+   actual database lease. At handler entry set
+   `deadline = min(start + 240 seconds, claimed lease bound - 60 seconds)`.
    Four minutes is §10.9's ratified refine ceiling; the 60-second reserve is for
    checksums, durable publication, fork enqueues, and completion. Every command
    receives only `deadline - now`; never infer a static lease length or create a
@@ -434,7 +438,7 @@ is represented by events, not competing scalar writes.
 - fsynced immutable multiprocess publication, conflict detection, manifest last;
 - identical stable-ID Present enqueue and canonical mesh-solve-aware manifests;
 - bounded engine-log tail; and
-- one shared deadline `min(start+240s, actual lease expiry-60s)`, including a
+- one shared deadline `min(start+240s, claimed lease bound-60s)`, including a
   short-lease case.
 
 ## What this spike does not prove

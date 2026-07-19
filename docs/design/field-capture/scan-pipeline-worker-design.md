@@ -77,7 +77,7 @@ rows = claim_agent_tasks(
     p_task_types        := ARRAY[<enabled STAGES>],   # e.g. {'scan_pipeline.ingest','scan_pipeline.solve','scan_pipeline.drawings'}
     p_batch             := MAX_CONCURRENT,
     p_worker            := LEASE_OWNER,
-    p_visibility_timeout := VISIBILITY_TIMEOUT        # default '15 minutes'
+    p_visibility_timeout := VISIBILITY_TIMEOUT        # default '60 minutes'
 )
 # → each returned row is status='running', attempts+1, locked_by=LEASE_OWNER.
 # If rows is empty: sleep POLL_SECONDS, poll again.
@@ -153,7 +153,7 @@ Everything about a worker — its readable identity prefix, which stages it runs
 | `POLL_SECONDS` | int | `5` | Sleep between polls when a claim returns zero tasks. |
 | `MAX_CONCURRENT` | int | `2` | Claim batch size and max in-flight jobs (`p_batch`). Bounds scratch disk and CPU. |
 | `GPU` | enum `auto`\|`off` | `auto` | `auto` = detect and report a CUDA device (P1: report only). `off` = never touch the GPU. No P1 stage uses it either way. |
-| `VISIBILITY_TIMEOUT` | duration | `15 minutes` | Lease length (`p_visibility_timeout`); a job whose worker dies is reclaimable after this. |
+| `VISIBILITY_TIMEOUT` | duration | `60 minutes` | Lease length (`p_visibility_timeout`); a job whose worker dies is reclaimable after this. |
 | `MAX_ATTEMPTS` | int | `5` | `p_max_attempts` set on enqueued successors (backoff parks at this count). |
 | `SUPABASE_URL` | url | *(required)* | Strata PostgREST + Storage base. Outbound-443 only. |
 | `SUPABASE_SERVICE_ROLE_KEY` | secret | *(required)* | The service-role JWT. The worker's **only** write credential; server-side only. |
@@ -600,7 +600,11 @@ coordinator, no new table:
   `status`, read-modify-writes `present`, or marks ready. Refine telemetry lives
   in events/manifests until Present composes the row.
 - **Deadline:** one absolute deadline per task:
-  `min(stage monotonic start + 4 min, actual claimed lease expiry - 60 s)`.
+  `min(stage monotonic start + 4 min, claimed lease bound - 60 s)`. The bound
+  is request-start monotonic time plus the exact validated visibility interval;
+  because PostgreSQL cannot establish the lease before the request begins,
+  response latency only shortens the safe budget. The bound is carried on the
+  claimed task and never reconstructed from mutable config or wall-clock time.
   Every engine command consumes the remaining deadline, streams output to a log,
   and retains only a bounded 64 KiB tail. No static lease length assumption.
 - **Telemetry:** `refine.started` / `refine.succeeded` (`duration_ms`, engine +
@@ -752,8 +756,8 @@ quality — realistic against the §10.2–10.5 engine survey:
   per-room GPU-cost ceiling attached.
 - **Refine lease guard.** The 4-minute row is the hard engine ceiling used by
   item 4. Its actual deadline is the smaller of start+4 minutes and the claimed
-  lease expiry minus a 60-second publication/completion reserve; no handler
-  assumes a fixed visibility timeout.
+  task's conservative lease bound minus a 60-second publication/completion
+  reserve; no handler re-reads a fixed visibility timeout after claiming.
 - **Watch it live:** `scan_present_stats` (00377) surfaces `train_seconds`,
   `vram_peak_mb`, `gaussian_count`, and `mesh_vertices` per room — the budget is
   measured, not assumed; a room drifting toward the GS-Scale escape hatch shows up

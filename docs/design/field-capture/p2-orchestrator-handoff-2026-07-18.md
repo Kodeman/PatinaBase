@@ -1,4 +1,4 @@
-# Field Capture — orchestrator handoff — paused 2026-07-18
+# Field Capture — orchestrator handoff — resumed 2026-07-18
 
 You are picking up the Field Capture program mid-P2. This document is the
 working state an orchestrator needs beyond what the repo already records.
@@ -28,26 +28,30 @@ Read it with, not instead of, the canonical sources below.
   Kody's Linux box → drawings → Room File portal page (flag `room-file`,
   PostHog id 768495, kody-only).
 - **P2 (presence)**: ruled (R114), P2-M1 passed (R115), schema **00376/00377
-  live on Strata**, items 1–2 done (item 2 was verified-not-rebuilt — its
+  live on Strata** and queue lease migration **00378 live**, items 1–2 done
+  (item 2 was verified-not-rebuilt — its
   deliverable landed inside item 1's commit `9db080d2`; recorded honestly).
-- **Wave-0 pickup is integrated locally on
-  `field-capture/p2-wave0-integration` at merge `5a38b9db`.** It has not been
-  merged to main, deployed, or applied to Strata. Queue lease ownership, the
-  item-4 adapter/evidence spike, and the item-3 installer closeout were developed
-  in isolated worktrees and adversarially reviewed before integration.
+- **Wave-0 pickup shipped 2026-07-18.** `field-capture/p2-wave0-integration`
+  (`636acf75`) was merged to remote `main` at `59abd0f5`. Migration `00378` was
+  applied surgically with its ledger row in one transaction; no blanket DB push
+  was used because unrelated `00374`/`00375` remain absent from Strata. The
+  affected `catalog-normalizer`, `fulfillment-intake`, and
+  `stripe-event-processor` bundles deployed at versions 8, 2, and 8 with JWT
+  verification preserved. Natural cron runs for the latter two succeeded with
+  zero failures; catalog's nightly business run was not forced.
 - **Local integration receipt:** 290 scan-pipeline Python tests, 46 affected
   Deno tests, 20 `@patina/agent-queue` tests, queue + Supabase typechecks, all
   agent-task SQL cases inside an outer transaction/rollback, and a two-session
   `SKIP LOCKED` run with distinct claims and zero residue passed. The generated
   legacy-grants seed was byte-identical. A Linux two-UID hostile-umask race probe
   also passed. None of this is Kody-box, real fixture, or production evidence.
-- **Queue ownership hardening is code-complete but local-only**:
+- **Queue ownership hardening is live on Strata**:
   `00378_agent_task_lease_ownership.sql` makes claim owners fresh UUIDs and
   fences completion plus successor enqueue to the exact live lease owner. The
   generated Supabase/client types, edge callers, worker wrapper, SQL transaction
-  tests, and two-session `SKIP LOCKED` runner are included. Strata remains at
-  00377; do not apply 00378 without an explicit production migration request.
-- **Item 3 local closeout is at `23949c05` and merged by `5a38b9db`**:
+  tests, and two-session `SKIP LOCKED` runner are included. Live RPC definitions
+  contain both actor/owner guards and remain executable only by `service_role`.
+- **Item 3 local closeout is at `23949c05` and merged to main by `59abd0f5`**:
   stage-named extras `[refine]/[fuse]/[splat]` + `[gpu]`, Turing/cu118 pin,
   cache confinement, GPU systemd/doctor-only units, and transactional
   `install.sh --upgrade`. The privileged installer now uses a separate
@@ -56,6 +60,16 @@ Read it with, not instead of, the canonical sources below.
   package resolution, local tests, and Linux container probes as code evidence
   only; real PID1/CUDA/Open3D/gsplat/COLMAP and second-worker acceptance remain
   Kody-box operator gates.
+- **Item 4 lease-budget prerequisite is implemented at `67dd7b95`** on
+  `field-capture/p2-item4-qualification`. `VISIBILITY_TIMEOUT` now has a strict
+  positive seconds/minutes/hours grammar and one source of truth. Every claim
+  carries an immutable conservative monotonic expiry bound captured before the
+  RPC, so response latency consumes rather than extends the Refine budget. The
+  stage-facing accessor fails closed on missing/non-finite/expired metadata and
+  feeds the existing `min(start+4m, bound-60s)` deadline. Focused tests passed
+  80/80; the final full scan-pipeline suite passed 316/316. An independent
+  review caught and closed a duplicate-duration-source bug; Refine remains
+  unregistered and the live worker's persistent `STAGES` remains CPU-only.
 - **Item 4 engine decision is corrected by I87** (decision record:
   `p2-item4-colmap-adapter-spike-2026-07-18.md`): exact pilot target is COLMAP
   CLI 4.0.2 + `pycolmap==4.0.2`; primary = known-pose seed model → point
@@ -68,7 +82,7 @@ Read it with, not instead of, the canonical sources below.
   handler is still NOT built. Handler development is open; before handler
   enablement/deployment or any real run, prove comparable
   reprojection/registration/verified-loop evidence (unchanged evidence cannot
-  pass; trajectory shape is diagnostic-only), use the actual lease-aware
+  pass; trajectory shape is diagnostic-only), use the carried lease-aware
   4-minute deadline, and preserve the canonical
   refine → {fuse→mesh-solve, splat} → Present four-manifest join. Scan
   `95266be1` remains the local-scratch proof subject before any DB/storage run.
@@ -110,7 +124,7 @@ Read it with, not instead of, the canonical sources below.
   (`generate_project.rb`, `scripts/generate-legacy-grants.py`,
   `pnpm db:generate` vs LOCAL only), never hand-spliced.
 - **Migrations**: hand-numbered; the ledger is a battlefield of parallel
-  programs. Strata remote head is **00377**. `00374`/`00375` exist unpushed
+  programs. Strata queue head is **00378**. `00374`/`00375` exist unpushed
   on the `field-site-request` branch; BOH owns earlier ranges. **NEVER run
   blanket `supabase db push`** — it would drag other programs' migrations.
   The proven surgical path: MCP `execute_sql` of the file's DDL + a bare
@@ -135,7 +149,8 @@ Read it with, not instead of, the canonical sources below.
   MIME lives in the manifest (B-17).
 - **Prod ops**: read-only SQL via Supabase MCP is always fine; mutations
   only via sanctioned RPCs (`requeue_agent_task` for parked jobs) or
-  explicitly authorized deploys. Edge fn confirm-scan-bundle is at v21.
+  explicitly authorized deploys. Edge fn confirm-scan-bundle is at v21;
+  catalog-normalizer/fulfillment-intake/stripe-event-processor are at v8/v2/v8.
   Verify deploys by probes, never version strings.
 
 ## Parked / owed ledger
