@@ -326,6 +326,56 @@ public final class CompanionAnalytics {
             ]
         )
     }
+
+    // MARK: - Coaching Events
+
+    /// Track the companion intro (wake-up self-introduction) being shown.
+    public func trackIntroShown(trigger: String, shownCount: Int) {
+        postHog.capture(
+            CompanionEvent.introShown.rawValue,
+            properties: [
+                "trigger": trigger,
+                "shown_count": shownCount,
+                "session_id": sessionMetrics.sessionId
+            ]
+        )
+    }
+
+    /// Track the companion intro being dismissed.
+    public func trackIntroDismissed(action: String, viewedMs: Int) {
+        postHog.capture(
+            CompanionEvent.introDismissed.rawValue,
+            properties: [
+                "action": action,
+                "viewed_ms": viewedMs,
+                "session_id": sessionMetrics.sessionId
+            ]
+        )
+    }
+
+    /// Track a coaching-phase transition.
+    public func trackCoachingPhaseChanged(from: String, to: String, navCount: Int) {
+        postHog.capture(
+            CompanionEvent.coachingPhaseChanged.rawValue,
+            properties: [
+                "from": from,
+                "to": to,
+                "nav_count": navCount,
+                "session_id": sessionMetrics.sessionId
+            ]
+        )
+    }
+
+    /// Track a coaching reinforcement affordance being shown.
+    public func trackReinforcementShown(kind: String) {
+        postHog.capture(
+            CompanionEvent.reinforcementShown.rawValue,
+            properties: [
+                "kind": kind,
+                "session_id": sessionMetrics.sessionId
+            ]
+        )
+    }
 }
 
 // MARK: - Event Names
@@ -372,6 +422,12 @@ public enum CompanionEvent: String {
 
     // Session events
     case sessionSummary = "companion_session_summary"
+
+    // Coaching events
+    case introShown = "companion_intro_shown"
+    case introDismissed = "companion_intro_dismissed"
+    case coachingPhaseChanged = "companion_coaching_phase_changed"
+    case reinforcementShown = "companion_reinforcement_shown"
 }
 
 // MARK: - Auth Method
