@@ -11,11 +11,18 @@ symlink.
 from __future__ import annotations
 
 import argparse
+import base64
+import csv
+import email.parser
+import hashlib
+import io
+import json
 import os
 import re
 import secrets
 import stat
 import sys
+import zipfile
 from pathlib import PurePath
 
 
@@ -35,6 +42,7 @@ SOURCE_TOP_LEVEL_FILES = frozenset(
         "patina-scan-worker-nvidia-prepare.service",
         "patina-scan-worker.gpu.conf",
         "patina-scan-worker.service",
+        "pycolmap-build-requirements.txt",
         "pyproject.toml",
         "scan-worker.env.example",
     }
@@ -45,6 +53,37 @@ SOURCE_REQUIRED_PACKAGE_FILES = frozenset(
         f"{SOURCE_PACKAGE_ROOT}/__init__.py",
         f"{SOURCE_PACKAGE_ROOT}/field_raster_libheif.c",
         f"{SOURCE_PACKAGE_ROOT}/field_raster_qualification.py",
+        f"{SOURCE_PACKAGE_ROOT}/pycolmap_cuda_smoke.py",
+    }
+)
+
+PYCOLMAP_SOURCE_COMMIT = "d927f7e518fc20afa33390712c4cc20d85b730b8"
+PYCOLMAP_SOURCE_TREE = "9c381aea43304df66df991183563b659c2f712fa"
+PYCOLMAP_SOURCE_PYPROJECT_SHA256 = (
+    "60b1cedf70be21acc3b8e33455f4f0d482e380c1c9cab65f8598613695be5fc5"
+)
+PYCOLMAP_SOURCE_CMAKE_SHA256 = (
+    "d6881e9110f221cbb0e725d1ff837f0a573e9e310c83447ff3bfcf9bc1c0adaa"
+)
+PYCOLMAP_BUILD_TAG = "1patinacu118sm75"
+PYCOLMAP_MANIFEST_KEYS = frozenset(
+    {
+        "artifact",
+        "colmapBuild",
+        "cudaArchitecture",
+        "cudaDeviceCount",
+        "cudaVersion",
+        "gpuSiftKeypoints",
+        "hasCuda",
+        "pythonTag",
+        "schemaVersion",
+        "sourceCmakeSha256",
+        "sourceCommit",
+        "sourcePyprojectSha256",
+        "sourceTree",
+        "wheelFile",
+        "wheelSha256",
+        "wheelSizeBytes",
     }
 )
 
@@ -837,6 +876,318 @@ def validate_source_tree(
         raise GuardError(f"installer source snapshot is incomplete: {missing}")
 
 
+def _validate_pycolmap_wheel(
+    wheel_fd: int,
+    *,
+    wheel_name: str,
+    python_tag: str,
+) -> None:
+    """Validate distribution metadata without extracting the held wheel fd."""
+
+    expected_name = (
+        f"pycolmap-4.0.2-{PYCOLMAP_BUILD_TAG}-{python_tag}-linux_x86_64.whl"
+    )
+    if wheel_name != expected_name:
+        raise GuardError(f"unexpected PyCOLMAP wheel filename: {wheel_name!r}")
+    with os.fdopen(os.dup(wheel_fd), "rb") as stream:
+        try:
+            archive = zipfile.ZipFile(stream)
+        except zipfile.BadZipFile as exc:
+            raise GuardError("PyCOLMAP artifact wheel is not a valid ZIP archive") from exc
+        with archive:
+            infos = archive.infolist()
+            names = [info.filename for info in infos]
+            if len(infos) > 10_000 or len(names) != len(set(names)):
+                raise GuardError("PyCOLMAP wheel has too many or duplicate entries")
+            if sum(info.file_size for info in infos) > 1024 * 1024 * 1024:
+                raise GuardError("PyCOLMAP wheel expands beyond the 1 GiB safety limit")
+            for info in infos:
+                parts = info.filename.split("/")
+                mode = info.external_attr >> 16
+                if (
+                    info.is_dir()
+                    or info.filename.startswith("/")
+                    or "\\" in info.filename
+                    or any(part in ("", ".", "..") for part in parts)
+                    or stat.S_IFMT(mode) not in (0, stat.S_IFREG)
+                ):
+                    raise GuardError(
+                        f"PyCOLMAP wheel has an unsafe entry: {info.filename!r}"
+                    )
+
+            dist_info = "pycolmap-4.0.2.dist-info"
+            if any(
+                not (
+                    name.startswith("pycolmap/")
+                    or name.startswith(f"{dist_info}/")
+                )
+                for name in names
+            ):
+                raise GuardError("PyCOLMAP wheel contains an unexpected import root")
+            dist_roots = {
+                name.split("/", 1)[0]
+                for name in names
+                if ".dist-info/" in name
+            }
+            if dist_roots != {dist_info}:
+                raise GuardError(
+                    f"PyCOLMAP wheel has unexpected dist-info roots: {dist_roots!r}"
+                )
+            metadata_name = f"{dist_info}/METADATA"
+            wheel_metadata_name = f"{dist_info}/WHEEL"
+            record_name = f"{dist_info}/RECORD"
+            required = {
+                metadata_name,
+                wheel_metadata_name,
+                record_name,
+                "pycolmap/__init__.py",
+            }
+            if not required.issubset(names):
+                raise GuardError("PyCOLMAP wheel omits required package metadata")
+            allowed_dist_info = required | {f"{dist_info}/licenses/COPYING.txt"}
+            if any(
+                name.startswith(f"{dist_info}/") and name not in allowed_dist_info
+                for name in names
+            ):
+                raise GuardError("PyCOLMAP wheel has unexpected dist-info payload")
+            core_names = [
+                name
+                for name in names
+                if re.fullmatch(
+                    r"pycolmap/_core\.cpython-312-x86_64-linux-gnu\.so", name
+                )
+            ]
+            if len(core_names) != 1:
+                raise GuardError("PyCOLMAP wheel must contain the exact CPython 3.12 core")
+
+            try:
+                metadata_text = archive.read(metadata_name).decode("utf-8")
+                wheel_text = archive.read(wheel_metadata_name).decode("utf-8")
+                record_text = archive.read(record_name).decode("utf-8")
+            except (KeyError, UnicodeDecodeError) as exc:
+                raise GuardError("PyCOLMAP wheel metadata is unreadable") from exc
+            metadata = email.parser.Parser().parsestr(metadata_text)
+            if metadata.get_all("Name") != ["pycolmap"]:
+                raise GuardError("PyCOLMAP wheel METADATA Name must be pycolmap")
+            if metadata.get_all("Version") != ["4.0.2"]:
+                raise GuardError("PyCOLMAP wheel METADATA Version must be 4.0.2")
+            if metadata.get_all("Requires-Dist") != ["numpy"]:
+                raise GuardError("PyCOLMAP wheel must declare only Requires-Dist: numpy")
+            wheel_metadata = email.parser.Parser().parsestr(wheel_text)
+            if wheel_metadata.get_all("Build") != [PYCOLMAP_BUILD_TAG]:
+                raise GuardError("PyCOLMAP wheel WHEEL Build tag is not qualified")
+            expected_tag = f"{python_tag}-linux_x86_64"
+            if wheel_metadata.get_all("Tag") != [expected_tag]:
+                raise GuardError(
+                    f"PyCOLMAP wheel WHEEL Tag must be {expected_tag!r}"
+                )
+            if wheel_metadata.get_all("Root-Is-Purelib") != ["false"]:
+                raise GuardError("PyCOLMAP wheel must be a platform wheel")
+
+            try:
+                record_rows = list(csv.reader(io.StringIO(record_text), strict=True))
+            except (csv.Error, UnicodeError) as exc:
+                raise GuardError("PyCOLMAP wheel RECORD is invalid CSV") from exc
+            if any(len(row) != 3 for row in record_rows):
+                raise GuardError("PyCOLMAP wheel RECORD rows must have three columns")
+            record = {row[0]: (row[1], row[2]) for row in record_rows}
+            if len(record) != len(record_rows) or set(record) != set(names):
+                raise GuardError("PyCOLMAP wheel RECORD does not cover the archive exactly")
+            if record.get(record_name) != ("", ""):
+                raise GuardError("PyCOLMAP wheel RECORD must leave its own digest empty")
+            for required_hash in (*core_names, metadata_name, wheel_metadata_name):
+                digest, size = record[required_hash]
+                if not digest.startswith("sha256=") or not size.isdecimal():
+                    raise GuardError(
+                        f"PyCOLMAP wheel RECORD omits digest/size for {required_hash}"
+                    )
+            info_by_name = {info.filename: info for info in infos}
+            for name, (record_digest, record_size) in record.items():
+                if name == record_name:
+                    continue
+                info = info_by_name[name]
+                if record_size != str(info.file_size):
+                    raise GuardError(f"PyCOLMAP wheel RECORD size mismatch for {name}")
+                hasher = hashlib.sha256()
+                with archive.open(info, "r") as member:
+                    while chunk := member.read(1024 * 1024):
+                        hasher.update(chunk)
+                encoded = base64.urlsafe_b64encode(hasher.digest()).rstrip(b"=")
+                if record_digest != "sha256=" + encoded.decode("ascii"):
+                    raise GuardError(f"PyCOLMAP wheel RECORD digest mismatch for {name}")
+
+
+def validate_pycolmap_artifact(
+    artifact_dir: str,
+    expected_python_tag: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> str:
+    """Return the only wheel in a closed, immutable CUDA artifact directory."""
+
+    if expected_python_tag != "cp312-cp312":
+        raise GuardError(
+            "DeskDev PyCOLMAP artifact supports only CPython 3.12 "
+            f"(got {expected_python_tag!r})"
+        )
+    _validate_trusted_tree(anchor, artifact_dir, uid=uid, gid=gid)
+    artifact_abs = _absolute(artifact_dir)
+    wheel_name = (
+        f"pycolmap-4.0.2-{PYCOLMAP_BUILD_TAG}-"
+        f"{expected_python_tag}-linux_x86_64.whl"
+    )
+    expected_entries = {"artifact.json", wheel_name}
+    directory_fd = _open_directory(artifact_abs)
+    try:
+        entries = set(os.listdir(directory_fd))
+        if entries != expected_entries:
+            raise GuardError(
+                "PyCOLMAP artifact must contain exactly artifact.json and "
+                f"{wheel_name}; got {sorted(entries)!r}"
+            )
+
+        def inspect_entry(
+            name: str,
+            *,
+            max_bytes: int,
+            retain_bytes: bool,
+            validate_wheel: bool = False,
+        ) -> tuple[bytes | None, os.stat_result, str]:
+            display = os.path.join(artifact_abs, name)
+            before = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+                raise GuardError(f"PyCOLMAP artifact entry is not regular: {display}")
+            if before.st_uid != uid or before.st_gid != gid:
+                raise GuardError(
+                    f"PyCOLMAP artifact entry is not owned by {uid}:{gid}: {display}"
+                )
+            if stat.S_IMODE(before.st_mode) & 0o022:
+                raise GuardError(
+                    f"PyCOLMAP artifact entry is group/world writable: {display}"
+                )
+            if before.st_nlink != 1:
+                raise GuardError(f"PyCOLMAP artifact entry has a hardlink: {display}")
+            if before.st_size > max_bytes:
+                raise GuardError(
+                    f"PyCOLMAP artifact entry exceeds {max_bytes} bytes: {display}"
+                )
+            entry_fd = os.open(
+                name,
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=directory_fd,
+            )
+            try:
+                opened = os.fstat(entry_fd)
+                if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+                    raise GuardError(f"PyCOLMAP artifact entry changed: {display}")
+                chunks: list[bytes] | None = [] if retain_bytes else None
+                digest = hashlib.sha256()
+                total = 0
+                while True:
+                    chunk = os.read(entry_fd, 1024 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > max_bytes:
+                        raise GuardError(
+                            f"PyCOLMAP artifact entry exceeds {max_bytes} bytes: {display}"
+                        )
+                    digest.update(chunk)
+                    if chunks is not None:
+                        chunks.append(chunk)
+                if validate_wheel:
+                    os.lseek(entry_fd, 0, os.SEEK_SET)
+                    _validate_pycolmap_wheel(
+                        entry_fd,
+                        wheel_name=wheel_name,
+                        python_tag=expected_python_tag,
+                    )
+                after = os.fstat(entry_fd)
+                identity = lambda value: (
+                    value.st_dev,
+                    value.st_ino,
+                    value.st_mode,
+                    value.st_size,
+                    value.st_mtime_ns,
+                    value.st_ctime_ns,
+                    value.st_nlink,
+                )
+                if identity(after) != identity(before):
+                    raise GuardError(f"PyCOLMAP artifact entry changed while read: {display}")
+                return (
+                    b"".join(chunks) if chunks is not None else None,
+                    after,
+                    digest.hexdigest(),
+                )
+            finally:
+                os.close(entry_fd)
+
+        manifest_bytes, _manifest_info, _manifest_sha = inspect_entry(
+            "artifact.json", max_bytes=64 * 1024, retain_bytes=True
+        )
+        assert manifest_bytes is not None
+        try:
+            manifest = json.loads(manifest_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise GuardError("PyCOLMAP artifact manifest is not valid UTF-8 JSON") from exc
+        if not isinstance(manifest, dict) or set(manifest) != PYCOLMAP_MANIFEST_KEYS:
+            raise GuardError("PyCOLMAP artifact manifest has an unexpected schema")
+        canonical = (
+            json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+        if manifest_bytes != canonical:
+            raise GuardError("PyCOLMAP artifact manifest is not canonical JSON")
+
+        exact = {
+            "artifact": "pycolmap-4.0.2-cuda118-sm75",
+            "colmapBuild": "Commit d927f7e on 2026-03-18 with CUDA",
+            "cudaArchitecture": "75",
+            "cudaVersion": "11.8",
+            "hasCuda": True,
+            "pythonTag": expected_python_tag,
+            "schemaVersion": 1,
+            "sourceCmakeSha256": PYCOLMAP_SOURCE_CMAKE_SHA256,
+            "sourceCommit": PYCOLMAP_SOURCE_COMMIT,
+            "sourcePyprojectSha256": PYCOLMAP_SOURCE_PYPROJECT_SHA256,
+            "sourceTree": PYCOLMAP_SOURCE_TREE,
+            "wheelFile": wheel_name,
+        }
+        for key, expected in exact.items():
+            actual = manifest.get(key)
+            if type(actual) is not type(expected) or actual != expected:
+                raise GuardError(
+                    f"PyCOLMAP artifact manifest {key} must be {expected!r}"
+                )
+        for key, minimum in (("cudaDeviceCount", 1), ("gpuSiftKeypoints", 40)):
+            value = manifest.get(key)
+            if type(value) is not int or value < minimum:
+                raise GuardError(
+                    f"PyCOLMAP artifact manifest {key} must be an integer >= {minimum}"
+                )
+        wheel_sha = manifest.get("wheelSha256")
+        if not isinstance(wheel_sha, str) or re.fullmatch(r"[0-9a-f]{64}", wheel_sha) is None:
+            raise GuardError("PyCOLMAP artifact manifest wheelSha256 is invalid")
+        wheel_size = manifest.get("wheelSizeBytes")
+        if type(wheel_size) is not int or not (1 <= wheel_size <= 512 * 1024 * 1024):
+            raise GuardError("PyCOLMAP artifact manifest wheelSizeBytes is invalid")
+
+        _wheel_bytes, wheel_info, actual_wheel_sha = inspect_entry(
+            wheel_name,
+            max_bytes=512 * 1024 * 1024,
+            retain_bytes=False,
+            validate_wheel=True,
+        )
+        if wheel_info.st_size != wheel_size:
+            raise GuardError("PyCOLMAP artifact wheel size does not match manifest")
+        if actual_wheel_sha != wheel_sha:
+            raise GuardError("PyCOLMAP artifact wheel hash does not match manifest")
+    finally:
+        os.close(directory_fd)
+    return os.path.join(artifact_abs, wheel_name)
+
+
 def _validate_release_tree(path: str, *, uid: int, gid: int) -> None:
     for current, directories, files, current_fd in os.fwalk(path, topdown=True, follow_symlinks=False):
         root_info = os.fstat(current_fd)
@@ -1403,6 +1754,10 @@ def _parser() -> argparse.ArgumentParser:
     validate_source = subparsers.add_parser("validate-source-tree")
     validate_source.add_argument("--source-dir", required=True)
 
+    validate_pycolmap = subparsers.add_parser("validate-pycolmap-artifact")
+    validate_pycolmap.add_argument("--artifact-dir", required=True)
+    validate_pycolmap.add_argument("--expected-python-tag", required=True)
+
     owned = subparsers.add_parser("ensure-owned-dir")
     owned.add_argument("--app-dir", required=True)
     owned.add_argument("--path", required=True)
@@ -1501,6 +1856,14 @@ def main(argv: list[str] | None = None) -> int:
             print(validate_trusted_executable(args.path, **common))
         elif args.command == "validate-source-tree":
             validate_source_tree(args.source_dir, **common)
+        elif args.command == "validate-pycolmap-artifact":
+            print(
+                validate_pycolmap_artifact(
+                    args.artifact_dir,
+                    args.expected_python_tag,
+                    **common,
+                )
+            )
         elif args.command == "ensure-owned-dir":
             ensure_owned_directory(
                 args.app_dir,

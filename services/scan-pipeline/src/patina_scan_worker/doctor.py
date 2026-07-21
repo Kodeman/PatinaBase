@@ -148,6 +148,41 @@ def _python_module_ok(module_name: str) -> tuple[bool, str]:
     return True, f"{module_name} import OK" + (f" ({version})" if version else "")
 
 
+def _pycolmap_cuda_ok() -> tuple[bool, str]:
+    """Require the exact CUDA-enabled PyCOLMAP pilot binding.
+
+    A normal ``pycolmap==4.0.2`` PyPI wheel is CPU-only.  Version parity alone
+    therefore cannot prove that refine will execute on this GPU box.
+    """
+    try:
+        pycolmap = importlib.import_module("pycolmap")
+    except Exception as exc:  # noqa: BLE001 — report native-link/import errors
+        return False, f"pycolmap not importable ({exc.__class__.__name__}: {exc})"
+
+    if getattr(pycolmap, "__version__", None) != "4.0.2":
+        return False, "pycolmap must report exact pilot version 4.0.2"
+    if getattr(pycolmap, "COLMAP_version", None) != "COLMAP 4.0.2":
+        return False, "pycolmap COLMAP_version must be exactly 'COLMAP 4.0.2'"
+    expected_build = "Commit d927f7e on 2026-03-18 with CUDA"
+    if getattr(pycolmap, "COLMAP_build", None) != expected_build:
+        return False, f"pycolmap build must be exactly '{expected_build}'"
+    has_cuda = getattr(pycolmap, "has_cuda", None)
+    if type(has_cuda) is not bool:  # noqa: E721 — bool, not truthy int/proxy
+        return False, "pycolmap has_cuda must be a bool"
+    if not has_cuda:
+        return False, "pycolmap has_cuda is false (CPU-only binding)"
+    get_device_count = getattr(pycolmap, "get_num_cuda_devices", None)
+    if not callable(get_device_count):
+        return False, "pycolmap CUDA build omitted get_num_cuda_devices()"
+    try:
+        count = int(get_device_count())
+    except Exception as exc:  # noqa: BLE001
+        return False, f"pycolmap CUDA device probe failed ({exc.__class__.__name__}: {exc})"
+    if count < 1:
+        return False, "pycolmap CUDA build cannot see a CUDA device"
+    return True, f"pycolmap 4.0.2 CUDA ready ({count} device(s); {expected_build})"
+
+
 def _open3d_cuda_ok() -> tuple[bool, str]:
     """Require the fuse runtime to be a CUDA-capable Open3D build.
 
@@ -437,7 +472,7 @@ def run_checks(settings: Settings) -> list[Check]:
         if refine_enabled:
             ok, cdetail = _colmap_command_set_ok()
             checks.append(Check("colmap", ok, warn=False, detail=cdetail))
-            ok, pdetail = _python_module_ok("pycolmap")
+            ok, pdetail = _pycolmap_cuda_ok()
             checks.append(Check("pycolmap", ok, warn=False, detail=pdetail))
         if fuse_enabled:
             ok, odetail = _open3d_cuda_ok()

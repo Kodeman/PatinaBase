@@ -45,7 +45,9 @@ def test_cpu_install_never_pulls_cuda():
 
 def test_gpu_stage_extras_pull_only_their_imports():
     extras, _ = _extras()
-    # refine drives the exact COLMAP target via pycolmap — NOT torch.
+    # refine drives the exact COLMAP target via pycolmap — NOT torch. install.sh
+    # supplies the qualified wheel as a direct candidate in the same resolver
+    # transaction, so this metadata remains truthful for pip check.
     refine = " ".join(extras["refine"]).lower()
     assert "pycolmap" in refine and "torch" not in refine and "gsplat" not in refine
     # fuse = Open3D TSDF (+ trimesh export) — NOT torch.

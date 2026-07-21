@@ -42,6 +42,11 @@ for arg in "$@"; do
 done
 
 APP_DIR=/opt/patina/scan-pipeline
+PYCOLMAP_ARTIFACT_DIR=/opt/patina/scan-pipeline-artifacts/pycolmap-4.0.2-cuda118-sm75
+PYCOLMAP_PYTHON_TAG=cp312-cp312
+PYCOLMAP_WHEEL=""
+PYCOLMAP_WHEEL_SHA256=""
+PYCOLMAP_REQUIREMENT=""
 VENV="$APP_DIR/.venv"
 # A venv is not relocatable: console-script shebangs embed the build path. Build
 # at an immutable final path, then replace only the stable .venv symlink.
@@ -214,6 +219,7 @@ _run_candidate_python() {
   local candidate_python="$1"
   shift
   /usr/bin/env -i HOME=/root PATH="$INSTALL_SECURE_PATH" \
+    PIP_CONFIG_FILE=/dev/null \
     "$candidate_python" -I "$@"
 }
 
@@ -266,6 +272,33 @@ if [ "$GPU" -eq 1 ] && [ ! -x "$NVIDIA_MODPROBE" ]; then
   echo "ERROR: --gpu requires executable $NVIDIA_MODPROBE." >&2
   echo "       Install the NVIDIA driver's nvidia-modprobe package first." >&2
   exit 2
+fi
+
+# The ordinary pycolmap==4.0.2 index wheel is CPU-only. Validate the separately
+# built immutable CUDA artifact and the target interpreter ABI before apt,
+# users, release creation, or a new activation transaction can change state.
+if [ "$GPU" -eq 1 ]; then
+  SYSTEM_PYTHON="$(_path_guard validate-trusted-executable --path /usr/bin/python3)"
+  if [ "$PYTHON" != "$SYSTEM_PYTHON" ]; then
+    echo "ERROR: --gpu requires the artifact ABI interpreter /usr/bin/python3." >&2
+    echo "       Unset PYTHON and rerun; alternate Python ABIs are not qualified." >&2
+    exit 2
+  fi
+  PYTHON_ABI="$(_run_privileged_python -c \
+    'import platform, struct, sys, sysconfig; v=f"cp{sys.version_info.major}{sys.version_info.minor}"; print("{}-{}:{}:{}:{}".format(v, v, sysconfig.get_config_var("SOABI"), platform.machine(), struct.calcsize("P")*8))')"
+  if [ "$PYTHON_ABI" != \
+    "cp312-cp312:cpython-312-x86_64-linux-gnu:x86_64:64" ]; then
+    echo "ERROR: --gpu artifact requires CPython 3.12 x86_64 ABI; got $PYTHON_ABI" >&2
+    exit 2
+  fi
+  PYCOLMAP_WHEEL="$(_path_guard validate-pycolmap-artifact --artifact-dir "$PYCOLMAP_ARTIFACT_DIR" \
+    --expected-python-tag "$PYCOLMAP_PYTHON_TAG")" || {
+      echo "ERROR: missing or invalid qualified PyCOLMAP CUDA artifact." >&2
+      echo "       Run install-colmap-4.0.2.sh on this box first." >&2
+      exit 2
+    }
+  PYCOLMAP_WHEEL_SHA256="$(/usr/bin/sha256sum "$PYCOLMAP_WHEEL" | /usr/bin/awk '{print $1}')"
+  PYCOLMAP_REQUIREMENT="pycolmap @ file://$PYCOLMAP_WHEEL#sha256=$PYCOLMAP_WHEEL_SHA256"
 fi
 
 echo "== Patina scan-pipeline worker install (gpu=$GPU upgrade=$UPGRADE) =="
@@ -416,18 +449,52 @@ if [ "$BUILD_VENV" -eq 1 ]; then
   echo "-- building staged venv at $STAGED_VENV ($(_run_privileged_python --version 2>&1))"
   _run_privileged_python -m venv "$STAGED_VENV"
   _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
-    install --upgrade pip >/dev/null
+    --isolated --disable-pip-version-check install \
+    --no-cache-dir --upgrade pip >/dev/null
   if [ "$GPU" -eq 1 ]; then
-    echo "-- pip install $SRC_DIR[drawings,gpu] via PyTorch cu118 index"
-    _run_candidate_python "$STAGED_VENV/bin/python" -m pip install \
+    echo "-- pip install qualified local PyCOLMAP + $SRC_DIR[drawings,gpu]"
+    _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
+      --isolated --disable-pip-version-check install --no-cache-dir \
       --extra-index-url https://download.pytorch.org/whl/cu118 \
-      "$SRC_DIR[drawings,gpu]"
+      --report "$STAGED_VENV/pip-install-report.json" \
+      "$PYCOLMAP_REQUIREMENT" "numpy==1.26.4" "$SRC_DIR[drawings,gpu]"
+    _run_candidate_python "$STAGED_VENV/bin/python" - \
+      "$STAGED_VENV/pip-install-report.json" \
+      "$PYCOLMAP_WHEEL" "$PYCOLMAP_WHEEL_SHA256" <<'PY'
+import json
+import pathlib
+import sys
+
+report_path = pathlib.Path(sys.argv[1])
+wheel = pathlib.Path(sys.argv[2]).resolve(strict=True)
+expected_hash = sys.argv[3]
+report = json.loads(report_path.read_text(encoding="utf-8"))
+records = [
+    record
+    for record in report.get("install", [])
+    if record.get("metadata", {}).get("name", "").lower() == "pycolmap"
+]
+if len(records) != 1:
+    raise SystemExit(f"pip report must contain one pycolmap record: {records!r}")
+record = records[0]
+if record.get("requested") is not True or record.get("is_direct") is not True:
+    raise SystemExit("pip did not treat the qualified PyCOLMAP wheel as direct/requested")
+if record.get("metadata", {}).get("version") != "4.0.2":
+    raise SystemExit("pip report selected the wrong PyCOLMAP version")
+download = record.get("download_info", {})
+if download.get("url") != wheel.as_uri():
+    raise SystemExit(f"pip report PyCOLMAP URL mismatch: {download.get('url')!r}")
+if download.get("archive_info", {}).get("hashes", {}).get("sha256") != expected_hash:
+    raise SystemExit("pip report PyCOLMAP archive SHA-256 mismatch")
+PY
   else
     echo "-- pip install $SRC_DIR[drawings] (CPU-only)"
     _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
-      install "$SRC_DIR[drawings]"
+      --isolated --disable-pip-version-check install --no-cache-dir \
+      "$SRC_DIR[drawings]"
   fi
-  _run_candidate_python "$STAGED_VENV/bin/python" -m pip check
+  _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
+    --isolated --disable-pip-version-check check
   _path_guard harden-release --app-dir "$APP_DIR" --path "$STAGED_VENV" >/dev/null
   SMOKE_VENV="$STAGED_VENV"
 else
@@ -443,6 +510,46 @@ fi
 echo "-- smoke-checking package imports and console entrypoint"
 _run_as_service_user "$SMOKE_VENV/bin/python" -I -c \
   'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor'
+if [ "$GPU" -eq 1 ]; then
+  echo "-- verifying direct PyCOLMAP artifact provenance and bounded CUDA SIFT"
+  _run_as_service_user "$SMOKE_VENV/bin/python" -I - \
+    "$SMOKE_VENV" "$PYCOLMAP_WHEEL" "$PYCOLMAP_WHEEL_SHA256" <<'PY'
+import importlib.metadata
+import json
+import pathlib
+import sys
+
+prefix = pathlib.Path(sys.argv[1]).resolve(strict=True)
+wheel = pathlib.Path(sys.argv[2]).resolve(strict=True)
+expected_hash = sys.argv[3]
+distribution = importlib.metadata.distribution("pycolmap")
+if distribution.version != "4.0.2":
+    raise SystemExit(f"unexpected pycolmap distribution version: {distribution.version}")
+direct_urls = [
+    pathlib.Path(distribution.locate_file(entry))
+    for entry in (distribution.files or ())
+    if entry.name == "direct_url.json"
+]
+if len(direct_urls) != 1:
+    raise SystemExit(f"expected one pycolmap direct_url.json, got {direct_urls!r}")
+direct = json.loads(direct_urls[0].read_text(encoding="utf-8"))
+if direct.get("url") != wheel.as_uri():
+    raise SystemExit(f"pycolmap direct URL mismatch: {direct.get('url')!r}")
+archive = direct.get("archive_info", {})
+hashes = archive.get("hashes", {})
+if hashes.get("sha256") != expected_hash:
+    raise SystemExit("pycolmap direct_url.json SHA-256 mismatch")
+import pycolmap
+module = pathlib.Path(pycolmap.__file__).resolve(strict=True)
+try:
+    module.relative_to(prefix)
+except ValueError as exc:
+    raise SystemExit(f"pycolmap imported outside candidate release: {module}") from exc
+PY
+  _run_as_service_user /usr/bin/timeout 90 \
+    "$SMOKE_VENV/bin/python" -I -m patina_scan_worker.pycolmap_cuda_smoke \
+    --expected-prefix "$SMOKE_VENV"
+fi
 _run_as_service_user "$SMOKE_VENV/bin/patina-scan-worker" --help >/dev/null
 
 # 3. stage a complete candidate systemd tree. Nothing under /etc/systemd is

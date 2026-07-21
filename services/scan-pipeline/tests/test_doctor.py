@@ -13,6 +13,7 @@ from patina_scan_worker.doctor import (
     _gsplat_cuda_ok,
     _nvcc_ok,
     _open3d_cuda_ok,
+    _pycolmap_cuda_ok,
     _torch_cuda_ok,
     run_checks,
 )
@@ -48,6 +49,8 @@ def _isolate_doctor_tests_from_host_gpu_stack(monkeypatch, tmp_path):
                         lambda: (True, "Open3D CUDA ready"))
     monkeypatch.setattr("patina_scan_worker.doctor._gsplat_cuda_ok",
                         lambda: (True, "gsplat CUDA ready"))
+    monkeypatch.setattr("patina_scan_worker.doctor._pycolmap_cuda_ok",
+                        lambda: (True, "pycolmap CUDA ready"))
     monkeypatch.setattr("patina_scan_worker.doctor._python_module_ok",
                         lambda name: (True, f"{name} ready"))
     for var, sub in (
@@ -167,6 +170,8 @@ def test_readiness_checks_are_scoped_to_the_enabled_gpu_stage(monkeypatch):
                         lambda: (True, "Open3D CUDA ready"))
     monkeypatch.setattr("patina_scan_worker.doctor._gsplat_cuda_ok",
                         lambda: (True, "gsplat CUDA ready"))
+    monkeypatch.setattr("patina_scan_worker.doctor._pycolmap_cuda_ok",
+                        lambda: (True, "pycolmap CUDA ready"))
     monkeypatch.setattr("patina_scan_worker.doctor._python_module_ok",
                         lambda name: (True, f"{name} ready"))
 
@@ -203,6 +208,47 @@ def test_open3d_cuda_failure_is_red_only_for_fuse(monkeypatch):
         **UNREACHABLE, "GPU": "auto", "STAGES": "refine",
     }))}
     assert "open3d-cuda" not in refine
+
+
+def test_pycolmap_probe_requires_exact_cuda_build(monkeypatch):
+    good = SimpleNamespace(
+        __version__="4.0.2",
+        COLMAP_version="COLMAP 4.0.2",
+        COLMAP_build="Commit d927f7e on 2026-03-18 with CUDA",
+        has_cuda=True,
+        get_num_cuda_devices=lambda: 1,
+    )
+    monkeypatch.setitem(sys.modules, "pycolmap", good)
+    ok, detail = _pycolmap_cuda_ok()
+    assert ok is True
+    assert "CUDA ready" in detail
+
+
+@pytest.mark.parametrize(
+    ("override", "expected"),
+    [
+        ({"has_cuda": False}, "has_cuda"),
+        ({"has_cuda": 1}, "bool"),
+        ({"COLMAP_build": "Commit d927f7e on 2026-03-18 without CUDA"}, "build"),
+        ({"__version__": "4.0.1"}, "4.0.2"),
+        ({"get_num_cuda_devices": lambda: 0}, "device"),
+    ],
+)
+def test_pycolmap_probe_rejects_cpu_or_mismatched_bindings(
+    monkeypatch, override, expected
+):
+    values = {
+        "__version__": "4.0.2",
+        "COLMAP_version": "COLMAP 4.0.2",
+        "COLMAP_build": "Commit d927f7e on 2026-03-18 with CUDA",
+        "has_cuda": True,
+        "get_num_cuda_devices": lambda: 1,
+    }
+    values.update(override)
+    monkeypatch.setitem(sys.modules, "pycolmap", SimpleNamespace(**values))
+    ok, detail = _pycolmap_cuda_ok()
+    assert ok is False
+    assert expected.lower() in detail.lower()
 
 
 def test_gsplat_cuda_failure_is_red_only_for_splat(monkeypatch):

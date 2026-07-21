@@ -12,6 +12,10 @@ IFS=$' \t\n'
 
 readonly COLMAP_VERSION=4.0.2
 readonly EXPECTED_COMMIT=d927f7e518fc20afa33390712c4cc20d85b730b8
+readonly EXPECTED_SOURCE_TREE=9c381aea43304df66df991183563b659c2f712fa
+readonly EXPECTED_PYPROJECT_SHA256=60b1cedf70be21acc3b8e33455f4f0d482e380c1c9cab65f8598613695be5fc5
+readonly EXPECTED_PYTHON_CMAKE_SHA256=d6881e9110f221cbb0e725d1ff837f0a573e9e310c83447ff3bfcf9bc1c0adaa
+readonly SOURCE_DATE_EPOCH=1773829775
 readonly SOURCE_URL=https://github.com/colmap/colmap.git
 readonly CUDA_ROOT=/usr/local/cuda-11.8
 readonly NVCC=/usr/local/cuda-11.8/bin/nvcc
@@ -19,11 +23,28 @@ readonly CC_11=/usr/bin/gcc-11
 readonly CXX_11=/usr/bin/g++-11
 readonly COLMAP_PREFIX=/opt/colmap/4.0.2
 readonly COLMAP_LINK=/usr/local/bin/colmap
+readonly PYCOLMAP_PYTHON=/usr/bin/python3
+readonly PYCOLMAP_PYTHON_TAG=cp312-cp312
+readonly PYCOLMAP_BUILD_TAG=1patinacu118sm75
+readonly PYCOLMAP_ARTIFACT_PARENT=/opt/patina/scan-pipeline-artifacts
+readonly PYCOLMAP_ARTIFACT_DIR=/opt/patina/scan-pipeline-artifacts/pycolmap-4.0.2-cuda118-sm75
+readonly PYCOLMAP_WHEEL_NAME=pycolmap-4.0.2-1patinacu118sm75-cp312-cp312-linux_x86_64.whl
 readonly EXPECTED_HEADER="COLMAP 4.0.2 -- Structure-from-Motion and Multi-View Stereo"
 readonly EXPECTED_BUILD="(Commit d927f7e on 2026-03-18 with CUDA)"
 readonly DEFAULT_WORK_DIR="/var/tmp/patina-colmap-4.0.2-${EUID}"
 readonly GLOBAL_LOCK_FILE="/var/tmp/patina-colmap-4.0.2-${EUID}.global.lock"
 readonly MIN_FREE_KIB=$((30 * 1024 * 1024))
+readonly RESUME_MIN_FREE_KIB=$((8 * 1024 * 1024))
+readonly SCRIPT_PATH="${BASH_SOURCE[0]}"
+SCRIPT_PARENT="${SCRIPT_PATH%/*}"
+if [ "$SCRIPT_PARENT" = "$SCRIPT_PATH" ]; then
+  SCRIPT_PARENT=.
+fi
+readonly SCRIPT_PARENT
+readonly SCRIPT_DIR="$(builtin cd -P -- "$SCRIPT_PARENT" && builtin pwd -P)"
+readonly PATH_GUARD="$SCRIPT_DIR/install-path-guard.py"
+readonly PYCOLMAP_BUILD_REQUIREMENTS="$SCRIPT_DIR/pycolmap-build-requirements.txt"
+readonly PYCOLMAP_SMOKE="$SCRIPT_DIR/src/patina_scan_worker/pycolmap_cuda_smoke.py"
 
 readonly REQUIRED_COMMANDS=(
   feature_extractor
@@ -57,6 +78,11 @@ readonly APT_PACKAGES=(
   libceres-dev
   libsuitesparse-dev
   libopenblas-openmp-dev
+  python3-dev
+  python3-venv
+  binutils
+  patchelf
+  unzip
 )
 
 ACKNOWLEDGE_NOBLE_EXPERIMENT=0
@@ -80,7 +106,7 @@ usage() {
     '  --work-dir PATH' \
     '      Build/resume in PATH (must end in patina-colmap-4.0.2-<uid>).' \
     '      Parent must be canonical, operator-owned mode 0700; noexec is rejected.' \
-    '  --verify-only  Verify the installed prefix/link without changing state.' \
+    '  --verify-only  Verify native COLMAP + the PyCOLMAP CUDA artifact.' \
     '  -h, --help     Show this help.' \
     '' \
     "Resumable build state: $WORK_DIR" \
@@ -153,6 +179,33 @@ verify_privileged_directory() {
   mode="$(stat -c '%a' "$directory")"
   (( (8#$mode & 0022) == 0 )) ||
     die "privileged directory is group/world writable: $directory"
+}
+
+validate_pycolmap_artifact() {
+  local anchor="$1"
+  local uid="$2"
+  local gid="$3"
+  local artifact_dir="$4"
+
+  [ -x "$PYCOLMAP_PYTHON" ] || die "missing executable $PYCOLMAP_PYTHON"
+  [ -f "$PATH_GUARD" ] || die "missing artifact validator $PATH_GUARD"
+  "$PYCOLMAP_PYTHON" -I -S "$PATH_GUARD" \
+    --anchor "$anchor" \
+    --trusted-uid "$uid" \
+    --trusted-gid "$gid" \
+    validate-pycolmap-artifact \
+    --artifact-dir "$artifact_dir" \
+    --expected-python-tag "$PYCOLMAP_PYTHON_TAG"
+}
+
+verify_pycolmap_python_abi() {
+  local abi
+
+  [ -x "$PYCOLMAP_PYTHON" ] || die "missing executable $PYCOLMAP_PYTHON"
+  abi="$("$PYCOLMAP_PYTHON" -I -c \
+    'import platform, struct, sys, sysconfig; v=f"cp{sys.version_info.major}{sys.version_info.minor}"; print("{}-{}:{}:{}:{}".format(v, v, sysconfig.get_config_var("SOABI"), platform.machine(), struct.calcsize("P")*8))')"
+  [ "$abi" = "cp312-cp312:cpython-312-x86_64-linux-gnu:x86_64:64" ] ||
+    die "$PYCOLMAP_PYTHON has unqualified ABI $abi"
 }
 
 validate_work_dir_argument() {
@@ -244,6 +297,7 @@ validate_lock_file() {
 }
 
 verify_installed_contract() {
+  verify_pycolmap_python_abi
   verify_privileged_directory /opt
   verify_privileged_directory /opt/colmap
   verify_privileged_directory /usr/local
@@ -258,10 +312,13 @@ verify_installed_contract() {
     die "installed COLMAP binary is not root-owned"
   verify_root_owned_tree "$COLMAP_PREFIX"
   verify_dynamic_links "$COLMAP_PREFIX/bin/colmap"
+  validate_pycolmap_artifact / 0 0 "$PYCOLMAP_ARTIFACT_DIR" >/dev/null ||
+    die "$PYCOLMAP_ARTIFACT_DIR failed manifest/hash/ownership verification"
   printf '%s\n' "$EXPECTED_HEADER" "$EXPECTED_BUILD"
   for command in "${REQUIRED_COMMANDS[@]}"; do
     printf '[OK] command %s\n' "$command"
   done
+  printf '[OK] PyCOLMAP 4.0.2 CUDA 11.8 sm_75 artifact\n'
 }
 
 while [ "$#" -gt 0 ]; do
@@ -324,6 +381,10 @@ fi
 grep -Eq '^VERSION_ID="?24\.04"?$' /etc/os-release ||
   die "this experimental installer is restricted to Ubuntu 24.04"
 [ "$(dpkg --print-architecture)" = amd64 ] || die "amd64 host required"
+[ -f "$PYCOLMAP_BUILD_REQUIREMENTS" ] ||
+  die "missing $PYCOLMAP_BUILD_REQUIREMENTS"
+[ -f "$PYCOLMAP_SMOKE" ] || die "missing $PYCOLMAP_SMOKE"
+verify_pycolmap_python_abi
 [ -x "$NVCC" ] || die "missing executable $NVCC"
 "$NVCC" --version | grep -Eq 'release 11\.8,' ||
   die "$NVCC is not CUDA 11.8"
@@ -361,8 +422,14 @@ trap on_exit EXIT
 available_kib="$(df -Pk "$WORK_DIR" | awk 'NR == 2 {print $4}')"
 [[ "$available_kib" =~ ^[0-9]+$ ]] ||
   die "could not determine free space at $WORK_DIR"
-[ "$available_kib" -ge "$MIN_FREE_KIB" ] ||
-  die "$WORK_DIR needs at least 30 GiB free for a resumable COLMAP build"
+required_free_kib="$MIN_FREE_KIB"
+required_free_label="30 GiB"
+if [ -x "$WORK_DIR/build/src/colmap/exe/colmap" ]; then
+  required_free_kib="$RESUME_MIN_FREE_KIB"
+  required_free_label="8 GiB for the retained native build + binding resume"
+fi
+[ "$available_kib" -ge "$required_free_kib" ] ||
+  die "$WORK_DIR needs at least $required_free_label free for a resumable COLMAP build"
 
 phase "host and package preflight"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
@@ -457,6 +524,12 @@ git -C "$SOURCE_DIR" fetch --depth=1 origin \
 git -C "$SOURCE_DIR" -c advice.detachedHead=false checkout --detach "$EXPECTED_COMMIT"
 [ "$(git -C "$SOURCE_DIR" rev-parse HEAD)" = "$EXPECTED_COMMIT" ] ||
   die "COLMAP tag did not resolve to $EXPECTED_COMMIT"
+[ "$(git -C "$SOURCE_DIR" rev-parse 'HEAD^{tree}')" = "$EXPECTED_SOURCE_TREE" ] ||
+  die "COLMAP source tree does not match $EXPECTED_SOURCE_TREE"
+[ "$(sha256sum "$SOURCE_DIR/pyproject.toml" | awk '{print $1}')" = "$EXPECTED_PYPROJECT_SHA256" ] ||
+  die "COLMAP pyproject.toml hash mismatch"
+[ "$(sha256sum "$SOURCE_DIR/python/CMakeLists.txt" | awk '{print $1}')" = "$EXPECTED_PYTHON_CMAKE_SHA256" ] ||
+  die "COLMAP python/CMakeLists.txt hash mismatch"
 [ -z "$(git -C "$SOURCE_DIR" status --porcelain --untracked-files=all)" ] ||
   die "COLMAP source checkout contains tracked or untracked changes"
 
@@ -573,6 +646,207 @@ elif [ -e "$COLMAP_LINK" ]; then
   die "refusing to replace existing $COLMAP_LINK"
 else
   sudo ln -s -- "$COLMAP_PREFIX/bin/colmap" "$COLMAP_LINK"
+fi
+
+phase "build and qualify PyCOLMAP $COLMAP_VERSION CUDA artifact"
+if [ -e "$PYCOLMAP_ARTIFACT_DIR" ] || [ -L "$PYCOLMAP_ARTIFACT_DIR" ]; then
+  validate_pycolmap_artifact / 0 0 "$PYCOLMAP_ARTIFACT_DIR" >/dev/null ||
+    die "existing $PYCOLMAP_ARTIFACT_DIR is invalid; refusing to replace it"
+  printf 'Reusing previously verified %s\n' "$PYCOLMAP_ARTIFACT_DIR"
+else
+  readonly PYCOLMAP_BUILD_DIR="$WORK_DIR/pycolmap-build"
+  PYCOLMAP_BUILD_VENV="$(mktemp -d -- "$WORK_DIR/pycolmap-build-venv.XXXXXXXXXX")" ||
+    die "could not create a fresh PyCOLMAP build venv"
+  readonly PYCOLMAP_BUILD_VENV
+  "$PYCOLMAP_PYTHON" -I -m venv "$PYCOLMAP_BUILD_VENV"
+  readonly PYCOLMAP_BUILD_HOME="$WORK_DIR/pycolmap-build-home"
+  readonly PYCOLMAP_BUILD_TMP="$WORK_DIR/pycolmap-build-tmp"
+  mkdir -p -- "$PYCOLMAP_BUILD_HOME" "$PYCOLMAP_BUILD_TMP"
+
+  /usr/bin/env -i \
+    HOME="$PYCOLMAP_BUILD_HOME" TMPDIR="$PYCOLMAP_BUILD_TMP" \
+    PATH="$PYCOLMAP_BUILD_VENV/bin:$CUDA_ROOT/bin:$INSTALL_SECURE_PATH" \
+    LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC PIP_CONFIG_FILE=/dev/null \
+    "$PYCOLMAP_BUILD_VENV/bin/python" -I -m pip \
+      --isolated --disable-pip-version-check install \
+      --no-cache-dir --only-binary=:all: --require-hashes \
+      -r "$PYCOLMAP_BUILD_REQUIREMENTS"
+
+  readonly WHEEL_OUTPUT_DIR="$(mktemp -d -- "$WORK_DIR/pycolmap-wheel.XXXXXXXXXX")"
+  readonly PYCOLMAP_CMAKE_ARGS="-Dcolmap_DIR=$COLMAP_PREFIX/share/colmap -DCMAKE_PREFIX_PATH=$COLMAP_PREFIX -DCMAKE_C_COMPILER=$CC_11 -DCMAKE_CXX_COMPILER=$CXX_11 -DCMAKE_CUDA_COMPILER=$NVCC -DCMAKE_CUDA_HOST_COMPILER=$CXX_11 -DCUDAToolkit_ROOT=$CUDA_ROOT -DCMAKE_CUDA_ARCHITECTURES=75 -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_RPATH=$CUDA_ROOT/lib64 -DCMAKE_INSTALL_RPATH=$CUDA_ROOT/lib64 -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=FALSE -DGENERATE_STUBS=OFF -DCCACHE_ENABLED=OFF"
+  /usr/bin/env -i \
+    HOME="$PYCOLMAP_BUILD_HOME" TMPDIR="$PYCOLMAP_BUILD_TMP" \
+    PATH="$PYCOLMAP_BUILD_VENV/bin:$CUDA_ROOT/bin:$INSTALL_SECURE_PATH" \
+    LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC PIP_CONFIG_FILE=/dev/null \
+    SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH" PYTHONHASHSEED=0 \
+    CC="$CC_11" CXX="$CXX_11" CUDACXX="$NVCC" CUDAHOSTCXX="$CXX_11" \
+    CUDA_HOME="$CUDA_ROOT" LD_LIBRARY_PATH="$CUDA_ROOT/lib64" \
+    CMAKE_GENERATOR=Ninja CMAKE_BUILD_PARALLEL_LEVEL="$JOBS" \
+    SKBUILD_BUILD_DIR="$PYCOLMAP_BUILD_DIR" CMAKE_ARGS="$PYCOLMAP_CMAKE_ARGS" \
+    "$PYCOLMAP_BUILD_VENV/bin/python" -I -m pip \
+      --isolated --disable-pip-version-check wheel \
+      --no-cache-dir --no-build-isolation --no-deps \
+      --config-settings="wheel.build-tag=$PYCOLMAP_BUILD_TAG" \
+      --wheel-dir "$WHEEL_OUTPUT_DIR" "$SOURCE_DIR"
+
+  readonly BUILT_PYCOLMAP_WHEEL="$WHEEL_OUTPUT_DIR/$PYCOLMAP_WHEEL_NAME"
+  [ -f "$BUILT_PYCOLMAP_WHEEL" ] ||
+    die "PyCOLMAP build did not produce exact wheel $PYCOLMAP_WHEEL_NAME"
+  [ "$(find "$WHEEL_OUTPUT_DIR" -maxdepth 1 -type f -name '*.whl' | wc -l)" -eq 1 ] ||
+    die "PyCOLMAP build produced an unexpected wheel set"
+  unzip -t "$BUILT_PYCOLMAP_WHEEL" >/dev/null || die "built PyCOLMAP wheel is corrupt"
+  QUALIFIED_WHEEL_SHA256="$(sha256sum "$BUILT_PYCOLMAP_WHEEL" | awk '{print $1}')" ||
+    die "could not hash the built PyCOLMAP wheel"
+  [[ "$QUALIFIED_WHEEL_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+    die "built PyCOLMAP wheel SHA-256 is invalid"
+  readonly QUALIFIED_WHEEL_SHA256
+  readonly QUALIFIED_WHEEL_REQUIREMENT="pycolmap @ file://$BUILT_PYCOLMAP_WHEEL#sha256=$QUALIFIED_WHEEL_SHA256"
+  grep -Eq '^CMAKE_CUDA_COMPILER:[^=]+=/usr/local/cuda-11\.8/bin/nvcc$' \
+    "$PYCOLMAP_BUILD_DIR/CMakeCache.txt" ||
+    die "PyCOLMAP CMake selected the wrong CUDA compiler"
+  grep -Eq '^CMAKE_CUDA_ARCHITECTURES:[^=]+=75$' \
+    "$PYCOLMAP_BUILD_DIR/CMakeCache.txt" ||
+    die "PyCOLMAP CMake did not retain sm_75"
+  grep -Fxq 'CMAKE_INSTALL_RPATH_USE_LINK_PATH:BOOL=FALSE' \
+    "$PYCOLMAP_BUILD_DIR/CMakeCache.txt" ||
+    die "PyCOLMAP CMake enabled implicit link-path RPATHs"
+  grep -Fq 'COLMAP_CUDA_ENABLED' "$PYCOLMAP_BUILD_DIR/compile_commands.json" ||
+    die "PyCOLMAP compile commands do not enable COLMAP CUDA"
+
+  /usr/bin/env -i \
+    HOME="$PYCOLMAP_BUILD_HOME" TMPDIR="$PYCOLMAP_BUILD_TMP" \
+    PATH="$PYCOLMAP_BUILD_VENV/bin:$CUDA_ROOT/bin:$INSTALL_SECURE_PATH" \
+    LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC PIP_CONFIG_FILE=/dev/null \
+    "$PYCOLMAP_BUILD_VENV/bin/python" -I -m pip \
+      --isolated --disable-pip-version-check install \
+      --no-index --no-deps --no-cache-dir --force-reinstall \
+      "$QUALIFIED_WHEEL_REQUIREMENT"
+  PYCOLMAP_EXTENSION="$(
+    "$PYCOLMAP_BUILD_VENV/bin/python" -I -c \
+      'import pycolmap._core as core; print(core.__file__)'
+  )" || die "could not locate installed PyCOLMAP extension"
+  readonly PYCOLMAP_EXTENSION
+  [ -f "$PYCOLMAP_EXTENSION" ] || die "installed PyCOLMAP extension is missing"
+  extension_links="$(ldd "$PYCOLMAP_EXTENSION" 2>&1)" ||
+    die "ldd failed for $PYCOLMAP_EXTENSION: $extension_links"
+  if printf '%s\n' "$extension_links" | grep -F 'not found'; then
+    die "PyCOLMAP extension has unresolved shared libraries"
+  fi
+  if printf '%s\n' "$extension_links" | grep -E \
+    "${WORK_DIR//\//\\/}|cuda-12|lib(cuda|cudart)[^[:space:]]*\\.so\\.12"; then
+    die "PyCOLMAP extension links a build path or CUDA 12"
+  fi
+  extension_dynamic="$(readelf -d "$PYCOLMAP_EXTENSION" 2>&1)" ||
+    die "readelf failed for $PYCOLMAP_EXTENSION: $extension_dynamic"
+  if printf '%s\n' "$extension_dynamic" | grep -E \
+    "${WORK_DIR//\//\\/}|cuda-12|lib(cuda|cudart)[^[:space:]]*\\.so\\.12"; then
+    die "PyCOLMAP extension embeds a build path or CUDA 12"
+  fi
+  extension_rpath="$(patchelf --print-rpath "$PYCOLMAP_EXTENSION")" ||
+    die "could not inspect PyCOLMAP extension RPATH"
+  case ":$extension_rpath:" in
+    *":$CUDA_ROOT/lib64:"*) ;;
+    *) die "PyCOLMAP extension RPATH omits $CUDA_ROOT/lib64" ;;
+  esac
+
+  readonly PYCOLMAP_SMOKE_HOME="$WORK_DIR/pycolmap-smoke-home"
+  mkdir -p -- "$PYCOLMAP_SMOKE_HOME"
+  PYCOLMAP_SMOKE_JSON="$(
+    /usr/bin/timeout 90 /usr/bin/env -i \
+      HOME="$PYCOLMAP_SMOKE_HOME" \
+      PATH="$PYCOLMAP_BUILD_VENV/bin:$CUDA_ROOT/bin:$INSTALL_SECURE_PATH" \
+      CUDA_HOME="$CUDA_ROOT" \
+      LD_LIBRARY_PATH="$CUDA_ROOT/lib64" \
+      "$PYCOLMAP_BUILD_VENV/bin/python" -I "$PYCOLMAP_SMOKE" \
+        --expected-prefix "$PYCOLMAP_BUILD_VENV"
+  )" || die "bounded PyCOLMAP CUDA SIFT qualification failed"
+  readonly PYCOLMAP_SMOKE_JSON
+  printf '%s\n' "$PYCOLMAP_SMOKE_JSON"
+  [ "$(git -C "$SOURCE_DIR" rev-parse HEAD)" = "$EXPECTED_COMMIT" ] ||
+    die "COLMAP source HEAD changed during PyCOLMAP build"
+  [ "$(git -C "$SOURCE_DIR" rev-parse 'HEAD^{tree}')" = "$EXPECTED_SOURCE_TREE" ] ||
+    die "COLMAP source tree changed during PyCOLMAP build"
+  [ -z "$(git -C "$SOURCE_DIR" status --porcelain --untracked-files=all)" ] ||
+    die "COLMAP source was mutated by the PyCOLMAP build backend"
+
+  readonly ARTIFACT_CANDIDATE="$(mktemp -d -- "$WORK_DIR/pycolmap-artifact.XXXXXXXXXX")"
+  install -m 0600 "$BUILT_PYCOLMAP_WHEEL" \
+    "$ARTIFACT_CANDIDATE/$PYCOLMAP_WHEEL_NAME"
+  "$PYCOLMAP_PYTHON" -I -S - \
+    "$ARTIFACT_CANDIDATE/$PYCOLMAP_WHEEL_NAME" \
+    "$ARTIFACT_CANDIDATE/artifact.json" \
+    "$PYCOLMAP_SMOKE_JSON" "$QUALIFIED_WHEEL_SHA256" <<'PY'
+import hashlib
+import json
+import os
+import sys
+
+wheel, destination, smoke_json, expected_digest = sys.argv[1:]
+with open(wheel, "rb") as stream:
+    digest = hashlib.file_digest(stream, "sha256").hexdigest()
+if digest != expected_digest:
+    raise SystemExit("qualified PyCOLMAP wheel changed before artifact staging")
+smoke = json.loads(smoke_json)
+manifest = {
+    "artifact": "pycolmap-4.0.2-cuda118-sm75",
+    "colmapBuild": smoke["colmap_build"],
+    "cudaArchitecture": "75",
+    "cudaDeviceCount": smoke["cuda_devices"],
+    "cudaVersion": "11.8",
+    "gpuSiftKeypoints": smoke["keypoints"],
+    "hasCuda": smoke["has_cuda"],
+    "pythonTag": "cp312-cp312",
+    "schemaVersion": 1,
+    "sourceCmakeSha256": "d6881e9110f221cbb0e725d1ff837f0a573e9e310c83447ff3bfcf9bc1c0adaa",
+    "sourceCommit": "d927f7e518fc20afa33390712c4cc20d85b730b8",
+    "sourcePyprojectSha256": "60b1cedf70be21acc3b8e33455f4f0d482e380c1c9cab65f8598613695be5fc5",
+    "sourceTree": "9c381aea43304df66df991183563b659c2f712fa",
+    "wheelFile": os.path.basename(wheel),
+    "wheelSha256": digest,
+    "wheelSizeBytes": os.stat(wheel).st_size,
+}
+with open(destination, "x", encoding="utf-8", newline="\n") as stream:
+    stream.write(json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n")
+PY
+  validate_pycolmap_artifact "$WORK_DIR" "$EUID" "$(id -g)" \
+    "$ARTIFACT_CANDIDATE" >/dev/null ||
+    die "operator PyCOLMAP artifact candidate failed verification"
+  [ "$(sha256sum "$ARTIFACT_CANDIDATE/$PYCOLMAP_WHEEL_NAME" | awk '{print $1}')" = "$QUALIFIED_WHEEL_SHA256" ] ||
+    die "artifact candidate wheel differs from the qualified wheel"
+  QUALIFIED_MANIFEST_SHA256="$(sha256sum "$ARTIFACT_CANDIDATE/artifact.json" | awk '{print $1}')" ||
+    die "could not hash the validated PyCOLMAP manifest"
+  readonly QUALIFIED_MANIFEST_SHA256
+
+  verify_privileged_directory /opt
+  if [ ! -e /opt/patina ] && [ ! -L /opt/patina ]; then
+    sudo install -d -o root -g root -m 0755 /opt/patina
+  fi
+  verify_privileged_directory /opt/patina
+  if [ ! -e "$PYCOLMAP_ARTIFACT_PARENT" ] && [ ! -L "$PYCOLMAP_ARTIFACT_PARENT" ]; then
+    sudo install -d -o root -g root -m 0755 "$PYCOLMAP_ARTIFACT_PARENT"
+  fi
+  verify_privileged_directory "$PYCOLMAP_ARTIFACT_PARENT"
+  readonly ROOT_ARTIFACT_CANDIDATE="$PYCOLMAP_ARTIFACT_PARENT/.pycolmap-4.0.2-candidate-${EUID}"
+  if sudo test -e "$ROOT_ARTIFACT_CANDIDATE" || sudo test -L "$ROOT_ARTIFACT_CANDIDATE"; then
+    die "incomplete root artifact candidate retained at $ROOT_ARTIFACT_CANDIDATE"
+  fi
+  sudo install -d -o root -g root -m 0755 "$ROOT_ARTIFACT_CANDIDATE"
+  sudo install -o root -g root -m 0644 \
+    "$ARTIFACT_CANDIDATE/artifact.json" \
+    "$ROOT_ARTIFACT_CANDIDATE/artifact.json"
+  sudo install -o root -g root -m 0644 \
+    "$ARTIFACT_CANDIDATE/$PYCOLMAP_WHEEL_NAME" \
+    "$ROOT_ARTIFACT_CANDIDATE/$PYCOLMAP_WHEEL_NAME"
+  validate_pycolmap_artifact / 0 0 "$ROOT_ARTIFACT_CANDIDATE" >/dev/null ||
+    die "root PyCOLMAP artifact candidate failed verification"
+  [ "$(sha256sum "$ROOT_ARTIFACT_CANDIDATE/$PYCOLMAP_WHEEL_NAME" | awk '{print $1}')" = "$QUALIFIED_WHEEL_SHA256" ] ||
+    die "root artifact wheel differs from the qualified wheel"
+  [ "$(sha256sum "$ROOT_ARTIFACT_CANDIDATE/artifact.json" | awk '{print $1}')" = "$QUALIFIED_MANIFEST_SHA256" ] ||
+    die "root artifact manifest differs from the validated candidate"
+  if sudo test -e "$PYCOLMAP_ARTIFACT_DIR" || sudo test -L "$PYCOLMAP_ARTIFACT_DIR"; then
+    die "$PYCOLMAP_ARTIFACT_DIR appeared while publishing the candidate"
+  fi
+  sudo mv -T -- "$ROOT_ARTIFACT_CANDIDATE" "$PYCOLMAP_ARTIFACT_DIR"
 fi
 
 phase "installed artifact verification"

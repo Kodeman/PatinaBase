@@ -7,12 +7,16 @@ a running systemd manager.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import importlib.util
+import json
 import os
 import stat
 import subprocess
 import sys
 import threading
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -36,6 +40,7 @@ INSTALL_SOURCE_FILES = (
     "patina-scan-worker.gpu.conf",
     "patina-scan-worker.service",
     "pyproject.toml",
+    "pycolmap-build-requirements.txt",
     "scan-worker.env.example",
     "src/patina_scan_worker/__init__.py",
     "src/patina_scan_worker/__main__.py",
@@ -53,6 +58,7 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/errors.py",
     "src/patina_scan_worker/field_raster_libheif.c",
     "src/patina_scan_worker/field_raster_qualification.py",
+    "src/patina_scan_worker/pycolmap_cuda_smoke.py",
     "src/patina_scan_worker/http.py",
     "src/patina_scan_worker/keys.py",
     "src/patina_scan_worker/queue.py",
@@ -127,7 +133,7 @@ def test_candidate_is_checked_smoked_and_verified_before_transaction_activation(
     script = INSTALL.read_text()
     assert 'generate-release-path --app-dir "$APP_DIR"' in script
     assert 'create-release --app-dir "$APP_DIR" --path "$STAGED_VENV"' in script
-    pip_check = '_run_candidate_python "$STAGED_VENV/bin/python" -m pip check'
+    pip_check = '--isolated --disable-pip-version-check check'
     assert pip_check in script
     assert 'import patina_scan_worker' in script
     assert '"$SMOKE_VENV/bin/patina-scan-worker" --help' in script
@@ -158,7 +164,7 @@ def test_candidate_is_checked_smoked_and_verified_before_transaction_activation(
         for offset, line in enumerate(build_lines)
         if line.lstrip().startswith("_path_guard harden-release ")
     )
-    assert len(candidate_invocations) == 4
+    assert len(candidate_invocations) >= 4
     assert build.index('_run_privileged_python -m venv "$STAGED_VENV"') < harden
     assert all(invocation < harden_line for invocation in candidate_invocations)
     assert "_run_candidate_python" not in build[harden:]
@@ -167,6 +173,26 @@ def test_candidate_is_checked_smoked_and_verified_before_transaction_activation(
     assert not any(
         line.strip() == "systemctl stop patina-scan-worker"
         for line in script.splitlines()
+    )
+
+
+def test_gpu_install_consumes_only_the_verified_local_pycolmap_wheel():
+    script = INSTALL.read_text()
+    artifact_check = 'validate-pycolmap-artifact --artifact-dir "$PYCOLMAP_ARTIFACT_DIR"'
+    transaction = "prepare_install_transaction"
+    assert artifact_check in script
+    assert script.index(artifact_check) < script.index(transaction)
+    assert "PIP_CONFIG_FILE=/dev/null" in script
+    assert "--isolated" in script
+    assert "--no-cache-dir" in script
+    assert "--disable-pip-version-check" in script
+    assert '"$PYCOLMAP_WHEEL"' in script
+    assert "direct_url.json" in script
+    assert "patina_scan_worker.pycolmap_cuda_smoke" in script
+    assert "timeout 90" in script
+    candidate = script[script.index("# 2. immutable Python candidate") :]
+    assert candidate.index("pycolmap_cuda_smoke") < candidate.index(
+        "begin_install_transaction"
     )
 
 
@@ -243,6 +269,150 @@ def _load_path_guard_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+PYCOLMAP_WHEEL_NAME = (
+    "pycolmap-4.0.2-1patinacu118sm75-"
+    "cp312-cp312-linux_x86_64.whl"
+)
+
+
+def _record_digest(data: bytes) -> str:
+    encoded = base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=")
+    return "sha256=" + encoded.decode("ascii")
+
+
+def _write_pycolmap_artifact(
+    tmp_path: Path,
+    *,
+    wheel_tag: str = "cp312-cp312-linux_x86_64",
+) -> tuple[Path, Path, Path]:
+    trusted = tmp_path / "trusted"
+    trusted.mkdir(mode=0o700)
+    artifact = trusted / "artifact"
+    artifact.mkdir(mode=0o700)
+    wheel = artifact / PYCOLMAP_WHEEL_NAME
+    dist_info = "pycolmap-4.0.2.dist-info"
+    files = {
+        "pycolmap/__init__.py": b"from ._core import *\n",
+        "pycolmap/_core.cpython-312-x86_64-linux-gnu.so": b"fake-elf-for-guard-test",
+        f"{dist_info}/METADATA": (
+            b"Metadata-Version: 2.3\nName: pycolmap\nVersion: 4.0.2\n"
+            b"Requires-Dist: numpy\n\n"
+        ),
+        f"{dist_info}/WHEEL": (
+            "Wheel-Version: 1.0\n"
+            "Generator: patina-test\n"
+            "Root-Is-Purelib: false\n"
+            "Build: 1patinacu118sm75\n"
+            f"Tag: {wheel_tag}\n\n"
+        ).encode(),
+    }
+    record_name = f"{dist_info}/RECORD"
+    record_lines = [
+        f"{name},{_record_digest(data)},{len(data)}" for name, data in files.items()
+    ]
+    record_lines.append(f"{record_name},,")
+    files[record_name] = ("\n".join(record_lines) + "\n").encode()
+    with zipfile.ZipFile(wheel, "x", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, data in files.items():
+            archive.writestr(name, data)
+    wheel.chmod(0o600)
+    wheel_bytes = wheel.read_bytes()
+    manifest = {
+        "artifact": "pycolmap-4.0.2-cuda118-sm75",
+        "colmapBuild": "Commit d927f7e on 2026-03-18 with CUDA",
+        "cudaArchitecture": "75",
+        "cudaDeviceCount": 1,
+        "cudaVersion": "11.8",
+        "gpuSiftKeypoints": 100,
+        "hasCuda": True,
+        "pythonTag": "cp312-cp312",
+        "schemaVersion": 1,
+        "sourceCmakeSha256": "d6881e9110f221cbb0e725d1ff837f0a573e9e310c83447ff3bfcf9bc1c0adaa",
+        "sourceCommit": "d927f7e518fc20afa33390712c4cc20d85b730b8",
+        "sourcePyprojectSha256": "60b1cedf70be21acc3b8e33455f4f0d482e380c1c9cab65f8598613695be5fc5",
+        "sourceTree": "9c381aea43304df66df991183563b659c2f712fa",
+        "wheelFile": PYCOLMAP_WHEEL_NAME,
+        "wheelSha256": hashlib.sha256(wheel_bytes).hexdigest(),
+        "wheelSizeBytes": len(wheel_bytes),
+    }
+    manifest_path = artifact / "artifact.json"
+    manifest_path.write_text(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n"
+    )
+    manifest_path.chmod(0o600)
+    return artifact, wheel, manifest_path
+
+
+def _validate_pycolmap_test_artifact(
+    tmp_path: Path, artifact: Path, *, expected_ok: bool = True
+) -> subprocess.CompletedProcess[str]:
+    return _path_guard(
+        tmp_path,
+        "validate-pycolmap-artifact",
+        "--artifact-dir",
+        str(artifact),
+        "--expected-python-tag",
+        "cp312-cp312",
+        expected_ok=expected_ok,
+    )
+
+
+def test_pycolmap_artifact_guard_accepts_exact_closed_artifact(tmp_path):
+    artifact, wheel, _manifest = _write_pycolmap_artifact(tmp_path)
+    result = _validate_pycolmap_test_artifact(tmp_path, artifact)
+    assert result.stdout.strip() == str(wheel)
+
+
+def test_pycolmap_artifact_guard_rejects_corrupt_hash(tmp_path):
+    artifact, _wheel, manifest_path = _write_pycolmap_artifact(tmp_path)
+    manifest = json.loads(manifest_path.read_text())
+    manifest["wheelSha256"] = "0" * 64
+    manifest_path.write_text(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n"
+    )
+    _validate_pycolmap_test_artifact(tmp_path, artifact, expected_ok=False)
+
+
+@pytest.mark.parametrize("kind", ["unknown-key", "noncanonical", "duplicate-key"])
+def test_pycolmap_artifact_guard_rejects_noncanonical_manifest(tmp_path, kind):
+    artifact, _wheel, manifest_path = _write_pycolmap_artifact(tmp_path)
+    manifest = json.loads(manifest_path.read_text())
+    if kind == "unknown-key":
+        manifest["unexpected"] = True
+        payload = json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n"
+    elif kind == "noncanonical":
+        payload = json.dumps(manifest, indent=2) + "\n"
+    else:
+        canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
+        payload = canonical[:-1] + ',"wheelSizeBytes":1}\n'
+    manifest_path.write_text(payload)
+    _validate_pycolmap_test_artifact(tmp_path, artifact, expected_ok=False)
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink", "writable", "extra"])
+def test_pycolmap_artifact_guard_rejects_unsafe_filesystem_shape(tmp_path, kind):
+    artifact, wheel, manifest_path = _write_pycolmap_artifact(tmp_path)
+    if kind == "symlink":
+        outside = tmp_path / "trusted" / "outside-manifest"
+        outside.write_bytes(manifest_path.read_bytes())
+        manifest_path.unlink()
+        manifest_path.symlink_to(outside)
+    elif kind == "hardlink":
+        os.link(wheel, tmp_path / "trusted" / "wheel-hardlink")
+    elif kind == "writable":
+        wheel.chmod(0o666)
+    else:
+        (artifact / "unexpected.txt").write_text("unexpected")
+    _validate_pycolmap_test_artifact(tmp_path, artifact, expected_ok=False)
+
+
+def test_pycolmap_artifact_guard_rejects_wrong_internal_wheel_tag(tmp_path):
+    artifact, _wheel, _manifest = _write_pycolmap_artifact(
+        tmp_path, wheel_tag="cp312-cp312-manylinux_2_17_x86_64"
+    )
+    _validate_pycolmap_test_artifact(tmp_path, artifact, expected_ok=False)
 
 
 def _write_stock_legacy_venv(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
@@ -1446,6 +1616,7 @@ def test_documented_staging_replaces_stale_inputs_in_separate_source_tree():
     assert "--chown=root:root" in staging
     assert "--chmod=Dgo-w,Fgo-w" in staging
     assert "--include='/install-colmap-4.0.2.sh'" in staging
+    assert "--include='/pycolmap-build-requirements.txt'" in staging
     harden = "sudo chmod -R go-w -- /opt/patina/scan-pipeline-source"
     assert harden in staging
     assert staging.index("sudo rsync") < staging.index(harden)

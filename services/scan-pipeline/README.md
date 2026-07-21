@@ -69,6 +69,7 @@ sudo rsync -a --delete --delete-excluded --ignore-times \
   --include='/install.sh' \
   --include='/install-path-guard.py' \
   --include='/install-venv-lib.sh' \
+  --include='/pycolmap-build-requirements.txt' \
   --include='/pyproject.toml' \
   --include='/patina-scan-worker.service' \
   --include='/patina-scan-worker-doctor.service' \
@@ -110,13 +111,16 @@ The trusted installer atomically replaces any legacy `APP_DIR/install.sh` with
 a fail-closed pointer to the separate source tree. Subsequent runs revalidate
 the same source contract. Never run a patina-writable checkout with `sudo`.
 
-If `/usr/bin/python3` is older than 3.11, select the installed interpreter with
-an absolute path, for example
+If `/usr/bin/python3` is older than 3.11, select the installed interpreter for
+a CPU worker with an absolute path, for example
 `sudo PYTHON=/usr/bin/python3.11 /opt/patina/scan-pipeline-source/install.sh`.
 The
 installer canonicalizes that value and rejects an interpreter or ancestry that
 is not root-owned, executable, and free of group/world writes before any
 transaction helper runs.
+GPU installs are intentionally narrower: the qualified local wheel targets the
+exact `/usr/bin/python3` CPython 3.12 x86_64 ABI, so `--gpu` rejects a `PYTHON`
+override even when another interpreter happens to report Python 3.12.
 
 CPU is enough for the P1 stages (validate + least-squares fit + SVG/PDF/DXF) and
 the CPU P2 stages. `install.sh` (no flags) installs **only** the CPU extras —
@@ -151,10 +155,15 @@ Prereqs to install **before** `./install.sh --gpu`:
    doctor without changing the host's global CUDA selection. Architecture
    selection stays box-local so the same package can serve Turing, Ampere, and
    Ada workers; the DeskDev acceptance override below pins `7.5` explicitly.
-4. **COLMAP CLI 4.0.2** on `PATH`, exactly matching `pycolmap==4.0.2` from
-   `.[refine]`, with `feature_extractor`, `sequential_matcher`,
+4. **COLMAP CLI and CUDA PyCOLMAP 4.0.2 artifact**, with the CLI exposing
+   `feature_extractor`, `sequential_matcher`,
    `exhaustive_matcher`, `point_triangulator`, `bundle_adjuster`, and
-   `pose_prior_mapper`. This is the I87 pilot qualification target, not the
+   `pose_prior_mapper`. `pyproject.toml` retains the truthful
+   `pycolmap==4.0.2` refine requirement, but the ordinary PyPI wheel is CPU-only.
+   `install.sh --gpu` supplies the separately qualified local wheel as a
+   hash-pinned direct requirement in the same resolver transaction and verifies
+   both pip's report and installed `direct_url.json`; it never accepts the
+   same-version index wheel. This is the I87 pilot qualification target, not the
    current release or a completed validation (COLMAP 4.1.1 is current as of
    2026-07-18). The still-owed item-4 fixture must prove CLI/binding parity,
    exact DB/model APIs, GPU SIFT, and the real Field/Core Image raster
@@ -180,8 +189,9 @@ Prereqs to install **before** `./install.sh --gpu`:
    `patina-colmap-4.0.2-$UID` leaf. It rejects symlinks, mount-root targets,
    group/world-writable leaves, and filesystems mounted `noexec`. Omitting
    `--work-dir` preserves the default
-   `/var/tmp/patina-colmap-4.0.2-$UID`. The same 30 GiB free-space gate applies
-   to whichever filesystem is selected.
+   `/var/tmp/patina-colmap-4.0.2-$UID`. The initial 30 GiB free-space gate
+   applies to whichever filesystem is selected; after the retained native
+   executable exists, an 8 GiB resume gate allows the binding build to finish.
 
    It hard-gates Noble/amd64, `/usr/local/cuda-11.8`, GCC/G++ 11, a real SM 7.5
    compile/run probe, 30 GiB of free build space, the exact tag commit, required
@@ -190,7 +200,19 @@ Prereqs to install **before** `./install.sh --gpu`:
    absent or already resolves to the exact tree. It does not install or switch
    the driver or global CUDA selection. The script uses scoped sudo only for OS
    packages and the final checked-tree copy; CMake configure/build/install runs
-   unprivileged.
+   unprivileged. It then builds PyCOLMAP outside the worker venv from the same
+   exact source tree with hash-pinned build wheels, GCC/G++ 11, CUDA 11.8, and
+   SM 7.5. Before atomically publishing the closed immutable artifact under
+   `/opt/patina/scan-pipeline-artifacts/pycolmap-4.0.2-cuda118-sm75`, it checks
+   wheel metadata/RECORD, ELF links/RPATH, exact binding build identity, and a
+   timeout-bounded real CUDA SIFT extraction. Existing valid artifacts are
+   reused; invalid existing content fails closed rather than being replaced.
+   A failed privileged copy is retained only at the exact
+   `/opt/patina/scan-pipeline-artifacts/.pycolmap-4.0.2-candidate-$UID` path and
+   blocks retries. Keep the worker stopped, confirm no installer is running,
+   inspect that directory with `sudo find -P ... -maxdepth 1 -ls` plus the
+   retained `install.log`, then quarantine or remove only that exact candidate
+   before retrying. Never alter the published versioned artifact in place.
 
    Builds resume in the selected work directory; every build attempt after the
    host gates appends to its `install.log`, and failures retain source, build,
@@ -201,9 +223,9 @@ Prereqs to install **before** `./install.sh --gpu`:
    /opt/patina/scan-pipeline-source/install-colmap-4.0.2.sh --verify-only
    ```
 
-   A green installer closes only the pinned CLI/toolchain installation gate.
-   It does **not** qualify item 4; the PyCOLMAP/GPU-SIFT/real-fixture evidence
-   below is still required.
+   A green installer closes the pinned CLI, binding-build, and bounded synthetic
+   GPU-SIFT installation gates. It does **not** qualify item 4; the database/API
+   fixture and real Field raster evidence below are still required.
 
 5. **Full Open3D wheel/build with CUDA**, not `open3d-cpu`. `doctor` requires
    Open3D's public CUDA availability probe and at least one visible device for
@@ -221,7 +243,8 @@ sudo systemctl show patina-scan-worker \
   -p User -p Environment -p ReadWritePaths -p PrivateDevices -p DevicePolicy -p DeviceAllow
 ```
 
-`--gpu` lays down a root `patina-scan-worker-nvidia-prepare.service` plus the
+`--gpu` first requires that verified local artifact and exact interpreter ABI,
+then lays down a root `patina-scan-worker-nvidia-prepare.service` plus the
 same `gpu.conf` under both `patina-scan-worker.service.d/` and
 `patina-scan-worker-doctor.service.d/`. The prepare oneshot creates the
 single-card compute/control and UVM nodes at cold boot. Both drop-ins order and
@@ -395,12 +418,12 @@ window only:
    if it was previously active. After a reboot those `/run` files are already
    gone; the persistent CPU env was never touched.
 
-Optional pre-install resolver evidence on a networked Linux host:
-
-```bash
-python3 -m pip install --dry-run --report /tmp/patina-gpu-resolve.json \
-  --extra-index-url https://download.pytorch.org/whl/cu118 '.[gpu]'
-```
+Optional pre-install resolver evidence is not a standalone command. Do not use
+a standalone `pip install --dry-run '.[gpu]'` as GPU evidence: it
+can select the ordinary CPU-only PyCOLMAP wheel. The managed GPU installer puts
+the manifest-hashed local wheel and `.[drawings,gpu]` in one resolver request,
+writes a pip report, and fails before activation unless that report and the
+installed `direct_url.json` both identify the exact direct artifact.
 
 ### Item 4A — exact COLMAP/PyCOLMAP qualification
 

@@ -718,6 +718,20 @@ def _low_level_module(database):
     return module
 
 
+@pytest.mark.parametrize("truthy_non_bool", [1, "cuda", SimpleNamespace()])
+def test_real_backend_rejects_truthy_non_bool_has_cuda(truthy_non_bool):
+    module = SimpleNamespace(
+        __version__="4.0.2",
+        COLMAP_version="COLMAP 4.0.2",
+        COLMAP_build="Commit d927f7e on 2026-03-18 with CUDA",
+        has_cuda=truthy_non_bool,
+    )
+    backend = PycolmapBackend(module, SimpleNamespace())
+    with pytest.raises(AdapterError, match="bool True") as exc:
+        backend.toolchain_evidence()
+    assert exc.value.code == "REFINE_GPU_SIFT_UNAVAILABLE"
+
+
 def test_real_backend_uses_exact_402_gpu_database_pair_and_seed_seams(tmp_path):
     fixtures = fixture_images()
     database_images = [

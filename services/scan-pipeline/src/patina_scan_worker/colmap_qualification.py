@@ -573,10 +573,10 @@ class PycolmapBackend:
         return str(self._p.__version__)
 
     def toolchain_evidence(self) -> Mapping[str, Any]:
-        has_cuda = bool(self._p.has_cuda)
-        if not has_cuda:
+        has_cuda = self._p.has_cuda
+        if type(has_cuda) is not bool or not has_cuda:  # noqa: E721
             raise AdapterError(
-                "PyCOLMAP reports a CPU-only build; GPU SIFT cannot be qualified",
+                "PyCOLMAP has_cuda must be the bool True; GPU SIFT cannot be qualified",
                 "REFINE_GPU_SIFT_UNAVAILABLE",
             )
         return {
@@ -604,9 +604,9 @@ class PycolmapBackend:
         gpu_index: str,
         log_path: Path,
     ) -> Sequence[Mapping[str, Any]]:
-        if not bool(self._p.has_cuda):
+        if type(self._p.has_cuda) is not bool or not self._p.has_cuda:  # noqa: E721
             raise AdapterError(
-                "PyCOLMAP reports a CPU-only build; GPU SIFT cannot be qualified",
+                "PyCOLMAP has_cuda must be the bool True; GPU SIFT cannot be qualified",
                 "REFINE_GPU_SIFT_UNAVAILABLE",
             )
         extraction_options = self._p.FeatureExtractionOptions()

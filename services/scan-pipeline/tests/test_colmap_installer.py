@@ -9,6 +9,9 @@ from pathlib import Path
 
 
 INSTALLER = Path(__file__).resolve().parent.parent / "install-colmap-4.0.2.sh"
+BUILD_REQUIREMENTS = (
+    Path(__file__).resolve().parent.parent / "pycolmap-build-requirements.txt"
+)
 
 
 def _script() -> str:
@@ -167,7 +170,8 @@ def test_installer_is_resumable_observable_and_retains_failure_evidence():
     assert "Build state and logs retained" in script
     assert 'mktemp -d -- "$WORK_DIR/install-root.XXXXXXXXXX"' in script
     assert "rm -rf" not in script
-    assert "needs at least 30 GiB free" in script
+    assert 'required_free_label="30 GiB"' in script
+    assert 'required_free_label="8 GiB for the retained native build + binding resume"' in script
 
 
 def test_installer_guards_versioned_prefix_link_and_command_contract():
@@ -192,3 +196,35 @@ def test_installer_guards_versioned_prefix_link_and_command_contract():
     assert "bundle_adjuster" in script
     assert "pose_prior_mapper" in script
     assert "with CUDA" in script
+
+
+def test_installer_builds_and_publishes_a_qualified_pycolmap_cuda_artifact():
+    script = _script()
+    assert "PYCOLMAP_ARTIFACT_DIR=/opt/patina/scan-pipeline-artifacts/pycolmap-4.0.2-cuda118-sm75" in script
+    assert "pycolmap-build-requirements.txt" in script
+    assert "--require-hashes" in script
+    assert "--no-build-isolation" in script
+    assert "--no-deps" in script
+    assert "SKBUILD_BUILD_DIR" in script
+    assert "-Dcolmap_DIR=$COLMAP_PREFIX/share/colmap" in script
+    assert "-DGENERATE_STUBS=OFF" in script
+    assert "-DCMAKE_CUDA_ARCHITECTURES=75" in script
+    assert "SOURCE_DATE_EPOCH=1773829775" in script
+    assert "pycolmap_cuda_smoke.py" in script
+    assert "timeout 90" in script
+    assert "validate-pycolmap-artifact" in script
+    assert "artifact.json" in script
+    assert "sudo mv -T" in script
+    assert "systemctl" not in script
+
+
+def test_pycolmap_build_requirements_are_exact_and_hash_pinned():
+    requirements = [
+        line.strip()
+        for line in BUILD_REQUIREMENTS.read_text().splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    assert requirements
+    for requirement in requirements:
+        assert "==" in requirement
+        assert "--hash=sha256:" in requirement

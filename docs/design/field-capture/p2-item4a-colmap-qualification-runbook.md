@@ -16,6 +16,9 @@ call the Patina task queue, Strata, or Storage, and it does not register the
 - `/usr/local/bin/colmap` resolves to the pinned CUDA-enabled COLMAP 4.0.2
   installation, and `/usr/local/cuda-11.8/bin/nvcc` remains the isolated
   toolkit selected for the worker.
+- `/opt/patina/scan-pipeline-artifacts/pycolmap-4.0.2-cuda118-sm75` passes its
+  manifest/hash/wheel-metadata checks, and the installed PyCOLMAP provenance is
+  the direct local artifact (never the ordinary CPU-only PyPI wheel).
 
 Install the current root-owned source snapshot while preserving the inactive
 worker posture, then verify it stayed stopped:
@@ -35,12 +38,15 @@ inspect the release rather than guessing which interpreter is active.
 
 Choose a new evidence directory. The harness refuses a symlink, a file, or a
 non-empty directory, so it cannot blend a new receipt with stale evidence.
+DeskDev's `item4a-colmap-4.0.2-v1` is immutable evidence of the CPU-wheel
+failure: never delete, rename, empty, or overwrite it. The recovery attempt
+uses `v2`; if that name already exists, increment to the next unused suffix.
 Do not source `/etc/patina/scan-worker.env`; this command needs no Supabase
 credential.
 
 ```bash
 item4a_parent=/var/lib/patina/scan-work/qualification
-item4a_output=$item4a_parent/item4a-colmap-4.0.2-v1
+item4a_output=$item4a_parent/item4a-colmap-4.0.2-v2
 
 sudo install -d -o patina -g patina -m 0700 \
   /var/lib/patina/scan-work/tmp "$item4a_parent"
