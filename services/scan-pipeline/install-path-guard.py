@@ -30,7 +30,15 @@ class GuardError(RuntimeError):
     """A managed path failed the installer's trust contract."""
 
 
-SOURCE_REQUIRED_DIRECTORIES = frozenset({"src", "src/patina_scan_worker"})
+SOURCE_PACKAGE_ROOT = "src/patina_scan_worker"
+SOURCE_REQUIRED_DIRECTORIES = frozenset(
+    {
+        "src",
+        SOURCE_PACKAGE_ROOT,
+        f"{SOURCE_PACKAGE_ROOT}/drawing",
+        f"{SOURCE_PACKAGE_ROOT}/stages",
+    }
+)
 SOURCE_TOP_LEVEL_FILES = frozenset(
     {
         "README.md",
@@ -47,16 +55,48 @@ SOURCE_TOP_LEVEL_FILES = frozenset(
         "scan-worker.env.example",
     }
 )
-SOURCE_PACKAGE_ROOT = "src/patina_scan_worker"
-SOURCE_REQUIRED_PACKAGE_FILES = frozenset(
+SOURCE_PACKAGE_FILES = frozenset(
     {
         f"{SOURCE_PACKAGE_ROOT}/__init__.py",
+        f"{SOURCE_PACKAGE_ROOT}/__main__.py",
+        f"{SOURCE_PACKAGE_ROOT}/cli.py",
+        f"{SOURCE_PACKAGE_ROOT}/colmap_qualification.py",
+        f"{SOURCE_PACKAGE_ROOT}/config.py",
+        f"{SOURCE_PACKAGE_ROOT}/db.py",
+        f"{SOURCE_PACKAGE_ROOT}/doctor.py",
+        f"{SOURCE_PACKAGE_ROOT}/drawing/__init__.py",
+        f"{SOURCE_PACKAGE_ROOT}/drawing/brand.py",
+        f"{SOURCE_PACKAGE_ROOT}/drawing/dxf.py",
+        f"{SOURCE_PACKAGE_ROOT}/drawing/model.py",
+        f"{SOURCE_PACKAGE_ROOT}/drawing/pdf.py",
+        f"{SOURCE_PACKAGE_ROOT}/drawing/svg.py",
+        f"{SOURCE_PACKAGE_ROOT}/drawing/units.py",
+        f"{SOURCE_PACKAGE_ROOT}/errors.py",
         f"{SOURCE_PACKAGE_ROOT}/field_raster_libheif.c",
         f"{SOURCE_PACKAGE_ROOT}/field_raster_qualification.py",
+        f"{SOURCE_PACKAGE_ROOT}/http.py",
+        f"{SOURCE_PACKAGE_ROOT}/keys.py",
         f"{SOURCE_PACKAGE_ROOT}/pycolmap_cuda_smoke.py",
+        f"{SOURCE_PACKAGE_ROOT}/queue.py",
+        f"{SOURCE_PACKAGE_ROOT}/refine_adapter.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_engine.py",
+        f"{SOURCE_PACKAGE_ROOT}/stages/__init__.py",
+        f"{SOURCE_PACKAGE_ROOT}/stages/base.py",
+        f"{SOURCE_PACKAGE_ROOT}/stages/captured_room.py",
+        f"{SOURCE_PACKAGE_ROOT}/stages/dimensions.py",
+        f"{SOURCE_PACKAGE_ROOT}/stages/drawings.py",
+        f"{SOURCE_PACKAGE_ROOT}/stages/ingest.py",
+        f"{SOURCE_PACKAGE_ROOT}/stages/solve.py",
+        f"{SOURCE_PACKAGE_ROOT}/stages/solve_math.py",
+        f"{SOURCE_PACKAGE_ROOT}/stages/validator.py",
+        f"{SOURCE_PACKAGE_ROOT}/storage.py",
+        f"{SOURCE_PACKAGE_ROOT}/telemetry.py",
+        f"{SOURCE_PACKAGE_ROOT}/untar.py",
+        f"{SOURCE_PACKAGE_ROOT}/worker.py",
     }
 )
+SOURCE_REQUIRED_PACKAGE_FILES = SOURCE_PACKAGE_FILES
+SOURCE_FILES = SOURCE_TOP_LEVEL_FILES | SOURCE_PACKAGE_FILES
 
 PYCOLMAP_SOURCE_COMMIT = "d927f7e518fc20afa33390712c4cc20d85b730b8"
 PYCOLMAP_SOURCE_TREE = "9c381aea43304df66df991183563b659c2f712fa"
@@ -67,6 +107,39 @@ PYCOLMAP_SOURCE_CMAKE_SHA256 = (
     "d6881e9110f221cbb0e725d1ff837f0a573e9e310c83447ff3bfcf9bc1c0adaa"
 )
 PYCOLMAP_BUILD_TAG = "1patinacu118sm75"
+WORKER_WHEEL_NAME = "patina_scan_worker-0.1.0-py3-none-any.whl"
+WORKER_DIST_INFO = "patina_scan_worker-0.1.0.dist-info"
+WORKER_PROVIDES_EXTRA = (
+    "solve",
+    "drawings",
+    "refine",
+    "fuse",
+    "splat",
+    "gpu",
+    "dev",
+)
+WORKER_REQUIRES_DIST = (
+    "httpx<1.0,>=0.24",
+    'numpy>=1.26; extra == "solve"',
+    'scipy>=1.11; extra == "solve"',
+    'ezdxf>=1.1; extra == "drawings"',
+    'cairosvg>=2.7; extra == "drawings"',
+    'pycolmap==4.0.2; extra == "refine"',
+    'numpy>=1.26; extra == "refine"',
+    'scipy>=1.11; extra == "refine"',
+    'open3d>=0.18; extra == "fuse"',
+    'trimesh>=4.0; extra == "fuse"',
+    'numpy>=1.26; extra == "fuse"',
+    'torch<2.5,>=2.2; extra == "splat"',
+    'gsplat<2.0,>=1.0; extra == "splat"',
+    'numpy>=1.26; extra == "splat"',
+    'patina-scan-worker[fuse,refine,splat]; extra == "gpu"',
+    'pytest>=7.4; extra == "dev"',
+    'build<2,>=1.2; extra == "dev"',
+    'setuptools>=68; extra == "dev"',
+    'wheel>=0.41; extra == "dev"',
+    'numpy>=1.26; extra == "dev"',
+)
 PYCOLMAP_MANIFEST_KEYS = frozenset(
     {
         "artifact",
@@ -833,8 +906,6 @@ def validate_source_tree(
             relative = name if relative_root == "." else os.path.join(relative_root, name)
             if relative in SOURCE_REQUIRED_DIRECTORIES:
                 seen_required_directories.add(relative)
-            elif relative.startswith(f"{SOURCE_PACKAGE_ROOT}{os.sep}") and name.isidentifier():
-                pass
             else:
                 raise GuardError(f"unexpected installer source directory: {relative}")
             _require_source_entry(
@@ -849,12 +920,8 @@ def validate_source_tree(
             relative = name if relative_root == "." else os.path.join(relative_root, name)
             if relative_root == "." and relative in SOURCE_TOP_LEVEL_FILES:
                 seen_top_level_files.add(relative)
-            elif relative.startswith(f"{SOURCE_PACKAGE_ROOT}{os.sep}") and (
-                name.endswith(".py")
-                or relative == f"{SOURCE_PACKAGE_ROOT}{os.sep}field_raster_libheif.c"
-            ):
-                if relative in SOURCE_REQUIRED_PACKAGE_FILES:
-                    seen_required_package_files.add(relative)
+            elif relative in SOURCE_PACKAGE_FILES:
+                seen_required_package_files.add(relative)
             else:
                 raise GuardError(f"unexpected installer source file: {relative}")
             _require_source_entry(
@@ -875,6 +942,41 @@ def validate_source_tree(
     if missing_directories or missing_files:
         missing = ", ".join((*missing_directories, *missing_files))
         raise GuardError(f"installer source snapshot is incomplete: {missing}")
+
+
+def validate_source_copy(
+    source_dir: str,
+    copy_dir: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> None:
+    """Require a byte-identical closed copy of every trusted source input."""
+
+    validate_source_tree(source_dir, anchor=anchor, uid=uid, gid=gid)
+    validate_source_tree(copy_dir, anchor=anchor, uid=uid, gid=gid)
+    source_abs = _absolute(source_dir)
+    copy_abs = _absolute(copy_dir)
+    for relative in sorted(SOURCE_FILES):
+        source_bytes = read_trusted_file(
+            source_abs,
+            os.path.join(source_abs, relative),
+            anchor=anchor,
+            uid=uid,
+            gid=gid,
+            max_bytes=4 * 1024 * 1024,
+        )
+        copy_bytes = read_trusted_file(
+            copy_abs,
+            os.path.join(copy_abs, relative),
+            anchor=anchor,
+            uid=uid,
+            gid=gid,
+            max_bytes=4 * 1024 * 1024,
+        )
+        if source_bytes != copy_bytes:
+            raise GuardError(f"transaction source copy differs at {relative}")
 
 
 def _validate_pycolmap_wheel(
@@ -1016,6 +1118,246 @@ def _validate_pycolmap_wheel(
                 encoded = base64.urlsafe_b64encode(hasher.digest()).rstrip(b"=")
                 if record_digest != "sha256=" + encoded.decode("ascii"):
                     raise GuardError(f"PyCOLMAP wheel RECORD digest mismatch for {name}")
+
+
+def _validate_worker_wheel(
+    wheel_fd: int,
+    *,
+    wheel_name: str,
+    source_payload: dict[str, bytes],
+) -> None:
+    """Validate the pure-Python worker wheel without extracting the held fd."""
+
+    if wheel_name != WORKER_WHEEL_NAME:
+        raise GuardError(f"unexpected worker wheel filename: {wheel_name!r}")
+    with os.fdopen(os.dup(wheel_fd), "rb") as stream:
+        try:
+            archive = zipfile.ZipFile(stream)
+        except zipfile.BadZipFile as exc:
+            raise GuardError("worker wheel is not a valid ZIP archive") from exc
+        with archive:
+            infos = archive.infolist()
+            names = [info.filename for info in infos]
+            if len(infos) > 10_000 or len(names) != len(set(names)):
+                raise GuardError("worker wheel has too many or duplicate entries")
+            if sum(info.file_size for info in infos) > 64 * 1024 * 1024:
+                raise GuardError("worker wheel expands beyond the 64 MiB safety limit")
+            for info in infos:
+                parts = info.filename.split("/")
+                mode = info.external_attr >> 16
+                if (
+                    info.is_dir()
+                    or info.filename.startswith("/")
+                    or "\\" in info.filename
+                    or any(part in ("", ".", "..") for part in parts)
+                    or stat.S_IFMT(mode) not in (0, stat.S_IFREG)
+                ):
+                    raise GuardError(
+                        f"worker wheel has an unsafe entry: {info.filename!r}"
+                    )
+            if any(
+                not (
+                    name.startswith("patina_scan_worker/")
+                    or name.startswith(f"{WORKER_DIST_INFO}/")
+                )
+                for name in names
+            ):
+                raise GuardError("worker wheel contains an unexpected import root")
+            dist_roots = {
+                name.split("/", 1)[0]
+                for name in names
+                if ".dist-info/" in name
+            }
+            if dist_roots != {WORKER_DIST_INFO}:
+                raise GuardError(
+                    f"worker wheel has unexpected dist-info roots: {dist_roots!r}"
+                )
+
+            metadata_name = f"{WORKER_DIST_INFO}/METADATA"
+            wheel_metadata_name = f"{WORKER_DIST_INFO}/WHEEL"
+            record_name = f"{WORKER_DIST_INFO}/RECORD"
+            entry_points_name = f"{WORKER_DIST_INFO}/entry_points.txt"
+            top_level_name = f"{WORKER_DIST_INFO}/top_level.txt"
+            required = {
+                metadata_name,
+                wheel_metadata_name,
+                record_name,
+                entry_points_name,
+                top_level_name,
+            }
+            if not required.issubset(names):
+                raise GuardError("worker wheel omits required package content or metadata")
+            allowed_dist_info = required
+            if any(
+                name.startswith(f"{WORKER_DIST_INFO}/")
+                and name not in allowed_dist_info
+                for name in names
+            ):
+                raise GuardError("worker wheel has unexpected dist-info payload")
+            wheel_package_names = {
+                name for name in names if name.startswith("patina_scan_worker/")
+            }
+            if wheel_package_names != set(source_payload):
+                raise GuardError(
+                    "worker wheel package payload does not exactly match trusted source"
+                )
+            for name, expected_bytes in source_payload.items():
+                if archive.read(name) != expected_bytes:
+                    raise GuardError(
+                        f"worker wheel rewrote trusted source payload: {name}"
+                    )
+            try:
+                metadata_text = archive.read(metadata_name).decode("utf-8")
+                wheel_text = archive.read(wheel_metadata_name).decode("utf-8")
+                record_text = archive.read(record_name).decode("utf-8")
+                entry_points_text = archive.read(entry_points_name).decode("utf-8")
+                top_level_text = archive.read(top_level_name).decode("utf-8")
+            except (KeyError, UnicodeDecodeError) as exc:
+                raise GuardError("worker wheel metadata is unreadable") from exc
+            metadata = email.parser.Parser().parsestr(metadata_text)
+            if metadata.get_all("Name") != ["patina-scan-worker"]:
+                raise GuardError("worker wheel METADATA Name must be patina-scan-worker")
+            if metadata.get_all("Version") != ["0.1.0"]:
+                raise GuardError("worker wheel METADATA Version must be 0.1.0")
+            if metadata.get_all("Requires-Python") != [">=3.11"]:
+                raise GuardError("worker wheel Requires-Python must be >=3.11")
+            if metadata.get_all("Provides-Extra") != list(WORKER_PROVIDES_EXTRA):
+                raise GuardError("worker wheel Provides-Extra contract changed")
+            if metadata.get_all("Requires-Dist") != list(WORKER_REQUIRES_DIST):
+                raise GuardError("worker wheel Requires-Dist contract changed")
+            if entry_points_text != (
+                "[console_scripts]\n"
+                "patina-scan-worker = patina_scan_worker.cli:main\n"
+            ):
+                raise GuardError("worker wheel console entry point changed")
+            if top_level_text != "patina_scan_worker\n":
+                raise GuardError("worker wheel top_level.txt changed")
+            wheel_metadata = email.parser.Parser().parsestr(wheel_text)
+            if wheel_metadata.get_all("Wheel-Version") != ["1.0"]:
+                raise GuardError("worker wheel Wheel-Version must be 1.0")
+            if wheel_metadata.get_all("Build") is not None:
+                raise GuardError("worker wheel must not carry a build tag")
+            if wheel_metadata.get_all("Tag") != ["py3-none-any"]:
+                raise GuardError("worker wheel WHEEL Tag must be 'py3-none-any'")
+            if wheel_metadata.get_all("Root-Is-Purelib") != ["true"]:
+                raise GuardError("worker wheel must be a pure-Python wheel")
+
+            try:
+                record_rows = list(csv.reader(io.StringIO(record_text), strict=True))
+            except (csv.Error, UnicodeError) as exc:
+                raise GuardError("worker wheel RECORD is invalid CSV") from exc
+            if any(len(row) != 3 for row in record_rows):
+                raise GuardError("worker wheel RECORD rows must have three columns")
+            record = {row[0]: (row[1], row[2]) for row in record_rows}
+            if len(record) != len(record_rows) or set(record) != set(names):
+                raise GuardError("worker wheel RECORD does not cover the archive exactly")
+            if record.get(record_name) != ("", ""):
+                raise GuardError("worker wheel RECORD must leave its own digest empty")
+            info_by_name = {info.filename: info for info in infos}
+            for name, (record_digest, record_size) in record.items():
+                if name == record_name:
+                    continue
+                info = info_by_name[name]
+                if record_size != str(info.file_size):
+                    raise GuardError(f"worker wheel RECORD size mismatch for {name}")
+                if not record_digest.startswith("sha256="):
+                    raise GuardError(f"worker wheel RECORD omits SHA-256 for {name}")
+                hasher = hashlib.sha256()
+                with archive.open(info, "r") as member:
+                    while chunk := member.read(1024 * 1024):
+                        hasher.update(chunk)
+                encoded = base64.urlsafe_b64encode(hasher.digest()).rstrip(b"=")
+                if record_digest != "sha256=" + encoded.decode("ascii"):
+                    raise GuardError(f"worker wheel RECORD digest mismatch for {name}")
+
+
+def validate_worker_wheel(
+    wheel_dir: str,
+    source_dir: str,
+    *,
+    anchor: str,
+    uid: int,
+    gid: int,
+) -> str:
+    """Return the held wheel path and SHA-256 from a closed wheel directory."""
+
+    validate_source_tree(source_dir, anchor=anchor, uid=uid, gid=gid)
+    source_abs = _absolute(source_dir)
+    source_payload = {
+        relative.removeprefix("src/"): read_trusted_file(
+            source_abs,
+            os.path.join(source_abs, relative),
+            anchor=anchor,
+            uid=uid,
+            gid=gid,
+            max_bytes=4 * 1024 * 1024,
+        )
+        for relative in SOURCE_PACKAGE_FILES
+    }
+    _validate_trusted_tree(anchor, wheel_dir, uid=uid, gid=gid)
+    wheel_dir_abs = _absolute(wheel_dir)
+    directory_fd = _open_directory(wheel_dir_abs)
+    try:
+        entries = set(os.listdir(directory_fd))
+        if entries != {WORKER_WHEEL_NAME}:
+            raise GuardError(
+                f"worker wheel directory must contain only {WORKER_WHEEL_NAME}; "
+                f"got {sorted(entries)!r}"
+            )
+        before = os.stat(WORKER_WHEEL_NAME, dir_fd=directory_fd, follow_symlinks=False)
+        display = os.path.join(wheel_dir_abs, WORKER_WHEEL_NAME)
+        if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+            raise GuardError(f"worker wheel is not regular: {display}")
+        if before.st_uid != uid or before.st_gid != gid:
+            raise GuardError(f"worker wheel is not owned by {uid}:{gid}: {display}")
+        if stat.S_IMODE(before.st_mode) & 0o022:
+            raise GuardError(f"worker wheel is group/world writable: {display}")
+        if before.st_nlink != 1:
+            raise GuardError(f"worker wheel has a hardlink: {display}")
+        if before.st_size > 64 * 1024 * 1024:
+            raise GuardError(f"worker wheel exceeds 64 MiB: {display}")
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        wheel_fd = os.open(WORKER_WHEEL_NAME, flags, dir_fd=directory_fd)
+        try:
+            opened = os.fstat(wheel_fd)
+            if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+                raise GuardError(f"worker wheel changed during open: {display}")
+            _validate_worker_wheel(
+                wheel_fd,
+                wheel_name=WORKER_WHEEL_NAME,
+                source_payload=source_payload,
+            )
+            hasher = hashlib.sha256()
+            os.lseek(wheel_fd, 0, os.SEEK_SET)
+            while chunk := os.read(wheel_fd, 1024 * 1024):
+                hasher.update(chunk)
+            after = os.fstat(wheel_fd)
+            stable_fields = (
+                "st_dev",
+                "st_ino",
+                "st_mode",
+                "st_uid",
+                "st_gid",
+                "st_nlink",
+                "st_size",
+                "st_mtime_ns",
+                "st_ctime_ns",
+            )
+            if any(getattr(before, field) != getattr(after, field) for field in stable_fields):
+                raise GuardError(f"worker wheel changed while hashing: {display}")
+            after_path = os.stat(
+                WORKER_WHEEL_NAME, dir_fd=directory_fd, follow_symlinks=False
+            )
+            if any(
+                getattr(before, field) != getattr(after_path, field)
+                for field in stable_fields
+            ):
+                raise GuardError(f"worker wheel path changed while hashing: {display}")
+        finally:
+            os.close(wheel_fd)
+    finally:
+        os.close(directory_fd)
+    return f"{display}\t{hasher.hexdigest()}"
 
 
 def validate_pycolmap_artifact(
@@ -1755,9 +2097,17 @@ def _parser() -> argparse.ArgumentParser:
     validate_source = subparsers.add_parser("validate-source-tree")
     validate_source.add_argument("--source-dir", required=True)
 
+    validate_copy = subparsers.add_parser("validate-source-copy")
+    validate_copy.add_argument("--source-dir", required=True)
+    validate_copy.add_argument("--copy-dir", required=True)
+
     validate_pycolmap = subparsers.add_parser("validate-pycolmap-artifact")
     validate_pycolmap.add_argument("--artifact-dir", required=True)
     validate_pycolmap.add_argument("--expected-python-tag", required=True)
+
+    validate_worker = subparsers.add_parser("validate-worker-wheel")
+    validate_worker.add_argument("--wheel-dir", required=True)
+    validate_worker.add_argument("--source-dir", required=True)
 
     owned = subparsers.add_parser("ensure-owned-dir")
     owned.add_argument("--app-dir", required=True)
@@ -1857,6 +2207,8 @@ def main(argv: list[str] | None = None) -> int:
             print(validate_trusted_executable(args.path, **common))
         elif args.command == "validate-source-tree":
             validate_source_tree(args.source_dir, **common)
+        elif args.command == "validate-source-copy":
+            validate_source_copy(args.source_dir, args.copy_dir, **common)
         elif args.command == "validate-pycolmap-artifact":
             print(
                 validate_pycolmap_artifact(
@@ -1865,6 +2217,8 @@ def main(argv: list[str] | None = None) -> int:
                     **common,
                 )
             )
+        elif args.command == "validate-worker-wheel":
+            print(validate_worker_wheel(args.wheel_dir, args.source_dir, **common))
         elif args.command == "ensure-owned-dir":
             ensure_owned_directory(
                 args.app_dir,

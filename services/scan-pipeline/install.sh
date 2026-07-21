@@ -47,6 +47,11 @@ PYCOLMAP_PYTHON_TAG=cp312-cp312
 PYCOLMAP_WHEEL=""
 PYCOLMAP_WHEEL_SHA256=""
 PYCOLMAP_REQUIREMENT=""
+# Stable ZIP-safe wheel epoch: reviewed base commit 517c802e's commit timestamp.
+WORKER_SOURCE_DATE_EPOCH=1784655816
+WORKER_WHEEL=""
+WORKER_WHEEL_SHA256=""
+WORKER_REQUIREMENT=""
 VENV="$APP_DIR/.venv"
 # A venv is not relocatable: console-script shebangs embed the build path. Build
 # at an immutable final path, then replace only the stable .venv symlink.
@@ -220,7 +225,57 @@ _run_candidate_python() {
   shift
   /usr/bin/env -i HOME=/root PATH="$INSTALL_SECURE_PATH" \
     PIP_CONFIG_FILE=/dev/null \
+    SOURCE_DATE_EPOCH="$WORKER_SOURCE_DATE_EPOCH" \
+    TMPDIR="$TRANSACTION_DIR/build-tmp" \
     "$candidate_python" -I "$@"
+}
+
+_validate_direct_wheel_report() {
+  local candidate_python="$1"
+  local report_path="$2"
+  local distribution_name="$3"
+  local distribution_version="$4"
+  local wheel="$5"
+  local expected_hash="$6"
+  _run_candidate_python "$candidate_python" - \
+    "$report_path" "$distribution_name" "$distribution_version" \
+    "$wheel" "$expected_hash" <<'PY'
+import json
+import pathlib
+import sys
+
+report_path = pathlib.Path(sys.argv[1])
+expected_name = sys.argv[2]
+expected_version = sys.argv[3]
+wheel = pathlib.Path(sys.argv[4]).resolve(strict=True)
+expected_hash = sys.argv[5]
+
+def canonical_name(value):
+    return value.lower().replace("_", "-")
+
+report = json.loads(report_path.read_text(encoding="utf-8"))
+records = [
+    record
+    for record in report.get("install", [])
+    if canonical_name(record.get("metadata", {}).get("name", "")) == expected_name
+]
+if len(records) != 1:
+    raise SystemExit(
+        f"pip report must contain one {expected_name} record: {records!r}"
+    )
+record = records[0]
+if record.get("requested") is not True or record.get("is_direct") is not True:
+    raise SystemExit(f"pip did not treat {expected_name} as direct/requested")
+if record.get("metadata", {}).get("version") != expected_version:
+    raise SystemExit(f"pip report selected the wrong {expected_name} version")
+download = record.get("download_info", {})
+if download.get("url") != wheel.as_uri():
+    raise SystemExit(
+        f"pip report {expected_name} URL mismatch: {download.get('url')!r}"
+    )
+if download.get("archive_info", {}).get("hashes", {}).get("sha256") != expected_hash:
+    raise SystemExit(f"pip report {expected_name} SHA-256 mismatch")
+PY
 }
 
 # Only now are helper bytes root-owned, non-service-writable, and reached
@@ -446,53 +501,48 @@ install -d "$CANDIDATE_SYSTEMD_DIR"
 SMOKE_VENV="$VENV"
 if [ "$BUILD_VENV" -eq 1 ]; then
   _path_guard create-release --app-dir "$APP_DIR" --path "$STAGED_VENV"
+  BUILD_SOURCE="$(_prepare_isolated_source_build "$SRC_DIR")"
+  install -d -m 0700 "$TRANSACTION_DIR/build-tmp" "$STAGED_VENV/.artifacts"
   echo "-- building staged venv at $STAGED_VENV ($(_run_privileged_python --version 2>&1))"
   _run_privileged_python -m venv "$STAGED_VENV"
   _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
     --isolated --disable-pip-version-check install \
     --no-cache-dir --upgrade pip >/dev/null
+  echo "-- build one isolated worker wheel"
+  _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
+    --isolated --disable-pip-version-check wheel --no-cache-dir --no-deps \
+    --wheel-dir "$STAGED_VENV/.artifacts" "$BUILD_SOURCE"
+  WORKER_WHEEL_INFO="$(_path_guard validate-worker-wheel \
+    --wheel-dir "$STAGED_VENV/.artifacts" --source-dir "$SRC_DIR")"
+  IFS=$'\t' read -r WORKER_WHEEL WORKER_WHEEL_SHA256 <<<"$WORKER_WHEEL_INFO"
+  if [ -z "$WORKER_WHEEL" ] || \
+     [[ ! "$WORKER_WHEEL_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "ERROR: invalid validated worker wheel identity." >&2
+    exit 1
+  fi
   if [ "$GPU" -eq 1 ]; then
-    echo "-- pip install qualified local PyCOLMAP + $SRC_DIR[drawings,gpu]"
+    WORKER_REQUIREMENT="patina-scan-worker[drawings,gpu] @ file://$WORKER_WHEEL#sha256=$WORKER_WHEEL_SHA256"
+    echo "-- pip install qualified local PyCOLMAP + worker wheel[drawings,gpu]"
     _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
       --isolated --disable-pip-version-check install --no-cache-dir \
       --extra-index-url https://download.pytorch.org/whl/cu118 \
       --report "$STAGED_VENV/pip-install-report.json" \
-      "$PYCOLMAP_REQUIREMENT" "numpy==1.26.4" "$SRC_DIR[drawings,gpu]"
-    _run_candidate_python "$STAGED_VENV/bin/python" - \
-      "$STAGED_VENV/pip-install-report.json" \
-      "$PYCOLMAP_WHEEL" "$PYCOLMAP_WHEEL_SHA256" <<'PY'
-import json
-import pathlib
-import sys
-
-report_path = pathlib.Path(sys.argv[1])
-wheel = pathlib.Path(sys.argv[2]).resolve(strict=True)
-expected_hash = sys.argv[3]
-report = json.loads(report_path.read_text(encoding="utf-8"))
-records = [
-    record
-    for record in report.get("install", [])
-    if record.get("metadata", {}).get("name", "").lower() == "pycolmap"
-]
-if len(records) != 1:
-    raise SystemExit(f"pip report must contain one pycolmap record: {records!r}")
-record = records[0]
-if record.get("requested") is not True or record.get("is_direct") is not True:
-    raise SystemExit("pip did not treat the qualified PyCOLMAP wheel as direct/requested")
-if record.get("metadata", {}).get("version") != "4.0.2":
-    raise SystemExit("pip report selected the wrong PyCOLMAP version")
-download = record.get("download_info", {})
-if download.get("url") != wheel.as_uri():
-    raise SystemExit(f"pip report PyCOLMAP URL mismatch: {download.get('url')!r}")
-if download.get("archive_info", {}).get("hashes", {}).get("sha256") != expected_hash:
-    raise SystemExit("pip report PyCOLMAP archive SHA-256 mismatch")
-PY
+      "$PYCOLMAP_REQUIREMENT" "numpy==1.26.4" "$WORKER_REQUIREMENT"
+    _validate_direct_wheel_report "$STAGED_VENV/bin/python" \
+      "$STAGED_VENV/pip-install-report.json" pycolmap 4.0.2 \
+      "$PYCOLMAP_WHEEL" "$PYCOLMAP_WHEEL_SHA256"
   else
-    echo "-- pip install $SRC_DIR[drawings] (CPU-only)"
+    WORKER_REQUIREMENT="patina-scan-worker[drawings] @ file://$WORKER_WHEEL#sha256=$WORKER_WHEEL_SHA256"
+    echo "-- pip install worker wheel[drawings] (CPU-only)"
     _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
       --isolated --disable-pip-version-check install --no-cache-dir \
-      "$SRC_DIR[drawings]"
+      --report "$STAGED_VENV/pip-install-report.json" \
+      "$WORKER_REQUIREMENT"
   fi
+  _validate_direct_wheel_report "$STAGED_VENV/bin/python" \
+    "$STAGED_VENV/pip-install-report.json" patina-scan-worker 0.1.0 \
+    "$WORKER_WHEEL" "$WORKER_WHEEL_SHA256"
+  _path_guard validate-source-tree --source-dir "$SRC_DIR"
   _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
     --isolated --disable-pip-version-check check
   _path_guard harden-release --app-dir "$APP_DIR" --path "$STAGED_VENV" >/dev/null
@@ -510,6 +560,43 @@ fi
 echo "-- smoke-checking package imports and console entrypoint"
 _run_as_service_user "$SMOKE_VENV/bin/python" -I -c \
   'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor'
+if [ "$BUILD_VENV" -eq 1 ]; then
+  echo "-- verifying durable direct worker-wheel provenance"
+  _run_as_service_user "$SMOKE_VENV/bin/python" -I - \
+    "$SMOKE_VENV" "$WORKER_WHEEL" "$WORKER_WHEEL_SHA256" <<'PY'
+import hashlib
+import importlib.metadata
+import json
+import pathlib
+import sys
+
+prefix = pathlib.Path(sys.argv[1]).resolve(strict=True)
+wheel = pathlib.Path(sys.argv[2]).resolve(strict=True)
+expected_hash = sys.argv[3]
+wheel.relative_to(prefix)
+distribution = importlib.metadata.distribution("patina-scan-worker")
+if distribution.version != "0.1.0":
+    raise SystemExit(f"unexpected worker distribution version: {distribution.version}")
+direct_urls = [
+    pathlib.Path(distribution.locate_file(entry))
+    for entry in (distribution.files or ())
+    if entry.name == "direct_url.json"
+]
+if len(direct_urls) != 1:
+    raise SystemExit(f"expected one worker direct_url.json, got {direct_urls!r}")
+direct = json.loads(direct_urls[0].read_text(encoding="utf-8"))
+if direct.get("url") != wheel.as_uri():
+    raise SystemExit(f"worker direct URL mismatch: {direct.get('url')!r}")
+if direct.get("archive_info", {}).get("hashes", {}).get("sha256") != expected_hash:
+    raise SystemExit("worker direct_url.json SHA-256 mismatch")
+hasher = hashlib.sha256()
+with wheel.open("rb") as stream:
+    while chunk := stream.read(1024 * 1024):
+        hasher.update(chunk)
+if hasher.hexdigest() != expected_hash:
+    raise SystemExit("durable worker wheel SHA-256 mismatch")
+PY
+fi
 if [ "$GPU" -eq 1 ]; then
   echo "-- verifying direct PyCOLMAP artifact provenance and bounded CUDA SIFT"
   _run_as_service_user "$SMOKE_VENV/bin/python" -I - \

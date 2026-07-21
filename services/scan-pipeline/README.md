@@ -96,11 +96,21 @@ That staging is the explicit first-run bootstrap trust event. Review the source,
 stop every `patina` process, and let `--ignore-times` create fresh destination
 inodes while `--delete --delete-excluded` removes stale inputs such as
 `setup.py`, `setup.cfg`, `MANIFEST.in`, or `sitecustomize.py`. The installer
-accepts an exact top-level file set, trusted Python modules below
+accepts an exact top-level and package file manifest below
 `src/patina_scan_worker`, and the one packaged
 `field_raster_libheif.c` qualification helper; every file must be root-owned,
 non-group/world-writable, non-symlinked, regular, and single-linked. It validates
 that closed snapshot before sourcing a helper or invoking the build backend.
+The Python build backend runs only against a second validated copy inside the
+durable install transaction; it never runs against this trust tree. The
+installer revalidates the original snapshot before candidate activation, and
+normal completion or interrupted-build recovery removes the private build copy.
+The resulting worker wheel is closed-content validated, SHA-256 pinned into the
+same dependency resolution as its extras, and retained under the immutable
+release's `.artifacts/` directory so installed `direct_url.json` provenance never
+points at deleted transaction state. Its package member names and bytes must
+match that trusted source manifest exactly, and its dependency/extra metadata is
+checked before pip is allowed to resolve it.
 Archive-mode rsync also copies the checkout directory's mode onto the staged
 tree. `--chmod=Dgo-w,Fgo-w` removes unsafe write bits during transfer; the
 explicit `chmod -R go-w` repeats that hardening as defense-in-depth.

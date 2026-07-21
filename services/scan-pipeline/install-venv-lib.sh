@@ -29,6 +29,23 @@ _assert_transaction_dir_trusted() {
   _path_guard validate-trusted-dir --path "$TRANSACTION_DIR"
 }
 
+_prepare_isolated_source_build() {
+  local source="$1"
+  local destination="$TRANSACTION_DIR/source-build"
+
+  _assert_transaction_dir_trusted || return 1
+  _path_guard validate-source-tree --source-dir "$source" || return 1
+  if [ -e "$destination" ] || [ -L "$destination" ]; then
+    echo "ERROR: refusing pre-existing transaction source build: $destination" >&2
+    return 1
+  fi
+  install -d -m 0700 "$destination" || return 1
+  cp -a -- "$source/." "$destination/" || return 1
+  _path_guard validate-source-copy \
+    --source-dir "$source" --copy-dir "$destination" || return 1
+  printf '%s\n' "$destination"
+}
+
 _trusted_transaction_file_read() {
   local path="$1"
   _path_guard read-trusted-file --root "$TRANSACTION_DIR" --path "$path"

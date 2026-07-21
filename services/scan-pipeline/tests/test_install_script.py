@@ -12,6 +12,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -45,6 +46,7 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/__init__.py",
     "src/patina_scan_worker/__main__.py",
     "src/patina_scan_worker/cli.py",
+    "src/patina_scan_worker/colmap_qualification.py",
     "src/patina_scan_worker/config.py",
     "src/patina_scan_worker/db.py",
     "src/patina_scan_worker/doctor.py",
@@ -60,6 +62,7 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/field_raster_qualification.py",
     "src/patina_scan_worker/pycolmap_cuda_smoke.py",
     "src/patina_scan_worker/refine_engine.py",
+    "src/patina_scan_worker/refine_adapter.py",
     "src/patina_scan_worker/http.py",
     "src/patina_scan_worker/keys.py",
     "src/patina_scan_worker/queue.py",
@@ -195,6 +198,42 @@ def test_gpu_install_consumes_only_the_verified_local_pycolmap_wheel():
     assert candidate.index("pycolmap_cuda_smoke") < candidate.index(
         "begin_install_transaction"
     )
+
+
+def test_candidate_build_uses_a_validated_direct_worker_wheel():
+    script = INSTALL.read_text()
+    prepare = script.index("prepare_install_transaction")
+    isolate = script.index(
+        'BUILD_SOURCE="$(_prepare_isolated_source_build "$SRC_DIR")"'
+    )
+    wheel_build = script.index('--wheel-dir "$STAGED_VENV/.artifacts" "$BUILD_SOURCE"')
+    wheel_validation = script.index("validate-worker-wheel")
+    gpu_requirement = script.index(
+        'WORKER_REQUIREMENT="patina-scan-worker[drawings,gpu] @ file://'
+    )
+    cpu_requirement = script.index(
+        'WORKER_REQUIREMENT="patina-scan-worker[drawings] @ file://'
+    )
+    source_rechecks = [
+        offset
+        for offset in range(len(script))
+        if script.startswith(
+            '_path_guard validate-source-tree --source-dir "$SRC_DIR"', offset
+        )
+    ]
+    harden = script.index(
+        '_path_guard harden-release --app-dir "$APP_DIR" --path "$STAGED_VENV"'
+    )
+
+    assert len(source_rechecks) == 2
+    assert prepare < isolate < wheel_build < wheel_validation
+    assert wheel_validation < gpu_requirement < source_rechecks[1] < harden
+    assert wheel_validation < cpu_requirement < source_rechecks[1]
+    assert script.count(' --wheel-dir "$STAGED_VENV/.artifacts" "$BUILD_SOURCE"') == 1
+    assert '"${BUILD_SOURCE}[' not in script
+    assert 'SOURCE_DATE_EPOCH="$WORKER_SOURCE_DATE_EPOCH"' in script
+    assert 'TMPDIR="$TRANSACTION_DIR/build-tmp"' in script
+    assert script.count('_validate_direct_wheel_report "$STAGED_VENV/bin/python"') == 2
 
 
 def test_release_namespace_and_candidate_contents_stay_root_owned():
@@ -1228,6 +1267,49 @@ def _write_minimal_installer_source(source: Path) -> None:
         )
 
 
+def _copy_reviewed_installer_source(source: Path) -> None:
+    for name in INSTALL_SOURCE_FILES:
+        original = INSTALL.parent / name
+        destination = source / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(original, destination)
+
+
+def _installer_source_snapshot(source: Path) -> tuple[tuple[object, ...], ...]:
+    entries: list[tuple[object, ...]] = []
+    for path in sorted(source.rglob("*")):
+        relative = path.relative_to(source).as_posix()
+        mode = stat.S_IMODE(path.stat().st_mode)
+        if path.is_dir():
+            entries.append((relative, "directory", mode))
+        else:
+            entries.append(
+                (relative, "file", mode, hashlib.sha256(path.read_bytes()).hexdigest())
+            )
+    return tuple(entries)
+
+
+def _rewrite_worker_wheel(wheel: Path, mutate) -> None:
+    with zipfile.ZipFile(wheel) as archive:
+        payloads = {
+            info.filename: archive.read(info.filename) for info in archive.infolist()
+        }
+    record_name = next(name for name in payloads if name.endswith(".dist-info/RECORD"))
+    payloads.pop(record_name)
+    mutate(payloads)
+    record_lines = [
+        f"{name},{_record_digest(data)},{len(data)}"
+        for name, data in payloads.items()
+    ]
+    record_lines.append(f"{record_name},,")
+    payloads[record_name] = ("\n".join(record_lines) + "\n").encode()
+    replacement = wheel.with_suffix(".replacement")
+    with zipfile.ZipFile(replacement, "x", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, data in payloads.items():
+            archive.writestr(name, data)
+    replacement.replace(wheel)
+
+
 def _principal_can_write(path: Path, *, uid: int, gid: int) -> bool:
     info = path.stat()
     mode = stat.S_IMODE(info.st_mode)
@@ -1278,6 +1360,207 @@ def test_source_validation_accepts_only_complete_root_owned_snapshot(tmp_path):
         _principal_can_write(path, uid=service_uid, gid=service_gid)
         for path in protected
     )
+
+
+def test_transaction_source_copy_requires_exact_trusted_bytes(tmp_path):
+    source = tmp_path / "trusted" / "source"
+    copy = tmp_path / "trusted" / "copy"
+    _write_minimal_installer_source(source)
+    shutil.copytree(source, copy)
+    (copy / "pyproject.toml").write_text("different but structurally valid\n")
+
+    result = _path_guard(
+        tmp_path,
+        "validate-source-copy",
+        "--source-dir",
+        str(source),
+        "--copy-dir",
+        str(copy),
+        expected_ok=False,
+    )
+    assert "transaction source copy differs at pyproject.toml" in result.stderr
+
+
+@pytest.mark.parametrize("extras", ["drawings", "drawings,gpu"])
+def test_local_path_build_keeps_trusted_source_byte_and_tree_clean(tmp_path, extras):
+    trusted = tmp_path / "trusted"
+    source = trusted / "scan-pipeline-source"
+    transaction_parent = trusted / "etc"
+    transaction_parent.mkdir(parents=True, mode=0o750)
+    _copy_reviewed_installer_source(source)
+    _path_guard(tmp_path, "validate-source-tree", "--source-dir", str(source))
+    source_before = _installer_source_snapshot(source)
+
+    shell = r"""
+set -euo pipefail
+source "$1"
+SRC_DIR="$2"
+TRANSACTION_PARENT="$3"
+TRANSACTION_DIR="$TRANSACTION_PARENT/.scan-worker-install-transaction"
+STAGED_VENV=""
+INSTALL_PATH_GUARD_SCRIPT="$4"
+INSTALL_PATH_GUARD_PYTHON="$5"
+INSTALL_TRUST_ANCHOR="$6"
+INSTALL_TRUSTED_UID="$(id -u)"
+INSTALL_TRUSTED_GID="$(id -g)"
+TEST_PYTHON="$5"
+_run_privileged_python() { "$TEST_PYTHON" -I -S "$@"; }
+prepare_install_transaction
+_prepare_isolated_source_build "$SRC_DIR"
+"""
+    prepared = subprocess.run(
+        [
+            "bash",
+            "-c",
+            shell,
+            "source-isolation-test",
+            str(VENV_LIB),
+            str(source),
+            str(transaction_parent),
+            str(PATH_GUARD),
+            sys.executable,
+            str(trusted),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert prepared.returncode == 0, prepared.stderr
+    build_source = Path(prepared.stdout.strip())
+    assert build_source == (
+        transaction_parent / ".scan-worker-install-transaction" / "source-build"
+    )
+
+    wheel_dir = trusted / "candidate-release" / ".artifacts"
+    wheel_dir.mkdir(parents=True)
+    build_tmp = (
+        transaction_parent / ".scan-worker-install-transaction" / "build-tmp"
+    )
+    build_tmp.mkdir()
+    build_env = {
+        **os.environ,
+        "SOURCE_DATE_EPOCH": "1784655816",
+        "TMPDIR": str(build_tmp),
+    }
+    built = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "wheel",
+            "--disable-pip-version-check",
+            "--no-input",
+            "--no-deps",
+            "--no-build-isolation",
+            "--wheel-dir",
+            str(wheel_dir),
+            str(build_source),
+        ],
+        text=True,
+        capture_output=True,
+        env=build_env,
+        check=False,
+    )
+    assert built.returncode == 0, built.stdout + built.stderr
+    assert (build_source / "build").is_dir()
+    assert (build_source / "src" / "patina_scan_worker.egg-info").is_dir()
+
+    wheel_result = _path_guard(
+        tmp_path,
+        "validate-worker-wheel",
+        "--wheel-dir",
+        str(wheel_dir),
+        "--source-dir",
+        str(source),
+    )
+    wheel_value, wheel_sha256 = wheel_result.stdout.strip().split("\t")
+    wheel = Path(wheel_value)
+    assert wheel.name == "patina_scan_worker-0.1.0-py3-none-any.whl"
+    assert hashlib.sha256(wheel.read_bytes()).hexdigest() == wheel_sha256
+
+    install_target = tmp_path / "installed"
+    worker_requirement = (
+        f"patina-scan-worker[{extras}] @ {wheel.as_uri()}#sha256={wheel_sha256}"
+    )
+    installed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "--no-input",
+            "--no-deps",
+            "--target",
+            str(install_target),
+            worker_requirement,
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    direct_url = json.loads(
+        (
+            install_target
+            / "patina_scan_worker-0.1.0.dist-info"
+            / "direct_url.json"
+        ).read_text()
+    )
+    assert direct_url["url"] == wheel.as_uri()
+    assert direct_url["archive_info"]["hashes"]["sha256"] == wheel_sha256
+    assert _installer_source_snapshot(source) == source_before
+    assert not (source / "build").exists()
+    assert not (source / "src" / "patina_scan_worker.egg-info").exists()
+    _path_guard(tmp_path, "validate-source-tree", "--source-dir", str(source))
+
+    rejected_copy = _path_guard(
+        tmp_path,
+        "validate-source-tree",
+        "--source-dir",
+        str(build_source),
+        expected_ok=False,
+    )
+    assert "unexpected installer source directory: build" in rejected_copy.stderr
+
+    bad_wheel_dir = trusted / f"bad-wheel-{extras.replace(',', '-')}"
+    shutil.copytree(wheel_dir, bad_wheel_dir)
+    bad_wheel = bad_wheel_dir / wheel.name
+    if extras == "drawings":
+        def inject_dependency(payloads):
+            metadata_name = next(
+                name for name in payloads if name.endswith(".dist-info/METADATA")
+            )
+            headers, body = payloads[metadata_name].split(b"\n\n", 1)
+            payloads[metadata_name] = (
+                headers
+                + b"\nRequires-Dist: attacker-package @ https://example.invalid/x.whl"
+                + b"\n\n"
+                + body
+            )
+
+        _rewrite_worker_wheel(bad_wheel, inject_dependency)
+        expected_rejection = "Requires-Dist contract changed"
+    else:
+        _rewrite_worker_wheel(
+            bad_wheel,
+            lambda payloads: payloads.pop("patina_scan_worker/refine_adapter.py"),
+        )
+        expected_rejection = "package payload does not exactly match trusted source"
+    rejected_wheel = _path_guard(
+        tmp_path,
+        "validate-worker-wheel",
+        "--wheel-dir",
+        str(bad_wheel_dir),
+        "--source-dir",
+        str(source),
+        expected_ok=False,
+    )
+    assert expected_rejection in rejected_wheel.stderr
+
+    shutil.rmtree(transaction_parent / ".scan-worker-install-transaction")
+    assert wheel.is_file()
+    assert Path(direct_url["url"].removeprefix("file://")).is_file()
 
 
 def test_source_validation_rejects_symlinked_package_content(tmp_path):
@@ -1372,7 +1655,7 @@ def test_source_validation_rejects_hardlinked_privileged_input(tmp_path):
     assert alternate.read_text() == "fixture pyproject.toml\n"
 
 
-def test_source_validation_accepts_a_new_trusted_package_module(tmp_path):
+def test_source_validation_rejects_an_unreviewed_package_module(tmp_path):
     source = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline-source"
     _path_guard(
         tmp_path,
@@ -1383,19 +1666,25 @@ def test_source_validation_accepts_a_new_trusted_package_module(tmp_path):
         "0755",
     )
     _write_minimal_installer_source(source)
-    adapter = source / "src" / "patina_scan_worker" / "refine_adapter.py"
+    adapter = source / "src" / "patina_scan_worker" / "unreviewed_adapter.py"
     adapter.write_text("SAFE_ADAPTER = True\n")
     adapter.chmod(0o644)
 
-    _path_guard(
+    result = _path_guard(
         tmp_path,
         "validate-source-tree",
         "--source-dir",
         str(source),
+        expected_ok=False,
     )
+    assert "unexpected installer source" in result.stderr.lower()
 
 
-def test_source_validation_requires_shared_refine_engine(tmp_path):
+@pytest.mark.parametrize(
+    "required_module",
+    ["colmap_qualification.py", "refine_adapter.py", "refine_engine.py"],
+)
+def test_source_validation_requires_item4a_refine_modules(tmp_path, required_module):
     source = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline-source"
     _path_guard(
         tmp_path,
@@ -1406,7 +1695,7 @@ def test_source_validation_requires_shared_refine_engine(tmp_path):
         "0755",
     )
     _write_minimal_installer_source(source)
-    (source / "src" / "patina_scan_worker" / "refine_engine.py").unlink()
+    (source / "src" / "patina_scan_worker" / required_module).unlink()
 
     result = _path_guard(
         tmp_path,
@@ -1417,7 +1706,7 @@ def test_source_validation_requires_shared_refine_engine(tmp_path):
     )
 
     assert "snapshot is incomplete" in result.stderr.lower()
-    assert "refine_engine.py" in result.stderr
+    assert required_module in result.stderr
 
 
 def test_source_validation_rejects_unreviewed_native_package_source(tmp_path):
@@ -2680,6 +2969,10 @@ def test_interruption_after_durable_commit_keeps_new_release_on_recovery(tmp_pat
 
 
 def test_recovery_cleans_an_interrupted_build_stage_without_touching_live(tmp_path):
+    trusted_source = tmp_path / "trusted-source"
+    trusted_source.mkdir()
+    trusted_marker = trusted_source / "pyproject.toml"
+    trusted_marker.write_text("reviewed-source\n")
     app = tmp_path / "app"
     app.mkdir()
     old = app / ".venv.release.old"
@@ -2693,6 +2986,10 @@ def test_recovery_cleans_an_interrupted_build_stage_without_touching_live(tmp_pa
     txn.mkdir()
     (txn / "state").write_text("building\n")
     (txn / "staged_release").write_text(f"{staged}\n")
+    source_build = txn / "source-build" / "build"
+    source_build.mkdir(parents=True)
+    (source_build / "backend-output").write_text("interrupted\n")
+    (txn / "source-build" / "pyproject.toml").write_text("partial-copy\n")
     result = subprocess.run(
         [
             "bash",
@@ -2710,6 +3007,8 @@ def test_recovery_cleans_an_interrupted_build_stage_without_touching_live(tmp_pa
     assert result.returncode == 0, result.stderr
     assert os.readlink(app / ".venv") == str(old)
     assert not staged.exists()
+    assert trusted_marker.read_text() == "reviewed-source\n"
+    assert not source_build.exists()
     assert not txn.exists()
 
 
