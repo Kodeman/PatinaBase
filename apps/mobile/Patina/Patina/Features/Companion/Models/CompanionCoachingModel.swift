@@ -365,6 +365,12 @@ public final class CompanionCoachingModel {
         phase == .new && storedIntroShownCount < CompanionCoachingModel.introShownCap
     }
 
+    /// How many times the intro has been shown so far (0…`introShownCap`).
+    /// Exposed read-only so the overlay can pick the re-show trigger
+    /// (`"second_session"` on the second appearance). Pure read — no writes,
+    /// no emission.
+    public var introShownCount: Int { storedIntroShownCount }
+
     /// Record that the intro was shown, incrementing the (hard-capped) count and
     /// emitting `companion_intro_shown`.
     public func recordIntroShown(trigger: String) {
