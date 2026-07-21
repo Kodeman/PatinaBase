@@ -218,6 +218,39 @@ def test_installer_builds_and_publishes_a_qualified_pycolmap_cuda_artifact():
     assert "systemctl" not in script
 
 
+def test_pycolmap_cmake_discovers_the_hash_pinned_build_venv_pybind11():
+    script = _script()
+
+    # An explicit COLMAP-only CMAKE_PREFIX_PATH is appended after
+    # scikit-build-core's init cache and hides the build venv's pybind11 config.
+    # colmap_DIR already selects the immutable native installation exactly.
+    assert "-DCMAKE_PREFIX_PATH=$COLMAP_PREFIX" not in script
+    assert "-Dcolmap_DIR=$COLMAP_PREFIX/share/colmap" in script
+
+    requirements_install = script.index('-r "$PYCOLMAP_BUILD_REQUIREMENTS"')
+    discovery = script.index('PYCOLMAP_PYBIND11_DIR="$(')
+    module_lookup = script.index("-m pybind11 --cmakedir", discovery)
+    containment = script.index(
+        'case "$PYCOLMAP_PYBIND11_DIR" in', module_lookup
+    )
+    config_guard = script.index(
+        "for pybind11_config in "
+        "pybind11Config.cmake pybind11ConfigVersion.cmake",
+        containment,
+    )
+    assert '"$PYCOLMAP_PYBIND11_DIR/$pybind11_config"' in script[config_guard:]
+    define = script.index(
+        '--config-settings="cmake.define.pybind11_DIR=$PYCOLMAP_PYBIND11_DIR"',
+        config_guard,
+    )
+    cache_check = script.index(
+        'PYCOLMAP_CACHED_PYBIND11_DIR=', define
+    )
+
+    assert requirements_install < discovery < module_lookup
+    assert module_lookup < containment < config_guard < define < cache_check
+
+
 def test_pycolmap_build_requirements_are_exact_and_hash_pinned():
     requirements = [
         line.strip()
@@ -225,6 +258,10 @@ def test_pycolmap_build_requirements_are_exact_and_hash_pinned():
         if line.strip() and not line.lstrip().startswith("#")
     ]
     assert requirements
+    assert any(
+        requirement.startswith("pybind11==3.0.1 ")
+        for requirement in requirements
+    )
     for requirement in requirements:
         assert "==" in requirement
         assert "--hash=sha256:" in requirement

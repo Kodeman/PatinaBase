@@ -672,8 +672,74 @@ else
       --no-cache-dir --only-binary=:all: --require-hashes \
       -r "$PYCOLMAP_BUILD_REQUIREMENTS"
 
+  PYCOLMAP_BUILD_PURELIB="$(
+    /usr/bin/env -i \
+      HOME="$PYCOLMAP_BUILD_HOME" \
+      PATH="$PYCOLMAP_BUILD_VENV/bin:$INSTALL_SECURE_PATH" \
+      LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+      "$PYCOLMAP_BUILD_VENV/bin/python" -I -c \
+        'import sysconfig; print(sysconfig.get_path("purelib"))'
+  )" || die "could not resolve the PyCOLMAP build venv purelib directory"
+  PYCOLMAP_PYBIND11_DIR="$(
+    /usr/bin/env -i \
+      HOME="$PYCOLMAP_BUILD_HOME" \
+      PATH="$PYCOLMAP_BUILD_VENV/bin:$INSTALL_SECURE_PATH" \
+      LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+      "$PYCOLMAP_BUILD_VENV/bin/python" -I -m pybind11 --cmakedir
+  )" || die "could not resolve the pinned pybind11 CMake package"
+  if [ -z "$PYCOLMAP_BUILD_PURELIB" ] || \
+     [ -z "$PYCOLMAP_PYBIND11_DIR" ] || \
+     ! /usr/bin/env -i \
+       HOME="$PYCOLMAP_BUILD_HOME" \
+       PATH="$PYCOLMAP_BUILD_VENV/bin:$INSTALL_SECURE_PATH" \
+       "$PYCOLMAP_BUILD_VENV/bin/python" -I -c \
+       'import sys
+for value in sys.argv[1:]:
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        raise SystemExit(1)
+    if ";" in value or "\\" in value:
+        raise SystemExit(1)' \
+       "$PYCOLMAP_BUILD_PURELIB" "$PYCOLMAP_PYBIND11_DIR"; then
+    die "pinned pybind11 reported an unsafe CMake package path"
+  fi
+  PYCOLMAP_BUILD_PURELIB="$(realpath -e -- "$PYCOLMAP_BUILD_PURELIB")" ||
+    die "PyCOLMAP build venv purelib directory is unavailable"
+  PYCOLMAP_PYBIND11_DIR="$(realpath -e -- "$PYCOLMAP_PYBIND11_DIR")" ||
+    die "pinned pybind11 CMake package directory is unavailable"
+  readonly PYCOLMAP_BUILD_PURELIB PYCOLMAP_PYBIND11_DIR
+  case "$PYCOLMAP_BUILD_PURELIB" in
+    "$PYCOLMAP_BUILD_VENV"/*) ;;
+    *) die "PyCOLMAP purelib escaped its fresh build venv" ;;
+  esac
+  case "$PYCOLMAP_PYBIND11_DIR" in
+    "$PYCOLMAP_BUILD_PURELIB"/*) ;;
+    *) die "pinned pybind11 CMake package escaped the build venv purelib" ;;
+  esac
+  [ "$PYCOLMAP_PYBIND11_DIR" = \
+    "$PYCOLMAP_BUILD_PURELIB/pybind11/share/cmake/pybind11" ] ||
+    die "pinned pybind11 reported an unexpected CMake package directory"
+  "$PYCOLMAP_PYTHON" -I -S "$PATH_GUARD" \
+    --anchor "$WORK_DIR" \
+    --trusted-uid "$EUID" \
+    --trusted-gid "$(id -g)" \
+    validate-trusted-dir --path "$PYCOLMAP_PYBIND11_DIR" ||
+    die "pinned pybind11 CMake package directory failed ownership validation"
+  for pybind11_config in pybind11Config.cmake pybind11ConfigVersion.cmake; do
+    [ "$(stat -c '%h' "$PYCOLMAP_PYBIND11_DIR/$pybind11_config")" = 1 ] ||
+      die "pinned pybind11 CMake package file has multiple hard links: $pybind11_config"
+    "$PYCOLMAP_PYTHON" -I -S "$PATH_GUARD" \
+      --anchor "$WORK_DIR" \
+      --trusted-uid "$EUID" \
+      --trusted-gid "$(id -g)" \
+      read-trusted-file \
+      --root "$PYCOLMAP_PYBIND11_DIR" \
+      --path "$PYCOLMAP_PYBIND11_DIR/$pybind11_config" \
+      --max-bytes 1048576 >/dev/null ||
+      die "pinned pybind11 CMake package file is invalid: $pybind11_config"
+  done
+
   readonly WHEEL_OUTPUT_DIR="$(mktemp -d -- "$WORK_DIR/pycolmap-wheel.XXXXXXXXXX")"
-  readonly PYCOLMAP_CMAKE_ARGS="-Dcolmap_DIR=$COLMAP_PREFIX/share/colmap -DCMAKE_PREFIX_PATH=$COLMAP_PREFIX -DCMAKE_C_COMPILER=$CC_11 -DCMAKE_CXX_COMPILER=$CXX_11 -DCMAKE_CUDA_COMPILER=$NVCC -DCMAKE_CUDA_HOST_COMPILER=$CXX_11 -DCUDAToolkit_ROOT=$CUDA_ROOT -DCMAKE_CUDA_ARCHITECTURES=75 -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_RPATH=$CUDA_ROOT/lib64 -DCMAKE_INSTALL_RPATH=$CUDA_ROOT/lib64 -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=FALSE -DGENERATE_STUBS=OFF -DCCACHE_ENABLED=OFF"
+  readonly PYCOLMAP_CMAKE_ARGS="-Dcolmap_DIR=$COLMAP_PREFIX/share/colmap -DCMAKE_C_COMPILER=$CC_11 -DCMAKE_CXX_COMPILER=$CXX_11 -DCMAKE_CUDA_COMPILER=$NVCC -DCMAKE_CUDA_HOST_COMPILER=$CXX_11 -DCUDAToolkit_ROOT=$CUDA_ROOT -DCMAKE_CUDA_ARCHITECTURES=75 -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_RPATH=$CUDA_ROOT/lib64 -DCMAKE_INSTALL_RPATH=$CUDA_ROOT/lib64 -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=FALSE -DGENERATE_STUBS=OFF -DCCACHE_ENABLED=OFF"
   /usr/bin/env -i \
     HOME="$PYCOLMAP_BUILD_HOME" TMPDIR="$PYCOLMAP_BUILD_TMP" \
     PATH="$PYCOLMAP_BUILD_VENV/bin:$CUDA_ROOT/bin:$INSTALL_SECURE_PATH" \
@@ -687,6 +753,7 @@ else
       --isolated --disable-pip-version-check wheel \
       --no-cache-dir --no-build-isolation --no-deps \
       --config-settings="wheel.build-tag=$PYCOLMAP_BUILD_TAG" \
+      --config-settings="cmake.define.pybind11_DIR=$PYCOLMAP_PYBIND11_DIR" \
       --wheel-dir "$WHEEL_OUTPUT_DIR" "$SOURCE_DIR"
 
   readonly BUILT_PYCOLMAP_WHEEL="$WHEEL_OUTPUT_DIR/$PYCOLMAP_WHEEL_NAME"
@@ -701,6 +768,13 @@ else
     die "built PyCOLMAP wheel SHA-256 is invalid"
   readonly QUALIFIED_WHEEL_SHA256
   readonly QUALIFIED_WHEEL_REQUIREMENT="pycolmap @ file://$BUILT_PYCOLMAP_WHEEL#sha256=$QUALIFIED_WHEEL_SHA256"
+  PYCOLMAP_CACHED_PYBIND11_DIR="$(
+    sed -n 's/^pybind11_DIR:[^=]*=//p' \
+      "$PYCOLMAP_BUILD_DIR/CMakeCache.txt"
+  )" || die "could not inspect PyCOLMAP's cached pybind11 package"
+  readonly PYCOLMAP_CACHED_PYBIND11_DIR
+  [ "$PYCOLMAP_CACHED_PYBIND11_DIR" = "$PYCOLMAP_PYBIND11_DIR" ] ||
+    die "PyCOLMAP CMake selected the wrong pybind11 package"
   grep -Eq '^CMAKE_CUDA_COMPILER:[^=]+=/usr/local/cuda-11\.8/bin/nvcc$' \
     "$PYCOLMAP_BUILD_DIR/CMakeCache.txt" ||
     die "PyCOLMAP CMake selected the wrong CUDA compiler"
