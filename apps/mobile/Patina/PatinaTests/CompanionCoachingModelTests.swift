@@ -117,10 +117,10 @@ struct CompanionCoachingModelTests {
         ])
     }
 
-    // MARK: - 3. 14-day auto-graduation via lazy phase read
+    // MARK: - 3. 14-day auto-graduation is a pure read
 
     @Test
-    func fourteenDays_autoGraduatesOnLazyPhaseRead() {
+    func fourteenDays_lazyPhaseReadReturnsLearned_purely() {
         let (defaults, suite) = makeDefaults()
         defer { defaults.removePersistentDomain(forName: suite) }
         let recorder = CoachingEventRecorder()
@@ -128,17 +128,129 @@ struct CompanionCoachingModelTests {
         let model = makeModel(defaults: defaults, now: { clock.now() }, recorder: recorder)
 
         model.recordMainSessionStart()   // stamps enteredMainAt = fixedNow
-        model.recordPanelExpanded()      // → learning (graduation only from learning)
+        model.recordPanelExpanded()      // → learning
         #expect(model.phase == .learning)
 
         // 13 days later — still learning.
         clock.current = CompanionCoachingModelTests.fixedNow.addingTimeInterval(13 * 24 * 60 * 60)
         #expect(model.phase == .learning)
 
-        // 15 days later — lazy read graduates to learned.
+        // 15 days later — the pure `phase` read reflects graduation
+        // immediately, but does NOT persist or emit: reads are side-effect-
+        // free (see the dedicated purity + deferred-emission tests below).
         clock.current = CompanionCoachingModelTests.fixedNow.addingTimeInterval(15 * 24 * 60 * 60)
         #expect(model.phase == .learned)
+        #expect(recorder.events.count == 1)
+        #expect(defaults.string(forKey: "patina.companion.coaching.phase") == "learning")
+    }
+
+    // MARK: - 3a. 14-day graduation applies from ANY phase, including `.new`
+
+    @Test
+    func fourteenDaysFromNew_graduatesToLearned_withoutEverExpandingPanel() {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let recorder = CoachingEventRecorder()
+        let clock = MutableClock(CompanionCoachingModelTests.fixedNow)
+        let model = makeModel(defaults: defaults, now: { clock.now() }, recorder: recorder)
+
+        model.recordMainSessionStart()   // stamps enteredMainAt; phase stays .new
+        #expect(model.phase == .new)
+
+        // Never expand the panel. 14+ days later the user must still
+        // graduate — the day-based rule applies from ANY phase, not just
+        // `.learning`.
+        clock.current = CompanionCoachingModelTests.fixedNow.addingTimeInterval(14 * 24 * 60 * 60 + 1)
+
+        #expect(model.phase == .learned)
+        #expect(model.markAttention == .calm)
+        #expect(model.canShowIntro == false)
+    }
+
+    // MARK: - 3b. navCount ≥ 3 graduates to `.learned` from ANY phase
+
+    @Test
+    func threeNavigations_graduateToLearned_fromNew_withoutPanelExpansion() {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let recorder = CoachingEventRecorder()
+        let model = makeModel(defaults: defaults, recorder: recorder)
+
+        #expect(model.phase == .new)
+
+        // The Companion's nudge pill navigates without expanding the panel,
+        // so navigations can legitimately accrue while still `.new`.
+        _ = model.recordCompanionNavigation()
+        #expect(model.phase == .new)
+        _ = model.recordCompanionNavigation()
+        #expect(model.phase == .new)
+        _ = model.recordCompanionNavigation()
+        #expect(model.phase == .learned)
+
+        #expect(recorder.events.contains(.phaseChanged(from: "new", to: "learned", navCount: 3)))
+    }
+
+    // MARK: - 3c. pure reads never write or emit
+
+    @Test
+    func readingPhaseAndDerivedProperties_repeatedly_performsNoWritesOrEmissions() {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let recorder = CoachingEventRecorder()
+        let clock = MutableClock(CompanionCoachingModelTests.fixedNow)
+        let model = makeModel(defaults: defaults, now: { clock.now() }, recorder: recorder)
+
+        model.recordMainSessionStart()
+        model.recordPanelExpanded()
+        // Push past the 14-day threshold so the reads below actually
+        // exercise the lazy-graduation branch of the pure computation, not
+        // just a stable stored value.
+        clock.current = CompanionCoachingModelTests.fixedNow.addingTimeInterval(15 * 24 * 60 * 60)
+
+        let eventCountBefore = recorder.events.count
+        let defaultsBefore = defaults.dictionaryRepresentation() as NSDictionary
+
+        for _ in 0..<5 {
+            _ = model.phase
+            _ = model.markAttention
+            _ = model.canShowIntro
+            _ = model.shouldShowPanelCoachmark
+        }
+
+        #expect(model.phase == .learned)   // sanity: the branch was exercised
+        #expect(recorder.events.count == eventCountBefore)
+        #expect((defaults.dictionaryRepresentation() as NSDictionary) == defaultsBefore)
+    }
+
+    // MARK: - 3d. deferred emission fires on the next mutating call, not on read
+
+    @Test
+    func timeGraduation_emitsPhaseChanged_onNextMutatingCall_notOnRead() {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let recorder = CoachingEventRecorder()
+        let clock = MutableClock(CompanionCoachingModelTests.fixedNow)
+
+        let model1 = makeModel(defaults: defaults, now: { clock.now() }, recorder: recorder)
+        model1.recordMainSessionStart()
+        model1.recordPanelExpanded()   // → learning (event 1)
+        #expect(recorder.events.count == 1)
+
+        clock.current = CompanionCoachingModelTests.fixedNow.addingTimeInterval(15 * 24 * 60 * 60)
+
+        // Pure read observes graduation but does not persist or emit.
+        #expect(model1.phase == .learned)
+        #expect(recorder.events.count == 1)
+        #expect(defaults.string(forKey: "patina.companion.coaching.phase") == "learning")
+
+        // Next launch (fresh model instance, same persisted defaults): the
+        // next mutating call reconciles and emits the deferred transition.
+        let model2 = makeModel(defaults: defaults, now: { clock.now() }, recorder: recorder)
+        model2.recordMainSessionStart()
+
+        #expect(recorder.events.count == 2)
         #expect(recorder.events.last == .phaseChanged(from: "learning", to: "learned", navCount: 0))
+        #expect(defaults.string(forKey: "patina.companion.coaching.phase") == "learned")
     }
 
     // MARK: - 4. no phase regression
@@ -187,6 +299,10 @@ struct CompanionCoachingModelTests {
         // The seed persisted the spent intro budget.
         #expect(defaults.integer(forKey: "patina.companion.coaching.introShownCount") == 2)
         #expect(defaults.string(forKey: "patina.companion.coaching.phase") == "learning")
+        // The first-nav acknowledgement is seeded too — existing users have
+        // already been navigating the Companion without it all along.
+        #expect(defaults.bool(forKey: "patina.companion.coaching.firstNavAckSeen") == true)
+        #expect(model.recordCompanionNavigation() == .none)
     }
 
     // MARK: - 6. intro cap

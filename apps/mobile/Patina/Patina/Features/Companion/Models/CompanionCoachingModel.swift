@@ -16,19 +16,28 @@
 //  ├─────────────────────────────────────────────────────────────────────────┤
 //  │  .new       never expanded the panel                                     │
 //  │  .learning  expanded the panel at least once                             │
-//  │  .learned   3 companion navigations  OR  14 days since entering main     │
-//  │             (the 14-day rule is evaluated LAZILY on `phase` read — no     │
-//  │              timers; a learning user graduates the moment `phase` is      │
-//  │              read after the window elapses)                              │
+//  │  .learned   3 companion navigations  OR  14 days since entering main —    │
+//  │             from ANY phase (a `.new` user who never expands the panel    │
+//  │             still graduates; the nudge pill navigates without expanding  │
+//  │             the panel, so navigations accrue from `.new` too)            │
+//  │                                                                          │
+//  │  `phase` (and everything derived from it — `markAttention`,              │
+//  │  `canShowIntro`, `shouldShowPanelCoachmark`) is a PURE read: it computes  │
+//  │  the effective phase from stored state + `now()` with no persistence and │
+//  │  no analytics emission, so it's safe to read from a SwiftUI view body.   │
+//  │  The 14-day rule is therefore evaluated lazily but silently on read; the │
+//  │  catch-up persistence + `phaseChanged` emission happen the next time a   │
+//  │  mutating method runs (`recordMainSessionStart`, `recordPanelExpanded`,  │
+//  │  `recordCompanionNavigation`), via a private `reconcilePhase()`.         │
 //  └─────────────────────────────────────────────────────────────────────────┘
 //
 //  Persistence is raw UserDefaults under the `patina.companion.coaching.` key
 //  namespace. The pre-existing `patina.companion.coachmarkSeen` flag (written by
 //  `CompanionOverlay`) is treated as a legacy signal: a user who already
 //  dismissed the old panel coachmark is migrated straight to `.learning` with a
-//  spent intro budget, so existing users never see the new intro or the loud
-//  attention pulse. That legacy key keeps its original meaning and is never
-//  renamed.
+//  spent intro budget and a spent first-nav acknowledgement, so existing users
+//  never see the new intro, the loud attention pulse, or the first-nav ack.
+//  That legacy key keeps its original meaning and is never renamed.
 //
 //  Testability mirrors `FirstLaunchTourModel` (see `Features/Help/`): every
 //  environmental dependency (UserDefaults, clock, tour-state provider, analytics
@@ -196,11 +205,13 @@ public final class CompanionCoachingModel {
             self.storedIntroShownCount = defaults.integer(forKey: Keys.introShownCount)
         } else if defaults.bool(forKey: Keys.legacyCoachmarkSeen) {
             // Existing user who already dismissed the old coachmark: skip the
-            // intro and the loud attention pulse entirely.
+            // intro, the loud attention pulse, and the first-nav ack entirely
+            // — they've been navigating the Companion without it all along.
             self.storedPhase = .learning
             self.storedIntroShownCount = CompanionCoachingModel.introShownCap
             defaults.set(CompanionCoachingPhase.learning.rawValue, forKey: Keys.phase)
             defaults.set(CompanionCoachingModel.introShownCap, forKey: Keys.introShownCount)
+            defaults.set(true, forKey: Keys.firstNavAckSeen)
         } else {
             self.storedPhase = .new
             self.storedIntroShownCount = 0
@@ -236,24 +247,36 @@ public final class CompanionCoachingModel {
 
     // MARK: - Phase
 
-    /// The user's current coaching phase. Reading this LAZILY graduates a
-    /// learning user to `.learned` once 14 days have elapsed since they entered
-    /// main — no timers involved.
+    /// The user's current coaching phase, computed PURELY from stored state +
+    /// `now()` — no UserDefaults writes, no analytics emission. Safe to read
+    /// from a SwiftUI view body. If the 14-day window has elapsed since
+    /// entering main, this reflects `.learned` immediately even though the
+    /// persisted phase may still lag until the next mutating call reconciles
+    /// it (see `reconcilePhase()`).
     public var phase: CompanionCoachingPhase {
-        if storedPhase == .learning, hasReachedDayGraduation {
-            transition(to: .learned)
-        }
-        return storedPhase
+        effectivePhase
     }
 
     /// How loudly the resting mark should draw attention, derived from `phase`
-    /// (so it reflects lazy graduation too).
+    /// (so it reflects lazy graduation too, purely).
     public var markAttention: MarkAttention {
         switch phase {
         case .new: return .full
         case .learning: return .ambient
         case .learned: return .calm
         }
+    }
+
+    /// The phase implied by stored state + `now()`, applying the 14-day
+    /// auto-graduation rule from ANY non-learned phase (including `.new` — a
+    /// user who never expands the panel still graduates on the clock). Pure:
+    /// no writes, no emission. `storedPhase` may lag this by up to one
+    /// mutating call; `reconcilePhase()` is what catches it up.
+    private var effectivePhase: CompanionCoachingPhase {
+        if storedPhase != .learned, hasReachedDayGraduation {
+            return .learned
+        }
+        return storedPhase
     }
 
     private var hasReachedDayGraduation: Bool {
@@ -264,12 +287,25 @@ public final class CompanionCoachingModel {
 
     /// Move the phase forward, persisting and emitting `phaseChanged`. No-op if
     /// the target is not strictly ahead of the current phase (monotonic guard).
+    /// Only ever called from mutating methods (directly, or via
+    /// `reconcilePhase()`) — never from a read.
     private func transition(to newPhase: CompanionCoachingPhase) {
         let from = storedPhase
         guard newPhase.rank > from.rank else { return }
         storedPhase = newPhase
         defaults.set(newPhase.rawValue, forKey: Keys.phase)
         track(.phaseChanged(from: from.rawValue, to: newPhase.rawValue, navCount: storedNavCount))
+    }
+
+    /// Catches `storedPhase` up to `effectivePhase`, persisting and emitting
+    /// `phaseChanged` if the lazy 14-day graduation has been reached since the
+    /// last mutating call. Called at the top of every mutating method so the
+    /// deferred transition fires at least once, on the next such call — never
+    /// from `phase` itself, which stays side-effect-free.
+    private func reconcilePhase() {
+        if storedPhase != .learned, hasReachedDayGraduation {
+            transition(to: .learned)
+        }
     }
 
     // MARK: - Session / navigation recording
@@ -279,30 +315,39 @@ public final class CompanionCoachingModel {
     public func recordMainSessionStart() {
         guard !didRecordMainSessionStart else { return }
         didRecordMainSessionStart = true
-        guard storedEnteredMainAt == nil else { return }
-        let timestamp = now()
-        storedEnteredMainAt = timestamp
-        defaults.set(timestamp.timeIntervalSince1970, forKey: Keys.enteredMainAt)
+        if storedEnteredMainAt == nil {
+            let timestamp = now()
+            storedEnteredMainAt = timestamp
+            defaults.set(timestamp.timeIntervalSince1970, forKey: Keys.enteredMainAt)
+        }
+        // Catches up any deferred 14-day graduation from a prior session —
+        // this is the canonical "next mutating call" that fires the event.
+        reconcilePhase()
     }
 
     /// Record that the user expanded the Companion panel. The first expansion
     /// transitions `.new` → `.learning`.
     public func recordPanelExpanded() {
+        reconcilePhase()
         if storedPhase == .new {
             transition(to: .learning)
         }
     }
 
-    /// Record a Companion-driven navigation. Graduates a learning user to
-    /// `.learned` on their 3rd navigation, and returns `.showFirstNavAck`
-    /// exactly once — on the first-ever navigation.
+    /// Record a Companion-driven navigation. Graduates to `.learned` on the
+    /// 3rd navigation from ANY phase, and returns `.showFirstNavAck` exactly
+    /// once — on the first-ever navigation.
     @discardableResult
     public func recordCompanionNavigation() -> NavigationOutcome {
+        reconcilePhase()
+
         storedNavCount += 1
         defaults.set(storedNavCount, forKey: Keys.navCount)
 
-        if storedPhase == .learning,
-           storedNavCount >= CompanionCoachingModel.navigationsToLearned {
+        // Graduates from ANY phase, not just `.learning`: the Companion's
+        // nudge pill navigates without expanding the panel, so navigations
+        // can legitimately accrue while the user is still `.new`.
+        if storedNavCount >= CompanionCoachingModel.navigationsToLearned {
             transition(to: .learned)
         }
 
