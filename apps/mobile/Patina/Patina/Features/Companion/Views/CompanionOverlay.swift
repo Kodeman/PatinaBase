@@ -48,6 +48,42 @@ public struct CompanionOverlay: View {
     @AppStorage("patina.companion.coachmarkSeen") private var hasSeenCompanionCoachmark: Bool = false
     @State private var showCoachmark: Bool = false
 
+    /// Coaching state machine for the "living companion" system. MUST be built
+    /// in this `@State` initializer (never lazily later): the model snapshots
+    /// the FirstLaunchTour state at init, and its intro-sequencing gate is only
+    /// sound if that snapshot is taken before DailyRoomView's tour `.task`
+    /// writes `launched` this process. Overlay init during ContentView body
+    /// evaluation guarantees that ordering.
+    @State private var coaching = CompanionCoachingModel()
+
+    /// Wake-up choreography phase driven forward by `runWakeChoreography()`.
+    @State private var wakePhase: WakePhase = .awake
+    /// Whether the self-intro / reinforcement bubble occupies the mark's slot.
+    @State private var introVisible = false
+    /// When the presented intro became visible — the basis for `viewedMs`.
+    @State private var introShownAt: Date?
+    /// Trigger of the in-flight or presented intro (`"first_arrival"` /
+    /// `"second_session"` / `"stuck"`), so an interruption records it correctly.
+    @State private var introTrigger: String?
+    /// The staged wake-up choreography, cancellable on surface change.
+    @State private var introTask: Task<Void, Never>?
+    /// One-shot spring bounce applied to the mark during the wake `.pulse` beat.
+    @State private var markBounceScale: CGFloat = 1.0
+
+    /// Whether the transient first-nav acknowledgement bubble is showing.
+    @State private var navAckVisible = false
+    /// Auto-dismiss timer for the first-nav ack, cancellable on surface change.
+    @State private var navAckTask: Task<Void, Never>?
+    /// The screen the ack was presented on. Retirement is keyed to this value
+    /// rather than "any screen change" — `handleNavigate`'s continuation calls
+    /// `coordinator.navigate(to:)` (which sets `currentScreen` synchronously)
+    /// and then `presentFirstNavAck()` on the same main-actor continuation, so
+    /// by the time SwiftUI's `.onChange(of: coordinator.currentScreen)` fires
+    /// for that navigation, this already equals the destination — the ack
+    /// must survive that change, not be torn down by it (the fixed defect: a
+    /// blanket dismiss-on-any-screen-change killed the ack within one frame).
+    @State private var navAckScreen: AppRoute?
+
     /// Computed display mode based on current screen context
     private var displayMode: CompanionDisplayMode {
         // Hidden during certain flows
@@ -175,12 +211,42 @@ public struct CompanionOverlay: View {
         .onChange(of: coordinator.companionContext) { _, newContext in
             viewModel.updateContext(newContext)
         }
-        .onChange(of: coordinator.currentScreen) { _, _ in
+        .onChange(of: coordinator.currentScreen) { _, newScreen in
             viewModel.updateContext(coordinator.companionContext)
+            // Leaving the intro's anchoring surface retires the intro.
+            syncIntroToSurface()
+            // Retire the first-nav ack only when the user navigated AWAY from
+            // the screen it was presented on — NOT on every screen change.
+            // `presentFirstNavAck()` sets `navAckScreen` to the destination
+            // before this fires (see its declaration), so the navigation that
+            // produced the ack leaves `navAckScreen == newScreen` and is a
+            // no-op here; a *subsequent* navigation makes them differ and
+            // dismisses it. A blanket `dismissNavAck()` on every change would
+            // tear the ack down within the same frame it appears.
+            if navAckScreen != newScreen {
+                dismissNavAck()
+            }
+        }
+        // A display-mode change that leaves resting/nudging (e.g. the panel
+        // expands, or the surface goes minimal) also retires the intro. Kept
+        // separate from `displayMode`'s root `.animation` — dismissal is driven
+        // by explicit `withAnimation` inside `dismissIntro`, not this key.
+        .onChange(of: displayMode) { _, _ in
+            syncIntroToSurface()
         }
         .onAppear {
             isAuthenticated = AuthService.shared.isAuthenticated
             viewModel.updateContext(coordinator.companionContext)
+            coaching.recordMainSessionStart()
+        }
+        // Wake-up self-intro: gated per screen so it re-evaluates whenever the
+        // surface changes, and cancels cleanly when the user leaves.
+        .task(id: coordinator.currentScreen) {
+            await maybePresentIntro()
+        }
+        // Unused-companion escalation — offers help to a stuck `.new` user.
+        .task {
+            await runUnusedCompanionEscalation()
         }
         .task {
             for await (event, _) in supabase.auth.authStateChanges {
@@ -234,40 +300,85 @@ public struct CompanionOverlay: View {
     // MARK: - State 1: Resting
 
     private var restingView: some View {
-        companionMarkButton
+        companionMarkStack(nudge: nil)
     }
 
     // MARK: - State 2: Nudging
 
     private func nudgingView(nudge: CompanionNudge) -> some View {
+        companionMarkStack(nudge: nudge)
+    }
+
+    /// The mark plus the slot above it. The slot holds — in priority order —
+    /// the wake-up self-intro, the transient first-nav ack, or the nudge pill.
+    /// The intro/ack win the slot over the pill (the pill is also suppressed
+    /// while the wake choreography is mid-flight). VoiceOver reads the bubble
+    /// before the mark.
+    @ViewBuilder
+    private func companionMarkStack(nudge: CompanionNudge?) -> some View {
         VStack(spacing: 0) {
-            // The pill is a real affordance, not décor (R01/R02): tapping it
-            // performs the suggested action; the mark below opens the panel.
-            Button {
-                CompanionAnalytics.shared.trackNudgeTapped(
-                    screen: coordinator.currentScreen.displayName,
-                    label: nudge.label
-                )
-                handleNavigate(to: nudge.route)
-            } label: {
-                Text(nudge.label)
-                    .font(PatinaTypography.caption)
-                    .foregroundStyle(PatinaColors.Text.inverse)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(PatinaColors.Interactive.active)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .patinaShadow(PatinaShadows.md)
-                    // 44pt hit target without inflating the visual pill.
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
+            if introVisible {
+                introBubbleView
+                    .padding(.bottom, 12)
+            } else if navAckVisible {
+                navAckBubbleView
+                    .padding(.bottom, 12)
+            } else if let nudge, introTask == nil {
+                nudgePill(nudge: nudge)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(nudge.label)
-            .accessibilityIdentifier("companion.nudge")
 
             companionMarkButton
         }
+    }
+
+    /// The suggested-action pill shown in nudging mode. A real affordance, not
+    /// décor (R01/R02): tapping it performs the suggested action; the mark
+    /// below opens the panel.
+    private func nudgePill(nudge: CompanionNudge) -> some View {
+        Button {
+            CompanionAnalytics.shared.trackNudgeTapped(
+                screen: coordinator.currentScreen.displayName,
+                label: nudge.label
+            )
+            handleNavigate(to: nudge.route)
+        } label: {
+            Text(nudge.label)
+                .font(PatinaTypography.caption)
+                .foregroundStyle(PatinaColors.Text.inverse)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(PatinaColors.Interactive.active)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .patinaShadow(PatinaShadows.md)
+                // 44pt hit target without inflating the visual pill.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(nudge.label)
+        .accessibilityIdentifier("companion.nudge")
+    }
+
+    /// The one-time wake-up self-introduction. "Show me" (and tapping the mark)
+    /// dismiss it and open the panel; "Later" dismisses it and lets the mark
+    /// keep pulsing.
+    private var introBubbleView: some View {
+        CompanionIntroBubble(
+            onShowMe: { expandToPanel() },
+            onLater: { dismissIntro(action: "later") }
+        )
+        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+        // VoiceOver reads the bubble before the mark below it.
+        .accessibilitySortPriority(1)
+    }
+
+    /// The transient first-nav acknowledgement, reusing the compact bubble.
+    private var navAckBubbleView: some View {
+        CompanionIntroBubble(
+            compactText: "That's the way. I'm always down here when you need your next step."
+        )
+        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+        .accessibilitySortPriority(1)
     }
 
     // MARK: - State 3: Expanded
@@ -371,6 +482,10 @@ public struct CompanionOverlay: View {
                                 handleNavigate(to: route)
                             } else if let special = item.specialAction {
                                 collapseToButton()
+                                // A special action is a companion navigation too
+                                // (it accrues toward graduation and can trigger
+                                // the one-shot first-nav ack).
+                                let navOutcome = coaching.recordCompanionNavigation()
                                 Task {
                                     try? await Task.sleep(for: .seconds(0.3))
                                     switch special {
@@ -382,6 +497,9 @@ public struct CompanionOverlay: View {
                                         coordinator.presentAuthentication()
                                     case .openDesignServices(let roomId):
                                         coordinator.presentedSheet = .designServices(roomId: roomId, preselectedScanIds: [])
+                                    }
+                                    if navOutcome == .showFirstNavAck {
+                                        presentFirstNavAck()
                                     }
                                 }
                             }
@@ -411,7 +529,7 @@ public struct CompanionOverlay: View {
 
     private var companionCoachmark: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("This is your Companion. Tap any time for what to do next.")
+            Text("These are your next steps. They change with every room you're in — tap one and I'll take you there.")
                 .font(.custom("PlayfairDisplay-Italic", size: 15, relativeTo: .subheadline))
                 .foregroundStyle(PatinaColors.Text.primary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -436,7 +554,7 @@ public struct CompanionOverlay: View {
         .patinaShadow(PatinaShadows.md)
         .padding(.horizontal, 12)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("This is your Companion. Tap any time for what to do next.")
+        .accessibilityLabel("These are your next steps. They change with every room you're in — tap one and I'll take you there.")
         .accessibilityAddTraits(.isModal)
     }
 
@@ -532,7 +650,12 @@ public struct CompanionOverlay: View {
     /// "Other" node (R21).
     private var companionMarkButton: some View {
         Button { expandToPanel() } label: {
-            companionMark
+            // The living mark (Task 2): attention reflects the coaching phase;
+            // `wakePhase` is driven by the wake-up choreography. The one-shot
+            // `.pulse`-beat bounce is applied here (reduce-motion holds at 1.0;
+            // the whole choreography is skipped under reduce motion anyway).
+            CompanionMarkView(attention: coaching.markAttention, wakePhase: wakePhase)
+                .scaleEffect(reduceMotion ? 1.0 : markBounceScale)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
@@ -540,31 +663,6 @@ public struct CompanionOverlay: View {
         .accessibilityHint("Opens quick actions for this screen.")
         .accessibilityIdentifier("companion.bubble")
     }
-
-    private var companionMark: some View {
-        ZStack {
-            // Breathing glow ring
-            Circle()
-                .stroke(PatinaColors.clay.opacity(0.35), lineWidth: 1.5)
-                .frame(width: 58, height: 58)
-                .scaleEffect(reduceMotion ? 1.0 : breatheScale)
-
-            // Main circle — deliberately dark mark, charcoal in both modes.
-            Circle()
-                .fill(PatinaColors.Background.dark)
-                .frame(width: 52, height: 52)
-                .patinaShadow(PatinaShadows.companion)
-
-            // Strata lines (white on charcoal)
-            VStack(spacing: 3) {
-                Capsule().fill(PatinaColors.offWhite).frame(width: 20, height: 1.5)
-                Capsule().fill(PatinaColors.offWhite.opacity(0.7)).frame(width: 16, height: 1.5)
-                Capsule().fill(PatinaColors.offWhite.opacity(0.4)).frame(width: 12, height: 1.5)
-            }
-        }
-    }
-
-    @State private var breatheScale: CGFloat = 1.0
 
     // MARK: - Companion Action Row
 
@@ -611,6 +709,22 @@ public struct CompanionOverlay: View {
     // MARK: - Actions
 
     private func expandToPanel() {
+        // The wake-up intro and first-nav ack live in the mark's slot; opening
+        // the panel retires them. Tapping through the intro (mark or "Show me")
+        // counts as accepting it — record "expanded", and as accepted help when
+        // it was the stuck re-offer.
+        if introVisible {
+            let wasStuckOffer = introTrigger == "stuck"
+            dismissIntro(action: "expanded")
+            if wasStuckOffer {
+                CompanionAnalytics.shared.trackHelpAccepted(
+                    screen: coordinator.currentScreen.displayName,
+                    actionTaken: "companion_expanded"
+                )
+            }
+        }
+        dismissNavAck()
+
         // PT-5-10: the soft pulse is fired declaratively via
         // `.sensoryFeedback(trigger: state.isExpanded)` below.
         CompanionAnalytics.shared.trackFABTapped(screen: coordinator.currentScreen.displayName)
@@ -625,9 +739,15 @@ public struct CompanionOverlay: View {
         panelOpenTime = Date()
         panelInteractionCount = 0
 
-        // PT-6-9: first time the Companion is expanded, surface a one-shot
-        // coachmark explaining what it is.
-        if !hasSeenCompanionCoachmark {
+        // Coaching: the first panel expansion graduates `.new` → `.learning`.
+        coaching.recordPanelExpanded()
+
+        // PT-6-9 (re-gated): first time the Companion is expanded, surface the
+        // one-shot next-steps coachmark. Now also gated on the coaching model
+        // so learned and legacy-migrated users never see it; showing it counts
+        // as a reinforcement.
+        if !hasSeenCompanionCoachmark && coaching.shouldShowPanelCoachmark {
+            coaching.recordReinforcementShown(kind: "panel_coachmark")
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3).delay(0.35)) {
                 showCoachmark = true
             }
@@ -665,9 +785,15 @@ public struct CompanionOverlay: View {
 
     private func handleNavigate(to route: AppRoute) {
         collapseToButton()
+        // Every companion navigation accrues toward graduation and can trigger
+        // the one-shot first-nav ack once it settles.
+        let navOutcome = coaching.recordCompanionNavigation()
         Task {
             try? await Task.sleep(for: .seconds(0.3))
             coordinator.navigate(to: route)
+            if navOutcome == .showFirstNavAck {
+                presentFirstNavAck()
+            }
         }
     }
 
@@ -675,6 +801,230 @@ public struct CompanionOverlay: View {
         if step < currentStep { return PatinaColors.clay }
         if step == currentStep { return PatinaColors.offWhite }
         return Color.white.opacity(0.2)
+    }
+
+    // MARK: - Coaching: wake-up intro
+
+    /// Whether `displayMode` is one that hosts the resting mark's bubble slot.
+    private var displayModeAllowsIntro: Bool {
+        switch displayMode {
+        case .resting, .nudging: return true
+        default: return false
+        }
+    }
+
+    /// All wake-up-intro preconditions except the tour gate. Re-checked before
+    /// and after every async hop in `maybePresentIntro`.
+    private var introEligible: Bool {
+        coaching.canShowIntro
+            && coordinator.currentScreen == .heroFrame
+            && displayModeAllowsIntro
+            && !state.isExpanded
+            && !introVisible
+            && introTask == nil
+    }
+
+    /// Entry point (per-screen `.task`): gate on the first-launch tour, then
+    /// present the self-intro. First arrival runs the staged wake choreography;
+    /// re-shows (and the reduce-motion path) present the bubble with a single
+    /// pulse and no choreography.
+    private func maybePresentIntro() async {
+        guard introEligible else { return }
+        guard await coaching.introGate() else { return }
+        // The screen may have changed while the gate resolved.
+        guard introEligible else { return }
+        do { try await Task.sleep(for: .seconds(0.8)) } catch { return }
+        guard introEligible else { return }
+
+        // Second appearance re-shows quietly; first appearance is the full wake.
+        let trigger = coaching.introShownCount == 1 ? "second_session" : "first_arrival"
+        introTrigger = trigger
+
+        if trigger == "first_arrival", !reduceMotion {
+            introTask = Task { await runWakeChoreography(trigger: trigger) }
+        } else {
+            // Reduce-motion first arrival and every re-show: bubble + a single
+            // pulse, no choreography.
+            HapticManager.shared.companionPulse()
+            presentIntroBubble(trigger: trigger)
+        }
+    }
+
+    /// The one-time wake-up choreography (motion path only — reduce motion
+    /// presents the bubble directly). Each sleep throws on cancellation; if a
+    /// surface change cancels us mid-flight, we bail without presenting and
+    /// `interruptWakeChoreography()` settles the mark and records the
+    /// auto-dismissal.
+    private func runWakeChoreography(trigger: String) async {
+        do {
+            wakePhase = .dormant                                   // 1 — snap, no animation
+            try await Task.sleep(for: .seconds(0.15))
+
+            withAnimation(.patinaHero) { wakePhase = .rising }     // 2
+            try await Task.sleep(for: .seconds(0.45))
+
+            wakePhase = .drawing                                   // 3 — mark staggers the draw-in
+            try await Task.sleep(for: .seconds(0.55))
+
+            wakePhase = .pulse                                     // 4 — burst + haptic + bounce
+            HapticManager.shared.companionPulse()
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) { markBounceScale = 1.1 }
+            try await Task.sleep(for: .seconds(0.18))
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) { markBounceScale = 1.0 }
+            try await Task.sleep(for: .seconds(0.32))
+
+            wakePhase = .awake                                     // 5 — settle, then present
+            try await Task.sleep(for: .seconds(0.3))
+        } catch {
+            return   // cancelled — interruption handler settles + records
+        }
+        presentIntroBubble(trigger: trigger)
+    }
+
+    /// Present the intro bubble and record it shown exactly once. Clears
+    /// `introTask` so the intro is now "presented" rather than "in-flight".
+    private func presentIntroBubble(trigger: String) {
+        introTask = nil
+        coaching.recordIntroShown(trigger: trigger)
+        introShownAt = Date()
+        withAnimation(reduceMotion ? nil : .patinaHero) { introVisible = true }
+    }
+
+    /// Dismiss a *presented* intro along `action` (`"expanded"` / `"later"` /
+    /// `"auto"`), recording the dismissal once with `viewedMs` measured from
+    /// when it appeared. Idempotent — guarded on `introVisible`.
+    private func dismissIntro(action: String) {
+        guard introVisible else { return }
+        let viewedMs = introShownAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? 0
+        coaching.recordIntroDismissed(action: action, viewedMs: viewedMs)
+        introShownAt = nil
+        introTrigger = nil
+        withAnimation(reduceMotion ? nil : .patinaHero) { introVisible = false }
+    }
+
+    /// Cancel an in-flight wake choreography and snap the mark back to `.awake`
+    /// (never leave it half-drawn). An interrupted attempt still counts as
+    /// shown, then auto-dismissed.
+    private func interruptWakeChoreography() {
+        introTask?.cancel()
+        introTask = nil
+        wakePhase = .awake
+        markBounceScale = 1.0
+        if let trigger = introTrigger {
+            coaching.recordIntroShown(trigger: trigger)
+            coaching.recordIntroDismissed(action: "auto", viewedMs: 0)
+        }
+        introTrigger = nil
+        introShownAt = nil
+    }
+
+    /// Retire the intro when the surface it anchors to is no longer valid. The
+    /// wake intro is heroFrame-bound; the stuck re-offer may live on any
+    /// resting/nudging surface. Resting↔nudging flips keep the intro.
+    private func syncIntroToSurface() {
+        let onValidMode = displayModeAllowsIntro
+        let onValidScreen = introTrigger == "stuck" || coordinator.currentScreen == .heroFrame
+        guard !(onValidMode && onValidScreen) else { return }
+
+        if introTask != nil {
+            interruptWakeChoreography()
+        } else if introVisible {
+            dismissIntro(action: "auto")
+        }
+    }
+
+    // MARK: - Coaching: first-nav ack + unused-companion escalation
+
+    /// After a companion navigation settles, acknowledge it once on the
+    /// resting mark (skipped on minimal / non-resting destinations, and never
+    /// colliding with a visible intro). Auto-dismisses after 2.5s.
+    private func presentFirstNavAck() {
+        guard displayModeAllowsIntro, !introVisible, introTask == nil else { return }
+        coaching.recordReinforcementShown(kind: "first_nav_ack")
+        // Key retirement to the screen we're presenting on. On the route path
+        // this is already the destination — `handleNavigate`'s continuation
+        // calls `coordinator.navigate(to:)` before this, on the same
+        // main-actor hop. On the special-action path `currentScreen` hasn't
+        // moved (the special action opens a sheet instead), so this is just
+        // the screen the user was already on.
+        navAckScreen = coordinator.currentScreen
+        withAnimation(reduceMotion ? nil : .patinaHero) { navAckVisible = true }
+
+        navAckTask?.cancel()
+        navAckTask = Task {
+            do { try await Task.sleep(for: .seconds(2.5)) } catch { return }
+            dismissNavAck()
+        }
+    }
+
+    /// Hide the first-nav ack, cancel its timer, and clear the screen it was
+    /// keyed to. Idempotent. Covers all three retirement paths: timer expiry
+    /// (above), navigating away from `navAckScreen` (the `.onChange` above),
+    /// and explicit cancellation (e.g. `expandToPanel()`).
+    private func dismissNavAck() {
+        navAckTask?.cancel()
+        navAckTask = nil
+        navAckScreen = nil
+        guard navAckVisible else { return }
+        withAnimation(reduceMotion ? nil : .patinaHero) { navAckVisible = false }
+    }
+
+    /// While the user is still `.new`, poll every 20s; if they look stuck and
+    /// still haven't spent their intro budget, offer help by re-presenting the
+    /// intro with the `"stuck"` trigger (no choreography). Structured `.task`:
+    /// exits on cancellation or as soon as the user moves past `.new`.
+    private func runUnusedCompanionEscalation() async {
+        while !Task.isCancelled {
+            guard coaching.phase == .new else { return }
+            do { try await Task.sleep(for: .seconds(20)) } catch { return }
+            guard !Task.isCancelled, coaching.phase == .new else { return }
+
+            let metrics = SessionMetricsService.shared
+            guard !introVisible,
+                  introTask == nil,
+                  coaching.canShowIntro,
+                  metrics.stuckReason != .none,
+                  displayModeAllowsIntro else { continue }
+
+            // This tick can trip while the first-launch tour popover is still
+            // open (e.g. the user parked on it, idle, for 20s+), so it must
+            // honor the same tour-sequencing gate as the wake-up path
+            // (`maybePresentIntro`) — otherwise the stuck intro would present
+            // on top of the tour, colliding with it and spending one of the
+            // two intro-budget slots the choreographed wake-up needs. On gate
+            // failure (timeout, or the tour never resolves) skip this tick
+            // rather than tearing down the whole loop — there's another
+            // chance in 20s. Cancellation still exits promptly.
+            guard await coaching.introGate() else {
+                if Task.isCancelled { return }
+                continue
+            }
+
+            // The gate can await for up to 120s — re-check every guard above,
+            // since the panel may have opened, the wake path may have spent
+            // the intro budget, or the user may no longer look stuck, while
+            // we were waiting.
+            guard coaching.phase == .new,
+                  !introVisible,
+                  introTask == nil,
+                  coaching.canShowIntro,
+                  metrics.stuckReason != .none,
+                  displayModeAllowsIntro else { continue }
+
+            let reason = metrics.stuckReason
+            let screen = coordinator.currentScreen.displayName
+            CompanionAnalytics.shared.trackUserStuck(
+                screen: screen,
+                reason: reason,
+                dwellTime: metrics.dwellTimeOnCurrentScreen,
+                interactionCount: metrics.interactionCountOnCurrentScreen
+            )
+            CompanionAnalytics.shared.trackHelpOffered(screen: screen, reason: reason)
+
+            introTrigger = "stuck"
+            HapticManager.shared.companionPulse()
+            presentIntroBubble(trigger: "stuck")
+        }
     }
 }
 
