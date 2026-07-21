@@ -74,6 +74,15 @@ public struct CompanionOverlay: View {
     @State private var navAckVisible = false
     /// Auto-dismiss timer for the first-nav ack, cancellable on surface change.
     @State private var navAckTask: Task<Void, Never>?
+    /// The screen the ack was presented on. Retirement is keyed to this value
+    /// rather than "any screen change" — `handleNavigate`'s continuation calls
+    /// `coordinator.navigate(to:)` (which sets `currentScreen` synchronously)
+    /// and then `presentFirstNavAck()` on the same main-actor continuation, so
+    /// by the time SwiftUI's `.onChange(of: coordinator.currentScreen)` fires
+    /// for that navigation, this already equals the destination — the ack
+    /// must survive that change, not be torn down by it (the fixed defect: a
+    /// blanket dismiss-on-any-screen-change killed the ack within one frame).
+    @State private var navAckScreen: AppRoute?
 
     /// Computed display mode based on current screen context
     private var displayMode: CompanionDisplayMode {
@@ -202,12 +211,21 @@ public struct CompanionOverlay: View {
         .onChange(of: coordinator.companionContext) { _, newContext in
             viewModel.updateContext(newContext)
         }
-        .onChange(of: coordinator.currentScreen) { _, _ in
+        .onChange(of: coordinator.currentScreen) { _, newScreen in
             viewModel.updateContext(coordinator.companionContext)
-            // Leaving the intro's anchoring surface retires the intro; a new
-            // screen retires any lingering first-nav ack.
+            // Leaving the intro's anchoring surface retires the intro.
             syncIntroToSurface()
-            dismissNavAck()
+            // Retire the first-nav ack only when the user navigated AWAY from
+            // the screen it was presented on — NOT on every screen change.
+            // `presentFirstNavAck()` sets `navAckScreen` to the destination
+            // before this fires (see its declaration), so the navigation that
+            // produced the ack leaves `navAckScreen == newScreen` and is a
+            // no-op here; a *subsequent* navigation makes them differ and
+            // dismisses it. A blanket `dismissNavAck()` on every change would
+            // tear the ack down within the same frame it appears.
+            if navAckScreen != newScreen {
+                dismissNavAck()
+            }
         }
         // A display-mode change that leaves resting/nudging (e.g. the panel
         // expands, or the surface goes minimal) also retires the intro. Kept
@@ -923,6 +941,13 @@ public struct CompanionOverlay: View {
     private func presentFirstNavAck() {
         guard displayModeAllowsIntro, !introVisible, introTask == nil else { return }
         coaching.recordReinforcementShown(kind: "first_nav_ack")
+        // Key retirement to the screen we're presenting on. On the route path
+        // this is already the destination — `handleNavigate`'s continuation
+        // calls `coordinator.navigate(to:)` before this, on the same
+        // main-actor hop. On the special-action path `currentScreen` hasn't
+        // moved (the special action opens a sheet instead), so this is just
+        // the screen the user was already on.
+        navAckScreen = coordinator.currentScreen
         withAnimation(reduceMotion ? nil : .patinaHero) { navAckVisible = true }
 
         navAckTask?.cancel()
@@ -932,10 +957,14 @@ public struct CompanionOverlay: View {
         }
     }
 
-    /// Hide the first-nav ack and cancel its timer. Idempotent.
+    /// Hide the first-nav ack, cancel its timer, and clear the screen it was
+    /// keyed to. Idempotent. Covers all three retirement paths: timer expiry
+    /// (above), navigating away from `navAckScreen` (the `.onChange` above),
+    /// and explicit cancellation (e.g. `expandToPanel()`).
     private func dismissNavAck() {
         navAckTask?.cancel()
         navAckTask = nil
+        navAckScreen = nil
         guard navAckVisible else { return }
         withAnimation(reduceMotion ? nil : .patinaHero) { navAckVisible = false }
     }
