@@ -980,13 +980,38 @@ public struct CompanionOverlay: View {
             guard !Task.isCancelled, coaching.phase == .new else { return }
 
             let metrics = SessionMetricsService.shared
-            let reason = metrics.stuckReason
             guard !introVisible,
                   introTask == nil,
                   coaching.canShowIntro,
-                  reason != .none,
+                  metrics.stuckReason != .none,
                   displayModeAllowsIntro else { continue }
 
+            // This tick can trip while the first-launch tour popover is still
+            // open (e.g. the user parked on it, idle, for 20s+), so it must
+            // honor the same tour-sequencing gate as the wake-up path
+            // (`maybePresentIntro`) — otherwise the stuck intro would present
+            // on top of the tour, colliding with it and spending one of the
+            // two intro-budget slots the choreographed wake-up needs. On gate
+            // failure (timeout, or the tour never resolves) skip this tick
+            // rather than tearing down the whole loop — there's another
+            // chance in 20s. Cancellation still exits promptly.
+            guard await coaching.introGate() else {
+                if Task.isCancelled { return }
+                continue
+            }
+
+            // The gate can await for up to 120s — re-check every guard above,
+            // since the panel may have opened, the wake path may have spent
+            // the intro budget, or the user may no longer look stuck, while
+            // we were waiting.
+            guard coaching.phase == .new,
+                  !introVisible,
+                  introTask == nil,
+                  coaching.canShowIntro,
+                  metrics.stuckReason != .none,
+                  displayModeAllowsIntro else { continue }
+
+            let reason = metrics.stuckReason
             let screen = coordinator.currentScreen.displayName
             CompanionAnalytics.shared.trackUserStuck(
                 screen: screen,
