@@ -14,6 +14,7 @@ def test_registry_has_three_stages():
 
 
 def test_get_handler_unknown_returns_none():
+    assert get_handler("scan_pipeline.refine") is None
     assert get_handler("scan_pipeline.splat") is None
     assert get_handler("something.else") is None
 

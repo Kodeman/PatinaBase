@@ -11,10 +11,7 @@ fake backend so ordinary development machines do not need PyCOLMAP or a GPU.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import hashlib
-import importlib
-import io
 import json
 import math
 import os
@@ -26,14 +23,23 @@ import time
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
+from . import refine_engine
+from .refine_engine import (
+    EngineImage,
+    ModelEvidence,
+    PycolmapBackend,
+    PycolmapBackendConfig,
+    RefineEngineBackend as QualificationBackend,
+)
 from .refine_adapter import (
     COLMAP_LOG_TAIL_BYTES,
     COLMAP_TARGET_VERSION,
     LEASE_COMPLETION_RESERVE_S,
     REFINE_STAGE_ENGINE_BUDGET_S,
     AdapterError,
+    ColmapPose,
     ColmapCommandResult,
     PinholeIntrinsics,
     RefineDeadline,
@@ -47,6 +53,8 @@ QUALIFICATION_NAME = "p2-item4a-colmap-known-pose"
 FIXTURE_VERSION = "tiny-multiview-v1"
 RECEIPT_NAME = "colmap-qualification-receipt-v1.json"
 QUALIFICATION_RANDOM_SEED = 0
+MAX_GPU_SIFT_FEATURES_PER_IMAGE = 4096
+NATIVE_EXCEPTION_TEXT_BYTES = 512
 
 FIXTURE_WIDTH = 480
 FIXTURE_HEIGHT = 360
@@ -64,6 +72,9 @@ MIN_GPU_SIFT_KEYPOINTS_PER_IMAGE = 40
 MIN_RAW_MATCHES_PER_PAIR = 15
 MIN_VERIFIED_INLIERS_PER_PAIR = 15
 MIN_TRIANGULATED_POINTS = 20
+
+# Backward-compatible test/operator access; implementation ownership is shared.
+_bounded_binding_output = refine_engine._bounded_binding_output
 
 
 @dataclass(frozen=True)
@@ -83,73 +94,6 @@ class QualificationConfig:
     gpu_index: str = "0"
 
 
-@dataclass(frozen=True)
-class ModelEvidence:
-    valid: bool
-    registered_image_ids: tuple[int, ...]
-    image_names_by_id: Mapping[int, str]
-    camera_ids_by_image_id: Mapping[int, int]
-    camera_contract_by_id: Mapping[int, Mapping[str, Any]]
-    camera_centers_by_image_id: Mapping[int, tuple[float, float, float]]
-    num_points3d: int
-
-
-class QualificationBackend(Protocol):
-    """The engine-facing seam used by both the real and fake qualification."""
-
-    @property
-    def version(self) -> str: ...
-
-    def toolchain_evidence(self) -> Mapping[str, Any]: ...
-
-    def extract_gpu_features(
-        self,
-        *,
-        database_path: Path,
-        image_dir: Path,
-        images: Sequence[FixtureImage],
-        gpu_index: str,
-        log_path: Path,
-    ) -> Sequence[Mapping[str, Any]]: ...
-
-    def rewrite_intrinsics_preserving_ids(
-        self,
-        *,
-        database_path: Path,
-        images: Sequence[FixtureImage],
-        log_path: Path,
-    ) -> Sequence[Mapping[str, Any]]: ...
-
-    def match_explicit_pairs(
-        self,
-        *,
-        database_path: Path,
-        pairs_path: Path,
-        image_pairs: Sequence[tuple[str, str]],
-        gpu_index: str,
-        log_path: Path,
-    ) -> Sequence[Mapping[str, Any]]: ...
-
-    def build_known_pose_seed(
-        self,
-        *,
-        database_path: Path,
-        images: Sequence[FixtureImage],
-        output_path: Path,
-        log_path: Path,
-    ) -> ModelEvidence: ...
-
-    def inspect_model(self, path: Path, *, log_path: Path) -> ModelEvidence: ...
-
-    def bundle_adjust_with_success_evidence(
-        self,
-        *,
-        input_path: Path,
-        output_path: Path,
-        log_path: Path,
-    ) -> Mapping[str, Any]: ...
-
-
 CommandRunner = Callable[..., ColmapCommandResult]
 
 
@@ -157,16 +101,34 @@ def _sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _bounded_exception_text(exc: BaseException) -> str:
+    """Return one bounded line so a native exception cannot flood stderr/JSON."""
+
+    raw = (
+        str(exc).replace("\r", " ").replace("\n", " ").encode("utf-8", errors="replace")
+    )
+    if len(raw) <= NATIVE_EXCEPTION_TEXT_BYTES:
+        return raw.decode("utf-8", errors="replace")
+    suffix = b"...<truncated>"
+    prefix = raw[: NATIVE_EXCEPTION_TEXT_BYTES - len(suffix)].decode(
+        "utf-8", errors="ignore"
+    )
+    return prefix + suffix.decode("ascii")
+
+
 def _backend_call(label: str, callback: Callable[[], Any]) -> Any:
     """Normalize native binding failures into the qualification error contract."""
 
     try:
         return callback()
-    except AdapterError:
-        raise
+    except AdapterError as exc:
+        bounded = _bounded_exception_text(exc)
+        if bounded == str(exc):
+            raise
+        raise AdapterError(bounded, exc.code) from exc
     except Exception as exc:
         raise AdapterError(
-            f"{label} failed ({type(exc).__name__}): {exc}",
+            f"{label} failed ({type(exc).__name__}): {_bounded_exception_text(exc)}",
             "REFINE_ENGINE_FAILED",
         ) from exc
 
@@ -298,6 +260,68 @@ def fixture_images() -> tuple[FixtureImage, ...]:
     )
 
 
+def fixture_engine_images(
+    images: Sequence[FixtureImage],
+) -> tuple[EngineImage, ...]:
+    """Map the synthetic COLMAP-coordinate fixture into the shared engine seam."""
+
+    identity = (
+        (1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        (0.0, 0.0, 1.0),
+    )
+    return tuple(
+        EngineImage(
+            name=image.name,
+            intrinsics=image.intrinsics,
+            cam_from_world=ColmapPose(
+                rotation=identity,
+                translation=tuple(-value for value in image.camera_center_m),
+                qvec=(1.0, 0.0, 0.0, 0.0),
+            ),
+        )
+        for image in images
+    )
+
+
+def non_identity_pose_control_image(image: EngineImage) -> EngineImage:
+    """Return a deterministic arbitrary pose used only for write/read control."""
+
+    angle = math.radians(31.0)
+    rotation = (
+        (math.cos(angle), 0.0, math.sin(angle)),
+        (0.0, 1.0, 0.0),
+        (-math.sin(angle), 0.0, math.cos(angle)),
+    )
+    center = (1.25, -0.4, 2.75)
+    translation = tuple(
+        -sum(rotation[row][column] * center[column] for column in range(3))
+        for row in range(3)
+    )
+    return EngineImage(
+        name=image.name,
+        intrinsics=image.intrinsics,
+        cam_from_world=ColmapPose(
+            rotation=rotation,
+            translation=translation,
+            qvec=(math.cos(angle / 2.0), 0.0, math.sin(angle / 2.0), 0.0),
+        ),
+    )
+
+
+def _pose_matrix(pose: ColmapPose) -> tuple[tuple[float, float, float, float], ...]:
+    return tuple(
+        tuple((*pose.rotation[row], pose.translation[row])) for row in range(3)
+    )
+
+
+def _pose_center(pose: ColmapPose) -> tuple[float, float, float]:
+    return tuple(
+        -sum(pose.rotation[row][column] * pose.translation[row] for row in range(3))
+        for column in range(3)
+    )
+
+
 def materialize_fixture(
     image_dir: Path,
 ) -> tuple[tuple[FixtureImage, ...], Mapping[str, Any]]:
@@ -424,6 +448,9 @@ def _model_receipt(model: ModelEvidence, path: Path) -> Mapping[str, Any]:
                 "name": model.image_names_by_id[image_id],
                 "cameraId": model.camera_ids_by_image_id[image_id],
                 "cameraCenterMeters": list(model.camera_centers_by_image_id[image_id]),
+                "camFromWorld": [
+                    list(row) for row in model.cam_from_world_by_image_id[image_id]
+                ],
             }
             for image_id in model.registered_image_ids
         ],
@@ -459,69 +486,6 @@ def _run_bounded_command(
     return result
 
 
-class _BoundedTextLog(io.TextIOBase):
-    """A text writer whose retained file is always a capped UTF-8 tail."""
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self._tail = bytearray()
-        self._handle = path.open("w+b")
-        self._closed_by_owner = False
-
-    @property
-    def encoding(self) -> str:
-        return "utf-8"
-
-    def writable(self) -> bool:
-        return True
-
-    def write(self, value: str) -> int:
-        if self._closed_by_owner:
-            raise ValueError("write to closed qualification log")
-        payload = value.encode("utf-8", errors="replace")
-        if len(payload) >= COLMAP_LOG_TAIL_BYTES:
-            self._tail[:] = payload[-COLMAP_LOG_TAIL_BYTES:]
-        else:
-            overflow = len(self._tail) + len(payload) - COLMAP_LOG_TAIL_BYTES
-            if overflow > 0:
-                del self._tail[:overflow]
-            self._tail.extend(payload)
-        self._handle.seek(0)
-        self._handle.truncate(0)
-        self._handle.write(self._tail)
-        self._handle.flush()
-        return len(value)
-
-    def flush(self) -> None:
-        if not self._closed_by_owner:
-            self._handle.flush()
-
-    def close_owned(self) -> None:
-        if self._closed_by_owner:
-            return
-        self._handle.flush()
-        os.fsync(self._handle.fileno())
-        self._handle.close()
-        self._closed_by_owner = True
-
-
-@contextlib.contextmanager
-def _bounded_binding_output(pycolmap_module: Any, log_path: Path):
-    """Capture Python and C++ binding streams into one hard-capped tail."""
-
-    writer = _BoundedTextLog(log_path)
-    try:
-        with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
-            ostream = getattr(pycolmap_module, "ostream", None)
-            if ostream is None:
-                yield
-            else:
-                with ostream(stdout=True, stderr=True):
-                    yield
-    finally:
-        writer.close_owned()
-
-
 def _bounded_log_evidence(label: str, log_path: Path) -> Mapping[str, Any]:
     if not log_path.is_file() or log_path.stat().st_size > COLMAP_LOG_TAIL_BYTES:
         raise AdapterError(
@@ -549,424 +513,272 @@ def _negative_version_control(cli_output: str) -> Mapping[str, str]:
     raise AdapterError("COLMAP mismatch negative control unexpectedly passed")
 
 
-class PycolmapBackend:
-    """Exact PyCOLMAP 4.0.2 database/model calls used by the future engine."""
+def _evidence_rows(
+    value: Any,
+    *,
+    label: str,
+    code: str,
+) -> tuple[Mapping[str, Any], ...]:
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise AdapterError(f"{label} evidence must be a sequence", code)
+    rows = tuple(value)
+    if any(not isinstance(row, Mapping) for row in rows):
+        raise AdapterError(f"{label} evidence contains a non-object row", code)
+    return rows
 
-    def __init__(self, pycolmap_module: Any, numpy_module: Any) -> None:
-        self._p = pycolmap_module
-        self._np = numpy_module
 
-    @classmethod
-    def load(cls) -> "PycolmapBackend":
-        try:
-            pycolmap_module = importlib.import_module("pycolmap")
-            numpy_module = importlib.import_module("numpy")
-        except (ImportError, OSError) as exc:
+def _positive_evidence_int(value: Any, *, label: str, code: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise AdapterError(f"{label} must be a positive integer", code)
+    return value
+
+
+def _nonnegative_evidence_int(value: Any, *, label: str, code: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise AdapterError(f"{label} must be a non-negative integer", code)
+    return value
+
+
+def _validate_toolchain_evidence(
+    value: Any,
+    *,
+    binding_version: str,
+) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise AdapterError(
+            "PyCOLMAP toolchain evidence must be an object",
+            "REFINE_ENGINE_FAILED",
+        )
+    required_strings = ("version", "colmapVersion", "colmapBuild")
+    for key in required_strings:
+        if not isinstance(value.get(key), str) or not value[key]:
             raise AdapterError(
-                f"cannot import the COLMAP qualification bindings: {exc}",
-                "REFINE_ENGINE_IMPORT",
-            ) from exc
-        return cls(pycolmap_module, numpy_module)
-
-    @property
-    def version(self) -> str:
-        return str(self._p.__version__)
-
-    def toolchain_evidence(self) -> Mapping[str, Any]:
-        has_cuda = self._p.has_cuda
-        if type(has_cuda) is not bool or not has_cuda:  # noqa: E721
-            raise AdapterError(
-                "PyCOLMAP has_cuda must be the bool True; GPU SIFT cannot be qualified",
-                "REFINE_GPU_SIFT_UNAVAILABLE",
+                f"PyCOLMAP toolchain evidence has invalid {key}",
+                "REFINE_ENGINE_FAILED",
             )
-        return {
-            "version": self.version,
-            "colmapVersion": str(self._p.COLMAP_version),
-            "colmapBuild": str(self._p.COLMAP_build),
-            "hasCuda": has_cuda,
+    if value["version"] != binding_version:
+        raise AdapterError(
+            "PyCOLMAP toolchain evidence disagrees with the binding version",
+            "REFINE_ENGINE_VERSION_MISMATCH",
+        )
+    if type(value.get("hasCuda")) is not bool or value["hasCuda"] is not True:  # noqa: E721
+        raise AdapterError(
+            "PyCOLMAP reports a CPU-only build; GPU SIFT cannot be qualified",
+            "REFINE_GPU_SIFT_UNAVAILABLE",
+        )
+    return dict(value)
+
+
+def _validate_gpu_sift_rows(
+    value: Any,
+    images: Sequence[EngineImage],
+) -> tuple[Mapping[str, Any], ...]:
+    code = "REFINE_GPU_SIFT_FAILED"
+    rows = _evidence_rows(value, label="GPU SIFT", code=code)
+    expected_by_name = {image.name: image for image in images}
+    if len(rows) != len(expected_by_name):
+        raise AdapterError("GPU SIFT evidence has a missing or duplicate image", code)
+    by_name: dict[str, Mapping[str, Any]] = {}
+    image_ids: set[int] = set()
+    camera_ids: set[int] = set()
+    for row in rows:
+        name = row.get("name")
+        if not isinstance(name, str) or name not in expected_by_name or name in by_name:
+            raise AdapterError(
+                "GPU SIFT evidence has an unknown or duplicate image", code
+            )
+        image_id = _positive_evidence_int(
+            row.get("imageId"), label=f"GPU SIFT imageId for {name}", code=code
+        )
+        camera_id = _positive_evidence_int(
+            row.get("cameraId"), label=f"GPU SIFT cameraId for {name}", code=code
+        )
+        keypoints = _nonnegative_evidence_int(
+            row.get("keypoints"), label=f"GPU SIFT keypoints for {name}", code=code
+        )
+        descriptors = _nonnegative_evidence_int(
+            row.get("descriptors"),
+            label=f"GPU SIFT descriptors for {name}",
+            code=code,
+        )
+        if image_id in image_ids or camera_id in camera_ids:
+            raise AdapterError("GPU SIFT evidence reuses an image or camera ID", code)
+        if keypoints < MIN_GPU_SIFT_KEYPOINTS_PER_IMAGE or descriptors != keypoints:
+            raise AdapterError(
+                f"GPU SIFT evidence is too small for {name}: "
+                f"keypoints={keypoints}, descriptors={descriptors}",
+                code,
+            )
+        image_ids.add(image_id)
+        camera_ids.add(camera_id)
+        by_name[name] = {
+            "name": name,
+            "imageId": image_id,
+            "cameraId": camera_id,
+            "keypoints": keypoints,
+            "descriptors": descriptors,
         }
+    return tuple(by_name[image.name] for image in images)
 
-    def _database(self, path: Path) -> Any:
-        return self._p.Database.open(path)
 
-    def _image(self, database: Any, name: str) -> Any:
-        image = database.read_image_with_name(name)
-        if image is None:
-            raise AdapterError(f"PyCOLMAP database is missing fixture image {name}")
-        return image
-
-    def extract_gpu_features(
-        self,
-        *,
-        database_path: Path,
-        image_dir: Path,
-        images: Sequence[FixtureImage],
-        gpu_index: str,
-        log_path: Path,
-    ) -> Sequence[Mapping[str, Any]]:
-        if type(self._p.has_cuda) is not bool or not self._p.has_cuda:  # noqa: E721
+def _validate_rewrite_rows(
+    value: Any,
+    images: Sequence[EngineImage],
+    sift_rows: Sequence[Mapping[str, Any]],
+) -> tuple[Mapping[str, Any], ...]:
+    code = "REFINE_ENGINE_FIXTURE_FAILED"
+    rows = _evidence_rows(value, label="intrinsics rewrite", code=code)
+    expected_by_name = {image.name: image for image in images}
+    sift_by_name = {str(row["name"]): row for row in sift_rows}
+    if len(rows) != len(expected_by_name):
+        raise AdapterError(
+            "intrinsics rewrite evidence has a missing or duplicate image", code
+        )
+    by_name: dict[str, Mapping[str, Any]] = {}
+    for row in rows:
+        name = row.get("name")
+        if not isinstance(name, str) or name not in expected_by_name or name in by_name:
             raise AdapterError(
-                "PyCOLMAP has_cuda must be the bool True; GPU SIFT cannot be qualified",
-                "REFINE_GPU_SIFT_UNAVAILABLE",
+                "intrinsics rewrite evidence has an unknown or duplicate image", code
             )
-        extraction_options = self._p.FeatureExtractionOptions()
-        extraction_options.use_gpu = True
-        extraction_options.gpu_index = gpu_index
-        extraction_options.max_image_size = max(FIXTURE_WIDTH, FIXTURE_HEIGHT)
-        sift_options = extraction_options.sift
-        sift_options.max_num_features = 4096
-        extraction_options.sift = sift_options
-        reader_options = self._p.ImageReaderOptions()
-        reader_options.camera_model = "SIMPLE_RADIAL"
-        rows: list[dict[str, Any]] = []
-        camera_ids: set[int] = set()
-        with _bounded_binding_output(self._p, log_path):
-            self._p.set_random_seed(QUALIFICATION_RANDOM_SEED)
-            self._p.extract_features(
-                database_path=database_path,
-                image_path=image_dir,
-                image_names=[image.name for image in images],
-                camera_mode=self._p.CameraMode.PER_IMAGE,
-                reader_options=reader_options,
-                extraction_options=extraction_options,
-                device=self._p.Device.cuda,
+        image_id_before = _positive_evidence_int(
+            row.get("imageIdBefore"), label=f"imageIdBefore for {name}", code=code
+        )
+        image_id_after = _positive_evidence_int(
+            row.get("imageIdAfter"), label=f"imageIdAfter for {name}", code=code
+        )
+        camera_id_before = _positive_evidence_int(
+            row.get("cameraIdBefore"), label=f"cameraIdBefore for {name}", code=code
+        )
+        camera_id_after = _positive_evidence_int(
+            row.get("cameraIdAfter"), label=f"cameraIdAfter for {name}", code=code
+        )
+        image = expected_by_name[name]
+        params = row.get("paramsAfter")
+        expected_params = (
+            image.intrinsics.fx,
+            image.intrinsics.fy,
+            image.intrinsics.cx,
+            image.intrinsics.cy,
+        )
+        if (
+            row.get("idsPreserved") is not True
+            or image_id_before != image_id_after
+            or image_id_after != sift_by_name[name]["imageId"]
+            or camera_id_before != camera_id_after
+            or camera_id_after != sift_by_name[name]["cameraId"]
+            or row.get("modelAfter") != "PINHOLE"
+            or row.get("widthAfter") != image.intrinsics.image_width
+            or row.get("heightAfter") != image.intrinsics.image_height
+            or row.get("hasPriorFocalLengthAfter") is not True
+            or not isinstance(params, Sequence)
+            or isinstance(params, (str, bytes))
+            or len(params) != 4
+            or any(
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                or abs(float(value) - expected) > 1e-9
+                for value, expected in zip(params, expected_params)
             )
-
-            with self._database(database_path) as database:
-                for fixture_image in images:
-                    image = self._image(database, fixture_image.name)
-                    image_id = int(image.image_id)
-                    camera_id = int(image.camera_id)
-                    keypoints = int(database.num_keypoints_for_image(image_id))
-                    descriptors = int(database.num_descriptors_for_image(image_id))
-                    if image_id <= 0 or camera_id <= 0:
-                        raise AdapterError(
-                            "PyCOLMAP created a non-positive database identifier"
-                        )
-                    if (
-                        keypoints < MIN_GPU_SIFT_KEYPOINTS_PER_IMAGE
-                        or descriptors != keypoints
-                    ):
-                        raise AdapterError(
-                            f"GPU SIFT evidence is too small for {fixture_image.name}: "
-                            f"keypoints={keypoints}, descriptors={descriptors}",
-                            "REFINE_GPU_SIFT_FAILED",
-                        )
-                    camera_ids.add(camera_id)
-                    rows.append(
-                        {
-                            "name": fixture_image.name,
-                            "imageId": image_id,
-                            "cameraId": camera_id,
-                            "keypoints": keypoints,
-                            "descriptors": descriptors,
-                        }
-                    )
-        if len(camera_ids) != len(images):
+        ):
             raise AdapterError(
-                "CameraMode.PER_IMAGE did not create one camera per fixture image"
+                f"intrinsics rewrite evidence is inconsistent for {name}", code
             )
-        return rows
+        by_name[name] = dict(row)
+    return tuple(by_name[image.name] for image in images)
 
-    def rewrite_intrinsics_preserving_ids(
-        self,
-        *,
-        database_path: Path,
-        images: Sequence[FixtureImage],
-        log_path: Path,
-    ) -> Sequence[Mapping[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        with (
-            _bounded_binding_output(self._p, log_path),
-            self._database(database_path) as database,
+
+def _validate_match_rows(
+    value: Any,
+    pairs: Sequence[tuple[str, str]],
+    rewrite_rows: Sequence[Mapping[str, Any]],
+) -> tuple[Mapping[str, Any], ...]:
+    code = "REFINE_ENGINE_FIXTURE_FAILED"
+    rows = _evidence_rows(value, label="explicit-pair matching", code=code)
+    expected_pairs = tuple(pairs)
+    if len(rows) != len(expected_pairs):
+        raise AdapterError(
+            "explicit-pair evidence has a missing or duplicate pair", code
+        )
+    ids_by_name = {str(row["name"]): int(row["imageIdAfter"]) for row in rewrite_rows}
+    by_pair: dict[tuple[str, str], Mapping[str, Any]] = {}
+    expected_set = set(expected_pairs)
+    for row in rows:
+        pair = (row.get("first"), row.get("second"))
+        if pair not in expected_set or pair in by_pair:
+            raise AdapterError(
+                "explicit-pair evidence has an unknown or duplicate pair", code
+            )
+        first, second = pair
+        first_id = _positive_evidence_int(
+            row.get("firstImageId"), label=f"firstImageId for {pair}", code=code
+        )
+        second_id = _positive_evidence_int(
+            row.get("secondImageId"), label=f"secondImageId for {pair}", code=code
+        )
+        raw_matches = _nonnegative_evidence_int(
+            row.get("rawMatches"), label=f"rawMatches for {pair}", code=code
+        )
+        inliers = _nonnegative_evidence_int(
+            row.get("verifiedInliers"),
+            label=f"verifiedInliers for {pair}",
+            code=code,
+        )
+        if first_id != ids_by_name[first] or second_id != ids_by_name[second]:
+            raise AdapterError("explicit-pair evidence changed an image ID", code)
+        if raw_matches < MIN_RAW_MATCHES_PER_PAIR:
+            raise AdapterError(
+                f"explicit pair {first} {second} has only {raw_matches} raw matches",
+                code,
+            )
+        if inliers < MIN_VERIFIED_INLIERS_PER_PAIR:
+            raise AdapterError(
+                f"explicit pair {first} {second} has only {inliers} verified inliers",
+                code,
+            )
+        if inliers > raw_matches:
+            raise AdapterError(
+                f"explicit pair {first} {second} has more verified inliers than raw matches",
+                code,
+            )
+        by_pair[(first, second)] = dict(row)
+    return tuple(by_pair[pair] for pair in expected_pairs)
+
+
+def _validated_pose_matrix(
+    value: Any,
+    *,
+    stage: str,
+) -> tuple[tuple[float, float, float, float], ...]:
+    if (
+        isinstance(value, (str, bytes))
+        or not isinstance(value, Sequence)
+        or len(value) != 3
+    ):
+        raise AdapterError(
+            f"{stage} model has a malformed cam_from_world pose",
+            "REFINE_ENGINE_FIXTURE_FAILED",
+        )
+    rows: list[tuple[float, float, float, float]] = []
+    for row in value:
+        if (
+            isinstance(row, (str, bytes))
+            or not isinstance(row, Sequence)
+            or len(row) != 4
+            or any(
+                isinstance(item, bool)
+                or not isinstance(item, (int, float))
+                or not math.isfinite(float(item))
+                for item in row
+            )
         ):
-            for fixture_image in images:
-                image_before = self._image(database, fixture_image.name)
-                image_id_before = int(image_before.image_id)
-                camera_id_before = int(image_before.camera_id)
-                camera = database.read_camera(camera_id_before)
-                model_before = str(camera.model_name)
-                camera.model = self._p.CameraModelId.PINHOLE
-                camera.width = fixture_image.intrinsics.image_width
-                camera.height = fixture_image.intrinsics.image_height
-                camera.params = [
-                    fixture_image.intrinsics.fx,
-                    fixture_image.intrinsics.fy,
-                    fixture_image.intrinsics.cx,
-                    fixture_image.intrinsics.cy,
-                ]
-                camera.has_prior_focal_length = True
-                database.update_camera(camera)
-
-                image_after = self._image(database, fixture_image.name)
-                camera_after = database.read_camera(int(image_after.camera_id))
-                params_after = [float(value) for value in camera_after.params]
-                expected_params = [
-                    fixture_image.intrinsics.fx,
-                    fixture_image.intrinsics.fy,
-                    fixture_image.intrinsics.cx,
-                    fixture_image.intrinsics.cy,
-                ]
-                ids_preserved = (
-                    int(image_after.image_id) == image_id_before
-                    and int(image_after.camera_id) == camera_id_before
-                    and int(camera_after.camera_id) == camera_id_before
-                )
-                if not ids_preserved:
-                    raise AdapterError(
-                        "camera rewrite changed a database image or camera ID"
-                    )
-                if (
-                    str(camera_after.model_name) != "PINHOLE"
-                    or int(camera_after.width) != fixture_image.intrinsics.image_width
-                    or int(camera_after.height) != fixture_image.intrinsics.image_height
-                    or not bool(camera_after.has_prior_focal_length)
-                    or len(params_after) != len(expected_params)
-                    or any(
-                        abs(left - right) > 1e-9
-                        for left, right in zip(params_after, expected_params)
-                    )
-                ):
-                    raise AdapterError(
-                        "camera rewrite did not persist exact PINHOLE intrinsics"
-                    )
-                rows.append(
-                    {
-                        "name": fixture_image.name,
-                        "imageIdBefore": image_id_before,
-                        "imageIdAfter": int(image_after.image_id),
-                        "cameraIdBefore": camera_id_before,
-                        "cameraIdAfter": int(image_after.camera_id),
-                        "modelBefore": model_before,
-                        "modelAfter": str(camera_after.model_name),
-                        "widthAfter": int(camera_after.width),
-                        "heightAfter": int(camera_after.height),
-                        "paramsAfter": params_after,
-                        "hasPriorFocalLengthAfter": bool(
-                            camera_after.has_prior_focal_length
-                        ),
-                        "idsPreserved": ids_preserved,
-                    }
-                )
-        return rows
-
-    def match_explicit_pairs(
-        self,
-        *,
-        database_path: Path,
-        pairs_path: Path,
-        image_pairs: Sequence[tuple[str, str]],
-        gpu_index: str,
-        log_path: Path,
-    ) -> Sequence[Mapping[str, Any]]:
-        matching_options = self._p.FeatureMatchingOptions()
-        matching_options.use_gpu = True
-        matching_options.gpu_index = gpu_index
-        matching_options.guided_matching = True
-        matching_options.skip_geometric_verification = False
-        pairing_options = self._p.ImportedPairingOptions()
-        pairing_options.match_list_path = pairs_path
-        verification_options = self._p.TwoViewGeometryOptions()
-        verification_options.compute_relative_pose = True
-        verification_options.detect_watermark = False
-        verification_options.min_num_inliers = MIN_VERIFIED_INLIERS_PER_PAIR
-        ransac_options = verification_options.ransac
-        ransac_options.random_seed = QUALIFICATION_RANDOM_SEED
-        verification_options.ransac = ransac_options
-        rows: list[dict[str, Any]] = []
-        with _bounded_binding_output(self._p, log_path):
-            self._p.set_random_seed(QUALIFICATION_RANDOM_SEED)
-            self._p.match_image_pairs(
-                database_path=database_path,
-                matching_options=matching_options,
-                pairing_options=pairing_options,
-                verification_options=verification_options,
-                device=self._p.Device.cuda,
+            raise AdapterError(
+                f"{stage} model has a malformed cam_from_world pose",
+                "REFINE_ENGINE_FIXTURE_FAILED",
             )
-
-            with self._database(database_path) as database:
-                for first_name, second_name in image_pairs:
-                    first = self._image(database, first_name)
-                    second = self._image(database, second_name)
-                    first_id = int(first.image_id)
-                    second_id = int(second.image_id)
-                    raw_matches = int(len(database.read_matches(first_id, second_id)))
-                    verified = bool(
-                        database.exists_two_view_geometry(first_id, second_id)
-                    )
-                    inliers = 0
-                    if verified:
-                        geometry = database.read_two_view_geometry(first_id, second_id)
-                        inliers = int(len(geometry.inlier_matches))
-                    if raw_matches < MIN_RAW_MATCHES_PER_PAIR:
-                        raise AdapterError(
-                            f"explicit pair {first_name} {second_name} has only {raw_matches} raw matches",
-                            "REFINE_ENGINE_FIXTURE_FAILED",
-                        )
-                    if not verified or inliers < MIN_VERIFIED_INLIERS_PER_PAIR:
-                        raise AdapterError(
-                            f"explicit pair {first_name} {second_name} has only {inliers} verified inliers",
-                            "REFINE_ENGINE_FIXTURE_FAILED",
-                        )
-                    rows.append(
-                        {
-                            "first": first_name,
-                            "second": second_name,
-                            "firstImageId": first_id,
-                            "secondImageId": second_id,
-                            "rawMatches": raw_matches,
-                            "verifiedInliers": inliers,
-                        }
-                    )
-        return rows
-
-    def _new_camera(self, fixture_image: FixtureImage, camera_id: int) -> Any:
-        camera = self._p.Camera()
-        camera.camera_id = camera_id
-        camera.model = self._p.CameraModelId.PINHOLE
-        camera.width = fixture_image.intrinsics.image_width
-        camera.height = fixture_image.intrinsics.image_height
-        camera.params = [
-            fixture_image.intrinsics.fx,
-            fixture_image.intrinsics.fy,
-            fixture_image.intrinsics.cx,
-            fixture_image.intrinsics.cy,
-        ]
-        camera.has_prior_focal_length = True
-        return camera
-
-    def build_known_pose_seed(
-        self,
-        *,
-        database_path: Path,
-        images: Sequence[FixtureImage],
-        output_path: Path,
-        log_path: Path,
-    ) -> ModelEvidence:
-        reconstruction = self._p.Reconstruction()
-        output_path.mkdir(parents=True, exist_ok=False)
-        with (
-            _bounded_binding_output(self._p, log_path),
-            self._database(database_path) as database,
-        ):
-            for fixture_image in images:
-                database_image = self._image(database, fixture_image.name)
-                image_id = int(database_image.image_id)
-                camera_id = int(database_image.camera_id)
-                camera = self._new_camera(fixture_image, camera_id)
-                reconstruction.add_camera_with_trivial_rig(camera)
-                image = self._p.Image(
-                    name=fixture_image.name,
-                    camera_id=camera_id,
-                    image_id=image_id,
-                )
-                center_x, center_y, center_z = fixture_image.camera_center_m
-                cam_from_world = self._p.Rigid3d(
-                    self._np.asarray(
-                        [
-                            [1.0, 0.0, 0.0, -center_x],
-                            [0.0, 1.0, 0.0, -center_y],
-                            [0.0, 0.0, 1.0, -center_z],
-                        ],
-                        dtype=self._np.float64,
-                    )
-                )
-                reconstruction.add_image_with_trivial_frame(image, cam_from_world)
-        if not bool(reconstruction.is_valid()):
-            raise AdapterError("known-pose seed reconstruction is internally invalid")
-        if int(reconstruction.num_reg_images()) != len(images):
-            raise AdapterError("known-pose seed did not register every fixture image")
-        if int(reconstruction.num_points3D()) != 0:
-            raise AdapterError("known-pose seed unexpectedly contains 3D points")
-        reconstruction.write(output_path)
-        return self.inspect_model(output_path, log_path=log_path)
-
-    def inspect_model(self, path: Path, *, log_path: Path) -> ModelEvidence:
-        with _bounded_binding_output(self._p, log_path):
-            reconstruction = self._p.Reconstruction(path)
-            registered_ids = tuple(
-                sorted(int(value) for value in reconstruction.reg_image_ids())
-            )
-            reconstruction_images = {
-                image_id: reconstruction.image(image_id) for image_id in registered_ids
-            }
-            names = {
-                image_id: str(image.name)
-                for image_id, image in reconstruction_images.items()
-            }
-            camera_ids = {
-                image_id: int(image.camera_id)
-                for image_id, image in reconstruction_images.items()
-            }
-            centers = {
-                image_id: tuple(float(value) for value in image.projection_center())
-                for image_id, image in reconstruction_images.items()
-            }
-            camera_contract = {}
-            for camera_id in sorted(set(camera_ids.values())):
-                camera = reconstruction.camera(camera_id)
-                camera_contract[camera_id] = {
-                    "model": str(camera.model_name),
-                    "width": int(camera.width),
-                    "height": int(camera.height),
-                    "params": [float(value) for value in camera.params],
-                }
-            return ModelEvidence(
-                valid=bool(reconstruction.is_valid()),
-                registered_image_ids=registered_ids,
-                image_names_by_id=names,
-                camera_ids_by_image_id=camera_ids,
-                camera_contract_by_id=camera_contract,
-                camera_centers_by_image_id=centers,
-                num_points3d=int(reconstruction.num_points3D()),
-            )
-
-    def bundle_adjust_with_success_evidence(
-        self,
-        *,
-        input_path: Path,
-        output_path: Path,
-        log_path: Path,
-    ) -> Mapping[str, Any]:
-        output_path.mkdir(exist_ok=False)
-        with _bounded_binding_output(self._p, log_path):
-            reconstruction = self._p.Reconstruction(input_path)
-            options = self._p.BundleAdjustmentOptions()
-            options.refine_focal_length = False
-            options.refine_principal_point = False
-            options.refine_extra_params = False
-            options.print_summary = True
-            config = self._p.BundleAdjustmentConfig()
-            for image_id in sorted(
-                int(value) for value in reconstruction.reg_image_ids()
-            ):
-                config.add_image(image_id)
-            config.fix_gauge(self._p.BundleAdjustmentGauge.TWO_CAMS_FROM_WORLD)
-            adjuster = self._p.create_default_bundle_adjuster(
-                options,
-                config,
-                reconstruction,
-            )
-            summary = adjuster.solve()
-            usable = bool(summary.is_solution_usable())
-            num_residuals = int(summary.num_residuals)
-            termination_type = str(summary.termination_type.name)
-            if not usable or num_residuals <= 0:
-                raise AdapterError(
-                    "PyCOLMAP bundle adjustment did not produce a usable solution",
-                    "REFINE_ENGINE_FIXTURE_FAILED",
-                )
-            reconstruction.update_point_3d_errors()
-            reconstruction.write(output_path)
-        return {
-            "api": "pycolmap.create_default_bundle_adjuster",
-            "usable": usable,
-            "terminationType": termination_type,
-            "numResiduals": num_residuals,
-            "refineFocalLength": False,
-            "refinePrincipalPoint": False,
-            "refineExtraParams": False,
-        }
+        rows.append(tuple(float(item) for item in row))
+    return tuple(rows)
 
 
 def _assert_model_identity(
@@ -977,48 +789,129 @@ def _assert_model_identity(
     stage: str,
     require_points: bool,
 ) -> None:
+    if not isinstance(model, ModelEvidence):
+        raise AdapterError(
+            f"{stage} backend returned malformed model evidence",
+            "REFINE_ENGINE_FIXTURE_FAILED",
+        )
     expected_ids = tuple(sorted(expected_names_by_id))
-    if not model.valid:
-        raise AdapterError(f"{stage} model is internally invalid")
+    if model.valid is not True:
+        raise AdapterError(
+            f"{stage} model is internally invalid", "REFINE_ENGINE_FIXTURE_FAILED"
+        )
+    if (
+        isinstance(model.num_points3d, bool)
+        or not isinstance(model.num_points3d, int)
+        or model.num_points3d < 0
+    ):
+        raise AdapterError(
+            f"{stage} model has an invalid 3D point count",
+            "REFINE_ENGINE_FIXTURE_FAILED",
+        )
     if model.registered_image_ids != expected_ids:
-        raise AdapterError(f"{stage} model changed the registered database image IDs")
+        raise AdapterError(
+            f"{stage} model changed the registered database image IDs",
+            "REFINE_ENGINE_FIXTURE_FAILED",
+        )
+    expected_camera_ids = set(expected_camera_ids_by_image_id.values())
+    try:
+        observed_key_sets = (
+            set(model.image_names_by_id),
+            set(model.camera_ids_by_image_id),
+            set(model.camera_centers_by_image_id),
+            set(model.cam_from_world_by_image_id),
+            set(model.camera_contract_by_id),
+        )
+    except TypeError as exc:
+        raise AdapterError(
+            f"{stage} backend returned malformed model evidence",
+            "REFINE_ENGINE_FIXTURE_FAILED",
+        ) from exc
+    if observed_key_sets != (
+        set(expected_ids),
+        set(expected_ids),
+        set(expected_ids),
+        set(expected_ids),
+        expected_camera_ids,
+    ):
+        raise AdapterError(
+            f"{stage} model evidence is missing or duplicates an ID",
+            "REFINE_ENGINE_FIXTURE_FAILED",
+        )
     actual_names = {
         image_id: model.image_names_by_id[image_id] for image_id in expected_ids
     }
     if actual_names != dict(expected_names_by_id):
-        raise AdapterError(f"{stage} model changed the image-ID/name join")
+        raise AdapterError(
+            f"{stage} model changed the image-ID/name join",
+            "REFINE_ENGINE_FIXTURE_FAILED",
+        )
     actual_camera_ids = {
         image_id: model.camera_ids_by_image_id[image_id] for image_id in expected_ids
     }
     if actual_camera_ids != dict(expected_camera_ids_by_image_id):
-        raise AdapterError(f"{stage} model changed the image-ID/camera-ID join")
+        raise AdapterError(
+            f"{stage} model changed the image-ID/camera-ID join",
+            "REFINE_ENGINE_FIXTURE_FAILED",
+        )
     for image_id in expected_ids:
         center = model.camera_centers_by_image_id[image_id]
-        if len(center) != 3 or not all(math.isfinite(value) for value in center):
-            raise AdapterError(
-                f"{stage} model has a non-finite or malformed camera center"
+        if (
+            isinstance(center, (str, bytes))
+            or not isinstance(center, Sequence)
+            or len(center) != 3
+            or any(
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                for value in center
             )
+        ):
+            raise AdapterError(
+                f"{stage} model has a non-finite or malformed camera center",
+                "REFINE_ENGINE_FIXTURE_FAILED",
+            )
+        _validated_pose_matrix(
+            model.cam_from_world_by_image_id[image_id],
+            stage=stage,
+        )
     expected_params = [
         FIXTURE_INTRINSICS.fx,
         FIXTURE_INTRINSICS.fy,
         FIXTURE_INTRINSICS.cx,
         FIXTURE_INTRINSICS.cy,
     ]
-    for camera_id in sorted(set(expected_camera_ids_by_image_id.values())):
+    for camera_id in sorted(expected_camera_ids):
         camera = model.camera_contract_by_id[camera_id]
-        params = list(camera["params"])
+        try:
+            params = list(camera["params"])
+            model_name = camera["model"]
+            width = camera["width"]
+            height = camera["height"]
+        except (KeyError, TypeError) as exc:
+            raise AdapterError(
+                f"{stage} model has malformed camera evidence",
+                "REFINE_ENGINE_FIXTURE_FAILED",
+            ) from exc
         if (
-            camera["model"] != "PINHOLE"
-            or camera["width"] != FIXTURE_WIDTH
-            or camera["height"] != FIXTURE_HEIGHT
+            model_name != "PINHOLE"
+            or width != FIXTURE_WIDTH
+            or height != FIXTURE_HEIGHT
             or len(params) != len(expected_params)
-            or not all(math.isfinite(value) for value in params)
             or any(
-                abs(left - right) > 1e-8 for left, right in zip(params, expected_params)
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                for value in params
+            )
+            or any(
+                abs(float(left) - right) > 1e-8
+                for left, right in zip(params, expected_params)
             )
         ):
             raise AdapterError(
-                f"{stage} model changed the qualified PINHOLE intrinsics"
+                f"{stage} model changed the qualified PINHOLE intrinsics",
+                "REFINE_ENGINE_FIXTURE_FAILED",
             )
     if require_points and model.num_points3d < MIN_TRIANGULATED_POINTS:
         raise AdapterError(
@@ -1027,12 +920,43 @@ def _assert_model_identity(
         )
 
 
-def _assert_seed_centers(
+def _validate_bundle_adjustment_evidence(value: Any) -> Mapping[str, Any]:
+    code = "REFINE_ENGINE_FIXTURE_FAILED"
+    if not isinstance(value, Mapping):
+        raise AdapterError("bundle adjustment evidence must be an object", code)
+    residuals = value.get("numResiduals")
+    termination = value.get("terminationType")
+    if (
+        value.get("usable") is not True
+        or isinstance(residuals, bool)
+        or not isinstance(residuals, int)
+        or residuals <= 0
+        or not isinstance(termination, str)
+        or termination in {"FAILURE", "USER_FAILURE"}
+        or value.get("modelWritten") is not True
+        or value.get("refineFocalLength") is not False
+        or value.get("refinePrincipalPoint") is not False
+        or value.get("refineExtraParams") is not False
+    ):
+        raise AdapterError(
+            "bundle adjustment lacks affirmative usable-solver evidence",
+            code,
+        )
+    return dict(value)
+
+
+def _assert_seed_poses(
     model: ModelEvidence,
-    expected_centers_by_image_id: Mapping[int, tuple[float, float, float]],
+    expected_poses_by_image_id: Mapping[int, ColmapPose],
 ) -> None:
-    for image_id, expected_center in expected_centers_by_image_id.items():
+    for image_id, expected_pose in expected_poses_by_image_id.items():
+        expected_center = _pose_center(expected_pose)
         actual_center = model.camera_centers_by_image_id[image_id]
+        actual_matrix = _validated_pose_matrix(
+            model.cam_from_world_by_image_id[image_id],
+            stage="known-pose seed",
+        )
+        expected_matrix = _pose_matrix(expected_pose)
         if (
             len(actual_center) != 3
             or not all(math.isfinite(value) for value in actual_center)
@@ -1042,7 +966,17 @@ def _assert_seed_centers(
             )
         ):
             raise AdapterError(
-                "known-pose seed did not persist the exact input camera centres"
+                "known-pose seed did not persist the exact input camera centres",
+                "REFINE_ENGINE_FIXTURE_FAILED",
+            )
+        if any(
+            abs(actual_matrix[row][column] - expected_matrix[row][column]) > 1e-9
+            for row in range(3)
+            for column in range(4)
+        ):
+            raise AdapterError(
+                "known-pose seed did not persist the exact input cam_from_world",
+                "REFINE_ENGINE_FIXTURE_FAILED",
             )
 
 
@@ -1060,6 +994,7 @@ def run_colmap_qualification(
     logs_dir.mkdir()
     database_path = output_dir / "database.db"
     pairs_path = output_dir / "pairs.txt"
+    pose_control_path = output_dir / "non-identity-pose-control-model"
     seed_path = output_dir / "seed-model"
     triangulated_path = output_dir / "triangulated-model"
     cli_adjusted_path = output_dir / "cli-adjusted-probe"
@@ -1069,7 +1004,18 @@ def run_colmap_qualification(
     nvcc = _resolve_executable(config.nvcc_path, "nvcc")
     nvidia_smi = _resolve_executable(config.nvidia_smi_path, "nvidia-smi")
     engine = (
-        _backend_call("PyCOLMAP import", PycolmapBackend.load)
+        _backend_call(
+            "PyCOLMAP import",
+            lambda: PycolmapBackend.load(
+                config=PycolmapBackendConfig(
+                    random_seed=QUALIFICATION_RANDOM_SEED,
+                    maximum_features_per_image=MAX_GPU_SIFT_FEATURES_PER_IMAGE,
+                    geometric_verification_minimum_inliers=(
+                        MIN_VERIFIED_INLIERS_PER_PAIR
+                    ),
+                )
+            ),
+        )
         if backend is None
         else backend
     )
@@ -1117,6 +1063,10 @@ def run_colmap_qualification(
     cli_help = run_probe("colmap-help", [str(colmap), "-h"])
     binding_version = _backend_call("PyCOLMAP version probe", lambda: engine.version)
     qualification = qualify_colmap_versions(cli_help.output_tail, binding_version)
+    pycolmap_evidence = _validate_toolchain_evidence(
+        _backend_call("PyCOLMAP toolchain evidence", engine.toolchain_evidence),
+        binding_version=binding_version,
+    )
     mismatch_control = _negative_version_control(cli_help.output_tail)
     nvcc_result = run_probe("nvcc-version", [str(nvcc), "--version"])
     gpu_result = run_probe(
@@ -1129,70 +1079,139 @@ def run_colmap_qualification(
     )
 
     images, fixture_contract = materialize_fixture(image_dir)
+    engine_images = fixture_engine_images(images)
     pairs = explicit_pairs(images)
     pair_contract = write_explicit_pairs(pairs_path, pairs)
     sift_log = next_log_path("pycolmap-gpu-sift")
     sift_log.touch(exist_ok=False)
-    gpu_sift_rows = _backend_call(
-        "PyCOLMAP GPU SIFT",
-        lambda: engine.extract_gpu_features(
-            database_path=database_path,
-            image_dir=image_dir,
-            images=images,
-            gpu_index=config.gpu_index,
-            log_path=sift_log,
+    gpu_sift_rows = _validate_gpu_sift_rows(
+        _backend_call(
+            "PyCOLMAP GPU SIFT",
+            lambda: engine.extract_gpu_features(
+                database_path=database_path,
+                image_dir=image_dir,
+                images=engine_images,
+                gpu_index=config.gpu_index,
+                log_path=sift_log,
+            ),
         ),
+        engine_images,
     )
     binding_rows.append(_bounded_log_evidence("pycolmap-gpu-sift", sift_log))
     rewrite_log = next_log_path("pycolmap-intrinsics-rewrite")
     rewrite_log.touch(exist_ok=False)
-    rewrite_rows = _backend_call(
-        "PyCOLMAP intrinsics rewrite",
-        lambda: engine.rewrite_intrinsics_preserving_ids(
-            database_path=database_path,
-            images=images,
-            log_path=rewrite_log,
+    rewrite_rows = _validate_rewrite_rows(
+        _backend_call(
+            "PyCOLMAP intrinsics rewrite",
+            lambda: engine.rewrite_intrinsics_preserving_ids(
+                database_path=database_path,
+                images=engine_images,
+                log_path=rewrite_log,
+            ),
         ),
+        engine_images,
+        gpu_sift_rows,
     )
     binding_rows.append(
         _bounded_log_evidence("pycolmap-intrinsics-rewrite", rewrite_log)
     )
     match_log = next_log_path("pycolmap-explicit-pairs")
     match_log.touch(exist_ok=False)
-    match_rows = _backend_call(
-        "PyCOLMAP explicit-pair matching",
-        lambda: engine.match_explicit_pairs(
-            database_path=database_path,
-            pairs_path=pairs_path,
-            image_pairs=pairs,
-            gpu_index=config.gpu_index,
-            log_path=match_log,
+    match_rows = _validate_match_rows(
+        _backend_call(
+            "PyCOLMAP explicit-pair matching",
+            lambda: engine.match_explicit_pairs(
+                database_path=database_path,
+                pairs_path=pairs_path,
+                image_pairs=pairs,
+                gpu_index=config.gpu_index,
+                log_path=match_log,
+            ),
         ),
+        pairs,
+        rewrite_rows,
     )
     binding_rows.append(_bounded_log_evidence("pycolmap-explicit-pairs", match_log))
-    seed_log = next_log_path("pycolmap-known-pose-seed")
-    seed_log.touch(exist_ok=False)
-    seed_model = _backend_call(
-        "PyCOLMAP known-pose seed",
-        lambda: engine.build_known_pose_seed(
-            database_path=database_path,
-            images=images,
-            output_path=seed_path,
-            log_path=seed_log,
-        ),
-    )
-    binding_rows.append(_bounded_log_evidence("pycolmap-known-pose-seed", seed_log))
     expected_names_by_id = {
         int(row["imageIdAfter"]): str(row["name"]) for row in rewrite_rows
     }
     expected_camera_ids_by_image_id = {
         int(row["imageIdAfter"]): int(row["cameraIdAfter"]) for row in rewrite_rows
     }
-    expected_centers_by_name = {image.name: image.camera_center_m for image in images}
-    expected_centers_by_image_id = {
-        int(row["imageIdAfter"]): expected_centers_by_name[str(row["name"])]
+    engine_images_by_name = {image.name: image for image in engine_images}
+    expected_poses_by_image_id = {
+        int(row["imageIdAfter"]): engine_images_by_name[str(row["name"])].cam_from_world
         for row in rewrite_rows
     }
+
+    pose_control_image = non_identity_pose_control_image(engine_images[0])
+    pose_control_row = next(
+        row for row in rewrite_rows if row["name"] == pose_control_image.name
+    )
+    pose_control_image_id = int(pose_control_row["imageIdAfter"])
+    pose_control_camera_id = int(pose_control_row["cameraIdAfter"])
+    pose_control_names = {pose_control_image_id: pose_control_image.name}
+    pose_control_camera_ids = {pose_control_image_id: pose_control_camera_id}
+    pose_control_poses = {
+        pose_control_image_id: pose_control_image.cam_from_world,
+    }
+    pose_control_write_log = next_log_path("pycolmap-non-identity-pose-write")
+    pose_control_write_log.touch(exist_ok=False)
+    pose_control_written = _backend_call(
+        "PyCOLMAP non-identity pose write control",
+        lambda: engine.build_known_pose_seed(
+            database_path=database_path,
+            images=(pose_control_image,),
+            output_path=pose_control_path,
+            log_path=pose_control_write_log,
+        ),
+    )
+    binding_rows.append(
+        _bounded_log_evidence(
+            "pycolmap-non-identity-pose-write", pose_control_write_log
+        )
+    )
+    _assert_model_identity(
+        pose_control_written,
+        pose_control_names,
+        pose_control_camera_ids,
+        stage="non-identity pose write control",
+        require_points=False,
+    )
+    _assert_seed_poses(pose_control_written, pose_control_poses)
+    pose_control_read_log = next_log_path("pycolmap-non-identity-pose-read")
+    pose_control_read_log.touch(exist_ok=False)
+    pose_control_model = _backend_call(
+        "PyCOLMAP non-identity pose read control",
+        lambda: engine.inspect_model(
+            pose_control_path,
+            log_path=pose_control_read_log,
+        ),
+    )
+    binding_rows.append(
+        _bounded_log_evidence("pycolmap-non-identity-pose-read", pose_control_read_log)
+    )
+    _assert_model_identity(
+        pose_control_model,
+        pose_control_names,
+        pose_control_camera_ids,
+        stage="non-identity pose read control",
+        require_points=False,
+    )
+    _assert_seed_poses(pose_control_model, pose_control_poses)
+
+    seed_log = next_log_path("pycolmap-known-pose-seed")
+    seed_log.touch(exist_ok=False)
+    seed_model = _backend_call(
+        "PyCOLMAP known-pose seed",
+        lambda: engine.build_known_pose_seed(
+            database_path=database_path,
+            images=engine_images,
+            output_path=seed_path,
+            log_path=seed_log,
+        ),
+    )
+    binding_rows.append(_bounded_log_evidence("pycolmap-known-pose-seed", seed_log))
     _assert_model_identity(
         seed_model,
         expected_names_by_id,
@@ -1200,9 +1219,12 @@ def run_colmap_qualification(
         stage="known-pose seed",
         require_points=False,
     )
-    _assert_seed_centers(seed_model, expected_centers_by_image_id)
+    _assert_seed_poses(seed_model, expected_poses_by_image_id)
     if seed_model.num_points3d != 0:
-        raise AdapterError("known-pose seed model must not contain points")
+        raise AdapterError(
+            "known-pose seed model must not contain points",
+            "REFINE_ENGINE_FIXTURE_FAILED",
+        )
 
     triangulated_path.mkdir()
     run_probe(
@@ -1266,24 +1288,16 @@ def run_colmap_qualification(
     )
     bundle_adjust_log = next_log_path("pycolmap-bundle-adjuster")
     bundle_adjust_log.touch(exist_ok=False)
-    bundle_adjustment_evidence = _backend_call(
-        "PyCOLMAP bundle adjustment",
-        lambda: engine.bundle_adjust_with_success_evidence(
-            input_path=triangulated_path,
-            output_path=adjusted_path,
-            log_path=bundle_adjust_log,
+    bundle_adjustment_evidence = _validate_bundle_adjustment_evidence(
+        _backend_call(
+            "PyCOLMAP bundle adjustment",
+            lambda: engine.bundle_adjust_with_success_evidence(
+                input_path=triangulated_path,
+                output_path=adjusted_path,
+                log_path=bundle_adjust_log,
+            ),
         ),
     )
-    if (
-        bundle_adjustment_evidence.get("usable") is not True
-        or int(bundle_adjustment_evidence.get("numResiduals", 0)) <= 0
-        or bundle_adjustment_evidence.get("terminationType")
-        in {"FAILURE", "USER_FAILURE", None}
-    ):
-        raise AdapterError(
-            "bundle adjustment lacks affirmative usable-solver evidence",
-            "REFINE_ENGINE_FIXTURE_FAILED",
-        )
     binding_rows.append(
         _bounded_log_evidence("pycolmap-bundle-adjuster", bundle_adjust_log)
     )
@@ -1307,9 +1321,6 @@ def run_colmap_qualification(
         require_points=True,
     )
 
-    pycolmap_evidence = dict(
-        _backend_call("PyCOLMAP toolchain evidence", engine.toolchain_evidence)
-    )
     toolchain: dict[str, Any] = {
         "colmap": {
             "targetVersion": qualification.target_version,
@@ -1333,6 +1344,7 @@ def run_colmap_qualification(
             "executable": str(Path(sys.executable).resolve()),
         },
         "harnessSourceSha256": _sha256_file(Path(__file__)),
+        "engineSourceSha256": _sha256_file(Path(refine_engine.__file__)),
     }
     toolchain["evidenceSha256"] = _sha256_bytes(_json_bytes(toolchain))
 
@@ -1371,6 +1383,21 @@ def run_colmap_qualification(
             "name": database_path.name,
             "sha256": _sha256_file(database_path),
             "sizeBytes": database_path.stat().st_size,
+        },
+        "nonIdentityPoseRoundTrip": {
+            "name": pose_control_image.name,
+            "imageId": pose_control_image_id,
+            "cameraId": pose_control_camera_id,
+            "expectedCamFromWorld": [
+                list(row) for row in _pose_matrix(pose_control_image.cam_from_world)
+            ],
+            "actualCamFromWorld": [
+                list(row)
+                for row in pose_control_model.cam_from_world_by_image_id[
+                    pose_control_image_id
+                ]
+            ],
+            "model": _model_receipt(pose_control_model, pose_control_path),
         },
         "knownPoseSeed": _model_receipt(seed_model, seed_path),
         "triangulatedModel": _model_receipt(triangulated_model, triangulated_path),
@@ -1425,7 +1452,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception as exc:
         if not isinstance(exc, AdapterError):
             exc = AdapterError(
-                f"qualification failed ({type(exc).__name__}): {exc}",
+                "qualification failed "
+                f"({type(exc).__name__}): {_bounded_exception_text(exc)}",
                 "REFINE_ENGINE_FAILED",
             )
         print(

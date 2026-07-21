@@ -12,7 +12,8 @@ call the Patina task queue, Strata, or Storage, and it does not register the
 - The Item 3 cold and warm GPU doctor runs both passed.
 - The queue worker is stopped.
 - The installed source contains
-  `patina_scan_worker/colmap_qualification.py`.
+  `patina_scan_worker/colmap_qualification.py` and the shared exact engine seam
+  `patina_scan_worker/refine_engine.py`.
 - `/usr/local/bin/colmap` resolves to the pinned CUDA-enabled COLMAP 4.0.2
   installation, and `/usr/local/cuda-11.8/bin/nvcc` remains the isolated
   toolkit selected for the worker.
@@ -28,6 +29,7 @@ test "$(systemctl is-active patina-scan-worker || true)" = inactive
 sudo /opt/patina/scan-pipeline-source/install.sh --gpu --upgrade
 test "$(systemctl is-active patina-scan-worker || true)" = inactive
 test -f /opt/patina/scan-pipeline/.venv/lib/python3.*/site-packages/patina_scan_worker/colmap_qualification.py
+test -f /opt/patina/scan-pipeline/.venv/lib/python3.*/site-packages/patina_scan_worker/refine_engine.py
 ```
 
 The final `test -f` intentionally expands only the interpreter-version
@@ -76,7 +78,9 @@ printf '%s\n' '-- worker remains stopped'
 systemctl is-active patina-scan-worker || true
 ```
 
-The harness uses exact PyCOLMAP 4.0.2 calls to request CUDA SIFT in
+The harness applies qualification policy around the same exact PyCOLMAP 4.0.2
+implementation a future Refine handler will import from
+`patina_scan_worker.refine_engine`. It requests CUDA SIFT in
 `CameraMode.PER_IMAGE`, rewrites each generated camera to the fixture's PINHOLE
 intrinsics without changing image or camera IDs, matches only its explicit pair
 file, constructs a registered known-pose seed with trivial rigs/frames, then
@@ -84,10 +88,13 @@ runs the pinned CLI's `point_triangulator` and a `bundle_adjuster` compatibility
 probe. Because COLMAP 4.0.2's bundle-adjuster CLI can return zero even when its
 solver fails, the authoritative adjustment is run through
 `pycolmap.create_default_bundle_adjuster` and must report a usable solution with
-positive residual count. The harness reopens
-each sparse model to verify the database image/camera ID join and exact PINHOLE
-intrinsics, and independently verifies the seed camera centers. Every CLI and
-binding log retained in the evidence directory is a hard-capped 64 KiB tail.
+positive residual count. The harness separately writes and reopens one
+non-identity full `[R|t]` pose control and records expected/actual
+`cam_from_world`; that control is not triangulated, so the primary synthetic
+image geometry remains identity-oriented. It reopens each operational sparse
+model to verify the database image/camera ID join, full pose shape, and exact
+PINHOLE intrinsics, and verifies every seed pose and camera center. Every CLI
+and binding log retained in the evidence directory is a hard-capped 64 KiB tail.
 
 ## Read the receipt
 
@@ -102,7 +109,8 @@ sudo -u patina /opt/patina/scan-pipeline/.venv/bin/python -m json.tool \
 
 The receipt uses canonical JSON, has no explicit wall-clock field, and does not
 embed the selected output-directory path. It records the exact CLI/binding
-versions, an intentional mismatch negative control, binary and harness hashes,
+versions, an intentional mismatch negative control, binary plus harness and
+shared-engine source hashes,
 GPU/driver/toolkit evidence, deterministic fixture and pair hashes, GPU SIFT
 counts, before/after database IDs and intrinsics, verified pair counts,
 seed/triangulated/adjusted model manifests, affirmative binding-solver evidence,
@@ -128,8 +136,10 @@ Pass requires all of the following in the receipt:
 - every emitted explicit pair has at least 15 raw matches and 15 verified
   inliers;
 - seed, triangulated, and adjusted models retain the same image ID/name/camera
-  ID join and exact PINHOLE intrinsics, the seed preserves every input camera
-  center, and the two post-triangulation models contain at least 20 points;
+  ID join, full finite `cam_from_world`, and exact PINHOLE intrinsics; the
+  operational seed preserves every exact input pose and camera center; the
+  separate non-identity pose control has equal expected/actual 3×4 matrices;
+  and the two post-triangulation models contain at least 20 points;
 - the CLI bundle-adjuster compatibility probe writes a model, while the
   authoritative PyCOLMAP solver reports `usable: true`, a non-failure
   termination type, and a positive residual count; and

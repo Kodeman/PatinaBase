@@ -15,7 +15,10 @@ does not expose the full ARKit rotation/translation seed required by item 4.
 
 This spike makes the adapter math, deterministic pair graph, overlap verdict,
 deadline, and immutable artifact contract executable in
-`patina_scan_worker.refine_adapter`. It is a **go for handler implementation**,
+`patina_scan_worker.refine_adapter`. The exact PyCOLMAP 4.0.2 database/model
+seam now lives in the queue/settings/storage-independent
+`patina_scan_worker.refine_engine`; the box qualification imports that same
+implementation, and a future handler must reuse it. It is a **go for handler implementation**,
 but a **no-go for deployment or a run on `95266be1`** until the box gates in
 “What this spike does not prove” pass. “Implementation” means code/test
 development; the handler must remain disabled until qualification passes.
@@ -463,12 +466,18 @@ The following are hard gates before deployment:
    `patina_scan_worker.colmap_qualification` harness on the deterministic tiny
    multiview fixture using
    `p2-item4a-colmap-qualification-runbook.md`. The harness contains the exact
-   PyCOLMAP database/model calls above and remains unregistered from the worker.
+   qualification policy and invokes the exact shared
+   `patina_scan_worker.refine_engine` PyCOLMAP database/model calls above; both
+   modules remain unregistered from the worker. The harness also writes and
+   reopens a separate non-identity `[R|t]` seed control so the host proves full
+   pose serialization without disturbing the identity-oriented imagery used
+   for triangulation.
    Save
    the `colmap -h` version/build header, `pycolmap.__version__`, mismatch
    rejection, GPU SIFT
-   result, IDs before/after camera rewrite, and the triangulated model as
-   evidence. No artifact may say validated before this passes.
+   result, IDs before/after camera rewrite, expected/actual non-identity
+   `cam_from_world`, both harness and engine source hashes, and the triangulated
+   model as evidence. No artifact may say validated before this passes.
 2. **Field/Core Image materialization probe:** capture a known off-centre raster
    through the real Field `.oriented(.right)` HEIC path. Prove its pixel mapping,
    metadata/dimensions, and the box decoder/materializer result. Source inspection

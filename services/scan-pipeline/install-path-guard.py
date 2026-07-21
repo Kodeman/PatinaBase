@@ -54,6 +54,7 @@ SOURCE_REQUIRED_PACKAGE_FILES = frozenset(
         f"{SOURCE_PACKAGE_ROOT}/field_raster_libheif.c",
         f"{SOURCE_PACKAGE_ROOT}/field_raster_qualification.py",
         f"{SOURCE_PACKAGE_ROOT}/pycolmap_cuda_smoke.py",
+        f"{SOURCE_PACKAGE_ROOT}/refine_engine.py",
     }
 )
 

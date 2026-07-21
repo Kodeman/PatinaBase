@@ -429,12 +429,16 @@ installed `direct_url.json` both identify the exact direct artifact.
 
 After the cold and warm Item 3 doctor runs pass, keep the queue worker stopped
 and run the repository-owned local-only qualification harness. It exercises
-the pinned CLI and exact PyCOLMAP 4.0.2 database/model APIs against a
-deterministic five-view PNG fixture: CUDA SIFT, per-image camera IDs and
+the pinned CLI and the exact shared PyCOLMAP 4.0.2 database/model seam in
+`patina_scan_worker.refine_engine` against a deterministic five-view PNG
+fixture: CUDA SIFT, per-image camera IDs and
 in-place PINHOLE rewrite, explicit-pair matching, trivial rig/frame known-pose
 seed construction, point triangulation, and bundle adjustment. It retains
 hard-capped 64 KiB engine-log tails and publishes a canonical evidence receipt
-last. CLI `bundle_adjuster` is a compatibility probe; the pass/fail verdict
+last. A separate non-identity full-pose seed is written and reopened to prove
+3×4 `[R|t]` serialization without changing the identity-oriented imagery used
+for triangulation, and the receipt binds both harness and shared-engine source
+hashes. CLI `bundle_adjuster` is a compatibility probe; the pass/fail verdict
 comes from the exact PyCOLMAP solver API's affirmative solution summary rather
 than the CLI's unreliable zero exit status. It never imports the task queue,
 Strata client, or Storage client, and it does not register a stage.
@@ -802,6 +806,6 @@ cp scripts/validate_capture_bundle.py \
 
 ```bash
 cd services/scan-pipeline
-python -m venv .venv && .venv/bin/pip install -e '.[dev]'
+python -m venv .venv && .venv/bin/pip install -e '.[dev,drawings]'
 .venv/bin/pytest -q
 ```

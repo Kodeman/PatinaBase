@@ -59,6 +59,7 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/field_raster_libheif.c",
     "src/patina_scan_worker/field_raster_qualification.py",
     "src/patina_scan_worker/pycolmap_cuda_smoke.py",
+    "src/patina_scan_worker/refine_engine.py",
     "src/patina_scan_worker/http.py",
     "src/patina_scan_worker/keys.py",
     "src/patina_scan_worker/queue.py",
@@ -1392,6 +1393,31 @@ def test_source_validation_accepts_a_new_trusted_package_module(tmp_path):
         "--source-dir",
         str(source),
     )
+
+
+def test_source_validation_requires_shared_refine_engine(tmp_path):
+    source = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline-source"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(source),
+        "--mode",
+        "0755",
+    )
+    _write_minimal_installer_source(source)
+    (source / "src" / "patina_scan_worker" / "refine_engine.py").unlink()
+
+    result = _path_guard(
+        tmp_path,
+        "validate-source-tree",
+        "--source-dir",
+        str(source),
+        expected_ok=False,
+    )
+
+    assert "snapshot is incomplete" in result.stderr.lower()
+    assert "refine_engine.py" in result.stderr
 
 
 def test_source_validation_rejects_unreviewed_native_package_source(tmp_path):

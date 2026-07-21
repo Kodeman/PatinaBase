@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,12 +10,15 @@ from types import SimpleNamespace
 import pytest
 
 import patina_scan_worker.colmap_qualification as qualification
+import patina_scan_worker.refine_engine as refine_engine
 from patina_scan_worker.colmap_qualification import (
     FIXTURE_CAMERA_CENTERS_X_M,
     MIN_TRIANGULATED_POINTS,
     ModelEvidence,
     PycolmapBackend,
+    PycolmapBackendConfig,
     QualificationConfig,
+    fixture_engine_images,
     fixture_images,
     materialize_fixture,
     run_colmap_qualification,
@@ -67,6 +71,15 @@ class _FakeQualificationBackend:
             11 + index: image.camera_center_m
             for index, image in enumerate(fixture_images())
         }
+        self._cam_from_world_by_image_id = {
+            11 + index: (
+                (1.0, 0.0, 0.0, -image.camera_center_m[0]),
+                (0.0, 1.0, 0.0, -image.camera_center_m[1]),
+                (0.0, 0.0, 1.0, -image.camera_center_m[2]),
+            )
+            for index, image in enumerate(fixture_images())
+        }
+        self._written_models = {}
 
     def toolchain_evidence(self):
         return {
@@ -144,19 +157,54 @@ class _FakeQualificationBackend:
         (output_path / "cameras.bin").write_bytes(b"seed-cameras\n")
         (output_path / "images.bin").write_bytes(b"seed-images\n")
         (output_path / "points3D.bin").write_bytes(b"seed-no-points\n")
-        return ModelEvidence(
-            valid=True,
-            registered_image_ids=tuple(self._names_by_id),
-            image_names_by_id=self._names_by_id,
-            camera_ids_by_image_id=self._camera_ids_by_image_id,
-            camera_contract_by_id=self._camera_contract_by_id,
-            camera_centers_by_image_id=self._camera_centers_by_image_id,
-            num_points3d=0,
+        ids = tuple(
+            image_id
+            for image_id, name in self._names_by_id.items()
+            if name in {image.name for image in images}
         )
+        by_name = {image.name: image for image in images}
+        poses = {
+            image_id: tuple(
+                tuple((*pose.rotation[row], pose.translation[row])) for row in range(3)
+            )
+            for image_id, name in self._names_by_id.items()
+            if (pose := by_name.get(name).cam_from_world if name in by_name else None)
+            is not None
+        }
+        centers = {
+            image_id: tuple(
+                -sum(pose[row][column] * pose[row][3] for row in range(3))
+                for column in range(3)
+            )
+            for image_id, pose in poses.items()
+        }
+        evidence = ModelEvidence(
+            valid=True,
+            registered_image_ids=ids,
+            image_names_by_id={
+                image_id: self._names_by_id[image_id] for image_id in ids
+            },
+            camera_ids_by_image_id={
+                image_id: self._camera_ids_by_image_id[image_id] for image_id in ids
+            },
+            camera_contract_by_id={
+                self._camera_ids_by_image_id[image_id]: self._camera_contract_by_id[
+                    self._camera_ids_by_image_id[image_id]
+                ]
+                for image_id in ids
+            },
+            camera_centers_by_image_id=centers,
+            num_points3d=0,
+            cam_from_world_by_image_id=poses,
+        )
+        self._written_models[str(output_path)] = evidence
+        return evidence
 
     def inspect_model(self, path, *, log_path):
         del log_path
         self.calls.append(("inspect", path.name))
+        if str(path) in self._written_models:
+            return self._written_models[str(path)]
         return ModelEvidence(
             valid=True,
             registered_image_ids=tuple(self._names_by_id),
@@ -165,6 +213,7 @@ class _FakeQualificationBackend:
             camera_contract_by_id=self._camera_contract_by_id,
             camera_centers_by_image_id=self._camera_centers_by_image_id,
             num_points3d=MIN_TRIANGULATED_POINTS + 7,
+            cam_from_world_by_image_id=self._cam_from_world_by_image_id,
         )
 
     def bundle_adjust_with_success_evidence(self, *, input_path, output_path, log_path):
@@ -179,6 +228,7 @@ class _FakeQualificationBackend:
             "usable": True,
             "terminationType": "CONVERGENCE",
             "numResiduals": 123,
+            "modelWritten": True,
             "refineFocalLength": False,
             "refinePrincipalPoint": False,
             "refineExtraParams": False,
@@ -263,6 +313,10 @@ def test_full_fake_qualification_receipt_is_canonical_and_non_mutating(tmp_path)
         "storage": "not-imported-not-called",
         "databaseScope": "local-scratch-sqlite-only",
     }
+    assert (
+        receipt["toolchain"]["engineSourceSha256"]
+        == hashlib.sha256(Path(refine_engine.__file__).read_bytes()).hexdigest()
+    )
     assert all(row["idsPreserved"] for row in receipt["intrinsicsRewrite"])
     assert len(receipt["explicitPairMatching"]["pairs"]) == 5
     assert receipt["knownPoseSeed"]["numPoints3D"] == 0
@@ -271,7 +325,19 @@ def test_full_fake_qualification_receipt_is_canonical_and_non_mutating(tmp_path)
         "name": "fixture_00.png",
         "cameraId": 101,
         "cameraCenterMeters": [-0.3, 0.0, 0.0],
+        "camFromWorld": [
+            [1.0, 0.0, 0.0, 0.3],
+            [0.0, 1.0, 0.0, -0.0],
+            [0.0, 0.0, 1.0, -0.0],
+        ],
     }
+    pose_control = receipt["nonIdentityPoseRoundTrip"]
+    assert pose_control["expectedCamFromWorld"] == pose_control["actualCamFromWorld"]
+    assert pose_control["actualCamFromWorld"] != [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+    ]
     assert all(
         camera["model"] == "PINHOLE"
         and camera["width"] == 480
@@ -286,6 +352,7 @@ def test_full_fake_qualification_receipt_is_canonical_and_non_mutating(tmp_path)
         "usable": True,
         "terminationType": "CONVERGENCE",
         "numResiduals": 123,
+        "modelWritten": True,
         "refineFocalLength": False,
         "refinePrincipalPoint": False,
         "refineExtraParams": False,
@@ -370,6 +437,170 @@ def test_native_backend_failure_uses_stable_adapter_error(tmp_path):
     assert str(exc.value) == (
         "PyCOLMAP GPU SIFT failed (RuntimeError): synthetic CUDA failure"
     )
+
+
+def test_native_backend_failure_text_is_bounded(tmp_path):
+    executables = _fake_executables(tmp_path)
+    backend = _FakeQualificationBackend()
+
+    def fail_gpu_sift(**_kwargs):
+        raise RuntimeError("x" * 5000)
+
+    backend.extract_gpu_features = fail_gpu_sift
+    with pytest.raises(AdapterError) as exc:
+        run_colmap_qualification(
+            _config(tmp_path / "bounded-native-failure", executables),
+            backend=backend,
+            command_runner=_fake_command_runner,
+        )
+
+    assert exc.value.code == "REFINE_ENGINE_FAILED"
+    assert "<truncated>" in str(exc.value)
+    assert len(str(exc.value).encode()) < 640
+
+
+@pytest.mark.parametrize("message", ("x" * 5000, "🚀" * 1000))
+def test_adapter_error_text_is_utf8_byte_bounded_without_changing_its_code(message):
+    def fail_with_adapter_error():
+        raise AdapterError(message, "REFINE_ENGINE_IMPORT")
+
+    with pytest.raises(AdapterError) as exc:
+        qualification._backend_call("import", fail_with_adapter_error)
+
+    assert exc.value.code == "REFINE_ENGINE_IMPORT"
+    assert str(exc.value).endswith("...<truncated>")
+    assert len(str(exc.value).encode()) <= qualification.NATIVE_EXCEPTION_TEXT_BYTES
+
+
+@pytest.mark.parametrize("has_cuda", (False, 1, "cuda"))
+def test_qualification_rejects_invalid_cuda_capability_before_fixture(
+    tmp_path, has_cuda
+):
+    executables = _fake_executables(tmp_path)
+    backend = _FakeQualificationBackend()
+    backend.toolchain_evidence = lambda: {
+        **_FakeQualificationBackend().toolchain_evidence(),
+        "hasCuda": has_cuda,
+    }
+
+    with pytest.raises(AdapterError) as exc:
+        run_colmap_qualification(
+            _config(tmp_path / "cpu-only", executables),
+            backend=backend,
+            command_runner=_fake_command_runner,
+        )
+
+    assert exc.value.code == "REFINE_GPU_SIFT_UNAVAILABLE"
+    assert backend.calls == []
+    assert not (tmp_path / "cpu-only" / "images").exists()
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("missing", "duplicate", "keypoint-floor", "descriptor-mismatch"),
+)
+def test_qualification_rejects_untrusted_gpu_sift_evidence(tmp_path, mutation):
+    executables = _fake_executables(tmp_path)
+    backend = _FakeQualificationBackend()
+    original = backend.extract_gpu_features
+
+    def malformed(**kwargs):
+        rows = [dict(row) for row in original(**kwargs)]
+        if mutation == "missing":
+            return rows[:-1]
+        if mutation == "duplicate":
+            rows[-1] = dict(rows[0])
+        elif mutation == "keypoint-floor":
+            rows[0]["keypoints"] = 39
+            rows[0]["descriptors"] = 39
+        elif mutation == "descriptor-mismatch":
+            rows[0]["descriptors"] -= 1
+        return rows
+
+    backend.extract_gpu_features = malformed
+    output_dir = tmp_path / f"bad-sift-{mutation}"
+    with pytest.raises(AdapterError) as exc:
+        run_colmap_qualification(
+            _config(output_dir, executables),
+            backend=backend,
+            command_runner=_fake_command_runner,
+        )
+
+    assert exc.value.code == "REFINE_GPU_SIFT_FAILED"
+    assert not (output_dir / qualification.RECEIPT_NAME).exists()
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("missing", "duplicate", "changed-id", "changed-intrinsics"),
+)
+def test_qualification_rejects_untrusted_intrinsics_rewrite_evidence(
+    tmp_path, mutation
+):
+    executables = _fake_executables(tmp_path)
+    backend = _FakeQualificationBackend()
+    original = backend.rewrite_intrinsics_preserving_ids
+
+    def malformed(**kwargs):
+        rows = [dict(row) for row in original(**kwargs)]
+        if mutation == "missing":
+            return rows[:-1]
+        if mutation == "duplicate":
+            rows[-1] = dict(rows[0])
+        elif mutation == "changed-id":
+            rows[0]["imageIdAfter"] += 100
+        elif mutation == "changed-intrinsics":
+            rows[0]["paramsAfter"] = list(rows[0]["paramsAfter"])
+            rows[0]["paramsAfter"][0] += 1.0
+        return rows
+
+    backend.rewrite_intrinsics_preserving_ids = malformed
+    output_dir = tmp_path / f"bad-rewrite-{mutation}"
+    with pytest.raises(AdapterError) as exc:
+        run_colmap_qualification(
+            _config(output_dir, executables),
+            backend=backend,
+            command_runner=_fake_command_runner,
+        )
+
+    assert exc.value.code == "REFINE_ENGINE_FIXTURE_FAILED"
+    assert not (output_dir / qualification.RECEIPT_NAME).exists()
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("missing", "duplicate", "raw-floor", "inlier-floor", "inliers-exceed-raw"),
+)
+def test_qualification_rejects_untrusted_match_evidence(tmp_path, mutation):
+    executables = _fake_executables(tmp_path)
+    backend = _FakeQualificationBackend()
+    original = backend.match_explicit_pairs
+
+    def malformed(**kwargs):
+        rows = [dict(row) for row in original(**kwargs)]
+        if mutation == "missing":
+            return rows[:-1]
+        if mutation == "duplicate":
+            rows[-1] = dict(rows[0])
+        elif mutation == "raw-floor":
+            rows[0]["rawMatches"] = 14
+        elif mutation == "inlier-floor":
+            rows[0]["verifiedInliers"] = 14
+        elif mutation == "inliers-exceed-raw":
+            rows[0]["verifiedInliers"] = rows[0]["rawMatches"] + 1
+        return rows
+
+    backend.match_explicit_pairs = malformed
+    output_dir = tmp_path / f"bad-matches-{mutation}"
+    with pytest.raises(AdapterError) as exc:
+        run_colmap_qualification(
+            _config(output_dir, executables),
+            backend=backend,
+            command_runner=_fake_command_runner,
+        )
+
+    assert exc.value.code == "REFINE_ENGINE_FIXTURE_FAILED"
+    assert not (output_dir / qualification.RECEIPT_NAME).exists()
 
 
 def test_qualification_rejects_cli_zero_without_usable_bundle_solution(tmp_path):
@@ -467,6 +698,7 @@ def test_model_evidence_rejects_nonfinite_intrinsics_and_malformed_centers():
         camera_contract_by_id=bad_camera_contract,
         camera_centers_by_image_id=backend._camera_centers_by_image_id,
         num_points3d=0,
+        cam_from_world_by_image_id=backend._cam_from_world_by_image_id,
     )
 
     with pytest.raises(AdapterError, match="changed the qualified PINHOLE"):
@@ -488,6 +720,7 @@ def test_model_evidence_rejects_nonfinite_intrinsics_and_malformed_centers():
         camera_contract_by_id=backend._camera_contract_by_id,
         camera_centers_by_image_id=bad_centers,
         num_points3d=0,
+        cam_from_world_by_image_id=backend._cam_from_world_by_image_id,
     )
 
     with pytest.raises(AdapterError, match="non-finite or malformed camera center"):
@@ -500,9 +733,15 @@ def test_model_evidence_rejects_nonfinite_intrinsics_and_malformed_centers():
         )
 
     with pytest.raises(AdapterError, match="exact input camera centres"):
-        qualification._assert_seed_centers(
+        qualification._assert_seed_poses(
             malformed_pose,
-            backend._camera_centers_by_image_id,
+            {
+                image_id: image.cam_from_world
+                for image_id, image in zip(
+                    backend._names_by_id,
+                    fixture_engine_images(fixture_images()),
+                )
+            },
         )
 
 
@@ -524,8 +763,16 @@ class _FakeImage:
         self.image_id = image_id
 
     def projection_center(self):
-        matrix = self.cam_from_world_value.matrix
-        return [-float(matrix[row][3]) for row in range(3)]
+        matrix = self.cam_from_world_value.matrix()
+        rotation = [row[:3] for row in matrix]
+        translation = [row[3] for row in matrix]
+        return [
+            -sum(rotation[row][column] * translation[row] for row in range(3))
+            for column in range(3)
+        ]
+
+    def cam_from_world(self):
+        return self.cam_from_world_value
 
 
 class _FakeDatabase:
@@ -698,7 +945,7 @@ def _low_level_module(database):
     module.Database = SimpleNamespace(open=lambda _path: database)
     module.Camera = _FakeCamera
     module.Image = _FakeImage
-    module.Rigid3d = lambda matrix: SimpleNamespace(matrix=matrix)
+    module.Rigid3d = lambda matrix: SimpleNamespace(matrix=lambda: matrix)
     module.Reconstruction = _FakeReconstruction
     module.BundleAdjustmentOptions = _FakeBundleAdjustmentOptions
     module.BundleAdjustmentConfig = _FakeBundleAdjustmentConfig
@@ -719,17 +966,19 @@ def _low_level_module(database):
 
 
 @pytest.mark.parametrize("truthy_non_bool", [1, "cuda", SimpleNamespace()])
-def test_real_backend_rejects_truthy_non_bool_has_cuda(truthy_non_bool):
+def test_real_backend_reports_raw_non_bool_has_cuda(truthy_non_bool):
     module = SimpleNamespace(
         __version__="4.0.2",
         COLMAP_version="COLMAP 4.0.2",
         COLMAP_build="Commit d927f7e on 2026-03-18 with CUDA",
         has_cuda=truthy_non_bool,
     )
-    backend = PycolmapBackend(module, SimpleNamespace())
-    with pytest.raises(AdapterError, match="bool True") as exc:
-        backend.toolchain_evidence()
-    assert exc.value.code == "REFINE_GPU_SIFT_UNAVAILABLE"
+    backend = PycolmapBackend(
+        module,
+        SimpleNamespace(),
+        config=PycolmapBackendConfig(0, 4096, 15),
+    )
+    assert backend.toolchain_evidence()["hasCuda"] is truthy_non_bool
 
 
 def test_real_backend_uses_exact_402_gpu_database_pair_and_seed_seams(tmp_path):
@@ -741,7 +990,12 @@ def test_real_backend_uses_exact_402_gpu_database_pair_and_seed_seams(tmp_path):
     database = _FakeDatabase(database_images)
     module = _low_level_module(database)
     numpy = SimpleNamespace(asarray=lambda value, dtype: value, float64="float64")
-    backend = PycolmapBackend(module, numpy)
+    backend = PycolmapBackend(
+        module,
+        numpy,
+        config=PycolmapBackendConfig(0, 4096, 15),
+    )
+    engine_images = fixture_engine_images(fixtures)
     pairs = qualification.explicit_pairs(fixtures)
     pairs_path = tmp_path / "pairs.txt"
     qualification.write_explicit_pairs(pairs_path, pairs)
@@ -749,13 +1003,13 @@ def test_real_backend_uses_exact_402_gpu_database_pair_and_seed_seams(tmp_path):
     sift = backend.extract_gpu_features(
         database_path=tmp_path / "database.db",
         image_dir=tmp_path,
-        images=fixtures,
+        images=engine_images,
         gpu_index="0",
         log_path=tmp_path / "sift.log",
     )
     rewritten = backend.rewrite_intrinsics_preserving_ids(
         database_path=tmp_path / "database.db",
-        images=fixtures,
+        images=engine_images,
         log_path=tmp_path / "rewrite.log",
     )
     matched = backend.match_explicit_pairs(
@@ -767,7 +1021,7 @@ def test_real_backend_uses_exact_402_gpu_database_pair_and_seed_seams(tmp_path):
     )
     seed = backend.build_known_pose_seed(
         database_path=tmp_path / "database.db",
-        images=fixtures,
+        images=engine_images,
         output_path=tmp_path / "seed",
         log_path=tmp_path / "seed.log",
     )
@@ -800,8 +1054,8 @@ def test_real_backend_uses_exact_402_gpu_database_pair_and_seed_seams(tmp_path):
     assert seed.registered_image_ids == (11, 12, 13, 14, 15)
     assert seed.num_points3d == 0
     for image in _FakeReconstruction.registry[str(tmp_path / "seed")].images.values():
-        assert len(image.cam_from_world_value.matrix) == 3
-        assert len(image.cam_from_world_value.matrix[0]) == 4
+        assert len(image.cam_from_world_value.matrix()) == 3
+        assert len(image.cam_from_world_value.matrix()[0]) == 4
     ba_options, ba_config, ba_reconstruction = module.ba_calls[0]
     assert ba_config.image_ids == [11, 12, 13, 14, 15]
     assert ba_config.gauge == "TWO_CAMS_FROM_WORLD"
@@ -812,6 +1066,47 @@ def test_real_backend_uses_exact_402_gpu_database_pair_and_seed_seams(tmp_path):
     assert ba_options.print_summary is True
     assert bundle_evidence["usable"] is True
     assert bundle_evidence["terminationType"] == "CONVERGENCE"
+    assert bundle_evidence["modelWritten"] is True
+
+
+def test_real_backend_returns_raw_unusable_bundle_evidence_without_writing(tmp_path):
+    fixture = fixture_images()[0]
+    database = _FakeDatabase([_FakeImage(fixture.name, 101, 11)])
+    module = _low_level_module(database)
+    numpy = SimpleNamespace(asarray=lambda value, dtype: value, float64="float64")
+    backend = PycolmapBackend(
+        module,
+        numpy,
+        config=PycolmapBackendConfig(0, 4096, 15),
+    )
+    input_path = tmp_path / "input"
+    backend.build_known_pose_seed(
+        database_path=tmp_path / "database.db",
+        images=fixture_engine_images((fixture,)),
+        output_path=input_path,
+        log_path=tmp_path / "seed.log",
+    )
+    summary = SimpleNamespace(
+        is_solution_usable=lambda: False,
+        num_residuals=0,
+        termination_type=SimpleNamespace(name="FAILURE"),
+    )
+    module.create_default_bundle_adjuster = lambda *_args: SimpleNamespace(
+        solve=lambda: summary
+    )
+    output_path = tmp_path / "adjusted"
+
+    evidence = backend.bundle_adjust_with_success_evidence(
+        input_path=input_path,
+        output_path=output_path,
+        log_path=tmp_path / "bundle-adjust.log",
+    )
+
+    assert evidence["usable"] is False
+    assert evidence["numResiduals"] == 0
+    assert evidence["terminationType"] == "FAILURE"
+    assert evidence["modelWritten"] is False
+    assert not output_path.exists()
 
 
 def test_module_has_no_queue_database_or_storage_client_imports():
