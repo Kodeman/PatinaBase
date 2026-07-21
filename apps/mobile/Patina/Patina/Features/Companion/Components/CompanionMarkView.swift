@@ -69,9 +69,10 @@ public struct CompanionMarkView: View {
     /// read-only `KeyPath` (not `WritableKeyPath`) in this SDK — verified via
     /// an isolated `swiftc -typecheck` repro — so
     /// `.environment(\.accessibilityReduceMotion, true)` does not compile at
-    /// a preview call site. Not part of the public call surface real hosts
-    /// use.
-    init(attention: MarkAttention, wakePhase: WakePhase = .awake, previewReduceMotion: Bool) {
+    /// a preview call site. `fileprivate` so production code outside this
+    /// file cannot reach it; the reduce-motion `#Preview` below lives in the
+    /// same file.
+    fileprivate init(attention: MarkAttention, wakePhase: WakePhase = .awake, previewReduceMotion: Bool) {
         self.attention = attention
         self.wakePhase = wakePhase
         self.reduceMotionOverride = previewReduceMotion
@@ -102,7 +103,9 @@ public struct CompanionMarkView: View {
     public var body: some View {
         ZStack {
             // 1. Attention pulse rings — full attention, steady state only.
-            if attention.isFull, isAwake {
+            // Structurally unmounted under reduce motion: no vestigial pulse
+            // ring should render, even inert.
+            if attention == .full, isAwake, !reduceMotion {
                 PulseAnimation(color: PatinaColors.clay, isActive: true)
                     .frame(width: 58, height: 58)
                     .allowsHitTesting(false)
@@ -115,8 +118,9 @@ public struct CompanionMarkView: View {
             // and active — see PulseAnimation.swift), so the "one-shot"
             // quality comes from the host advancing `wakePhase` past
             // `.pulse` shortly after mounting it; that sequencing is owned
-            // by the overlay, out of scope here.
-            if effectiveWakePhase == .pulse {
+            // by the overlay, out of scope here. Also structurally unmounted
+            // under reduce motion, matching the steady-state pulse above.
+            if effectiveWakePhase == .pulse, !reduceMotion {
                 PulseAnimation(color: PatinaColors.clay, isActive: true)
                     .frame(width: 58, height: 58)
                     .allowsHitTesting(false)
@@ -167,7 +171,7 @@ public struct CompanionMarkView: View {
     /// structurally (the `phaseAnimator` simply isn't in the view tree)
     /// rather than merely deactivated, since it's a repeating animator.
     private var shimmerActive: Bool {
-        isAwake && !reduceMotion && (attention.isFull || attention.isAmbient)
+        isAwake && !reduceMotion && (attention == .full || attention == .ambient)
     }
 
     @ViewBuilder
@@ -213,24 +217,6 @@ public struct CompanionMarkView: View {
                 .easeOut(duration: 0.25).delay(0.15 * Double(index)),
                 value: wakePhase
             )
-    }
-}
-
-// MARK: - MarkAttention comparisons
-
-// `MarkAttention` (Task 1, CompanionCoachingModel.swift) has no case payload
-// but also declares no `Equatable` conformance, so `==` isn't available on
-// it. Pattern-matching helpers instead of extending its conformance here,
-// to avoid touching the Task 1 file.
-private extension MarkAttention {
-    var isFull: Bool {
-        if case .full = self { return true }
-        return false
-    }
-
-    var isAmbient: Bool {
-        if case .ambient = self { return true }
-        return false
     }
 }
 

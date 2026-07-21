@@ -84,6 +84,9 @@ public struct CompanionIntroBubble: View {
                         .padding(.vertical, 8)
                         .background(PatinaColors.clay)
                         .clipShape(Capsule())
+                        // 44pt hit target without inflating the visual capsule.
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("companion.intro.showMe")
