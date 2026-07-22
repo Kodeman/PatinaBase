@@ -251,6 +251,36 @@ def test_pycolmap_cmake_discovers_the_hash_pinned_build_venv_pybind11():
     assert module_lookup < containment < config_guard < define < cache_check
 
 
+def test_pycolmap_cmake_types_and_verifies_implicit_link_rpath_policy():
+    script = _script()
+
+    typed_setting = "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH:BOOL=FALSE"
+    untyped_setting = "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=FALSE"
+    cache_gate = "CMAKE_INSTALL_RPATH_USE_LINK_PATH:BOOL=FALSE"
+
+    # CMake records an untyped -D value as UNINITIALIZED. Keep the setting and
+    # the exact cache gate typed so a safe FALSE value is not rejected merely
+    # because its cache metadata differs.
+    assert typed_setting in script
+    assert untyped_setting not in script
+
+    setting = script.index(typed_setting)
+    verification = script.index(cache_gate, setting + len(typed_setting))
+    extension_links = script.index(
+        'extension_links="$(ldd "$PYCOLMAP_EXTENSION"', verification
+    )
+    extension_dynamic = script.index(
+        'extension_dynamic="$(readelf -d "$PYCOLMAP_EXTENSION"',
+        extension_links,
+    )
+    extension_rpath = script.index(
+        'extension_rpath="$(patchelf --print-rpath', extension_dynamic
+    )
+    assert '*) die "PyCOLMAP extension RPATH omits $CUDA_ROOT/lib64"' in script
+    assert setting < verification < extension_links
+    assert extension_links < extension_dynamic < extension_rpath
+
+
 def test_pycolmap_build_requirements_are_exact_and_hash_pinned():
     requirements = [
         line.strip()
