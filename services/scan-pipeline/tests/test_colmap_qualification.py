@@ -144,6 +144,7 @@ class _FakeQualificationBackend:
                 "second": second,
                 "firstImageId": by_name[first],
                 "secondImageId": by_name[second],
+                "guidedMatching": True,
                 "rawMatches": 90,
                 "verifiedInliers": 70,
             }
@@ -569,7 +570,7 @@ def test_qualification_rejects_untrusted_intrinsics_rewrite_evidence(
 
 @pytest.mark.parametrize(
     "mutation",
-    ("missing", "duplicate", "raw-floor", "inlier-floor", "inliers-exceed-raw"),
+    ("missing", "duplicate", "raw-floor", "inlier-floor", "guided-disabled"),
 )
 def test_qualification_rejects_untrusted_match_evidence(tmp_path, mutation):
     executables = _fake_executables(tmp_path)
@@ -586,8 +587,8 @@ def test_qualification_rejects_untrusted_match_evidence(tmp_path, mutation):
             rows[0]["rawMatches"] = 14
         elif mutation == "inlier-floor":
             rows[0]["verifiedInliers"] = 14
-        elif mutation == "inliers-exceed-raw":
-            rows[0]["verifiedInliers"] = rows[0]["rawMatches"] + 1
+        elif mutation == "guided-disabled":
+            rows[0]["guidedMatching"] = False
         return rows
 
     backend.match_explicit_pairs = malformed
@@ -601,6 +602,30 @@ def test_qualification_rejects_untrusted_match_evidence(tmp_path, mutation):
 
     assert exc.value.code == "REFINE_ENGINE_FIXTURE_FAILED"
     assert not (output_dir / qualification.RECEIPT_NAME).exists()
+
+
+def test_qualification_accepts_guided_inliers_beyond_putative_matches(tmp_path):
+    executables = _fake_executables(tmp_path)
+    backend = _FakeQualificationBackend()
+    original = backend.match_explicit_pairs
+
+    def guided_match_growth(**kwargs):
+        rows = [dict(row) for row in original(**kwargs)]
+        rows[0]["rawMatches"] = 30
+        rows[0]["verifiedInliers"] = 35
+        return rows
+
+    backend.match_explicit_pairs = guided_match_growth
+    receipt_path = run_colmap_qualification(
+        _config(tmp_path / "guided-match-growth", executables),
+        backend=backend,
+        command_runner=_fake_command_runner,
+    )
+
+    receipt = json.loads(receipt_path.read_text())
+    first_pair = receipt["explicitPairMatching"]["pairs"][0]
+    assert first_pair["rawMatches"] == 30
+    assert first_pair["verifiedInliers"] == 35
 
 
 def test_qualification_rejects_cli_zero_without_usable_bundle_solution(tmp_path):
@@ -776,9 +801,11 @@ class _FakeImage:
 
 
 class _FakeDatabase:
-    def __init__(self, images):
+    def __init__(self, images, *, raw_matches=40, verified_inliers=35):
         self.images = {image.name: image for image in images}
         self.cameras = {image.camera_id: _FakeCamera() for image in images}
+        self.raw_matches = raw_matches
+        self.verified_inliers = verified_inliers
         for camera_id, camera in self.cameras.items():
             camera.camera_id = camera_id
 
@@ -807,13 +834,13 @@ class _FakeDatabase:
         return 120 + image_id
 
     def read_matches(self, _first_id, _second_id):
-        return list(range(40))
+        return list(range(self.raw_matches))
 
     def exists_two_view_geometry(self, _first_id, _second_id):
         return True
 
     def read_two_view_geometry(self, _first_id, _second_id):
-        return SimpleNamespace(inlier_matches=list(range(35)))
+        return SimpleNamespace(inlier_matches=list(range(self.verified_inliers)))
 
 
 class _FakeFeatureOptions:
@@ -979,6 +1006,50 @@ def test_real_backend_reports_raw_non_bool_has_cuda(truthy_non_bool):
         config=PycolmapBackendConfig(0, 4096, 15),
     )
     assert backend.toolchain_evidence()["hasCuda"] is truthy_non_bool
+
+
+def test_real_backend_accepts_guided_inliers_beyond_putative_matches(tmp_path):
+    fixtures = fixture_images()
+    database_images = [
+        _FakeImage(image.name, 101 + index, 11 + index)
+        for index, image in enumerate(fixtures)
+    ]
+    database = _FakeDatabase(
+        database_images,
+        raw_matches=30,
+        verified_inliers=35,
+    )
+    module = _low_level_module(database)
+    numpy = SimpleNamespace(asarray=lambda value, dtype: value, float64="float64")
+    backend = PycolmapBackend(
+        module,
+        numpy,
+        config=PycolmapBackendConfig(0, 4096, 15),
+    )
+    images = fixture_engine_images(fixtures)
+    pairs = (qualification.explicit_pairs(fixtures)[0],)
+    pairs_path = tmp_path / "pairs.txt"
+    qualification.write_explicit_pairs(pairs_path, pairs)
+
+    rewritten = backend.rewrite_intrinsics_preserving_ids(
+        database_path=tmp_path / "database.db",
+        images=images,
+        log_path=tmp_path / "rewrite.log",
+    )
+    matched = backend.match_explicit_pairs(
+        database_path=tmp_path / "database.db",
+        pairs_path=pairs_path,
+        image_pairs=pairs,
+        gpu_index="0",
+        log_path=tmp_path / "match.log",
+    )
+    validated = qualification._validate_match_rows(matched, pairs, rewritten)
+
+    assert module.match_calls[0]["matching_options"].guided_matching is True
+    assert validated == tuple(matched)
+    assert validated[0]["guidedMatching"] is True
+    assert validated[0]["rawMatches"] == 30
+    assert validated[0]["verifiedInliers"] == 35
 
 
 def test_real_backend_uses_exact_402_gpu_database_pair_and_seed_seams(tmp_path):

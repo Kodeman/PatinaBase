@@ -133,8 +133,10 @@ Pass requires all of the following in the receipt:
   keypoints with an equal descriptor count;
 - every camera rewrite says `idsPreserved: true`, `modelAfter: PINHOLE`, and
   carries the exact fixture dimensions and four parameters;
-- every emitted explicit pair has at least 15 raw matches and 15 verified
-  inliers;
+- every emitted explicit pair confirms guided matching and has at least 15
+  initial putative matches plus 15 final guided geometry correspondences;
+  these are independent database populations, so the guided count may exceed
+  the initial count;
 - seed, triangulated, and adjusted models retain the same image ID/name/camera
   ID join, full finite `cam_from_world`, and exact PINHOLE intrinsics; the
   operational seed preserves every exact input pose and camera center; the

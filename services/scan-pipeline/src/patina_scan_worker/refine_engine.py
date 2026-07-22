@@ -486,6 +486,9 @@ class PycolmapBackend:
                             "second": second_name,
                             "firstImageId": first_id,
                             "secondImageId": second_id,
+                            "guidedMatching": bool(
+                                matching_options.guided_matching
+                            ),
                             "rawMatches": raw_matches,
                             "verifiedInliers": inliers,
                         }

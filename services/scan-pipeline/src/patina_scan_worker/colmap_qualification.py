@@ -725,6 +725,11 @@ def _validate_match_rows(
             label=f"verifiedInliers for {pair}",
             code=code,
         )
+        if row.get("guidedMatching") is not True:
+            raise AdapterError(
+                f"explicit pair {first} {second} did not use guided matching",
+                code,
+            )
         if first_id != ids_by_name[first] or second_id != ids_by_name[second]:
             raise AdapterError("explicit-pair evidence changed an image ID", code)
         if raw_matches < MIN_RAW_MATCHES_PER_PAIR:
@@ -735,11 +740,6 @@ def _validate_match_rows(
         if inliers < MIN_VERIFIED_INLIERS_PER_PAIR:
             raise AdapterError(
                 f"explicit pair {first} {second} has only {inliers} verified inliers",
-                code,
-            )
-        if inliers > raw_matches:
-            raise AdapterError(
-                f"explicit pair {first} {second} has more verified inliers than raw matches",
                 code,
             )
         by_pair[(first, second)] = dict(row)
