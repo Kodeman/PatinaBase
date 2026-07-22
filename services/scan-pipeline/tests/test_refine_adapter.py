@@ -711,6 +711,7 @@ def test_subprocess_uses_ratified_budget_and_pipe_drain(tmp_path, monkeypatch):
     assert observed["stdout"] is adapter.subprocess.PIPE
     assert observed["stderr"] is adapter.subprocess.STDOUT
     assert observed["bufsize"] == 0
+    assert observed["start_new_session"] is True
     assert "shell" not in observed
 
 
@@ -766,33 +767,78 @@ def test_subprocess_high_volume_log_is_hard_capped_and_reused_path_is_fresh(tmp_
     assert second.output_tail == "SECOND-RUN-ONLY\n"
 
 
-def test_subprocess_timeout_kills_reaps_and_flushes_the_log(tmp_path):
+def test_subprocess_timeout_kills_process_group_reaps_and_blocks_late_writes(tmp_path):
     log_path = tmp_path / "timeout.log"
-    pid_path = tmp_path / "child.pid"
+    leader_pid_path = tmp_path / "leader.pid"
+    descendant_pid_path = tmp_path / "descendant.pid"
+    late_artifact = tmp_path / "late-artifact"
     now = time.monotonic()
     deadline = RefineDeadline.start(
         now_monotonic_s=now,
-        lease_expires_at_monotonic_s=now + LEASE_COMPLETION_RESERVE_S + 0.75,
+        lease_expires_at_monotonic_s=now + LEASE_COMPLETION_RESERVE_S + 0.30,
+    )
+    descendant_program = (
+        "import os,pathlib,signal,sys,time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        "pathlib.Path(sys.argv[1]).write_text(str(os.getpid()), encoding='utf-8'); "
+        "time.sleep(0.75); "
+        "pathlib.Path(sys.argv[2]).write_text('late\\n', encoding='utf-8')"
+    )
+    leader_program = "\n".join(
+        (
+            "import os",
+            "import pathlib",
+            "import subprocess",
+            "import sys",
+            "import time",
+            f"pathlib.Path({str(leader_pid_path)!r}).write_text(str(os.getpid()))",
+            (
+                f"subprocess.Popen([sys.executable, '-c', {descendant_program!r}, "
+                f"{str(descendant_pid_path)!r}, {str(late_artifact)!r}])"
+            ),
+            f"pid_path = pathlib.Path({str(descendant_pid_path)!r})",
+            "stop = time.monotonic() + 5.0",
+            "while not pid_path.exists() and time.monotonic() < stop:",
+            "    time.sleep(0.005)",
+            "print('before-timeout', flush=True)",
+            "time.sleep(30)",
+        )
     )
     command = [
         sys.executable,
         "-c",
-        (
-            "import os,pathlib,time; "
-            f"pathlib.Path({str(pid_path)!r}).write_text(str(os.getpid())); "
-            "print('before-timeout', flush=True); time.sleep(30)"
-        ),
+        leader_program,
     ]
 
     with pytest.raises(AdapterError) as exc:
         adapter.run_colmap_subprocess(command, deadline=deadline, log_path=log_path)
 
     assert exc.value.code == "REFINE_ENGINE_TIMEOUT"
-    child_pid = int(pid_path.read_text())
-    with pytest.raises(ProcessLookupError):
-        os.kill(child_pid, 0)
+    leader_pid = int(leader_pid_path.read_text())
+    descendant_pid = int(descendant_pid_path.read_text())
+    stop = time.monotonic() + 2.0
+    leader_gone = False
+    descendant_gone = False
+    while time.monotonic() < stop:
+        try:
+            os.kill(leader_pid, 0)
+            leader_gone = False
+        except ProcessLookupError:
+            leader_gone = True
+        try:
+            os.kill(descendant_pid, 0)
+            descendant_gone = False
+        except ProcessLookupError:
+            descendant_gone = True
+        if leader_gone and descendant_gone:
+            break
+        time.sleep(0.01)
+    assert leader_gone
+    assert descendant_gone
     assert log_path.read_text().endswith("before-timeout\n")
     assert log_path.stat().st_size <= COLMAP_LOG_TAIL_BYTES
+    time.sleep(0.80)
+    assert not late_artifact.exists()
 
 
 def test_subprocess_propagates_log_drain_errors(tmp_path, monkeypatch):

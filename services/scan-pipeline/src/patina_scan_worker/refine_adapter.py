@@ -25,6 +25,7 @@ import json
 import math
 import os
 import re
+import signal
 import stat
 import subprocess
 import tempfile
@@ -45,6 +46,8 @@ LEASE_COMPLETION_RESERVE_S = 60
 COLMAP_LOG_TAIL_BYTES = 64 * 1024
 COLMAP_LOG_READ_BYTES = 16 * 1024
 COLMAP_LOG_DRAIN_JOIN_S = 5.0
+COLMAP_PROCESS_TERM_GRACE_S = 0.10
+COLMAP_PROCESS_KILL_REAP_S = 1.0
 
 TEMPORAL_WINDOW = 10
 SPATIAL_RADIUS_M = 1.5
@@ -1405,17 +1408,46 @@ def _drain_colmap_output(
             errors.append(exc)
 
 
-def _kill_and_reap(process: subprocess.Popen[bytes]) -> None:
-    """Best-effort hard stop that never leaves the direct COLMAP child a zombie."""
+def _kill_and_reap(process: subprocess.Popen[bytes]) -> tuple[str, ...]:
+    """Bounded TERM/KILL of one isolated group, then reap its direct leader."""
 
-    try:
-        if process.poll() is None:
+    errors: list[str] = []
+    pid = getattr(process, "pid", None)
+    if os.name == "posix" and isinstance(pid, int) and pid > 0:
+        for sig in (signal.SIGTERM, signal.SIGKILL):
             try:
-                process.kill()
+                os.killpg(pid, sig)
             except ProcessLookupError:
                 pass
-    finally:
-        process.wait()
+            except OSError as exc:
+                errors.append(f"cannot signal COLMAP process group with {sig.name}: {exc}")
+            if sig == signal.SIGTERM:
+                # Do not poll/wait before SIGKILL. Keeping the direct leader
+                # unreaped prevents its PID/process-group ID from being reused
+                # while descendants receive the escalation signal.
+                time.sleep(COLMAP_PROCESS_TERM_GRACE_S)
+    else:  # defensive portability for test doubles/non-POSIX callers
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        except OSError as exc:
+            errors.append(f"cannot kill COLMAP child: {exc}")
+
+    try:
+        process.wait(timeout=COLMAP_PROCESS_KILL_REAP_S)
+    except subprocess.TimeoutExpired:
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        except OSError as exc:
+            errors.append(f"cannot kill COLMAP process leader: {exc}")
+        try:
+            process.wait(timeout=COLMAP_PROCESS_KILL_REAP_S)
+        except subprocess.TimeoutExpired:
+            errors.append("COLMAP process leader could not be reaped")
+    return tuple(errors)
 
 
 def run_colmap_subprocess(
@@ -1444,6 +1476,7 @@ def run_colmap_subprocess(
     process: subprocess.Popen[bytes] | None = None
     drain_thread: threading.Thread | None = None
     drain_errors: list[BaseException] = []
+    cleanup_errors: list[str] = []
     returncode: int | None = None
     startup_error: OSError | None = None
     try:
@@ -1454,6 +1487,7 @@ def run_colmap_subprocess(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 bufsize=0,
+                start_new_session=True,
             )
         except OSError as exc:
             startup_error = exc
@@ -1471,11 +1505,11 @@ def run_colmap_subprocess(
                 returncode = process.wait(timeout=timeout_s)
             except subprocess.TimeoutExpired as exc:
                 timed_out = exc
-                _kill_and_reap(process)
+                cleanup_errors.extend(_kill_and_reap(process))
                 returncode = process.returncode
     finally:
         if process is not None and process.poll() is None:
-            _kill_and_reap(process)
+            cleanup_errors.extend(_kill_and_reap(process))
         if drain_thread is not None:
             drain_thread.join(COLMAP_LOG_DRAIN_JOIN_S)
             if drain_thread.is_alive():
@@ -1500,17 +1534,27 @@ def run_colmap_subprocess(
             f"cannot start COLMAP subprocess {command[0]}: {startup_error}",
             "REFINE_ENGINE_FAILED",
         ) from startup_error
+    if timed_out is not None:
+        details = [*cleanup_errors, *(str(error) for error in drain_errors)]
+        cleanup_detail = ""
+        if details:
+            cleanup_detail = "; cleanup: " + "; ".join(details)
+        raise AdapterError(
+            f"COLMAP subprocess exceeded {timeout_s} seconds: {command[0]}"
+            f"{cleanup_detail}",
+            "REFINE_ENGINE_TIMEOUT",
+        ) from timed_out
+    if cleanup_errors:
+        raise AdapterError(
+            "cannot stop and reap COLMAP process group: " + "; ".join(cleanup_errors),
+            "REFINE_ENGINE_FAILED",
+        )
     if drain_errors:
         error = drain_errors[0]
         raise AdapterError(
             f"cannot retain bounded COLMAP output: {error}",
             "REFINE_ENGINE_LOG_IO",
         ) from error
-    if timed_out is not None:
-        raise AdapterError(
-            f"COLMAP subprocess exceeded {timeout_s} seconds: {command[0]}",
-            "REFINE_ENGINE_TIMEOUT",
-        ) from timed_out
     assert returncode is not None
     if returncode != 0:
         detail = (output_tail or "no output").strip()[-2000:]
