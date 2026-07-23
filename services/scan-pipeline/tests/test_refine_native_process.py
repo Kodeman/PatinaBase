@@ -242,7 +242,7 @@ def test_deadline_expiring_during_setup_does_not_start_child(monkeypatch):
             deadline=deadline,
         )
 
-    assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT", str(raised.value)
     assert starts == []
     assert deadline.checks == 2
     assert close_attempts == ["parent", "child"]
@@ -971,6 +971,146 @@ def test_cleanup_crash_still_emergency_kills_group_and_prevents_late_write(
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+def test_false_clean_primary_cleanup_is_verified_before_return_and_kills_group(
+    monkeypatch,
+    tmp_path,
+):
+    leader_pid_path = tmp_path / "false-clean-leader.pid"
+    descendant_pid_path = tmp_path / "false-clean-descendant.pid"
+    late_artifact = tmp_path / "published-after-false-clean.json"
+    activity_log = tmp_path / "false-clean-native.log"
+    verification_reports: list[tuple[str, ...]] = []
+    emergency_calls: list[int | None] = []
+    failure = None
+    leader_pid = None
+    descendant_pid = None
+    gone_at_return = False
+
+    def false_clean(_process, *, group_leader_pid):
+        assert isinstance(group_leader_pid, int)
+        return ()
+
+    monkeypatch.setattr(native_process, "_terminate_and_reap", false_clean)
+    real_emergency = native_process._emergency_kill_and_reap
+
+    def record_emergency(process, *, group_leader_pid):
+        emergency_calls.append(group_leader_pid)
+        return real_emergency(process, group_leader_pid=group_leader_pid)
+
+    monkeypatch.setattr(
+        native_process,
+        "_emergency_kill_and_reap",
+        record_emergency,
+    )
+    real_verify = getattr(native_process, "_verify_cleanup_complete", None)
+    if real_verify is not None:
+
+        def record_verification(process, *, group_leader_pid):
+            report = real_verify(
+                process,
+                group_leader_pid=group_leader_pid,
+            )
+            verification_reports.append(report)
+            return report
+
+        monkeypatch.setattr(
+            native_process,
+            "_verify_cleanup_complete",
+            record_verification,
+        )
+
+    try:
+        try:
+            run_native_engine_child(
+                _entrypoint("_spawn_late_writer"),
+                {
+                    "leaderPid": str(leader_pid_path),
+                    "descendantPid": str(descendant_pid_path),
+                    "lateArtifact": str(late_artifact),
+                    "activityLog": str(activity_log),
+                },
+                deadline=_deadline(0.30),
+            )
+        except AdapterError as exc:
+            failure = exc
+
+        if leader_pid_path.is_file() and descendant_pid_path.is_file():
+            leader_pid = int(leader_pid_path.read_text(encoding="utf-8"))
+            descendant_pid = int(descendant_pid_path.read_text(encoding="utf-8"))
+            gone_at_return = _pid_is_gone(leader_pid) and _pid_is_gone(descendant_pid)
+    finally:
+        if leader_pid is not None and not _pid_is_gone(leader_pid):
+            try:
+                os.killpg(leader_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        if descendant_pid is not None and not _pid_is_gone(descendant_pid):
+            try:
+                os.kill(descendant_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+    assert failure is not None
+    assert failure.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert "remains alive after cleanup verification" in str(failure)
+    assert len(str(failure).encode("utf-8")) <= NATIVE_CHILD_MAX_ERROR_BYTES
+    assert emergency_calls == [leader_pid]
+    assert verification_reports[0]
+    assert verification_reports[-1] == ()
+    assert gone_at_return
+    time.sleep(0.80)
+    assert activity_log.read_text(encoding="utf-8") == "leader-ready\n"
+    assert not late_artifact.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+def test_false_clean_primary_cleanup_with_verification_exception_is_fatal(
+    monkeypatch,
+):
+    verify_calls: list[int | None] = []
+    emergency_calls: list[int | None] = []
+    real_emergency = native_process._emergency_kill_and_reap
+
+    def false_clean(_process, *, group_leader_pid):
+        assert isinstance(group_leader_pid, int)
+        return ()
+
+    def verification_raises(_process, *, group_leader_pid):
+        verify_calls.append(group_leader_pid)
+        raise RuntimeError("synthetic cleanup verification crash")
+
+    def record_emergency(process, *, group_leader_pid):
+        emergency_calls.append(group_leader_pid)
+        return real_emergency(process, group_leader_pid=group_leader_pid)
+
+    monkeypatch.setattr(native_process, "_terminate_and_reap", false_clean)
+    monkeypatch.setattr(
+        native_process,
+        "_verify_cleanup_complete",
+        verification_raises,
+    )
+    monkeypatch.setattr(
+        native_process,
+        "_emergency_kill_and_reap",
+        record_emergency,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_sleep_past_deadline"),
+            {},
+            deadline=_deadline(0.20),
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert "verification raised RuntimeError" in str(raised.value)
+    assert "synthetic cleanup verification crash" in str(raised.value)
+    assert len(str(raised.value).encode("utf-8")) <= NATIVE_CHILD_MAX_ERROR_BYTES
+    assert len(verify_calls) == 2
+    assert emergency_calls == [verify_calls[0]]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
 def test_timeout_kills_group_reaps_leader_and_prevents_late_publication(tmp_path):
     leader_pid_path = tmp_path / "leader.pid"
     descendant_pid_path = tmp_path / "descendant.pid"
@@ -992,7 +1132,7 @@ def test_timeout_kills_group_reaps_leader_and_prevents_late_publication(tmp_path
         )
         accepted_artifact.write_text(json.dumps(result), encoding="utf-8")
 
-    assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT", str(raised.value)
     assert time.monotonic() - started < 2.0
     assert leader_pid_path.is_file()
     assert descendant_pid_path.is_file()

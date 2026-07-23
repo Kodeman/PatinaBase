@@ -954,6 +954,76 @@ def _emergency_kill_and_reap(
     return tuple(errors)
 
 
+def _verify_cleanup_complete(
+    process: multiprocessing.Process,
+    *,
+    group_leader_pid: int | None,
+) -> tuple[str, ...]:
+    """Independently prove the direct child and its known group are gone."""
+
+    errors: list[str] = []
+    leader_alive: bool | None = None
+    try:
+        process.join(0)
+    except BaseException as exc:
+        errors.append(
+            _bounded_diagnostic(
+                "cannot nonblocking-join native child during cleanup verification: ",
+                _exception_summary(exc),
+            )
+        )
+    try:
+        leader_alive = process.is_alive()
+    except BaseException as exc:
+        errors.append(
+            _bounded_diagnostic(
+                "cannot inspect native child during cleanup verification: ",
+                _exception_summary(exc),
+            )
+        )
+    else:
+        if leader_alive:
+            errors.append(
+                "native child leader remains alive after cleanup verification"
+            )
+
+    if group_leader_pid is not None:
+        # Darwin can transiently report EPERM while the group contains only a
+        # killed descendant awaiting reaping. Once the direct leader is proven
+        # dead, retry that uncertainty for one bounded reap window.
+        permission_deadline = time.monotonic() + NATIVE_CHILD_KILL_REAP_S
+        while True:
+            try:
+                os.killpg(group_leader_pid, 0)
+            except ProcessLookupError:
+                break
+            except PermissionError as exc:
+                if leader_alive is False and time.monotonic() < permission_deadline:
+                    time.sleep(0.01)
+                    continue
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot verify native child process-group removal: ",
+                        _exception_summary(exc),
+                    )
+                )
+                break
+            except BaseException as exc:
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot verify native child process-group removal: ",
+                        _exception_summary(exc),
+                    )
+                )
+                break
+            else:
+                errors.append(
+                    "native child process group remains alive after cleanup verification"
+                )
+                break
+    return tuple(errors)
+
+
 def _normalize_cleanup_errors(errors: Any) -> tuple[str, ...] | None:
     if type(errors) is not tuple:
         return None
@@ -967,6 +1037,52 @@ def _normalize_cleanup_errors(errors: Any) -> tuple[str, ...] | None:
             return None
         normalized.append(_truncate_utf8(error, _MAX_CLEANUP_ERROR_BYTES))
     return tuple(normalized)
+
+
+def _cleanup_verification_errors(
+    process: multiprocessing.Process,
+    *,
+    group_leader_pid: int | None,
+) -> tuple[str, ...]:
+    try:
+        errors = _verify_cleanup_complete(
+            process,
+            group_leader_pid=group_leader_pid,
+        )
+    except BaseException as exc:
+        return (
+            _bounded_diagnostic(
+                "native child cleanup verification raised ",
+                _exception_summary(exc),
+            ),
+        )
+    normalized = _normalize_cleanup_errors(errors)
+    if normalized is None:
+        return ("native child cleanup verification returned an invalid report",)
+    return normalized
+
+
+def _emergency_cleanup_errors(
+    process: multiprocessing.Process,
+    *,
+    group_leader_pid: int | None,
+) -> tuple[str, ...]:
+    try:
+        errors = _emergency_kill_and_reap(
+            process,
+            group_leader_pid=group_leader_pid,
+        )
+    except BaseException as exc:
+        return (
+            _bounded_diagnostic(
+                "emergency native child cleanup raised ",
+                _exception_summary(exc),
+            ),
+        )
+    normalized = _normalize_cleanup_errors(errors)
+    if normalized is None:
+        return ("emergency native child cleanup returned an invalid report",)
+    return normalized
 
 
 def _bounded_cleanup_report(
@@ -995,58 +1111,56 @@ def _cleanup_process(
     *,
     group_leader_pid: int | None,
 ) -> tuple[str, ...]:
-    """Convert every cleanup implementation failure into stable uncertainty."""
+    """Run cleanup, prove its result, and fail closed on every uncertainty."""
 
+    force_emergency = False
     try:
         errors = _terminate_and_reap(
             process,
             group_leader_pid=group_leader_pid,
         )
     except BaseException as exc:
-        primary_error = _bounded_diagnostic(
-            "native child cleanup raised ",
-            _exception_summary(exc),
+        primary_errors = (
+            _bounded_diagnostic(
+                "native child cleanup raised ",
+                _exception_summary(exc),
+            ),
         )
-        try:
-            emergency_errors = _emergency_kill_and_reap(
-                process,
-                group_leader_pid=group_leader_pid,
+        force_emergency = True
+    else:
+        normalized_errors = _normalize_cleanup_errors(errors)
+        if normalized_errors is None:
+            primary_errors = (
+                "native child cleanup returned an invalid uncertainty report",
             )
-        except BaseException as emergency_exc:
-            emergency_errors = (
-                _bounded_diagnostic(
-                    "emergency native child cleanup raised ",
-                    _exception_summary(emergency_exc),
-                ),
-            )
-        normalized_emergency = _normalize_cleanup_errors(emergency_errors)
-        if normalized_emergency is None:
-            normalized_emergency = (
-                "emergency native child cleanup returned an invalid report",
-            )
-        return (primary_error, *normalized_emergency)
-    normalized_errors = _normalize_cleanup_errors(errors)
-    if normalized_errors is None:
-        invalid_report = "native child cleanup returned an invalid uncertainty report"
-        try:
-            emergency_errors = _emergency_kill_and_reap(
-                process,
-                group_leader_pid=group_leader_pid,
-            )
-        except BaseException as emergency_exc:
-            emergency_errors = (
-                _bounded_diagnostic(
-                    "emergency native child cleanup raised ",
-                    _exception_summary(emergency_exc),
-                ),
-            )
-        normalized_emergency = _normalize_cleanup_errors(emergency_errors)
-        if normalized_emergency is None:
-            normalized_emergency = (
-                "emergency native child cleanup returned an invalid report",
-            )
-        return (invalid_report, *normalized_emergency)
-    return normalized_errors
+            force_emergency = True
+        else:
+            primary_errors = normalized_errors
+
+    verification_errors = _cleanup_verification_errors(
+        process,
+        group_leader_pid=group_leader_pid,
+    )
+    if force_emergency or verification_errors:
+        emergency_errors = _emergency_cleanup_errors(
+            process,
+            group_leader_pid=group_leader_pid,
+        )
+        post_emergency_errors = _cleanup_verification_errors(
+            process,
+            group_leader_pid=group_leader_pid,
+        )
+        combined = (
+            *primary_errors,
+            *verification_errors,
+            *emergency_errors,
+            *post_emergency_errors,
+        )
+        normalized_combined = _normalize_cleanup_errors(combined)
+        if normalized_combined is None:
+            return ("native child cleanup produced excessive uncertainty",)
+        return normalized_combined
+    return primary_errors
 
 
 def _cleanup_failed_error(
