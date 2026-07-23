@@ -8,10 +8,11 @@ or configuration imports.
 HEIC decoding is delegated to a tiny packaged C helper compiled unprivileged
 against Ubuntu's security-maintained system libheif. The helper decodes once
 with ``ignore_transformations=1`` and once with libheif defaults, then requires
-the dimensions and RGB bytes to be identical. It permits only ImageIO's single
-identity ``irot`` property and rejects every effective or ambiguous crop,
-rotation, and mirror transform before off-centre marker geometry is checked or
-any output directory is created.
+the dimensions and RGB bytes to be identical. Through libheif's public API it
+permits only ImageIO's single recognized, primary-item-associated identity
+``irot`` property and rejects recognized effective or ambiguous crop, rotation,
+and mirror transforms before off-centre marker geometry is checked or any
+output directory is created.
 """
 
 from __future__ import annotations
@@ -1520,20 +1521,23 @@ def run_field_raster_qualification(
             "sourceChannels": decoded.source_channels,
             "sourcePixelType": decoded.source_pixel_type,
             "orientationProof": {
-                "heifGeometricTransformationProperties": {
+                "libheifRecognizedPrimaryItemTransformProperties": {
+                    "associationScope": "primary-item-associated",
+                    "recognizedTypes": ["irot", "imir", "clap"],
                     "count": decoded.transformation_property_count,
                     "propertyType": decoded.transformation_property_type,
                     "rotationCCWDegrees": decoded.transformation_rotation_ccw,
                 },
-                "hiddenHeifCropRotationMirror": False,
+                "hiddenLibheifRecognizedPrimaryItemTransformEffect": False,
                 "rawDefaultRGBIdentical": True,
                 "embeddedMetadataBlocks": decoded.metadata_blocks,
                 "embeddedExifXmpOrientation": "absent (zero metadata blocks)",
                 "materializedRasterCarriesMetadata": False,
                 "scope": (
-                    "stored pixels, zero attached metadata, exactly one identity "
-                    "HEIF irot (0 degrees CCW), and zero HEIF imir/clap; output "
-                    "PPM drops metadata"
+                    "public libheif API proof covers recognized primary-item-"
+                    "associated irot/imir/clap semantic type and value, zero "
+                    "attached metadata, and strict raw/default dimension and RGB "
+                    "byte identity; output PPM drops metadata"
                 ),
             },
             "rawDefaultRGBIdentical": decoded.raw_default_rgb_identical,

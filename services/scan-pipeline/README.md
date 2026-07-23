@@ -489,13 +489,15 @@ the raw stored raster. Instead, the Python gate copies the already-hash-verified
 HEIC bytes to private `0700` scratch, compiles the packaged C helper
 unprivileged with `/usr/bin/cc` and `/usr/bin/pkg-config`, and uses the public
 system-libheif API. The helper requires the public file-type probe to report
-exactly `image/heic` (HEIF using H.265) and requires exactly one associated
-transformation property: `irot` with a `0°` counter-clockwise angle. This is
-ImageIO's identity container property, not a second pixel rotation. Zero
-properties are rejected as writer-contract drift; multiple properties, nonzero
-`irot`, `imir`, `clap`, and unknown transform types are rejected. The helper
-enumerates the public HEVC decoder descriptors and requires exactly one available
-`libde265` descriptor, then decodes strict RGB twice (raw
+exactly `image/heic` (HEIF using H.265) and requires exactly one
+libheif-recognized transformation property associated with the primary item:
+`irot` with a `0°` counter-clockwise angle. This is ImageIO's identity
+container property, not a second pixel rotation. Zero recognized primary-item
+transform properties are rejected as writer-contract drift; multiple recognized
+properties, nonzero `irot`, primary-item-associated `imir`, and
+primary-item-associated `clap` are rejected. The helper enumerates the public
+HEVC decoder descriptors and requires exactly one available `libde265`
+descriptor, then decodes strict RGB twice (raw
 `ignore_transformations=1` and default `ignore_transformations=0`) with that
 descriptor's ID and requires equal dimensions and byte identity. It also
 requires zero attached metadata blocks, so no unseen Exif/XMP orientation
@@ -503,7 +505,12 @@ survives the gate. The asymmetric markers independently prove exactly one
 physical clockwise pixel rotation, and the materialized PPM deliberately carries
 no metadata. HEIC marker matching is deliberately narrow and recorded in the
 receipt: search radius `3 px`, maximum absolute error `64` in each RGB channel.
-See the upstream
+The Linux receipt intentionally makes no claim about unknown BMFF property
+types, raw `ipma` essential bits, or reserved/trailing transform payload bytes:
+the public libheif API exposes semantic type/value for its recognized
+primary-item-associated `irot`/`imir`/`clap` set. The separate Capture iOS BMFF
+regression owns the exact ImageIO writer-byte contract for `pitm`, `ipco`/`ipma`
+association/index encoding, and the `irot` payload. See the upstream
 [libheif decode API](https://raw.githubusercontent.com/strukturag/libheif/v1.17.6/libheif/heif.h),
 [transform-property API](https://raw.githubusercontent.com/strukturag/libheif/v1.17.6/libheif/heif_properties.h),
 and [Ubuntu USN-8526-2](https://ubuntu.com/security/notices/USN-8526-2).

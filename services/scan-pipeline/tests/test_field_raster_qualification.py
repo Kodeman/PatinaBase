@@ -366,15 +366,27 @@ def test_protocol_materializes_canonical_ppm_and_receipt_without_mutating_inputs
     assert len(receipt["geometry"]["markers"]) == 6
     assert receipt["materializedRaster"]["sha256"] == _sha256(ppm)
     assert receipt["safety"]["externalSystemsTouched"] == []
+    orientation_proof = receipt["decoder"]["orientationProof"]
+    assert orientation_proof["libheifRecognizedPrimaryItemTransformProperties"] == {
+        "associationScope": "primary-item-associated",
+        "recognizedTypes": ["irot", "imir", "clap"],
+        "count": 1,
+        "propertyType": "irot",
+        "rotationCCWDegrees": 0,
+    }
     assert (
-        receipt["decoder"]["orientationProof"]["heifGeometricTransformationProperties"]
-        == {
-            "count": 1,
-            "propertyType": "irot",
-            "rotationCCWDegrees": 0,
-        }
+        orientation_proof["hiddenLibheifRecognizedPrimaryItemTransformEffect"]
+        is False
     )
-    assert receipt["decoder"]["orientationProof"]["embeddedMetadataBlocks"] == 0
+    assert "heifGeometricTransformationProperties" not in orientation_proof
+    assert "hiddenHeifCropRotationMirror" not in orientation_proof
+    assert orientation_proof["scope"] == (
+        "public libheif API proof covers recognized primary-item-associated "
+        "irot/imir/clap semantic type and value, zero attached metadata, and "
+        "strict raw/default dimension and RGB byte identity; output PPM drops "
+        "metadata"
+    )
+    assert orientation_proof["embeddedMetadataBlocks"] == 0
 
     for path, (payload, mtime_ns) in before.items():
         assert path.read_bytes() == payload
