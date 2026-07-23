@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
@@ -23,6 +25,7 @@ _ENV = {
     "WORKER_ID": "storage-test",
     "SUPABASE_URL": "https://example.supabase.co",
     "SUPABASE_SERVICE_ROLE_KEY": "service-role",
+    "WORK_DIR": tempfile.gettempdir(),
 }
 
 
@@ -40,7 +43,9 @@ class _Response:
             body = json.dumps(json_body).encode("utf-8")
         self.status_code = status_code
         self._body = body
-        self.headers = headers or {}
+        self.headers = {"content-type": "application/octet-stream"}
+        if headers is not None:
+            self.headers.update(headers)
         self._iter_error = iter_error
         self.bytes_yielded = 0
         self.iter_chunk_size: int | None = None
@@ -66,6 +71,9 @@ class _Response:
             chunk = self._body[offset : offset + chunk_size]
             self.bytes_yielded += len(chunk)
             yield chunk
+
+    def iter_raw(self, chunk_size: int) -> Any:
+        yield from self.iter_bytes(chunk_size)
 
 
 class _Session:
@@ -164,6 +172,31 @@ def test_absent_object_is_created_without_upsert_and_upload_is_chunked(tmp_path)
             "chunk_sizes": [1 << 20, 1 << 20, 17],
         }
     ]
+
+
+def test_frozen_snapshot_uses_the_provisioned_work_volume(tmp_path, monkeypatch):
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"payload")
+    work_dir = tmp_path / "qualified-work"
+    work_dir.mkdir()
+    observed_dirs = []
+    real_temporary_file = storage_module.tempfile.TemporaryFile
+
+    def recording_temporary_file(*args, **kwargs):
+        observed_dirs.append(kwargs.get("dir"))
+        return real_temporary_file(*args, **kwargs)
+
+    monkeypatch.setattr(
+        storage_module.tempfile,
+        "TemporaryFile",
+        recording_temporary_file,
+    )
+    session = _Session(_Response(200))
+    settings = settings_from_env({**_ENV, "WORK_DIR": str(work_dir)})
+    client = StorageClient(session, settings)  # type: ignore[arg-type]
+
+    assert _publish(client, source) is True
+    assert observed_dirs == [str(work_dir)]
 
 
 def test_httpx_sends_stream_with_exact_content_length_not_chunked(tmp_path):
@@ -316,6 +349,52 @@ def test_existing_content_length_mismatch_fails_without_reading_body(tmp_path):
         _publish(_client(session), source)
 
     assert caught.value.token == "REFINE_ARTIFACT_CONFLICT"
+    assert existing.bytes_yielded == 0
+
+
+@pytest.mark.parametrize("content_type", ["", "text/html", " application/json "])
+def test_duplicate_with_missing_or_wrong_content_type_is_a_stable_conflict(
+    tmp_path, content_type
+):
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"payload")
+    existing = _Response(
+        200,
+        b"payload",
+        headers={"content-type": content_type},
+    )
+    session = _Session(
+        _Response(409, json_body={"code": "ResourceAlreadyExists"}),
+        existing,
+    )
+
+    with pytest.raises(PermanentError) as caught:
+        _publish(_client(session), source)
+
+    assert caught.value.token == "REFINE_ARTIFACT_CONFLICT"
+    assert existing.bytes_yielded == 0
+
+
+@pytest.mark.parametrize("content_encoding", ["gzip", "br", "deflate"])
+def test_duplicate_with_encoded_body_is_rejected_before_decoding_or_hashing(
+    tmp_path, content_encoding
+):
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"payload")
+    existing = _Response(
+        200,
+        b"encoded-body-that-must-not-be-decoded",
+        headers={"content-encoding": content_encoding},
+    )
+    session = _Session(
+        _Response(409, json_body={"code": "ResourceAlreadyExists"}),
+        existing,
+    )
+
+    with pytest.raises(PermanentError) as caught:
+        _publish(_client(session), source)
+
+    assert caught.value.token == "REFINE_ARTIFACT_VERIFY"
     assert existing.bytes_yielded == 0
 
 
@@ -477,6 +556,44 @@ def test_symlink_source_is_rejected_before_any_service_role_write(tmp_path):
     with pytest.raises(PermanentError) as caught:
         _publish(_client(session), source)
 
+    assert caught.value.token == "REFINE_ARTIFACT_SOURCE"
+    assert session.posts == []
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "mkfifo") or not hasattr(os, "O_NONBLOCK"),
+    reason="FIFO race defense requires POSIX nonblocking opens",
+)
+def test_regular_source_replaced_by_fifo_cannot_block_publication(tmp_path, monkeypatch):
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"payload")
+    session = _Session(_Response(200))
+    real_lstat = storage_module.os.lstat
+    raced = False
+
+    def replace_after_lstat(path):
+        nonlocal raced
+        metadata = real_lstat(path)
+        if not raced and os.fspath(path) == os.fspath(source):
+            raced = True
+            source.unlink()
+            os.mkfifo(source)
+        return metadata
+
+    monkeypatch.setattr(storage_module.os, "lstat", replace_after_lstat)
+
+    with pytest.raises(PermanentError) as caught:
+        _client(session).publish_immutable_file(
+            f"{_PREFIX}/artifact.bin",
+            source,
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(b"payload").hexdigest(),
+            expected_size=7,
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
+
+    assert raced is True
     assert caught.value.token == "REFINE_ARTIFACT_SOURCE"
     assert session.posts == []
 

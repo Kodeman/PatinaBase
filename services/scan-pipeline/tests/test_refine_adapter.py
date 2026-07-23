@@ -875,6 +875,39 @@ def test_subprocess_deadline_consumes_slow_process_startup(tmp_path, monkeypatch
     assert cleanup_calls == [process]
 
 
+def test_subprocess_deadline_exhausted_by_log_setup_never_launches(
+    tmp_path, monkeypatch
+):
+    real_init = adapter._CappedTailLog.__init__
+    launched = []
+
+    def slow_log_init(self, path, cap_bytes):
+        real_init(self, path, cap_bytes)
+        time.sleep(0.25)
+
+    def forbidden_popen(*args, **kwargs):
+        launched.append((args, kwargs))
+        raise AssertionError("expired setup must not launch COLMAP")
+
+    monkeypatch.setattr(adapter._CappedTailLog, "__init__", slow_log_init)
+    monkeypatch.setattr(adapter.subprocess, "Popen", forbidden_popen)
+    now = time.monotonic()
+    deadline = RefineDeadline.start(
+        now_monotonic_s=now,
+        lease_expires_at_monotonic_s=now + LEASE_COMPLETION_RESERVE_S + 0.15,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        adapter.run_colmap_subprocess(
+            ["colmap", "feature_extractor"],
+            deadline=deadline,
+            log_path=tmp_path / "slow-setup.log",
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+    assert launched == []
+
+
 def test_subprocess_deadline_consumes_slow_log_drain(tmp_path, monkeypatch):
     real_drain = adapter._drain_colmap_output
 
@@ -931,6 +964,45 @@ def test_subprocess_timeout_cleanup_uncertainty_is_never_retryable(
 
     assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
     assert "synthetic process-group cleanup failure" in str(raised.value)
+
+
+def test_timeout_with_unstoppable_log_drain_is_cleanup_failure(tmp_path, monkeypatch):
+    process = _CompletedPopen()
+    release_drain = threading.Event()
+
+    def timed_out_wait(timeout=None):
+        process.wait_timeouts.append(timeout)
+        raise subprocess.TimeoutExpired("colmap", timeout)
+
+    def stuck_drain(_stream, _sink, _errors):
+        release_drain.wait(5.0)
+
+    def clean_process_group_cleanup(cleanup_process):
+        cleanup_process.returncode = -9
+        return ()
+
+    process.wait = timed_out_wait
+    monkeypatch.setattr(adapter.subprocess, "Popen", lambda *_args, **_kwargs: process)
+    monkeypatch.setattr(adapter, "_drain_colmap_output", stuck_drain)
+    monkeypatch.setattr(adapter, "_kill_and_reap", clean_process_group_cleanup)
+    deadline = RefineDeadline.start(
+        now_monotonic_s=100.0,
+        lease_expires_at_monotonic_s=1000.0,
+    )
+    monkeypatch.setattr(adapter.time, "monotonic", lambda: 175.0)
+
+    try:
+        with pytest.raises(AdapterError) as raised:
+            adapter.run_colmap_subprocess(
+                ["colmap", "feature_extractor"],
+                deadline=deadline,
+                log_path=tmp_path / "stuck-drain.log",
+            )
+    finally:
+        release_drain.set()
+
+    assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert "log drain thread could not be stopped" in str(raised.value)
 
 
 def test_subprocess_propagates_log_drain_errors(tmp_path, monkeypatch):

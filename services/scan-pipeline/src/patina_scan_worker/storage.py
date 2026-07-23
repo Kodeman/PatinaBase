@@ -128,6 +128,12 @@ def _normalized_error_code(value: Any) -> str:
     return "".join(character for character in value.lower() if character.isalnum())
 
 
+def _normalized_media_type(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.split(";", 1)[0].strip().lower()
+
+
 def _is_explicit_duplicate(response: Any) -> bool:
     """Recognize only Supabase's documented current/legacy duplicate bodies."""
 
@@ -242,8 +248,9 @@ class StorageClient:
         object_key: str,
         expected_sha256: str,
         expected_size: int,
+        expected_content_type: str,
     ) -> bool:
-        """Stream at most expected size + one byte from a raced object."""
+        """Stream at most expected size + one raw byte from a raced object."""
 
         try:
             with self._s.stream(
@@ -272,6 +279,21 @@ class StorageClient:
                         token="REFINE_ARTIFACT_VERIFY",
                     )
 
+                content_encoding = resp.headers.get("content-encoding")
+                if (
+                    content_encoding is not None
+                    and content_encoding.strip().lower() != "identity"
+                ):
+                    raise PermanentError(
+                        f"storage conflict verification GET {object_key} returned "
+                        f"encoded content: {content_encoding!r}",
+                        token="REFINE_ARTIFACT_VERIFY",
+                    )
+                if _normalized_media_type(
+                    resp.headers.get("content-type")
+                ) != _normalized_media_type(expected_content_type):
+                    return False
+
                 content_length = resp.headers.get("content-length")
                 if content_length is not None:
                     try:
@@ -286,7 +308,7 @@ class StorageClient:
                 compared = 0
                 comparison_limit = expected_size + 1
                 chunk_size = min(_TRANSFER_CHUNK_BYTES, max(1, comparison_limit))
-                for chunk in resp.iter_bytes(chunk_size=chunk_size):
+                for chunk in resp.iter_raw(chunk_size=chunk_size):
                     remaining = comparison_limit - compared
                     if remaining <= 0:
                         return False
@@ -360,6 +382,7 @@ class StorageClient:
                 )
             flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
             flags |= getattr(os, "O_NOFOLLOW", 0)
+            flags |= getattr(os, "O_NONBLOCK", 0)
             try:
                 descriptor = os.open(source_name, flags)
             except OSError as exc:
@@ -380,7 +403,9 @@ class StorageClient:
                         token="REFINE_ARTIFACT_IO",
                     )
                 with tempfile.TemporaryFile(
-                    mode="w+b", prefix="patina-refine-upload-"
+                    mode="w+b",
+                    prefix="patina-refine-upload-",
+                    dir=self._cfg.work_dir,
                 ) as frozen:
                     _stage_verified_file(
                         source,
@@ -435,6 +460,7 @@ class StorageClient:
                 object_key,
                 expected_sha256,
                 expected_size,
+                content_type,
             ):
                 return False
             raise PermanentError(

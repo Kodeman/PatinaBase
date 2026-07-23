@@ -1465,9 +1465,12 @@ def run_colmap_subprocess(
     """Run one argv-only command using what remains of the shared stage budget.
 
     The future handler creates one :class:`RefineDeadline` from the actual claim
-    lease at stage start and passes it to every call. Setup, process launch,
+    lease at stage start and passes it to every call. Parent-controlled setup,
     waiting, log draining, and the final acceptance check all consume that same
-    absolute deadline. Output streams to a scratch log. A reader thread
+    absolute deadline. The synchronous POSIX ``Popen`` call itself cannot be
+    preempted before it returns a PID, so it is checked immediately afterward
+    and a late launch is killed without being accepted. Output streams to a
+    scratch log. A reader thread
     continuously drains the merged pipe into a hard-capped 64 KiB on-disk tail;
     retries start fresh, and only that tail can be attached to an error.
 
@@ -1494,16 +1497,21 @@ def run_colmap_subprocess(
     wait_timeout_s: float | None = None
     try:
         try:
-            process = subprocess.Popen(
-                list(command),
-                cwd=cwd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                bufsize=0,
-                start_new_session=True,
-            )
-        except OSError as exc:
-            startup_error = exc
+            deadline.remaining_seconds()
+        except AdapterError as exc:
+            deadline_error = exc
+        if deadline_error is None:
+            try:
+                process = subprocess.Popen(
+                    list(command),
+                    cwd=cwd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    bufsize=0,
+                    start_new_session=True,
+                )
+            except OSError as exc:
+                startup_error = exc
         if process is not None:
             if process.stdout is None:  # defensive: stdout=PIPE must provide it
                 raise AdapterError("COLMAP subprocess did not expose its output pipe")
@@ -1556,7 +1564,7 @@ def run_colmap_subprocess(
                         drain_errors.append(exc)
                 drain_thread.join(1.0)
                 if drain_thread.is_alive():
-                    drain_errors.append(RuntimeError("COLMAP log drain did not stop"))
+                    cleanup_errors.append("COLMAP log drain thread could not be stopped")
         try:
             sink.close()
         except BaseException as exc:
