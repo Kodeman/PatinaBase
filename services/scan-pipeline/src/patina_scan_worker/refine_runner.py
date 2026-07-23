@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import errno
 import hashlib
+import json
 import math
 import os
 import re
@@ -62,8 +63,13 @@ REFINE_MANIFEST_NAME = "refine-manifest-v1.json"
 MAX_INLINE_ARTIFACT_BYTES = 2 * 1024 * 1024
 ROOM_SCANS_BINARY_TRANSPORT_TYPE = "application/octet-stream"
 MAX_RUNNER_ERROR_BYTES = COLMAP_LOG_TAIL_BYTES
+MAX_ENGINE_TELEMETRY_BYTES = 16 * 1024
+MAX_ENGINE_TELEMETRY_METRICS = 32
+MAX_ENGINE_TELEMETRY_KEY_BYTES = 64
+MAX_ENGINE_TELEMETRY_STRING_BYTES = 512
 _DEADLINE_CHECK_INTERVAL = 32
 _SAFE_ARTIFACT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+_SAFE_TELEMETRY_KEY = re.compile(r"[a-z][A-Za-z0-9.]{0,63}")
 
 _RUNNER_ARTIFACT_NAMES = frozenset(
     {
@@ -75,16 +81,22 @@ _RUNNER_ARTIFACT_NAMES = frozenset(
 )
 _REQUIRED_ENGINE_ARTIFACT_NAMES = frozenset(
     {
+        "adapter-v2.json",
+        "pairs-v2.txt",
         "database-v1.db",
         "seed-model-v1.tar",
         "aligned-sparse-model-v1.tar",
+        "engine-command-evidence-v1.json",
     }
 )
 _ENGINE_ARTIFACT_MEDIA_TYPES: Mapping[str, str] = MappingProxyType(
     {
+        "adapter-v2.json": "application/json",
+        "pairs-v2.txt": "text/plain",
         "database-v1.db": "application/vnd.sqlite3",
         "seed-model-v1.tar": "application/x-tar",
         "aligned-sparse-model-v1.tar": "application/x-tar",
+        "engine-command-evidence-v1.json": "application/json",
     }
 )
 
@@ -233,8 +245,34 @@ class InputArtifact:
 
 @dataclass(frozen=True)
 class NamedRefinedPose:
-    image_name: str
+    engine_image_name: str
     cam_from_world: ColmapPose
+
+
+@dataclass(frozen=True)
+class RefineEngineOutputReference:
+    """Immutable identity and integrity claim for one canonical engine output."""
+
+    name: str
+    relative_path: str
+    sha256: str
+    size_bytes: int
+    transport_content_type: str
+    semantic_media_type: str
+
+
+EngineTelemetryScalar: TypeAlias = bool | int | float | str
+
+
+@dataclass(frozen=True)
+class RefineEngineTelemetry:
+    """Small immutable summary; timestamped command logs remain scratch-only."""
+
+    duration_ms: int
+    iterations: int
+    vram_peak_mb: int
+    command_count: int
+    metrics: tuple[tuple[str, EngineTelemetryScalar], ...]
 
 
 @dataclass(frozen=True)
@@ -245,8 +283,8 @@ class RefineEngineCandidate:
     binding_version: str
     refined_poses: tuple[NamedRefinedPose, ...]
     evidence: RefinementEvidence
-    iterations: int
-    vram_peak_mb: int
+    outputs: tuple[RefineEngineOutputReference, ...]
+    telemetry: RefineEngineTelemetry
 
 
 @dataclass(frozen=True)
@@ -262,12 +300,19 @@ class RefineRunRequest:
 
 @dataclass(frozen=True)
 class RefineFrameInput:
-    """One normalized frame plus its already-materialized workspace source."""
+    """One source HEIC and its distinct canonical materialized engine PPM."""
 
     frame: NormalizedFrame
     relative_source_path: str
+    source_archive_key: str
+    source_member: str
     source_sha256: str
     source_size_bytes: int
+    engine_name: str
+    engine_relative_path: str
+    engine_sha256: str
+    engine_size_bytes: int
+    materializer_id: str
 
 
 @dataclass(frozen=True)
@@ -283,8 +328,16 @@ class PreparedRefineFrame:
     frame: NormalizedFrame
     source_path: Path
     relative_source_path: str
+    source_archive_key: str
+    source_member: str
     source_sha256: str
     source_size_bytes: int
+    engine_name: str
+    engine_path: Path
+    engine_relative_path: str
+    engine_sha256: str
+    engine_size_bytes: int
+    materializer_id: str
 
 
 @dataclass(frozen=True)
@@ -361,6 +414,9 @@ class RefineRunResult:
     alignment: Sim3
     evidence_verdict: RefinementEvidenceVerdict
     trajectory_shape_change: TrajectoryShapeChangeMetrics
+    frame_inputs: tuple[PreparedRefineFrame, ...]
+    engine_outputs: tuple[RefineEngineOutputReference, ...]
+    engine_telemetry: RefineEngineTelemetry
     manifest_key: str
     manifest_sha256: str
     files: tuple[RefineArtifact, ...]
@@ -677,13 +733,18 @@ def _validate_frame_consistency(frame: NormalizedFrame) -> None:
         )
 
 
-def _safe_relative_path(value: object, label: str) -> PurePosixPath:
+def _safe_relative_path(
+    value: object,
+    label: str,
+    *,
+    failure_code: RefineFailureCode = RefineFailureCode.INPUT_INVALID,
+) -> PurePosixPath:
     if (
-        not isinstance(value, str)
+        type(value) is not str
         or not value
         or any(character in value for character in ("\\", "?", "#", "%"))
     ):
-        _fail(RefineFailureCode.INPUT_INVALID, f"{label} must be a safe relative path")
+        _fail(failure_code, f"{label} must be a safe relative path")
     path = PurePosixPath(value)
     if (
         path.is_absolute()
@@ -691,7 +752,7 @@ def _safe_relative_path(value: object, label: str) -> PurePosixPath:
         or any(part in ("", ".", "..") for part in path.parts)
         or str(path) != value
     ):
-        _fail(RefineFailureCode.INPUT_INVALID, f"{label} must be a safe relative path")
+        _fail(failure_code, f"{label} must be a safe relative path")
     return path
 
 
@@ -783,20 +844,21 @@ def _stable_file_sha256(
     return digest.hexdigest(), after
 
 
-def _verified_frame_source(
+def _verified_frame_file(
     *,
     workspace_root: Path,
-    frame_input: RefineFrameInput,
+    relative_path: object,
+    expected_name: str,
+    expected_sha256: object,
+    expected_size_bytes: object,
+    label: str,
     deadline: RefineDeadline,
 ) -> Path:
-    relative = _safe_relative_path(
-        frame_input.relative_source_path,
-        "frame source path",
-    )
-    if relative.name != frame_input.frame.image_name:
+    relative = _safe_relative_path(relative_path, f"{label} path")
+    if relative.name != expected_name:
         _fail(
             RefineFailureCode.INPUT_INVALID,
-            "frame source basename must equal the canonical image name",
+            f"{label} basename must equal its declared image name",
         )
     candidate = workspace_root.joinpath(*relative.parts)
     try:
@@ -811,22 +873,21 @@ def _verified_frame_source(
             "frame source must be a contained regular file without symlinks",
         )
     if (
-        isinstance(frame_input.source_size_bytes, bool)
-        or not isinstance(frame_input.source_size_bytes, int)
-        or frame_input.source_size_bytes <= 0
-        or file_stat.st_size != frame_input.source_size_bytes
+        type(expected_size_bytes) is not int
+        or expected_size_bytes <= 0
+        or file_stat.st_size != expected_size_bytes
     ):
         _fail(
             RefineFailureCode.INPUT_INVALID,
-            "frame source size does not match its ledger",
+            f"{label} size does not match its ledger",
         )
     if (
-        not isinstance(frame_input.source_sha256, str)
-        or re.fullmatch(r"[0-9a-f]{64}", frame_input.source_sha256) is None
+        type(expected_sha256) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
     ):
         _fail(
             RefineFailureCode.INPUT_INVALID,
-            "frame source sha256 must be lowercase hexadecimal",
+            f"{label} sha256 must be lowercase hexadecimal",
         )
     try:
         actual_sha256, stable_stat = _stable_file_sha256(
@@ -837,12 +898,12 @@ def _verified_frame_source(
         _fail(RefineFailureCode.INPUT_IO, str(exc))
     except ValueError as exc:
         _fail(RefineFailureCode.INPUT_INVALID, str(exc))
-    if stable_stat.st_size != frame_input.source_size_bytes:
-        _fail(RefineFailureCode.INPUT_INVALID, "frame source changed before hashing")
-    if actual_sha256 != frame_input.source_sha256:
+    if stable_stat.st_size != expected_size_bytes:
+        _fail(RefineFailureCode.INPUT_INVALID, f"{label} changed before hashing")
+    if actual_sha256 != expected_sha256:
         _fail(
             RefineFailureCode.INPUT_INVALID,
-            "frame source sha256 does not match its ledger",
+            f"{label} sha256 does not match its ledger",
         )
     return resolved
 
@@ -904,6 +965,7 @@ def _validate_request(
     if len(frame_values) < 3:
         _fail(RefineFailureCode.LOW_OVERLAP, "refine needs at least three frames")
     names: set[str] = set()
+    engine_names: set[str] = set()
     ordinals: set[int] = set()
     prepared_frames: list[PreparedRefineFrame] = []
     for frame_index, frame_input in enumerate(frame_values):
@@ -919,7 +981,7 @@ def _validate_request(
         _validate_frame_consistency(frame)
         name = frame.image_name
         if (
-            not isinstance(name, str)
+            type(name) is not str
             or not name
             or PurePosixPath(name).name != name
             or any(character.isspace() for character in name)
@@ -950,9 +1012,65 @@ def _validate_request(
                 RefineFailureCode.INPUT_INVALID,
                 "bundle frame basename must equal the canonical image name",
             )
-        source_path = _verified_frame_source(
+        source_archive_key = _safe_relative_path(
+            frame_input.source_archive_key,
+            "frame source archive key",
+        )
+        source_member = _safe_relative_path(
+            frame_input.source_member,
+            "frame source member",
+        )
+        if str(source_member) != str(heic_path):
+            _fail(
+                RefineFailureCode.INPUT_INVALID,
+                "frame source member must equal the normalized HEIC path",
+            )
+        if source_member.suffix.lower() != ".heic":
+            _fail(
+                RefineFailureCode.INPUT_INVALID,
+                "frame source member must identify a HEIC",
+            )
+        if type(frame_input.engine_name) is not str:
+            _fail(
+                RefineFailureCode.INPUT_INVALID,
+                "frame engine image name must be an immutable string",
+            )
+        engine_name_path = PurePosixPath(frame_input.engine_name)
+        if (
+            engine_name_path.name != frame_input.engine_name
+            or engine_name_path.suffix != ".ppm"
+            or frame_input.engine_name in engine_names
+        ):
+            _fail(
+                RefineFailureCode.INPUT_INVALID,
+                "frame engine image names must be unique PPM basenames",
+            )
+        if (
+            type(frame_input.materializer_id) is not str
+            or not frame_input.materializer_id
+            or len(frame_input.materializer_id.encode("utf-8")) > 128
+            or any(ord(character) < 0x21 for character in frame_input.materializer_id)
+        ):
+            _fail(
+                RefineFailureCode.INPUT_INVALID,
+                "frame materializer id must be a bounded visible string",
+            )
+        source_path = _verified_frame_file(
             workspace_root=workspace_root,
-            frame_input=frame_input,
+            relative_path=frame_input.relative_source_path,
+            expected_name=name,
+            expected_sha256=frame_input.source_sha256,
+            expected_size_bytes=frame_input.source_size_bytes,
+            label="frame source HEIC",
+            deadline=deadline,
+        )
+        engine_path = _verified_frame_file(
+            workspace_root=workspace_root,
+            relative_path=frame_input.engine_relative_path,
+            expected_name=frame_input.engine_name,
+            expected_sha256=frame_input.engine_sha256,
+            expected_size_bytes=frame_input.engine_size_bytes,
+            label="frame engine PPM",
             deadline=deadline,
         )
         prepared_frames.append(
@@ -960,11 +1078,20 @@ def _validate_request(
                 frame=frame,
                 source_path=source_path,
                 relative_source_path=frame_input.relative_source_path,
+                source_archive_key=str(source_archive_key),
+                source_member=str(source_member),
                 source_sha256=frame_input.source_sha256,
                 source_size_bytes=frame_input.source_size_bytes,
+                engine_name=frame_input.engine_name,
+                engine_path=engine_path,
+                engine_relative_path=frame_input.engine_relative_path,
+                engine_sha256=frame_input.engine_sha256,
+                engine_size_bytes=frame_input.engine_size_bytes,
+                materializer_id=frame_input.materializer_id,
             )
         )
         names.add(name)
+        engine_names.add(frame_input.engine_name)
         ordinals.add(frame.ordinal)
 
     input_values = _snapshot_sequence(
@@ -1010,22 +1137,42 @@ def _validate_request(
             )
         input_keys.add(key)
         validated_inputs.append(source)
+    for frame_index, prepared_frame in enumerate(prepared_frames):
+        _deadline_checkpoint(deadline, frame_index)
+        if prepared_frame.source_archive_key not in input_keys:
+            _fail(
+                RefineFailureCode.INPUT_INVALID,
+                "frame source archive key is absent from the input ledger",
+            )
     _require_engine_budget(deadline)
+    sorted_frames = tuple(
+        sorted(
+            prepared_frames,
+            key=lambda value: (
+                value.frame.frame_timestamp_s,
+                value.frame.image_name,
+            ),
+        )
+    )
+    for engine_ordinal, prepared_frame in enumerate(sorted_frames):
+        _deadline_checkpoint(deadline, engine_ordinal)
+        canonical_name = f"frame_{engine_ordinal:06d}.ppm"
+        if (
+            prepared_frame.engine_name != canonical_name
+            or prepared_frame.engine_relative_path != f"images/{canonical_name}"
+        ):
+            _fail(
+                RefineFailureCode.INPUT_INVALID,
+                "engine PPM identity must use the canonical ordered name and path",
+            )
+
     prepared = PreparedRefineRunRequest(
         user_id=request.user_id,
         scan_id=request.scan_id,
         room_file_id=request.room_file_id,
         room_file_version=request.room_file_version,
         workspace_root=workspace_root,
-        frames=tuple(
-            sorted(
-                prepared_frames,
-                key=lambda value: (
-                    value.frame.frame_timestamp_s,
-                    value.frame.image_name,
-                ),
-            )
-        ),
+        frames=sorted_frames,
         inputs=tuple(sorted(validated_inputs, key=lambda source: source.key)),
     )
     return manifest_key, prepared
@@ -1109,6 +1256,218 @@ def _snapshot_candidate_pose(value: object) -> ColmapPose:
     )
 
 
+def _snapshot_engine_output_references(
+    value: object,
+    *,
+    deadline: RefineDeadline,
+) -> tuple[RefineEngineOutputReference, ...]:
+    if type(value) is not tuple:
+        _fail(
+            RefineFailureCode.ARTIFACT_INVALID,
+            "candidate output references must be an immutable tuple",
+        )
+    if len(value) != len(_REQUIRED_ENGINE_ARTIFACT_NAMES):
+        _fail(
+            RefineFailureCode.ARTIFACT_INVALID,
+            "candidate output references must contain the closed canonical set",
+        )
+    seen: set[str] = set()
+    snapshot: list[RefineEngineOutputReference] = []
+    for index, item in enumerate(value):
+        _deadline_checkpoint(deadline, index)
+        if type(item) is not RefineEngineOutputReference:
+            _fail(
+                RefineFailureCode.ARTIFACT_INVALID,
+                "candidate output reference has the wrong contract type",
+            )
+        if (
+            type(item.name) is not str
+            or item.name not in _ENGINE_ARTIFACT_MEDIA_TYPES
+            or item.name in seen
+        ):
+            _fail(
+                RefineFailureCode.ARTIFACT_INVALID,
+                "candidate output names must be the unique canonical engine set",
+            )
+        relative_path = _safe_relative_path(
+            item.relative_path,
+            "candidate output path",
+            failure_code=RefineFailureCode.ARTIFACT_INVALID,
+        )
+        if relative_path.name != item.name:
+            _fail(
+                RefineFailureCode.ARTIFACT_INVALID,
+                "candidate output path basename must equal its canonical name",
+            )
+        if (
+            type(item.sha256) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", item.sha256) is None
+            or type(item.size_bytes) is not int
+            or item.size_bytes <= 0
+            or type(item.transport_content_type) is not str
+            or item.transport_content_type != ROOM_SCANS_BINARY_TRANSPORT_TYPE
+            or type(item.semantic_media_type) is not str
+            or item.semantic_media_type != _ENGINE_ARTIFACT_MEDIA_TYPES[item.name]
+        ):
+            _fail(
+                RefineFailureCode.ARTIFACT_INVALID,
+                "candidate output integrity or media metadata is invalid",
+            )
+        seen.add(item.name)
+        snapshot.append(
+            RefineEngineOutputReference(
+                name=item.name,
+                relative_path=str(relative_path),
+                sha256=item.sha256,
+                size_bytes=item.size_bytes,
+                transport_content_type=item.transport_content_type,
+                semantic_media_type=item.semantic_media_type,
+            )
+        )
+    if seen != _REQUIRED_ENGINE_ARTIFACT_NAMES:
+        _fail(
+            RefineFailureCode.ARTIFACT_INVALID,
+            "candidate output references omit a canonical engine artifact",
+        )
+    _require_engine_budget(deadline)
+    return tuple(sorted(snapshot, key=lambda item: item.name))
+
+
+def _snapshot_engine_telemetry(
+    value: object,
+    *,
+    deadline: RefineDeadline,
+) -> RefineEngineTelemetry:
+    if type(value) is not RefineEngineTelemetry:
+        _fail(
+            RefineFailureCode.EVIDENCE_INVALID,
+            "engine telemetry has the wrong contract type",
+        )
+    for label, number in (
+        ("duration_ms", value.duration_ms),
+        ("iterations", value.iterations),
+        ("vram_peak_mb", value.vram_peak_mb),
+        ("command_count", value.command_count),
+    ):
+        if type(number) is not int or number < 0 or number > 2**63 - 1:
+            _fail(
+                RefineFailureCode.EVIDENCE_INVALID,
+                f"engine telemetry {label} must be a bounded non-negative integer",
+            )
+    if type(value.metrics) is not tuple:
+        _fail(
+            RefineFailureCode.EVIDENCE_INVALID,
+            "engine telemetry metrics must be an immutable tuple",
+        )
+    if len(value.metrics) > MAX_ENGINE_TELEMETRY_METRICS:
+        _fail(
+            RefineFailureCode.EVIDENCE_INVALID,
+            "engine telemetry has too many metrics",
+        )
+    seen: set[str] = set()
+    metrics: list[tuple[str, EngineTelemetryScalar]] = []
+    for index, row in enumerate(value.metrics):
+        _deadline_checkpoint(deadline, index)
+        if type(row) is not tuple or len(row) != 2:
+            _fail(
+                RefineFailureCode.EVIDENCE_INVALID,
+                "engine telemetry metric rows must be immutable key/value pairs",
+            )
+        key, scalar = row
+        if (
+            type(key) is not str
+            or len(key.encode("utf-8")) > MAX_ENGINE_TELEMETRY_KEY_BYTES
+            or _SAFE_TELEMETRY_KEY.fullmatch(key) is None
+            or key in seen
+        ):
+            _fail(
+                RefineFailureCode.EVIDENCE_INVALID,
+                "engine telemetry metric keys must be unique bounded identifiers",
+            )
+        if type(scalar) is bool:
+            copied: EngineTelemetryScalar = scalar
+        elif type(scalar) is int:
+            if abs(scalar) > 2**63 - 1:
+                _fail(
+                    RefineFailureCode.EVIDENCE_INVALID,
+                    "engine telemetry integer metric is out of range",
+                )
+            copied = scalar
+        elif type(scalar) is float:
+            if not math.isfinite(scalar):
+                _fail(
+                    RefineFailureCode.EVIDENCE_INVALID,
+                    "engine telemetry float metric must be finite",
+                )
+            copied = scalar
+        elif type(scalar) is str:
+            if (
+                len(scalar.encode("utf-8")) > MAX_ENGINE_TELEMETRY_STRING_BYTES
+                or any(ord(character) < 0x20 for character in scalar)
+            ):
+                _fail(
+                    RefineFailureCode.EVIDENCE_INVALID,
+                    "engine telemetry string metric is invalid or too large",
+                )
+            copied = scalar
+        else:
+            _fail(
+                RefineFailureCode.EVIDENCE_INVALID,
+                "engine telemetry metrics must use exact JSON scalar types",
+            )
+        seen.add(key)
+        metrics.append((key, copied))
+    snapshot = RefineEngineTelemetry(
+        duration_ms=value.duration_ms,
+        iterations=value.iterations,
+        vram_peak_mb=value.vram_peak_mb,
+        command_count=value.command_count,
+        metrics=tuple(sorted(metrics)),
+    )
+    try:
+        encoded = _canonical_json_bytes(_telemetry_document(snapshot))
+    except (AdapterError, TypeError, ValueError) as exc:
+        _fail(RefineFailureCode.EVIDENCE_INVALID, str(exc))
+    if len(encoded) > MAX_ENGINE_TELEMETRY_BYTES:
+        _fail(
+            RefineFailureCode.EVIDENCE_INVALID,
+            "engine telemetry summary exceeds its canonical byte budget",
+        )
+    _require_engine_budget(deadline)
+    return snapshot
+
+
+def _snapshot_refinement_evidence(value: object) -> RefinementEvidence:
+    if type(value) is not RefinementEvidence:
+        _fail(
+            RefineFailureCode.EVIDENCE_INVALID,
+            "engine evidence has the wrong contract type",
+        )
+    return RefinementEvidence(
+        input_images=value.input_images,
+        registered_images_before=value.registered_images_before,
+        registered_images_after=value.registered_images_after,
+        common_observations=value.common_observations,
+        common_observation_set_sha256=value.common_observation_set_sha256,
+        reprojection_rmse_px_before=value.reprojection_rmse_px_before,
+        reprojection_rmse_px_after=value.reprojection_rmse_px_after,
+        verified_loop_edges=value.verified_loop_edges,
+        verified_loop_set_sha256=value.verified_loop_set_sha256,
+        loop_rotation_rmse_deg_before=value.loop_rotation_rmse_deg_before,
+        loop_rotation_rmse_deg_after=value.loop_rotation_rmse_deg_after,
+        loop_translation_direction_rmse_deg_before=(
+            value.loop_translation_direction_rmse_deg_before
+        ),
+        loop_translation_direction_rmse_deg_after=(
+            value.loop_translation_direction_rmse_deg_after
+        ),
+        external_error_m_before=value.external_error_m_before,
+        external_error_m_after=value.external_error_m_after,
+        external_evidence_kind=value.external_evidence_kind,
+        external_evidence_ref=value.external_evidence_ref,
+    )
+
+
 def _snapshot_candidate(
     candidate: object,
     *,
@@ -1133,14 +1492,14 @@ def _snapshot_candidate(
                 RefineFailureCode.SIM3_INVALID,
                 "refined pose row has the wrong contract type",
             )
-        if type(row.image_name) is not str:
+        if type(row.engine_image_name) is not str:
             _fail(
                 RefineFailureCode.SIM3_INVALID,
                 "refined pose image name must be an immutable string",
             )
         pose_rows.append(
             NamedRefinedPose(
-                image_name=row.image_name,
+                engine_image_name=row.engine_image_name,
                 cam_from_world=_snapshot_candidate_pose(row.cam_from_world),
             )
         )
@@ -1148,9 +1507,15 @@ def _snapshot_candidate(
         cli_version=candidate.cli_version,
         binding_version=candidate.binding_version,
         refined_poses=tuple(pose_rows),
-        evidence=candidate.evidence,
-        iterations=candidate.iterations,
-        vram_peak_mb=candidate.vram_peak_mb,
+        evidence=_snapshot_refinement_evidence(candidate.evidence),
+        outputs=_snapshot_engine_output_references(
+            getattr(candidate, "outputs", None),
+            deadline=deadline,
+        ),
+        telemetry=_snapshot_engine_telemetry(
+            getattr(candidate, "telemetry", None),
+            deadline=deadline,
+        ),
     )
 
 
@@ -1254,15 +1619,6 @@ def _validate_candidate_versions(
         )
     except Exception as exc:  # noqa: BLE001 - malformed versions also fail closed
         _fail(RefineFailureCode.ENGINE_VERSION_MISMATCH, str(exc))
-    for label, value in (
-        ("iterations", candidate.iterations),
-        ("vram_peak_mb", candidate.vram_peak_mb),
-    ):
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            _fail(
-                RefineFailureCode.EVIDENCE_INVALID,
-                f"{label} must be a non-negative integer",
-            )
     _require_engine_budget(deadline)
 
 
@@ -1285,7 +1641,7 @@ def _validate_and_align(
     TrajectoryShapeChangeMetrics,
 ]:
     _require_engine_budget(deadline)
-    expected = {value.frame.image_name: value.frame for value in request.frames}
+    expected = {value.engine_name: value for value in request.frames}
     refined: dict[str, ColmapPose] = {}
     for row_index, row in enumerate(candidate.refined_poses):
         _deadline_checkpoint(deadline, row_index)
@@ -1294,7 +1650,7 @@ def _validate_and_align(
                 RefineFailureCode.SIM3_INVALID,
                 "refined pose row has the wrong contract type",
             )
-        name = row.image_name
+        name = row.engine_image_name
         if (
             not isinstance(name, str)
             or not name
@@ -1310,15 +1666,15 @@ def _validate_and_align(
                 RefineFailureCode.SIM3_INVALID,
                 "refined poses must have unique named rows",
             )
-        frame = expected.get(name)
-        if frame is None:
+        prepared_frame = expected.get(name)
+        if prepared_frame is None:
             _fail(
                 RefineFailureCode.SIM3_INVALID, "refined poses contain an unknown image"
             )
         try:
             EngineImage(
                 name=name,
-                intrinsics=frame.intrinsics,
+                intrinsics=prepared_frame.frame.intrinsics,
                 cam_from_world=row.cam_from_world,
             )
             round_trip = arkit_c2w_to_colmap_w2c(
@@ -1362,7 +1718,7 @@ def _validate_and_align(
     for name_index, name in enumerate(ordered_names):
         _deadline_checkpoint(deadline, name_index)
         source_centres.append(_camera_center(refined[name]))
-        target_centres.append(expected[name].camera_center_m)
+        target_centres.append(expected[name].frame.camera_center_m)
     try:
         _require_engine_budget(deadline)
         alignment = estimate_sim3(source_centres, target_centres)
@@ -1521,6 +1877,55 @@ def _shape_document(shape: TrajectoryShapeChangeMetrics) -> dict[str, object]:
     }
 
 
+def _telemetry_document(telemetry: RefineEngineTelemetry) -> dict[str, object]:
+    return {
+        "durationMs": telemetry.duration_ms,
+        "iterations": telemetry.iterations,
+        "vramPeakMb": telemetry.vram_peak_mb,
+        "commandCount": telemetry.command_count,
+        "metrics": [
+            {"name": key, "value": value} for key, value in telemetry.metrics
+        ],
+    }
+
+
+def _frame_input_document(frame: PreparedRefineFrame) -> dict[str, object]:
+    return {
+        "imageName": frame.frame.image_name,
+        "relativeSourcePath": frame.relative_source_path,
+        "sha256": frame.source_sha256,
+        "sizeBytes": frame.source_size_bytes,
+        "sourceHeic": {
+            "archiveKey": frame.source_archive_key,
+            "member": frame.source_member,
+            "imageName": frame.frame.image_name,
+            "relativePath": frame.relative_source_path,
+            "sha256": frame.source_sha256,
+            "sizeBytes": frame.source_size_bytes,
+        },
+        "enginePpm": {
+            "imageName": frame.engine_name,
+            "relativePath": frame.engine_relative_path,
+            "sha256": frame.engine_sha256,
+            "sizeBytes": frame.engine_size_bytes,
+        },
+        "materializerId": frame.materializer_id,
+    }
+
+
+def _engine_output_document(
+    reference: RefineEngineOutputReference,
+) -> dict[str, object]:
+    return {
+        "name": reference.name,
+        "relativePath": reference.relative_path,
+        "transportContentType": reference.transport_content_type,
+        "semanticMediaType": reference.semantic_media_type,
+        "sha256": reference.sha256,
+        "sizeBytes": reference.size_bytes,
+    }
+
+
 def _evidence_document(
     evidence: RefinementEvidence,
     verdict: RefinementEvidenceVerdict,
@@ -1563,17 +1968,20 @@ def _pose_documents(
     *,
     deadline: RefineDeadline,
 ) -> tuple[dict[str, object], dict[str, object]]:
-    frames = {value.frame.image_name: value.frame for value in request.frames}
+    frames = {value.engine_name: value for value in request.frames}
     pose_rows: list[dict[str, object]] = []
     delta_rows: list[dict[str, object]] = []
     for row_index, row in enumerate(aligned_poses):
         _deadline_checkpoint(deadline, row_index)
-        frame = frames[row.image_name]
+        prepared_frame = frames[row.engine_image_name]
+        frame = prepared_frame.frame
         aligned_center = _camera_center(row.cam_from_world)
         raw_center = frame.camera_center_m
         pose_rows.append(
             {
-                "imageName": row.image_name,
+                "imageName": frame.image_name,
+                "sourceImageName": frame.image_name,
+                "engineImageName": row.engine_image_name,
                 "cameraCenterMeters": list(aligned_center),
                 "camFromWorld": {
                     "qvecHamilton": list(row.cam_from_world.qvec),
@@ -1587,7 +1995,9 @@ def _pose_documents(
         )
         delta_rows.append(
             {
-                "imageName": row.image_name,
+                "imageName": frame.image_name,
+                "sourceImageName": frame.image_name,
+                "engineImageName": row.engine_image_name,
                 "rawCameraCenterMeters": list(raw_center),
                 "alignedCameraCenterMeters": list(aligned_center),
                 "cameraCenterDeltaMeters": [
@@ -1607,6 +2017,7 @@ def _validate_engine_artifacts(
     values: object,
     *,
     workspace_root: Path,
+    expected_outputs: tuple[RefineEngineOutputReference, ...],
     deadline: RefineDeadline,
 ) -> tuple[RefineFileArtifact, ...]:
     artifacts = _snapshot_sequence(
@@ -1616,6 +2027,7 @@ def _validate_engine_artifacts(
         deadline=deadline,
     )
     seen: set[str] = set()
+    expected_by_name = {reference.name: reference for reference in expected_outputs}
     validated: list[RefineFileArtifact] = []
     for artifact_index, artifact in enumerate(artifacts):
         _deadline_checkpoint(deadline, artifact_index)
@@ -1677,9 +2089,23 @@ def _validate_engine_artifacts(
                 RefineFailureCode.ARTIFACT_INVALID,
                 "engine artifact must be a contained regular file without symlinks",
             )
+        reference = expected_by_name.get(artifact.name)
+        if reference is None:
+            _fail(
+                RefineFailureCode.ARTIFACT_INVALID,
+                "engine artifact is absent from the candidate output references",
+            )
+        try:
+            relative_path = resolved.relative_to(workspace_root).as_posix()
+        except ValueError as exc:  # pragma: no cover - containment checked above
+            _fail(RefineFailureCode.ARTIFACT_INVALID, str(exc))
+        if relative_path != reference.relative_path:
+            _fail(
+                RefineFailureCode.ARTIFACT_INVALID,
+                "engine artifact path disagrees with its candidate output reference",
+            )
         if (
-            isinstance(artifact.size_bytes, bool)
-            or not isinstance(artifact.size_bytes, int)
+            type(artifact.size_bytes) is not int
             or artifact.size_bytes <= 0
             or artifact.size_bytes != file_stat.st_size
         ):
@@ -1687,7 +2113,7 @@ def _validate_engine_artifacts(
                 RefineFailureCode.ARTIFACT_INVALID, "engine artifact size is untrusted"
             )
         if (
-            not isinstance(artifact.sha256, str)
+            type(artifact.sha256) is not str
             or re.fullmatch(r"[0-9a-f]{64}", artifact.sha256) is None
         ):
             _fail(
@@ -1713,8 +2139,27 @@ def _validate_engine_artifacts(
                 RefineFailureCode.ARTIFACT_INVALID,
                 "engine artifact sha256 is untrusted",
             )
+        if (
+            artifact.sha256 != reference.sha256
+            or artifact.size_bytes != reference.size_bytes
+            or artifact.transport_content_type != reference.transport_content_type
+            or artifact.semantic_media_type != reference.semantic_media_type
+        ):
+            _fail(
+                RefineFailureCode.ARTIFACT_INVALID,
+                "engine artifact disagrees with its immutable candidate reference",
+            )
         seen.add(artifact.name)
-        validated.append(artifact)
+        validated.append(
+            RefineFileArtifact(
+                name=artifact.name,
+                source_path=resolved,
+                sha256=artifact.sha256,
+                size_bytes=artifact.size_bytes,
+                transport_content_type=artifact.transport_content_type,
+                semantic_media_type=artifact.semantic_media_type,
+            )
+        )
     missing = _REQUIRED_ENGINE_ARTIFACT_NAMES - seen
     if missing:
         _fail(
@@ -1754,6 +2199,629 @@ def _artifact_row(artifact: RefineArtifact) -> dict[str, object]:
         "sha256": artifact.sha256,
         "sizeBytes": artifact.size_bytes,
     }
+
+
+def _publication_invalid(message: str) -> NoReturn:
+    _fail(RefineFailureCode.ARTIFACT_INVALID, message)
+
+
+def _strict_mapping(
+    value: object,
+    keys: frozenset[str],
+    label: str,
+) -> dict[str, object]:
+    if type(value) is not dict or set(value) != keys:
+        _publication_invalid(f"{label} must contain exactly {', '.join(sorted(keys))}")
+    return value
+
+
+def _strict_list(value: object, label: str) -> list[object]:
+    if type(value) is not list:
+        _publication_invalid(f"{label} must be a JSON array")
+    return value
+
+
+def _strict_string(value: object, label: str) -> str:
+    if type(value) is not str or not value:
+        _publication_invalid(f"{label} must be a non-empty string")
+    return value
+
+
+def _strict_integer(
+    value: object,
+    label: str,
+    *,
+    minimum: int = 0,
+) -> int:
+    if type(value) is not int or value < minimum or value > 2**63 - 1:
+        _publication_invalid(f"{label} must be a bounded integer")
+    return value
+
+
+def _strict_number(value: object, label: str) -> float:
+    if type(value) not in (int, float) or not math.isfinite(float(value)):
+        _publication_invalid(f"{label} must be a finite JSON number")
+    return float(value)
+
+
+def _strict_json_scalar(value: object, label: str) -> EngineTelemetryScalar:
+    if type(value) is bool:
+        return value
+    if type(value) is int:
+        if abs(value) > 2**63 - 1:
+            _publication_invalid(f"{label} integer is out of range")
+        return value
+    if type(value) is float:
+        if not math.isfinite(value):
+            _publication_invalid(f"{label} float is not finite")
+        return value
+    if type(value) is str:
+        if (
+            len(value.encode("utf-8")) > MAX_ENGINE_TELEMETRY_STRING_BYTES
+            or not value.isprintable()
+        ):
+            _publication_invalid(f"{label} string is invalid")
+        return value
+    _publication_invalid(f"{label} must use an exact JSON scalar type")
+
+
+def _strict_sha256(value: object, label: str) -> str:
+    if type(value) is not str or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+        _publication_invalid(f"{label} must be a lowercase sha256")
+    return value
+
+
+def _strict_safe_relative_path(value: object, label: str) -> str:
+    text = _strict_string(value, label)
+    if any(character in text for character in ("\\", "?", "#", "%")):
+        _publication_invalid(f"{label} must be a safe relative path")
+    path = PurePosixPath(text)
+    if (
+        path.is_absolute()
+        or any(part in ("", ".", "..") for part in path.parts)
+        or str(path) != text
+    ):
+        _publication_invalid(f"{label} must be a safe relative path")
+    return text
+
+
+def _strict_publication_telemetry(value: object) -> RefineEngineTelemetry:
+    if type(value) is not RefineEngineTelemetry:
+        _publication_invalid("result engine telemetry has the wrong contract type")
+    for label, number in (
+        ("durationMs", value.duration_ms),
+        ("iterations", value.iterations),
+        ("vramPeakMb", value.vram_peak_mb),
+        ("commandCount", value.command_count),
+    ):
+        _strict_integer(number, f"result engine telemetry {label}")
+    if type(value.metrics) is not tuple or len(value.metrics) > MAX_ENGINE_TELEMETRY_METRICS:
+        _publication_invalid("result engine telemetry metrics are not bounded")
+    seen: set[str] = set()
+    for row in value.metrics:
+        if type(row) is not tuple or len(row) != 2:
+            _publication_invalid("result engine telemetry metric row is malformed")
+        key, scalar = row
+        if (
+            type(key) is not str
+            or _SAFE_TELEMETRY_KEY.fullmatch(key) is None
+            or key in seen
+        ):
+            _publication_invalid("result engine telemetry metric key is invalid")
+        if type(scalar) is int:
+            if abs(scalar) > 2**63 - 1:
+                _publication_invalid("result engine telemetry integer is out of range")
+        elif type(scalar) is float:
+            if not math.isfinite(scalar):
+                _publication_invalid("result engine telemetry float is not finite")
+        elif type(scalar) is str:
+            if (
+                len(scalar.encode("utf-8")) > MAX_ENGINE_TELEMETRY_STRING_BYTES
+                or not scalar.isprintable()
+            ):
+                _publication_invalid("result engine telemetry string is invalid")
+        elif type(scalar) is not bool:
+            _publication_invalid("result engine telemetry scalar type is invalid")
+        seen.add(key)
+    if len(_canonical_json_bytes(_telemetry_document(value))) > MAX_ENGINE_TELEMETRY_BYTES:
+        _publication_invalid("result engine telemetry exceeds its canonical byte budget")
+    return value
+
+
+def _strict_output_reference(
+    value: object,
+) -> RefineEngineOutputReference:
+    if type(value) is not RefineEngineOutputReference:
+        _publication_invalid("result engine output has the wrong contract type")
+    if type(value.name) is not str or value.name not in _ENGINE_ARTIFACT_MEDIA_TYPES:
+        _publication_invalid("result engine output name is not canonical")
+    relative_path = _strict_safe_relative_path(
+        value.relative_path,
+        "result engine output path",
+    )
+    if PurePosixPath(relative_path).name != value.name:
+        _publication_invalid("result engine output path/name binding is invalid")
+    _strict_sha256(value.sha256, "result engine output sha256")
+    _strict_integer(value.size_bytes, "result engine output size", minimum=1)
+    if (
+        type(value.transport_content_type) is not str
+        or value.transport_content_type != ROOM_SCANS_BINARY_TRANSPORT_TYPE
+        or type(value.semantic_media_type) is not str
+        or value.semantic_media_type != _ENGINE_ARTIFACT_MEDIA_TYPES[value.name]
+    ):
+        _publication_invalid("result engine output media type is invalid")
+    return value
+
+
+def _decode_canonical_manifest(payload: bytes) -> dict[str, object]:
+    if type(payload) is not bytes or not payload:
+        _publication_invalid("refine manifest payload must be non-empty bytes")
+
+    def _pairs_hook(pairs):
+        document: dict[str, object] = {}
+        for key, value in pairs:
+            if type(key) is not str or key in document:
+                raise ValueError("duplicate or non-string JSON object key")
+            document[key] = value
+        return document
+
+    try:
+        decoded = json.loads(payload.decode("utf-8"), object_pairs_hook=_pairs_hook)
+        canonical = _canonical_json_bytes(decoded)
+    except (AdapterError, UnicodeError, ValueError, TypeError) as exc:
+        _publication_invalid(f"refine manifest is not canonical JSON: {exc}")
+    if canonical != payload or type(decoded) is not dict:
+        _publication_invalid("refine manifest bytes are not canonical")
+    return decoded
+
+
+def validate_refine_result_for_publication(result: object) -> None:
+    """Pure fail-closed gate a publisher must call before manifest-last commit.
+
+    The validator performs no filesystem, queue, storage, clock, or network
+    access. It rejects partial/legacy schemas and binds every publishable
+    manifest field to the immutable runner result available at this boundary.
+    """
+
+    if type(result) is not RefineRunResult:
+        _publication_invalid("publication requires an exact RefineRunResult")
+    if type(result.files) is not tuple or len(result.files) != (
+        len(_REQUIRED_ENGINE_ARTIFACT_NAMES) + len(_RUNNER_ARTIFACT_NAMES) + 1
+    ):
+        _publication_invalid("result files do not contain the closed Refine set")
+    manifest = result.files[-1]
+    if type(manifest) is not RefineInlineArtifact:
+        _publication_invalid("result manifest must be the last inline artifact")
+    if (
+        manifest.name != REFINE_MANIFEST_NAME
+        or manifest.transport_content_type != "application/json"
+        or manifest.semantic_media_type != "application/json"
+        or type(result.manifest_sha256) is not str
+        or result.manifest_sha256 != manifest.sha256
+    ):
+        _publication_invalid("result manifest identity or digest is invalid")
+
+    document = _decode_canonical_manifest(manifest.payload)
+    _strict_mapping(
+        document,
+        frozenset(
+            {
+                "schemaVersion",
+                "status",
+                "productionEnablement",
+                "identity",
+                "engine",
+                "inputs",
+                "frameInputs",
+                "sim3",
+                "trajectoryShapeChange",
+                "refinementEvidence",
+                "engineTelemetry",
+                "engineOutputs",
+                "artifacts",
+            }
+        ),
+        "refine manifest",
+    )
+    if type(document["schemaVersion"]) is not int or document["schemaVersion"] != 1:
+        _publication_invalid("refine manifest schemaVersion must be integer 1")
+    if document["status"] != "complete" or type(document["status"]) is not str:
+        _publication_invalid("refine manifest status must be complete")
+    if (
+        document["productionEnablement"] != "disabled"
+        or type(document["productionEnablement"]) is not str
+    ):
+        _publication_invalid("refine manifest must remain disabled")
+
+    identity = _strict_mapping(
+        document["identity"],
+        frozenset({"userId", "scanId", "roomFileId", "roomFileVersion"}),
+        "refine manifest identity",
+    )
+    user_id = _strict_string(identity["userId"], "identity.userId")
+    scan_id = _strict_string(identity["scanId"], "identity.scanId")
+    _strict_string(identity["roomFileId"], "identity.roomFileId")
+    version = _strict_integer(
+        identity["roomFileVersion"],
+        "identity.roomFileVersion",
+        minimum=1,
+    )
+    if any("/" in value for value in (user_id, scan_id)):
+        _publication_invalid("manifest identity cannot contain path separators")
+    expected_manifest_key = (
+        f"room_file/{user_id}/{scan_id}/v{version}/refine/{REFINE_MANIFEST_NAME}"
+    )
+    if type(result.manifest_key) is not str or result.manifest_key != expected_manifest_key:
+        _publication_invalid("manifest storage key disagrees with manifest identity")
+
+    engine = _strict_mapping(
+        document["engine"],
+        frozenset(
+            {
+                "selected",
+                "targetVersion",
+                "actualCliVersion",
+                "actualPycolmapVersion",
+                "fallbackPolicy",
+                "fallbackTrigger",
+                "rotationPriorRepresented",
+            }
+        ),
+        "refine manifest engine",
+    )
+    if result.fallback_trigger is not None and type(result.fallback_trigger) is not EngineFailureKind:
+        _publication_invalid("result fallback trigger has the wrong contract type")
+    expected_trigger = (
+        result.fallback_trigger.value if result.fallback_trigger is not None else None
+    )
+    if (
+        type(result.selected_engine) is not str
+        or result.selected_engine not in (PRIMARY_ENGINE, FALLBACK_ENGINE)
+        or engine["selected"] != result.selected_engine
+        or engine["targetVersion"] != COLMAP_TARGET_VERSION
+        or engine["actualCliVersion"] != COLMAP_TARGET_VERSION
+        or engine["actualPycolmapVersion"] != COLMAP_TARGET_VERSION
+        or type(result.fallback_policy) is not RefineFallbackPolicy
+        or engine["fallbackPolicy"] != result.fallback_policy.value
+        or engine["fallbackTrigger"] != expected_trigger
+        or type(engine["rotationPriorRepresented"]) is not bool
+        or engine["rotationPriorRepresented"]
+        != (result.selected_engine == PRIMARY_ENGINE)
+    ):
+        _publication_invalid("manifest engine does not bind to the runner result")
+
+    input_rows = _strict_list(document["inputs"], "refine manifest inputs")
+    if not input_rows:
+        _publication_invalid("refine manifest inputs cannot be empty")
+    input_keys: list[str] = []
+    for index, row_value in enumerate(input_rows):
+        row = _strict_mapping(
+            row_value,
+            frozenset({"key", "sha256", "sizeBytes"}),
+            f"refine manifest input {index}",
+        )
+        input_keys.append(_strict_safe_relative_path(row["key"], "input key"))
+        _strict_sha256(row["sha256"], "input sha256")
+        _strict_integer(row["sizeBytes"], "input size", minimum=1)
+    if input_keys != sorted(set(input_keys)):
+        _publication_invalid("refine manifest inputs must be unique and sorted")
+
+    frame_rows = _strict_list(document["frameInputs"], "refine manifest frameInputs")
+    if (
+        type(result.frame_inputs) is not tuple
+        or len(frame_rows) != len(result.frame_inputs)
+        or len(frame_rows) < 3
+    ):
+        _publication_invalid("manifest frames do not bind to the runner result")
+    for index, row_value in enumerate(frame_rows):
+        row = _strict_mapping(
+            row_value,
+            frozenset(
+                {
+                    "imageName",
+                    "relativeSourcePath",
+                    "sha256",
+                    "sizeBytes",
+                    "sourceHeic",
+                    "enginePpm",
+                    "materializerId",
+                }
+            ),
+            f"refine manifest frame {index}",
+        )
+        source = _strict_mapping(
+            row["sourceHeic"],
+            frozenset(
+                {
+                    "archiveKey",
+                    "member",
+                    "imageName",
+                    "relativePath",
+                    "sha256",
+                    "sizeBytes",
+                }
+            ),
+            f"refine manifest source HEIC {index}",
+        )
+        engine_ppm = _strict_mapping(
+            row["enginePpm"],
+            frozenset({"imageName", "relativePath", "sha256", "sizeBytes"}),
+            f"refine manifest engine PPM {index}",
+        )
+        source_name = _strict_string(source["imageName"], "source HEIC imageName")
+        source_member = _strict_safe_relative_path(
+            source["member"],
+            "source HEIC member",
+        )
+        source_relative = _strict_safe_relative_path(
+            source["relativePath"],
+            "source HEIC relativePath",
+        )
+        source_archive = _strict_safe_relative_path(
+            source["archiveKey"],
+            "source HEIC archiveKey",
+        )
+        source_sha = _strict_sha256(source["sha256"], "source HEIC sha256")
+        source_size = _strict_integer(
+            source["sizeBytes"],
+            "source HEIC size",
+            minimum=1,
+        )
+        engine_name = _strict_string(engine_ppm["imageName"], "engine PPM imageName")
+        engine_relative = _strict_safe_relative_path(
+            engine_ppm["relativePath"],
+            "engine PPM relativePath",
+        )
+        _strict_sha256(engine_ppm["sha256"], "engine PPM sha256")
+        _strict_integer(engine_ppm["sizeBytes"], "engine PPM size", minimum=1)
+        materializer_id = _strict_string(row["materializerId"], "materializerId")
+        if (
+            PurePosixPath(source_member).suffix.lower() != ".heic"
+            or PurePosixPath(source_member).name != source_name
+            or PurePosixPath(source_relative).name != source_name
+            or source_archive not in input_keys
+            or engine_name != f"frame_{index:06d}.ppm"
+            or engine_relative != f"images/{engine_name}"
+            or row["imageName"] != source_name
+            or row["relativeSourcePath"] != source_relative
+            or row["sha256"] != source_sha
+            or row["sizeBytes"] != source_size
+            or len(materializer_id.encode("utf-8")) > 128
+            or not materializer_id.isprintable()
+        ):
+            _publication_invalid("manifest source/engine frame identity is invalid")
+        prepared = result.frame_inputs[index]
+        if (
+            type(prepared) is not PreparedRefineFrame
+            or type(prepared.frame) is not NormalizedFrame
+            or type(prepared.frame.image_name) is not str
+        ):
+            _publication_invalid("result frame has the wrong contract type")
+        if row != _frame_input_document(prepared):
+            _publication_invalid("manifest frame identity disagrees with the result")
+
+    if (
+        type(result.alignment) is not Sim3
+        or not _is_finite_number(result.alignment.scale)
+        or not _is_finite_matrix3(result.alignment.rotation)
+        or not _is_finite_vector3(result.alignment.translation)
+    ):
+        _publication_invalid("result Sim(3) has the wrong contract type")
+    sim3 = _strict_mapping(
+        document["sim3"],
+        frozenset({"scale", "rotation", "translationMeters"}),
+        "refine manifest sim3",
+    )
+    _strict_number(sim3["scale"], "sim3.scale")
+    rotation = _strict_list(sim3["rotation"], "sim3.rotation")
+    translation = _strict_list(sim3["translationMeters"], "sim3.translation")
+    if len(rotation) != 3 or len(translation) != 3:
+        _publication_invalid("manifest Sim(3) has the wrong dimensions")
+    for row in rotation:
+        values = _strict_list(row, "sim3 rotation row")
+        if len(values) != 3:
+            _publication_invalid("manifest Sim(3) rotation row is malformed")
+        for value in values:
+            _strict_number(value, "sim3 rotation value")
+    for value in translation:
+        _strict_number(value, "sim3 translation value")
+    if sim3 != _sim3_document(result.alignment):
+        _publication_invalid("manifest Sim(3) disagrees with the result")
+
+    shape = _strict_mapping(
+        document["trajectoryShapeChange"],
+        frozenset(
+            {
+                "shapeChangeRmseMeters",
+                "rawKeyframeRmsRadiusMeters",
+                "trajectoryShapeChangePercent",
+                "meanKeyframeDisplacementPercent",
+                "maxKeyframeDisplacementMeters",
+                "certificationRole",
+            }
+        ),
+        "refine manifest trajectory shape",
+    )
+    if (
+        type(result.trajectory_shape_change) is not TrajectoryShapeChangeMetrics
+        or any(
+            not _is_finite_number(value)
+            for value in (
+                result.trajectory_shape_change.shape_change_rmse_m,
+                result.trajectory_shape_change.raw_keyframe_rms_radius_m,
+                result.trajectory_shape_change.trajectory_shape_change_pct,
+                result.trajectory_shape_change.mean_keyframe_displacement_pct,
+                result.trajectory_shape_change.max_keyframe_displacement_m,
+            )
+        )
+        or type(result.trajectory_shape_change.certification_role) is not str
+    ):
+        _publication_invalid("result trajectory shape has the wrong contract type")
+    for key, value in shape.items():
+        if key == "certificationRole":
+            _strict_string(value, "trajectory shape certificationRole")
+        else:
+            _strict_number(value, f"trajectory shape {key}")
+    if shape != _shape_document(result.trajectory_shape_change):
+        _publication_invalid("manifest trajectory shape disagrees with the result")
+
+    evidence = _strict_mapping(
+        document["refinementEvidence"],
+        frozenset(
+            {
+                "refinementEvidenced",
+                "absoluteAccuracyCertified",
+                "verdictReason",
+            }
+        ),
+        "refine manifest evidence",
+    )
+    if (
+        type(result.evidence_verdict) is not RefinementEvidenceVerdict
+        or type(result.evidence_verdict.refinement_evidenced) is not bool
+        or type(result.evidence_verdict.absolute_accuracy_certified) is not bool
+        or type(result.evidence_verdict.reason) is not str
+    ):
+        _publication_invalid("result evidence verdict has the wrong contract type")
+    if (
+        type(evidence["refinementEvidenced"]) is not bool
+        or type(evidence["absoluteAccuracyCertified"]) is not bool
+        or type(evidence["verdictReason"]) is not str
+        or evidence["refinementEvidenced"]
+        != result.evidence_verdict.refinement_evidenced
+        or evidence["absoluteAccuracyCertified"]
+        != result.evidence_verdict.absolute_accuracy_certified
+        or evidence["verdictReason"] != result.evidence_verdict.reason
+    ):
+        _publication_invalid("manifest evidence disagrees with the result")
+
+    telemetry = _strict_publication_telemetry(result.engine_telemetry)
+    telemetry_document = _strict_mapping(
+        document["engineTelemetry"],
+        frozenset(
+            {"durationMs", "iterations", "vramPeakMb", "commandCount", "metrics"}
+        ),
+        "refine manifest engineTelemetry",
+    )
+    for key in ("durationMs", "iterations", "vramPeakMb", "commandCount"):
+        _strict_integer(telemetry_document[key], f"engineTelemetry.{key}")
+    metric_rows = _strict_list(
+        telemetry_document["metrics"],
+        "engineTelemetry.metrics",
+    )
+    if len(metric_rows) > MAX_ENGINE_TELEMETRY_METRICS:
+        _publication_invalid("manifest engine telemetry has too many metrics")
+    for index, metric_value in enumerate(metric_rows):
+        metric = _strict_mapping(
+            metric_value,
+            frozenset({"name", "value"}),
+            f"engineTelemetry metric {index}",
+        )
+        _strict_string(metric["name"], "engineTelemetry metric name")
+        _strict_json_scalar(metric["value"], "engineTelemetry metric value")
+    if telemetry_document != _telemetry_document(telemetry):
+        _publication_invalid("manifest telemetry disagrees with the result")
+
+    if (
+        type(result.engine_outputs) is not tuple
+        or len(result.engine_outputs) != len(_REQUIRED_ENGINE_ARTIFACT_NAMES)
+    ):
+        _publication_invalid("result engine output set is incomplete")
+    output_documents: list[dict[str, object]] = []
+    output_names: set[str] = set()
+    for reference in result.engine_outputs:
+        validated = _strict_output_reference(reference)
+        if validated.name in output_names:
+            _publication_invalid("result engine output names are not unique")
+        output_names.add(validated.name)
+        output_documents.append(_engine_output_document(validated))
+    if tuple(reference.name for reference in result.engine_outputs) != tuple(
+        sorted(_REQUIRED_ENGINE_ARTIFACT_NAMES)
+    ):
+        _publication_invalid("result engine output order is not canonical")
+    if output_names != _REQUIRED_ENGINE_ARTIFACT_NAMES:
+        _publication_invalid("result engine output names are not the closed set")
+    output_documents.sort(key=lambda row: str(row["name"]))
+    engine_output_rows = _strict_list(
+        document["engineOutputs"],
+        "refine manifest engineOutputs",
+    )
+    for index, row_value in enumerate(engine_output_rows):
+        row = _strict_mapping(
+            row_value,
+            frozenset(
+                {
+                    "name",
+                    "relativePath",
+                    "transportContentType",
+                    "semanticMediaType",
+                    "sha256",
+                    "sizeBytes",
+                }
+            ),
+            f"refine manifest engine output {index}",
+        )
+        _strict_string(row["name"], "engine output name")
+        _strict_safe_relative_path(row["relativePath"], "engine output path")
+        _strict_string(row["transportContentType"], "engine output transport type")
+        _strict_string(row["semanticMediaType"], "engine output semantic type")
+        _strict_sha256(row["sha256"], "engine output sha256")
+        _strict_integer(row["sizeBytes"], "engine output size", minimum=1)
+    if engine_output_rows != output_documents:
+        _publication_invalid("manifest engine outputs disagree with the result")
+
+    artifact_names = _REQUIRED_ENGINE_ARTIFACT_NAMES | _RUNNER_ARTIFACT_NAMES
+    artifacts = result.files[:-1]
+    artifact_documents: list[dict[str, object]] = []
+    artifact_by_name: dict[str, RefineArtifact] = {}
+    for artifact in artifacts:
+        if type(artifact) not in (RefineFileArtifact, RefineInlineArtifact):
+            _publication_invalid("result artifact has the wrong contract type")
+        if type(artifact.name) is not str or artifact.name in artifact_by_name:
+            _publication_invalid("result artifact name is invalid or duplicated")
+        _strict_sha256(artifact.sha256, "result artifact sha256")
+        _strict_integer(artifact.size_bytes, "result artifact size", minimum=1)
+        if (
+            type(artifact.transport_content_type) is not str
+            or type(artifact.semantic_media_type) is not str
+        ):
+            _publication_invalid("result artifact media types must be exact strings")
+        artifact_by_name[artifact.name] = artifact
+        artifact_documents.append(_artifact_row(artifact))
+    if tuple(artifact_by_name) != tuple(sorted(artifact_names)):
+        _publication_invalid("result artifact order or names are not canonical")
+    for reference in result.engine_outputs:
+        artifact = artifact_by_name.get(reference.name)
+        if (
+            type(artifact) is not RefineFileArtifact
+            or artifact.sha256 != reference.sha256
+            or artifact.size_bytes != reference.size_bytes
+            or artifact.transport_content_type != reference.transport_content_type
+            or artifact.semantic_media_type != reference.semantic_media_type
+        ):
+            _publication_invalid("result engine output does not bind to its artifact")
+    artifact_rows = _strict_list(document["artifacts"], "refine manifest artifacts")
+    for index, row_value in enumerate(artifact_rows):
+        row = _strict_mapping(
+            row_value,
+            frozenset(
+                {
+                    "name",
+                    "transportContentType",
+                    "semanticMediaType",
+                    "sha256",
+                    "sizeBytes",
+                }
+            ),
+            f"refine manifest artifact {index}",
+        )
+        _strict_string(row["name"], "artifact name")
+        _strict_string(row["transportContentType"], "artifact transport type")
+        _strict_string(row["semanticMediaType"], "artifact semantic type")
+        _strict_sha256(row["sha256"], "artifact sha256")
+        _strict_integer(row["sizeBytes"], "artifact size", minimum=1)
+    if artifact_rows != artifact_documents:
+        _publication_invalid("manifest artifacts disagree with the result")
 
 
 class RefineRunner:
@@ -1838,6 +2906,7 @@ class RefineRunner:
         engine_artifacts = _validate_engine_artifacts(
             built_artifacts,
             workspace_root=prepared.workspace_root,
+            expected_outputs=candidate.outputs,
             deadline=deadline,
         )
         _require_engine_budget(deadline)
@@ -1894,14 +2963,7 @@ class RefineRunner:
         frame_rows: list[dict[str, object]] = []
         for frame_index, frame in enumerate(prepared.frames):
             _deadline_checkpoint(deadline, frame_index)
-            frame_rows.append(
-                {
-                    "imageName": frame.frame.image_name,
-                    "relativeSourcePath": frame.relative_source_path,
-                    "sha256": frame.source_sha256,
-                    "sizeBytes": frame.source_size_bytes,
-                }
-            )
+            frame_rows.append(_frame_input_document(frame))
         artifact_rows: list[dict[str, object]] = []
         for artifact_index, artifact in enumerate(artifacts):
             _deadline_checkpoint(deadline, artifact_index)
@@ -1934,10 +2996,10 @@ class RefineRunner:
                 "absoluteAccuracyCertified": evidence_verdict.absolute_accuracy_certified,
                 "verdictReason": evidence_verdict.reason,
             },
-            "engineTelemetry": {
-                "iterations": candidate.iterations,
-                "vramPeakMb": candidate.vram_peak_mb,
-            },
+            "engineTelemetry": _telemetry_document(candidate.telemetry),
+            "engineOutputs": [
+                _engine_output_document(reference) for reference in candidate.outputs
+            ],
             "artifacts": artifact_rows,
         }
         manifest = _inline_json(
@@ -1946,14 +3008,20 @@ class RefineRunner:
             deadline=deadline,
         )
         _require_engine_budget(deadline)
-        return RefineRunResult(
+        result = RefineRunResult(
             selected_engine=selected_engine,
             fallback_policy=self._fallback_policy,
             fallback_trigger=fallback_trigger,
             alignment=alignment,
             evidence_verdict=evidence_verdict,
             trajectory_shape_change=shape,
+            frame_inputs=prepared.frames,
+            engine_outputs=candidate.outputs,
+            engine_telemetry=candidate.telemetry,
             manifest_key=manifest_key,
             manifest_sha256=manifest.sha256,
             files=(*artifacts, manifest),
         )
+        validate_refine_result_for_publication(result)
+        _require_engine_budget(deadline)
+        return result

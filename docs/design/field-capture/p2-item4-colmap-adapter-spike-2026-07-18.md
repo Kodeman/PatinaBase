@@ -344,7 +344,7 @@ The production handler owns this versioned prefix:
 room_file/{uid}/{scanId}/v{roomFileVersion}/refine/
 ```
 
-The spike writes:
+The standalone adapter spike writes:
 
 ```text
 adapter-v2.json
@@ -352,18 +352,32 @@ pairs-v2.txt
 adapter-manifest-v2.json       # commit marker, always last
 ```
 
+`adapter-manifest-v2.json` is the standalone spike's local qualification marker;
+it is not a persistent Refine engine artifact.
+
 The rejected `adapter-v1` proof is superseded and was never a production/storage
 contract; v2 carries the corrected evidence, deadline, qualification, and join
 semantics.
 
-The handler adds at least:
+The disabled runner/backend boundary ratifies exactly six persistent engine
+artifacts (a closed set, not a minimum):
 
 ```text
-database-v1.db or deterministic archive
+adapter-v2.json
+pairs-v2.txt
+database-v1.db
 seed-model-v1.tar
 aligned-sparse-model-v1.tar
+engine-command-evidence-v1.json
+```
+
+The runner adds the deterministic derived documents and commit marker:
+
+```text
 refined-poses-v1.json
 pose-deltas-v1.json
+refinement-evidence-v1.json
+trajectory-shape-v1.json
 refine-manifest-v1.json        # checksums/sizes/engine+version/input hashes, last
 ```
 
@@ -376,6 +390,26 @@ artifact. Publication is create-only. Concurrent writers behave as follows:
 - existing different bytes/checksum: `REFINE_ARTIFACT_CONFLICT`, never overwrite;
 - the manifest is the only completeness marker and is published after every
   referenced artifact is durable.
+
+Engine outputs carry exact semantic media type, transport content type,
+SHA-256, size, and contained relative path in both the engine candidate and
+final result. Timestamped stdout/stderr files remain scratch-only; only the
+canonical bounded `engine-command-evidence-v1.json` may cross the publication
+boundary.
+
+Source identity and engine identity are distinct. Each normalized frame retains
+its original archive key, HEIC member/name, checksum, and size. The materialized
+COLMAP raster uses its own ordered identity
+`images/frame_<six-decimal-ordinal>.ppm`, checksum, and size. Candidate poses,
+adapter rows, pairs, and COLMAP database images use the PPM engine name; the
+manifest records both identities explicitly. A source `.heic` name must never
+be reused as the decoded engine filename.
+
+Engine telemetry is a deeply snapshotted immutable summary capped at 16 KiB of
+canonical JSON and 32 bounded scalar metrics. Raw timestamped command logs are
+not telemetry artifacts. The runner and publisher both call the pure strict
+`validate_refine_result_for_publication` gate; a canonical-looking partial or
+extended manifest is not publishable.
 
 The local prototype fsyncs the temporary file, atomically hard-links it, then
 fsyncs the destination directory. A real multi-process race test proves exactly

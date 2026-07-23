@@ -36,6 +36,8 @@ from patina_scan_worker.refine_runner import (
     NamedRefinedPose,
     PreparedRefineFrame,
     RefineEngineCandidate,
+    RefineEngineOutputReference,
+    RefineEngineTelemetry,
     RefineFailureCode,
     RefineFallbackPolicy,
     RefineFileArtifact,
@@ -44,6 +46,7 @@ from patina_scan_worker.refine_runner import (
     RefineRunError,
     RefineRunRequest,
     RefineRunner,
+    validate_refine_result_for_publication,
 )
 
 
@@ -52,6 +55,22 @@ _IDENTITY = (
     (0.0, 1.0, 0.0),
     (0.0, 0.0, 1.0),
 )
+_ENGINE_MEDIA_TYPES = {
+    "adapter-v2.json": "application/json",
+    "pairs-v2.txt": "text/plain",
+    "database-v1.db": "application/vnd.sqlite3",
+    "seed-model-v1.tar": "application/x-tar",
+    "aligned-sparse-model-v1.tar": "application/x-tar",
+    "engine-command-evidence-v1.json": "application/json",
+}
+_ENGINE_PAYLOADS = {
+    "adapter-v2.json": b'{"schemaVersion":2}\n',
+    "pairs-v2.txt": b"frame_000000.ppm frame_000001.ppm\n",
+    "database-v1.db": b"database-v1\n",
+    "seed-model-v1.tar": b"seed-model-v1\n",
+    "aligned-sparse-model-v1.tar": b"aligned-sparse-model-v1\n",
+    "engine-command-evidence-v1.json": b'{"schemaVersion":1}\n',
+}
 
 
 class _TargetVersionString(str):
@@ -155,20 +174,33 @@ def _request(tmp_path: Path) -> RefineRunRequest:
         (0.0, 0.0, 2.0),
     )
     workspace = tmp_path / "refine-work"
+    source_dir = workspace / "extracted" / "keyframes"
     image_dir = workspace / "images"
+    source_dir.mkdir(parents=True)
     image_dir.mkdir(parents=True)
     frames = []
     for index, center in enumerate(raw_centers):
         frame = _frame(index, center)
         payload = f"physical-raster-placeholder-{index}\n".encode("ascii")
-        source = image_dir / frame.image_name
+        source = source_dir / frame.image_name
         source.write_bytes(payload)
+        engine_name = f"frame_{index:06d}.ppm"
+        engine_payload = f"P6\n1 1\n255\n{index:03d}".encode("ascii")
+        engine = image_dir / engine_name
+        engine.write_bytes(engine_payload)
         frames.append(
             RefineFrameInput(
                 frame=frame,
-                relative_source_path=f"images/{frame.image_name}",
+                relative_source_path=f"extracted/keyframes/{frame.image_name}",
+                source_archive_key="keyframes/user-1/room-1/keyframes.tar",
+                source_member=frame.heic_path,
                 source_sha256=hashlib.sha256(payload).hexdigest(),
                 source_size_bytes=len(payload),
+                engine_name=engine_name,
+                engine_relative_path=f"images/{engine_name}",
+                engine_sha256=hashlib.sha256(engine_payload).hexdigest(),
+                engine_size_bytes=len(engine_payload),
+                materializer_id="qualified-core-image-v1",
             )
         )
     return RefineRunRequest(
@@ -188,6 +220,11 @@ def _request(tmp_path: Path) -> RefineRunRequest:
                 key="keyframe-index/user-1/room-1/keyframe-index.json",
                 sha256="2" * 64,
                 size_bytes=8192,
+            ),
+            InputArtifact(
+                key="keyframes/user-1/room-1/keyframes.tar",
+                sha256="3" * 64,
+                size_bytes=16384,
             ),
         ),
     )
@@ -217,6 +254,7 @@ def _candidate(
     *,
     centers: tuple[tuple[float, float, float], ...] | None = None,
     evidence: RefinementEvidence | None = None,
+    large_aligned_model: bool = False,
 ) -> RefineEngineCandidate:
     # raw = 2 * refined + (-2, -2, -2), a known positive-scale Sim(3).
     refined_centers = centers or (
@@ -229,13 +267,46 @@ def _candidate(
         cli_version="4.0.2",
         binding_version="4.0.2",
         refined_poses=tuple(
-            NamedRefinedPose(f"frame_{index:04d}.heic", _pose(center))
+            NamedRefinedPose(f"frame_{index:06d}.ppm", _pose(center))
             for index, center in enumerate(refined_centers)
         ),
         evidence=evidence or _evidence(),
-        iterations=9,
-        vram_peak_mb=512,
+        outputs=_engine_output_references(
+            large_aligned_model=large_aligned_model,
+        ),
+        telemetry=RefineEngineTelemetry(
+            duration_ms=1250,
+            iterations=9,
+            vram_peak_mb=512,
+            command_count=4,
+            metrics=(
+                ("registeredImages", 4),
+                ("usedGpuSift", True),
+            ),
+        ),
     )
+
+
+def _engine_output_references(
+    *,
+    large_aligned_model: bool = False,
+) -> tuple[RefineEngineOutputReference, ...]:
+    references = []
+    for name in sorted(_ENGINE_PAYLOADS):
+        payload = _ENGINE_PAYLOADS[name]
+        if name == "aligned-sparse-model-v1.tar" and large_aligned_model:
+            payload = b"\0" * (8 * 1024 * 1024 - 1) + b"x"
+        references.append(
+            RefineEngineOutputReference(
+                name=name,
+                relative_path=f"engine-artifacts/{name}",
+                sha256=hashlib.sha256(payload).hexdigest(),
+                size_bytes=len(payload),
+                transport_content_type="application/octet-stream",
+                semantic_media_type=_ENGINE_MEDIA_TYPES[name],
+            )
+        )
+    return tuple(references)
 
 
 class _FakeBackend:
@@ -307,42 +378,34 @@ class _FakeArtifactBuilder:
         )
         artifact_dir = request.workspace_root / "engine-artifacts"
         artifact_dir.mkdir(exist_ok=True)
-        prefix = selected_engine.encode("ascii")
-        database = artifact_dir / "database-v1.db"
-        seed = artifact_dir / "seed-model-v1.tar"
-        aligned = artifact_dir / "aligned-sparse-model-v1.tar"
-        if not database.exists():
-            database.write_bytes(b"db:" + prefix)
-        if not seed.exists():
-            seed.write_bytes(b"seed:" + prefix)
-        if not aligned.exists():
-            if self.large_aligned_model:
-                with aligned.open("wb") as handle:
-                    handle.seek(8 * 1024 * 1024 - 1)
-                    handle.write(b"x")
-            else:
-                aligned.write_bytes(b"aligned:" + prefix)
-        return (
-            self._descriptor(
-                database,
-                "database-v1.db",
-                "application/vnd.sqlite3",
-            ),
-            self._descriptor(
-                seed,
-                "seed-model-v1.tar",
-                "application/x-tar",
-            ),
-            self._descriptor(
-                aligned,
-                "aligned-sparse-model-v1.tar",
-                "application/x-tar",
-            ),
-        )
+        artifacts = []
+        for name in sorted(_ENGINE_PAYLOADS):
+            path = artifact_dir / name
+            payload = _ENGINE_PAYLOADS[name]
+            if name == "aligned-sparse-model-v1.tar" and self.large_aligned_model:
+                payload = b"\0" * (8 * 1024 * 1024 - 1) + b"x"
+            if not path.exists():
+                path.write_bytes(payload)
+            artifacts.append(self._descriptor(path, name, _ENGINE_MEDIA_TYPES[name]))
+        return tuple(artifacts)
 
 
 def _deadline() -> RefineDeadline:
     return RefineDeadline(time.monotonic() + 60.0)
+
+
+def _with_manifest_document(result, document):
+    manifest = RefineInlineArtifact(
+        name=REFINE_MANIFEST_NAME,
+        transport_content_type="application/json",
+        semantic_media_type="application/json",
+        payload=refine_runner._canonical_json_bytes(document),
+    )
+    return replace(
+        result,
+        manifest_sha256=manifest.sha256,
+        files=(*result.files[:-1], manifest),
+    )
 
 
 def _install_open_substitution(
@@ -417,22 +480,51 @@ def test_primary_success_builds_byte_deterministic_manifest_last_artifacts(tmp_p
     assert manifest["trajectoryShapeChange"]["certificationRole"] == "diagnostic-only"
     assert manifest["refinementEvidence"]["refinementEvidenced"] is True
     assert manifest["refinementEvidence"]["absoluteAccuracyCertified"] is False
+    assert manifest["frameInputs"][0]["sourceHeic"] == {
+        "archiveKey": "keyframes/user-1/room-1/keyframes.tar",
+        "imageName": "frame_0000.heic",
+        "member": "keyframes/frame_0000.heic",
+        "relativePath": "extracted/keyframes/frame_0000.heic",
+        "sha256": request.frames[0].source_sha256,
+        "sizeBytes": request.frames[0].source_size_bytes,
+    }
+    assert manifest["frameInputs"][0]["enginePpm"] == {
+        "imageName": "frame_000000.ppm",
+        "relativePath": "images/frame_000000.ppm",
+        "sha256": request.frames[0].engine_sha256,
+        "sizeBytes": request.frames[0].engine_size_bytes,
+    }
+    assert first.engine_telemetry == _candidate().telemetry
+    assert first.engine_outputs == _candidate().outputs
+    assert manifest["engineTelemetry"] == {
+        "commandCount": 4,
+        "durationMs": 1250,
+        "iterations": 9,
+        "metrics": [
+            {"name": "registeredImages", "value": 4},
+            {"name": "usedGpuSift", "value": True},
+        ],
+        "vramPeakMb": 512,
+    }
+    assert [row["name"] for row in manifest["engineOutputs"]] == sorted(
+        _ENGINE_PAYLOADS
+    )
     binary_rows = {
         row["name"]: row
         for row in manifest["artifacts"]
-        if row["name"]
-        in {
-            "database-v1.db",
-            "seed-model-v1.tar",
-            "aligned-sparse-model-v1.tar",
-        }
+        if row["name"] in _ENGINE_PAYLOADS
     }
+    assert set(binary_rows) == set(_ENGINE_PAYLOADS)
     assert all(
         row["transportContentType"] == "application/octet-stream"
         for row in binary_rows.values()
     )
-    assert binary_rows["database-v1.db"]["semanticMediaType"] == (
-        "application/vnd.sqlite3"
+    assert {
+        name: row["semanticMediaType"] for name, row in binary_rows.items()
+    } == _ENGINE_MEDIA_TYPES
+    assert not any(
+        "log" in row["name"] or "stdout" in row["name"] or "stderr" in row["name"]
+        for row in manifest["artifacts"]
     )
     assert all(
         isinstance(file, RefineFileArtifact)
@@ -440,6 +532,245 @@ def test_primary_success_builds_byte_deterministic_manifest_last_artifacts(tmp_p
         if file.name in binary_rows
     )
     assert isinstance(first.manifest, RefineInlineArtifact)
+    assert validate_refine_result_for_publication(first) is None
+
+
+def test_publication_validator_rejects_canonical_minimal_manifest(tmp_path):
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    malformed = _with_manifest_document(
+        result,
+        {
+            "schemaVersion": 1,
+            "status": "complete",
+            "productionEnablement": "disabled",
+        },
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(malformed)
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert raised.value.fatal is True
+
+
+def test_publication_validator_rejects_extra_manifest_keys(tmp_path):
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    document["unreviewedExtension"] = {}
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(
+            _with_manifest_document(result, document)
+        )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+def test_publication_validator_rejects_boolean_room_file_version(tmp_path):
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    document["identity"]["roomFileVersion"] = True
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(
+            _with_manifest_document(result, document)
+        )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+def test_publication_validator_rejects_boolean_telemetry_integer(tmp_path):
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    document["engineTelemetry"]["commandCount"] = True
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(
+            _with_manifest_document(result, document)
+        )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    (
+        ("source_member", "keyframes/wrong.heic"),
+        ("engine_name", "frame_000000.heic"),
+        ("engine_name", "frame_999999.ppm"),
+        ("engine_relative_path", "images/frame_999999.ppm"),
+        ("materializer_id", ""),
+    ),
+)
+def test_source_heic_and_engine_ppm_identity_contract_fails_closed_before_backend(
+    tmp_path,
+    field_name,
+    field_value,
+):
+    request = _request(tmp_path)
+    malformed = replace(request.frames[0], **{field_name: field_value})
+    backend = _FakeBackend(primary=_candidate())
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=backend,
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(
+            replace(request, frames=(malformed, *request.frames[1:])),
+            deadline=_deadline(),
+        )
+
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert backend.calls == []
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("missing", "raw-log", "wrong-media", "wrong-sha", "mutable-container"),
+)
+def test_candidate_output_references_require_the_closed_immutable_six_file_set(
+    tmp_path,
+    mutation,
+):
+    candidate = _candidate()
+    outputs = candidate.outputs
+    if mutation == "missing":
+        malformed_outputs = outputs[:-1]
+    elif mutation == "raw-log":
+        raw_log = replace(
+            outputs[-1],
+            name="bundle-adjuster-20260723T120000Z.log",
+            relative_path="engine-artifacts/bundle-adjuster-20260723T120000Z.log",
+            semantic_media_type="text/plain",
+        )
+        malformed_outputs = (*outputs, raw_log)
+    elif mutation == "wrong-media":
+        malformed_outputs = (
+            replace(outputs[0], semantic_media_type="text/plain"),
+            *outputs[1:],
+        )
+    elif mutation == "wrong-sha":
+        malformed_outputs = (
+            replace(outputs[0], sha256="f" * 64),
+            *outputs[1:],
+        )
+    else:
+        malformed_outputs = list(outputs)
+    malformed = replace(candidate, outputs=malformed_outputs)  # type: ignore[arg-type]
+    builder = _FakeArtifactBuilder()
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=malformed),
+            artifact_builder=builder,
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert raised.value.fatal is True
+    assert len(builder.calls) == (1 if mutation == "wrong-sha" else 0)
+
+
+@pytest.mark.parametrize(
+    "telemetry",
+    (
+        RefineEngineTelemetry(
+            duration_ms=True,  # type: ignore[arg-type]
+            iterations=1,
+            vram_peak_mb=1,
+            command_count=1,
+            metrics=(),
+        ),
+        RefineEngineTelemetry(
+            duration_ms=1,
+            iterations=1,
+            vram_peak_mb=1,
+            command_count=1,
+            metrics=(("bad key", 1),),
+        ),
+        RefineEngineTelemetry(
+            duration_ms=1,
+            iterations=1,
+            vram_peak_mb=1,
+            command_count=1,
+            metrics=(("value", float("nan")),),
+        ),
+        RefineEngineTelemetry(
+            duration_ms=1,
+            iterations=1,
+            vram_peak_mb=1,
+            command_count=1,
+            metrics=tuple((f"metric{index}", index) for index in range(33)),
+        ),
+    ),
+)
+def test_engine_telemetry_is_exact_immutable_and_bounded(tmp_path, telemetry):
+    malformed = replace(_candidate(), telemetry=telemetry)
+    builder = _FakeArtifactBuilder()
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=malformed),
+            artifact_builder=builder,
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.EVIDENCE_INVALID
+    assert builder.calls == []
+
+
+def test_candidate_output_and_telemetry_are_deep_snapshotted_before_builder(tmp_path):
+    original = _candidate()
+
+    class _MutatingBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            object.__setattr__(original.outputs[0], "sha256", "f" * 64)
+            object.__setattr__(
+                original.telemetry,
+                "metrics",
+                (("mutated", "after-return"),),
+            )
+            snapshot = kwargs["candidate"]
+            assert snapshot.outputs[0].sha256 != original.outputs[0].sha256
+            assert snapshot.telemetry.metrics != original.telemetry.metrics
+            return super().build_engine_artifacts(**kwargs)
+
+    result = RefineRunner(
+        backend=_FakeBackend(primary=original),
+        artifact_builder=_MutatingBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+
+    assert result.engine_outputs[0].sha256 != "f" * 64
+    assert result.engine_telemetry.metrics == (
+        ("registeredImages", 4),
+        ("usedGpuSift", True),
+    )
+
+
+def test_old_candidate_without_output_contract_fails_closed(tmp_path):
+    old_candidate = _candidate()
+    object.__delattr__(old_candidate, "outputs")
+    builder = _FakeArtifactBuilder()
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=old_candidate),
+            artifact_builder=builder,
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert raised.value.fatal is True
+    assert builder.calls == []
 
 
 def test_known_pose_construction_failure_uses_one_deadline_for_bounded_fallback(
@@ -774,7 +1105,7 @@ def test_large_engine_artifact_stays_file_backed_and_is_stream_verified(
 
     monkeypatch.setattr(Path, "read_bytes", _forbid_unbounded_read)
     result = RefineRunner(
-        backend=_FakeBackend(primary=_candidate()),
+        backend=_FakeBackend(primary=_candidate(large_aligned_model=True)),
         artifact_builder=_FakeArtifactBuilder(large_aligned_model=True),
     ).run(request, deadline=_deadline())
 
@@ -1082,12 +1413,15 @@ def test_engine_artifact_names_reject_storage_reserved_characters(
 @pytest.mark.parametrize(
     ("artifact_name", "semantic_media_type"),
     (
+        ("adapter-v2.json", "text/plain"),
+        ("pairs-v2.txt", "application/json"),
         ("database-v1.db", "application/x-tar"),
         ("database-v1.db", "application/vnd.sqlite3 "),
         ("seed-model-v1.tar", "application/vnd.sqlite3"),
         ("seed-model-v1.tar", "application/x-tar\n"),
         ("aligned-sparse-model-v1.tar", "text/plain"),
         ("aligned-sparse-model-v1.tar", "application/x-tar\x00"),
+        ("engine-command-evidence-v1.json", "text/plain"),
     ),
 )
 def test_engine_artifact_semantic_media_type_is_exact_for_its_name(
@@ -1330,7 +1664,7 @@ def test_unhashable_refined_pose_name_is_a_closed_geometry_failure(tmp_path):
     candidate = _candidate()
     malformed_row = replace(
         candidate.refined_poses[0],
-        image_name=["not", "hashable"],  # type: ignore[arg-type]
+        engine_image_name=["not", "hashable"],  # type: ignore[arg-type]
     )
     malformed = replace(
         candidate,
