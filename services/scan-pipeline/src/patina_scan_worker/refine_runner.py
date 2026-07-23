@@ -15,6 +15,7 @@ this state machine without a GPU, database, network, or physical raster fixture.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import math
 import os
@@ -702,20 +703,60 @@ def _stable_file_sha256(
     """Stream one regular file while proving its identity stayed unchanged."""
 
     _require_engine_budget(deadline)
+    try:
+        path_snapshot = os.lstat(path)
+    except OSError as exc:
+        raise OSError("source path could not be inspected safely") from exc
+    if not stat.S_ISREG(path_snapshot.st_mode):
+        raise ValueError("source is not a regular non-symlink file")
+
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError(
+                "source changed to a symbolic link before hashing"
+            ) from exc
+        raise OSError("source could not be opened safely") from exc
+
     digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        before = os.fstat(handle.fileno())
+    pending_error = False
+    try:
+        before = os.fstat(descriptor)
         if not stat.S_ISREG(before.st_mode):
-            raise ValueError("source is not a regular file")
+            raise ValueError("source is not a regular non-symlink file")
+        if (before.st_dev, before.st_ino) != (
+            path_snapshot.st_dev,
+            path_snapshot.st_ino,
+        ):
+            raise ValueError("source changed identity before hashing")
         chunk_index = 0
         while True:
             _deadline_checkpoint(deadline, chunk_index)
-            chunk = handle.read(1024 * 1024)
+            chunk = os.read(descriptor, 1024 * 1024)
             if not chunk:
                 break
             digest.update(chunk)
             chunk_index += 1
-        after = os.fstat(handle.fileno())
+        after = os.fstat(descriptor)
+    except OSError as exc:
+        pending_error = True
+        raise OSError("source descriptor could not be consumed safely") from exc
+    except BaseException:  # preserve typed runner failures while closing the descriptor
+        pending_error = True
+        raise
+    finally:
+        try:
+            os.close(descriptor)
+        except OSError as exc:
+            if not pending_error:
+                raise OSError("source descriptor could not be closed safely") from exc
     _require_engine_budget(deadline)
     stable_fields_before = (
         before.st_dev,

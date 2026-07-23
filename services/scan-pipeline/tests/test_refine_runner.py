@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+import patina_scan_worker.refine_runner as refine_runner
 from patina_scan_worker.refine_adapter import (
     COLMAP_TARGET_VERSION,
     AdapterError,
@@ -341,6 +343,33 @@ class _FakeArtifactBuilder:
 
 def _deadline() -> RefineDeadline:
     return RefineDeadline(time.monotonic() + 60.0)
+
+
+def _install_open_substitution(
+    monkeypatch,
+    *,
+    target: Path,
+    replacement_kind: str,
+    symlink_target: Path,
+) -> dict[str, int]:
+    real_open = os.open
+    observed: dict[str, int] = {}
+
+    def _racing_open(path, flags, *args, **kwargs):
+        if os.fspath(path) == os.fspath(target) and not observed:
+            observed["flags"] = flags
+            target.unlink()
+            if replacement_kind == "fifo":
+                os.mkfifo(target, 0o600)
+            elif replacement_kind == "symlink":
+                symlink_target.write_bytes(b"must-not-be-hashed\n")
+                target.symlink_to(symlink_target)
+            else:  # pragma: no cover - test helper contract
+                raise AssertionError(replacement_kind)
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(refine_runner.os, "open", _racing_open)
+    return observed
 
 
 def test_primary_success_builds_byte_deterministic_manifest_last_artifacts(tmp_path):
@@ -775,6 +804,138 @@ def test_engine_artifact_hash_is_reverified_before_manifest_construction(tmp_pat
 
     assert raised.value.code == RefineFailureCode.ARTIFACT_INVALID
     assert raised.value.fatal is True
+
+
+@pytest.mark.parametrize("replacement_kind", ("fifo", "symlink"))
+def test_frame_hash_substitution_fails_promptly_before_backend_or_manifest(
+    tmp_path,
+    monkeypatch,
+    replacement_kind,
+):
+    request = _request(tmp_path)
+    target = request.workspace_root / request.frames[0].relative_source_path
+    observed = _install_open_substitution(
+        monkeypatch,
+        target=target,
+        replacement_kind=replacement_kind,
+        symlink_target=tmp_path / "outside-frame.bin",
+    )
+    backend = _FakeBackend(primary=_candidate())
+    builder = _FakeArtifactBuilder()
+    manifest_calls = []
+
+    def _manifest_trap(*args, **kwargs):
+        manifest_calls.append((args, kwargs))
+        raise AssertionError("manifest construction must not run")
+
+    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
+    started = time.monotonic()
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(backend=backend, artifact_builder=builder).run(
+            request,
+            deadline=_deadline(),
+        )
+
+    assert time.monotonic() - started < 2.0
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert raised.value.fatal is True
+    assert str(target) not in str(raised.value)
+    assert observed
+    if hasattr(os, "O_CLOEXEC"):
+        assert observed["flags"] & os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        assert observed["flags"] & os.O_NOFOLLOW
+    if hasattr(os, "O_NONBLOCK"):
+        assert observed["flags"] & os.O_NONBLOCK
+    assert backend.calls == []
+    assert builder.calls == []
+    assert manifest_calls == []
+
+
+@pytest.mark.parametrize("replacement_kind", ("fifo", "symlink"))
+def test_engine_artifact_hash_substitution_fails_before_manifest(
+    tmp_path,
+    monkeypatch,
+    replacement_kind,
+):
+    request = _request(tmp_path)
+    target = request.workspace_root / "engine-artifacts" / "database-v1.db"
+    observed = _install_open_substitution(
+        monkeypatch,
+        target=target,
+        replacement_kind=replacement_kind,
+        symlink_target=tmp_path / "outside-engine-artifact.bin",
+    )
+    backend = _FakeBackend(primary=_candidate())
+    builder = _FakeArtifactBuilder()
+    manifest_calls = []
+
+    def _manifest_trap(*args, **kwargs):
+        manifest_calls.append((args, kwargs))
+        raise AssertionError("manifest construction must not run")
+
+    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
+    started = time.monotonic()
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(backend=backend, artifact_builder=builder).run(
+            request,
+            deadline=_deadline(),
+        )
+
+    assert time.monotonic() - started < 2.0
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert raised.value.fatal is True
+    assert str(target) not in str(raised.value)
+    assert observed
+    if hasattr(os, "O_CLOEXEC"):
+        assert observed["flags"] & os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        assert observed["flags"] & os.O_NOFOLLOW
+    if hasattr(os, "O_NONBLOCK"):
+        assert observed["flags"] & os.O_NONBLOCK
+    assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
+    assert len(builder.calls) == 1
+    assert manifest_calls == []
+
+
+def test_stable_file_hash_uses_the_descriptor_opened_before_path_replacement(
+    tmp_path,
+    monkeypatch,
+):
+    target = tmp_path / "source.bin"
+    original = b"descriptor-bound-original\n"
+    replacement = b"path-level-replacement\n"
+    target.write_bytes(original)
+    original_stat = target.stat()
+    real_open = os.open
+    opened = False
+
+    def _open_then_replace(path, flags, *args, **kwargs):
+        nonlocal opened
+        descriptor = real_open(path, flags, *args, **kwargs)
+        if os.fspath(path) == os.fspath(target) and not opened:
+            opened = True
+            target.unlink()
+            target.write_bytes(replacement)
+        return descriptor
+
+    monkeypatch.setattr(refine_runner.os, "open", _open_then_replace)
+
+    digest, stable_stat = refine_runner._stable_file_sha256(
+        target,
+        deadline=_deadline(),
+    )
+
+    assert opened is True
+    assert digest == hashlib.sha256(original).hexdigest()
+    assert (stable_stat.st_dev, stable_stat.st_ino) == (
+        original_stat.st_dev,
+        original_stat.st_ino,
+    )
+    assert target.read_bytes() == replacement
+    assert target.stat().st_ino != stable_stat.st_ino
 
 
 def test_engine_artifact_path_must_remain_inside_the_workspace(tmp_path):
