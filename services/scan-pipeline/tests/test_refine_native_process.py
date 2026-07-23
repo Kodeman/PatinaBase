@@ -21,6 +21,7 @@ from patina_scan_worker.refine_adapter import (
     RefineDeadline,
 )
 from patina_scan_worker.refine_native_process import (
+    NATIVE_CHILD_MAX_ERROR_BYTES,
     NATIVE_CHILD_MAX_REQUEST_BYTES,
     NATIVE_CHILD_MAX_RESPONSE_BYTES,
     NativeChildContext,
@@ -189,6 +190,64 @@ def test_native_child_start_oserror_is_stable(monkeypatch):
     )
 
 
+def test_deadline_expiring_during_setup_does_not_start_child(monkeypatch):
+    starts: list[str] = []
+    close_attempts: list[str] = []
+
+    class TrackingConnection:
+        def __init__(self, label):
+            self.label = label
+
+        def close(self):
+            close_attempts.append(self.label)
+
+    class TrackingProcess:
+        def start(self):
+            starts.append("started")
+
+    class SlowSetupContext:
+        def Pipe(self, *, duplex):
+            assert duplex is True
+            return TrackingConnection("parent"), TrackingConnection("child")
+
+        def Process(self, **_kwargs):
+            return TrackingProcess()
+
+    class SetupExpiringDeadline:
+        expires_at_monotonic_s = 1.0
+
+        def __init__(self):
+            self.checks = 0
+
+        def remaining_seconds(self):
+            self.checks += 1
+            if self.checks == 1:
+                return 1.0
+            raise AdapterError(
+                "refine stage engine deadline is exhausted",
+                "REFINE_ENGINE_TIMEOUT",
+            )
+
+    deadline = SetupExpiringDeadline()
+    monkeypatch.setattr(
+        native_process.multiprocessing,
+        "get_context",
+        lambda method: SlowSetupContext() if method == "spawn" else None,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_echo_with_budget"),
+            {},
+            deadline=deadline,
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+    assert starts == []
+    assert deadline.checks == 2
+    assert close_attempts == ["parent", "child"]
+
+
 @pytest.mark.parametrize(
     ("close_error", "expected_code"),
     (
@@ -293,7 +352,7 @@ def test_final_pipe_close_failure_does_not_mask_start_error(monkeypatch):
     assert len(notes) == 1
     assert "parent final close failure" in notes[0]
     assert "child final close failure" in notes[0]
-    assert len(notes[0].encode("utf-8")) < 3_000
+    assert len(notes[0].encode("utf-8")) <= NATIVE_CHILD_MAX_ERROR_BYTES
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
@@ -509,7 +568,7 @@ def test_native_child_join_oserror_is_stable(monkeypatch):
         ("_return_oversized_result", "exceeds the bounded transport"),
         (
             "_return_oversized_generated_result",
-            "not JSON serializable",
+            "requires exact built-in JSON values",
         ),
     ),
 )
@@ -585,6 +644,81 @@ def test_bounded_json_encoding_is_canonical_and_counts_terminal_newline(monkeypa
         )
 
 
+@pytest.mark.parametrize("name_behavior", ("raise", "huge"))
+def test_nested_json_rejection_never_reads_hostile_dynamic_type_name(name_behavior):
+    metadata_reads: list[str] = []
+
+    class HostileNameMeta(type):
+        def __getattribute__(cls, name):
+            if name == "__name__":
+                metadata_reads.append(name)
+                if name_behavior == "raise" and len(metadata_reads) == 1:
+                    raise AssertionError("hostile metaclass name was read")
+                if name_behavior == "huge":
+                    return "x" * (2 * NATIVE_CHILD_MAX_RESPONSE_BYTES)
+                return "HostileValue"
+            return type.__getattribute__(cls, name)
+
+    class HostileValue(metaclass=HostileNameMeta):
+        pass
+
+    with pytest.raises(native_process._ChildTransportError) as raised:
+        native_process._bounded_json_bytes(
+            {"nested": HostileValue()},
+            maximum_bytes=1024,
+            overflow_message="too large",
+        )
+
+    assert str(raised.value) == (
+        "native child transport requires exact built-in JSON values"
+    )
+    assert metadata_reads == []
+    assert len(str(raised.value).encode("utf-8")) <= NATIVE_CHILD_MAX_ERROR_BYTES
+
+
+@pytest.mark.parametrize("text_behavior", ("raise", "huge"))
+def test_exception_diagnostics_never_read_hostile_dynamic_metadata_or_text(
+    text_behavior,
+):
+    metadata_reads: list[str] = []
+    hash_reads: list[str] = []
+    text_reads: list[str] = []
+
+    class HostileExceptionMeta(type):
+        def __getattribute__(cls, name):
+            if name == "__name__":
+                metadata_reads.append(name)
+                if len(metadata_reads) == 1:
+                    raise AssertionError("hostile exception type name was read")
+                return "HostileDiagnosticError"
+            return type.__getattribute__(cls, name)
+
+        def __hash__(cls):
+            hash_reads.append("hash")
+            raise AssertionError("hostile exception type hash was read")
+
+    class HostileDiagnosticError(Exception, metaclass=HostileExceptionMeta):
+        def __str__(self):
+            text_reads.append("str")
+            if text_behavior == "raise" and len(text_reads) == 1:
+                raise AssertionError("hostile exception text was read")
+            if text_behavior == "huge":
+                return "x" * (2 * NATIVE_CHILD_MAX_RESPONSE_BYTES)
+            return "HostileDiagnosticError"
+
+    error = HostileDiagnosticError()
+    summary = native_process._exception_summary(error)
+    envelope = native_process._error_envelope(error)
+
+    assert summary == "external exception"
+    assert envelope["exceptionType"] == "external exception"
+    assert envelope["message"] == "external exception"
+    assert metadata_reads == []
+    assert hash_reads == []
+    assert text_reads == []
+    assert len(summary.encode("utf-8")) <= NATIVE_CHILD_MAX_ERROR_BYTES
+
+
 class _RaisingMapping(Mapping):
     def __getitem__(self, _key):
         raise AssertionError("hostile mapping was indexed")
@@ -642,7 +776,9 @@ def test_nested_json_rejects_hostile_dict_subclass_without_inspection():
             overflow_message="too large",
         )
 
-    assert "_RaisingDict is not JSON serializable" in str(raised.value)
+    assert str(raised.value) == (
+        "native child transport requires exact built-in JSON values"
+    )
 
 
 def test_tiny_json_cap_rejects_builtin_mapping_before_sort(monkeypatch):
@@ -734,6 +870,39 @@ def test_cleanup_exception_has_distinct_stable_code(monkeypatch):
     assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
     assert "cleanup raised RuntimeError" in str(raised.value)
     assert "synthetic cleanup implementation crash" in str(raised.value)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+@pytest.mark.parametrize("failure_mode", ("returned", "raised"))
+def test_huge_cleanup_diagnostics_and_final_report_are_strictly_bounded(
+    monkeypatch,
+    failure_mode,
+):
+    real_cleanup = native_process._terminate_and_reap
+    huge_detail = "synthetic huge cleanup uncertainty " + (
+        "x" * (2 * NATIVE_CHILD_MAX_RESPONSE_BYTES)
+    )
+
+    def huge_cleanup(process, *, group_leader_pid):
+        errors = real_cleanup(process, group_leader_pid=group_leader_pid)
+        assert errors == ()
+        if failure_mode == "raised":
+            raise RuntimeError(huge_detail)
+        return (huge_detail,)
+
+    monkeypatch.setattr(native_process, "_terminate_and_reap", huge_cleanup)
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_sleep_past_deadline"),
+            {},
+            deadline=_deadline(0.20),
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    message = str(raised.value)
+    assert "synthetic huge cleanup uncertainty" in message
+    assert len(message.encode("utf-8")) <= NATIVE_CHILD_MAX_ERROR_BYTES
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")

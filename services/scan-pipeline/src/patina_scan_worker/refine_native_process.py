@@ -40,7 +40,7 @@ from .refine_adapter import AdapterError, RefineDeadline
 
 NATIVE_CHILD_MAX_REQUEST_BYTES = 64 * 1024
 NATIVE_CHILD_MAX_RESPONSE_BYTES = 256 * 1024
-NATIVE_CHILD_MAX_ERROR_BYTES = 4 * 1024
+NATIVE_CHILD_MAX_ERROR_BYTES = 1024
 NATIVE_CHILD_TERM_GRACE_S = 0.10
 NATIVE_CHILD_KILL_REAP_S = 1.0
 
@@ -55,6 +55,11 @@ _CHILD_PROTOCOL_REJECT_EXIT_CODE = 74
 _IN_PROCESS_ENTRYPOINT_MARKER = "__patina_refine_in_process_only__"
 _JSON_STRING_CHUNK_CHARS = 1024
 _JSON_OUTPUT_CHUNK_CHARS = 1024
+# Individual cleanup entries stay small enough that a final 1 KiB report can
+# retain more than one independently failing resource.
+_MAX_CLEANUP_ERRORS = 32
+_MAX_CLEANUP_ERROR_BYTES = 256
+_ERROR_CODE_PATTERN = re.compile(r"^REFINE_[A-Z0-9_]{1,63}$")
 
 
 class _ChildBoundaryTimeout(TimeoutError):
@@ -247,7 +252,9 @@ def _iter_canonical_json_chunks(
         finally:
             active_containers.remove(marker)
         return
-    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+    raise _ChildTransportError(
+        "native child transport requires exact built-in JSON values"
+    )
 
 
 def _collect_bounded_json_chunks(
@@ -258,11 +265,16 @@ def _collect_bounded_json_chunks(
 ) -> bytes:
     """Collect UTF-8 chunks without ever constructing output beyond ``cap``."""
 
-    if not isinstance(maximum_bytes, int) or maximum_bytes < 1:
+    if type(maximum_bytes) is not int or maximum_bytes < 1:
         raise ValueError("native child JSON byte cap must be positive")
+    safe_overflow_message = (
+        _truncate_utf8(overflow_message, NATIVE_CHILD_MAX_ERROR_BYTES)
+        if type(overflow_message) is str
+        else "native child JSON exceeds the bounded transport"
+    )
     output = bytearray()
     for chunk in chunks:
-        if not isinstance(chunk, str):
+        if type(chunk) is not str:
             raise _ChildTransportError(
                 "native child JSON encoder yielded a non-text chunk"
             )
@@ -270,7 +282,7 @@ def _collect_bounded_json_chunks(
             piece = chunk[offset : offset + _JSON_OUTPUT_CHUNK_CHARS]
             encoded = piece.encode("utf-8")
             if len(output) + len(encoded) > maximum_bytes:
-                raise _ChildTransportError(overflow_message)
+                raise _ChildTransportError(safe_overflow_message)
             output.extend(encoded)
     return bytes(output)
 
@@ -297,10 +309,20 @@ def _bounded_json_bytes(
     except _ChildTransportError:
         raise
     except _ChildJsonOverflow as exc:
-        raise _ChildTransportError(overflow_message) from exc
+        raise _ChildTransportError(
+            _truncate_utf8(
+                overflow_message
+                if type(overflow_message) is str
+                else "native child JSON exceeds the bounded transport",
+                NATIVE_CHILD_MAX_ERROR_BYTES,
+            )
+        ) from exc
     except (RecursionError, TypeError, ValueError, OverflowError) as exc:
         raise _ChildTransportError(
-            f"native child transport requires finite JSON values: {exc}"
+            _bounded_diagnostic(
+                "native child transport requires finite JSON values: ",
+                _exception_summary(exc),
+            )
         ) from exc
 
 
@@ -319,32 +341,152 @@ def _bounded_request(request: Mapping[str, Any]) -> bytes:
             ),
         )
     except _ChildTransportError as exc:
-        raise AdapterError(str(exc), _FAILED_CODE) from exc
+        raise AdapterError(
+            _safe_exception_message(
+                exc,
+                fallback="refine native child request transport failed",
+            ),
+            _FAILED_CODE,
+        ) from exc
     return payload
 
 
-def _truncate_utf8(value: str, maximum_bytes: int) -> str:
+# This is deliberately a tuple searched with ``is``. A dict lookup can invoke
+# a hostile exception metaclass's dynamic ``__hash__`` implementation.
+_SAFE_EXCEPTION_LABELS: tuple[tuple[type[BaseException], str], ...] = (
+    (AdapterError, "AdapterError"),
+    (_ChildBoundaryTimeout, "child boundary timeout"),
+    (_ChildJsonOverflow, "child JSON overflow"),
+    (_ChildTransportError, "child transport error"),
+    (AssertionError, "AssertionError"),
+    (AttributeError, "AttributeError"),
+    (BaseException, "BaseException"),
+    (BrokenPipeError, "BrokenPipeError"),
+    (ChildProcessError, "ChildProcessError"),
+    (ConnectionError, "ConnectionError"),
+    (EOFError, "EOFError"),
+    (Exception, "Exception"),
+    (FileNotFoundError, "FileNotFoundError"),
+    (ImportError, "ImportError"),
+    (json.JSONDecodeError, "JSONDecodeError"),
+    (KeyboardInterrupt, "KeyboardInterrupt"),
+    (MemoryError, "MemoryError"),
+    (OSError, "OSError"),
+    (OverflowError, "OverflowError"),
+    (PermissionError, "PermissionError"),
+    (ProcessLookupError, "ProcessLookupError"),
+    (RecursionError, "RecursionError"),
+    (RuntimeError, "RuntimeError"),
+    (SystemExit, "SystemExit"),
+    (TimeoutError, "TimeoutError"),
+    (TypeError, "TypeError"),
+    (UnicodeDecodeError, "UnicodeDecodeError"),
+    (ValueError, "ValueError"),
+)
+
+
+def _bounded_diagnostic(
+    *parts: Any,
+    maximum_bytes: int = NATIVE_CHILD_MAX_ERROR_BYTES,
+) -> str:
+    """Join exact built-in strings without constructing text beyond the cap."""
+
+    if type(maximum_bytes) is not int or maximum_bytes < 1:
+        maximum_bytes = NATIVE_CHILD_MAX_ERROR_BYTES
     output = bytearray()
-    for offset in range(0, len(value), _JSON_STRING_CHUNK_CHARS):
-        encoded = value[offset : offset + _JSON_STRING_CHUNK_CHARS].encode(
-            "utf-8", errors="replace"
-        )
-        remaining = maximum_bytes - len(output)
-        if len(encoded) > remaining:
-            output.extend(encoded[:remaining])
-            return output.decode("utf-8", errors="ignore") + "..."
-        output.extend(encoded)
-    return output.decode("utf-8")
+    for part in parts:
+        text = part if type(part) is str else "invalid diagnostic"
+        for offset in range(0, len(text), _JSON_STRING_CHUNK_CHARS):
+            encoded = text[offset : offset + _JSON_STRING_CHUNK_CHARS].encode(
+                "utf-8",
+                errors="replace",
+            )
+            remaining = maximum_bytes - len(output)
+            if len(encoded) > remaining:
+                output.extend(encoded[:remaining])
+                if maximum_bytes >= 3:
+                    return (
+                        bytes(output[: maximum_bytes - 3]).decode(
+                            "utf-8",
+                            errors="ignore",
+                        )
+                        + "..."
+                    )
+                return bytes(output).decode("utf-8", errors="ignore")
+            output.extend(encoded)
+    return bytes(output).decode("utf-8")
+
+
+def _truncate_utf8(value: str, maximum_bytes: int) -> str:
+    return _bounded_diagnostic(value, maximum_bytes=maximum_bytes)
+
+
+def _safe_exception_details(exc: BaseException) -> tuple[str, str | None]:
+    """Return fixed type metadata and only exact built-in string arguments."""
+
+    exception_type = type(exc)
+    label = None
+    for candidate, candidate_label in _SAFE_EXCEPTION_LABELS:
+        if exception_type is candidate:
+            label = candidate_label
+            break
+    if label is None:
+        return "external exception", None
+    try:
+        args = BaseException.args.__get__(exc, BaseException)
+    except BaseException:
+        return label, None
+    if type(args) is tuple:
+        count = tuple.__len__(args)
+        if count <= 4:
+            for index in range(count):
+                message = tuple.__getitem__(args, index)
+                if type(message) is str:
+                    return label, message
+    return label, None
+
+
+def _safe_exception_message(
+    exc: BaseException,
+    *,
+    fallback: str,
+) -> str:
+    _label, message = _safe_exception_details(exc)
+    if message is None:
+        message = fallback if type(fallback) is str else "external exception"
+    return _truncate_utf8(message, NATIVE_CHILD_MAX_ERROR_BYTES)
+
+
+def _validated_error_code(value: Any) -> str:
+    if (
+        type(value) is str
+        and len(value) <= 64
+        and _ERROR_CODE_PATTERN.fullmatch(value) is not None
+    ):
+        return value
+    return _FAILED_CODE
+
+
+def _safe_adapter_error_code(exc: BaseException) -> str:
+    if type(exc) is not AdapterError:
+        return _FAILED_CODE
+    try:
+        return _validated_error_code(object.__getattribute__(exc, "code"))
+    except BaseException:
+        return _FAILED_CODE
 
 
 def _error_envelope(exc: BaseException) -> Mapping[str, Any]:
-    code = exc.code if isinstance(exc, AdapterError) else _FAILED_CODE
+    label, message = _safe_exception_details(exc)
     return {
         "protocolVersion": _PROTOCOL_VERSION,
         "kind": "error",
-        "code": code,
-        "exceptionType": type(exc).__name__,
-        "message": _truncate_utf8(str(exc), NATIVE_CHILD_MAX_ERROR_BYTES),
+        "code": _safe_adapter_error_code(exc),
+        "exceptionType": label,
+        "message": _truncate_utf8(
+            message if message is not None else label,
+            NATIVE_CHILD_MAX_ERROR_BYTES,
+        ),
     }
 
 
@@ -358,7 +500,7 @@ def _send_envelope(connection: Connection, envelope: Mapping[str, Any]) -> None:
 
 
 def _resolve_entrypoint(value: str):
-    if not isinstance(value, str) or _ENTRYPOINT_PATTERN.fullmatch(value) is None:
+    if type(value) is not str or _ENTRYPOINT_PATTERN.fullmatch(value) is None:
         raise _ChildTransportError(
             "native child entry point must be module.path:function_name"
         )
@@ -366,7 +508,7 @@ def _resolve_entrypoint(value: str):
     module = importlib.import_module(module_name)
     target = getattr(module, function_name, None)
     if target is None or not callable(target):
-        raise _ChildTransportError(f"native child entry point is not callable: {value}")
+        raise _ChildTransportError("native child entry point is not callable")
     if getattr(target, _IN_PROCESS_ENTRYPOINT_MARKER, False) is not True:
         raise _ChildTransportError(
             "native child entry point must declare the in-process-only contract"
@@ -387,21 +529,41 @@ def _receive_exact_child_ack(
         acknowledged = connection.poll(context.remaining_seconds())
     except (EOFError, OSError) as exc:
         raise _ChildTransportError(
-            f"cannot wait for native child {phase} acknowledgement: {exc}"
+            _bounded_diagnostic(
+                "cannot wait for native child ",
+                phase,
+                " acknowledgement: ",
+                _exception_summary(exc),
+            )
         ) from exc
     if not acknowledged:
         raise AdapterError(
-            f"native child {phase} acknowledgement exceeded the shared deadline",
+            _bounded_diagnostic(
+                "native child ",
+                phase,
+                " acknowledgement exceeded the shared deadline",
+            ),
             _TIMEOUT_CODE,
         )
     try:
         acknowledgement = connection.recv_bytes(len(expected))
     except (EOFError, OSError) as exc:
         raise _ChildTransportError(
-            f"cannot receive native child {phase} acknowledgement: {exc}"
+            _bounded_diagnostic(
+                "cannot receive native child ",
+                phase,
+                " acknowledgement: ",
+                _exception_summary(exc),
+            )
         ) from exc
     if acknowledgement != expected:
-        raise _ChildTransportError(f"native child {phase} acknowledgement is invalid")
+        raise _ChildTransportError(
+            _bounded_diagnostic(
+                "native child ",
+                phase,
+                " acknowledgement is invalid",
+            )
+        )
 
 
 def _child_entry(
@@ -438,7 +600,7 @@ def _child_entry(
         )
         context.remaining_seconds()
         request = json.loads(request_payload.decode("utf-8"))
-        if not isinstance(request, dict):
+        if type(request) is not dict:
             raise _ChildTransportError(
                 "native child request did not decode to an object"
             )
@@ -489,7 +651,10 @@ def _receive_envelope(
         ready = wait((connection, process.sentinel), timeout=timeout_s)
     except OSError as exc:
         raise AdapterError(
-            f"cannot wait for refine native child response: {exc}",
+            _bounded_diagnostic(
+                "cannot wait for refine native child response: ",
+                _exception_summary(exc),
+            ),
             _FAILED_CODE,
         ) from exc
     if not ready:
@@ -499,7 +664,10 @@ def _receive_envelope(
             response_ready = connection.poll(0)
         except OSError as exc:
             raise AdapterError(
-                f"cannot inspect refine native child response: {exc}",
+                _bounded_diagnostic(
+                    "cannot inspect refine native child response: ",
+                    _exception_summary(exc),
+                ),
                 _FAILED_CODE,
             ) from exc
         if not response_ready:
@@ -512,10 +680,13 @@ def _receive_envelope(
         envelope = json.loads(payload.decode("utf-8"))
     except (EOFError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise AdapterError(
-            f"refine native child returned an invalid bounded response: {exc}",
+            _bounded_diagnostic(
+                "refine native child returned an invalid bounded response: ",
+                _exception_summary(exc),
+            ),
             _FAILED_CODE,
         ) from exc
-    if not isinstance(envelope, dict):
+    if type(envelope) is not dict:
         raise AdapterError(
             "refine native child response must be a JSON object",
             _FAILED_CODE,
@@ -542,7 +713,18 @@ def _signal_group(
 
 
 def _signal_error(sig: signal.Signals, exc: OSError) -> str:
-    return f"cannot signal native child process group with {sig.name}: {exc}"
+    if sig is signal.SIGTERM:
+        signal_label = "SIGTERM"
+    elif sig is signal.SIGKILL:
+        signal_label = "SIGKILL"
+    else:
+        signal_label = "signal"
+    return _bounded_diagnostic(
+        "cannot signal native child process group with ",
+        signal_label,
+        ": ",
+        _exception_summary(exc),
+    )
 
 
 def _terminate_and_reap(
@@ -575,16 +757,31 @@ def _terminate_and_reap(
         try:
             process.terminate()
         except (AttributeError, ProcessLookupError, OSError) as exc:
-            errors.append(f"cannot terminate native child before session setup: {exc}")
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot terminate native child before session setup: ",
+                    _exception_summary(exc),
+                )
+            )
 
     try:
         process.join(NATIVE_CHILD_KILL_REAP_S)
     except (AssertionError, OSError, ValueError) as exc:
-        errors.append(f"cannot join native child leader: {exc}")
+        errors.append(
+            _bounded_diagnostic(
+                "cannot join native child leader: ",
+                _exception_summary(exc),
+            )
+        )
     try:
         leader_alive = process.is_alive()
     except (AssertionError, OSError, ValueError) as exc:
-        errors.append(f"cannot inspect native child leader: {exc}")
+        errors.append(
+            _bounded_diagnostic(
+                "cannot inspect native child leader: ",
+                _exception_summary(exc),
+            )
+        )
         leader_alive = True
     if leader_alive:
         try:
@@ -596,15 +793,30 @@ def _terminate_and_reap(
             OSError,
             ValueError,
         ) as exc:
-            errors.append(f"cannot kill native child leader: {exc}")
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot kill native child leader: ",
+                    _exception_summary(exc),
+                )
+            )
         try:
             process.join(NATIVE_CHILD_KILL_REAP_S)
         except (AssertionError, OSError, ValueError) as exc:
-            errors.append(f"cannot join killed native child leader: {exc}")
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot join killed native child leader: ",
+                    _exception_summary(exc),
+                )
+            )
     try:
         leader_alive = process.is_alive()
     except (AssertionError, OSError, ValueError) as exc:
-        errors.append(f"cannot confirm native child leader exit: {exc}")
+        errors.append(
+            _bounded_diagnostic(
+                "cannot confirm native child leader exit: ",
+                _exception_summary(exc),
+            )
+        )
         leader_alive = True
     if leader_alive:
         errors.append("native child session leader could not be reaped")
@@ -616,7 +828,10 @@ def _terminate_and_reap(
         except OSError as exc:
             errors.append(deferred_kill_permission_error)
             errors.append(
-                f"cannot confirm native child process group removal after reap: {exc}"
+                _bounded_diagnostic(
+                    "cannot confirm native child process group removal after reap: ",
+                    _exception_summary(exc),
+                )
             )
         else:
             errors.append(deferred_kill_permission_error)
@@ -625,14 +840,15 @@ def _terminate_and_reap(
 
 
 def _exception_summary(exc: BaseException, *, maximum_bytes: int = 1024) -> str:
-    try:
-        message = str(exc)
-    except BaseException as formatting_error:
-        message = (
-            f"<unprintable {type(exc).__name__}; "
-            f"str raised {type(formatting_error).__name__}>"
-        )
-    return f"{type(exc).__name__}: {_truncate_utf8(message, maximum_bytes)}"
+    label, message = _safe_exception_details(exc)
+    if message is None:
+        return _truncate_utf8(label, maximum_bytes)
+    return _bounded_diagnostic(
+        label,
+        ": ",
+        message,
+        maximum_bytes=maximum_bytes,
+    )
 
 
 def _emergency_kill_and_reap(
@@ -650,7 +866,10 @@ def _emergency_kill_and_reap(
             pass
         except BaseException as exc:
             errors.append(
-                "emergency process-group SIGKILL failed: " + _exception_summary(exc)
+                _bounded_diagnostic(
+                    "emergency process-group SIGKILL failed: ",
+                    _exception_summary(exc),
+                )
             )
     else:
         try:
@@ -659,18 +878,29 @@ def _emergency_kill_and_reap(
             pass
         except BaseException as exc:
             errors.append(
-                "emergency native child kill failed: " + _exception_summary(exc)
+                _bounded_diagnostic(
+                    "emergency native child kill failed: ",
+                    _exception_summary(exc),
+                )
             )
 
     try:
         process.join(NATIVE_CHILD_KILL_REAP_S)
     except BaseException as exc:
-        errors.append("emergency native child join failed: " + _exception_summary(exc))
+        errors.append(
+            _bounded_diagnostic(
+                "emergency native child join failed: ",
+                _exception_summary(exc),
+            )
+        )
     try:
         leader_alive = process.is_alive()
     except BaseException as exc:
         errors.append(
-            "emergency native child liveness check failed: " + _exception_summary(exc)
+            _bounded_diagnostic(
+                "emergency native child liveness check failed: ",
+                _exception_summary(exc),
+            )
         )
         leader_alive = True
     if leader_alive:
@@ -680,19 +910,28 @@ def _emergency_kill_and_reap(
             pass
         except BaseException as exc:
             errors.append(
-                "emergency direct leader SIGKILL failed: " + _exception_summary(exc)
+                _bounded_diagnostic(
+                    "emergency direct leader SIGKILL failed: ",
+                    _exception_summary(exc),
+                )
             )
         try:
             process.join(NATIVE_CHILD_KILL_REAP_S)
         except BaseException as exc:
             errors.append(
-                "emergency killed leader join failed: " + _exception_summary(exc)
+                _bounded_diagnostic(
+                    "emergency killed leader join failed: ",
+                    _exception_summary(exc),
+                )
             )
     try:
         leader_alive = process.is_alive()
     except BaseException as exc:
         errors.append(
-            "emergency final leader liveness check failed: " + _exception_summary(exc)
+            _bounded_diagnostic(
+                "emergency final leader liveness check failed: ",
+                _exception_summary(exc),
+            )
         )
         leader_alive = True
     if leader_alive:
@@ -705,12 +944,50 @@ def _emergency_kill_and_reap(
             pass
         except BaseException as exc:
             errors.append(
-                "emergency cleanup cannot confirm process-group removal: "
-                + _exception_summary(exc)
+                _bounded_diagnostic(
+                    "emergency cleanup cannot confirm process-group removal: ",
+                    _exception_summary(exc),
+                )
             )
         else:
             errors.append("emergency cleanup process group still exists after reap")
     return tuple(errors)
+
+
+def _normalize_cleanup_errors(errors: Any) -> tuple[str, ...] | None:
+    if type(errors) is not tuple:
+        return None
+    count = tuple.__len__(errors)
+    if count > _MAX_CLEANUP_ERRORS:
+        return None
+    normalized: list[str] = []
+    for index in range(count):
+        error = tuple.__getitem__(errors, index)
+        if type(error) is not str or len(error) == 0:
+            return None
+        normalized.append(_truncate_utf8(error, _MAX_CLEANUP_ERROR_BYTES))
+    return tuple(normalized)
+
+
+def _bounded_cleanup_report(
+    message: str,
+    cleanup_errors: tuple[str, ...],
+) -> str:
+    safe_message = _truncate_utf8(
+        (message if type(message) is str else "refine native boundary cleanup failed"),
+        NATIVE_CHILD_MAX_ERROR_BYTES,
+    )
+    normalized = _normalize_cleanup_errors(cleanup_errors)
+    if normalized is None:
+        normalized = ("native child cleanup returned an invalid uncertainty report",)
+    parts: list[str] = [safe_message]
+    if normalized:
+        parts.append("; cleanup: ")
+        for index, error in enumerate(normalized):
+            if index:
+                parts.append("; ")
+            parts.append(error)
+    return _bounded_diagnostic(*parts)
 
 
 def _cleanup_process(
@@ -726,7 +1003,10 @@ def _cleanup_process(
             group_leader_pid=group_leader_pid,
         )
     except BaseException as exc:
-        primary_error = "native child cleanup raised " + _exception_summary(exc)
+        primary_error = _bounded_diagnostic(
+            "native child cleanup raised ",
+            _exception_summary(exc),
+        )
         try:
             emergency_errors = _emergency_kill_and_reap(
                 process,
@@ -734,13 +1014,19 @@ def _cleanup_process(
             )
         except BaseException as emergency_exc:
             emergency_errors = (
-                "emergency native child cleanup raised "
-                + _exception_summary(emergency_exc),
+                _bounded_diagnostic(
+                    "emergency native child cleanup raised ",
+                    _exception_summary(emergency_exc),
+                ),
             )
-        return (primary_error, *emergency_errors)
-    if not isinstance(errors, tuple) or any(
-        not isinstance(error, str) or not error for error in errors
-    ):
+        normalized_emergency = _normalize_cleanup_errors(emergency_errors)
+        if normalized_emergency is None:
+            normalized_emergency = (
+                "emergency native child cleanup returned an invalid report",
+            )
+        return (primary_error, *normalized_emergency)
+    normalized_errors = _normalize_cleanup_errors(errors)
+    if normalized_errors is None:
         invalid_report = "native child cleanup returned an invalid uncertainty report"
         try:
             emergency_errors = _emergency_kill_and_reap(
@@ -749,11 +1035,18 @@ def _cleanup_process(
             )
         except BaseException as emergency_exc:
             emergency_errors = (
-                "emergency native child cleanup raised "
-                + _exception_summary(emergency_exc),
+                _bounded_diagnostic(
+                    "emergency native child cleanup raised ",
+                    _exception_summary(emergency_exc),
+                ),
             )
-        return (invalid_report, *emergency_errors)
-    return errors
+        normalized_emergency = _normalize_cleanup_errors(emergency_errors)
+        if normalized_emergency is None:
+            normalized_emergency = (
+                "emergency native child cleanup returned an invalid report",
+            )
+        return (invalid_report, *normalized_emergency)
+    return normalized_errors
 
 
 def _cleanup_failed_error(
@@ -761,16 +1054,22 @@ def _cleanup_failed_error(
     cleanup_errors: tuple[str, ...],
 ) -> AdapterError:
     return AdapterError(
-        message + "; cleanup: " + "; ".join(cleanup_errors),
+        _bounded_cleanup_report(message, cleanup_errors),
         _CLEANUP_FAILED_CODE,
     )
 
 
 def _timeout_error(cleanup_errors: tuple[str, ...]) -> AdapterError:
-    if cleanup_errors:
+    normalized = _normalize_cleanup_errors(cleanup_errors)
+    if normalized is None:
         return _cleanup_failed_error(
             "refine native engine child exceeded the shared deadline",
-            cleanup_errors,
+            ("native child cleanup returned an invalid uncertainty report",),
+        )
+    if normalized:
+        return _cleanup_failed_error(
+            "refine native engine child exceeded the shared deadline",
+            normalized,
         )
     return AdapterError(
         "refine native engine child exceeded the shared deadline",
@@ -787,16 +1086,23 @@ def _close_connections_safely(
             connection.close()
         except BaseException as exc:
             errors.append(
-                f"cannot close {label} native child transport: "
-                + _exception_summary(exc)
+                _bounded_diagnostic(
+                    "cannot close ",
+                    label,
+                    " native child transport: ",
+                    _exception_summary(exc),
+                )
             )
     return tuple(errors)
 
 
 def _add_cleanup_note(exc: BaseException, errors: tuple[str, ...]) -> None:
-    note = "non-masking native boundary cleanup report: " + "; ".join(errors)
+    note = _bounded_cleanup_report(
+        "non-masking native boundary cleanup report",
+        errors,
+    )
     try:
-        exc.add_note(_truncate_utf8(note, 2560))
+        BaseException.add_note(exc, note)
     except BaseException:
         return
 
@@ -821,23 +1127,50 @@ def run_native_engine_child(
             "refine native engine isolation requires POSIX process groups",
             _FAILED_CODE,
         )
-    if (
-        not isinstance(entrypoint, str)
-        or _ENTRYPOINT_PATTERN.fullmatch(entrypoint) is None
-    ):
+    if type(entrypoint) is not str or _ENTRYPOINT_PATTERN.fullmatch(entrypoint) is None:
         raise AdapterError(
             "native child entry point must be module.path:function_name",
             _FAILED_CODE,
         )
     request_payload = _bounded_request(request)
-    deadline.remaining_seconds()
-
-    context = multiprocessing.get_context("spawn")
     try:
-        parent_connection, child_connection = context.Pipe(duplex=True)
-    except OSError as exc:
+        deadline.remaining_seconds()
+    except AdapterError as exc:
         raise AdapterError(
-            f"cannot create refine native child transport: {exc}",
+            _safe_exception_message(
+                exc,
+                fallback="refine native boundary deadline failed",
+            ),
+            _safe_adapter_error_code(exc),
+        ) from exc
+    except Exception as exc:
+        raise AdapterError(
+            _bounded_diagnostic(
+                "cannot inspect refine native boundary deadline: ",
+                _exception_summary(exc),
+            ),
+            _FAILED_CODE,
+        ) from exc
+    except BaseException as exc:
+        if type(exc) is KeyboardInterrupt or type(exc) is SystemExit:
+            raise
+        raise AdapterError(
+            "cannot inspect refine native boundary deadline: external exception",
+            _FAILED_CODE,
+        ) from exc
+
+    try:
+        context = multiprocessing.get_context("spawn")
+        parent_connection, child_connection = context.Pipe(duplex=True)
+    except BaseException as exc:
+        raise AdapterError(
+            _bounded_diagnostic(
+                "cannot create refine native child transport: ",
+                _safe_exception_message(
+                    exc,
+                    fallback="transport setup failed",
+                ),
+            ),
             _FAILED_CODE,
         ) from exc
     try:
@@ -859,7 +1192,13 @@ def run_native_engine_child(
                 ("child", child_connection),
             )
         )
-        message = "cannot prepare refine native child: " + _exception_summary(exc)
+        message = _bounded_diagnostic(
+            "cannot prepare refine native child: ",
+            _safe_exception_message(
+                exc,
+                fallback="process construction failed",
+            ),
+        )
         if close_errors:
             raise _cleanup_failed_error(message, close_errors) from exc
         raise AdapterError(message, _FAILED_CODE) from exc
@@ -869,10 +1208,19 @@ def run_native_engine_child(
     cleanup_handled = False
     try:
         try:
+            # Pipe/process construction can consume the entire absolute budget.
+            # This final no-side-effect gate must remain adjacent to start().
+            deadline.remaining_seconds()
             process.start()
         except OSError as exc:
             raise AdapterError(
-                f"cannot start refine native child: {exc}",
+                _bounded_diagnostic(
+                    "cannot start refine native child: ",
+                    _safe_exception_message(
+                        exc,
+                        fallback="process start failed",
+                    ),
+                ),
                 _FAILED_CODE,
             ) from exc
         started = True
@@ -880,17 +1228,31 @@ def run_native_engine_child(
             child_connection.close()
         except OSError as exc:
             raise AdapterError(
-                f"cannot close parent copy of native child transport: {exc}",
+                _bounded_diagnostic(
+                    "cannot close parent copy of native child transport: ",
+                    _safe_exception_message(
+                        exc,
+                        fallback="transport close failed",
+                    ),
+                ),
                 _FAILED_CODE,
             ) from exc
 
         ready = _receive_envelope(parent_connection, process, deadline)
         if ready.get("kind") != "ready":
-            message = str(ready.get("message", "child failed before session setup"))
-            raise AdapterError(message, str(ready.get("code", _FAILED_CODE)))
+            raw_message = ready.get("message")
+            message = (
+                _truncate_utf8(raw_message, NATIVE_CHILD_MAX_ERROR_BYTES)
+                if type(raw_message) is str
+                else "child failed before session setup"
+            )
+            raise AdapterError(
+                message,
+                _validated_error_code(ready.get("code")),
+            )
         pid = process.pid
         if (
-            not isinstance(pid, int)
+            type(pid) is not int
             or ready.get("pid") != pid
             or ready.get("processGroupId") != pid
             or ready.get("sessionId") != pid
@@ -904,21 +1266,29 @@ def run_native_engine_child(
             parent_connection.send_bytes(_ACK_READY)
         except OSError as exc:
             raise AdapterError(
-                f"cannot acknowledge refine native child readiness: {exc}",
+                _bounded_diagnostic(
+                    "cannot acknowledge refine native child readiness: ",
+                    _safe_exception_message(
+                        exc,
+                        fallback="readiness acknowledgement failed",
+                    ),
+                ),
                 _FAILED_CODE,
             ) from exc
 
         terminal = _receive_envelope(parent_connection, process, deadline)
         kind = terminal.get("kind")
         if kind == "error":
-            message = _truncate_utf8(
-                str(terminal.get("message", "native child failed")),
-                NATIVE_CHILD_MAX_ERROR_BYTES,
+            raw_message = terminal.get("message")
+            message = (
+                _truncate_utf8(raw_message, NATIVE_CHILD_MAX_ERROR_BYTES)
+                if type(raw_message) is str
+                else "native child failed"
             )
-            code = terminal.get("code")
-            if not isinstance(code, str) or not code.startswith("REFINE_"):
-                code = _FAILED_CODE
-            raise AdapterError(message, code)
+            raise AdapterError(
+                message,
+                _validated_error_code(terminal.get("code")),
+            )
         if kind != "result" or "value" not in terminal:
             raise AdapterError(
                 "refine native child returned an invalid terminal response",
@@ -929,29 +1299,55 @@ def run_native_engine_child(
             parent_connection.send_bytes(_ACK_ACCEPT)
         except OSError as exc:
             raise AdapterError(
-                f"cannot acknowledge refine native child result: {exc}",
+                _bounded_diagnostic(
+                    "cannot acknowledge refine native child result: ",
+                    _safe_exception_message(
+                        exc,
+                        fallback="result acknowledgement failed",
+                    ),
+                ),
                 _FAILED_CODE,
             ) from exc
         try:
             process.join(deadline.remaining_seconds())
         except OSError as exc:
             raise AdapterError(
-                f"cannot join refine native child leader: {exc}",
+                _bounded_diagnostic(
+                    "cannot join refine native child leader: ",
+                    _safe_exception_message(
+                        exc,
+                        fallback="leader join failed",
+                    ),
+                ),
                 _FAILED_CODE,
             ) from exc
         try:
             leader_alive = process.is_alive()
         except (AssertionError, OSError, ValueError) as exc:
             raise AdapterError(
-                f"cannot inspect refine native child leader after join: {exc}",
+                _bounded_diagnostic(
+                    "cannot inspect refine native child leader after join: ",
+                    _safe_exception_message(
+                        exc,
+                        fallback="leader inspection failed",
+                    ),
+                ),
                 _FAILED_CODE,
             ) from exc
         if leader_alive:
             raise _ChildBoundaryTimeout
         reaped = True
-        if process.exitcode != 0:
+        exitcode = process.exitcode
+        if type(exitcode) is not int or exitcode != 0:
+            detail = (
+                int.__str__(exitcode) if type(exitcode) is int else "unknown status"
+            )
             raise AdapterError(
-                f"refine native child exited unsuccessfully ({process.exitcode})",
+                _bounded_diagnostic(
+                    "refine native child exited unsuccessfully (",
+                    detail,
+                    ")",
+                ),
                 _FAILED_CODE,
             )
         deadline.remaining_seconds()
@@ -966,6 +1362,10 @@ def run_native_engine_child(
             cleanup_handled = True
         raise _timeout_error(cleanup_errors) from exc
     except AdapterError as exc:
+        safe_message = _safe_exception_message(
+            exc,
+            fallback="refine native boundary failed",
+        )
         cleanup_errors = ()
         if started and not reaped:
             cleanup_errors = _cleanup_process(
@@ -974,8 +1374,14 @@ def run_native_engine_child(
             )
             cleanup_handled = True
         if cleanup_errors:
-            raise _cleanup_failed_error(str(exc), cleanup_errors) from exc
-        raise
+            raise _cleanup_failed_error(
+                safe_message,
+                cleanup_errors,
+            ) from exc
+        raise AdapterError(
+            safe_message,
+            _safe_adapter_error_code(exc),
+        ) from exc
     except Exception as exc:
         cleanup_errors = ()
         if started and not reaped:
@@ -984,8 +1390,9 @@ def run_native_engine_child(
                 group_leader_pid=group_leader_pid,
             )
             cleanup_handled = True
-        detail = (
-            f"unexpected refine native boundary failure: {type(exc).__name__}: {exc}"
+        detail = _bounded_diagnostic(
+            "unexpected refine native boundary failure: ",
+            _exception_summary(exc),
         )
         if cleanup_errors:
             raise _cleanup_failed_error(detail, cleanup_errors) from exc
@@ -1003,7 +1410,15 @@ def run_native_engine_child(
                 "unexpected refine native boundary failure",
                 cleanup_errors,
             ) from exc
-        raise
+        if type(exc) is KeyboardInterrupt or type(exc) is SystemExit:
+            raise
+        raise AdapterError(
+            _bounded_diagnostic(
+                "unexpected refine native boundary failure: ",
+                _exception_summary(exc),
+            ),
+            _FAILED_CODE,
+        ) from exc
     finally:
         active_exception = sys.exc_info()[1]
         final_cleanup_errors: tuple[str, ...] = ()
@@ -1025,8 +1440,11 @@ def run_native_engine_child(
                 leader_alive = process.is_alive()
             except BaseException as exc:
                 resource_errors.append(
-                    "cannot inspect native child leader during final resource "
-                    "cleanup: " + _exception_summary(exc)
+                    _bounded_diagnostic(
+                        "cannot inspect native child leader during final resource "
+                        "cleanup: ",
+                        _exception_summary(exc),
+                    )
                 )
                 leader_alive = True
             if not leader_alive:
@@ -1034,8 +1452,10 @@ def run_native_engine_child(
                     process.close()
                 except BaseException as exc:
                     resource_errors.append(
-                        "cannot close native child process handle: "
-                        + _exception_summary(exc)
+                        _bounded_diagnostic(
+                            "cannot close native child process handle: ",
+                            _exception_summary(exc),
+                        )
                     )
 
         all_final_errors = (*final_cleanup_errors, *resource_errors)
