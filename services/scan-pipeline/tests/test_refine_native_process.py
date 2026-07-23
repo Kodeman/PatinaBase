@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
+from collections.abc import Mapping
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 
@@ -187,6 +189,113 @@ def test_native_child_start_oserror_is_stable(monkeypatch):
     )
 
 
+@pytest.mark.parametrize(
+    ("close_error", "expected_code"),
+    (
+        (False, "REFINE_ENGINE_FAILED"),
+        (True, "REFINE_ENGINE_CLEANUP_FAILED"),
+    ),
+)
+def test_process_construction_exception_closes_both_pipes_and_is_stable(
+    monkeypatch,
+    close_error,
+    expected_code,
+):
+    close_attempts: list[str] = []
+
+    class TrackingConnection:
+        def __init__(self, label, *, close_error=False):
+            self.label = label
+            self.close_error = close_error
+
+        def close(self):
+            close_attempts.append(self.label)
+            if self.close_error:
+                raise RuntimeError("synthetic process-construction close failure")
+
+    parent = TrackingConnection("parent", close_error=close_error)
+    child = TrackingConnection("child")
+
+    class ConstructionFailureContext:
+        def Pipe(self, *, duplex):
+            assert duplex is True
+            return parent, child
+
+        def Process(self, **_kwargs):
+            raise RuntimeError("synthetic process construction failure")
+
+    monkeypatch.setattr(
+        native_process.multiprocessing,
+        "get_context",
+        lambda method: ConstructionFailureContext() if method == "spawn" else None,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_echo_with_budget"),
+            {},
+            deadline=_deadline(3.0),
+        )
+
+    assert raised.value.code == expected_code
+    assert "cannot prepare refine native child" in str(raised.value)
+    assert "synthetic process construction failure" in str(raised.value)
+    assert (
+        "synthetic process-construction close failure" in str(raised.value)
+    ) is close_error
+    assert close_attempts == ["parent", "child"]
+
+
+def test_final_pipe_close_failure_does_not_mask_start_error(monkeypatch):
+    close_attempts: list[str] = []
+
+    class RaisingCloseConnection:
+        def __init__(self, label):
+            self.label = label
+
+        def close(self):
+            close_attempts.append(self.label)
+            raise RuntimeError(
+                f"synthetic {self.label} final close failure " + ("x" * 16_000)
+            )
+
+    class StartFailureProcess:
+        def start(self):
+            raise OSError("synthetic intended start failure")
+
+    class StartFailureContext:
+        def Pipe(self, *, duplex):
+            assert duplex is True
+            return RaisingCloseConnection("parent"), RaisingCloseConnection("child")
+
+        def Process(self, **_kwargs):
+            return StartFailureProcess()
+
+    monkeypatch.setattr(
+        native_process.multiprocessing,
+        "get_context",
+        lambda method: StartFailureContext() if method == "spawn" else None,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_echo_with_budget"),
+            {},
+            deadline=_deadline(3.0),
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert "cannot start refine native child: synthetic intended start failure" in str(
+        raised.value
+    )
+    assert close_attempts == ["parent", "child"]
+    notes = getattr(raised.value, "__notes__", ())
+    assert len(notes) == 1
+    assert "parent final close failure" in notes[0]
+    assert "child final close failure" in notes[0]
+    assert len(notes[0].encode("utf-8")) < 3_000
+
+
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
 def test_native_child_ack_oserror_is_stable(monkeypatch):
     real_send_bytes = native_process.Connection.send_bytes
@@ -317,6 +426,29 @@ def test_child_requires_bounded_exact_ready_ack_before_engine_import(
     assert not import_marker.exists()
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+@pytest.mark.parametrize("replacement", (b"reject-v1", b"accept-v1!"))
+def test_malformed_result_ack_is_parent_visible_failure(monkeypatch, replacement):
+    real_send_bytes = native_process.Connection.send_bytes
+
+    def replace_result_ack(connection, payload, *args, **kwargs):
+        if payload == native_process._ACK_ACCEPT:
+            payload = replacement
+        return real_send_bytes(connection, payload, *args, **kwargs)
+
+    monkeypatch.setattr(native_process.Connection, "send_bytes", replace_result_ack)
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_echo_with_budget"),
+            {"fixture": "known-pose"},
+            deadline=_deadline(3.0),
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert "exited unsuccessfully" in str(raised.value)
+
+
 def test_native_child_sentinel_poll_oserror_is_stable(monkeypatch):
     sentinel = object()
 
@@ -377,7 +509,7 @@ def test_native_child_join_oserror_is_stable(monkeypatch):
         ("_return_oversized_result", "exceeds the bounded transport"),
         (
             "_return_oversized_generated_result",
-            "exceeds the bounded transport",
+            "not JSON serializable",
         ),
     ),
 )
@@ -449,6 +581,81 @@ def test_bounded_json_encoding_is_canonical_and_counts_terminal_newline(monkeypa
         native_process._bounded_json_bytes(
             value,
             maximum_bytes=len(canonical) - 1,
+            overflow_message="too large",
+        )
+
+
+class _RaisingMapping(Mapping):
+    def __getitem__(self, _key):
+        raise AssertionError("hostile mapping was indexed")
+
+    def __iter__(self):
+        raise AssertionError("hostile mapping was iterated")
+
+    def __len__(self):
+        raise AssertionError("hostile mapping length was read")
+
+
+class _InfiniteMapping(Mapping):
+    def __getitem__(self, key):
+        return key
+
+    def __iter__(self):
+        index = 0
+        while True:
+            yield f"key-{index}"
+            index += 1
+
+    def __len__(self):
+        return 2**63 - 1
+
+
+class _RaisingDict(dict):
+    def __iter__(self):
+        raise AssertionError("hostile dict subclass was iterated")
+
+    def items(self):
+        raise AssertionError("hostile dict subclass items were read")
+
+    def keys(self):
+        raise AssertionError("hostile dict subclass keys were read")
+
+
+@pytest.mark.parametrize("hostile_mapping", (_RaisingMapping(), _InfiniteMapping()))
+def test_request_rejects_hostile_mapping_without_inspection(hostile_mapping):
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_echo_with_budget"),
+            hostile_mapping,
+            deadline=_deadline(3.0),
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert "exact built-in JSON object" in str(raised.value)
+
+
+def test_nested_json_rejects_hostile_dict_subclass_without_inspection():
+    with pytest.raises(native_process._ChildTransportError) as raised:
+        native_process._bounded_json_bytes(
+            {"nested": _RaisingDict()},
+            maximum_bytes=1024,
+            overflow_message="too large",
+        )
+
+    assert "_RaisingDict is not JSON serializable" in str(raised.value)
+
+
+def test_tiny_json_cap_rejects_builtin_mapping_before_sort(monkeypatch):
+    monkeypatch.setattr(
+        native_process,
+        "_sort_bounded_json_keys",
+        lambda _value: pytest.fail("mapping keys sorted before cap validation"),
+    )
+
+    with pytest.raises(native_process._ChildTransportError, match="too large"):
+        native_process._bounded_json_bytes(
+            {"a": 0, "b": 0},
+            maximum_bytes=8,
             overflow_message="too large",
         )
 
@@ -527,6 +734,71 @@ def test_cleanup_exception_has_distinct_stable_code(monkeypatch):
     assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
     assert "cleanup raised RuntimeError" in str(raised.value)
     assert "synthetic cleanup implementation crash" in str(raised.value)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+def test_cleanup_crash_still_emergency_kills_group_and_prevents_late_write(
+    monkeypatch,
+    tmp_path,
+):
+    leader_pid_path = tmp_path / "leader.pid"
+    descendant_pid_path = tmp_path / "descendant.pid"
+    late_artifact = tmp_path / "published-after-cleanup-crash.json"
+    activity_log = tmp_path / "cleanup-crash-native.log"
+    leader_pid = None
+    descendant_pid = None
+    gone_before_manual_cleanup = False
+
+    def cleanup_crash(_process, *, group_leader_pid):
+        assert isinstance(group_leader_pid, int)
+        raise RuntimeError("synthetic primary cleanup crash before signalling")
+
+    monkeypatch.setattr(native_process, "_terminate_and_reap", cleanup_crash)
+
+    try:
+        with pytest.raises(AdapterError) as raised:
+            run_native_engine_child(
+                _entrypoint("_spawn_late_writer"),
+                {
+                    "leaderPid": str(leader_pid_path),
+                    "descendantPid": str(descendant_pid_path),
+                    "lateArtifact": str(late_artifact),
+                    "activityLog": str(activity_log),
+                },
+                deadline=_deadline(0.30),
+            )
+
+        assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+        assert "synthetic primary cleanup crash before signalling" in str(raised.value)
+        assert leader_pid_path.is_file()
+        assert descendant_pid_path.is_file()
+        leader_pid = int(leader_pid_path.read_text(encoding="utf-8"))
+        descendant_pid = int(descendant_pid_path.read_text(encoding="utf-8"))
+
+        stop = time.monotonic() + 1.0
+        while time.monotonic() < stop and not (
+            _pid_is_gone(leader_pid) and _pid_is_gone(descendant_pid)
+        ):
+            time.sleep(0.01)
+        gone_before_manual_cleanup = _pid_is_gone(leader_pid) and _pid_is_gone(
+            descendant_pid
+        )
+    finally:
+        if leader_pid is not None and not _pid_is_gone(leader_pid):
+            try:
+                os.killpg(leader_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        if descendant_pid is not None and not _pid_is_gone(descendant_pid):
+            try:
+                os.kill(descendant_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+    assert gone_before_manual_cleanup
+    time.sleep(0.80)
+    assert activity_log.read_text(encoding="utf-8") == "leader-ready\n"
+    assert not late_artifact.exists()
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")

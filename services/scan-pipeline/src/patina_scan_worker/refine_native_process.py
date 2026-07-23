@@ -7,16 +7,17 @@ only after the parent validates that boundary and returns an exact readiness
 acknowledgement.  The parent accepts a result only after the session leader
 exits inside the one shared :class:`RefineDeadline`.
 
-The boundary deliberately transports bounded JSON, not Python/native objects.
-Future handler entry points must therefore load PyCOLMAP inside the child, use
-scratch paths from the request, and return evidence needed by the parent.  They
-must also be explicitly marked as in-process-only: native threads are allowed,
-but an entry point may not spawn an OS child and then return while that process
-remains alive.  Timeout cleanup kills a whole process group; successful cleanup
-relies on this narrower contract.  Any durable artifact publication remains
-parent-only and must occur only after this function returns successfully.  The
-Item 4A qualifier remains in-process until the production handler contract is
-built and separately qualified.
+The boundary deliberately transports bounded canonical JSON made only from
+exact built-in JSON containers/scalars, not Python/native objects or hostile
+container subclasses. Future handler entry points must therefore load PyCOLMAP
+inside the child, use scratch paths from the request, and return evidence needed
+by the parent. They must also be explicitly marked as in-process-only: native
+threads are allowed, but an entry point may not spawn an OS child and then
+return while that process remains alive. Timeout cleanup kills a whole process
+group; successful cleanup relies on this narrower contract. Any durable
+artifact publication remains parent-only and must occur only after this
+function returns successfully. The Item 4A qualifier remains in-process until
+the production handler contract is built and separately qualified.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ import multiprocessing
 import os
 import re
 import signal
+import sys
 import time
 from dataclasses import dataclass
 from json.encoder import encode_basestring_ascii
@@ -49,6 +51,7 @@ _ACK_ACCEPT = b"accept-v1"
 _TIMEOUT_CODE = "REFINE_ENGINE_TIMEOUT"
 _FAILED_CODE = "REFINE_ENGINE_FAILED"
 _CLEANUP_FAILED_CODE = "REFINE_ENGINE_CLEANUP_FAILED"
+_CHILD_PROTOCOL_REJECT_EXIT_CODE = 74
 _IN_PROCESS_ENTRYPOINT_MARKER = "__patina_refine_in_process_only__"
 _JSON_STRING_CHUNK_CHARS = 1024
 _JSON_OUTPUT_CHUNK_CHARS = 1024
@@ -59,6 +62,10 @@ class _ChildBoundaryTimeout(TimeoutError):
 
 
 class _ChildTransportError(ValueError):
+    pass
+
+
+class _ChildJsonOverflow(OverflowError):
     pass
 
 
@@ -108,30 +115,53 @@ def _bounded_int_repr(value: int, *, maximum_bytes: int) -> str:
     # impossible-to-fit integers before making their decimal copy; any
     # surviving representation is bounded by a small multiple of the cap.
     if int.bit_length(value) > (maximum_bytes + 1) * 4:
-        raise _ChildTransportError(
-            "native child JSON integer exceeds the bounded transport"
-        )
+        raise _ChildJsonOverflow
     return int.__repr__(value)
 
 
-def _json_mapping_key(value: Any, *, maximum_bytes: int) -> str:
-    if isinstance(value, str):
-        return value
-    if value is True:
-        return "true"
-    if value is False:
-        return "false"
-    if value is None:
-        return "null"
-    if isinstance(value, int):
-        return _bounded_int_repr(value, maximum_bytes=maximum_bytes)
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise ValueError("Out of range float values are not JSON compliant")
-        return float.__repr__(value)
-    raise TypeError(
-        f"keys must be str, int, float, bool or None, not {type(value).__name__}"
-    )
+def _json_string_content_size(value: str, *, maximum_bytes: int) -> int:
+    size = 0
+    for offset in range(0, len(value), _JSON_STRING_CHUNK_CHARS):
+        encoded = encode_basestring_ascii(
+            value[offset : offset + _JSON_STRING_CHUNK_CHARS]
+        )
+        size += len(encoded) - 2
+        if size > maximum_bytes:
+            raise _ChildJsonOverflow
+    return size
+
+
+def _sort_bounded_json_keys(value: dict[str, Any]) -> list[str]:
+    """Sort only after callers prove the key-reference copy fits the cap."""
+
+    return sorted(dict.keys(value))
+
+
+def _validated_bounded_json_keys(
+    value: dict[str, Any],
+    *,
+    maximum_bytes: int,
+) -> list[str]:
+    count = dict.__len__(value)
+    # Braces + newline, commas, quoted empty keys, colons, and the smallest
+    # possible one-byte values.  Reject before iterating or copying keys.
+    minimum_document_bytes = 3 if count == 0 else (5 * count) + 2
+    if minimum_document_bytes > maximum_bytes:
+        raise _ChildJsonOverflow
+
+    key_content_bytes = 0
+    for key in dict.keys(value):
+        if type(key) is not str:
+            raise TypeError(
+                "native child JSON object keys must be exact built-in strings"
+            )
+        key_content_bytes += _json_string_content_size(
+            key,
+            maximum_bytes=maximum_bytes - minimum_document_bytes,
+        )
+        if minimum_document_bytes + key_content_bytes > maximum_bytes:
+            raise _ChildJsonOverflow
+    return _sort_bounded_json_keys(value)
 
 
 def _iter_canonical_json_chunks(
@@ -158,18 +188,19 @@ def _iter_canonical_json_chunks(
     if value is False:
         yield "false"
         return
-    if isinstance(value, str):
+    value_type = type(value)
+    if value_type is str:
         yield from _iter_json_string(value)
         return
-    if isinstance(value, int):
+    if value_type is int:
         yield _bounded_int_repr(value, maximum_bytes=maximum_bytes)
         return
-    if isinstance(value, float):
+    if value_type is float:
         if not math.isfinite(value):
             raise ValueError("Out of range float values are not JSON compliant")
         yield float.__repr__(value)
         return
-    if isinstance(value, (list, tuple)):
+    if value_type is list or value_type is tuple:
         marker = id(value)
         if marker in active_containers:
             raise ValueError("Circular reference detected")
@@ -190,7 +221,7 @@ def _iter_canonical_json_chunks(
         finally:
             active_containers.remove(marker)
         return
-    if isinstance(value, dict):
+    if value_type is dict:
         marker = id(value)
         if marker in active_containers:
             raise ValueError("Circular reference detected")
@@ -198,18 +229,17 @@ def _iter_canonical_json_chunks(
         try:
             yield "{"
             first = True
-            # Match JSONEncoder(sort_keys=True): sort original keys before the
-            # supported non-string key conversion.
-            for key, item in sorted(value.items()):
+            for key in _validated_bounded_json_keys(
+                value,
+                maximum_bytes=maximum_bytes,
+            ):
                 if not first:
                     yield ","
                 first = False
-                yield from _iter_json_string(
-                    _json_mapping_key(key, maximum_bytes=maximum_bytes)
-                )
+                yield from _iter_json_string(key)
                 yield ":"
                 yield from _iter_canonical_json_chunks(
-                    item,
+                    dict.__getitem__(value, key),
                     maximum_bytes=maximum_bytes,
                     active_containers=active_containers,
                 )
@@ -266,6 +296,8 @@ def _bounded_json_bytes(
         )
     except _ChildTransportError:
         raise
+    except _ChildJsonOverflow as exc:
+        raise _ChildTransportError(overflow_message) from exc
     except (RecursionError, TypeError, ValueError, OverflowError) as exc:
         raise _ChildTransportError(
             f"native child transport requires finite JSON values: {exc}"
@@ -273,14 +305,14 @@ def _bounded_json_bytes(
 
 
 def _bounded_request(request: Mapping[str, Any]) -> bytes:
-    if not isinstance(request, Mapping):
+    if type(request) is not dict:
         raise AdapterError(
-            "refine native child request must be a JSON object",
+            "refine native child request must be an exact built-in JSON object",
             _FAILED_CODE,
         )
     try:
         payload = _bounded_json_bytes(
-            dict(request),
+            request,
             maximum_bytes=NATIVE_CHILD_MAX_REQUEST_BYTES,
             overflow_message=(
                 "refine native child request exceeds the bounded transport"
@@ -427,6 +459,7 @@ def _child_entry(
         except BaseException:
             return
 
+    protocol_rejected = False
     try:
         context = NativeChildContext(expires_at_monotonic_s)
         _receive_exact_child_ack(
@@ -435,10 +468,15 @@ def _child_entry(
             context=context,
             phase="result",
         )
-    except (AdapterError, _ChildTransportError, EOFError, OSError):
-        return
+    except BaseException:
+        protocol_rejected = True
     finally:
-        connection.close()
+        try:
+            connection.close()
+        except BaseException:
+            protocol_rejected = True
+    if protocol_rejected:
+        raise SystemExit(_CHILD_PROTOCOL_REJECT_EXIT_CODE)
 
 
 def _receive_envelope(
@@ -586,6 +624,95 @@ def _terminate_and_reap(
     return tuple(errors)
 
 
+def _exception_summary(exc: BaseException, *, maximum_bytes: int = 1024) -> str:
+    try:
+        message = str(exc)
+    except BaseException as formatting_error:
+        message = (
+            f"<unprintable {type(exc).__name__}; "
+            f"str raised {type(formatting_error).__name__}>"
+        )
+    return f"{type(exc).__name__}: {_truncate_utf8(message, maximum_bytes)}"
+
+
+def _emergency_kill_and_reap(
+    process: multiprocessing.Process,
+    *,
+    group_leader_pid: int | None,
+) -> tuple[str, ...]:
+    """Independent last-resort SIGKILL + reap after primary cleanup crashes."""
+
+    errors: list[str] = []
+    if group_leader_pid is not None:
+        try:
+            os.killpg(group_leader_pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except BaseException as exc:
+            errors.append(
+                "emergency process-group SIGKILL failed: " + _exception_summary(exc)
+            )
+    else:
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        except BaseException as exc:
+            errors.append(
+                "emergency native child kill failed: " + _exception_summary(exc)
+            )
+
+    try:
+        process.join(NATIVE_CHILD_KILL_REAP_S)
+    except BaseException as exc:
+        errors.append("emergency native child join failed: " + _exception_summary(exc))
+    try:
+        leader_alive = process.is_alive()
+    except BaseException as exc:
+        errors.append(
+            "emergency native child liveness check failed: " + _exception_summary(exc)
+        )
+        leader_alive = True
+    if leader_alive:
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        except BaseException as exc:
+            errors.append(
+                "emergency direct leader SIGKILL failed: " + _exception_summary(exc)
+            )
+        try:
+            process.join(NATIVE_CHILD_KILL_REAP_S)
+        except BaseException as exc:
+            errors.append(
+                "emergency killed leader join failed: " + _exception_summary(exc)
+            )
+    try:
+        leader_alive = process.is_alive()
+    except BaseException as exc:
+        errors.append(
+            "emergency final leader liveness check failed: " + _exception_summary(exc)
+        )
+        leader_alive = True
+    if leader_alive:
+        errors.append("emergency cleanup could not reap native child leader")
+
+    if group_leader_pid is not None and not leader_alive:
+        try:
+            os.killpg(group_leader_pid, 0)
+        except ProcessLookupError:
+            pass
+        except BaseException as exc:
+            errors.append(
+                "emergency cleanup cannot confirm process-group removal: "
+                + _exception_summary(exc)
+            )
+        else:
+            errors.append("emergency cleanup process group still exists after reap")
+    return tuple(errors)
+
+
 def _cleanup_process(
     process: multiprocessing.Process,
     *,
@@ -599,14 +726,33 @@ def _cleanup_process(
             group_leader_pid=group_leader_pid,
         )
     except BaseException as exc:
-        return (
-            "native child cleanup raised "
-            f"{type(exc).__name__}: {_truncate_utf8(str(exc), 1024)}",
-        )
+        primary_error = "native child cleanup raised " + _exception_summary(exc)
+        try:
+            emergency_errors = _emergency_kill_and_reap(
+                process,
+                group_leader_pid=group_leader_pid,
+            )
+        except BaseException as emergency_exc:
+            emergency_errors = (
+                "emergency native child cleanup raised "
+                + _exception_summary(emergency_exc),
+            )
+        return (primary_error, *emergency_errors)
     if not isinstance(errors, tuple) or any(
         not isinstance(error, str) or not error for error in errors
     ):
-        return ("native child cleanup returned an invalid uncertainty report",)
+        invalid_report = "native child cleanup returned an invalid uncertainty report"
+        try:
+            emergency_errors = _emergency_kill_and_reap(
+                process,
+                group_leader_pid=group_leader_pid,
+            )
+        except BaseException as emergency_exc:
+            emergency_errors = (
+                "emergency native child cleanup raised "
+                + _exception_summary(emergency_exc),
+            )
+        return (invalid_report, *emergency_errors)
     return errors
 
 
@@ -630,6 +776,29 @@ def _timeout_error(cleanup_errors: tuple[str, ...]) -> AdapterError:
         "refine native engine child exceeded the shared deadline",
         _TIMEOUT_CODE,
     )
+
+
+def _close_connections_safely(
+    connections: tuple[tuple[str, Any], ...],
+) -> tuple[str, ...]:
+    errors: list[str] = []
+    for label, connection in connections:
+        try:
+            connection.close()
+        except BaseException as exc:
+            errors.append(
+                f"cannot close {label} native child transport: "
+                + _exception_summary(exc)
+            )
+    return tuple(errors)
+
+
+def _add_cleanup_note(exc: BaseException, errors: tuple[str, ...]) -> None:
+    note = "non-masking native boundary cleanup report: " + "; ".join(errors)
+    try:
+        exc.add_note(_truncate_utf8(note, 2560))
+    except BaseException:
+        return
 
 
 def run_native_engine_child(
@@ -683,13 +852,17 @@ def run_native_engine_child(
             name="patina-refine-native",
             daemon=False,
         )
-    except (OSError, ValueError) as exc:
-        parent_connection.close()
-        child_connection.close()
-        raise AdapterError(
-            f"cannot prepare refine native child: {exc}",
-            _FAILED_CODE,
-        ) from exc
+    except BaseException as exc:
+        close_errors = _close_connections_safely(
+            (
+                ("parent", parent_connection),
+                ("child", child_connection),
+            )
+        )
+        message = "cannot prepare refine native child: " + _exception_summary(exc)
+        if close_errors:
+            raise _cleanup_failed_error(message, close_errors) from exc
+        raise AdapterError(message, _FAILED_CODE) from exc
     started = False
     group_leader_pid: int | None = None
     reaped = False
@@ -832,28 +1005,50 @@ def run_native_engine_child(
             ) from exc
         raise
     finally:
+        active_exception = sys.exc_info()[1]
+        final_cleanup_errors: tuple[str, ...] = ()
         if started and not reaped and not cleanup_handled:
-            cleanup_errors = _cleanup_process(
+            final_cleanup_errors = _cleanup_process(
                 process,
                 group_leader_pid=group_leader_pid,
             )
-            if cleanup_errors:
-                raise _cleanup_failed_error(
-                    "refine native child cleanup failed",
-                    cleanup_errors,
+        resource_errors = list(
+            _close_connections_safely(
+                (
+                    ("parent", parent_connection),
+                    ("child", child_connection),
                 )
-        for connection in (parent_connection, child_connection):
-            try:
-                connection.close()
-            except OSError:
-                pass
+            )
+        )
         if started:
             try:
                 leader_alive = process.is_alive()
-            except (AssertionError, OSError, ValueError):
+            except BaseException as exc:
+                resource_errors.append(
+                    "cannot inspect native child leader during final resource "
+                    "cleanup: " + _exception_summary(exc)
+                )
                 leader_alive = True
             if not leader_alive:
                 try:
                     process.close()
-                except (OSError, ValueError):
-                    pass
+                except BaseException as exc:
+                    resource_errors.append(
+                        "cannot close native child process handle: "
+                        + _exception_summary(exc)
+                    )
+
+        all_final_errors = (*final_cleanup_errors, *resource_errors)
+        if final_cleanup_errors:
+            raise _cleanup_failed_error(
+                "refine native child cleanup failed",
+                all_final_errors,
+            ) from active_exception
+        if resource_errors:
+            if active_exception is not None:
+                _add_cleanup_note(active_exception, tuple(resource_errors))
+            else:
+                raise _cleanup_failed_error(
+                    "refine native boundary resource cleanup failed",
+                    tuple(resource_errors),
+                )
