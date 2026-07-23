@@ -883,13 +883,29 @@ def test_unhashable_refined_pose_name_is_a_closed_geometry_failure(tmp_path):
     assert raised.value.code is RefineFailureCode.SIM3_INVALID
 
 
-def test_mutable_nested_refined_pose_values_are_rejected(tmp_path):
+@pytest.mark.parametrize("field_name", ("rotation", "translation", "qvec"))
+def test_mutable_nested_refined_pose_values_are_rejected(tmp_path, field_name):
     candidate = _candidate()
     first = candidate.refined_poses[0]
-    malformed_pose = replace(
-        first.cam_from_world,
-        qvec=list(first.cam_from_world.qvec),  # type: ignore[arg-type]
-    )
+    if field_name == "rotation":
+        malformed_pose = replace(
+            first.cam_from_world,
+            rotation=[  # type: ignore[arg-type]
+                list(row) for row in first.cam_from_world.rotation
+            ],
+        )
+    elif field_name == "translation":
+        malformed_pose = replace(
+            first.cam_from_world,
+            translation=list(  # type: ignore[arg-type]
+                first.cam_from_world.translation
+            ),
+        )
+    else:
+        malformed_pose = replace(
+            first.cam_from_world,
+            qvec=list(first.cam_from_world.qvec),  # type: ignore[arg-type]
+        )
     malformed = replace(
         candidate,
         refined_poses=(
@@ -906,6 +922,45 @@ def test_mutable_nested_refined_pose_values_are_rejected(tmp_path):
 
     assert raised.value.code is RefineFailureCode.SIM3_INVALID
     assert raised.value.fatal is True
+
+
+def test_backend_candidate_mutation_after_return_cannot_change_deep_snapshot(tmp_path):
+    original = _candidate()
+
+    class _MutatingOriginalBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            original_pose = original.refined_poses[0].cam_from_world
+            object.__setattr__(
+                original_pose,
+                "rotation",
+                [list(row) for row in original_pose.rotation],
+            )
+            object.__setattr__(
+                original_pose,
+                "translation",
+                list(original_pose.translation),
+            )
+            snapshotted_pose = kwargs["candidate"].refined_poses[0].cam_from_world
+            assert snapshotted_pose is not original_pose
+            assert type(snapshotted_pose.rotation) is tuple
+            assert all(type(row) is tuple for row in snapshotted_pose.rotation)
+            assert type(snapshotted_pose.translation) is tuple
+            return super().build_engine_artifacts(**kwargs)
+
+    builder = _MutatingOriginalBuilder()
+    result = RefineRunner(
+        backend=_FakeBackend(primary=original),
+        artifact_builder=builder,
+    ).run(_request(tmp_path), deadline=_deadline())
+
+    snapshotted_candidate = builder.calls[0][1]
+    assert type(original.refined_poses[0].cam_from_world.rotation) is list
+    assert type(original.refined_poses[0].cam_from_world.translation) is list
+    assert type(snapshotted_candidate.refined_poses[0].cam_from_world.rotation) is tuple
+    assert (
+        type(snapshotted_candidate.refined_poses[0].cam_from_world.translation) is tuple
+    )
+    assert json.loads(result.manifest.payload)["status"] == "complete"
 
 
 @pytest.mark.parametrize(

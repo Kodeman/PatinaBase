@@ -1010,6 +1010,60 @@ def _engine_failure(error: EngineAttemptError) -> RefineRunError:
     return RefineRunError(code, str(error))
 
 
+def _snapshot_candidate_pose(value: object) -> ColmapPose:
+    """Build a deeply immutable pose snapshot or reject the engine output."""
+
+    if not isinstance(value, ColmapPose):
+        _fail(
+            RefineFailureCode.SIM3_INVALID,
+            "candidate pose has the wrong contract type",
+        )
+    rotation = value.rotation
+    translation = value.translation
+    qvec = value.qvec
+    if not (
+        type(rotation) is tuple
+        and len(rotation) == 3
+        and all(
+            type(row) is tuple
+            and len(row) == 3
+            and all(_is_finite_number(component) for component in row)
+            for row in rotation
+        )
+    ):
+        _fail(
+            RefineFailureCode.SIM3_INVALID,
+            "candidate pose rotation must be an immutable finite 3x3 tuple",
+        )
+    if not (
+        type(translation) is tuple
+        and len(translation) == 3
+        and all(_is_finite_number(component) for component in translation)
+    ):
+        _fail(
+            RefineFailureCode.SIM3_INVALID,
+            "candidate pose translation must be an immutable finite 3-tuple",
+        )
+    if not (
+        type(qvec) is tuple
+        and len(qvec) == 4
+        and all(_is_finite_number(component) for component in qvec)
+    ):
+        _fail(
+            RefineFailureCode.SIM3_INVALID,
+            "candidate pose quaternion must be an immutable finite 4-tuple",
+        )
+    return ColmapPose(
+        rotation=(
+            tuple(float(component) for component in rotation[0]),
+            tuple(float(component) for component in rotation[1]),
+            tuple(float(component) for component in rotation[2]),
+        ),
+        translation=tuple(float(component) for component in translation),
+        qvec=tuple(float(component) for component in qvec),
+    )
+
+
 def _snapshot_candidate(
     candidate: object,
     *,
@@ -1026,10 +1080,29 @@ def _snapshot_candidate(
         failure_code=RefineFailureCode.SIM3_INVALID,
         deadline=deadline,
     )
+    pose_rows: list[NamedRefinedPose] = []
+    for row_index, row in enumerate(refined_poses):
+        _deadline_checkpoint(deadline, row_index)
+        if not isinstance(row, NamedRefinedPose):
+            _fail(
+                RefineFailureCode.SIM3_INVALID,
+                "refined pose row has the wrong contract type",
+            )
+        if type(row.image_name) is not str:
+            _fail(
+                RefineFailureCode.SIM3_INVALID,
+                "refined pose image name must be an immutable string",
+            )
+        pose_rows.append(
+            NamedRefinedPose(
+                image_name=row.image_name,
+                cam_from_world=_snapshot_candidate_pose(row.cam_from_world),
+            )
+        )
     return RefineEngineCandidate(
         cli_version=candidate.cli_version,
         binding_version=candidate.binding_version,
-        refined_poses=refined_poses,  # type: ignore[arg-type]
+        refined_poses=tuple(pose_rows),
         evidence=candidate.evidence,
         iterations=candidate.iterations,
         vram_peak_mb=candidate.vram_peak_mb,
@@ -1053,8 +1126,9 @@ def _call_engine(
             RefineFailureCode.ENGINE_FAILED,
             f"engine adapter raised {type(exc).__name__}",
         ) from exc
+    snapshot = _snapshot_candidate(candidate, deadline=deadline)
     _require_engine_budget(deadline)
-    return _snapshot_candidate(candidate, deadline=deadline)
+    return snapshot
 
 
 def _backend_callback(backend: object, name: str):
