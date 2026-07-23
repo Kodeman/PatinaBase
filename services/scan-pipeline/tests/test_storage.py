@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Callable
 
 import httpx
+import patina_scan_worker.storage as storage_module
 import pytest
 
 from patina_scan_worker.config import settings_from_env
@@ -129,10 +131,13 @@ def _client(session: _Session) -> StorageClient:
 
 
 def _publish(client: StorageClient, source: Path, name: str = "artifact.bin") -> bool:
+    payload = source.read_bytes()
     return client.publish_immutable_file(
         f"{_PREFIX}/{name}",
         source,
         "application/octet-stream",
+        expected_sha256=hashlib.sha256(payload).hexdigest(),
+        expected_size=len(payload),
         user_id=_USER_ID,
         scan_id=_SCAN_ID,
     )
@@ -407,6 +412,8 @@ def test_owner_prefix_is_required_before_any_service_role_write(tmp_path):
             f"room_file/other-user/{_SCAN_ID}/v2/refine/artifact.bin",
             source,
             "application/octet-stream",
+            expected_sha256=hashlib.sha256(b"payload").hexdigest(),
+            expected_size=7,
             user_id=_USER_ID,
             scan_id=_SCAN_ID,
         )
@@ -439,6 +446,8 @@ def test_unsafe_object_key_is_rejected_before_service_role_write(tmp_path, objec
             object_key,
             source,
             "application/octet-stream",
+            expected_sha256=hashlib.sha256(b"payload").hexdigest(),
+            expected_size=7,
             user_id=_USER_ID,
             scan_id=_SCAN_ID,
         )
@@ -472,18 +481,115 @@ def test_symlink_source_is_rejected_before_any_service_role_write(tmp_path):
     assert session.posts == []
 
 
-def test_source_mutation_during_upload_never_reports_success(tmp_path):
+def test_source_mutation_while_staging_never_reaches_remote(tmp_path, monkeypatch):
+    original = b"a" * ((1 << 20) * 2)
     source = tmp_path / "artifact.bin"
-    source.write_bytes(b"first payload")
+    source.write_bytes(original)
+    real_chunks = storage_module._bounded_file_chunks
+    source_inode = source.stat().st_ino
+
+    def handle_stat(handle):
+        return storage_module.os.fstat(handle.fileno())
+
+    def mutate_between_source_chunks(handle):
+        for index, chunk in enumerate(real_chunks(handle)):
+            yield chunk
+            if index == 0 and handle.fileno() >= 0:
+                if source_inode == source.stat().st_ino == handle_stat(handle).st_ino:
+                    source.write_bytes(b"b" * len(original))
+
+    monkeypatch.setattr(
+        storage_module,
+        "_bounded_file_chunks",
+        mutate_between_source_chunks,
+    )
+    session = _Session(_Response(200))
+
+    with pytest.raises(TransientError) as caught:
+        _client(session).publish_immutable_file(
+            f"{_PREFIX}/artifact.bin",
+            source,
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(original).hexdigest(),
+            expected_size=len(original),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_IO"
+    assert session.posts == []
+
+
+def test_source_mutation_after_frozen_snapshot_cannot_change_uploaded_bytes(tmp_path):
+    original = b"first payload"
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(original)
     session = _Session(
         _Response(200),
         after_upload=lambda: source.write_bytes(b"later payload"),
     )
 
+    assert _publish(_client(session), source) is True
+    assert session.posts[0]["body"] == original
+
+
+@pytest.mark.parametrize(
+    ("expected_sha256", "expected_size"),
+    (
+        ("not-a-sha", 7),
+        ("0" * 64, -1),
+        ("0" * 64, True),
+    ),
+)
+def test_invalid_expected_fingerprint_is_rejected_before_network(
+    tmp_path, expected_sha256, expected_size
+):
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"payload")
+    session = _Session(_Response(200))
+
+    with pytest.raises(PermanentError) as caught:
+        _client(session).publish_immutable_file(
+            f"{_PREFIX}/artifact.bin",
+            source,
+            "application/octet-stream",
+            expected_sha256=expected_sha256,
+            expected_size=expected_size,
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_VERIFY"
+    assert session.posts == []
+
+
+@pytest.mark.parametrize(
+    ("expected_sha256", "expected_size"),
+    (
+        (hashlib.sha256(b"different").hexdigest(), 7),
+        (hashlib.sha256(b"payload").hexdigest(), 8),
+    ),
+)
+def test_manifest_fingerprint_mismatch_is_rejected_before_network(
+    tmp_path, expected_sha256, expected_size
+):
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"payload")
+    session = _Session(_Response(200))
+
     with pytest.raises(TransientError) as caught:
-        _publish(_client(session), source)
+        _client(session).publish_immutable_file(
+            f"{_PREFIX}/artifact.bin",
+            source,
+            "application/octet-stream",
+            expected_sha256=expected_sha256,
+            expected_size=expected_size,
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
 
     assert caught.value.token == "REFINE_ARTIFACT_IO"
+    assert session.posts == []
 
 
 def test_manifest_last_order_remains_under_caller_control(tmp_path):

@@ -841,6 +841,98 @@ def test_subprocess_timeout_kills_process_group_reaps_and_blocks_late_writes(tmp
     assert not late_artifact.exists()
 
 
+def test_subprocess_deadline_consumes_slow_process_startup(tmp_path, monkeypatch):
+    process = _CompletedPopen()
+    cleanup_calls = []
+
+    def delayed_popen(_command, **kwargs):
+        del kwargs
+        time.sleep(0.25)
+        return process
+
+    def reap_after_expired_startup(cleanup_process):
+        cleanup_calls.append(cleanup_process)
+        cleanup_process.returncode = -9
+        return ()
+
+    monkeypatch.setattr(adapter.subprocess, "Popen", delayed_popen)
+    monkeypatch.setattr(adapter, "_kill_and_reap", reap_after_expired_startup)
+    now = time.monotonic()
+    deadline = RefineDeadline.start(
+        now_monotonic_s=now,
+        lease_expires_at_monotonic_s=now + LEASE_COMPLETION_RESERVE_S + 0.15,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        adapter.run_colmap_subprocess(
+            ["colmap", "feature_extractor"],
+            deadline=deadline,
+            log_path=tmp_path / "slow-startup.log",
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+    assert process.wait_timeouts == []
+    assert cleanup_calls == [process]
+
+
+def test_subprocess_deadline_consumes_slow_log_drain(tmp_path, monkeypatch):
+    real_drain = adapter._drain_colmap_output
+
+    def delayed_drain(stream, sink, errors):
+        real_drain(stream, sink, errors)
+        time.sleep(0.25)
+
+    monkeypatch.setattr(adapter, "_drain_colmap_output", delayed_drain)
+    now = time.monotonic()
+    deadline = RefineDeadline.start(
+        now_monotonic_s=now,
+        lease_expires_at_monotonic_s=now + LEASE_COMPLETION_RESERVE_S + 0.15,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        adapter.run_colmap_subprocess(
+            [sys.executable, "-c", "print('completed-before-slow-drain')"],
+            deadline=deadline,
+            log_path=tmp_path / "slow-drain.log",
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+
+
+def test_subprocess_timeout_cleanup_uncertainty_is_never_retryable(
+    tmp_path, monkeypatch
+):
+    process = _CompletedPopen()
+
+    def timed_out_wait(timeout=None):
+        process.wait_timeouts.append(timeout)
+        raise subprocess.TimeoutExpired("colmap", timeout)
+
+    process.wait = timed_out_wait
+    monkeypatch.setattr(adapter.subprocess, "Popen", lambda *_args, **_kwargs: process)
+
+    def failed_cleanup(cleanup_process):
+        cleanup_process.returncode = -9
+        return ("synthetic process-group cleanup failure",)
+
+    monkeypatch.setattr(adapter, "_kill_and_reap", failed_cleanup)
+    deadline = RefineDeadline.start(
+        now_monotonic_s=100.0,
+        lease_expires_at_monotonic_s=1000.0,
+    )
+    monkeypatch.setattr(adapter.time, "monotonic", lambda: 175.0)
+
+    with pytest.raises(AdapterError) as raised:
+        adapter.run_colmap_subprocess(
+            ["colmap", "feature_extractor"],
+            deadline=deadline,
+            log_path=tmp_path / "cleanup-failed.log",
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert "synthetic process-group cleanup failure" in str(raised.value)
+
+
 def test_subprocess_propagates_log_drain_errors(tmp_path, monkeypatch):
     _install_completed_popen(monkeypatch, output=b"output that must be drained")
 
@@ -939,8 +1031,11 @@ def test_claimed_task_expiry_feeds_refine_deadline_and_reserve_fails_closed():
 
 def test_subprocess_deadline_is_shared_across_commands(monkeypatch, tmp_path):
     timeouts = []
+    clock = [1100.0]
+    launch_times = iter((1100.0, 1180.0))
 
     def fake_popen(_command, **_kwargs):
+        clock[0] = next(launch_times)
         process = _CompletedPopen()
         real_wait = process.wait
 
@@ -956,8 +1051,7 @@ def test_subprocess_deadline_is_shared_across_commands(monkeypatch, tmp_path):
         now_monotonic_s=1000.0,
         lease_expires_at_monotonic_s=2000.0,
     )
-    times = iter((1100.0, 1180.0))
-    monkeypatch.setattr(adapter.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(adapter.time, "monotonic", lambda: clock[0])
 
     adapter.run_colmap_subprocess(
         ["colmap", "feature_extractor"], deadline=deadline, log_path=tmp_path / "features.log"

@@ -12,6 +12,7 @@ import errno
 import hashlib
 import os
 import stat
+import tempfile
 from collections.abc import Iterator
 from typing import Any, BinaryIO
 
@@ -39,13 +40,62 @@ def _bounded_file_chunks(handle: BinaryIO) -> Iterator[bytes]:
         yield chunk
 
 
-def _file_fingerprint(handle: BinaryIO) -> tuple[str, int]:
+def _stage_verified_file(
+    source: BinaryIO,
+    frozen: BinaryIO,
+    *,
+    expected_sha256: str,
+    expected_size: int,
+) -> None:
+    """Copy one stable source generation into a private upload descriptor.
+
+    The service must never stream a caller-writable inode directly into a
+    create-only object. If that inode changes between upload chunks, the remote
+    key can otherwise be committed with mixed bytes before the client notices.
+    ``frozen`` is an unlinked, mode-0600 temporary file owned only by this
+    process; no network call occurs until its bytes and the live source metadata
+    have both been verified.
+    """
+
+    initial_snapshot = _file_snapshot(source)
+    if initial_snapshot[3] != expected_size:
+        raise TransientError(
+            "immutable publication source size no longer matches its manifest",
+            token="REFINE_ARTIFACT_IO",
+        )
+
     digest = hashlib.sha256()
-    size = 0
-    for chunk in _bounded_file_chunks(handle):
+    copied = 0
+    for chunk in _bounded_file_chunks(source):
+        copied += len(chunk)
+        if copied > expected_size:
+            raise TransientError(
+                "immutable publication source grew while staging",
+                token="REFINE_ARTIFACT_IO",
+            )
         digest.update(chunk)
-        size += len(chunk)
-    return digest.hexdigest(), size
+        frozen.write(chunk)
+
+    staged_snapshot = _file_snapshot(source)
+    if staged_snapshot != initial_snapshot or copied != expected_size:
+        raise TransientError(
+            "immutable publication source changed while staging",
+            token="REFINE_ARTIFACT_IO",
+        )
+    if digest.hexdigest() != expected_sha256:
+        raise TransientError(
+            "immutable publication source hash no longer matches its manifest",
+            token="REFINE_ARTIFACT_IO",
+        )
+
+    frozen.flush()
+    os.fsync(frozen.fileno())
+    if _file_snapshot(frozen)[3] != expected_size:
+        raise TransientError(
+            "immutable publication snapshot could not be verified",
+            token="REFINE_ARTIFACT_IO",
+        )
+    frozen.seek(0)
 
 
 def _file_snapshot(handle: BinaryIO) -> tuple[int, int, int, int, int, int]:
@@ -260,6 +310,8 @@ class StorageClient:
         source_path: str | os.PathLike[str],
         content_type: str,
         *,
+        expected_sha256: str,
+        expected_size: int,
         user_id: str,
         scan_id: str,
     ) -> bool:
@@ -270,8 +322,10 @@ class StorageClient:
         created the object and ``False`` for an identical concurrent/replayed
         object. A divergent existing object is a permanent stable conflict.
 
-        The source is fingerprinted and uploaded from the same open descriptor
-        in bounded chunks. The required owner/scan arguments enforce the
+        ``expected_sha256`` and ``expected_size`` bind the object to the
+        already-built manifest. The source is copied into a private frozen
+        descriptor, verified there, and only that descriptor is uploaded in
+        bounded chunks. The required owner/scan arguments enforce the
         service-role RLS-equivalent guard before any network call.
         """
 
@@ -279,6 +333,19 @@ class StorageClient:
             _assert_safe_owner_key(object_key, user_id, scan_id)
         except OwnershipError as exc:
             raise PermanentError(str(exc), token="OWNERSHIP_VIOLATION") from exc
+
+        if (
+            not isinstance(expected_sha256, str)
+            or len(expected_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in expected_sha256)
+            or isinstance(expected_size, bool)
+            or not isinstance(expected_size, int)
+            or expected_size < 0
+        ):
+            raise PermanentError(
+                "immutable storage publication requires a canonical expected fingerprint",
+                token="REFINE_ARTIFACT_VERIFY",
+            )
 
         url = f"/storage/v1/object/{self._bucket}/{object_key}"
         source_name = os.fspath(source_path)
@@ -312,51 +379,40 @@ class StorageClient:
                         f"immutable publication source changed while opening: {source_path}",
                         token="REFINE_ARTIFACT_IO",
                     )
-                expected_sha256, expected_size = _file_fingerprint(source)
-                if expected_size != initial_snapshot[3]:
-                    raise TransientError(
-                        f"immutable publication source changed while hashing: {source_path}",
-                        token="REFINE_ARTIFACT_IO",
+                with tempfile.TemporaryFile(
+                    mode="w+b", prefix="patina-refine-upload-"
+                ) as frozen:
+                    _stage_verified_file(
+                        source,
+                        frozen,
+                        expected_sha256=expected_sha256,
+                        expected_size=expected_size,
                     )
-                hashed_snapshot = _file_snapshot(source)
-                if hashed_snapshot != initial_snapshot:
-                    raise TransientError(
-                        f"immutable publication source changed while hashing: {source_path}",
-                        token="REFINE_ARTIFACT_IO",
+
+                    uploaded_digest = hashlib.sha256()
+                    uploaded_size = 0
+
+                    def upload_chunks() -> Iterator[bytes]:
+                        nonlocal uploaded_size
+                        for chunk in _bounded_file_chunks(frozen):
+                            uploaded_digest.update(chunk)
+                            uploaded_size += len(chunk)
+                            yield chunk
+
+                    resp = self._s.post(
+                        url,
+                        content=upload_chunks(),
+                        headers={
+                            "content-type": content_type,
+                            "content-length": str(expected_size),
+                            "x-upsert": "false",
+                        },
                     )
-                source.seek(0)
-
-                uploaded_digest = hashlib.sha256()
-                uploaded_size = 0
-
-                def upload_chunks() -> Iterator[bytes]:
-                    nonlocal uploaded_size
-                    for chunk in _bounded_file_chunks(source):
-                        uploaded_digest.update(chunk)
-                        uploaded_size += len(chunk)
-                        yield chunk
-
-                resp = self._s.post(
-                    url,
-                    content=upload_chunks(),
-                    headers={
-                        "content-type": content_type,
-                        "content-length": str(expected_size),
-                        "x-upsert": "false",
-                    },
-                )
-                uploaded_snapshot = _file_snapshot(source)
         except (httpx.HTTPError, OSError) as exc:
             raise TransientError(
                 f"storage immutable PUT {object_key}: {exc}",
                 token="REFINE_ARTIFACT_IO",
             ) from exc
-
-        if uploaded_snapshot != hashed_snapshot:
-            raise TransientError(
-                f"immutable publication source changed during upload: {source_path}",
-                token="REFINE_ARTIFACT_IO",
-            )
 
         if 200 <= resp.status_code < 300:
             if (

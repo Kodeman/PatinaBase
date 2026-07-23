@@ -48,6 +48,8 @@ COLMAP_LOG_READ_BYTES = 16 * 1024
 COLMAP_LOG_DRAIN_JOIN_S = 5.0
 COLMAP_PROCESS_TERM_GRACE_S = 0.10
 COLMAP_PROCESS_KILL_REAP_S = 1.0
+REFINE_ENGINE_TIMEOUT_CODE = "REFINE_ENGINE_TIMEOUT"
+REFINE_ENGINE_CLEANUP_FAILED_CODE = "REFINE_ENGINE_CLEANUP_FAILED"
 
 TEMPORAL_WINDOW = 10
 SPATIAL_RADIUS_M = 1.5
@@ -148,7 +150,7 @@ class RefineDeadline:
         if deadline <= now:
             raise AdapterError(
                 "claimed lease has no engine time after the completion reserve",
-                "REFINE_ENGINE_TIMEOUT",
+                REFINE_ENGINE_TIMEOUT_CODE,
             )
         return cls(deadline)
 
@@ -156,7 +158,10 @@ class RefineDeadline:
         now = time.monotonic() if now_monotonic_s is None else now_monotonic_s
         remaining = self.expires_at_monotonic_s - now
         if not math.isfinite(remaining) or remaining <= 0:
-            raise AdapterError("refine stage engine deadline is exhausted", "REFINE_ENGINE_TIMEOUT")
+            raise AdapterError(
+                "refine stage engine deadline is exhausted",
+                REFINE_ENGINE_TIMEOUT_CODE,
+            )
         return remaining
 
 
@@ -1460,15 +1465,21 @@ def run_colmap_subprocess(
     """Run one argv-only command using what remains of the shared stage budget.
 
     The future handler creates one :class:`RefineDeadline` from the actual claim
-    lease at stage start and passes it to every call. Output streams to a scratch
-    log. A reader thread continuously drains the merged pipe into a hard-capped
-    64 KiB on-disk tail; retries start fresh, and only that tail can be attached
-    to an error.
+    lease at stage start and passes it to every call. Setup, process launch,
+    waiting, log draining, and the final acceptance check all consume that same
+    absolute deadline. Output streams to a scratch log. A reader thread
+    continuously drains the merged pipe into a hard-capped 64 KiB on-disk tail;
+    retries start fresh, and only that tail can be attached to an error.
+
+    Production callers may pass only the qualified synchronous COLMAP 4.0.2
+    commands. Those commands are contractually required to return with no live
+    OS descendants; arbitrary executables do not satisfy this success contract.
+    Timeout cleanup still targets the entire dedicated process group.
     """
 
     if not command or any(not isinstance(part, str) or not part for part in command):
         raise AdapterError("COLMAP command must be a non-empty argv sequence")
-    timeout_s = deadline.remaining_seconds()
+    deadline.remaining_seconds()
     destination = Path(log_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     sink = _CappedTailLog(destination, COLMAP_LOG_TAIL_BYTES)
@@ -1479,6 +1490,8 @@ def run_colmap_subprocess(
     cleanup_errors: list[str] = []
     returncode: int | None = None
     startup_error: OSError | None = None
+    deadline_error: AdapterError | None = None
+    wait_timeout_s: float | None = None
     try:
         try:
             process = subprocess.Popen(
@@ -1502,16 +1515,37 @@ def run_colmap_subprocess(
             )
             drain_thread.start()
             try:
-                returncode = process.wait(timeout=timeout_s)
-            except subprocess.TimeoutExpired as exc:
-                timed_out = exc
+                wait_timeout_s = deadline.remaining_seconds()
+            except AdapterError as exc:
+                deadline_error = exc
                 cleanup_errors.extend(_kill_and_reap(process))
                 returncode = process.returncode
+            else:
+                try:
+                    returncode = process.wait(timeout=wait_timeout_s)
+                except subprocess.TimeoutExpired as exc:
+                    timed_out = exc
+                    cleanup_errors.extend(_kill_and_reap(process))
+                    returncode = process.returncode
+                else:
+                    try:
+                        deadline.remaining_seconds()
+                    except AdapterError as exc:
+                        deadline_error = exc
     finally:
         if process is not None and process.poll() is None:
             cleanup_errors.extend(_kill_and_reap(process))
         if drain_thread is not None:
-            drain_thread.join(COLMAP_LOG_DRAIN_JOIN_S)
+            drain_join_s = 0.0
+            if deadline_error is None and timed_out is None:
+                try:
+                    drain_join_s = min(
+                        COLMAP_LOG_DRAIN_JOIN_S,
+                        deadline.remaining_seconds(),
+                    )
+                except AdapterError as exc:
+                    deadline_error = exc
+            drain_thread.join(drain_join_s)
             if drain_thread.is_alive():
                 # A dead child closes the pipe. This close is a last-resort
                 # unblock for a broken stream implementation before we fail.
@@ -1534,21 +1568,28 @@ def run_colmap_subprocess(
             f"cannot start COLMAP subprocess {command[0]}: {startup_error}",
             "REFINE_ENGINE_FAILED",
         ) from startup_error
-    if timed_out is not None:
-        details = [*cleanup_errors, *(str(error) for error in drain_errors)]
-        cleanup_detail = ""
-        if details:
-            cleanup_detail = "; cleanup: " + "; ".join(details)
-        raise AdapterError(
-            f"COLMAP subprocess exceeded {timeout_s} seconds: {command[0]}"
-            f"{cleanup_detail}",
-            "REFINE_ENGINE_TIMEOUT",
-        ) from timed_out
+    if deadline_error is None and timed_out is None:
+        try:
+            deadline.remaining_seconds()
+        except AdapterError as exc:
+            deadline_error = exc
     if cleanup_errors:
         raise AdapterError(
             "cannot stop and reap COLMAP process group: " + "; ".join(cleanup_errors),
-            "REFINE_ENGINE_FAILED",
+            REFINE_ENGINE_CLEANUP_FAILED_CODE,
         )
+    if timed_out is not None or deadline_error is not None:
+        details = [str(error) for error in drain_errors]
+        cleanup_detail = ""
+        if details:
+            cleanup_detail = "; cleanup: " + "; ".join(details)
+        elapsed_budget = wait_timeout_s if wait_timeout_s is not None else 0.0
+        raise AdapterError(
+            f"COLMAP subprocess exceeded its shared deadline "
+            f"(last wait budget {elapsed_budget} seconds): {command[0]}"
+            f"{cleanup_detail}",
+            REFINE_ENGINE_TIMEOUT_CODE,
+        ) from (timed_out or deadline_error)
     if drain_errors:
         error = drain_errors[0]
         raise AdapterError(
