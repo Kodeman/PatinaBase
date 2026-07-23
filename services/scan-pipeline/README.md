@@ -112,11 +112,11 @@ points at deleted transaction state. Its package member names and bytes must
 match that trusted source manifest exactly, and its dependency/extra metadata is
 checked before pip is allowed to resolve it.
 The package manifest now includes the queue-independent
-`refine_native_process.py` and `refine_runner.py` foundations, and every
-candidate release imports both as the `patina` service user before activation.
-They remain deliberately unregistered: installing or importing them does not
-add `scan_pipeline.refine` to the stage registry or change persistent/default
-`STAGES`.
+`refine_native_process.py`, `refine_publisher.py`, and `refine_runner.py`
+foundations, and every candidate release imports all three as the `patina`
+service user before activation. They remain deliberately unregistered:
+installing or importing them does not add `scan_pipeline.refine` to the stage
+registry or change persistent/default `STAGES`.
 Archive-mode rsync also copies the checkout directory's mode onto the staged
 tree. `--chmod=Dgo-w,Fgo-w` removes unsafe write bits during transfer; the
 explicit `chmod -R go-w` repeats that hardening as defense-in-depth.

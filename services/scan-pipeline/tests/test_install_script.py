@@ -64,6 +64,7 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/refine_engine.py",
     "src/patina_scan_worker/refine_adapter.py",
     "src/patina_scan_worker/refine_native_process.py",
+    "src/patina_scan_worker/refine_publisher.py",
     "src/patina_scan_worker/refine_runner.py",
     "src/patina_scan_worker/http.py",
     "src/patina_scan_worker/keys.py",
@@ -277,6 +278,7 @@ def test_candidate_smoke_imports_disabled_refine_foundations_before_activation()
         "'import patina_scan_worker; import patina_scan_worker.cli; "
         "import patina_scan_worker.doctor; "
         "import patina_scan_worker.refine_native_process; "
+        "import patina_scan_worker.refine_publisher; "
         "import patina_scan_worker.refine_runner'"
     )
     service_user_smoke = (
@@ -1427,6 +1429,11 @@ def test_transaction_source_copy_requires_exact_trusted_bytes(tmp_path):
             "patina_scan_worker/refine_runner.py",
             id="gpu-missing-refine-runner",
         ),
+        pytest.param(
+            "drawings,gpu",
+            "patina_scan_worker/refine_publisher.py",
+            id="gpu-missing-refine-publisher",
+        ),
     ),
 )
 def test_local_path_build_keeps_trusted_source_byte_and_tree_clean(
@@ -1489,6 +1496,7 @@ _prepare_isolated_source_build "$SRC_DIR"
     )
     for relative in (
         "src/patina_scan_worker/refine_native_process.py",
+        "src/patina_scan_worker/refine_publisher.py",
         "src/patina_scan_worker/refine_runner.py",
     ):
         assert (build_source / relative).read_bytes() == (source / relative).read_bytes()
@@ -1570,9 +1578,11 @@ _prepare_isolated_source_build "$SRC_DIR"
             (
                 "import pathlib,sys; sys.path.insert(0,sys.argv[1]); "
                 "import patina_scan_worker.refine_native_process as native; "
+                "import patina_scan_worker.refine_publisher as publisher; "
                 "import patina_scan_worker.refine_runner as runner; "
                 "root=pathlib.Path(sys.argv[1]).resolve(); "
                 "assert pathlib.Path(native.__file__).resolve().is_relative_to(root); "
+                "assert pathlib.Path(publisher.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(runner.__file__).resolve().is_relative_to(root)"
             ),
             str(install_target),
@@ -1769,6 +1779,7 @@ def test_source_validation_rejects_an_unreviewed_package_module(tmp_path):
         "refine_adapter.py",
         "refine_engine.py",
         "refine_native_process.py",
+        "refine_publisher.py",
         "refine_runner.py",
     ],
 )

@@ -8,12 +8,14 @@ object endpoint with the service-role key.
 
 from __future__ import annotations
 
+import asyncio
 import errno
 import hashlib
+import math
 import os
 import stat
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any, BinaryIO
 
 import httpx
@@ -21,6 +23,7 @@ import httpx
 from .config import Settings
 from .errors import PermanentError, TransientError
 from .keys import OwnershipError, assert_owner_prefix, safe_relative_path
+from .refine_adapter import AdapterError, RefineDeadline
 
 
 _TRANSFER_CHUNK_BYTES = 1 << 20
@@ -35,8 +38,50 @@ _DUPLICATE_CODES = frozenset(
 )
 
 
-def _bounded_file_chunks(handle: BinaryIO) -> Iterator[bytes]:
-    while chunk := handle.read(_TRANSFER_CHUNK_BYTES):
+def _deadline_remaining(
+    deadline: RefineDeadline | None,
+    *,
+    reserve_seconds: float,
+) -> float | None:
+    if deadline is None:
+        return None
+    if (
+        isinstance(reserve_seconds, bool)
+        or not isinstance(reserve_seconds, (int, float))
+        or not math.isfinite(float(reserve_seconds))
+        or reserve_seconds < 0
+    ):
+        raise PermanentError(
+            "refine storage reserve must be a finite non-negative number",
+            token="REFINE_ARTIFACT_VERIFY",
+        )
+    try:
+        remaining = deadline.remaining_seconds()
+    except AdapterError as exc:
+        raise TransientError(
+            "refine storage deadline is exhausted",
+            token="REFINE_ENGINE_TIMEOUT",
+        ) from exc
+    usable = remaining - float(reserve_seconds)
+    if not math.isfinite(usable) or usable <= 0:
+        raise TransientError(
+            "refine storage deadline cannot preserve the completion reserve",
+            token="REFINE_ENGINE_TIMEOUT",
+        )
+    return usable
+
+
+def _bounded_file_chunks(
+    handle: BinaryIO,
+    *,
+    deadline: RefineDeadline | None = None,
+    reserve_seconds: float = 0,
+) -> Iterator[bytes]:
+    while True:
+        _deadline_remaining(deadline, reserve_seconds=reserve_seconds)
+        chunk = handle.read(_TRANSFER_CHUNK_BYTES)
+        if not chunk:
+            break
         yield chunk
 
 
@@ -46,6 +91,8 @@ def _stage_verified_file(
     *,
     expected_sha256: str,
     expected_size: int,
+    deadline: RefineDeadline | None = None,
+    reserve_seconds: float = 0,
 ) -> None:
     """Copy one stable source generation into a private upload descriptor.
 
@@ -66,7 +113,16 @@ def _stage_verified_file(
 
     digest = hashlib.sha256()
     copied = 0
-    for chunk in _bounded_file_chunks(source):
+    source_chunks = (
+        _bounded_file_chunks(source)
+        if deadline is None and reserve_seconds == 0
+        else _bounded_file_chunks(
+            source,
+            deadline=deadline,
+            reserve_seconds=reserve_seconds,
+        )
+    )
+    for chunk in source_chunks:
         copied += len(chunk)
         if copied > expected_size:
             raise TransientError(
@@ -90,6 +146,7 @@ def _stage_verified_file(
 
     frozen.flush()
     os.fsync(frozen.fileno())
+    _deadline_remaining(deadline, reserve_seconds=reserve_seconds)
     if _file_snapshot(frozen)[3] != expected_size:
         raise TransientError(
             "immutable publication snapshot could not be verified",
@@ -175,12 +232,124 @@ def _assert_safe_owner_key(object_key: str, user_id: str, scan_id: str) -> None:
 
 
 class StorageClient:
-    def __init__(self, session: httpx.Client, settings: Settings):
+    def __init__(
+        self,
+        session: httpx.Client,
+        settings: Settings,
+        *,
+        refine_client_factory: Callable[[], Any] | None = None,
+    ):
         self._s = session
         self._cfg = settings
         self._bucket = settings.room_scans_bucket
+        self._refine_client_factory = (
+            refine_client_factory or self._build_refine_client
+        )
 
-    def download_to(self, object_key: str, dest_path: str) -> int:
+    def _build_refine_client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            base_url=self._cfg.supabase_url,
+            headers={
+                "apikey": self._cfg.service_role_key,
+                "Authorization": f"Bearer {self._cfg.service_role_key}",
+            },
+            timeout=None,
+        )
+
+    def _run_refine_io(
+        self,
+        operation: Callable[[], Any],
+        *,
+        deadline: RefineDeadline,
+        reserve_seconds: float,
+        description: str,
+    ) -> Any:
+        """Run one async HTTP operation under a hard monotonic total timeout.
+
+        HTTPX timeouts are inactivity limits for individual connect/read/write/
+        pool operations, not total request deadlines. Refine therefore uses a
+        request-local async client under ``asyncio.timeout`` while the existing
+        synchronous client remains untouched for all P1 call paths.
+        """
+
+        usable = _deadline_remaining(deadline, reserve_seconds=reserve_seconds)
+        assert usable is not None
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise PermanentError(
+                "synchronous refine storage cannot run inside an event loop",
+                token="REFINE_ARTIFACT_VERIFY",
+            )
+
+        async def bounded() -> Any:
+            async with asyncio.timeout(usable):
+                return await operation()
+
+        try:
+            result = asyncio.run(bounded())
+        except TimeoutError as exc:
+            raise TransientError(
+                f"{description}: absolute refine storage deadline exhausted",
+                token="REFINE_ENGINE_TIMEOUT",
+            ) from exc
+        _deadline_remaining(deadline, reserve_seconds=reserve_seconds)
+        return result
+
+    async def _download_to_refine(
+        self,
+        url: str,
+        object_key: str,
+        dest_path: str,
+        *,
+        deadline: RefineDeadline,
+        reserve_seconds: float,
+    ) -> int:
+        try:
+            async with self._refine_client_factory() as client:
+                async with client.stream("GET", url, timeout=None) as resp:
+                    if resp.status_code == 404:
+                        raise PermanentError(
+                            f"object not found: {object_key}",
+                            token="MISSING_FILE",
+                        )
+                    if resp.status_code >= 500:
+                        raise TransientError(
+                            f"storage GET {object_key} -> {resp.status_code}"
+                        )
+                    if resp.status_code >= 400:
+                        body = await resp.aread()
+                        raise PermanentError(
+                            f"storage GET {object_key} -> {resp.status_code}: "
+                            f"{body[:200]!r}",
+                            token="MISSING_FILE",
+                        )
+                    written = 0
+                    with open(dest_path, "wb") as handle:
+                        async for chunk in resp.aiter_bytes(chunk_size=1 << 20):
+                            _deadline_remaining(
+                                deadline,
+                                reserve_seconds=reserve_seconds,
+                            )
+                            handle.write(chunk)
+                            written += len(chunk)
+                    return written
+        except httpx.HTTPError as exc:
+            raise TransientError(
+                f"storage GET {object_key}: {exc}",
+                token="REFINE_ARTIFACT_IO",
+            ) from exc
+
+    def download_to(
+        self,
+        object_key: str,
+        dest_path: str,
+        *,
+        deadline: RefineDeadline | None = None,
+        reserve_seconds: float = 0,
+    ) -> int:
         """Download a bucket object to ``dest_path``. Returns bytes written.
 
         404 → PermanentError token MISSING_FILE (the caller decides transient-vs-
@@ -188,6 +357,19 @@ class StorageClient:
         """
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         url = f"/storage/v1/object/{self._bucket}/{object_key}"
+        if deadline is not None:
+            return self._run_refine_io(
+                lambda: self._download_to_refine(
+                    url,
+                    object_key,
+                    dest_path,
+                    deadline=deadline,
+                    reserve_seconds=reserve_seconds,
+                ),
+                deadline=deadline,
+                reserve_seconds=reserve_seconds,
+                description=f"storage GET {object_key}",
+            )
         try:
             with self._s.stream("GET", url) as resp:
                 if resp.status_code == 404:
@@ -242,6 +424,100 @@ class StorageClient:
                 f"storage PUT {object_key} -> {resp.status_code}: {resp.text[:200]}"
             )
 
+    async def _existing_matches_refine(
+        self,
+        url: str,
+        object_key: str,
+        expected_sha256: str,
+        expected_size: int,
+        expected_content_type: str,
+        *,
+        deadline: RefineDeadline,
+        reserve_seconds: float,
+    ) -> bool:
+        try:
+            async with self._refine_client_factory() as client:
+                async with client.stream(
+                    "GET",
+                    url,
+                    headers={"accept-encoding": "identity"},
+                    timeout=None,
+                ) as resp:
+                    if resp.status_code == 404:
+                        raise TransientError(
+                            f"storage conflict verification GET {object_key} -> 404",
+                            token="REFINE_ARTIFACT_IO",
+                        )
+                    if (
+                        resp.status_code in _TRANSIENT_HTTP_STATUSES
+                        or resp.status_code >= 500
+                    ):
+                        raise TransientError(
+                            f"storage conflict verification GET {object_key} -> "
+                            f"{resp.status_code}",
+                            token="REFINE_ARTIFACT_IO",
+                        )
+                    if not 200 <= resp.status_code < 300:
+                        body = await resp.aread()
+                        raise PermanentError(
+                            f"storage conflict verification GET {object_key} -> "
+                            f"{resp.status_code}: {body[:200]!r}",
+                            token="REFINE_ARTIFACT_VERIFY",
+                        )
+
+                    content_encoding = resp.headers.get("content-encoding")
+                    if (
+                        content_encoding is not None
+                        and content_encoding.strip().lower() != "identity"
+                    ):
+                        raise PermanentError(
+                            f"storage conflict verification GET {object_key} returned "
+                            f"encoded content: {content_encoding!r}",
+                            token="REFINE_ARTIFACT_VERIFY",
+                        )
+                    if _normalized_media_type(
+                        resp.headers.get("content-type")
+                    ) != _normalized_media_type(expected_content_type):
+                        return False
+
+                    content_length = resp.headers.get("content-length")
+                    if content_length is not None:
+                        try:
+                            if int(content_length) != expected_size:
+                                return False
+                        except ValueError:
+                            pass
+
+                    digest = hashlib.sha256()
+                    compared = 0
+                    comparison_limit = expected_size + 1
+                    chunk_size = min(
+                        _TRANSFER_CHUNK_BYTES,
+                        max(1, comparison_limit),
+                    )
+                    async for chunk in resp.aiter_raw(chunk_size=chunk_size):
+                        _deadline_remaining(
+                            deadline,
+                            reserve_seconds=reserve_seconds,
+                        )
+                        remaining = comparison_limit - compared
+                        if remaining <= 0:
+                            return False
+                        bounded = chunk[:remaining]
+                        digest.update(bounded)
+                        compared += len(bounded)
+                        if len(chunk) > remaining or compared > expected_size:
+                            return False
+                    return (
+                        compared == expected_size
+                        and digest.hexdigest() == expected_sha256
+                    )
+        except httpx.HTTPError as exc:
+            raise TransientError(
+                f"storage conflict verification GET {object_key}: {exc}",
+                token="REFINE_ARTIFACT_IO",
+            ) from exc
+
     def _existing_matches(
         self,
         url: str,
@@ -249,9 +525,27 @@ class StorageClient:
         expected_sha256: str,
         expected_size: int,
         expected_content_type: str,
+        *,
+        deadline: RefineDeadline | None,
+        reserve_seconds: float,
     ) -> bool:
         """Stream at most expected size + one raw byte from a raced object."""
 
+        if deadline is not None:
+            return self._run_refine_io(
+                lambda: self._existing_matches_refine(
+                    url,
+                    object_key,
+                    expected_sha256,
+                    expected_size,
+                    expected_content_type,
+                    deadline=deadline,
+                    reserve_seconds=reserve_seconds,
+                ),
+                deadline=deadline,
+                reserve_seconds=reserve_seconds,
+                description=f"storage conflict verification GET {object_key}",
+            )
         try:
             with self._s.stream(
                 "GET",
@@ -317,12 +611,35 @@ class StorageClient:
                     compared += len(bounded)
                     if len(chunk) > remaining or compared > expected_size:
                         return False
-                return (
+                matches = (
                     compared == expected_size and digest.hexdigest() == expected_sha256
                 )
+                return matches
         except httpx.HTTPError as exc:
             raise TransientError(
                 f"storage conflict verification GET {object_key}: {exc}",
+                token="REFINE_ARTIFACT_IO",
+            ) from exc
+
+    async def _publish_refine(
+        self,
+        url: str,
+        object_key: str,
+        *,
+        content: Any,
+        headers: dict[str, str],
+    ) -> Any:
+        try:
+            async with self._refine_client_factory() as client:
+                return await client.post(
+                    url,
+                    content=content,
+                    headers=headers,
+                    timeout=None,
+                )
+        except httpx.HTTPError as exc:
+            raise TransientError(
+                f"storage immutable PUT {object_key}: {exc}",
                 token="REFINE_ARTIFACT_IO",
             ) from exc
 
@@ -336,6 +653,8 @@ class StorageClient:
         expected_size: int,
         user_id: str,
         scan_id: str,
+        deadline: RefineDeadline | None = None,
+        reserve_seconds: float = 0,
     ) -> bool:
         """Create one versioned artifact without replacing an existing object.
 
@@ -369,6 +688,7 @@ class StorageClient:
                 token="REFINE_ARTIFACT_VERIFY",
             )
 
+        _deadline_remaining(deadline, reserve_seconds=reserve_seconds)
         url = f"/storage/v1/object/{self._bucket}/{object_key}"
         source_name = os.fspath(source_path)
         try:
@@ -380,9 +700,16 @@ class StorageClient:
                     "immutable storage publication source is not a regular file",
                     token="REFINE_ARTIFACT_SOURCE",
                 )
+            try:
+                nonblocking_flag = os.O_NONBLOCK
+            except AttributeError as exc:
+                raise PermanentError(
+                    "nonblocking immutable source opens are unavailable",
+                    token="REFINE_ARTIFACT_SOURCE",
+                ) from exc
             flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
             flags |= getattr(os, "O_NOFOLLOW", 0)
-            flags |= getattr(os, "O_NONBLOCK", 0)
+            flags |= nonblocking_flag
             try:
                 descriptor = os.open(source_name, flags)
             except OSError as exc:
@@ -412,6 +739,8 @@ class StorageClient:
                         frozen,
                         expected_sha256=expected_sha256,
                         expected_size=expected_size,
+                        deadline=deadline,
+                        reserve_seconds=reserve_seconds,
                     )
 
                     uploaded_digest = hashlib.sha256()
@@ -419,20 +748,46 @@ class StorageClient:
 
                     def upload_chunks() -> Iterator[bytes]:
                         nonlocal uploaded_size
-                        for chunk in _bounded_file_chunks(frozen):
+                        frozen_chunks = _bounded_file_chunks(frozen)
+                        for chunk in frozen_chunks:
                             uploaded_digest.update(chunk)
                             uploaded_size += len(chunk)
                             yield chunk
 
-                    resp = self._s.post(
-                        url,
-                        content=upload_chunks(),
-                        headers={
-                            "content-type": content_type,
-                            "content-length": str(expected_size),
-                            "x-upsert": "false",
-                        },
-                    )
+                    async def upload_chunks_refine():
+                        nonlocal uploaded_size
+                        for chunk in _bounded_file_chunks(
+                            frozen,
+                            deadline=deadline,
+                            reserve_seconds=reserve_seconds,
+                        ):
+                            uploaded_digest.update(chunk)
+                            uploaded_size += len(chunk)
+                            yield chunk
+
+                    headers = {
+                        "content-type": content_type,
+                        "content-length": str(expected_size),
+                        "x-upsert": "false",
+                    }
+                    if deadline is None:
+                        resp = self._s.post(
+                            url,
+                            content=upload_chunks(),
+                            headers=headers,
+                        )
+                    else:
+                        resp = self._run_refine_io(
+                            lambda: self._publish_refine(
+                                url,
+                                object_key,
+                                content=upload_chunks_refine(),
+                                headers=headers,
+                            ),
+                            deadline=deadline,
+                            reserve_seconds=reserve_seconds,
+                            description=f"storage immutable PUT {object_key}",
+                        )
         except (httpx.HTTPError, OSError) as exc:
             raise TransientError(
                 f"storage immutable PUT {object_key}: {exc}",
@@ -461,6 +816,8 @@ class StorageClient:
                 expected_sha256,
                 expected_size,
                 content_type,
+                deadline=deadline,
+                reserve_seconds=reserve_seconds,
             ):
                 return False
             raise PermanentError(

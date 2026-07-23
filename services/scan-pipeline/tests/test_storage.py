@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,6 +17,7 @@ import pytest
 
 from patina_scan_worker.config import settings_from_env
 from patina_scan_worker.errors import PermanentError, TransientError
+from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.storage import StorageClient
 
 
@@ -63,6 +66,15 @@ class _Response:
     def __exit__(self, *args: object) -> None:
         return None
 
+    async def __aenter__(self) -> "_Response":
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
+
+    async def aread(self) -> bytes:
+        return self._body
+
     def iter_bytes(self, chunk_size: int) -> Any:
         self.iter_chunk_size = chunk_size
         for offset in range(0, len(self._body), chunk_size):
@@ -74,6 +86,19 @@ class _Response:
 
     def iter_raw(self, chunk_size: int) -> Any:
         yield from self.iter_bytes(chunk_size)
+
+    async def aiter_bytes(self, chunk_size: int) -> Any:
+        self.iter_chunk_size = chunk_size
+        for offset in range(0, len(self._body), chunk_size):
+            if self._iter_error is not None:
+                raise self._iter_error
+            chunk = self._body[offset : offset + chunk_size]
+            self.bytes_yielded += len(chunk)
+            yield chunk
+
+    async def aiter_raw(self, chunk_size: int) -> Any:
+        async for chunk in self.aiter_bytes(chunk_size):
+            yield chunk
 
 
 class _Session:
@@ -114,28 +139,81 @@ class _Session:
             uploaded = b"".join(chunks)
         if self.after_upload is not None:
             self.after_upload()
-        self.posts.append(
-            {
-                "path": path,
-                "headers": kwargs.get("headers"),
-                "body": uploaded,
-                "chunk_sizes": chunk_sizes,
-            }
-        )
+        recorded_post = {
+            "path": path,
+            "headers": kwargs.get("headers"),
+            "body": uploaded,
+            "chunk_sizes": chunk_sizes,
+        }
+        if "timeout" in kwargs:
+            recorded_post["timeout"] = kwargs["timeout"]
+        self.posts.append(recorded_post)
         return self.upload_response
 
     def stream(self, method: str, path: str, **kwargs: Any) -> _Response:
         if self.get_error is not None:
             raise self.get_error
         assert self.existing_response is not None
-        self.gets.append(
-            {"method": method, "path": path, "headers": kwargs.get("headers")}
-        )
+        recorded_get = {
+            "method": method,
+            "path": path,
+            "headers": kwargs.get("headers"),
+        }
+        if "timeout" in kwargs:
+            recorded_get["timeout"] = kwargs["timeout"]
+        self.gets.append(recorded_get)
         return self.existing_response
 
 
+class _AsyncSession:
+    def __init__(self, session: _Session) -> None:
+        self._session = session
+
+    async def __aenter__(self) -> "_AsyncSession":
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
+
+    def stream(self, method: str, path: str, **kwargs: Any) -> _Response:
+        return self._session.stream(method, path, **kwargs)
+
+    async def post(self, path: str, **kwargs: Any) -> _Response:
+        if self._session.post_error is not None:
+            raise self._session.post_error
+        content = kwargs.get("content")
+        chunk_sizes: list[int] = []
+        if isinstance(content, bytes):
+            uploaded = content
+            chunk_sizes.append(len(content))
+        elif not self._session.consume_upload:
+            uploaded = b""
+        else:
+            chunks = []
+            async for chunk in content:
+                chunk_sizes.append(len(chunk))
+                chunks.append(chunk)
+            uploaded = b"".join(chunks)
+        if self._session.after_upload is not None:
+            self._session.after_upload()
+        recorded_post = {
+            "path": path,
+            "headers": kwargs.get("headers"),
+            "body": uploaded,
+            "chunk_sizes": chunk_sizes,
+        }
+        if "timeout" in kwargs:
+            recorded_post["timeout"] = kwargs["timeout"]
+        self._session.posts.append(recorded_post)
+        return self._session.upload_response
+
+
 def _client(session: _Session) -> StorageClient:
-    return StorageClient(session, settings_from_env(_ENV))  # type: ignore[arg-type]
+    return StorageClient(
+        session,  # type: ignore[arg-type]
+        settings_from_env(_ENV),
+        refine_client_factory=lambda: _AsyncSession(session),
+    )
 
 
 def _publish(client: StorageClient, source: Path, name: str = "artifact.bin") -> bool:
@@ -724,6 +802,229 @@ def test_manifest_last_order_remains_under_caller_control(tmp_path):
         "aligned-model.tar",
         "refine-manifest-v1.json",
     ]
+
+
+def test_refine_deadline_bounds_download_and_upload_requests(tmp_path):
+    payload = b"deadline-bound payload"
+    download_session = _Session(
+        _Response(200),
+        existing_response=_Response(200, payload),
+    )
+    deadline = RefineDeadline(time.monotonic() + 30.0)
+
+    destination = tmp_path / "download.bin"
+    assert (
+        _client(download_session).download_to(
+            f"{_PREFIX}/input.bin",
+            str(destination),
+            deadline=deadline,
+            reserve_seconds=5.0,
+        )
+        == len(payload)
+    )
+    assert destination.read_bytes() == payload
+    assert download_session.gets[0]["timeout"] is None
+
+    source = tmp_path / "upload.bin"
+    source.write_bytes(payload)
+    upload_session = _Session(_Response(200))
+    assert (
+        _client(upload_session).publish_immutable_file(
+            f"{_PREFIX}/upload.bin",
+            source,
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
+            expected_size=len(payload),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+            deadline=deadline,
+            reserve_seconds=5.0,
+        )
+        is True
+    )
+    assert upload_session.posts[0]["timeout"] is None
+
+
+def test_refine_deadline_duplicate_verification_is_async_and_idempotent(tmp_path):
+    payload = b"same immutable bytes"
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(payload)
+    existing = _Response(200, payload)
+    session = _Session(
+        _Response(409, json_body={"code": "ResourceAlreadyExists"}),
+        existing,
+    )
+
+    assert (
+        _client(session).publish_immutable_file(
+            f"{_PREFIX}/artifact.bin",
+            source,
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
+            expected_size=len(payload),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+            deadline=RefineDeadline(time.monotonic() + 30.0),
+        )
+        is False
+    )
+
+    assert session.posts[0]["timeout"] is None
+    assert session.gets[0]["timeout"] is None
+    assert existing.bytes_yielded == len(payload)
+
+
+def test_refine_total_deadline_cancels_a_progressing_download(tmp_path):
+    class _ProgressingResponse(_Response):
+        async def aiter_bytes(self, chunk_size: int) -> Any:
+            del chunk_size
+            for _ in range(10):
+                await asyncio.sleep(0.06)
+                yield b"x"
+
+    response = _ProgressingResponse(200)
+    session = _Session(_Response(200), existing_response=response)
+    destination = tmp_path / "partial.bin"
+    started = time.monotonic()
+
+    with pytest.raises(TransientError) as caught:
+        _client(session).download_to(
+            f"{_PREFIX}/input.bin",
+            str(destination),
+            deadline=RefineDeadline(started + 0.15),
+        )
+
+    elapsed = time.monotonic() - started
+    assert caught.value.token == "REFINE_ENGINE_TIMEOUT"
+    assert 0 < destination.stat().st_size < 10
+    assert elapsed < 0.5
+
+
+def test_refine_total_deadline_cancels_a_stalled_upload(tmp_path):
+    class _StalledAsyncSession(_AsyncSession):
+        async def post(self, path: str, **kwargs: Any) -> _Response:
+            del path, kwargs
+            await asyncio.sleep(1.0)
+            return self._session.upload_response
+
+    payload = b"payload"
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(payload)
+    session = _Session(_Response(200))
+    client = StorageClient(
+        session,  # type: ignore[arg-type]
+        settings_from_env(_ENV),
+        refine_client_factory=lambda: _StalledAsyncSession(session),
+    )
+    started = time.monotonic()
+
+    with pytest.raises(TransientError) as caught:
+        client.publish_immutable_file(
+            f"{_PREFIX}/artifact.bin",
+            source,
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
+            expected_size=len(payload),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+            deadline=RefineDeadline(started + 0.15),
+        )
+
+    assert caught.value.token == "REFINE_ENGINE_TIMEOUT"
+    assert time.monotonic() - started < 0.5
+    assert session.posts == []
+
+
+def test_refine_deadline_exhaustion_stops_before_network(tmp_path):
+    payload = b"payload"
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(payload)
+    session = _Session(
+        _Response(200),
+        existing_response=_Response(200, payload),
+    )
+    deadline = RefineDeadline(time.monotonic() + 1.0)
+    client = _client(session)
+
+    with pytest.raises(TransientError) as download_error:
+        client.download_to(
+            f"{_PREFIX}/input.bin",
+            str(tmp_path / "download.bin"),
+            deadline=deadline,
+            reserve_seconds=2.0,
+        )
+    assert download_error.value.token == "REFINE_ENGINE_TIMEOUT"
+
+    with pytest.raises(TransientError) as upload_error:
+        client.publish_immutable_file(
+            f"{_PREFIX}/artifact.bin",
+            source,
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
+            expected_size=len(payload),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+            deadline=deadline,
+            reserve_seconds=2.0,
+        )
+    assert upload_error.value.token == "REFINE_ENGINE_TIMEOUT"
+    assert session.gets == []
+    assert session.posts == []
+
+
+def test_download_stops_when_deadline_expires_between_chunks(tmp_path):
+    class _ExpiringDeadline:
+        def __init__(self):
+            self.calls = 0
+
+        def remaining_seconds(self):
+            self.calls += 1
+            if self.calls >= 3:
+                raise AdapterError("expired", "REFINE_ENGINE_TIMEOUT")
+            return 30.0
+
+    payload = b"x" * ((1 << 20) + 1)
+    session = _Session(
+        _Response(200),
+        existing_response=_Response(200, payload),
+    )
+    destination = tmp_path / "partial.bin"
+
+    with pytest.raises(TransientError) as caught:
+        _client(session).download_to(
+            f"{_PREFIX}/input.bin",
+            str(destination),
+            deadline=_ExpiringDeadline(),  # type: ignore[arg-type]
+        )
+
+    assert caught.value.token == "REFINE_ENGINE_TIMEOUT"
+    assert destination.stat().st_size == 1 << 20
+
+
+def test_missing_nonblocking_flag_fails_before_source_open_or_network(
+    tmp_path,
+    monkeypatch,
+):
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(b"payload")
+    session = _Session(_Response(200))
+    open_calls = 0
+
+    def forbidden_open(*args, **kwargs):
+        del args, kwargs
+        nonlocal open_calls
+        open_calls += 1
+        raise AssertionError("os.open must not run without O_NONBLOCK")
+
+    monkeypatch.delattr(storage_module.os, "O_NONBLOCK")
+    monkeypatch.setattr(storage_module.os, "open", forbidden_open)
+
+    with pytest.raises(PermanentError) as caught:
+        _publish(_client(session), source)
+
+    assert caught.value.token == "REFINE_ARTIFACT_SOURCE"
+    assert open_calls == 0
+    assert session.posts == []
 
 
 def test_existing_p1_upload_bytes_still_upserts(tmp_path):

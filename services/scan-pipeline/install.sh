@@ -559,7 +559,7 @@ else
 fi
 echo "-- smoke-checking package imports and console entrypoint"
 _run_as_service_user "$SMOKE_VENV/bin/python" -I -c \
-  'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor; import patina_scan_worker.refine_native_process; import patina_scan_worker.refine_runner'
+  'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor; import patina_scan_worker.refine_native_process; import patina_scan_worker.refine_publisher; import patina_scan_worker.refine_runner'
 if [ "$BUILD_VENV" -eq 1 ]; then
   echo "-- verifying durable direct worker-wheel provenance"
   _run_as_service_user "$SMOKE_VENV/bin/python" -I - \

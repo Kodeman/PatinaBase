@@ -81,6 +81,7 @@ SOURCE_PACKAGE_FILES = frozenset(
         f"{SOURCE_PACKAGE_ROOT}/refine_adapter.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_engine.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_native_process.py",
+        f"{SOURCE_PACKAGE_ROOT}/refine_publisher.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_runner.py",
         f"{SOURCE_PACKAGE_ROOT}/stages/__init__.py",
         f"{SOURCE_PACKAGE_ROOT}/stages/base.py",
