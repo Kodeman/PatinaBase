@@ -31,7 +31,9 @@ from .refine_runner import (
     RefineArtifact,
     RefineFileArtifact,
     RefineInlineArtifact,
+    RefineRunError,
     RefineRunResult,
+    validate_refine_result_for_publication,
 )
 from .storage import StorageClient
 
@@ -160,6 +162,13 @@ def _validate_result(
             "refine publisher requires an exact RefineRunResult",
             token="REFINE_ARTIFACT_VERIFY",
         )
+    try:
+        validate_refine_result_for_publication(result)
+    except RefineRunError as exc:
+        raise PermanentError(
+            "refine result failed the strict publication contract",
+            token="REFINE_ARTIFACT_VERIFY",
+        ) from exc
     if type(result.files) is not tuple or len(result.files) < 2:
         raise PermanentError(
             "refine publication requires artifacts and a manifest",

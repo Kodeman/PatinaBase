@@ -267,6 +267,96 @@ def test_boolean_manifest_schema_is_rejected_before_storage(tmp_path):
     assert storage.calls == []
 
 
+def test_runner_strict_publication_contract_is_rechecked_before_storage(tmp_path):
+    result = _result(tmp_path)
+    document = json.loads(result.manifest.payload)
+    del document["engineOutputs"]
+    payload = (
+        json.dumps(
+            document,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+    malformed_manifest = RefineInlineArtifact(
+        name=REFINE_MANIFEST_NAME,
+        transport_content_type="application/json",
+        semantic_media_type="application/json",
+        payload=payload,
+    )
+    malformed_result = replace(
+        result,
+        manifest_sha256=malformed_manifest.sha256,
+        files=(*result.files[:-1], malformed_manifest),
+    )
+    storage = _RecordingStorage()
+
+    with pytest.raises(PermanentError) as caught:
+        _publisher(storage, tmp_path).publish(
+            malformed_result,
+            user_id="user-1",
+            scan_id="scan-1",
+            deadline=_deadline(),
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_VERIFY"
+    assert storage.calls == []
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["room-file-id", "input-sha256", "input-size"],
+)
+def test_trusted_identity_and_input_ledger_are_bound_before_storage(
+    tmp_path,
+    mutation,
+):
+    result = _result(tmp_path)
+    document = json.loads(result.manifest.payload)
+    if mutation == "room-file-id":
+        document["identity"]["roomFileId"] = "unbound-room-file"
+    elif mutation == "input-sha256":
+        document["inputs"][0]["sha256"] = "0" * 64
+    else:
+        document["inputs"][0]["sizeBytes"] = 1
+    payload = (
+        json.dumps(
+            document,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+    malformed_manifest = RefineInlineArtifact(
+        name=REFINE_MANIFEST_NAME,
+        transport_content_type="application/json",
+        semantic_media_type="application/json",
+        payload=payload,
+    )
+    malformed_result = replace(
+        result,
+        manifest_sha256=malformed_manifest.sha256,
+        files=(*result.files[:-1], malformed_manifest),
+    )
+    storage = _RecordingStorage()
+
+    with pytest.raises(PermanentError) as caught:
+        _publisher(storage, tmp_path).publish(
+            malformed_result,
+            user_id="user-1",
+            scan_id="scan-1",
+            deadline=_deadline(),
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_VERIFY"
+    assert storage.calls == []
+
+
 @pytest.mark.parametrize("invalid_size", [True, 1.0], ids=["boolean", "float"])
 def test_manifest_artifact_sizes_require_exact_json_integers(
     tmp_path,
