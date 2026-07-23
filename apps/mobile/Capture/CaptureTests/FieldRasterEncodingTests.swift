@@ -159,6 +159,34 @@ struct FieldRasterEncodingTests {
         expectViolation(.associatedTransformCount(2), in: canceling)
     }
 
+    @Test func identityRotationContractRejectsNonessentialIdentityRotation() {
+        let heic = SyntheticHEIF.make(
+            properties: [.rotation(0)],
+            associations: [
+                .init(itemID: 1, propertyIndices: [1], essential: false)
+            ]
+        )
+
+        expectViolation(.nonessentialTransform("irot"), in: heic)
+    }
+
+    @Test func identityRotationContractAcceptsEssential15BitAssociationIndex() throws {
+        var properties = Array(
+            repeating: SyntheticHEIF.Property(
+                type: "ispe",
+                payload: Data(repeating: 0, count: 12)
+            ),
+            count: 127
+        )
+        properties.append(.rotation(0))
+        let heic = SyntheticHEIF.make(
+            properties: properties,
+            associations: [.init(itemID: 1, propertyIndices: [128])]
+        )
+
+        try HEIFIdentityRotationContract.validate(heic)
+    }
+
     @Test func identityRotationContractRejectsInvalidRotationPayloads() {
         let emptyPayload = SyntheticHEIF.make(
             properties: [.init(type: "irot", payload: Data())],
@@ -263,6 +291,7 @@ private enum HEIFIdentityRotationContract {
         case nonzeroReservedBits(type: String, byte: UInt8)
         case associatedTransformCount(Int)
         case nonidentityRotation(UInt8)
+        case nonessentialTransform(String)
         case unexpectedTransform(String)
     }
 
@@ -278,6 +307,16 @@ private enum HEIFIdentityRotationContract {
             case .cleanAperture: "clap"
             }
         }
+    }
+
+    private struct AssociatedTransform {
+        let value: Transform
+        let essential: Bool
+    }
+
+    private struct PropertyAssociation {
+        let propertyIndex: Int
+        let essential: Bool
     }
 
     private struct Box {
@@ -341,15 +380,19 @@ private enum HEIFIdentityRotationContract {
         guard transforms.count == 1 else {
             throw Violation.associatedTransformCount(transforms.count)
         }
-        guard case let .rotation(angle) = transforms[0] else {
-            throw Violation.unexpectedTransform(transforms[0].type)
+        let transform = transforms[0]
+        guard case let .rotation(angle) = transform.value else {
+            throw Violation.unexpectedTransform(transform.value.type)
+        }
+        guard transform.essential else {
+            throw Violation.nonessentialTransform(transform.value.type)
         }
         guard angle == 0 else {
             throw Violation.nonidentityRotation(angle)
         }
     }
 
-    private static func primaryItemTransforms(in data: Data) throws -> [Transform] {
+    private static func primaryItemTransforms(in data: Data) throws -> [AssociatedTransform] {
         let bytes = [UInt8](data)
         let topLevel = try boxes(in: bytes.indices, bytes: bytes)
         let meta = try exactlyOneBox("meta", in: topLevel)
@@ -383,16 +426,22 @@ private enum HEIFIdentityRotationContract {
             throw Violation.missingBox("ipma")
         }
 
-        let propertyIndices = try primaryPropertyIndices(
+        let propertyAssociations = try primaryPropertyAssociations(
             primaryItemID: primaryItemID,
             associationBoxes: associationBoxes,
             propertyCount: propertyBoxes.count,
             bytes: bytes
         )
-        return try propertyIndices.compactMap { propertyIndex in
-            try transform(
-                from: propertyBoxes[propertyIndex - 1],
+        return try propertyAssociations.compactMap { association in
+            guard let value = try transform(
+                from: propertyBoxes[association.propertyIndex - 1],
                 bytes: bytes
+            ) else {
+                return nil
+            }
+            return AssociatedTransform(
+                value: value,
+                essential: association.essential
             )
         }
     }
@@ -428,13 +477,13 @@ private enum HEIFIdentityRotationContract {
         return itemID
     }
 
-    private static func primaryPropertyIndices(
+    private static func primaryPropertyAssociations(
         primaryItemID: UInt32,
         associationBoxes: [Box],
         propertyCount: Int,
         bytes: [UInt8]
-    ) throws -> [Int] {
-        var primaryIndices: [Int] = []
+    ) throws -> [PropertyAssociation] {
+        var primaryAssociations: [PropertyAssociation] = []
         for box in associationBoxes {
             let parsed = try fullBox(box, bytes: bytes)
             guard parsed.version == 0 || parsed.version == 1 else {
@@ -459,11 +508,19 @@ private enum HEIFIdentityRotationContract {
                     : try cursor.readUInt32()
                 let associationCount = try Int(cursor.readUInt8())
                 for _ in 0 ..< associationCount {
-                    let propertyIndex: Int = if parsed.flags & 1 == 0 {
-                        try Int(cursor.readUInt8() & 0x7F)
+                    let encodedAssociation: UInt16
+                    let propertyIndexMask: UInt16
+                    let essentialMask: UInt16
+                    if parsed.flags & 1 == 0 {
+                        encodedAssociation = try UInt16(cursor.readUInt8())
+                        propertyIndexMask = 0x007F
+                        essentialMask = 0x0080
                     } else {
-                        try Int(cursor.readUInt16() & 0x7FFF)
+                        encodedAssociation = try cursor.readUInt16()
+                        propertyIndexMask = 0x7FFF
+                        essentialMask = 0x8000
                     }
+                    let propertyIndex = Int(encodedAssociation & propertyIndexMask)
                     guard propertyIndex > 0, propertyIndex <= propertyCount else {
                         throw Violation.invalidPropertyIndex(
                             index: propertyIndex,
@@ -471,7 +528,12 @@ private enum HEIFIdentityRotationContract {
                         )
                     }
                     if itemID == primaryItemID {
-                        primaryIndices.append(propertyIndex)
+                        primaryAssociations.append(
+                            PropertyAssociation(
+                                propertyIndex: propertyIndex,
+                                essential: encodedAssociation & essentialMask != 0
+                            )
+                        )
                     }
                 }
             }
@@ -479,7 +541,7 @@ private enum HEIFIdentityRotationContract {
                 throw Violation.truncated("ipma trailing bytes")
             }
         }
-        return primaryIndices
+        return primaryAssociations
     }
 
     private static func transform(
@@ -656,7 +718,18 @@ private enum SyntheticHEIF {
 
     struct Association {
         let itemID: UInt16
-        let propertyIndices: [UInt8]
+        let propertyIndices: [UInt16]
+        let essential: Bool
+
+        init(
+            itemID: UInt16,
+            propertyIndices: [UInt16],
+            essential: Bool = true
+        ) {
+            self.itemID = itemID
+            self.propertyIndices = propertyIndices
+            self.essential = essential
+        }
     }
 
     static func make(
@@ -683,16 +756,28 @@ private enum SyntheticHEIF {
         }
         let propertyContainer = box(type: "ipco", payload: propertyPayload)
 
+        let usesLargePropertyIndices = associations.contains { association in
+            association.propertyIndices.contains { $0 > 0x7F }
+        }
         var associationPayload = uint32(UInt32(associations.count))
         for association in associations {
+            precondition(association.propertyIndices.count <= Int(UInt8.max))
             associationPayload.append(uint16(association.itemID))
             associationPayload.append(UInt8(association.propertyIndices.count))
             for propertyIndex in association.propertyIndices {
-                associationPayload.append(0x80 | propertyIndex)
+                precondition(propertyIndex <= 0x7FFF)
+                if usesLargePropertyIndices {
+                    let essential = association.essential ? UInt16(0x8000) : 0
+                    associationPayload.append(uint16(essential | propertyIndex))
+                } else {
+                    let essential = association.essential ? UInt8(0x80) : 0
+                    associationPayload.append(essential | UInt8(propertyIndex))
+                }
             }
         }
         let propertyAssociations = fullBox(
             type: "ipma",
+            flags: usesLargePropertyIndices ? 1 : 0,
             payload: associationPayload
         )
         let itemProperties = box(
