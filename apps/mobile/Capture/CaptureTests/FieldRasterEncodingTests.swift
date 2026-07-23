@@ -101,6 +101,654 @@ struct FieldRasterEncodingTests {
         #expect(try Data(contentsOf: first.manifestURL) == Data(contentsOf: second.manifestURL))
     }
 
+    @Test func productionImageIOHEICHasOneAssociatedIdentityRotation() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let output = try FieldRasterFixtureExporter.export(to: directory)
+        let heicData = try Data(contentsOf: output.heicURL)
+
+        try HEIFIdentityRotationContract.validate(heicData)
+    }
+
+    @Test func identityRotationContractRejectsZeroAssociatedTransforms() {
+        let heic = SyntheticHEIF.make(
+            properties: [.init(type: "ispe", payload: Data(repeating: 0, count: 12))],
+            associations: [.init(itemID: 1, propertyIndices: [1])]
+        )
+
+        expectViolation(.associatedTransformCount(0), in: heic)
+    }
+
+    @Test func identityRotationContractRejectsEveryNonidentityRotation() {
+        for angle in UInt8(1) ... UInt8(3) {
+            let heic = SyntheticHEIF.make(
+                properties: [.rotation(angle)],
+                associations: [.init(itemID: 1, propertyIndices: [1])]
+            )
+
+            expectViolation(.nonidentityRotation(angle), in: heic)
+        }
+    }
+
+    @Test func identityRotationContractRejectsMirrorAndCleanAperture() {
+        let mirror = SyntheticHEIF.make(
+            properties: [.mirror(axis: 0)],
+            associations: [.init(itemID: 1, propertyIndices: [1])]
+        )
+        expectViolation(.unexpectedTransform("imir"), in: mirror)
+
+        let cleanAperture = SyntheticHEIF.make(
+            properties: [.cleanAperture],
+            associations: [.init(itemID: 1, propertyIndices: [1])]
+        )
+        expectViolation(.unexpectedTransform("clap"), in: cleanAperture)
+    }
+
+    @Test func identityRotationContractRejectsDuplicateAndCancelingRotations() {
+        let duplicate = SyntheticHEIF.make(
+            properties: [.rotation(0), .rotation(0)],
+            associations: [.init(itemID: 1, propertyIndices: [1, 2])]
+        )
+        expectViolation(.associatedTransformCount(2), in: duplicate)
+
+        let canceling = SyntheticHEIF.make(
+            properties: [.rotation(1), .rotation(3)],
+            associations: [.init(itemID: 1, propertyIndices: [1, 2])]
+        )
+        expectViolation(.associatedTransformCount(2), in: canceling)
+    }
+
+    @Test func identityRotationContractRejectsInvalidRotationPayloads() {
+        let emptyPayload = SyntheticHEIF.make(
+            properties: [.init(type: "irot", payload: Data())],
+            associations: [.init(itemID: 1, propertyIndices: [1])]
+        )
+        expectViolation(
+            .invalidTransformPayload(type: "irot", actual: 0, expected: 1),
+            in: emptyPayload
+        )
+
+        let longPayload = SyntheticHEIF.make(
+            properties: [.init(type: "irot", payload: Data([0, 0]))],
+            associations: [.init(itemID: 1, propertyIndices: [1])]
+        )
+        expectViolation(
+            .invalidTransformPayload(type: "irot", actual: 2, expected: 1),
+            in: longPayload
+        )
+
+        let reservedBits = SyntheticHEIF.make(
+            properties: [.init(type: "irot", payload: Data([0b0000_0100]))],
+            associations: [.init(itemID: 1, propertyIndices: [1])]
+        )
+        expectViolation(.nonzeroReservedBits(type: "irot", byte: 4), in: reservedBits)
+    }
+
+    @Test func identityRotationContractRejectsMalformedAndInvalidAssociations() {
+        let malformedBox = Data([0, 0, 0, 7]) + Data("meta".utf8)
+        expectViolation(.invalidBoxSize(type: "meta", size: 7), in: malformedBox)
+
+        var truncated = SyntheticHEIF.make(
+            properties: [.rotation(0)],
+            associations: [.init(itemID: 1, propertyIndices: [1])]
+        )
+        truncated.removeLast()
+        expectViolation(.boxExtendsPastParent("meta"), in: truncated)
+
+        let zeroIndex = SyntheticHEIF.make(
+            properties: [.rotation(0)],
+            associations: [.init(itemID: 1, propertyIndices: [0])]
+        )
+        expectViolation(
+            .invalidPropertyIndex(index: 0, propertyCount: 1),
+            in: zeroIndex
+        )
+
+        let outOfRange = SyntheticHEIF.make(
+            properties: [.rotation(0)],
+            associations: [.init(itemID: 1, propertyIndices: [2])]
+        )
+        expectViolation(
+            .invalidPropertyIndex(index: 2, propertyCount: 1),
+            in: outOfRange
+        )
+    }
+
+    @Test func identityRotationContractUsesPitmAndIgnoresUnassociatedTransforms() throws {
+        let heic = SyntheticHEIF.make(
+            primaryItemID: 2,
+            properties: [
+                .rotation(3),
+                .mirror(axis: 0),
+                .cleanAperture,
+                .rotation(0)
+            ],
+            associations: [
+                .init(itemID: 1, propertyIndices: [1, 2, 3]),
+                .init(itemID: 2, propertyIndices: [4])
+            ]
+        )
+
+        try HEIFIdentityRotationContract.validate(heic)
+    }
+
+    private func expectViolation(
+        _ expected: HEIFIdentityRotationContract.Violation,
+        in data: Data
+    ) {
+        do {
+            try HEIFIdentityRotationContract.validate(data)
+            Issue.record("expected \(expected), but HEIF validation succeeded")
+        } catch let actual as HEIFIdentityRotationContract.Violation {
+            #expect(actual == expected)
+        } catch {
+            Issue.record("expected \(expected), but received \(error)")
+        }
+    }
+}
+
+private enum HEIFIdentityRotationContract {
+    enum Violation: Error, Equatable {
+        case missingBox(String)
+        case duplicateBox(String)
+        case truncated(String)
+        case invalidBoxSize(type: String, size: UInt64)
+        case boxExtendsPastParent(String)
+        case invalidFourCC
+        case unsupportedVersion(type: String, version: UInt8)
+        case unsupportedFlags(type: String, flags: UInt32)
+        case invalidPropertyIndex(index: Int, propertyCount: Int)
+        case invalidTransformPayload(type: String, actual: Int, expected: Int)
+        case nonzeroReservedBits(type: String, byte: UInt8)
+        case associatedTransformCount(Int)
+        case nonidentityRotation(UInt8)
+        case unexpectedTransform(String)
+    }
+
+    private enum Transform: Equatable {
+        case rotation(UInt8)
+        case mirror(UInt8)
+        case cleanAperture
+
+        var type: String {
+            switch self {
+            case .rotation: "irot"
+            case .mirror: "imir"
+            case .cleanAperture: "clap"
+            }
+        }
+    }
+
+    private struct Box {
+        let type: String
+        let payloadRange: Range<Int>
+    }
+
+    private struct FullBox {
+        let version: UInt8
+        let flags: UInt32
+        let contentRange: Range<Int>
+    }
+
+    private struct Cursor {
+        let bytes: [UInt8]
+        let endIndex: Int
+        var index: Int
+        let context: String
+
+        init(bytes: [UInt8], range: Range<Int>, context: String) {
+            self.bytes = bytes
+            endIndex = range.upperBound
+            index = range.lowerBound
+            self.context = context
+        }
+
+        var isAtEnd: Bool {
+            index == endIndex
+        }
+
+        mutating func readUInt8() throws -> UInt8 {
+            guard index < endIndex else {
+                throw Violation.truncated(context)
+            }
+            defer { index += 1 }
+            return bytes[index]
+        }
+
+        mutating func readUInt16() throws -> UInt16 {
+            let high = try UInt16(readUInt8())
+            let low = try UInt16(readUInt8())
+            return (high << 8) | low
+        }
+
+        mutating func readUInt24() throws -> UInt32 {
+            let high = try UInt32(readUInt8())
+            let middle = try UInt32(readUInt8())
+            let low = try UInt32(readUInt8())
+            return (high << 16) | (middle << 8) | low
+        }
+
+        mutating func readUInt32() throws -> UInt32 {
+            let high = try UInt32(readUInt16())
+            let low = try UInt32(readUInt16())
+            return (high << 16) | low
+        }
+    }
+
+    static func validate(_ data: Data) throws {
+        let transforms = try primaryItemTransforms(in: data)
+        guard transforms.count == 1 else {
+            throw Violation.associatedTransformCount(transforms.count)
+        }
+        guard case let .rotation(angle) = transforms[0] else {
+            throw Violation.unexpectedTransform(transforms[0].type)
+        }
+        guard angle == 0 else {
+            throw Violation.nonidentityRotation(angle)
+        }
+    }
+
+    private static func primaryItemTransforms(in data: Data) throws -> [Transform] {
+        let bytes = [UInt8](data)
+        let topLevel = try boxes(in: bytes.indices, bytes: bytes)
+        let meta = try exactlyOneBox("meta", in: topLevel)
+        let metaFullBox = try fullBox(meta, bytes: bytes)
+        guard metaFullBox.version == 0 else {
+            throw Violation.unsupportedVersion(
+                type: "meta",
+                version: metaFullBox.version
+            )
+        }
+        guard metaFullBox.flags == 0 else {
+            throw Violation.unsupportedFlags(type: "meta", flags: metaFullBox.flags)
+        }
+
+        let metaChildren = try boxes(in: metaFullBox.contentRange, bytes: bytes)
+        let primaryItemID = try parsePrimaryItemID(
+            from: exactlyOneBox("pitm", in: metaChildren),
+            bytes: bytes
+        )
+        let itemProperties = try exactlyOneBox("iprp", in: metaChildren)
+        let itemPropertyChildren = try boxes(
+            in: itemProperties.payloadRange,
+            bytes: bytes
+        )
+        let propertyBoxes = try boxes(
+            in: exactlyOneBox("ipco", in: itemPropertyChildren).payloadRange,
+            bytes: bytes
+        )
+        let associationBoxes = itemPropertyChildren.filter { $0.type == "ipma" }
+        guard !associationBoxes.isEmpty else {
+            throw Violation.missingBox("ipma")
+        }
+
+        let propertyIndices = try primaryPropertyIndices(
+            primaryItemID: primaryItemID,
+            associationBoxes: associationBoxes,
+            propertyCount: propertyBoxes.count,
+            bytes: bytes
+        )
+        return try propertyIndices.compactMap { propertyIndex in
+            try transform(
+                from: propertyBoxes[propertyIndex - 1],
+                bytes: bytes
+            )
+        }
+    }
+
+    private static func parsePrimaryItemID(
+        from box: Box,
+        bytes: [UInt8]
+    ) throws -> UInt32 {
+        let parsed = try fullBox(box, bytes: bytes)
+        guard parsed.flags == 0 else {
+            throw Violation.unsupportedFlags(type: "pitm", flags: parsed.flags)
+        }
+        var cursor = Cursor(
+            bytes: bytes,
+            range: parsed.contentRange,
+            context: "pitm"
+        )
+        let itemID: UInt32
+        switch parsed.version {
+        case 0:
+            itemID = try UInt32(cursor.readUInt16())
+        case 1:
+            itemID = try cursor.readUInt32()
+        default:
+            throw Violation.unsupportedVersion(
+                type: "pitm",
+                version: parsed.version
+            )
+        }
+        guard cursor.isAtEnd else {
+            throw Violation.unsupportedFlags(type: "pitm", flags: parsed.flags)
+        }
+        return itemID
+    }
+
+    private static func primaryPropertyIndices(
+        primaryItemID: UInt32,
+        associationBoxes: [Box],
+        propertyCount: Int,
+        bytes: [UInt8]
+    ) throws -> [Int] {
+        var primaryIndices: [Int] = []
+        for box in associationBoxes {
+            let parsed = try fullBox(box, bytes: bytes)
+            guard parsed.version == 0 || parsed.version == 1 else {
+                throw Violation.unsupportedVersion(
+                    type: "ipma",
+                    version: parsed.version
+                )
+            }
+            guard parsed.flags & ~UInt32(1) == 0 else {
+                throw Violation.unsupportedFlags(type: "ipma", flags: parsed.flags)
+            }
+
+            var cursor = Cursor(
+                bytes: bytes,
+                range: parsed.contentRange,
+                context: "ipma"
+            )
+            let entryCount = try Int(cursor.readUInt32())
+            for _ in 0 ..< entryCount {
+                let itemID = try parsed.version == 0
+                    ? UInt32(cursor.readUInt16())
+                    : try cursor.readUInt32()
+                let associationCount = try Int(cursor.readUInt8())
+                for _ in 0 ..< associationCount {
+                    let propertyIndex: Int = if parsed.flags & 1 == 0 {
+                        try Int(cursor.readUInt8() & 0x7F)
+                    } else {
+                        try Int(cursor.readUInt16() & 0x7FFF)
+                    }
+                    guard propertyIndex > 0, propertyIndex <= propertyCount else {
+                        throw Violation.invalidPropertyIndex(
+                            index: propertyIndex,
+                            propertyCount: propertyCount
+                        )
+                    }
+                    if itemID == primaryItemID {
+                        primaryIndices.append(propertyIndex)
+                    }
+                }
+            }
+            guard cursor.isAtEnd else {
+                throw Violation.truncated("ipma trailing bytes")
+            }
+        }
+        return primaryIndices
+    }
+
+    private static func transform(
+        from property: Box,
+        bytes: [UInt8]
+    ) throws -> Transform? {
+        let payload = Array(bytes[property.payloadRange])
+        switch property.type {
+        case "irot":
+            try requirePayload(payload, type: "irot", count: 1)
+            guard payload[0] & 0xFC == 0 else {
+                throw Violation.nonzeroReservedBits(
+                    type: "irot",
+                    byte: payload[0]
+                )
+            }
+            return .rotation(payload[0] & 0x03)
+        case "imir":
+            try requirePayload(payload, type: "imir", count: 1)
+            guard payload[0] & 0xFE == 0 else {
+                throw Violation.nonzeroReservedBits(
+                    type: "imir",
+                    byte: payload[0]
+                )
+            }
+            return .mirror(payload[0] & 0x01)
+        case "clap":
+            try requirePayload(payload, type: "clap", count: 32)
+            return .cleanAperture
+        default:
+            return nil
+        }
+    }
+
+    private static func requirePayload(
+        _ payload: [UInt8],
+        type: String,
+        count: Int
+    ) throws {
+        guard payload.count == count else {
+            throw Violation.invalidTransformPayload(
+                type: type,
+                actual: payload.count,
+                expected: count
+            )
+        }
+    }
+
+    private static func boxes(
+        in range: Range<Int>,
+        bytes: [UInt8]
+    ) throws -> [Box] {
+        var parsed: [Box] = []
+        var offset = range.lowerBound
+        while offset < range.upperBound {
+            guard range.upperBound - offset >= 8 else {
+                throw Violation.truncated("box header")
+            }
+            let size32 = try uint32(at: offset, bytes: bytes)
+            guard let type = String(
+                bytes: bytes[(offset + 4) ..< (offset + 8)],
+                encoding: .ascii
+            ) else {
+                throw Violation.invalidFourCC
+            }
+
+            let headerSize: Int
+            let size: UInt64
+            switch size32 {
+            case 0:
+                headerSize = 8
+                size = UInt64(range.upperBound - offset)
+            case 1:
+                guard range.upperBound - offset >= 16 else {
+                    throw Violation.truncated("\(type) extended size")
+                }
+                headerSize = 16
+                size = try uint64(at: offset + 8, bytes: bytes)
+            default:
+                headerSize = 8
+                size = UInt64(size32)
+            }
+            guard size >= UInt64(headerSize) else {
+                throw Violation.invalidBoxSize(type: type, size: size)
+            }
+            guard size <= UInt64(range.upperBound - offset) else {
+                throw Violation.boxExtendsPastParent(type)
+            }
+
+            let endOffset = offset + Int(size)
+            parsed.append(
+                Box(
+                    type: type,
+                    payloadRange: (offset + headerSize) ..< endOffset
+                )
+            )
+            offset = endOffset
+        }
+        return parsed
+    }
+
+    private static func exactlyOneBox(
+        _ type: String,
+        in boxes: [Box]
+    ) throws -> Box {
+        let matches = boxes.filter { $0.type == type }
+        guard let first = matches.first else {
+            throw Violation.missingBox(type)
+        }
+        guard matches.count == 1 else {
+            throw Violation.duplicateBox(type)
+        }
+        return first
+    }
+
+    private static func fullBox(_ box: Box, bytes: [UInt8]) throws -> FullBox {
+        guard box.payloadRange.count >= 4 else {
+            throw Violation.truncated("\(box.type) full-box header")
+        }
+        let version = bytes[box.payloadRange.lowerBound]
+        let flagsOffset = box.payloadRange.lowerBound + 1
+        let flags = (
+            UInt32(bytes[flagsOffset]) << 16
+                | UInt32(bytes[flagsOffset + 1]) << 8
+                | UInt32(bytes[flagsOffset + 2])
+        )
+        return FullBox(
+            version: version,
+            flags: flags,
+            contentRange: (box.payloadRange.lowerBound + 4) ..< box.payloadRange.upperBound
+        )
+    }
+
+    private static func uint32(at offset: Int, bytes: [UInt8]) throws -> UInt32 {
+        guard offset >= 0, offset + 4 <= bytes.count else {
+            throw Violation.truncated("uint32")
+        }
+        return
+            UInt32(bytes[offset]) << 24
+                | UInt32(bytes[offset + 1]) << 16
+                | UInt32(bytes[offset + 2]) << 8
+                | UInt32(bytes[offset + 3])
+    }
+
+    private static func uint64(at offset: Int, bytes: [UInt8]) throws -> UInt64 {
+        guard offset >= 0, offset + 8 <= bytes.count else {
+            throw Violation.truncated("uint64")
+        }
+        var value: UInt64 = 0
+        for byte in bytes[offset ..< (offset + 8)] {
+            value = (value << 8) | UInt64(byte)
+        }
+        return value
+    }
+}
+
+private enum SyntheticHEIF {
+    struct Property {
+        let type: String
+        let payload: Data
+
+        static func rotation(_ angle: UInt8) -> Self {
+            .init(type: "irot", payload: Data([angle]))
+        }
+
+        static func mirror(axis: UInt8) -> Self {
+            .init(type: "imir", payload: Data([axis]))
+        }
+
+        static var cleanAperture: Self {
+            .init(type: "clap", payload: Data(repeating: 0, count: 32))
+        }
+    }
+
+    struct Association {
+        let itemID: UInt16
+        let propertyIndices: [UInt8]
+    }
+
+    static func make(
+        primaryItemID: UInt16 = 1,
+        properties: [Property],
+        associations: [Association]
+    ) -> Data {
+        let fileType = box(
+            type: "ftyp",
+            payload: Data("heic".utf8)
+                + uint32(0)
+                + Data("mif1heic".utf8)
+        )
+        let primaryItem = fullBox(
+            type: "pitm",
+            payload: uint16(primaryItemID)
+        )
+
+        var propertyPayload = Data()
+        for property in properties {
+            propertyPayload.append(
+                box(type: property.type, payload: property.payload)
+            )
+        }
+        let propertyContainer = box(type: "ipco", payload: propertyPayload)
+
+        var associationPayload = uint32(UInt32(associations.count))
+        for association in associations {
+            associationPayload.append(uint16(association.itemID))
+            associationPayload.append(UInt8(association.propertyIndices.count))
+            for propertyIndex in association.propertyIndices {
+                associationPayload.append(0x80 | propertyIndex)
+            }
+        }
+        let propertyAssociations = fullBox(
+            type: "ipma",
+            payload: associationPayload
+        )
+        let itemProperties = box(
+            type: "iprp",
+            payload: propertyContainer + propertyAssociations
+        )
+        let metadata = fullBox(
+            type: "meta",
+            payload: primaryItem + itemProperties
+        )
+        return fileType + metadata
+    }
+
+    private static func fullBox(
+        type: String,
+        version: UInt8 = 0,
+        flags: UInt32 = 0,
+        payload: Data
+    ) -> Data {
+        var fullBoxPayload = Data([
+            version,
+            UInt8((flags >> 16) & 0xFF),
+            UInt8((flags >> 8) & 0xFF),
+            UInt8(flags & 0xFF)
+        ])
+        fullBoxPayload.append(payload)
+        return box(type: type, payload: fullBoxPayload)
+    }
+
+    private static func box(type: String, payload: Data) -> Data {
+        let typeBytes = Data(type.utf8)
+        precondition(typeBytes.count == 4)
+        var encoded = uint32(UInt32(payload.count + 8))
+        encoded.append(typeBytes)
+        encoded.append(payload)
+        return encoded
+    }
+
+    private static func uint16(_ value: UInt16) -> Data {
+        Data([
+            UInt8((value >> 8) & 0xFF),
+            UInt8(value & 0xFF)
+        ])
+    }
+
+    private static func uint32(_ value: UInt32) -> Data {
+        Data([
+            UInt8((value >> 24) & 0xFF),
+            UInt8((value >> 16) & 0xFF),
+            UInt8((value >> 8) & 0xFF),
+            UInt8(value & 0xFF)
+        ])
+    }
+}
+
+private extension FieldRasterEncodingTests {
     private struct RGBA {
         let r: UInt8
         let g: UInt8
