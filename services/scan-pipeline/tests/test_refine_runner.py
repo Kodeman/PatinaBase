@@ -458,6 +458,8 @@ def test_primary_success_builds_byte_deterministic_manifest_last_artifacts(tmp_p
     assert first.manifest_key == (
         "room_file/user-1/scan-1/v3/refine/refine-manifest-v1.json"
     )
+    assert first.room_file_id == request.room_file_id
+    assert first.inputs == tuple(sorted(request.inputs, key=lambda source: source.key))
 
     manifest = json.loads(first.manifest.payload)
     assert manifest["schemaVersion"] == 1
@@ -579,6 +581,54 @@ def test_publication_validator_rejects_boolean_room_file_version(tmp_path):
     ).run(_request(tmp_path), deadline=_deadline())
     document = json.loads(result.manifest.payload)
     document["identity"]["roomFileVersion"] = True
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(
+            _with_manifest_document(result, document)
+        )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+def test_publication_validator_rejects_mutated_room_file_id(tmp_path):
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    document["identity"]["roomFileId"] = "room-file-2"
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(
+            _with_manifest_document(result, document)
+        )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+def test_publication_validator_rejects_mutated_input_sha256(tmp_path):
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    document["inputs"][0]["sha256"] = "0" * 64
+
+    with pytest.raises(RefineRunError) as raised:
+        validate_refine_result_for_publication(
+            _with_manifest_document(result, document)
+        )
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+def test_publication_validator_rejects_mutated_input_size(tmp_path):
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(_request(tmp_path), deadline=_deadline())
+    document = json.loads(result.manifest.payload)
+    document["inputs"][0]["sizeBytes"] += 1
 
     with pytest.raises(RefineRunError) as raised:
         validate_refine_result_for_publication(

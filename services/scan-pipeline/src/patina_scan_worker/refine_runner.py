@@ -414,6 +414,8 @@ class RefineRunResult:
     alignment: Sim3
     evidence_verdict: RefinementEvidenceVerdict
     trajectory_shape_change: TrajectoryShapeChangeMetrics
+    room_file_id: str
+    inputs: tuple[InputArtifact, ...]
     frame_inputs: tuple[PreparedRefineFrame, ...]
     engine_outputs: tuple[RefineEngineOutputReference, ...]
     engine_telemetry: RefineEngineTelemetry
@@ -2440,7 +2442,7 @@ def validate_refine_result_for_publication(result: object) -> None:
     )
     user_id = _strict_string(identity["userId"], "identity.userId")
     scan_id = _strict_string(identity["scanId"], "identity.scanId")
-    _strict_string(identity["roomFileId"], "identity.roomFileId")
+    room_file_id = _strict_string(identity["roomFileId"], "identity.roomFileId")
     version = _strict_integer(
         identity["roomFileVersion"],
         "identity.roomFileVersion",
@@ -2453,6 +2455,12 @@ def validate_refine_result_for_publication(result: object) -> None:
     )
     if type(result.manifest_key) is not str or result.manifest_key != expected_manifest_key:
         _publication_invalid("manifest storage key disagrees with manifest identity")
+    if (
+        type(result.room_file_id) is not str
+        or not result.room_file_id
+        or room_file_id != result.room_file_id
+    ):
+        _publication_invalid("manifest room file identity disagrees with the result")
 
     engine = _strict_mapping(
         document["engine"],
@@ -2491,9 +2499,14 @@ def validate_refine_result_for_publication(result: object) -> None:
         _publication_invalid("manifest engine does not bind to the runner result")
 
     input_rows = _strict_list(document["inputs"], "refine manifest inputs")
-    if not input_rows:
-        _publication_invalid("refine manifest inputs cannot be empty")
+    if (
+        type(result.inputs) is not tuple
+        or not result.inputs
+        or len(input_rows) != len(result.inputs)
+    ):
+        _publication_invalid("manifest inputs do not bind to the runner result")
     input_keys: list[str] = []
+    input_documents: list[dict[str, object]] = []
     for index, row_value in enumerate(input_rows):
         row = _strict_mapping(
             row_value,
@@ -2503,8 +2516,31 @@ def validate_refine_result_for_publication(result: object) -> None:
         input_keys.append(_strict_safe_relative_path(row["key"], "input key"))
         _strict_sha256(row["sha256"], "input sha256")
         _strict_integer(row["sizeBytes"], "input size", minimum=1)
+        input_documents.append(row)
     if input_keys != sorted(set(input_keys)):
         _publication_invalid("refine manifest inputs must be unique and sorted")
+    trusted_input_documents: list[dict[str, object]] = []
+    trusted_input_keys: list[str] = []
+    for index, source in enumerate(result.inputs):
+        if type(source) is not InputArtifact:
+            _publication_invalid(
+                f"result input {index} has the wrong contract type"
+            )
+        key = _strict_safe_relative_path(source.key, "result input key")
+        sha256 = _strict_sha256(source.sha256, "result input sha256")
+        size_bytes = _strict_integer(
+            source.size_bytes,
+            "result input size",
+            minimum=1,
+        )
+        trusted_input_keys.append(key)
+        trusted_input_documents.append(
+            {"key": key, "sha256": sha256, "sizeBytes": size_bytes}
+        )
+    if trusted_input_keys != sorted(set(trusted_input_keys)):
+        _publication_invalid("result inputs must be unique and sorted")
+    if input_documents != trusted_input_documents:
+        _publication_invalid("manifest inputs disagree with the result")
 
     frame_rows = _strict_list(document["frameInputs"], "refine manifest frameInputs")
     if (
@@ -3015,6 +3051,8 @@ class RefineRunner:
             alignment=alignment,
             evidence_verdict=evidence_verdict,
             trajectory_shape_change=shape,
+            room_file_id=prepared.room_file_id,
+            inputs=prepared.inputs,
             frame_inputs=prepared.frames,
             engine_outputs=candidate.outputs,
             engine_telemetry=candidate.telemetry,
