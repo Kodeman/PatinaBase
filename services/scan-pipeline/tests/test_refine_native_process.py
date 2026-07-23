@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import signal
 import subprocess
 import sys
 import time
@@ -20,6 +19,7 @@ from patina_scan_worker.refine_adapter import (
     RefineDeadline,
 )
 from patina_scan_worker.refine_native_process import (
+    NATIVE_CHILD_MAX_REQUEST_BYTES,
     NATIVE_CHILD_MAX_RESPONSE_BYTES,
     NativeChildContext,
     native_engine_entrypoint,
@@ -35,9 +35,7 @@ def _deadline(seconds: float) -> RefineDeadline:
     now = time.monotonic()
     return RefineDeadline.start(
         now_monotonic_s=now,
-        lease_expires_at_monotonic_s=(
-            now + LEASE_COMPLETION_RESERVE_S + seconds
-        ),
+        lease_expires_at_monotonic_s=(now + LEASE_COMPLETION_RESERVE_S + seconds),
     )
 
 
@@ -57,6 +55,25 @@ def _raise_large_error(_request, _context: NativeChildContext):
 @native_engine_entrypoint
 def _return_oversized_result(_request, _context: NativeChildContext):
     return {"oversized": "x" * NATIVE_CHILD_MAX_RESPONSE_BYTES}
+
+
+class _OversizedGeneratedList(list):
+    """A JSON-compatible container whose iterator never terminates."""
+
+    def __iter__(self):
+        while True:
+            yield "x" * 4096
+
+
+@native_engine_entrypoint
+def _return_oversized_generated_result(_request, _context: NativeChildContext):
+    return {"oversized": _OversizedGeneratedList()}
+
+
+@native_engine_entrypoint
+def _sleep_past_deadline(_request, _context: NativeChildContext):
+    time.sleep(30.0)
+    return {"unreachable": True}
 
 
 @native_engine_entrypoint
@@ -200,10 +217,104 @@ def test_native_child_ack_oserror_is_stable(monkeypatch):
             deadline=_deadline(3.0),
         )
 
-    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
     assert "cannot acknowledge refine native child result" in str(raised.value)
     assert "cleanup:" in str(raised.value)
     assert "synthetic cleanup failure" in str(raised.value)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+def test_ready_ack_failure_cleans_group_before_importing_engine_target(
+    monkeypatch,
+    tmp_path,
+):
+    import_marker = tmp_path / "engine-imported"
+    module_path = tmp_path / "ready_ack_probe.py"
+    module_path.write_text(
+        "from pathlib import Path\n"
+        "import os\n"
+        "Path(os.environ['PATINA_READY_ACK_IMPORT_MARKER']).write_text('imported')\n"
+        "from patina_scan_worker.refine_native_process import "
+        "native_engine_entrypoint\n"
+        "@native_engine_entrypoint\n"
+        "def run(request, context):\n"
+        "    return {'unexpected': True}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("PATINA_READY_ACK_IMPORT_MARKER", str(import_marker))
+
+    real_send_bytes = native_process.Connection.send_bytes
+    real_cleanup = native_process._terminate_and_reap
+    cleaned_group_leaders: list[int | None] = []
+
+    def fail_ready_ack(connection, payload, *args, **kwargs):
+        if payload == native_process._ACK_READY:
+            raise BrokenPipeError("synthetic closed ready pipe")
+        return real_send_bytes(connection, payload, *args, **kwargs)
+
+    def record_cleanup(process, *, group_leader_pid):
+        cleaned_group_leaders.append(group_leader_pid)
+        return real_cleanup(process, group_leader_pid=group_leader_pid)
+
+    monkeypatch.setattr(native_process.Connection, "send_bytes", fail_ready_ack)
+    monkeypatch.setattr(native_process, "_terminate_and_reap", record_cleanup)
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            "ready_ack_probe:run",
+            {},
+            deadline=_deadline(3.0),
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert "cannot acknowledge refine native child readiness" in str(raised.value)
+    assert len(cleaned_group_leaders) == 1
+    assert isinstance(cleaned_group_leaders[0], int)
+    assert not import_marker.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+@pytest.mark.parametrize("replacement", (b"wrong-ready-ack", b"ready-accept-v1!"))
+def test_child_requires_bounded_exact_ready_ack_before_engine_import(
+    monkeypatch,
+    tmp_path,
+    replacement,
+):
+    import_marker = tmp_path / "engine-imported"
+    module_path = tmp_path / "ready_ack_exact_probe.py"
+    module_path.write_text(
+        "from pathlib import Path\n"
+        "import os\n"
+        "Path(os.environ['PATINA_READY_ACK_IMPORT_MARKER']).write_text('imported')\n"
+        "from patina_scan_worker.refine_native_process import "
+        "native_engine_entrypoint\n"
+        "@native_engine_entrypoint\n"
+        "def run(request, context):\n"
+        "    return {'unexpected': True}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("PATINA_READY_ACK_IMPORT_MARKER", str(import_marker))
+
+    real_send_bytes = native_process.Connection.send_bytes
+
+    def replace_ready_ack(connection, payload, *args, **kwargs):
+        if payload == native_process._ACK_READY:
+            payload = replacement
+        return real_send_bytes(connection, payload, *args, **kwargs)
+
+    monkeypatch.setattr(native_process.Connection, "send_bytes", replace_ready_ack)
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            "ready_ack_exact_probe:run",
+            {},
+            deadline=_deadline(3.0),
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert not import_marker.exists()
 
 
 def test_native_child_sentinel_poll_oserror_is_stable(monkeypatch):
@@ -264,6 +375,10 @@ def test_native_child_join_oserror_is_stable(monkeypatch):
     (
         ("_raise_large_error", "native-boom-"),
         ("_return_oversized_result", "exceeds the bounded transport"),
+        (
+            "_return_oversized_generated_result",
+            "exceeds the bounded transport",
+        ),
     ),
 )
 def test_native_child_result_and_error_transport_is_bounded(target, detail):
@@ -277,6 +392,141 @@ def test_native_child_result_and_error_transport_is_bounded(target, detail):
     assert raised.value.code == "REFINE_ENGINE_FAILED"
     assert detail in str(raised.value)
     assert len(str(raised.value).encode("utf-8")) < 8 * 1024
+
+
+def test_bounded_json_encoding_stops_an_oversized_chunk_generator_early():
+    chunks_requested: list[int] = []
+
+    def oversized_chunks():
+        yield '{"value":"'
+        for index in range(1000):
+            chunks_requested.append(index)
+            if index > 2:
+                pytest.fail("bounded collector consumed past its byte cap")
+            yield "x" * 32
+
+    with pytest.raises(native_process._ChildTransportError) as raised:
+        native_process._collect_bounded_json_chunks(
+            oversized_chunks(),
+            maximum_bytes=64,
+            overflow_message="synthetic bounded overflow",
+        )
+
+    assert str(raised.value) == "synthetic bounded overflow"
+    assert chunks_requested == [0, 1]
+
+
+def test_bounded_json_encoding_is_canonical_and_counts_terminal_newline(monkeypatch):
+    value = {"unicode": "Patina \N{WHITE HEART SUIT}", "value": [1, True, None]}
+    canonical = (
+        json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+    monkeypatch.setattr(
+        native_process.json,
+        "dumps",
+        lambda *_args, **_kwargs: pytest.fail(
+            "bounded transport materialized JSON with dumps"
+        ),
+    )
+
+    assert (
+        native_process._bounded_json_bytes(
+            value,
+            maximum_bytes=len(canonical),
+            overflow_message="too large",
+        )
+        == canonical
+    )
+    with pytest.raises(native_process._ChildTransportError, match="too large"):
+        native_process._bounded_json_bytes(
+            value,
+            maximum_bytes=len(canonical) - 1,
+            overflow_message="too large",
+        )
+
+
+def test_oversized_request_is_rejected_before_process_setup(monkeypatch):
+    def unexpected_context(_method):
+        pytest.fail("process setup ran before request encoding was bounded")
+
+    monkeypatch.setattr(
+        native_process.multiprocessing,
+        "get_context",
+        unexpected_context,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_echo_with_budget"),
+            {"oversized": "x" * NATIVE_CHILD_MAX_REQUEST_BYTES},
+            deadline=_deadline(3.0),
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert "request exceeds the bounded transport" in str(raised.value)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+def test_timeout_cleanup_uncertainty_has_distinct_stable_code(monkeypatch):
+    real_cleanup = native_process._terminate_and_reap
+
+    def cleanup_with_reported_failure(process, *, group_leader_pid):
+        return (
+            *real_cleanup(process, group_leader_pid=group_leader_pid),
+            "synthetic timeout cleanup uncertainty",
+        )
+
+    monkeypatch.setattr(
+        native_process,
+        "_terminate_and_reap",
+        cleanup_with_reported_failure,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_sleep_past_deadline"),
+            {},
+            deadline=_deadline(0.20),
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert "exceeded the shared deadline" in str(raised.value)
+    assert "synthetic timeout cleanup uncertainty" in str(raised.value)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+def test_cleanup_exception_has_distinct_stable_code(monkeypatch):
+    real_cleanup = native_process._terminate_and_reap
+
+    def cleanup_then_raise(process, *, group_leader_pid):
+        errors = real_cleanup(process, group_leader_pid=group_leader_pid)
+        assert errors == ()
+        raise RuntimeError("synthetic cleanup implementation crash")
+
+    monkeypatch.setattr(
+        native_process,
+        "_terminate_and_reap",
+        cleanup_then_raise,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_sleep_past_deadline"),
+            {},
+            deadline=_deadline(0.20),
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert "cleanup raised RuntimeError" in str(raised.value)
+    assert "synthetic cleanup implementation crash" in str(raised.value)
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
