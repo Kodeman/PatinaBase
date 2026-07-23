@@ -40,15 +40,16 @@ inspect the release rather than guessing which interpreter is active.
 
 Choose a new evidence directory. The harness refuses a symlink, a file, or a
 non-empty directory, so it cannot blend a new receipt with stale evidence.
-DeskDev's `item4a-colmap-4.0.2-v1` is immutable evidence of the CPU-wheel
-failure: never delete, rename, empty, or overwrite it. The recovery attempt
-uses `v2`; if that name already exists, increment to the next unused suffix.
-Do not source `/etc/patina/scan-worker.env`; this command needs no Supabase
-credential.
+DeskDev's `v1` CPU-wheel failure, `v2` guided-match-accounting failure, and
+passing `v3` receipt are immutable evidence: never delete, rename, empty, or
+overwrite them. The accepted v3 receipt is recorded in
+`p2-item4a-colmap-qualification-2026-07-22.md`. Any deliberate rerun starts at
+the next unused suffix (`v4` or later). Do not source
+`/etc/patina/scan-worker.env`; this command needs no Supabase credential.
 
 ```bash
 item4a_parent=/var/lib/patina/scan-work/qualification
-item4a_output=$item4a_parent/item4a-colmap-4.0.2-v2
+item4a_output=$item4a_parent/item4a-colmap-4.0.2-v4
 
 sudo install -d -o patina -g patina -m 0700 \
   /var/lib/patina/scan-work/tmp "$item4a_parent"

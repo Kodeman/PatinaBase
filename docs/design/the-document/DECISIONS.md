@@ -4502,3 +4502,46 @@ to a suspend-aware clock/live lease revalidation contract. Scan `95266be1`
 remains local-scratch-only until the remaining item-4 gates pass.
 
 *Entries add: I89 · last id = I89*
+
+### I90 · Field Capture P2 item 4A · COLMAP gate passed; disabled Refine foundations hardened — 2026-07-23
+
+DeskDev passed the exact COLMAP/PyCOLMAP half of Item 4A. The immutable v3
+receipt is recorded in
+`docs/design/field-capture/p2-item4a-colmap-qualification-2026-07-22.md`.
+Its canonical payload SHA-256 is
+`7d60da6b6f67c864e4584b417ed36c209ceea4aee1b9811441d244574f40f278`.
+COLMAP CLI and PyCOLMAP both reported 4.0.2 at commit `d927f7e` with CUDA;
+PyCOLMAP reported `has_cuda=True`; all five images completed GPU SIFT, explicit
+guided matching, ID-preserving PINHOLE rewrites, known-pose seed,
+triangulation, model re-open, and authoritative binding bundle adjustment.
+The operator independently proved canonical receipt bytes and recomputed the
+payload digest. Failed v1 (CPU-only binding) and v2 (invalid guided-match
+accounting assumption) directories remain preserved without pass receipts.
+
+The disabled Refine foundation series is integrated through tip `97d082d3`.
+Storage publication is create-only, manifest-bound, same-descriptor, and
+manifest-last. Engine subprocess/native boundaries share the absolute
+lease-aware deadline, fail closed on launch and cleanup uncertainty, kill and
+reap process groups before return, and cap diagnostics. The runner deep-copies
+accepted candidates, requires exact COLMAP versions and MIME/hash contracts,
+defaults to primary-only execution, records fallback provenance when explicitly
+enabled, preserves fatal cleanup classification, and hashes only nonblocking
+same-descriptor regular files. The installer exact-source allowlist, service
+user smoke, wheel, and sdist carry both disabled modules.
+
+Combined verification passed 267 focused cross-module tests and all 648
+scan-pipeline tests. Bash syntax, compileall, Ruff, diff integrity,
+package/import checks, and stage/config probes passed. Independent component
+and final integration reviews returned PASS. The stage registry still has no
+`scan_pipeline.refine`; defaults remain `ingest,solve,drawings`. DeskDev's
+worker remained inactive with that persistent CPU stage set, and the
+qualification made no queue, Strata, or Storage mutation.
+
+**Boundary:** Item 4A's physical Field/Core Image HEIC/Linux materializer
+receipt remains open, as do deterministic real backend artifacts, the
+materializer/publisher/lease-aware handler composition, real-room
+same-evidence improvement on scan `95266be1`, Fuse/Splat/mesh-solve/Present,
+host-suspend mitigation, registration, and GPU-stage enablement. No GPU queue
+task may be claimed yet.
+
+*Entries add: I90 · last id = I90*

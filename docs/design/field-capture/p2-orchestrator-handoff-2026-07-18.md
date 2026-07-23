@@ -1,4 +1,4 @@
-# Field Capture — orchestrator handoff — active 2026-07-19
+# Field Capture — orchestrator handoff — active 2026-07-23
 
 You are picking up the Field Capture program mid-P2. This document is the
 working state an orchestrator needs beyond what the repo already records.
@@ -10,8 +10,8 @@ Read it with, not instead of, the canonical sources below.
    runs (rulings → numbered plan → hard gates). P1 is COMPLETE.
 2. `docs/design/field-capture/field-capture-p2-package.md` — the ACTIVE plan.
    Part B carries Kody's R114 rulings inline; Part E is the numbered plan.
-3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I89**
-   are this program's full decision history. R115 is the latest gate; I89 is
+3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I90**
+   are this program's full decision history. R115 is the latest gate; I90 is
    the latest implementation record.
 4. `docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md` — the
    completed real-DeskDev dependency/sandbox receipt (I88).
@@ -83,17 +83,20 @@ Read it with, not instead of, the canonical sources below.
   `p2-item4-colmap-adapter-spike-2026-07-18.md`): exact pilot target is COLMAP
   CLI 4.0.2 + `pycolmap==4.0.2`; primary = known-pose seed model → point
   triangulation → BA; fallback = position-prior mapper; integrated
-  `global_mapper` is diagnostic-only and standalone GLOMAP is archived. This
-  runtime dependency surface passed item 3, but the target remains
-  **unqualified for item 4** until the exact database/model API + GPU-SIFT
-  reconstruction fixture and real Field/Core Image raster/materializer fixture
-  pass. Newer 4.x needs separate qualification.
-- **Item 4A qualification is currently in development**, split between the
-  isolated `field-capture/item4a-colmap-qualification` and
-  `field-capture/p2-ios-raster-fixture` worktrees. Neither fixture has an
-  acceptance receipt or integrated commit yet. The adapter/geometry prototype
-  is executable, but the production queue handler is still NOT built. Before
-  handler enablement/deployment or any real run, prove comparable
+  `global_mapper` is diagnostic-only and standalone GLOMAP is archived.
+  **I90 closes the exact database/model API + GPU-SIFT reconstruction half** on
+  DeskDev with the immutable v3 receipt in
+  `p2-item4a-colmap-qualification-2026-07-22.md`. The physical Field/Core Image
+  raster/materializer fixture remains unqualified. Newer 4.x still needs
+  separate qualification.
+- **Item 4A COLMAP qualification passed; the physical raster half remains
+  open.** Failed v1/v2 evidence and passing v3 evidence are preserved; v3's
+  canonical receipt payload SHA-256 is
+  `7d60da6b6f67c864e4584b417ed36c209ceea4aee1b9811441d244574f40f278`.
+  The disabled storage/deadline/native/runner foundations are packaged but no
+  production queue handler is registered or composed yet. Before handler
+  enablement/deployment or any real run, pass the physical raster fixture,
+  then prove comparable
   reprojection/registration/verified-loop evidence (unchanged evidence cannot
   pass; trajectory shape is diagnostic-only), use the carried lease-aware
   4-minute deadline, and preserve the canonical
@@ -103,11 +106,12 @@ Read it with, not instead of, the canonical sources below.
   posture after I88 is inactive; its persistent `STAGES` remains the safe CPU
   set. Do not add `refine`, `fuse`, or `splat`, and do not start a GPU-stage
   worker merely because the doctor passed.
-- **Next safe execution packet:** finish and independently review both Item 4A
-  fixtures, integrate their evidence on top of current main, disable DeskDev
-  suspend, then build/prove the full Refine handler locally. Do not claim a GPU
-  queue task or run `95266be1` through production DB/Storage until those gates
-  pass.
+- **Next safe execution packet:** finish the physical Field/Core Image raster
+  receipt, ratify source-to-engine image naming plus deterministic engine
+  artifacts, and build/prove the materializer/backend/publisher/lease-aware
+  Refine composition while keeping the stage unregistered. Disable DeskDev
+  suspend before any Refine enablement. Do not claim a GPU queue task or run
+  `95266be1` through production DB/Storage until those gates pass.
 
 ## The operating cadence (do not drop it)
 
