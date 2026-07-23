@@ -63,6 +63,7 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/pycolmap_cuda_smoke.py",
     "src/patina_scan_worker/refine_engine.py",
     "src/patina_scan_worker/refine_adapter.py",
+    "src/patina_scan_worker/refine_materializer.py",
     "src/patina_scan_worker/refine_native_process.py",
     "src/patina_scan_worker/refine_publisher.py",
     "src/patina_scan_worker/refine_runner.py",
@@ -277,6 +278,7 @@ def test_candidate_smoke_imports_disabled_refine_foundations_before_activation()
     expected_imports = (
         "'import patina_scan_worker; import patina_scan_worker.cli; "
         "import patina_scan_worker.doctor; "
+        "import patina_scan_worker.refine_materializer; "
         "import patina_scan_worker.refine_native_process; "
         "import patina_scan_worker.refine_publisher; "
         "import patina_scan_worker.refine_runner'"
@@ -1421,6 +1423,11 @@ def test_transaction_source_copy_requires_exact_trusted_bytes(tmp_path):
         pytest.param("drawings", None, id="cpu"),
         pytest.param(
             "drawings,gpu",
+            "patina_scan_worker/refine_materializer.py",
+            id="gpu-missing-refine-materializer",
+        ),
+        pytest.param(
+            "drawings,gpu",
             "patina_scan_worker/refine_native_process.py",
             id="gpu-missing-refine-native-process",
         ),
@@ -1495,6 +1502,7 @@ _prepare_isolated_source_build "$SRC_DIR"
         str(build_source),
     )
     for relative in (
+        "src/patina_scan_worker/refine_materializer.py",
         "src/patina_scan_worker/refine_native_process.py",
         "src/patina_scan_worker/refine_publisher.py",
         "src/patina_scan_worker/refine_runner.py",
@@ -1577,10 +1585,12 @@ _prepare_isolated_source_build "$SRC_DIR"
             "-c",
             (
                 "import pathlib,sys; sys.path.insert(0,sys.argv[1]); "
+                "import patina_scan_worker.refine_materializer as materializer; "
                 "import patina_scan_worker.refine_native_process as native; "
                 "import patina_scan_worker.refine_publisher as publisher; "
                 "import patina_scan_worker.refine_runner as runner; "
                 "root=pathlib.Path(sys.argv[1]).resolve(); "
+                "assert pathlib.Path(materializer.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(native.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(publisher.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(runner.__file__).resolve().is_relative_to(root)"
@@ -1778,6 +1788,7 @@ def test_source_validation_rejects_an_unreviewed_package_module(tmp_path):
         "colmap_qualification.py",
         "refine_adapter.py",
         "refine_engine.py",
+        "refine_materializer.py",
         "refine_native_process.py",
         "refine_publisher.py",
         "refine_runner.py",

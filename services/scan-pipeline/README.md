@@ -112,11 +112,17 @@ points at deleted transaction state. Its package member names and bytes must
 match that trusted source manifest exactly, and its dependency/extra metadata is
 checked before pip is allowed to resolve it.
 The package manifest now includes the queue-independent
-`refine_native_process.py`, `refine_publisher.py`, and `refine_runner.py`
-foundations, and every candidate release imports all three as the `patina`
+`refine_materializer.py`, `refine_native_process.py`, `refine_publisher.py`, and
+`refine_runner.py` foundations, and every candidate release imports all four as
+the `patina`
 service user before activation. They remain deliberately unregistered:
 installing or importing them does not add `scan_pipeline.refine` to the stage
 registry or change persistent/default `STAGES`.
+The materializer enforces exact in-call source/raster write ceilings, a 4 GiB
+per-task aggregate raster workspace ceiling, and descriptor-pinned workspace
+access. Its absolute paths are display metadata; disabled composition code must
+consume verified bytes through `RefineMaterialization.open_verified_file()` and
+then call `cleanup()`.
 Archive-mode rsync also copies the checkout directory's mode onto the staged
 tree. `--chmod=Dgo-w,Fgo-w` removes unsafe write bits during transfer; the
 explicit `chmod -R go-w` repeats that hardening as defense-in-depth.

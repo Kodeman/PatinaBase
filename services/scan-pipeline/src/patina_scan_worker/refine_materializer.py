@@ -16,7 +16,8 @@ composition layer can adapt each :class:`MaterializedRefineFrame` to the
 runner's ``RefineFrameInput`` by preserving ``frame`` as the source identity and
 using ``engine_name``/``engine_path`` as the canonical engine identity.  The
 explicit mapping prevents a decoded ``.ppm`` from being confused with its
-archive ``.heic`` source.
+archive ``.heic`` source. The composition must retain this materialization and
+consume bytes through ``open_verified_file`` until the runner finishes.
 """
 
 from __future__ import annotations
@@ -37,13 +38,16 @@ from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Iterator, NoReturn, Protocol
 
 from .keys import OwnershipError, assert_owner_prefix
-from .refine_adapter import AdapterError, NormalizedFrame, RefineDeadline, normalize_keyframe_entry
+from .refine_adapter import (
+    AdapterError,
+    NormalizedFrame,
+    RefineDeadline,
+    normalize_keyframe_entry,
+)
 
 _COPY_CHUNK_BYTES = 1 << 20
 _SAFE_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
-_SAFE_ARCHIVE_MEMBER = re.compile(
-    r"keyframes/[A-Za-z0-9][A-Za-z0-9._-]*\.(?:heic|bin)"
-)
+_SAFE_ARCHIVE_MEMBER = re.compile(r"keyframes/[A-Za-z0-9][A-Za-z0-9._-]*\.(?:heic|bin)")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _INPUT_LAYOUT = (
     (
@@ -162,6 +166,9 @@ class RefineMaterializationLimits:
     max_frames: int = 1000
     max_index_line_bytes: int = 256 * 1024
     max_raster_bytes: int = 128 * 1024 * 1024
+    # One task stays below DeskDev's ~1.5 GiB nominal estimate and 24 GiB disk
+    # posture in ordinary use, while 4 GiB is the absolute fail-closed ceiling.
+    max_raster_workspace_bytes: int = 4 * 1024 * 1024 * 1024
 
     def __post_init__(self) -> None:
         for name, value in vars(self).items():
@@ -169,19 +176,37 @@ class RefineMaterializationLimits:
                 raise ValueError(f"{name} must be a positive integer")
 
 
+class RefineBoundedWriter(Protocol):
+    """Materializer-owned write sink that enforces an exact byte ceiling."""
+
+    def write(self, payload: bytes | bytearray | memoryview) -> int: ...
+
+
+class RefinePinnedSource(Protocol):
+    """Deadline-aware view of one already-verified, pinned source descriptor."""
+
+    def read(self, size: int = -1) -> bytes: ...
+
+    def seek(self, offset: int, whence: int = os.SEEK_SET) -> int: ...
+
+    def tell(self) -> int: ...
+
+    def fileno(self) -> int: ...
+
+
 class RefineArtifactAcquirer(Protocol):
     """Injected authenticated acquisition seam.
 
-    The implementation must create ``destination`` and obey the supplied
-    absolute deadline.  This module distrusts the resulting path and freezes it
-    through its own descriptor before parsing anything.
+    The implementation must stream only through ``destination`` and obey the
+    supplied absolute deadline. The sink enforces the reviewed source size while
+    the callback is running; no unrestricted destination path is exposed.
     """
 
     def acquire(
         self,
         *,
         object_key: str,
-        destination: Path,
+        destination: RefineBoundedWriter,
         deadline: RefineDeadline,
     ) -> None: ...
 
@@ -198,13 +223,18 @@ class FieldRasterMaterialization:
 
 
 class FieldRasterMaterializer(Protocol):
-    """Still-unqualified Field/Core Image HEIC-to-engine-raster seam."""
+    """Still-unqualified Field/Core Image HEIC-to-engine-raster seam.
+
+    The implementation receives a pinned read-only source view, its reviewed
+    archive name, and a bounded output sink; it never receives workspace paths.
+    """
 
     def materialize(
         self,
         *,
-        source: Path,
-        destination: Path,
+        source: RefinePinnedSource,
+        source_name: str,
+        destination: RefineBoundedWriter,
         engine_name: str,
         encoded_width: int,
         encoded_height: int,
@@ -214,7 +244,11 @@ class FieldRasterMaterializer(Protocol):
 
 @dataclass(frozen=True)
 class VerifiedRefineInput:
-    """One exact acquired input suitable for the runner input hash ledger."""
+    """One exact acquired input suitable for the runner input hash ledger.
+
+    ``local_path`` is display metadata. Consumers must acquire bytes through
+    :meth:`RefineMaterialization.open_verified_file`.
+    """
 
     kind: str
     object_key: str
@@ -225,7 +259,11 @@ class VerifiedRefineInput:
 
 @dataclass(frozen=True)
 class MaterializedRefineFrame:
-    """Explicit source-to-engine identity mapping for one indexed keyframe."""
+    """Explicit source-to-engine identity mapping for one indexed keyframe.
+
+    The absolute paths are display metadata. Consumers must acquire bytes
+    through :meth:`RefineMaterialization.open_verified_file`.
+    """
 
     frame: NormalizedFrame
     source_archive_key: str
@@ -245,21 +283,105 @@ class MaterializedRefineFrame:
 
 @dataclass(frozen=True)
 class RefineMaterialization:
-    """Private, verified, still-unpublished runner input."""
+    """Private, verified, still-unpublished runner input.
+
+    The workspace remains descriptor-pinned until :meth:`cleanup`. Consumers
+    must use :meth:`open_verified_file`; reopening the absolute display paths
+    would discard the ancestry pin.
+    """
 
     task_id: str
     lease_id: str
     workspace_root: Path
     inputs: tuple[VerifiedRefineInput, ...]
     frames: tuple[MaterializedRefineFrame, ...]
+    _workspace_anchor: _PrivateWorkspace = field(repr=False, compare=False)
     production_enablement: str = field(default="disabled", init=False)
+
+    def validate_workspace(self) -> None:
+        """Fail closed if the visible handoff path no longer matches its pin."""
+
+        self._workspace_anchor.validate_path_identity()
+
+    @contextmanager
+    def open_verified_file(
+        self,
+        relative_path: str,
+        *,
+        deadline: RefineDeadline,
+    ) -> Iterator[RefinePinnedSource]:
+        """Open a ledger-bound file through the pinned workspace hierarchy."""
+
+        if not isinstance(relative_path, str):
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                "verified workspace path must be a string",
+            )
+        candidate = PurePosixPath(relative_path)
+        if candidate.is_absolute() or str(candidate) != relative_path:
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                "verified workspace path must be canonical and relative",
+            )
+        ledger: dict[str, tuple[str, int]] = {}
+        for source in self.inputs:
+            try:
+                local_relative = source.local_path.relative_to(
+                    self.workspace_root
+                ).as_posix()
+            except ValueError:
+                _fail(
+                    MaterializerFailureCode.INPUT_INVALID,
+                    "verified input path escaped its workspace",
+                )
+            ledger[local_relative] = (source.sha256, source.size_bytes)
+        for frame in self.frames:
+            ledger[f"extracted/{frame.source_member}"] = (
+                frame.source_sha256,
+                frame.source_size_bytes,
+            )
+            ledger[frame.engine_relative_path] = (
+                frame.engine_sha256,
+                frame.engine_size_bytes,
+            )
+        expected = ledger.get(relative_path)
+        if expected is None:
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                "workspace file is not present in the verified materialization ledger",
+            )
+        frozen = _FrozenFile(
+            workspace=self._workspace_anchor,
+            relative_path=candidate,
+            sha256=expected[0],
+            size_bytes=expected[1],
+        )
+        with _open_frozen_binary(frozen, deadline=deadline) as (handle, _snapshot):
+            yield _DeadlineFile(handle, deadline)
+
+    def cleanup(self) -> None:
+        """Delete the pinned private workspace and release its descriptors."""
+
+        self._workspace_anchor.cleanup()
+
+    def __enter__(self) -> RefineMaterialization:
+        self.validate_workspace()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.cleanup()
 
 
 @dataclass(frozen=True)
 class _FrozenFile:
-    path: Path
+    workspace: _PrivateWorkspace
+    relative_path: PurePosixPath
     sha256: str
     size_bytes: int
+
+    @property
+    def path(self) -> Path:
+        return self.workspace.path.joinpath(*self.relative_path.parts)
 
 
 @dataclass(frozen=True)
@@ -271,14 +393,6 @@ class _IndexedFrame:
 @dataclass(frozen=True)
 class _ArchiveMember:
     name: str
-    size_bytes: int
-
-
-@dataclass(frozen=True)
-class _ExtractedMember:
-    name: str
-    path: Path
-    sha256: str
     size_bytes: int
 
 
@@ -302,6 +416,9 @@ class _DeadlineFile:
     def tell(self) -> int:
         return self._handle.tell()
 
+    def fileno(self) -> int:
+        return self._handle.fileno()
+
 
 def _require_deadline(deadline: RefineDeadline) -> float:
     if not isinstance(deadline, RefineDeadline):
@@ -318,6 +435,468 @@ def _require_deadline(deadline: RefineDeadline) -> float:
     ):
         _fail(MaterializerFailureCode.DEADLINE, "deadline is exhausted")
     return float(remaining)
+
+
+def _directory_open_flags() -> int:
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    directory = getattr(os, "O_DIRECTORY", None)
+    if nofollow is None or directory is None:
+        _fail(
+            MaterializerFailureCode.INPUT_INVALID,
+            "no-follow directory descriptors are unavailable",
+        )
+    return os.O_RDONLY | nofollow | directory | getattr(os, "O_CLOEXEC", 0)
+
+
+def _open_absolute_directory(path: Path) -> int:
+    """Walk and pin an absolute directory without following any symlink component."""
+
+    if not path.is_absolute() or any(
+        part in ("", ".", "..") for part in path.parts[1:]
+    ):
+        _fail(
+            MaterializerFailureCode.INPUT_INVALID,
+            "workspace parent must have canonical absolute components",
+        )
+    flags = _directory_open_flags()
+    try:
+        descriptor = os.open(os.sep, flags)
+    except OSError as exc:
+        _fail(
+            MaterializerFailureCode.INPUT_IO,
+            f"cannot pin the filesystem root: {exc}",
+        )
+    pending_error = False
+    try:
+        for component in path.parts[1:]:
+            try:
+                child = os.open(component, flags, dir_fd=descriptor)
+            except OSError as exc:
+                if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                    _fail(
+                        MaterializerFailureCode.INPUT_INVALID,
+                        "workspace parent ancestry must contain only real directories",
+                    )
+                _fail(
+                    MaterializerFailureCode.INPUT_IO,
+                    f"workspace parent is unavailable: {exc}",
+                )
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                os.close(child)
+                _fail(
+                    MaterializerFailureCode.INPUT_IO,
+                    f"cannot close workspace ancestry descriptor: {exc}",
+                )
+            descriptor = child
+        metadata = os.fstat(descriptor)
+    except BaseException:
+        pending_error = True
+        raise
+    finally:
+        if pending_error:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+    if not stat.S_ISDIR(metadata.st_mode):
+        os.close(descriptor)
+        _fail(
+            MaterializerFailureCode.INPUT_INVALID,
+            "workspace parent must be a directory",
+        )
+    return descriptor
+
+
+@dataclass
+class _PrivateWorkspace:
+    path: Path
+    name: str
+    parent_descriptor: int | None
+    workspace_descriptor: int | None
+
+    def validate_path_identity(self) -> None:
+        if self.parent_descriptor is None or self.workspace_descriptor is None:
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                "private workspace descriptors are unavailable",
+            )
+        try:
+            opened = os.fstat(self.workspace_descriptor)
+            anchored = os.stat(
+                self.name,
+                dir_fd=self.parent_descriptor,
+                follow_symlinks=False,
+            )
+            visible = os.lstat(self.path)
+        except OSError as exc:
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                f"private workspace path identity changed: {exc}",
+            )
+        expected = (opened.st_dev, opened.st_ino)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or stat.S_IMODE(opened.st_mode) != 0o700
+            or expected != (anchored.st_dev, anchored.st_ino)
+            or expected != (visible.st_dev, visible.st_ino)
+            or stat.S_ISLNK(anchored.st_mode)
+            or stat.S_ISLNK(visible.st_mode)
+        ):
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                "private workspace path no longer names its pinned directory",
+            )
+
+    def open_directory(self, *components: str) -> int:
+        if self.workspace_descriptor is None:
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                "private workspace descriptor is unavailable",
+            )
+        try:
+            descriptor = os.dup(self.workspace_descriptor)
+        except OSError as exc:
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                f"cannot duplicate private workspace descriptor: {exc}",
+            )
+        pending_error = False
+        try:
+            for component in components:
+                if (
+                    not isinstance(component, str)
+                    or not component
+                    or component in (".", "..")
+                    or "/" in component
+                    or "\x00" in component
+                ):
+                    _fail(
+                        MaterializerFailureCode.INPUT_INVALID,
+                        "private workspace path has an unsafe component",
+                    )
+                child: int | None = None
+                try:
+                    child = os.open(
+                        component,
+                        _directory_open_flags(),
+                        dir_fd=descriptor,
+                    )
+                    metadata = os.fstat(child)
+                except OSError as exc:
+                    if child is not None:
+                        try:
+                            os.close(child)
+                        except OSError:
+                            pass
+                    _fail(
+                        MaterializerFailureCode.INPUT_IO,
+                        f"cannot pin private workspace directory {component!r}: {exc}",
+                    )
+                if (
+                    not stat.S_ISDIR(metadata.st_mode)
+                    or metadata.st_uid != os.geteuid()
+                    or stat.S_IMODE(metadata.st_mode) != 0o700
+                ):
+                    os.close(child)
+                    _fail(
+                        MaterializerFailureCode.INPUT_INVALID,
+                        f"private workspace directory {component!r} is untrusted",
+                    )
+                try:
+                    os.close(descriptor)
+                except OSError as exc:
+                    os.close(child)
+                    _fail(
+                        MaterializerFailureCode.INPUT_IO,
+                        f"cannot close private workspace directory: {exc}",
+                    )
+                descriptor = child
+            return descriptor
+        except BaseException:
+            pending_error = True
+            raise
+        finally:
+            if pending_error:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    pass
+
+    def cleanup(self) -> None:
+        cleanup_error: OSError | None = None
+        if self.parent_descriptor is not None:
+            try:
+                if self.workspace_descriptor is None:
+                    raise OSError("private workspace descriptor is unavailable")
+                opened = os.fstat(self.workspace_descriptor)
+                anchored = os.stat(
+                    self.name,
+                    dir_fd=self.parent_descriptor,
+                    follow_symlinks=False,
+                )
+                if (opened.st_dev, opened.st_ino) != (
+                    anchored.st_dev,
+                    anchored.st_ino,
+                ):
+                    raise OSError(
+                        "private workspace entry no longer names its pinned directory"
+                    )
+                shutil.rmtree(self.name, dir_fd=self.parent_descriptor)
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                cleanup_error = exc
+        for attribute in ("workspace_descriptor", "parent_descriptor"):
+            descriptor = getattr(self, attribute)
+            if descriptor is None:
+                continue
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                cleanup_error = cleanup_error or exc
+            setattr(self, attribute, None)
+        if cleanup_error is not None:
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                f"task/lease workspace cleanup failed: {cleanup_error}",
+            )
+
+
+class _BoundedFileWriter:
+    """Private descriptor-backed sink with sticky deadline and size failures."""
+
+    def __init__(
+        self,
+        *,
+        directory_descriptor: int,
+        filename: str,
+        expected_size: int,
+        maximum_size: int,
+        deadline: RefineDeadline,
+        violation_code: MaterializerFailureCode,
+        label: str,
+    ) -> None:
+        if (
+            type(expected_size) is not int
+            or expected_size <= 0
+            or type(maximum_size) is not int
+            or maximum_size <= 0
+            or expected_size > maximum_size
+        ):
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                f"{label} has an invalid write ceiling",
+            )
+        self._directory_descriptor = directory_descriptor
+        self._filename = filename
+        self._expected_size = expected_size
+        self._maximum_size = maximum_size
+        self._deadline = deadline
+        self._violation_code = violation_code
+        self._label = label
+        self._written = 0
+        self._violation: RefineMaterializerError | None = None
+        self._descriptor: int | None = None
+        flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        try:
+            self._descriptor = os.open(
+                filename,
+                flags,
+                0o600,
+                dir_fd=directory_descriptor,
+            )
+            metadata = os.fstat(self._descriptor)
+        except OSError as exc:
+            self._close_and_unlink()
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                f"cannot create bounded {label} destination: {exc}",
+            )
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            self._close_and_unlink()
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                f"bounded {label} destination is not a private regular file",
+            )
+
+    def _record_violation(
+        self,
+        code: MaterializerFailureCode,
+        message: str,
+    ) -> NoReturn:
+        if self._violation is None:
+            self._violation = RefineMaterializerError(code, message)
+        raise self._violation
+
+    def _checkpoint(self) -> None:
+        try:
+            _require_deadline(self._deadline)
+        except RefineMaterializerError as exc:
+            self._violation = self._violation or exc
+            raise self._violation
+
+    def write(self, payload: bytes | bytearray | memoryview) -> int:
+        if self._violation is not None:
+            raise self._violation
+        self._checkpoint()
+        if self._descriptor is None:
+            self._record_violation(
+                MaterializerFailureCode.INPUT_IO,
+                f"bounded {self._label} destination is closed",
+            )
+        if not isinstance(payload, (bytes, bytearray, memoryview)):
+            self._record_violation(
+                self._violation_code,
+                f"bounded {self._label} writes require bytes",
+            )
+        try:
+            view = memoryview(payload).cast("B")
+        except (TypeError, ValueError) as exc:
+            self._record_violation(
+                self._violation_code,
+                f"bounded {self._label} write is not a contiguous byte buffer: {exc}",
+            )
+        payload_size = len(view)
+        if (
+            self._written + payload_size > self._maximum_size
+            or self._written + payload_size > self._expected_size
+        ):
+            self._record_violation(
+                self._violation_code,
+                f"bounded {self._label} write exceeds its exact byte ceiling",
+            )
+        offset = 0
+        while offset < payload_size:
+            self._checkpoint()
+            try:
+                written = os.write(
+                    self._descriptor,
+                    view[offset : offset + _COPY_CHUNK_BYTES],
+                )
+            except OSError as exc:
+                self._record_violation(
+                    MaterializerFailureCode.INPUT_IO,
+                    f"bounded {self._label} write failed: {exc}",
+                )
+            if written <= 0:
+                self._record_violation(
+                    MaterializerFailureCode.INPUT_IO,
+                    f"bounded {self._label} write made no progress",
+                )
+            offset += written
+            self._written += written
+        return payload_size
+
+    def finish(self) -> None:
+        if self._violation is not None:
+            raise self._violation
+        if self._descriptor is None:
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                f"bounded {self._label} destination is closed",
+            )
+        self._checkpoint()
+        if self._written != self._expected_size:
+            self._record_violation(
+                self._violation_code,
+                f"bounded {self._label} write did not match its exact byte count",
+            )
+        try:
+            os.fsync(self._descriptor)
+            metadata = os.fstat(self._descriptor)
+            os.close(self._descriptor)
+            self._descriptor = None
+        except OSError as exc:
+            self._record_violation(
+                MaterializerFailureCode.INPUT_IO,
+                f"cannot seal bounded {self._label} destination: {exc}",
+            )
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size != self._written:
+            self._record_violation(
+                MaterializerFailureCode.INPUT_IO,
+                f"bounded {self._label} destination did not retain its bytes",
+            )
+        self._checkpoint()
+
+    def _close_and_unlink(self) -> None:
+        if self._descriptor is not None:
+            try:
+                os.close(self._descriptor)
+            except OSError:
+                pass
+            self._descriptor = None
+        try:
+            os.unlink(self._filename, dir_fd=self._directory_descriptor)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+
+    def abort(self) -> None:
+        self._close_and_unlink()
+
+
+@contextmanager
+def _bounded_workspace_destination(
+    workspace: _PrivateWorkspace,
+    *,
+    directory: str,
+    filename: str,
+    expected_size: int,
+    maximum_size: int,
+    deadline: RefineDeadline,
+    violation_code: MaterializerFailureCode,
+    label: str,
+) -> Iterator[RefineBoundedWriter]:
+    workspace.validate_path_identity()
+    directory_descriptor = workspace.open_directory(directory)
+    writer: _BoundedFileWriter | None = None
+    primary_error = False
+    try:
+        writer = _BoundedFileWriter(
+            directory_descriptor=directory_descriptor,
+            filename=filename,
+            expected_size=expected_size,
+            maximum_size=maximum_size,
+            deadline=deadline,
+            violation_code=violation_code,
+            label=label,
+        )
+        try:
+            yield writer
+        except BaseException:
+            primary_error = True
+            writer.abort()
+            raise
+        try:
+            writer.finish()
+        except BaseException:
+            primary_error = True
+            writer.abort()
+            raise
+        workspace.validate_path_identity()
+    finally:
+        if writer is not None and primary_error:
+            writer.abort()
+        try:
+            os.close(directory_descriptor)
+        except OSError as exc:
+            if not primary_error:
+                _fail(
+                    MaterializerFailureCode.INPUT_IO,
+                    f"cannot close bounded {label} directory: {exc}",
+                )
 
 
 def _stable_identifier(value: object, label: str) -> str:
@@ -414,7 +993,10 @@ def _validate_request(
     scan_id = _stable_identifier(request.scan_id, "scan_id")
     _stable_identifier(request.task_id, "task_id")
     _stable_identifier(request.lease_id, "lease_id")
-    if not isinstance(request.workspace_parent, Path) or not request.workspace_parent.is_absolute():
+    if (
+        not isinstance(request.workspace_parent, Path)
+        or not request.workspace_parent.is_absolute()
+    ):
         _fail(
             MaterializerFailureCode.INPUT_INVALID,
             "workspace_parent must be an absolute Path",
@@ -456,62 +1038,145 @@ def _create_private_workspace(
     request: RefineMaterializationRequest,
     *,
     deadline: RefineDeadline,
-) -> Path:
+) -> _PrivateWorkspace:
     _require_deadline(deadline)
     parent = request.workspace_parent
+    parent_descriptor = _open_absolute_directory(parent)
     try:
-        parent_stat = os.lstat(parent)
+        parent_stat = os.fstat(parent_descriptor)
     except OSError as exc:
+        os.close(parent_descriptor)
         _fail(
-            MaterializerFailureCode.INPUT_IO,
-            f"workspace parent is unavailable: {exc}",
-        )
-    if stat.S_ISLNK(parent_stat.st_mode) or not stat.S_ISDIR(parent_stat.st_mode):
-        _fail(
-            MaterializerFailureCode.INPUT_INVALID,
-            "workspace parent must be a real directory",
+            MaterializerFailureCode.INPUT_IO, f"cannot inspect workspace parent: {exc}"
         )
     if parent_stat.st_uid != os.geteuid() or parent_stat.st_mode & 0o022:
+        os.close(parent_descriptor)
         _fail(
             MaterializerFailureCode.INPUT_INVALID,
             "workspace parent must be service-owned and not group/world writable",
         )
 
-    workspace = parent / _workspace_name(request.task_id, request.lease_id)
-    created = False
+    workspace_name = _workspace_name(request.task_id, request.lease_id)
+    workspace = parent / workspace_name
     try:
-        os.mkdir(workspace, 0o700)
-        created = True
-        os.chmod(workspace, 0o700)
-        for child in ("incoming", "inputs", "extracted", "images", "raster-incoming"):
-            os.mkdir(workspace / child, 0o700)
+        os.mkdir(workspace_name, 0o700, dir_fd=parent_descriptor)
     except FileExistsError:
-        if created:
-            shutil.rmtree(workspace, ignore_errors=True)
+        os.close(parent_descriptor)
         _fail(
             MaterializerFailureCode.INPUT_IO,
             "task/lease workspace already exists",
         )
     except OSError as exc:
-        if created:
-            shutil.rmtree(workspace, ignore_errors=True)
+        os.close(parent_descriptor)
         _fail(
             MaterializerFailureCode.INPUT_IO,
             f"cannot create private task/lease workspace: {exc}",
         )
+
+    workspace_descriptor: int | None = None
+    anchor: _PrivateWorkspace | None = None
     try:
-        mode = stat.S_IMODE(os.lstat(workspace).st_mode)
-    except OSError as exc:
-        shutil.rmtree(workspace, ignore_errors=True)
-        _fail(MaterializerFailureCode.INPUT_IO, f"cannot inspect workspace: {exc}")
-    if mode != 0o700:
-        shutil.rmtree(workspace, ignore_errors=True)
-        _fail(
-            MaterializerFailureCode.INPUT_INVALID,
-            "task/lease workspace is not mode 0700",
+        workspace_descriptor = os.open(
+            workspace_name,
+            _directory_open_flags(),
+            dir_fd=parent_descriptor,
         )
+        os.fchmod(workspace_descriptor, 0o700)
+        workspace_stat = os.fstat(workspace_descriptor)
+        anchored_stat = os.stat(
+            workspace_name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISDIR(workspace_stat.st_mode)
+            or workspace_stat.st_uid != os.geteuid()
+            or stat.S_IMODE(workspace_stat.st_mode) != 0o700
+            or (workspace_stat.st_dev, workspace_stat.st_ino)
+            != (anchored_stat.st_dev, anchored_stat.st_ino)
+        ):
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                "task/lease workspace descriptor is untrusted",
+            )
+        anchor = _PrivateWorkspace(
+            path=workspace,
+            name=workspace_name,
+            parent_descriptor=parent_descriptor,
+            workspace_descriptor=workspace_descriptor,
+        )
+        for child in ("incoming", "inputs", "extracted", "images", "raster-incoming"):
+            os.mkdir(child, 0o700, dir_fd=workspace_descriptor)
+            child_descriptor = os.open(
+                child,
+                _directory_open_flags(),
+                dir_fd=workspace_descriptor,
+            )
+            try:
+                os.fchmod(child_descriptor, 0o700)
+                child_stat = os.fstat(child_descriptor)
+            finally:
+                os.close(child_descriptor)
+            if (
+                not stat.S_ISDIR(child_stat.st_mode)
+                or child_stat.st_uid != os.geteuid()
+                or stat.S_IMODE(child_stat.st_mode) != 0o700
+            ):
+                _fail(
+                    MaterializerFailureCode.INPUT_INVALID,
+                    f"task/lease workspace child {child!r} is untrusted",
+                )
+        anchor.validate_path_identity()
+    except RefineMaterializerError as primary_error:
+        if anchor is not None:
+            try:
+                anchor.cleanup()
+            except RefineMaterializerError as cleanup_error:
+                raise cleanup_error from primary_error
+        else:
+            try:
+                shutil.rmtree(workspace_name, dir_fd=parent_descriptor)
+            except OSError as cleanup_error:
+                if workspace_descriptor is not None:
+                    os.close(workspace_descriptor)
+                os.close(parent_descriptor)
+                raise RefineMaterializerError(
+                    MaterializerFailureCode.INPUT_IO,
+                    f"cannot clean partial task/lease workspace: {cleanup_error}",
+                ) from primary_error
+            if workspace_descriptor is not None:
+                os.close(workspace_descriptor)
+            os.close(parent_descriptor)
+        raise
+    except OSError as exc:
+        primary_error = RefineMaterializerError(
+            MaterializerFailureCode.INPUT_IO,
+            f"cannot create private task/lease workspace: {exc}",
+        )
+        if anchor is not None:
+            try:
+                anchor.cleanup()
+            except RefineMaterializerError as cleanup_error:
+                raise cleanup_error from primary_error
+        else:
+            try:
+                shutil.rmtree(workspace_name, dir_fd=parent_descriptor)
+            except OSError as cleanup_error:
+                if workspace_descriptor is not None:
+                    os.close(workspace_descriptor)
+                os.close(parent_descriptor)
+                raise RefineMaterializerError(
+                    MaterializerFailureCode.INPUT_IO,
+                    f"cannot clean partial task/lease workspace: {cleanup_error}",
+                ) from primary_error
+            if workspace_descriptor is not None:
+                os.close(workspace_descriptor)
+            os.close(parent_descriptor)
+        raise primary_error from exc
     _require_deadline(deadline)
-    return workspace
+    if anchor is None:  # pragma: no cover - every successful path assigns it
+        _fail(MaterializerFailureCode.INPUT_IO, "private workspace was not created")
+    return anchor
 
 
 def _stat_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int, int]:
@@ -525,55 +1190,146 @@ def _stat_identity(metadata: os.stat_result) -> tuple[int, int, int, int, int, i
     )
 
 
-def _safe_source_descriptor(path: Path) -> tuple[int, os.stat_result]:
-    try:
-        path_snapshot = os.lstat(path)
-    except OSError as exc:
-        _fail(MaterializerFailureCode.INPUT_IO, f"cannot inspect acquired file: {exc}")
-    if stat.S_ISLNK(path_snapshot.st_mode) or not stat.S_ISREG(path_snapshot.st_mode):
+def _workspace_file_parts(
+    relative_path: PurePosixPath,
+) -> tuple[tuple[str, ...], str]:
+    if (
+        not isinstance(relative_path, PurePosixPath)
+        or relative_path.is_absolute()
+        or len(relative_path.parts) < 2
+        or any(
+            part in ("", ".", "..") or "/" in part or "\x00" in part
+            for part in relative_path.parts
+        )
+    ):
         _fail(
             MaterializerFailureCode.INPUT_INVALID,
-            "acquired source must be a regular non-symlink file",
+            "private workspace file path is unsafe",
         )
-    nonblocking = getattr(os, "O_NONBLOCK", None)
-    if nonblocking is None:
-        _fail(
-            MaterializerFailureCode.INPUT_INVALID,
-            "nonblocking file opens are unavailable",
-        )
-    flags = (
-        os.O_RDONLY
-        | getattr(os, "O_CLOEXEC", 0)
-        | getattr(os, "O_NOFOLLOW", 0)
-        | nonblocking
-    )
+    return tuple(relative_path.parts[:-1]), relative_path.parts[-1]
+
+
+def _safe_source_descriptor(
+    workspace: _PrivateWorkspace,
+    relative_path: PurePosixPath,
+) -> tuple[int, os.stat_result]:
+    workspace.validate_path_identity()
+    directory_parts, filename = _workspace_file_parts(relative_path)
+    directory_descriptor = workspace.open_directory(*directory_parts)
+    descriptor: int | None = None
+    pending_error = False
     try:
-        descriptor = os.open(path, flags)
-    except OSError as exc:
-        if exc.errno == errno.ELOOP:
+        try:
+            path_snapshot = os.stat(
+                filename,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+        except OSError as exc:
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                f"cannot inspect private workspace file: {exc}",
+            )
+        if stat.S_ISLNK(path_snapshot.st_mode) or not stat.S_ISREG(
+            path_snapshot.st_mode
+        ):
             _fail(
                 MaterializerFailureCode.INPUT_INVALID,
-                "acquired source changed to a symlink while opening",
+                "private workspace source must be a regular non-symlink file",
             )
-        _fail(MaterializerFailureCode.INPUT_IO, f"cannot open acquired file: {exc}")
-    try:
-        opened = os.fstat(descriptor)
-    except OSError as exc:
-        os.close(descriptor)
-        _fail(MaterializerFailureCode.INPUT_IO, f"cannot inspect acquired descriptor: {exc}")
-    if not stat.S_ISREG(opened.st_mode) or (
-        opened.st_dev,
-        opened.st_ino,
-    ) != (
-        path_snapshot.st_dev,
-        path_snapshot.st_ino,
-    ):
-        os.close(descriptor)
-        _fail(
-            MaterializerFailureCode.INPUT_INVALID,
-            "acquired source changed identity while opening",
+        nonblocking = getattr(os, "O_NONBLOCK", None)
+        if nonblocking is None:
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                "nonblocking file opens are unavailable",
+            )
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | nonblocking
         )
+        try:
+            descriptor = os.open(
+                filename,
+                flags,
+                dir_fd=directory_descriptor,
+            )
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                _fail(
+                    MaterializerFailureCode.INPUT_INVALID,
+                    "private workspace source changed to a symlink while opening",
+                )
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                f"cannot open private workspace file: {exc}",
+            )
+        try:
+            opened = os.fstat(descriptor)
+        except OSError as exc:
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                f"cannot inspect private workspace descriptor: {exc}",
+            )
+        if not stat.S_ISREG(opened.st_mode) or (
+            opened.st_dev,
+            opened.st_ino,
+        ) != (
+            path_snapshot.st_dev,
+            path_snapshot.st_ino,
+        ):
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                "private workspace source changed identity while opening",
+            )
+    except BaseException:
+        pending_error = True
+        raise
+    finally:
+        try:
+            os.close(directory_descriptor)
+        except OSError as exc:
+            if not pending_error:
+                if descriptor is not None:
+                    os.close(descriptor)
+                _fail(
+                    MaterializerFailureCode.INPUT_IO,
+                    f"cannot close private workspace directory: {exc}",
+                )
+        if pending_error and descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
     return descriptor, opened
+
+
+def _unlink_workspace_file(
+    workspace: _PrivateWorkspace,
+    relative_path: PurePosixPath,
+) -> None:
+    workspace.validate_path_identity()
+    directory_parts, filename = _workspace_file_parts(relative_path)
+    directory_descriptor = workspace.open_directory(*directory_parts)
+    primary_error = False
+    try:
+        os.unlink(filename, dir_fd=directory_descriptor)
+    except OSError as exc:
+        primary_error = True
+        _fail(
+            MaterializerFailureCode.INPUT_IO,
+            f"cannot remove private workspace file: {exc}",
+        )
+    finally:
+        try:
+            os.close(directory_descriptor)
+        except OSError as exc:
+            if not primary_error:
+                _fail(
+                    MaterializerFailureCode.INPUT_IO,
+                    f"cannot close private workspace directory: {exc}",
+                )
 
 
 def _write_all(
@@ -588,7 +1344,10 @@ def _write_all(
         try:
             written = os.write(descriptor, payload[offset:])
         except OSError as exc:
-            _fail(MaterializerFailureCode.INPUT_IO, f"cannot write private snapshot: {exc}")
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                f"cannot write private snapshot: {exc}",
+            )
         if written <= 0:
             _fail(
                 MaterializerFailureCode.INPUT_IO,
@@ -598,8 +1357,9 @@ def _write_all(
 
 
 def _freeze_untrusted_file(
-    source: Path,
-    destination: Path,
+    workspace: _PrivateWorkspace,
+    source: PurePosixPath,
+    destination: PurePosixPath,
     *,
     maximum_size: int,
     deadline: RefineDeadline,
@@ -609,8 +1369,10 @@ def _freeze_untrusted_file(
     """Copy and hash one untrusted generation through the same source descriptor."""
 
     _require_deadline(deadline)
-    descriptor, before = _safe_source_descriptor(source)
+    descriptor, before = _safe_source_descriptor(workspace, source)
     output_descriptor: int | None = None
+    output_directory_descriptor: int | None = None
+    destination_name = ""
     destination_created = False
     pending_error = False
     digest = hashlib.sha256()
@@ -623,7 +1385,14 @@ def _freeze_untrusted_file(
             | getattr(os, "O_CLOEXEC", 0)
             | getattr(os, "O_NOFOLLOW", 0)
         )
-        output_descriptor = os.open(destination, flags, 0o600)
+        destination_directories, destination_name = _workspace_file_parts(destination)
+        output_directory_descriptor = workspace.open_directory(*destination_directories)
+        output_descriptor = os.open(
+            destination_name,
+            flags,
+            0o600,
+            dir_fd=output_directory_descriptor,
+        )
         destination_created = True
         chunk_index = 0
         while True:
@@ -699,18 +1468,30 @@ def _freeze_untrusted_file(
                 os.close(open_descriptor)
             except OSError as exc:
                 close_error = close_error or exc
-        if pending_error and destination_created:
+        if (
+            pending_error
+            and destination_created
+            and output_directory_descriptor is not None
+        ):
             try:
-                os.unlink(destination)
+                os.unlink(
+                    destination_name,
+                    dir_fd=output_directory_descriptor,
+                )
             except OSError:
                 pass
+        if output_directory_descriptor is not None:
+            try:
+                os.close(output_directory_descriptor)
+            except OSError as exc:
+                close_error = close_error or exc
         if close_error is not None and not pending_error:
             _fail(
                 MaterializerFailureCode.INPUT_IO,
                 f"cannot close verified descriptor: {close_error}",
             )
     _require_deadline(deadline)
-    return _FrozenFile(destination, actual_sha256, copied)
+    return _FrozenFile(workspace, destination, actual_sha256, copied)
 
 
 def _read_frozen_file(
@@ -718,7 +1499,10 @@ def _read_frozen_file(
     *,
     deadline: RefineDeadline,
 ) -> bytes:
-    descriptor, before = _safe_source_descriptor(frozen.path)
+    descriptor, before = _safe_source_descriptor(
+        frozen.workspace,
+        frozen.relative_path,
+    )
     payload = bytearray()
     digest = hashlib.sha256()
     pending_error = False
@@ -781,7 +1565,10 @@ def _hash_frozen_file(
     *,
     deadline: RefineDeadline,
 ) -> None:
-    descriptor, before = _safe_source_descriptor(frozen.path)
+    descriptor, before = _safe_source_descriptor(
+        frozen.workspace,
+        frozen.relative_path,
+    )
     digest = hashlib.sha256()
     size = 0
     pending_error = False
@@ -822,7 +1609,10 @@ def _hash_frozen_file(
             os.close(descriptor)
         except OSError as exc:
             if not pending_error:
-                _fail(MaterializerFailureCode.INPUT_IO, f"cannot close private file: {exc}")
+                _fail(
+                    MaterializerFailureCode.INPUT_IO,
+                    f"cannot close private file: {exc}",
+                )
     if (
         _stat_identity(before) != _stat_identity(after)
         or size != frozen.size_bytes
@@ -853,6 +1643,16 @@ def _json_value(payload: bytes, label: str) -> Any:
             object_pairs_hook=unique_object,
             parse_constant=reject_constant,
         )
+    except MemoryError:
+        _fail(
+            MaterializerFailureCode.INPUT_IO,
+            f"{label} exhausted memory while parsing",
+        )
+    except RecursionError:
+        _fail(
+            MaterializerFailureCode.INPUT_INVALID,
+            f"{label} exceeds the supported JSON nesting depth",
+        )
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         _fail(
             MaterializerFailureCode.INPUT_INVALID,
@@ -867,7 +1667,9 @@ def _validate_manifest(
 ) -> None:
     document = _json_value(payload, "bundle manifest")
     if not isinstance(document, dict):
-        _fail(MaterializerFailureCode.INPUT_INVALID, "bundle manifest must be an object")
+        _fail(
+            MaterializerFailureCode.INPUT_INVALID, "bundle manifest must be an object"
+        )
     if (
         type(document.get("schemaVersion")) is not int
         or document["schemaVersion"] != 3
@@ -952,7 +1754,9 @@ def _parse_index(
     try:
         text = payload.decode("utf-8", errors="strict")
     except UnicodeDecodeError as exc:
-        _fail(MaterializerFailureCode.INPUT_INVALID, f"keyframe index is not UTF-8: {exc}")
+        _fail(
+            MaterializerFailureCode.INPUT_INVALID, f"keyframe index is not UTF-8: {exc}"
+        )
     rows: list[_IndexedFrame] = []
     paths: set[str] = set()
     names: set[str] = set()
@@ -1001,13 +1805,18 @@ def _parse_index(
                 )
         else:
             depth_path = _validate_member_path(depth_value, suffix=".bin")
-            if not has_depth or PurePosixPath(depth_path).stem != PurePosixPath(heic_path).stem:
+            if (
+                not has_depth
+                or PurePosixPath(depth_path).stem != PurePosixPath(heic_path).stem
+            ):
                 _fail(
                     MaterializerFailureCode.INPUT_INVALID,
                     "keyframe depth member must share its HEIC stem",
                 )
-        if heic_path in paths or frame.image_name in names or (
-            depth_path is not None and depth_path in paths
+        if (
+            heic_path in paths
+            or frame.image_name in names
+            or (depth_path is not None and depth_path in paths)
         ):
             _fail(
                 MaterializerFailureCode.INPUT_INVALID,
@@ -1042,7 +1851,9 @@ def _validate_summary(
 ) -> None:
     summary = _json_value(payload, "keyframe summary")
     if not isinstance(summary, dict):
-        _fail(MaterializerFailureCode.INPUT_INVALID, "keyframe summary must be an object")
+        _fail(
+            MaterializerFailureCode.INPUT_INVALID, "keyframe summary must be an object"
+        )
     fired = summary.get("fired")
     if type(fired) is not int or fired < 0 or fired > limits.max_frames:
         _fail(
@@ -1081,8 +1892,23 @@ def _open_frozen_binary(
     deadline: RefineDeadline,
 ) -> Iterator[tuple[BinaryIO, os.stat_result]]:
     _require_deadline(deadline)
-    descriptor, before = _safe_source_descriptor(frozen.path)
-    handle = os.fdopen(descriptor, "rb", closefd=True)
+    descriptor, before = _safe_source_descriptor(
+        frozen.workspace,
+        frozen.relative_path,
+    )
+    try:
+        handle = os.fdopen(descriptor, "rb", closefd=True)
+    except BaseException as exc:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        if isinstance(exc, OSError):
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                f"cannot wrap private file descriptor: {exc}",
+            )
+        raise
     pending_error = False
     try:
         digest = hashlib.sha256()
@@ -1267,20 +2093,48 @@ def _extract_archive(
     archive: _FrozenFile,
     *,
     members: tuple[_ArchiveMember, ...],
-    destination: Path,
+    destination: PurePosixPath,
     deadline: RefineDeadline,
-) -> dict[str, _ExtractedMember]:
+) -> dict[str, _FrozenFile]:
     expected = {member.name: member for member in members}
-    extracted: dict[str, _ExtractedMember] = {}
-    keyframes_dir = destination / "keyframes"
-    try:
-        os.mkdir(keyframes_dir, 0o700)
-    except OSError as exc:
+    extracted: dict[str, _FrozenFile] = {}
+    workspace = archive.workspace
+    if (
+        destination.is_absolute()
+        or not destination.parts
+        or any(part in ("", ".", "..") for part in destination.parts)
+    ):
         _fail(
-            MaterializerFailureCode.INPUT_IO,
-            f"cannot create private keyframe extraction directory: {exc}",
+            MaterializerFailureCode.INPUT_INVALID,
+            "private extraction directory is unsafe",
         )
+    destination_descriptor = workspace.open_directory(*destination.parts)
+    keyframes_descriptor: int | None = None
+    primary_error = False
     try:
+        try:
+            os.mkdir("keyframes", 0o700, dir_fd=destination_descriptor)
+            keyframes_descriptor = os.open(
+                "keyframes",
+                _directory_open_flags(),
+                dir_fd=destination_descriptor,
+            )
+            os.fchmod(keyframes_descriptor, 0o700)
+            keyframes_stat = os.fstat(keyframes_descriptor)
+        except OSError as exc:
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                f"cannot create private keyframe extraction directory: {exc}",
+            )
+        if (
+            not stat.S_ISDIR(keyframes_stat.st_mode)
+            or keyframes_stat.st_uid != os.geteuid()
+            or stat.S_IMODE(keyframes_stat.st_mode) != 0o700
+        ):
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                "private keyframe extraction directory is untrusted",
+            )
         with _open_frozen_binary(archive, deadline=deadline) as (handle, _snapshot):
             with tarfile.open(
                 fileobj=_DeadlineFile(handle, deadline),
@@ -1310,7 +2164,16 @@ def _extract_archive(
                             MaterializerFailureCode.INPUT_INVALID,
                             "keyframes archive regular member has no payload",
                         )
-                    target = destination.joinpath(*PurePosixPath(member.name).parts)
+                    member_path = PurePosixPath(member.name)
+                    if (
+                        len(member_path.parts) != 2
+                        or member_path.parts[0] != "keyframes"
+                    ):
+                        _fail(
+                            MaterializerFailureCode.INPUT_INVALID,
+                            "keyframes archive changed to an unsafe member path",
+                        )
+                    target_name = member_path.parts[1]
                     flags = (
                         os.O_WRONLY
                         | os.O_CREAT
@@ -1319,7 +2182,12 @@ def _extract_archive(
                         | getattr(os, "O_NOFOLLOW", 0)
                     )
                     try:
-                        output = os.open(target, flags, 0o600)
+                        output = os.open(
+                            target_name,
+                            flags,
+                            0o600,
+                            dir_fd=keyframes_descriptor,
+                        )
                     except OSError as exc:
                         _fail(
                             MaterializerFailureCode.INPUT_IO,
@@ -1349,7 +2217,10 @@ def _extract_archive(
                             )
                         os.fsync(output)
                         output_stat = os.fstat(output)
-                        if not stat.S_ISREG(output_stat.st_mode) or output_stat.st_size != written:
+                        if (
+                            not stat.S_ISREG(output_stat.st_mode)
+                            or output_stat.st_size != written
+                        ):
                             _fail(
                                 MaterializerFailureCode.INPUT_IO,
                                 "extracted keyframe did not retain its byte count",
@@ -1366,24 +2237,42 @@ def _extract_archive(
                                     MaterializerFailureCode.INPUT_IO,
                                     f"cannot close extracted keyframe: {exc}",
                                 )
-                    extracted[member.name] = _ExtractedMember(
-                        name=member.name,
-                        path=target,
+                    extracted[member.name] = _FrozenFile(
+                        workspace=workspace,
+                        relative_path=destination / member_path,
                         sha256=digest.hexdigest(),
                         size_bytes=written,
                     )
+        workspace.validate_path_identity()
     except RefineMaterializerError:
+        primary_error = True
         raise
     except OSError as exc:
+        primary_error = True
         _fail(
             MaterializerFailureCode.INPUT_IO,
             f"keyframes archive extraction I/O failed: {exc}",
         )
     except (tarfile.TarError, EOFError) as exc:
+        primary_error = True
         _fail(
             MaterializerFailureCode.INPUT_INVALID,
             f"keyframes archive extraction failed: {exc}",
         )
+    finally:
+        close_error: OSError | None = None
+        for descriptor in (keyframes_descriptor, destination_descriptor):
+            if descriptor is None:
+                continue
+            try:
+                os.close(descriptor)
+            except OSError as exc:
+                close_error = close_error or exc
+        if close_error is not None and not primary_error:
+            _fail(
+                MaterializerFailureCode.INPUT_IO,
+                f"cannot close private extraction directory: {close_error}",
+            )
     if set(extracted) != set(expected):
         _fail(
             MaterializerFailureCode.INPUT_INVALID,
@@ -1431,6 +2320,45 @@ def _validate_raster_evidence(
     return value
 
 
+def _canonical_ppm_size(width: int, height: int) -> int:
+    if type(width) is not int or width <= 0 or type(height) is not int or height <= 0:
+        _fail(
+            MaterializerFailureCode.INPUT_INVALID,
+            "indexed raster dimensions must be positive integers",
+        )
+    header = f"P6\n{width} {height}\n255\n".encode("ascii")
+    return len(header) + width * height * 3
+
+
+def _preflight_raster_sizes(
+    frames: tuple[_IndexedFrame, ...],
+    *,
+    limits: RefineMaterializationLimits,
+) -> tuple[int, ...]:
+    """Reject impossible per-frame or aggregate raster allocation before decode."""
+
+    sizes: list[int] = []
+    materialized_bytes = 0
+    for indexed in frames:
+        width = indexed.frame.intrinsics.image_width
+        height = indexed.frame.intrinsics.image_height
+        size = _canonical_ppm_size(width, height)
+        if size > limits.max_raster_bytes:
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                "indexed raster dimensions exceed the per-frame byte ceiling",
+            )
+        peak_bytes = materialized_bytes + 2 * size
+        if peak_bytes > limits.max_raster_workspace_bytes:
+            _fail(
+                MaterializerFailureCode.INPUT_INVALID,
+                "indexed rasters exceed the aggregate workspace byte ceiling",
+            )
+        materialized_bytes += size
+        sizes.append(size)
+    return tuple(sizes)
+
+
 def _validate_canonical_ppm(
     frozen: _FrozenFile,
     *,
@@ -1439,13 +2367,16 @@ def _validate_canonical_ppm(
     deadline: RefineDeadline,
 ) -> None:
     header = f"P6\n{width} {height}\n255\n".encode("ascii")
-    expected_size = len(header) + width * height * 3
+    expected_size = _canonical_ppm_size(width, height)
     if frozen.size_bytes != expected_size:
         _fail(
             MaterializerFailureCode.RASTER_UNQUALIFIED,
             "materialized PPM byte count does not match its indexed dimensions",
         )
-    descriptor, before = _safe_source_descriptor(frozen.path)
+    descriptor, before = _safe_source_descriptor(
+        frozen.workspace,
+        frozen.relative_path,
+    )
     pending_error = False
     try:
         _require_deadline(deadline)
@@ -1498,10 +2429,10 @@ class RefineMaterializer:
         sources = _validate_request(request, self._limits)
         _require_deadline(deadline)
         workspace: Path | None = None
+        workspace_anchor: _PrivateWorkspace | None = None
         try:
-            workspace = _create_private_workspace(request, deadline=deadline)
-            incoming_dir = workspace / "incoming"
-            input_dir = workspace / "inputs"
+            workspace_anchor = _create_private_workspace(request, deadline=deadline)
+            workspace = workspace_anchor.path
             frozen_by_kind: dict[str, _FrozenFile] = {}
             verified_inputs: list[VerifiedRefineInput] = []
             local_names = {
@@ -1518,13 +2449,25 @@ class RefineMaterializer:
             }
             for kind, source in sources:
                 _require_deadline(deadline)
-                incoming = incoming_dir / local_names[kind]
+                local_name = local_names[kind]
+                incoming = PurePosixPath("incoming") / local_name
+                private_input = PurePosixPath("inputs") / local_name
                 try:
-                    self._acquirer.acquire(
-                        object_key=source.object_key,
-                        destination=incoming,
+                    with _bounded_workspace_destination(
+                        workspace_anchor,
+                        directory="incoming",
+                        filename=local_name,
+                        expected_size=source.size_bytes,
+                        maximum_size=maxima[kind],
                         deadline=deadline,
-                    )
+                        violation_code=MaterializerFailureCode.INPUT_INVALID,
+                        label=f"{kind} acquisition",
+                    ) as destination:
+                        self._acquirer.acquire(
+                            object_key=source.object_key,
+                            destination=destination,
+                            deadline=deadline,
+                        )
                 except RefineMaterializerError:
                     raise
                 except AdapterError as exc:
@@ -1538,20 +2481,15 @@ class RefineMaterializer:
                     )
                 _require_deadline(deadline)
                 frozen = _freeze_untrusted_file(
+                    workspace_anchor,
                     incoming,
-                    input_dir / local_names[kind],
+                    private_input,
                     maximum_size=maxima[kind],
                     expected_sha256=source.sha256,
                     expected_size=source.size_bytes,
                     deadline=deadline,
                 )
-                try:
-                    os.unlink(incoming)
-                except OSError as exc:
-                    _fail(
-                        MaterializerFailureCode.INPUT_IO,
-                        f"cannot remove untrusted acquisition path: {exc}",
-                    )
+                _unlink_workspace_file(workspace_anchor, incoming)
                 frozen_by_kind[kind] = frozen
                 verified_inputs.append(
                     VerifiedRefineInput(
@@ -1573,6 +2511,7 @@ class RefineMaterializer:
                 deadline=deadline,
             )
             frames = _parse_index(index_payload, limits=self._limits)
+            raster_sizes = _preflight_raster_sizes(frames, limits=self._limits)
             summary_payload = _read_frozen_file(
                 frozen_by_kind["keyframeSummary"],
                 deadline=deadline,
@@ -1594,34 +2533,44 @@ class RefineMaterializer:
             extracted = _extract_archive(
                 archive,
                 members=preflight,
-                destination=workspace / "extracted",
+                destination=PurePosixPath("extracted"),
                 deadline=deadline,
             )
 
             materialized_frames: list[MaterializedRefineFrame] = []
-            raster_incoming_dir = workspace / "raster-incoming"
-            images_dir = workspace / "images"
             for engine_ordinal, indexed in enumerate(frames):
                 _require_deadline(deadline)
                 source = extracted[indexed.frame.heic_path]
-                source_frozen = _FrozenFile(
-                    source.path,
-                    source.sha256,
-                    source.size_bytes,
-                )
+                source_frozen = source
                 engine_name = f"frame_{engine_ordinal:06d}.ppm"
-                incoming_raster = raster_incoming_dir / engine_name
+                incoming_raster = PurePosixPath("raster-incoming") / engine_name
+                private_raster = PurePosixPath("images") / engine_name
                 width = indexed.frame.intrinsics.image_width
                 height = indexed.frame.intrinsics.image_height
                 try:
-                    evidence_value = self._raster_materializer.materialize(
-                        source=source.path,
-                        destination=incoming_raster,
-                        engine_name=engine_name,
-                        encoded_width=width,
-                        encoded_height=height,
+                    with _open_frozen_binary(
+                        source,
                         deadline=deadline,
-                    )
+                    ) as (source_handle, _source_snapshot):
+                        with _bounded_workspace_destination(
+                            workspace_anchor,
+                            directory="raster-incoming",
+                            filename=engine_name,
+                            expected_size=raster_sizes[engine_ordinal],
+                            maximum_size=self._limits.max_raster_bytes,
+                            deadline=deadline,
+                            violation_code=MaterializerFailureCode.RASTER_UNQUALIFIED,
+                            label=f"raster {engine_name}",
+                        ) as destination:
+                            evidence_value = self._raster_materializer.materialize(
+                                source=_DeadlineFile(source_handle, deadline),
+                                source_name=indexed.frame.heic_path,
+                                destination=destination,
+                                engine_name=engine_name,
+                                encoded_width=width,
+                                encoded_height=height,
+                                deadline=deadline,
+                            )
                 except RefineMaterializerError:
                     raise
                 except AdapterError as exc:
@@ -1640,18 +2589,13 @@ class RefineMaterializer:
                     height=height,
                 )
                 raster = _freeze_untrusted_file(
+                    workspace_anchor,
                     incoming_raster,
-                    images_dir / engine_name,
+                    private_raster,
                     maximum_size=self._limits.max_raster_bytes,
                     deadline=deadline,
                 )
-                try:
-                    os.unlink(incoming_raster)
-                except OSError as exc:
-                    _fail(
-                        MaterializerFailureCode.INPUT_IO,
-                        f"cannot remove untrusted raster path: {exc}",
-                    )
+                _unlink_workspace_file(workspace_anchor, incoming_raster)
                 _validate_canonical_ppm(
                     raster,
                     width=width,
@@ -1680,28 +2624,37 @@ class RefineMaterializer:
                 )
 
             try:
-                os.rmdir(incoming_dir)
-                os.rmdir(raster_incoming_dir)
+                if workspace_anchor.workspace_descriptor is None:
+                    _fail(
+                        MaterializerFailureCode.INPUT_IO,
+                        "private workspace descriptor is unavailable",
+                    )
+                os.rmdir("incoming", dir_fd=workspace_anchor.workspace_descriptor)
+                os.rmdir(
+                    "raster-incoming",
+                    dir_fd=workspace_anchor.workspace_descriptor,
+                )
             except OSError as exc:
                 _fail(
                     MaterializerFailureCode.INPUT_IO,
                     f"cannot retire untrusted workspace lanes: {exc}",
                 )
+            workspace_anchor.validate_path_identity()
             _require_deadline(deadline)
-            return RefineMaterialization(
+            result = RefineMaterialization(
                 task_id=request.task_id,
                 lease_id=request.lease_id,
                 workspace_root=workspace,
                 inputs=tuple(verified_inputs),
                 frames=tuple(materialized_frames),
+                _workspace_anchor=workspace_anchor,
             )
+            workspace_anchor = None
+            return result
         except BaseException as primary_error:
-            if workspace is not None:
+            if workspace_anchor is not None:
                 try:
-                    shutil.rmtree(workspace)
-                except OSError as cleanup_error:
-                    raise RefineMaterializerError(
-                        MaterializerFailureCode.INPUT_IO,
-                        f"task/lease workspace cleanup failed: {cleanup_error}",
-                    ) from primary_error
+                    workspace_anchor.cleanup()
+                except RefineMaterializerError as cleanup_error:
+                    raise cleanup_error from primary_error
             raise

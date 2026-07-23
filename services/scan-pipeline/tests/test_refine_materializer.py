@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-import os
 import stat
 import tarfile
 import time
@@ -114,17 +113,17 @@ def _regular(name: str, payload: bytes) -> tuple[tarfile.TarInfo, bytes]:
 class _MemoryAcquirer:
     def __init__(self, objects: dict[str, bytes]) -> None:
         self.objects = objects
-        self.calls: list[tuple[str, Path, RefineDeadline]] = []
+        self.calls: list[tuple[str, object, RefineDeadline]] = []
 
     def acquire(
         self,
         *,
         object_key: str,
-        destination: Path,
+        destination,
         deadline: RefineDeadline,
     ) -> None:
         self.calls.append((object_key, destination, deadline))
-        destination.write_bytes(self.objects[object_key])
+        destination.write(self.objects[object_key])
 
 
 class _PrematerializedRaster:
@@ -138,22 +137,23 @@ class _PrematerializedRaster:
     ) -> None:
         self.source_width_delta = source_width_delta
         self.output_width_delta = output_width_delta
-        self.calls: list[tuple[Path, Path, str, RefineDeadline]] = []
+        self.calls: list[tuple[object, str, object, str, RefineDeadline]] = []
 
     def materialize(
         self,
         *,
-        source: Path,
-        destination: Path,
+        source,
+        source_name: str,
+        destination,
         engine_name: str,
         encoded_width: int,
         encoded_height: int,
         deadline: RefineDeadline,
     ) -> FieldRasterMaterialization:
-        self.calls.append((source, destination, engine_name, deadline))
+        self.calls.append((source, source_name, destination, engine_name, deadline))
         width = encoded_width + self.output_width_delta
         pixels = bytes([len(self.calls)]) * (width * encoded_height * 3)
-        destination.write_bytes(
+        destination.write(
             f"P6\n{width} {encoded_height}\n255\n".encode("ascii") + pixels
         )
         return FieldRasterMaterialization(
@@ -335,17 +335,30 @@ def test_materializes_private_deterministic_runner_seam(tmp_path):
         "frame_000001.ppm",
         "frame_000002.ppm",
     ]
+    assert [call[1] for call in raster.calls] == [
+        "keyframes/keyframe_000000.heic",
+        "keyframes/keyframe_000001.heic",
+        "keyframes/keyframe_000002.heic",
+    ]
     assert [row.engine_relative_path for row in result.frames] == [
         "images/frame_000000.ppm",
         "images/frame_000001.ppm",
         "images/frame_000002.ppm",
     ]
     assert all(row.engine_path.is_file() for row in result.frames)
-    assert all(row.encoded_width == 2 and row.encoded_height == 3 for row in result.frames)
-    assert all(row.source_sha256 == _sha256(row.source_path.read_bytes()) for row in result.frames)
-    assert all(row.engine_sha256 == _sha256(row.engine_path.read_bytes()) for row in result.frames)
+    assert all(
+        row.encoded_width == 2 and row.encoded_height == 3 for row in result.frames
+    )
+    assert all(
+        row.source_sha256 == _sha256(row.source_path.read_bytes())
+        for row in result.frames
+    )
+    assert all(
+        row.engine_sha256 == _sha256(row.engine_path.read_bytes())
+        for row in result.frames
+    )
     assert all(call[2] is deadline for call in acquirer.calls)
-    assert all(call[3] is deadline for call in raster.calls)
+    assert all(call[4] is deadline for call in raster.calls)
     assert [call[0] for call in acquirer.calls] == [
         fixture.manifest.object_key,
         fixture.index.object_key,
@@ -354,6 +367,13 @@ def test_materializes_private_deterministic_runner_seam(tmp_path):
     ]
     assert not (result.workspace_root / "incoming").exists()
     assert not (result.workspace_root / "raster-incoming").exists()
+    with result.open_verified_file(
+        result.frames[0].engine_relative_path,
+        deadline=deadline,
+    ) as pinned:
+        assert pinned.read(2) == b"P6"
+    result.cleanup()
+    assert not result.workspace_root.exists()
 
 
 def test_owner_prefix_is_rejected_before_workspace_or_acquirer_io(tmp_path):
@@ -392,24 +412,19 @@ def test_expired_deadline_prevents_workspace_and_acquirer_io(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.parametrize("source_kind", ("symlink", "fifo"))
-def test_acquired_non_regular_source_is_rejected_without_blocking(tmp_path, source_kind):
+def test_acquirer_write_is_hard_bounded_during_the_injected_call(tmp_path):
     fixture = _Fixture(tmp_path)
 
-    class _UnsafeAcquirer(_MemoryAcquirer):
+    class _OverflowAcquirer(_MemoryAcquirer):
+        overflow_returned = False
+
         def acquire(self, *, object_key, destination, deadline):
             self.calls.append((object_key, destination, deadline))
-            if not self.calls[:-1]:
-                if source_kind == "symlink":
-                    target = destination.parent / "outside"
-                    target.write_bytes(self.objects[object_key])
-                    destination.symlink_to(target)
-                else:
-                    os.mkfifo(destination)
-                return
-            destination.write_bytes(self.objects[object_key])
+            assert not isinstance(destination, Path)
+            destination.write(self.objects[object_key] + b"x")
+            self.overflow_returned = True
 
-    acquirer = _UnsafeAcquirer(fixture.objects)
+    acquirer = _OverflowAcquirer(fixture.objects)
     materializer = RefineMaterializer(
         acquirer=acquirer,
         raster_materializer=_PrematerializedRaster(),
@@ -419,6 +434,8 @@ def test_acquired_non_regular_source_is_rejected_without_blocking(tmp_path, sour
         materializer.materialize(fixture.request, deadline=_deadline())
 
     assert caught.value.code is MaterializerFailureCode.INPUT_INVALID
+    assert len(acquirer.calls) == 1
+    assert acquirer.overflow_returned is False
     assert list(tmp_path.iterdir()) == []
 
 
@@ -461,6 +478,56 @@ def test_deadline_expiry_after_acquirer_is_fail_closed(tmp_path):
 
 
 @pytest.mark.parametrize(
+    ("parser_failure", "expected_code"),
+    (
+        (RecursionError("nested JSON"), MaterializerFailureCode.INPUT_INVALID),
+        (MemoryError("JSON allocation"), MaterializerFailureCode.INPUT_IO),
+    ),
+)
+def test_json_parser_resource_failures_are_classified_and_cleanup(
+    tmp_path,
+    monkeypatch,
+    parser_failure,
+    expected_code,
+):
+    fixture = _Fixture(tmp_path)
+    materializer, _, _ = _materializer(fixture)
+
+    def fail_json_parse(*args, **kwargs):
+        del args, kwargs
+        raise parser_failure
+
+    monkeypatch.setattr(refine_materializer.json, "loads", fail_json_parse)
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(fixture.request, deadline=_deadline())
+
+    assert caught.value.code is expected_code
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_deeply_nested_json_is_fail_closed_and_cleanup(tmp_path):
+    fixture = _Fixture(tmp_path)
+    payload = b"[" * 10_000 + b"0" + b"]" * 10_000
+    fixture.objects[fixture.manifest.object_key] = payload
+    request = replace(
+        fixture.request,
+        manifest=replace(
+            fixture.manifest,
+            sha256=_sha256(payload),
+            size_bytes=len(payload),
+        ),
+    )
+    materializer, _, _ = _materializer(fixture)
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(request, deadline=_deadline())
+
+    assert caught.value.code is MaterializerFailureCode.INPUT_INVALID
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
     "bad_entry",
     (
         "traversal",
@@ -475,9 +542,7 @@ def test_archive_preflight_rejects_unsafe_or_ambiguous_members_before_extraction
     tmp_path, bad_entry
 ):
     rows = [_index_row(index) for index in range(3)]
-    entries = [
-        _regular(str(row["heicPath"]), b"heic") for row in rows
-    ]
+    entries = [_regular(str(row["heicPath"]), b"heic") for row in rows]
     entries.append(_regular(str(rows[1]["depthPath"]), b"depth"))
     if bad_entry == "traversal":
         entries.append(_regular("../escape.heic", b"x"))
@@ -552,12 +617,54 @@ def test_archive_payload_cannot_change_between_preflight_and_extraction(
     assert list(tmp_path.iterdir()) == []
 
 
+def test_frozen_binary_fdopen_failure_closes_raw_descriptor_and_cleanup(
+    tmp_path,
+    monkeypatch,
+):
+    fixture = _Fixture(tmp_path)
+    materializer, _, _ = _materializer(fixture)
+    real_close = refine_materializer.os.close
+    real_rmtree = refine_materializer.shutil.rmtree
+    wrapped_descriptor: list[int] = []
+    closed_wrapped_descriptor: list[int] = []
+    close_observed_before_cleanup: list[bool] = []
+
+    def fail_fdopen(descriptor, *args, **kwargs):
+        del args, kwargs
+        wrapped_descriptor.append(descriptor)
+        raise OSError("fdopen failed")
+
+    def record_close(descriptor):
+        if wrapped_descriptor and descriptor == wrapped_descriptor[-1]:
+            closed_wrapped_descriptor.append(descriptor)
+        return real_close(descriptor)
+
+    def observe_cleanup(*args, **kwargs):
+        close_observed_before_cleanup.append(
+            bool(
+                wrapped_descriptor
+                and wrapped_descriptor[-1] in closed_wrapped_descriptor
+            )
+        )
+        return real_rmtree(*args, **kwargs)
+
+    monkeypatch.setattr(refine_materializer.os, "fdopen", fail_fdopen)
+    monkeypatch.setattr(refine_materializer.os, "close", record_close)
+    monkeypatch.setattr(refine_materializer.shutil, "rmtree", observe_cleanup)
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(fixture.request, deadline=_deadline())
+
+    assert caught.value.code is MaterializerFailureCode.INPUT_IO
+    assert len(wrapped_descriptor) == 1
+    assert closed_wrapped_descriptor
+    assert close_observed_before_cleanup == [True]
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_index_summary_and_archive_membership_must_agree(tmp_path):
     rows = [_index_row(index) for index in range(3)]
-    entries = [
-        _regular(str(row["heicPath"]), b"heic")
-        for row in rows[:-1]
-    ]
+    entries = [_regular(str(row["heicPath"]), b"heic") for row in rows[:-1]]
     entries.append(_regular(str(rows[1]["depthPath"]), b"depth"))
     fixture = _Fixture(
         tmp_path,
@@ -600,6 +707,69 @@ def test_raster_evidence_and_ppm_dimensions_are_independently_verified(tmp_path)
     assert list(tmp_path.iterdir()) == []
 
 
+def test_raster_dimensions_are_rejected_before_the_adapter_runs(tmp_path):
+    rows = [_index_row(index) for index in range(3)]
+    rows[1]["width"] = 50_000
+    rows[1]["height"] = 50_000
+    rows[1]["intrinsics"]["imageWidth"] = 50_000
+    rows[1]["intrinsics"]["imageHeight"] = 50_000
+    fixture = _Fixture(tmp_path, rows=rows)
+    limits = RefineMaterializationLimits(max_raster_bytes=1024 * 1024)
+    materializer, _, raster = _materializer(fixture, limits=limits)
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(fixture.request, deadline=_deadline())
+
+    assert caught.value.code is MaterializerFailureCode.INPUT_INVALID
+    assert raster.calls == []
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_aggregate_raster_workspace_limit_is_preflighted_before_decode(tmp_path):
+    assert (
+        RefineMaterializationLimits().max_raster_workspace_bytes
+        == 4 * 1024 * 1024 * 1024
+    )
+    fixture = _Fixture(tmp_path)
+    limits = RefineMaterializationLimits(max_raster_workspace_bytes=60)
+    materializer, _, raster = _materializer(fixture, limits=limits)
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(fixture.request, deadline=_deadline())
+
+    assert caught.value.code is MaterializerFailureCode.INPUT_INVALID
+    assert raster.calls == []
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_raster_writer_rejects_overflow_during_the_adapter_call(tmp_path):
+    fixture = _Fixture(tmp_path)
+
+    class _OverflowRaster(_PrematerializedRaster):
+        overflow_returned = False
+
+        def materialize(self, **kwargs):
+            destination = kwargs["destination"]
+            width = kwargs["encoded_width"]
+            height = kwargs["encoded_height"]
+            destination.write(
+                f"P6\n{width} {height}\n255\n".encode("ascii")
+                + b"x" * (width * height * 3 + 1)
+            )
+            self.overflow_returned = True
+            raise AssertionError("bounded writer must reject before adapter returns")
+
+    raster = _OverflowRaster()
+    materializer, _, _ = _materializer(fixture, raster=raster)
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(fixture.request, deadline=_deadline())
+
+    assert caught.value.code is MaterializerFailureCode.RASTER_UNQUALIFIED
+    assert raster.overflow_returned is False
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_manifest_inventory_must_bind_all_three_child_artifacts(tmp_path):
     fixture = _Fixture(tmp_path)
     manifest = json.loads(fixture.objects[fixture.manifest.object_key])
@@ -634,3 +804,119 @@ def test_same_task_and_lease_cannot_reuse_an_existing_workspace(tmp_path):
 
     assert caught.value.code is MaterializerFailureCode.INPUT_IO
     assert first.workspace_root.exists()
+    first.cleanup()
+
+
+def test_workspace_parent_ancestor_swap_never_redirects_creation_or_cleanup(
+    tmp_path,
+    monkeypatch,
+):
+    stable_ancestor = tmp_path / "stable"
+    workspace_parent = stable_ancestor / "work"
+    workspace_parent.mkdir(parents=True)
+    attacker = tmp_path / "attacker"
+    attacker.mkdir()
+    moved_ancestor = tmp_path / "moved-stable"
+    fixture = _Fixture(workspace_parent)
+    materializer, acquirer, _ = _materializer(fixture)
+    real_mkdir = refine_materializer.os.mkdir
+    swapped = False
+
+    def swap_before_workspace_mkdir(path, mode=0o777, *, dir_fd=None):
+        nonlocal swapped
+        if not swapped and str(path).startswith("refine-") and dir_fd is not None:
+            stable_ancestor.rename(moved_ancestor)
+            stable_ancestor.symlink_to(attacker, target_is_directory=True)
+            swapped = True
+        return real_mkdir(path, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(refine_materializer.os, "mkdir", swap_before_workspace_mkdir)
+
+    with pytest.raises(RefineMaterializerError):
+        materializer.materialize(fixture.request, deadline=_deadline())
+
+    assert swapped is True
+    assert acquirer.calls == []
+    assert list(attacker.iterdir()) == []
+    assert list((moved_ancestor / "work").iterdir()) == []
+
+
+def test_acquirer_ancestor_swap_never_redirects_freeze_or_cleanup(tmp_path):
+    stable_ancestor = tmp_path / "stable"
+    workspace_parent = stable_ancestor / "work"
+    workspace_parent.mkdir(parents=True)
+    moved_ancestor = tmp_path / "moved-stable"
+    attacker = tmp_path / "attacker"
+    attacker_workspace = (
+        attacker / "work" / refine_materializer._workspace_name(TASK_ID, LEASE_ID)
+    )
+    (attacker_workspace / "incoming").mkdir(parents=True, mode=0o700)
+    (attacker_workspace / "inputs").mkdir(mode=0o700)
+    fixture = _Fixture(workspace_parent)
+    (attacker_workspace / "incoming" / "manifest.json").write_bytes(
+        fixture.objects[fixture.manifest.object_key]
+    )
+
+    class _SwappingAcquirer(_MemoryAcquirer):
+        swapped = False
+
+        def acquire(self, *, object_key, destination, deadline):
+            super().acquire(
+                object_key=object_key,
+                destination=destination,
+                deadline=deadline,
+            )
+            if not self.swapped:
+                stable_ancestor.rename(moved_ancestor)
+                stable_ancestor.symlink_to(attacker, target_is_directory=True)
+                self.swapped = True
+
+    acquirer = _SwappingAcquirer(fixture.objects)
+    materializer = RefineMaterializer(
+        acquirer=acquirer,
+        raster_materializer=_PrematerializedRaster(),
+    )
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(fixture.request, deadline=_deadline())
+
+    assert caught.value.code is MaterializerFailureCode.INPUT_INVALID
+    assert acquirer.swapped is True
+    assert not (attacker_workspace / "inputs" / "manifest.json").exists()
+    assert list((moved_ancestor / "work").iterdir()) == []
+
+
+def test_returned_materialization_rejects_unpinned_handoff_after_ancestor_swap(
+    tmp_path,
+):
+    stable_ancestor = tmp_path / "stable"
+    workspace_parent = stable_ancestor / "work"
+    workspace_parent.mkdir(parents=True)
+    moved_ancestor = tmp_path / "moved-stable"
+    attacker = tmp_path / "attacker"
+    fixture = _Fixture(workspace_parent)
+    materializer, _, _ = _materializer(fixture)
+    result = materializer.materialize(fixture.request, deadline=_deadline())
+    attacker_workspace = attacker / "work" / result.workspace_root.name
+    (attacker_workspace / "images").mkdir(parents=True)
+    attacker_payload = b"attacker"
+    (attacker_workspace / result.frames[0].engine_relative_path).write_bytes(
+        attacker_payload
+    )
+
+    stable_ancestor.rename(moved_ancestor)
+    stable_ancestor.symlink_to(attacker, target_is_directory=True)
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        with result.open_verified_file(
+            result.frames[0].engine_relative_path,
+            deadline=_deadline(),
+        ) as pinned:
+            pinned.read()
+
+    assert caught.value.code is MaterializerFailureCode.INPUT_INVALID
+    assert (
+        attacker_workspace / result.frames[0].engine_relative_path
+    ).read_bytes() == attacker_payload
+    result.cleanup()
+    assert list((moved_ancestor / "work").iterdir()) == []
