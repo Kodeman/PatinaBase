@@ -900,6 +900,96 @@ def test_engine_artifact_hash_substitution_fails_before_manifest(
     assert manifest_calls == []
 
 
+def test_frame_hash_fails_closed_before_open_when_nonblocking_is_unavailable(
+    tmp_path,
+    monkeypatch,
+):
+    request = _request(tmp_path)
+    backend = _FakeBackend(primary=_candidate())
+    builder = _FakeArtifactBuilder()
+    open_calls = []
+    manifest_calls = []
+
+    def _open_trap(*args, **kwargs):
+        open_calls.append((args, kwargs))
+        raise AssertionError("os.open must not run without O_NONBLOCK")
+
+    def _manifest_trap(*args, **kwargs):
+        manifest_calls.append((args, kwargs))
+        raise AssertionError("manifest construction must not run")
+
+    monkeypatch.delattr(refine_runner.os, "O_NONBLOCK", raising=False)
+    monkeypatch.setattr(refine_runner.os, "open", _open_trap)
+    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
+    started = time.monotonic()
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(backend=backend, artifact_builder=builder).run(
+            request,
+            deadline=_deadline(),
+        )
+
+    assert time.monotonic() - started < 2.0
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert raised.value.fatal is True
+    assert "nonblocking source opens are unavailable" in str(raised.value)
+    assert open_calls == []
+    assert backend.calls == []
+    assert builder.calls == []
+    assert manifest_calls == []
+
+
+def test_engine_artifact_hash_fails_closed_before_open_when_nonblocking_is_unavailable(
+    tmp_path,
+    monkeypatch,
+):
+    request = _request(tmp_path)
+    backend = _FakeBackend(primary=_candidate())
+    builder = _FakeArtifactBuilder()
+    real_stable_file_sha256 = refine_runner._stable_file_sha256
+    open_calls = []
+    manifest_calls = []
+
+    def _frame_hash_then_real_artifact_hash(path, *, deadline):
+        if "engine-artifacts" in path.parts:
+            return real_stable_file_sha256(path, deadline=deadline)
+        payload = path.read_bytes()
+        return hashlib.sha256(payload).hexdigest(), path.stat()
+
+    def _open_trap(*args, **kwargs):
+        open_calls.append((args, kwargs))
+        raise AssertionError("os.open must not run without O_NONBLOCK")
+
+    def _manifest_trap(*args, **kwargs):
+        manifest_calls.append((args, kwargs))
+        raise AssertionError("manifest construction must not run")
+
+    monkeypatch.delattr(refine_runner.os, "O_NONBLOCK", raising=False)
+    monkeypatch.setattr(refine_runner.os, "open", _open_trap)
+    monkeypatch.setattr(
+        refine_runner,
+        "_stable_file_sha256",
+        _frame_hash_then_real_artifact_hash,
+    )
+    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
+    started = time.monotonic()
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(backend=backend, artifact_builder=builder).run(
+            request,
+            deadline=_deadline(),
+        )
+
+    assert time.monotonic() - started < 2.0
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert raised.value.fatal is True
+    assert "nonblocking source opens are unavailable" in str(raised.value)
+    assert open_calls == []
+    assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
+    assert len(builder.calls) == 1
+    assert manifest_calls == []
+
+
 def test_stable_file_hash_uses_the_descriptor_opened_before_path_replacement(
     tmp_path,
     monkeypatch,

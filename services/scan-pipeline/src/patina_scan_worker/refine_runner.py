@@ -704,6 +704,10 @@ def _stable_file_sha256(
 
     _require_engine_budget(deadline)
     try:
+        nonblocking_flag = os.O_NONBLOCK
+    except AttributeError as exc:
+        raise ValueError("nonblocking source opens are unavailable") from exc
+    try:
         path_snapshot = os.lstat(path)
     except OSError as exc:
         raise OSError("source path could not be inspected safely") from exc
@@ -714,7 +718,7 @@ def _stable_file_sha256(
         os.O_RDONLY
         | getattr(os, "O_CLOEXEC", 0)
         | getattr(os, "O_NOFOLLOW", 0)
-        | getattr(os, "O_NONBLOCK", 0)
+        | nonblocking_flag
     )
     try:
         descriptor = os.open(path, flags)
