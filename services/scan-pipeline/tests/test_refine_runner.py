@@ -18,9 +18,12 @@ from patina_scan_worker.refine_adapter import (
     PositionPrior,
     RefineDeadline,
     RefinementEvidence,
+    arkit_c2w_to_colmap_w2c,
+    right_rotated_intrinsics,
 )
 from patina_scan_worker.refine_runner import (
     FALLBACK_ENGINE,
+    MAX_RUNNER_ERROR_BYTES,
     PRIMARY_ENGINE,
     REFINE_FAILURE_FATALITY,
     REFINE_MANIFEST_NAME,
@@ -28,8 +31,10 @@ from patina_scan_worker.refine_runner import (
     EngineFailureKind,
     InputArtifact,
     NamedRefinedPose,
+    PreparedRefineFrame,
     RefineEngineCandidate,
     RefineFailureCode,
+    RefineFallbackPolicy,
     RefineFileArtifact,
     RefineFrameInput,
     RefineInlineArtifact,
@@ -58,34 +63,47 @@ def _frame(
     ordinal: int,
     center: tuple[float, float, float],
 ) -> NormalizedFrame:
-    intrinsics = PinholeIntrinsics(800.0, 805.0, 320.0, 240.0, 640, 480)
+    native_intrinsics = PinholeIntrinsics(
+        805.0,
+        800.0,
+        240.0,
+        320.0,
+        480,
+        640,
+    )
+    intrinsics = right_rotated_intrinsics(
+        native_intrinsics,
+        encoded_width=640,
+        encoded_height=480,
+    )
     variance = 0.01
+    transform = (
+        1.0,
+        0.0,
+        0.0,
+        center[0],
+        0.0,
+        1.0,
+        0.0,
+        center[1],
+        0.0,
+        0.0,
+        1.0,
+        center[2],
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    )
     return NormalizedFrame(
         ordinal=ordinal,
         frame_timestamp_s=float(ordinal),
         heic_path=f"keyframes/frame_{ordinal:04d}.heic",
         image_name=f"frame_{ordinal:04d}.heic",
-        arkit_camera_to_world=(
-            1.0,
-            0.0,
-            0.0,
-            center[0],
-            0.0,
-            1.0,
-            0.0,
-            center[1],
-            0.0,
-            0.0,
-            1.0,
-            center[2],
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-        ),
-        native_intrinsics=intrinsics,
+        arkit_camera_to_world=transform,
+        native_intrinsics=native_intrinsics,
         intrinsics=intrinsics,
-        colmap_pose=_pose(center),
+        colmap_pose=arkit_c2w_to_colmap_w2c(transform),
         camera_center_m=center,
         pose_prior=PositionPrior(
             position_m=center,
@@ -310,6 +328,7 @@ def test_primary_success_builds_byte_deterministic_manifest_last_artifacts(tmp_p
     assert all(seen_deadline is deadline for _, seen_deadline in backend.calls)
     assert first == second
     assert first.selected_engine == PRIMARY_ENGINE
+    assert first.fallback_policy is RefineFallbackPolicy.PRIMARY_ONLY
     assert first.fallback_trigger is None
     assert first.files[-1].name == REFINE_MANIFEST_NAME
     assert tuple(file.name for file in first.files[:-1]) == tuple(
@@ -326,6 +345,7 @@ def test_primary_success_builds_byte_deterministic_manifest_last_artifacts(tmp_p
     assert manifest["engine"] == {
         "actualCliVersion": "4.0.2",
         "actualPycolmapVersion": "4.0.2",
+        "fallbackPolicy": RefineFallbackPolicy.PRIMARY_ONLY.value,
         "fallbackTrigger": None,
         "rotationPriorRepresented": True,
         "selected": PRIMARY_ENGINE,
@@ -376,41 +396,33 @@ def test_known_pose_construction_failure_uses_one_deadline_for_bounded_fallback(
     builder = _FakeArtifactBuilder()
     deadline = _deadline()
 
-    result = RefineRunner(backend=backend, artifact_builder=builder).run(
-        request, deadline=deadline
-    )
+    result = RefineRunner(
+        backend=backend,
+        artifact_builder=builder,
+        fallback_policy=RefineFallbackPolicy.POSITION_PRIOR_ENABLED,
+    ).run(request, deadline=deadline)
 
     assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE, FALLBACK_ENGINE]
     assert all(seen_deadline is deadline for _, seen_deadline in backend.calls)
     assert result.selected_engine == FALLBACK_ENGINE
+    assert result.fallback_policy is RefineFallbackPolicy.POSITION_PRIOR_ENABLED
     assert result.fallback_trigger == EngineFailureKind.PRIMARY_CONSTRUCTION_FAILED
     manifest = json.loads(result.manifest.payload)
     assert manifest["engine"]["selected"] == FALLBACK_ENGINE
+    assert manifest["engine"]["fallbackPolicy"] == (
+        RefineFallbackPolicy.POSITION_PRIOR_ENABLED.value
+    )
     assert manifest["engine"]["fallbackTrigger"] == (
         EngineFailureKind.PRIMARY_CONSTRUCTION_FAILED.value
     )
     assert manifest["engine"]["rotationPriorRepresented"] is False
 
 
-def test_fallback_is_not_launched_when_the_shared_deadline_is_exhausted(tmp_path):
-    class _ExpiresBeforeFallback(RefineDeadline):
-        calls = 0
-
-        def remaining_seconds(self, *, now_monotonic_s=None):
-            del now_monotonic_s
-            type(self).calls += 1
-            if type(self).calls == 1:
-                return 10.0
-            raise AdapterError(
-                "refine stage engine deadline is exhausted",
-                "REFINE_ENGINE_TIMEOUT",
-            )
-
-    _ExpiresBeforeFallback.calls = 0
+def test_position_prior_fallback_is_fail_closed_by_default(tmp_path):
     backend = _FakeBackend(
         primary=EngineAttemptError(
-            EngineFailureKind.PRIMARY_UNSUPPORTED,
-            "known-pose construction unavailable",
+            EngineFailureKind.PRIMARY_CONSTRUCTION_FAILED,
+            "known-pose seed construction failed",
         ),
         fallback=_candidate(),
     )
@@ -419,6 +431,75 @@ def test_fallback_is_not_launched_when_the_shared_deadline_is_exhausted(tmp_path
         RefineRunner(
             backend=backend,
             artifact_builder=_FakeArtifactBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ENGINE_FAILED
+    assert raised.value.fatal is False
+    assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
+
+
+def test_cleanup_failure_never_uses_explicitly_enabled_fallback(tmp_path):
+    backend = _FakeBackend(
+        primary=EngineAttemptError(
+            EngineFailureKind.CLEANUP_FAILED,
+            "native process group could not be proven reaped",
+        ),
+        fallback=_candidate(),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=backend,
+            artifact_builder=_FakeArtifactBuilder(),
+            fallback_policy=RefineFallbackPolicy.POSITION_PRIOR_ENABLED,
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ENGINE_CLEANUP_FAILED
+    assert raised.value.token == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert raised.value.fatal is True
+    assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
+
+
+def test_fallback_policy_rejects_untyped_configuration():
+    with pytest.raises(TypeError, match="RefineFallbackPolicy"):
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+            fallback_policy="position_prior_enabled",  # type: ignore[arg-type]
+        )
+
+
+def test_fallback_is_not_launched_when_the_shared_deadline_is_exhausted(tmp_path):
+    class _ExpiresBeforeFallback(RefineDeadline):
+        expired = False
+
+        def remaining_seconds(self, *, now_monotonic_s=None):
+            del now_monotonic_s
+            if type(self).expired:
+                raise AdapterError(
+                    "refine stage engine deadline is exhausted",
+                    "REFINE_ENGINE_TIMEOUT",
+                )
+            return 10.0
+
+    class _ExpiringBackend(_FakeBackend):
+        def run_primary(self, request, *, deadline):
+            del request
+            self.calls.append((PRIMARY_ENGINE, deadline))
+            type(deadline).expired = True
+            raise EngineAttemptError(
+                EngineFailureKind.PRIMARY_UNSUPPORTED,
+                "known-pose construction unavailable",
+            )
+
+    _ExpiresBeforeFallback.expired = False
+    backend = _ExpiringBackend(primary=_candidate(), fallback=_candidate())
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=backend,
+            artifact_builder=_FakeArtifactBuilder(),
+            fallback_policy=RefineFallbackPolicy.POSITION_PRIOR_ENABLED,
         ).run(_request(tmp_path), deadline=_ExpiresBeforeFallback(100.0))
 
     assert raised.value.code == RefineFailureCode.ENGINE_TIMEOUT
@@ -428,17 +509,22 @@ def test_fallback_is_not_launched_when_the_shared_deadline_is_exhausted(tmp_path
 
 def test_candidate_returned_after_deadline_never_reaches_artifact_builder(tmp_path):
     class _ExpiresWhenPrimaryReturns(RefineDeadline):
-        calls = 0
+        expired = False
 
         def remaining_seconds(self, *, now_monotonic_s=None):
             del now_monotonic_s
-            type(self).calls += 1
-            if type(self).calls == 1:
-                return 10.0
-            raise AdapterError("expired after primary", "REFINE_ENGINE_TIMEOUT")
+            if type(self).expired:
+                raise AdapterError("expired after primary", "REFINE_ENGINE_TIMEOUT")
+            return 10.0
 
-    _ExpiresWhenPrimaryReturns.calls = 0
-    backend = _FakeBackend(primary=_candidate())
+    class _ExpiringBackend(_FakeBackend):
+        def run_primary(self, request, *, deadline):
+            result = super().run_primary(request, deadline=deadline)
+            type(deadline).expired = True
+            return result
+
+    _ExpiresWhenPrimaryReturns.expired = False
+    backend = _ExpiringBackend(primary=_candidate())
     builder = _FakeArtifactBuilder()
 
     with pytest.raises(RefineRunError) as raised:
@@ -453,17 +539,25 @@ def test_candidate_returned_after_deadline_never_reaches_artifact_builder(tmp_pa
 
 def test_artifact_output_returned_after_deadline_never_reaches_manifest(tmp_path):
     class _ExpiresWhenArtifactsReturn(RefineDeadline):
-        calls = 0
+        expired = False
 
         def remaining_seconds(self, *, now_monotonic_s=None):
             del now_monotonic_s
-            type(self).calls += 1
-            if type(self).calls <= 2:
-                return 10.0
-            raise AdapterError("expired after artifact build", "REFINE_ENGINE_TIMEOUT")
+            if type(self).expired:
+                raise AdapterError(
+                    "expired after artifact build",
+                    "REFINE_ENGINE_TIMEOUT",
+                )
+            return 10.0
 
-    _ExpiresWhenArtifactsReturn.calls = 0
-    builder = _FakeArtifactBuilder()
+    class _ExpiringBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            result = super().build_engine_artifacts(**kwargs)
+            type(kwargs["deadline"]).expired = True
+            return result
+
+    _ExpiresWhenArtifactsReturn.expired = False
+    builder = _ExpiringBuilder()
 
     with pytest.raises(RefineRunError) as raised:
         RefineRunner(
@@ -572,6 +666,133 @@ def test_engine_artifact_names_reject_storage_reserved_characters(
     assert raised.value.code == RefineFailureCode.ARTIFACT_INVALID
 
 
+@pytest.mark.parametrize(
+    ("artifact_name", "semantic_media_type"),
+    (
+        ("database-v1.db", "application/x-tar"),
+        ("database-v1.db", "application/vnd.sqlite3 "),
+        ("seed-model-v1.tar", "application/vnd.sqlite3"),
+        ("seed-model-v1.tar", "application/x-tar\n"),
+        ("aligned-sparse-model-v1.tar", "text/plain"),
+        ("aligned-sparse-model-v1.tar", "application/x-tar\x00"),
+    ),
+)
+def test_engine_artifact_semantic_media_type_is_exact_for_its_name(
+    tmp_path,
+    artifact_name,
+    semantic_media_type,
+):
+    class _WrongMediaBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            artifacts = list(super().build_engine_artifacts(**kwargs))
+            index = next(
+                index
+                for index, artifact in enumerate(artifacts)
+                if artifact.name == artifact_name
+            )
+            artifacts[index] = replace(
+                artifacts[index],
+                semantic_media_type=semantic_media_type,
+            )
+            return tuple(artifacts)
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_WrongMediaBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+def test_arbitrary_safe_engine_artifact_name_is_rejected(tmp_path):
+    class _ArbitraryArtifactBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            artifacts = list(super().build_engine_artifacts(**kwargs))
+            artifacts[0] = replace(
+                artifacts[0],
+                name="database-copy-v1.db",
+            )
+            return tuple(artifacts)
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_ArbitraryArtifactBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+
+
+def test_one_shot_artifact_builder_output_is_deterministically_invalid(tmp_path):
+    class _OneShotArtifactBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            return iter(super().build_engine_artifacts(**kwargs))
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_OneShotArtifactBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert raised.value.fatal is True
+
+
+@pytest.mark.parametrize(
+    ("builder_error", "expected_code", "expected_fatal"),
+    (
+        (
+            OSError("temporary artifact filesystem failure"),
+            RefineFailureCode.INPUT_IO,
+            False,
+        ),
+        (
+            AdapterError("temporary materializer failure", "REFINE_INPUT_IO"),
+            RefineFailureCode.INPUT_IO,
+            False,
+        ),
+        (
+            TimeoutError("materializer deadline expired"),
+            RefineFailureCode.ENGINE_TIMEOUT,
+            False,
+        ),
+        (
+            AdapterError("materializer deadline expired", "REFINE_ENGINE_TIMEOUT"),
+            RefineFailureCode.ENGINE_TIMEOUT,
+            False,
+        ),
+        (
+            ValueError("deterministic malformed model"),
+            RefineFailureCode.ARTIFACT_INVALID,
+            True,
+        ),
+    ),
+)
+def test_artifact_builder_failures_have_stable_retryability(
+    tmp_path,
+    builder_error,
+    expected_code,
+    expected_fatal,
+):
+    class _RaisingBuilder:
+        def build_engine_artifacts(self, **kwargs):
+            del kwargs
+            raise builder_error
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_RaisingBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is expected_code
+    assert raised.value.fatal is expected_fatal
+    if type(builder_error) is ValueError:
+        assert "ValueError" in str(raised.value)
+        assert "deterministic malformed model" not in str(raised.value)
+
+
 def test_frame_source_path_must_be_relative_and_contained_before_backend_call(tmp_path):
     request = _request(tmp_path)
     first = replace(request.frames[0], relative_source_path="../escape.heic")
@@ -585,6 +806,307 @@ def test_frame_source_path_must_be_relative_and_contained_before_backend_call(tm
         ).run(unsafe, deadline=_deadline())
 
     assert raised.value.code == RefineFailureCode.INPUT_INVALID
+    assert backend.calls == []
+
+
+def test_one_shot_request_inputs_are_rejected_before_backend_call(tmp_path):
+    request = _request(tmp_path)
+    one_shot = replace(request, inputs=iter(request.inputs))  # type: ignore[arg-type]
+    backend = _FakeBackend(primary=_candidate())
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=backend,
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(one_shot, deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert backend.calls == []
+
+
+def test_unhashable_input_key_is_a_closed_input_failure(tmp_path):
+    request = _request(tmp_path)
+    malformed = InputArtifact(
+        key=["not", "hashable"],  # type: ignore[arg-type]
+        sha256="a" * 64,
+        size_bytes=1,
+    )
+    unsafe = replace(request, inputs=(malformed, *request.inputs[1:]))
+    backend = _FakeBackend(primary=_candidate())
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=backend,
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(unsafe, deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert backend.calls == []
+
+
+def test_one_shot_candidate_pose_rows_are_a_fatal_closed_geometry_failure(tmp_path):
+    candidate = _candidate()
+    malformed = replace(
+        candidate,
+        refined_poses=iter(candidate.refined_poses),  # type: ignore[arg-type]
+    )
+    builder = _FakeArtifactBuilder()
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=malformed),
+            artifact_builder=builder,
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.SIM3_INVALID
+    assert raised.value.fatal is True
+    assert builder.calls == []
+
+
+def test_unhashable_refined_pose_name_is_a_closed_geometry_failure(tmp_path):
+    candidate = _candidate()
+    malformed_row = replace(
+        candidate.refined_poses[0],
+        image_name=["not", "hashable"],  # type: ignore[arg-type]
+    )
+    malformed = replace(
+        candidate,
+        refined_poses=(malformed_row, *candidate.refined_poses[1:]),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=malformed),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.SIM3_INVALID
+
+
+def test_mutable_nested_refined_pose_values_are_rejected(tmp_path):
+    candidate = _candidate()
+    first = candidate.refined_poses[0]
+    malformed_pose = replace(
+        first.cam_from_world,
+        qvec=list(first.cam_from_world.qvec),  # type: ignore[arg-type]
+    )
+    malformed = replace(
+        candidate,
+        refined_poses=(
+            replace(first, cam_from_world=malformed_pose),
+            *candidate.refined_poses[1:],
+        ),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=malformed),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.SIM3_INVALID
+    assert raised.value.fatal is True
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    (
+        ("input_images", True),
+        ("common_observations", False),
+        ("reprojection_rmse_px_before", True),
+        ("reprojection_rmse_px_after", float("nan")),
+        ("loop_rotation_rmse_deg_before", float("inf")),
+        ("external_error_m_before", True),
+    ),
+)
+def test_bool_and_nonfinite_evidence_is_rejected_without_type_errors(
+    tmp_path,
+    field_name,
+    field_value,
+):
+    overrides: dict[str, object] = {field_name: field_value}
+    if field_name == "external_error_m_before":
+        overrides.update(
+            {
+                "external_error_m_after": 0.1,
+                "external_evidence_kind": "fixture",
+                "external_evidence_ref": "fixture:v1",
+            }
+        )
+    malformed = _candidate(evidence=_evidence(**overrides))
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=malformed),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.EVIDENCE_INVALID
+    assert raised.value.fatal is True
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "timestamp_bool",
+        "timestamp_nan",
+        "camera_center",
+        "camera_center_list",
+        "camera_transform",
+        "camera_transform_list",
+        "colmap_pose",
+        "intrinsics",
+        "position_prior",
+        "covariance",
+        "covariance_non_positive",
+    ),
+)
+def test_internally_inconsistent_frames_fail_before_backend_call(tmp_path, mutation):
+    request = _request(tmp_path)
+    frame_input = request.frames[0]
+    frame = frame_input.frame
+    if mutation == "timestamp_bool":
+        frame = replace(frame, frame_timestamp_s=True)
+    elif mutation == "timestamp_nan":
+        frame = replace(frame, frame_timestamp_s=float("nan"))
+    elif mutation == "camera_center":
+        frame = replace(frame, camera_center_m=(9.0, 0.0, 0.0))
+    elif mutation == "camera_center_list":
+        frame = replace(
+            frame,
+            camera_center_m=list(frame.camera_center_m),  # type: ignore[arg-type]
+        )
+    elif mutation == "camera_transform":
+        transform = list(frame.arkit_camera_to_world)
+        transform[3] = 9.0
+        frame = replace(frame, arkit_camera_to_world=tuple(transform))
+    elif mutation == "camera_transform_list":
+        frame = replace(
+            frame,
+            arkit_camera_to_world=list(  # type: ignore[arg-type]
+                frame.arkit_camera_to_world
+            ),
+        )
+    elif mutation == "colmap_pose":
+        frame = replace(frame, colmap_pose=_pose((9.0, 0.0, 0.0)))
+    elif mutation == "intrinsics":
+        frame = replace(
+            frame,
+            intrinsics=replace(frame.intrinsics, fx=frame.intrinsics.fx + 1.0),
+        )
+    elif mutation == "position_prior":
+        frame = replace(
+            frame,
+            pose_prior=replace(frame.pose_prior, position_m=(9.0, 0.0, 0.0)),
+        )
+    elif mutation == "covariance":
+        frame = replace(
+            frame,
+            pose_prior=replace(
+                frame.pose_prior,
+                covariance_m2=(
+                    (0.01, 2.0, 0.0),
+                    (0.0, 0.01, 0.0),
+                    (0.0, 0.0, 0.01),
+                ),
+            ),
+        )
+    elif mutation == "covariance_non_positive":
+        frame = replace(
+            frame,
+            pose_prior=replace(
+                frame.pose_prior,
+                covariance_m2=(
+                    (1.0, 2.0, 0.0),
+                    (2.0, 1.0, 0.0),
+                    (0.0, 0.0, 1.0),
+                ),
+            ),
+        )
+    else:  # pragma: no cover
+        raise AssertionError(mutation)
+    unsafe = replace(
+        request,
+        frames=(replace(frame_input, frame=frame), *request.frames[1:]),
+    )
+    backend = _FakeBackend(primary=_candidate())
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=backend,
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(unsafe, deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert backend.calls == []
+
+
+def test_expired_deadline_wins_at_run_entry_before_request_iteration(tmp_path):
+    request = _request(tmp_path)
+    malformed = replace(
+        request,
+        inputs=iter(request.inputs),  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(
+            malformed,
+            deadline=RefineDeadline(time.monotonic() - 1.0),
+        )
+
+    assert raised.value.code is RefineFailureCode.ENGINE_TIMEOUT
+
+
+def test_deadline_is_checked_periodically_while_hashing_large_inputs(tmp_path):
+    import inspect
+
+    class _ExpiresInsideHash(RefineDeadline):
+        hash_checks = 0
+
+        def remaining_seconds(self, *, now_monotonic_s=None):
+            del now_monotonic_s
+            if any(
+                frame_info.function == "_stable_file_sha256"
+                for frame_info in inspect.stack()
+            ):
+                type(self).hash_checks += 1
+                if type(self).hash_checks >= 3:
+                    raise AdapterError(
+                        "expired during streaming hash",
+                        "REFINE_ENGINE_TIMEOUT",
+                    )
+            return 10.0
+
+    request = _request(tmp_path)
+    first = request.frames[0]
+    payload = b"x" * (4 * 1024 * 1024)
+    first_path = request.workspace_root / first.relative_source_path
+    first_path.write_bytes(payload)
+    request = replace(
+        request,
+        frames=(
+            replace(
+                first,
+                source_sha256=hashlib.sha256(payload).hexdigest(),
+                source_size_bytes=len(payload),
+            ),
+            *request.frames[1:],
+        ),
+    )
+    backend = _FakeBackend(primary=_candidate())
+    _ExpiresInsideHash.hash_checks = 0
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=backend,
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_ExpiresInsideHash(100.0))
+
+    assert raised.value.code is RefineFailureCode.ENGINE_TIMEOUT
+    assert _ExpiresInsideHash.hash_checks == 3
     assert backend.calls == []
 
 
@@ -668,6 +1190,26 @@ def test_valid_but_unchanged_evidence_is_not_publishable(tmp_path):
     assert raised.value.fatal is True
 
 
+def test_backend_error_text_is_bounded_by_existing_log_tail_ceiling(tmp_path):
+    backend = _FakeBackend(
+        primary=EngineAttemptError(
+            EngineFailureKind.DRIVER,
+            "é" * MAX_RUNNER_ERROR_BYTES,
+        )
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=backend,
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    encoded = str(raised.value).encode("utf-8")
+    assert raised.value.code is RefineFailureCode.GPU_DRIVER
+    assert len(encoded) <= MAX_RUNNER_ERROR_BYTES
+    assert encoded.startswith(b"REFINE_GPU_DRIVER: ")
+
+
 @pytest.mark.parametrize(
     ("kind", "code", "fatal"),
     (
@@ -682,6 +1224,11 @@ def test_valid_but_unchanged_evidence_is_not_publishable(tmp_path):
         ),
         (EngineFailureKind.INVALID_INPUT, RefineFailureCode.INPUT_INVALID, True),
         (EngineFailureKind.LOW_OVERLAP, RefineFailureCode.LOW_OVERLAP, True),
+        (
+            EngineFailureKind.CLEANUP_FAILED,
+            RefineFailureCode.ENGINE_CLEANUP_FAILED,
+            True,
+        ),
     ),
 )
 def test_backend_failure_taxonomy_is_stable_and_non_fallback(
@@ -721,6 +1268,7 @@ def test_failure_taxonomy_is_closed_and_covers_every_public_failure_code():
         RefineFailureCode.EVIDENCE_REGRESSION: True,
         RefineFailureCode.NO_MEASURABLE_IMPROVEMENT: True,
         RefineFailureCode.ARTIFACT_INVALID: True,
+        RefineFailureCode.ENGINE_CLEANUP_FAILED: True,
     }
 
 
@@ -733,4 +1281,6 @@ def test_runner_remains_independent_of_queue_storage_db_and_stage_registry():
     assert "from .storage" not in source
     assert "from .db" not in source
     assert "from .stages" not in source
+    assert "exact same open descriptor" in (RefineFileArtifact.__doc__ or "")
+    assert "do not make a path TOCTOU-safe" in (PreparedRefineFrame.__doc__ or "")
     assert get_handler("scan_pipeline.refine") is None
