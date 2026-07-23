@@ -134,9 +134,11 @@ class _PrematerializedRaster:
         *,
         source_width_delta: int = 0,
         output_width_delta: int = 0,
+        materializer_id: str = "fake-prematerialized-ppm-v1",
     ) -> None:
         self.source_width_delta = source_width_delta
         self.output_width_delta = output_width_delta
+        self.materializer_id = materializer_id
         self.calls: list[tuple[object, str, object, str, RefineDeadline]] = []
 
     def materialize(
@@ -157,7 +159,7 @@ class _PrematerializedRaster:
             f"P6\n{width} {encoded_height}\n255\n".encode("ascii") + pixels
         )
         return FieldRasterMaterialization(
-            materializer_id="fake-prematerialized-ppm-v1",
+            materializer_id=self.materializer_id,
             source_width=encoded_width + self.source_width_delta,
             source_height=encoded_height,
             output_width=width,
@@ -704,6 +706,61 @@ def test_raster_evidence_and_ppm_dimensions_are_independently_verified(tmp_path)
 
     assert caught.value.code is MaterializerFailureCode.RASTER_UNQUALIFIED
     assert caught.value.fatal is True
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "materializer_id",
+    (
+        pytest.param("m" * 128, id="ascii-128-bytes"),
+        pytest.param("\N{LATIN SMALL LETTER E WITH ACUTE}" * 64, id="utf8-128-bytes"),
+    ),
+)
+def test_materializer_id_accepts_the_runner_128_byte_boundary(
+    tmp_path,
+    materializer_id,
+):
+    fixture = _Fixture(tmp_path)
+    raster = _PrematerializedRaster(materializer_id=materializer_id)
+    materializer, _, _ = _materializer(fixture, raster=raster)
+
+    result = materializer.materialize(fixture.request, deadline=_deadline())
+
+    assert {frame.materializer_id for frame in result.frames} == {materializer_id}
+    result.cleanup()
+
+
+class _StringSubclass(str):
+    pass
+
+
+@pytest.mark.parametrize(
+    "materializer_id",
+    (
+        pytest.param("m" * 129, id="ascii-129-bytes"),
+        pytest.param(
+            "\N{LATIN SMALL LETTER E WITH ACUTE}" * 64 + "m",
+            id="utf8-129-bytes",
+        ),
+        pytest.param("qualified\nid", id="ascii-control"),
+        pytest.param("qualified id", id="space-not-visible"),
+        pytest.param("qualified\x7fid", id="nonprintable-del"),
+        pytest.param(_StringSubclass("qualified-id"), id="str-subclass"),
+    ),
+)
+def test_materializer_id_rejects_runner_invalid_values_and_cleans_up(
+    tmp_path,
+    materializer_id,
+):
+    fixture = _Fixture(tmp_path)
+    raster = _PrematerializedRaster(materializer_id=materializer_id)
+    materializer, _, _ = _materializer(fixture, raster=raster)
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(fixture.request, deadline=_deadline())
+
+    assert caught.value.code is MaterializerFailureCode.RASTER_UNQUALIFIED
+    assert len(raster.calls) == 1
     assert list(tmp_path.iterdir()) == []
 
 

@@ -46,6 +46,7 @@ from .refine_adapter import (
 )
 
 _COPY_CHUNK_BYTES = 1 << 20
+_MAX_MATERIALIZER_ID_BYTES = 128
 _SAFE_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 _SAFE_ARCHIVE_MEMBER = re.compile(r"keyframes/[A-Za-z0-9][A-Za-z0-9._-]*\.(?:heic|bin)")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -2292,14 +2293,17 @@ def _validate_raster_evidence(
             MaterializerFailureCode.RASTER_UNQUALIFIED,
             "raster adapter returned the wrong evidence contract",
         )
+    materializer_id = value.materializer_id
     if (
-        not isinstance(value.materializer_id, str)
-        or not value.materializer_id
-        or len(value.materializer_id.encode("utf-8")) > 256
+        type(materializer_id) is not str
+        or not materializer_id
+        or not materializer_id.isprintable()
+        or any(ord(character) < 0x21 for character in materializer_id)
+        or len(materializer_id.encode("utf-8")) > _MAX_MATERIALIZER_ID_BYTES
     ):
         _fail(
             MaterializerFailureCode.RASTER_UNQUALIFIED,
-            "raster adapter needs a bounded materializer identity",
+            "raster adapter materializer id must be a bounded visible string",
         )
     dimensions = (
         value.source_width,
