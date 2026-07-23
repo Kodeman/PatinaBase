@@ -1121,6 +1121,8 @@ def _call_engine(
         candidate = callback(request, deadline=deadline)
     except EngineAttemptError:
         raise
+    except RefineRunError:
+        raise
     except Exception as exc:  # noqa: BLE001 - normalize an injected engine
         raise RefineRunError(
             RefineFailureCode.ENGINE_FAILED,
@@ -1158,19 +1160,18 @@ def _select_candidate(
             deadline,
         )
     except EngineAttemptError as primary_error:
-        _require_engine_budget(deadline)
         if primary_error.kind not in _FALLBACK_ELIGIBLE:
             raise _engine_failure(primary_error) from primary_error
         if fallback_policy is RefineFallbackPolicy.PRIMARY_ONLY:
             raise _engine_failure(primary_error) from primary_error
         fallback_trigger = primary_error.kind
     except RefineRunError:
-        _require_engine_budget(deadline)
         raise
     else:
         _require_engine_budget(deadline)
         return PRIMARY_ENGINE, None, candidate
 
+    _require_engine_budget(deadline)
     try:
         candidate = _call_engine(
             _backend_callback(backend, "run_fallback"),
@@ -1178,10 +1179,8 @@ def _select_candidate(
             deadline,
         )
     except EngineAttemptError as fallback_error:
-        _require_engine_budget(deadline)
         raise _engine_failure(fallback_error) from fallback_error
     except RefineRunError:
-        _require_engine_budget(deadline)
         raise
     _require_engine_budget(deadline)
     return FALLBACK_ENGINE, fallback_trigger, candidate
@@ -1194,14 +1193,14 @@ def _validate_candidate_versions(
 ) -> None:
     _require_engine_budget(deadline)
     if (
-        not isinstance(candidate.cli_version, str)
-        or not candidate.cli_version
-        or not isinstance(candidate.binding_version, str)
-        or not candidate.binding_version
+        type(candidate.cli_version) is not str
+        or candidate.cli_version != COLMAP_TARGET_VERSION
+        or type(candidate.binding_version) is not str
+        or candidate.binding_version != COLMAP_TARGET_VERSION
     ):
         _fail(
             RefineFailureCode.ENGINE_VERSION_MISMATCH,
-            "engine versions must be non-empty strings",
+            "candidate CLI and binding versions must exactly equal the target version",
         )
     try:
         qualify_colmap_versions(
@@ -1770,7 +1769,6 @@ class RefineRunner:
                 deadline=deadline,
             )
         except RefineRunError:
-            _require_engine_budget(deadline)
             raise
         except TimeoutError as exc:
             _require_engine_budget(deadline)

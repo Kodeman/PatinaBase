@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from patina_scan_worker.refine_adapter import (
+    COLMAP_TARGET_VERSION,
     AdapterError,
     ColmapPose,
     NormalizedFrame,
@@ -49,6 +50,34 @@ _IDENTITY = (
     (0.0, 1.0, 0.0),
     (0.0, 0.0, 1.0),
 )
+
+
+class _TargetVersionString(str):
+    pass
+
+
+class _TargetVersionImposter:
+    def __str__(self):
+        return COLMAP_TARGET_VERSION
+
+    def __eq__(self, other):
+        return other == COLMAP_TARGET_VERSION
+
+
+class _ExpirableDeadline(RefineDeadline):
+    def remaining_seconds(self, *, now_monotonic_s=None):
+        del now_monotonic_s
+        if getattr(self, "expired", False):
+            raise AdapterError(
+                "expired while surfacing failure", "REFINE_ENGINE_TIMEOUT"
+            )
+        return 10.0
+
+
+def _expirable_deadline() -> _ExpirableDeadline:
+    deadline = _ExpirableDeadline(time.monotonic() + 60.0)
+    object.__setattr__(deadline, "expired", False)
+    return deadline
 
 
 def _pose(center: tuple[float, float, float]) -> ColmapPose:
@@ -460,6 +489,139 @@ def test_cleanup_failure_never_uses_explicitly_enabled_fallback(tmp_path):
     assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
 
 
+def test_primary_cleanup_failure_precedes_deadline_expiry_while_unwinding(tmp_path):
+    class _CleanupThenExpireBackend(_FakeBackend):
+        def run_primary(self, request, *, deadline):
+            del request
+            self.calls.append((PRIMARY_ENGINE, deadline))
+            object.__setattr__(deadline, "expired", True)
+            raise EngineAttemptError(
+                EngineFailureKind.CLEANUP_FAILED,
+                "native descendants could not be proven reaped",
+            )
+
+    backend = _CleanupThenExpireBackend(primary=_candidate(), fallback=_candidate())
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=backend,
+            artifact_builder=_FakeArtifactBuilder(),
+            fallback_policy=RefineFallbackPolicy.POSITION_PRIOR_ENABLED,
+        ).run(_request(tmp_path), deadline=_expirable_deadline())
+
+    assert raised.value.code is RefineFailureCode.ENGINE_CLEANUP_FAILED
+    assert raised.value.fatal is True
+    assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
+
+
+def test_fallback_cleanup_failure_precedes_deadline_expiry_while_unwinding(tmp_path):
+    class _FallbackCleanupThenExpireBackend(_FakeBackend):
+        def run_fallback(self, request, *, deadline):
+            del request
+            self.calls.append((FALLBACK_ENGINE, deadline))
+            object.__setattr__(deadline, "expired", True)
+            raise EngineAttemptError(
+                EngineFailureKind.CLEANUP_FAILED,
+                "fallback native descendants could not be proven reaped",
+            )
+
+    backend = _FallbackCleanupThenExpireBackend(
+        primary=EngineAttemptError(
+            EngineFailureKind.PRIMARY_UNSUPPORTED,
+            "known-pose construction unavailable",
+        ),
+        fallback=_candidate(),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=backend,
+            artifact_builder=_FakeArtifactBuilder(),
+            fallback_policy=RefineFallbackPolicy.POSITION_PRIOR_ENABLED,
+        ).run(_request(tmp_path), deadline=_expirable_deadline())
+
+    assert raised.value.code is RefineFailureCode.ENGINE_CLEANUP_FAILED
+    assert raised.value.fatal is True
+    assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE, FALLBACK_ENGINE]
+
+
+@pytest.mark.parametrize(
+    ("path", "stable_code"),
+    (
+        ("primary", RefineFailureCode.SIM3_INVALID),
+        ("fallback", RefineFailureCode.EVIDENCE_INVALID),
+    ),
+)
+def test_backend_refine_run_error_precedes_deadline_expiry(
+    tmp_path,
+    path,
+    stable_code,
+):
+    class _StableErrorThenExpireBackend(_FakeBackend):
+        @staticmethod
+        def _raise_stable(deadline):
+            object.__setattr__(deadline, "expired", True)
+            raise RefineRunError(stable_code, "already-classified backend failure")
+
+        def run_primary(self, request, *, deadline):
+            del request
+            self.calls.append((PRIMARY_ENGINE, deadline))
+            if path == "primary":
+                self._raise_stable(deadline)
+            return self._return_or_raise(self.primary)
+
+        def run_fallback(self, request, *, deadline):
+            del request
+            self.calls.append((FALLBACK_ENGINE, deadline))
+            self._raise_stable(deadline)
+
+    primary = (
+        _candidate()
+        if path == "primary"
+        else EngineAttemptError(
+            EngineFailureKind.PRIMARY_UNSUPPORTED,
+            "known-pose construction unavailable",
+        )
+    )
+    backend = _StableErrorThenExpireBackend(
+        primary=primary,
+        fallback=_candidate(),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=backend,
+            artifact_builder=_FakeArtifactBuilder(),
+            fallback_policy=RefineFallbackPolicy.POSITION_PRIOR_ENABLED,
+        ).run(_request(tmp_path), deadline=_expirable_deadline())
+
+    assert raised.value.code is stable_code
+    assert raised.value.fatal is True
+    expected_calls = (
+        [PRIMARY_ENGINE] if path == "primary" else [PRIMARY_ENGINE, FALLBACK_ENGINE]
+    )
+    assert [name for name, _ in backend.calls] == expected_calls
+
+
+def test_artifact_builder_refine_run_error_precedes_deadline_expiry(tmp_path):
+    class _StableErrorThenExpireBuilder:
+        def build_engine_artifacts(self, **kwargs):
+            object.__setattr__(kwargs["deadline"], "expired", True)
+            raise RefineRunError(
+                RefineFailureCode.ARTIFACT_INVALID,
+                "already-classified artifact failure",
+            )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_StableErrorThenExpireBuilder(),
+        ).run(_request(tmp_path), deadline=_expirable_deadline())
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert raised.value.fatal is True
+
+
 def test_fallback_policy_rejects_untyped_configuration():
     with pytest.raises(TypeError, match="RefineFallbackPolicy"):
         RefineRunner(
@@ -859,6 +1021,56 @@ def test_one_shot_candidate_pose_rows_are_a_fatal_closed_geometry_failure(tmp_pa
         ).run(_request(tmp_path), deadline=_deadline())
 
     assert raised.value.code is RefineFailureCode.SIM3_INVALID
+    assert raised.value.fatal is True
+    assert builder.calls == []
+
+
+@pytest.mark.parametrize("field_name", ("cli_version", "binding_version"))
+@pytest.mark.parametrize(
+    "invalid_version",
+    (
+        "4.0.2-dev",
+        "v4.0.2",
+        "4.0.2.1",
+        " 4.0.2",
+        "4.0.2 ",
+        "4.0.2\n",
+        True,
+        1,
+        _TargetVersionString(COLMAP_TARGET_VERSION),
+        _TargetVersionImposter(),
+    ),
+    ids=(
+        "suffix",
+        "prefix",
+        "extra-segment",
+        "leading-whitespace",
+        "trailing-whitespace",
+        "control-whitespace",
+        "bool",
+        "integer",
+        "str-subclass",
+        "equality-imposter",
+    ),
+)
+def test_candidate_versions_must_be_exact_builtin_target_strings(
+    tmp_path,
+    field_name,
+    invalid_version,
+):
+    candidate = replace(
+        _candidate(),
+        **{field_name: invalid_version},
+    )
+    builder = _FakeArtifactBuilder()
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=candidate),
+            artifact_builder=builder,
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ENGINE_VERSION_MISMATCH
     assert raised.value.fatal is True
     assert builder.calls == []
 
