@@ -1,0 +1,949 @@
+<meta charset="utf-8">
+<title>Aesthete Engine — State &amp; Roadmap</title>
+<style>
+  /* ---- Palette: patina / oxidized bronze. Verdigris accent, bronze rules. ---- */
+  :root {
+    --ground:      #F2F1EB;
+    --surface:     #FBFAF5;
+    --surface-2:   #EEEDE4;
+    --ink:         #23261F;
+    --ink-muted:   #5B5E54;
+    --accent:      #3E7A6C;
+    --accent-ink:  #2E5D52;
+    --bronze:      #8C6D42;
+    --hairline:    #D8D5CB;
+    --code-bg:     #ECEAE1;
+    --code-ink:    #2E3128;
+
+    --st-green-bg:   #E2EEDB; --st-green-ink:   #356A34;
+    --st-amber-bg:   #F5E7CD; --st-amber-ink:   #8A5A16;
+    --st-red-bg:     #F3DBD6; --st-red-ink:     #9A3B32;
+    --st-neutral-bg: #E7E5DB; --st-neutral-ink: #565950;
+
+    --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:      #161915;
+      --surface:     #1E221D;
+      --surface-2:   #262A23;
+      --ink:         #E7E4D9;
+      --ink-muted:   #A2A498;
+      --accent:      #79B5A6;
+      --accent-ink:  #8CC3B4;
+      --bronze:      #C29B62;
+      --hairline:    #34382F;
+      --code-bg:     #23271F;
+      --code-ink:    #D2CFC3;
+
+      --st-green-bg:   #1F2C1B; --st-green-ink:   #8ECB8F;
+      --st-amber-bg:   #2E2614; --st-amber-ink:   #DBB06D;
+      --st-red-bg:     #301E1B; --st-red-ink:     #E4948B;
+      --st-neutral-bg: #272B23; --st-neutral-ink: #ABAD9F;
+    }
+  }
+
+  /* Viewer-stamped theme must win in both directions (higher specificity, placed last). */
+  :root[data-theme="dark"] {
+    --ground:      #161915;
+    --surface:     #1E221D;
+    --surface-2:   #262A23;
+    --ink:         #E7E4D9;
+    --ink-muted:   #A2A498;
+    --accent:      #79B5A6;
+    --accent-ink:  #8CC3B4;
+    --bronze:      #C29B62;
+    --hairline:    #34382F;
+    --code-bg:     #23271F;
+    --code-ink:    #D2CFC3;
+
+    --st-green-bg:   #1F2C1B; --st-green-ink:   #8ECB8F;
+    --st-amber-bg:   #2E2614; --st-amber-ink:   #DBB06D;
+    --st-red-bg:     #301E1B; --st-red-ink:     #E4948B;
+    --st-neutral-bg: #272B23; --st-neutral-ink: #ABAD9F;
+  }
+  :root[data-theme="light"] {
+    --ground:      #F2F1EB;
+    --surface:     #FBFAF5;
+    --surface-2:   #EEEDE4;
+    --ink:         #23261F;
+    --ink-muted:   #5B5E54;
+    --accent:      #3E7A6C;
+    --accent-ink:  #2E5D52;
+    --bronze:      #8C6D42;
+    --hairline:    #D8D5CB;
+    --code-bg:     #ECEAE1;
+    --code-ink:    #2E3128;
+
+    --st-green-bg:   #E2EEDB; --st-green-ink:   #356A34;
+    --st-amber-bg:   #F5E7CD; --st-amber-ink:   #8A5A16;
+    --st-red-bg:     #F3DBD6; --st-red-ink:     #9A3B32;
+    --st-neutral-bg: #E7E5DB; --st-neutral-ink: #565950;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  .page {
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  /* ---- Typography ---- */
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; line-height: 1.18; }
+  h1 { font-size: clamp(2rem, 5vw, 3rem); margin: 0.2rem 0 0.6rem; letter-spacing: -0.01em; }
+  h2 { font-size: clamp(1.4rem, 3vw, 1.9rem); margin: 0 0 0.4rem; }
+  h3 { font-size: 1.12rem; margin: 1.6rem 0 0.4rem; }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.72rem;
+    color: var(--bronze);
+    margin: 0 0 0.35rem;
+  }
+
+  p { max-width: 65ch; }
+  .prose { max-width: 65ch; }
+  .muted { color: var(--ink-muted); }
+
+  a { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
+  a:hover { text-decoration-thickness: 2px; }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 0.05em 0.32em;
+    border-radius: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  pre.code {
+    font-family: var(--font-mono);
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 0.85rem 1rem;
+    border-radius: 6px;
+    border: 1px solid var(--hairline);
+    overflow-x: auto;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    margin: 0.8rem 0 0;
+    max-width: 100%;
+  }
+  pre.code code { background: none; padding: 0; }
+
+  /* ---- Masthead ---- */
+  .masthead {
+    border-bottom: 2px solid var(--bronze);
+    padding-bottom: 1.4rem;
+    margin-bottom: 1.8rem;
+  }
+  .masthead .lede {
+    font-family: var(--font-display);
+    font-size: clamp(1.05rem, 2.4vw, 1.3rem);
+    color: var(--ink);
+    margin: 0 0 0.7rem;
+    max-width: 60ch;
+  }
+  .masthead .meta {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Verdict banner ---- */
+  .verdict {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 1.25rem 1.4rem;
+    margin-bottom: 2.4rem;
+  }
+  .verdict h2 {
+    font-size: clamp(1.3rem, 3vw, 1.65rem);
+    color: var(--accent-ink);
+    margin: 0 0 0.5rem;
+  }
+  .verdict p { margin: 0 0 1rem; max-width: 68ch; }
+  .stat-row { display: flex; flex-wrap: wrap; gap: 0.9rem; }
+  .stat {
+    flex: 1 1 12rem;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 0.7rem 0.9rem;
+  }
+  .stat .val {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    color: var(--accent-ink);
+    line-height: 1.1;
+  }
+  .stat .lab {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-variant-numeric: tabular-nums;
+    margin-top: 0.25rem;
+  }
+
+  /* ---- Sections ---- */
+  section { border-top: 1px solid var(--hairline); padding-top: 1.8rem; margin-top: 2.4rem; }
+  section:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+
+  /* ---- Status pills ---- */
+  .pill {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    line-height: 1.4;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .pill--green   { background: var(--st-green-bg);   color: var(--st-green-ink); }
+  .pill--amber   { background: var(--st-amber-bg);   color: var(--st-amber-ink); }
+  .pill--red     { background: var(--st-red-bg);     color: var(--st-red-ink); }
+  .pill--neutral { background: var(--st-neutral-bg); color: var(--st-neutral-ink); }
+
+  /* ---- Tables ---- */
+  .scroll { overflow-x: auto; max-width: 100%; margin: 0.9rem 0; }
+  table.data {
+    width: 100%;
+    min-width: 44rem;
+    border-collapse: collapse;
+    /* explicit: quirks-mode (doctype-less) rendering breaks inheritance at <table> */
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 0.88rem;
+    font-variant-numeric: tabular-nums;
+  }
+  table.data.narrow { min-width: 32rem; }
+  table.data caption {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-muted);
+    padding-bottom: 0.55rem;
+  }
+  table.data th {
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--bronze);
+    font-weight: 600;
+    padding: 0.55rem 0.8rem;
+    border-bottom: 1.5px solid var(--bronze);
+    vertical-align: bottom;
+  }
+  table.data td {
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: top;
+  }
+  table.data tbody tr:nth-child(even) { background: var(--surface-2); }
+  table.data td.mono { font-family: var(--font-mono); font-size: 0.82rem; }
+  table.data td.num  { font-family: var(--font-mono); font-size: 0.82rem; text-align: right; white-space: nowrap; }
+  table.data th.num  { text-align: right; }
+  table.data code { font-size: 0.78rem; }
+
+  /* ---- Lists ---- */
+  ul.list { max-width: 65ch; padding-left: 1.15rem; }
+  ul.list li { margin: 0.4rem 0; }
+  ul.list.wide { max-width: 72rem; }
+  .lead { font-weight: 600; color: var(--ink); }
+
+  /* ---- Diagram ---- */
+  .diagram-scroll { overflow-x: auto; max-width: 100%; margin: 1rem 0; }
+  .diagram { min-width: 42rem; }
+  .lane {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 0.8rem 0.9rem;
+  }
+  .lane-head {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--bronze);
+    margin-bottom: 0.6rem;
+  }
+  .lane-body { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0.7rem; }
+  .node {
+    flex: 1 1 12rem;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 0.6rem 0.7rem;
+    min-width: 10rem;
+  }
+  .node.accent { border-color: var(--accent); border-width: 1.5px; }
+  .node.parked { border-style: dashed; opacity: 0.9; }
+  .node .n-title {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .node .n-sub {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-muted);
+    margin-top: 0.25rem;
+    line-height: 1.45;
+  }
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.25rem 0; }
+  .flow svg { color: var(--bronze); }
+  .flow-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--ink-muted);
+    text-align: center;
+    max-width: 60ch;
+  }
+  .cf-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; width: 100%; }
+  .arrow-h { color: var(--bronze); flex: 0 0 auto; }
+  .legend {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-muted);
+    margin-top: 0.5rem;
+  }
+
+  /* ---- Footer ---- */
+  footer {
+    border-top: 1px solid var(--hairline);
+    margin-top: 3rem;
+    padding-top: 1.2rem;
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+  }
+  footer .eyebrow { color: var(--bronze); }
+  footer code { font-size: 0.76rem; }
+
+  /* ---- Focus + motion ---- */
+  a:focus-visible, .stat:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+
+  @media (max-width: 40rem) {
+    .page { padding: 1.8rem 1rem 3rem; }
+    .node { flex-basis: 100%; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Aesthete Engine · Internal Engineering Review</p>
+    <h1>The Aesthete Engine</h1>
+    <p class="lede">State of the system, hosting plan, and the road to a functional product.</p>
+    <p class="meta">Reviewed 2026-07-23 · Patina monorepo · prod = Strata (Supabase) + Cloudflare</p>
+  </header>
+
+  <div class="verdict">
+    <h2>Build complete. Runtime live. Running on empty.</h2>
+    <p>All six delivery waves shipped to <code>main</code> (2026-07-01 → 2026-07-02); the full runtime is
+      deployed and healthy in production — the database tier, five edge functions, the inference container,
+      eight green crons, and a live <code>/quiz</code>. But it is idling at seed scale — three products, zero
+      taste judgments, zero DNA drafts — and the LLM lane is parked on a single missing secret
+      (<code>ANTHROPIC_API_KEY</code>). The remaining work is mostly data, content, and curation — not engineering.</p>
+    <div class="stat-row">
+      <div class="stat" tabindex="0">
+        <div class="val">Shipped</div>
+        <div class="lab">6 of 6 waves · 100% scope</div>
+      </div>
+      <div class="stat" tabindex="0">
+        <div class="val">Healthy</div>
+        <div class="lab">runtime live · 8/8 crons green</div>
+      </div>
+      <div class="stat" tabindex="0">
+        <div class="val">Idling</div>
+        <div class="lab">3 products · 0 judgments · 0 DNA drafts</div>
+      </div>
+    </div>
+  </div>
+
+  <section>
+    <p class="eyebrow">Orientation</p>
+    <h2>What the engine is</h2>
+    <p class="prose">The Aesthete Engine is Patina's taste system: a shared 768-dimensional style space
+      (<code>nomic-embed-text-v1.5</code> + <code>nomic-embed-vision-v1.5</code>, int8 ONNX) in which products,
+      client quiz results, designer taste, and the house point of view all live. The client-facing money path —
+      style quiz → top-ten product matches with human-readable "why" phrases — is pure SQL over pre-computed
+      vectors (86ms end-to-end, match RPC p95 12ms), so the inference service being down is a non-event for it.</p>
+    <p class="prose">Around that core sits a Bradley–Terry taste model over a 94-dimensional interpretable basis,
+      refit nightly per designer; Claude-drafted product DNA (drafts never overwrite designer-owned rows); a jobs
+      outbox for all machine work; and weekly drift audits. The design document, v1.0.3, is
+      <code>docs/prds/AE/aesthete-engine-system-design.md</code> (18 sections).</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Topology</p>
+    <h2>System at a glance</h2>
+    <p class="prose">Solid connectors are active lanes; the dashed connector to Anthropic is the parked LLM lane.
+      The client hot path never touches the inference container.</p>
+
+    <div class="diagram-scroll">
+      <div class="diagram">
+
+        <div class="lane">
+          <div class="lane-head">Clients</div>
+          <div class="lane-body">
+            <div class="node accent">
+              <div class="n-title">client-portal /quiz</div>
+              <div class="n-sub">live · style quiz → top-10 matches</div>
+            </div>
+            <div class="node">
+              <div class="n-title">designer-portal</div>
+              <div class="n-sub">teaching · ⌘K ask</div>
+            </div>
+            <div class="node">
+              <div class="n-title">iOS Patina app</div>
+              <div class="n-sub">RPC shims</div>
+            </div>
+            <div class="node parked">
+              <div class="n-title">marketing site</div>
+              <div class="n-sub">planned · external repo</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow">
+          <svg width="14" height="34" viewBox="0 0 14 34" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <line x1="7" y1="0" x2="7" y2="26"/>
+            <polyline points="2,20 7,30 12,20" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+          <div class="flow-label">hot path — pure SQL, no inference</div>
+        </div>
+
+        <div class="lane">
+          <div class="lane-head">Supabase — Strata (Postgres + pgvector)</div>
+          <div class="lane-body">
+            <div class="node accent">
+              <div class="n-title">SQL RPCs</div>
+              <div class="n-sub">submit_style_quiz · get_aesthete_matches · process_style_quiz / get_recommendations (iOS shims)</div>
+            </div>
+            <div class="node">
+              <div class="n-title">aesthete_jobs</div>
+              <div class="n-sub">outbox</div>
+            </div>
+            <div class="node">
+              <div class="n-title">pg_cron</div>
+              <div class="n-sub">8 scheduled jobs</div>
+            </div>
+            <div class="node">
+              <div class="n-title">edge functions (5)</div>
+              <div class="n-sub">embed-worker · nightly · dna-draft · ask · drift-audit</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow">
+          <svg width="14" height="34" viewBox="0 0 14 34" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <line x1="7" y1="0" x2="7" y2="26"/>
+            <polyline points="2,20 7,30 12,20" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+          <div class="flow-label">crons → edge fns → outbox → inference worker · nightly → /fit/taste</div>
+        </div>
+
+        <div class="lane">
+          <div class="lane-head">Cloudflare</div>
+          <div class="lane-body">
+            <div class="cf-row">
+              <div class="node accent" style="flex:1 1 14rem;">
+                <div class="n-title">patina-inference-worker</div>
+                <div class="n-sub">Worker · workers.dev · bearer auth</div>
+              </div>
+              <svg class="arrow-h" width="34" height="14" viewBox="0 0 34 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <line x1="0" y1="7" x2="26" y2="7"/>
+                <polyline points="20,2 30,7 20,12" stroke-linejoin="round" stroke-linecap="round"/>
+              </svg>
+              <div class="node accent" style="flex:2 1 20rem;">
+                <div class="n-title">Container · standard-3</div>
+                <div class="n-sub">2 vCPU / 8 GiB · warm singleton · FastAPI: /embed/text · /embed/image · /fit/taste · /fit/taste/backtest · /convert/usdz-to-glb · /convert/heic-to-jpeg (shared with Room View)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow">
+          <svg width="14" height="34" viewBox="0 0 14 34" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3" aria-hidden="true">
+            <line x1="7" y1="0" x2="7" y2="26"/>
+          </svg>
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" style="margin-top:-2px;color:var(--bronze)">
+            <polyline points="2,2 7,10 12,2" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+          <div class="flow-label">dna-draft → Anthropic · parked (no key)</div>
+        </div>
+
+        <div class="lane">
+          <div class="lane-head">Anthropic API</div>
+          <div class="lane-body">
+            <div class="node parked">
+              <div class="n-title">Claude</div>
+              <div class="n-sub">product-DNA drafting · currently parked, no key</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <p class="legend">Legend: bordered-green node = active AE surface · dashed node = planned or parked.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Codebase</p>
+    <h2>Codebase state</h2>
+    <p class="prose">Every layer of the engine exists in the tree and carries its own tests. The status pill
+      reads <span class="pill pill--green">Live</span> where this review verified the code running in production,
+      and <span class="pill pill--neutral">Built</span> where the code is shipped to <code>main</code> and the
+      deployed portals but is not separately prod- or device-verified here.</p>
+
+    <div class="scroll">
+      <table class="data">
+        <caption>Delivered components, evidence, and verified status</caption>
+        <thead>
+          <tr><th>Area</th><th>What exists</th><th>Evidence</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono">Inference service</td>
+            <td><code>services/aesthete-inference/</code> — FastAPI + ONNX int8 nomic pair; 7 routes; concurrency gate (queue depth 8 → 429); refuses to boot without <code>INFERENCE_TOKEN</code>.</td>
+            <td>56 tests across 9 files; bench p50 8.7ms/short text, 66ms/image (Apple-Silicon dev); no TODO/stub markers.</td>
+            <td><span class="pill pill--green">Live</span></td>
+          </tr>
+          <tr>
+            <td class="mono">Database tier</td>
+            <td>Migrations <code>00239</code>–<code>00251</code> (13 files): 768-d space + HNSW, product-DNA tables, jobs outbox + spend ledger, ~12-table taste foundation, quiz RPCs, match RPC (~18 scoring helpers, the 94-d φ contract), behavior-stats matview, iOS shims, ask-kNN, nightly-refit RPCs, house/portfolio (geometric-median centroid), audit/janitor, why-phrase breadth.</td>
+            <td>12 SQL test suites in <code>supabase/tests/aesthete/</code>; all applied on Strata.</td>
+            <td><span class="pill pill--green">Live</span></td>
+          </tr>
+          <tr>
+            <td class="mono">Edge functions</td>
+            <td>5 Deno functions, each with colocated tests; graceful degradation (dna-draft parks without key; ask falls back to FTS at 1.5s).</td>
+            <td>ACTIVE v18 on Strata.</td>
+            <td><span class="pill pill--green">Live</span></td>
+          </tr>
+          <tr>
+            <td class="mono">Quiz package</td>
+            <td><code>@patina/aesthete-quiz</code> (core + <code>/react</code>), zero-dependency PostgREST wire client, <code>WIRE-CONTRACT.md</code>.</td>
+            <td>Consumed by client-portal; built for the external marketing site too.</td>
+            <td><span class="pill pill--green">Live</span></td>
+          </tr>
+          <tr>
+            <td class="mono">Portal surfaces</td>
+            <td>client-portal <code>/quiz</code> + results (PostHog funnel events, 07-10); designer-portal teaching hub (Your Eye, judgments, validate / quick / deep, per-product), librarian / ⌘K ask, deep-analysis sheet.</td>
+            <td>Live in the deployed portals.</td>
+            <td><span class="pill pill--neutral">Built</span></td>
+          </tr>
+          <tr>
+            <td class="mono">iOS</td>
+            <td><code>process_style_quiz</code> / <code>get_recommendations</code> RPC shims byte-compatible; called from <code>ProductAPIClient.swift</code>, feed + quiz features.</td>
+            <td>Device walk against prod not verified.</td>
+            <td><span class="pill pill--neutral">Built</span></td>
+          </tr>
+          <tr>
+            <td class="mono">Hooks</td>
+            <td><code>use-aesthete-taste</code>, <code>use-product-dna</code>, <code>use-engine-ask</code> in <code>@patina/supabase</code>.</td>
+            <td class="muted">—</td>
+            <td><span class="pill pill--neutral">Built</span></td>
+          </tr>
+          <tr>
+            <td class="mono">Tooling</td>
+            <td><code>scripts/aesthete-gate.sh</code> (6 tiers), persona eval harness (<code>scripts/aesthete-eval/</code>, 34/34 bars at G3), demo seed, drill + load-sanity scripts.</td>
+            <td class="muted">—</td>
+            <td><span class="pill pill--neutral">Built</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Wave record</h3>
+    <div class="scroll">
+      <table class="data narrow">
+        <caption>Six waves, all shipped — nothing descoped</caption>
+        <thead>
+          <tr><th>Wave / gate</th><th>Scope</th><th class="num">Date</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">W0 / G0</td><td>Foundations + gate</td><td class="num">07-01</td><td class="muted">—</td></tr>
+          <tr><td class="mono">W1 / G1</td><td>Taste foundation + quiz + inference service</td><td class="num">07-01</td><td>ts 24/24</td></tr>
+          <tr><td class="mono">W2 / G2</td><td>"Demo gate": match RPC, embed worker, dna-draft, quiz package</td><td class="num">07-02</td><td>anon quiz → top-10 in 86ms</td></tr>
+          <tr><td class="mono">W3 / G3</td><td>Portal surfaces, ask / ⌘K, eval + PostHog</td><td class="num">07-02</td><td class="muted">—</td></tr>
+          <tr><td class="mono">W4 / G4</td><td>Nightly refit, house / portfolio, guardrails</td><td class="num">07-02</td><td>backtest 0.86 / 0.88 / 0.83, dial-unlock TRUE</td></tr>
+          <tr><td class="mono">W5</td><td>Hardening + runbook + prod-readiness "GO, conditional"</td><td class="num">07-02</td><td>ts 26/26</td></tr>
+          <tr><td class="mono">Deploy</td><td>DB tier → prod; edge fns; worker → Cloudflare Containers</td><td class="num">07-02 →<br>07-17</td><td>DB 07-02 · edge fns 07-08 · worker 07-06/07, latest 07-17</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="prose"><span class="lead">100% of planned scope landed; nothing was descoped.</span></p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Evidence</p>
+    <h2>Production runtime verification</h2>
+    <p class="prose">The tables below are a point-in-time, read-only probe taken 2026-07-23 against project Strata
+      (<code>bkvcixdmuyejfzcijpdg</code>). They record what was observed, not what should be true.</p>
+
+    <p class="prose">All five edge functions are ACTIVE at version 18, updated 2026-07-08 between 04:44 and 04:45 UTC
+      in a single batch. The worker <code>patina-inference-worker</code> is deployed (latest deployment
+      2026-07-17T07:40:46Z); its <code>/healthz</code> returned HTTP 200 in 0.75s while warm:</p>
+
+    <pre class="code"><code>{"status":"ok","model_version":"nomic-v1.5-onnx-int8-r1","text_dim":768,"image_dim":768,"warmed":true,"usd_available":true,"heif_available":true}</code></pre>
+
+    <h3>Cron health</h3>
+    <div class="scroll">
+      <table class="data">
+        <caption>Eight jobs active — every observed run succeeded over the trailing 3 days</caption>
+        <thead>
+          <tr><th>Job</th><th>Schedule</th><th class="num">Runs (3 days)</th><th>State</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">aesthete-embed</td><td class="mono"><code>* * * * *</code></td><td class="num">4320</td><td><span class="pill pill--green">Succeeded</span></td></tr>
+          <tr><td class="mono">aesthete-dna-draft</td><td class="mono"><code>*/2 * * * *</code></td><td class="num">2160</td><td><span class="pill pill--green">Succeeded</span></td></tr>
+          <tr><td class="mono">aesthete-jobs-janitor</td><td class="mono"><code>*/10 * * * *</code></td><td class="num">432</td><td><span class="pill pill--green">Succeeded</span></td></tr>
+          <tr><td class="mono">aesthete-nightly</td><td class="mono"><code>30 2 * * *</code></td><td class="num">3</td><td><span class="pill pill--green">Succeeded</span></td></tr>
+          <tr><td class="mono">aesthete-behavior-stats</td><td class="mono"><code>20 3 * * *</code></td><td class="num">3</td><td><span class="pill pill--green">Succeeded</span></td></tr>
+          <tr><td class="mono">aesthete-house-portfolio</td><td class="mono"><code>15 3 * * *</code></td><td class="num">3</td><td><span class="pill pill--green">Succeeded</span></td></tr>
+          <tr><td class="mono">aesthete-quiz-janitor</td><td class="mono"><code>45 3 * * *</code></td><td class="num">3</td><td><span class="pill pill--green">Succeeded</span></td></tr>
+          <tr><td class="mono">aesthete-drift-audit</td><td class="mono"><code>0 4 * * 0</code></td><td class="num">0 in window</td><td><span class="pill pill--neutral">Weekly — none due</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Secrets matrix</h3>
+    <div class="scroll">
+      <table class="data">
+        <caption>Edge-runtime secrets, by name only — three gaps, all benign-by-design</caption>
+        <thead>
+          <tr><th>Secret</th><th>State</th><th>Effect</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono"><code>INFERENCE_URL</code></td><td><span class="pill pill--green">Present</span></td><td class="muted">—</td></tr>
+          <tr><td class="mono"><code>INFERENCE_TOKEN</code></td><td><span class="pill pill--green">Present</span></td><td class="muted">—</td></tr>
+          <tr><td class="mono"><code>ANTHROPIC_API_KEY</code></td><td><span class="pill pill--red">Missing</span></td><td>Code reads it 14×; dna-draft parks politely.</td></tr>
+          <tr><td class="mono"><code>DAILY_BUDGET_USD</code></td><td><span class="pill pill--red">Missing</span></td><td>Spend governor falls to the code default.</td></tr>
+          <tr><td class="mono"><code>POSTHOG_KEY</code></td><td><span class="pill pill--red">Missing</span></td><td>Only the secondary <code>POSTHOG_API_KEY</code> is present; code reads <code>POSTHOG_KEY</code> 12× vs <code>POSTHOG_API_KEY</code> 3× → most AE analytics events don't emit.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Data scale</h3>
+    <div class="scroll">
+      <table class="data">
+        <caption>The engine is idling at seed scale</caption>
+        <thead>
+          <tr><th>Metric</th><th class="num">Count</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">products</td><td class="num">3</td><td>3 with <code>aesthete_vector</code>, 3 with text <code>embedding</code>.</td></tr>
+          <tr><td class="mono">client_style_profiles</td><td class="num">1</td><td class="muted">—</td></tr>
+          <tr><td class="mono">match_events</td><td class="num">7</td><td class="muted">—</td></tr>
+          <tr><td class="mono">taste_judgments</td><td class="num">0</td><td class="muted">—</td></tr>
+          <tr><td class="mono">product_dna_drafts</td><td class="num">0</td><td class="muted">—</td></tr>
+          <tr><td class="mono">house_taste</td><td class="num">1</td><td>provisional v0.</td></tr>
+          <tr><td class="mono">quiz_option_loadings</td><td class="num">22</td><td>0 with <code>image_embedding</code>.</td></tr>
+          <tr><td class="mono">aesthete_jobs</td><td class="num">6 / 3</td><td>6 done (embed), 3 pending (<code>dna_draft</code>) — waiting on the missing key.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="prose"><code>https://client.patina.cloud/quiz</code> → HTTP 200.</p>
+    <p class="prose"><span class="lead">Takeaway:</span> every lane that can run without content or an LLM key is green; the
+      three pending <code>dna_draft</code> jobs are the parked lane made visible.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Hosting</p>
+    <h2>Hosting plan</h2>
+
+    <h3>Current topology (keep it)</h3>
+    <div class="scroll">
+      <table class="data">
+        <caption>The footprint the engine runs on today</caption>
+        <thead>
+          <tr><th>Component</th><th>Detail</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono">Compute</td>
+            <td>One Cloudflare Container (<code>standard-3</code>: 2 vCPU / 8 GiB; <code>max_instances 3</code> but the code pins a single warm <code>'singleton'</code>; <code>sleepAfter '1h'</code>; cold model load ~15–90s) behind Worker <code>patina-inference-worker</code> on <code>workers.dev</code>; bearer-token auth on everything except <code>/healthz</code>. Shared with the Room View / scan-pipeline lanes (usdz / heic routes, lazy imports).</td>
+          </tr>
+          <tr>
+            <td class="mono">Data</td>
+            <td>Strata Postgres with pgvector 0.7.0 (768-d HNSW on <code>products.aesthete_vector</code>; vector columns across taste / quiz / house tables); <code>aesthete_jobs</code> outbox; unlogged <code>ask_embed_cache</code> (7-day TTL); R2-backed buckets <code>product-images</code> (public) + <code>portfolio-items</code> (private).</td>
+          </tr>
+          <tr>
+            <td class="mono">Edge</td>
+            <td>5 Deno functions on Supabase, cron-invoked via <code>public.invoke_edge_function</code> with a Vault-backed service-role bearer.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Recommendation</h3>
+    <p class="prose">Stay on this footprint. It is already live and green; the hot path is pure SQL, so container
+      availability only affects background embedding, refit, and ask; the container is already paid for by the Room
+      View program; and there is no traffic yet that would justify more.</p>
+
+    <h3>Cost picture</h3>
+    <p class="prose muted">All figures are estimates — verify against current Cloudflare and Anthropic pricing
+      before budgeting.</p>
+    <ul class="list">
+      <li>Cloudflare Workers paid-plan baseline.</li>
+      <li>Containers bill on active seconds — with <code>sleepAfter 1h</code> and today's near-zero duty cycle, container cost is minimal.</li>
+      <li>Ceiling if pinned warm 24/7 at <code>standard-3</code> is roughly $100–160/mo.</li>
+      <li>Supabase: AE adds negligible load to the existing Strata plan.</li>
+      <li>Claude DNA drafting (design-doc estimates): ~$0.013/product with Haiku drafts; $40–75 one-time for a 5k-product Batches backfill. <code>DAILY_BUDGET_USD</code> + <code>aesthete_spend_ledger</code> cap daily spend.</li>
+    </ul>
+
+    <h3>Deploy procedure — and the one gotcha</h3>
+    <p class="prose">The model weights (224 MB int8 ONNX: text 137 MB, vision 97 MB) are host-exported and
+      gitignored. <code>Dockerfile.cf</code> COPIES <code>models/</code> from the host, so a worker deploy REQUIRES
+      <code>make export</code> (≈1.5 GB download, pinned HF revisions, manifest sha256) before
+      <code>wrangler deploy</code>. A fresh clone without that step ships a broken image. Deploy order when things
+      change:</p>
+    <ol class="list">
+      <li>Migrations.</li>
+      <li>Edge functions — <code>scripts/deploy-edge-functions.sh</code> covers all five.</li>
+      <li>Worker — <code>cd infra/inference-worker &amp;&amp; npx wrangler deploy</code>.</li>
+      <li>Portals — <code>./infra/deploy-portal.sh</code>.</li>
+    </ol>
+
+    <h3>Scale / split triggers</h3>
+    <ul class="list">
+      <li>Raise past the singleton — or split the AE embed lanes from the Room View conversion lanes into separate containers — when embed backfills start contending with scan conversions.</li>
+      <li>Add a custom domain / route if the <code>workers.dev</code> URL becomes a policy issue.</li>
+      <li>Revisit Typesense only if <code>aesthete_search</code> FTS falls over — it was deliberately deferred.</li>
+    </ul>
+
+    <h3>Degradation ladder</h3>
+    <p class="prose">The graceful-degradation behavior is a designed feature, not an accident — worth showing
+      explicitly:</p>
+    <div class="scroll">
+      <table class="data narrow">
+        <caption>What happens when a dependency is unavailable</caption>
+        <thead>
+          <tr><th>Condition</th><th>Behavior</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">Worker down</td><td>Quiz / matches unaffected (pure SQL).</td></tr>
+          <tr><td class="mono">⌘K ask (worker down)</td><td>FTS fallback at 1.5s ("the Engine is resting").</td></tr>
+          <tr><td class="mono">Embed / DNA / portfolio jobs (worker down)</td><td>Queue in <code>aesthete_jobs</code> and drain later.</td></tr>
+          <tr><td class="mono">No <code>ANTHROPIC</code> key</td><td>dna-draft parks <code>{parked:true}</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Roadmap</p>
+    <h2>Remaining work to a functional product</h2>
+    <p class="prose">The engineering is done and deployed. What remains is fuel — secrets, catalog, imagery,
+      judgments — plus a few finishing-carpentry items. Three phases follow, ordered by what unblocks what.</p>
+
+    <h3>Phase A — Activate (an afternoon)</h3>
+    <div class="scroll">
+      <table class="data">
+        <caption>Flip the switches; drain the parked lane</caption>
+        <thead>
+          <tr><th>Item</th><th>What / why</th><th>Effort</th><th>Owner</th><th>Unblocks</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Set <code>ANTHROPIC_API_KEY</code></td>
+            <td>On the Strata edge runtime.</td>
+            <td class="mono">part of an afternoon</td>
+            <td class="mono">Kody-gated (key custody)</td>
+            <td>The 3 pending <code>dna_draft</code> jobs drain; DNA drafting goes live end-to-end.</td>
+          </tr>
+          <tr>
+            <td>Set <code>DAILY_BUDGET_USD</code></td>
+            <td>Explicit spend cap instead of the code default.</td>
+            <td class="mono">minutes</td>
+            <td class="mono">Kody-gated</td>
+            <td>Governed daily spend.</td>
+          </tr>
+          <tr>
+            <td>Set <code>POSTHOG_KEY</code></td>
+            <td>The funnel is already instrumented client-side.</td>
+            <td class="mono">minutes</td>
+            <td class="mono">Kody-gated</td>
+            <td>AE analytics events actually emit.</td>
+          </tr>
+          <tr>
+            <td>Optional: wire why-phrase breadth</td>
+            <td><code>00251</code> staged <code>why_phrase_alts</code> + <code>_ae_pick_why_phrase</code>; a documented 3-line swap inside a reviewed match-RPC revision.</td>
+            <td class="mono">small migration</td>
+            <td class="mono">Agent-executable</td>
+            <td>Why-phrase variety.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Phase B — Feed it (the real work · 2–4 weeks, mostly content / curation)</h3>
+    <div class="scroll">
+      <table class="data">
+        <caption>Give the vector space something to reason over</caption>
+        <thead>
+          <tr><th>Item</th><th>What / why</th><th>Effort</th><th>Owner</th><th>Unblocks</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Catalog ingestion + embed backfill</td>
+            <td>Get the real product catalog into <code>products</code>; the outbox auto-enqueues. ~1.5–2h of worker time per 5k products (design est.).</td>
+            <td class="mono">days</td>
+            <td class="mono">Agent-executable once source chosen (Kody decision)</td>
+            <td>Real match candidates.</td>
+          </tr>
+          <tr>
+            <td>Quiz imagery</td>
+            <td>Produce / select quiz option images and pre-embed them into <code>quiz_option_loadings.image_embedding</code>; the 22 options are text / loadings-only today, so personalization is spectrum-loadings-only until then.</td>
+            <td class="mono">content + small embed run</td>
+            <td class="mono">Kody / content</td>
+            <td>Image-grounded personalization.</td>
+          </tr>
+          <tr>
+            <td>House Hundred</td>
+            <td>Curate ~100 canonical products → seeds the <code>house_taste</code> centroid + lead-set spectrums via <code>seed_house_from_validated_catalog</code>; replaces the provisional v0 row.</td>
+            <td class="mono">curation</td>
+            <td class="mono">Kody / Leah</td>
+            <td>A real house point of view.</td>
+          </tr>
+          <tr>
+            <td>Designer validation sprint</td>
+            <td>300–500 product judgments through the teaching UI — the original W4 quality gate that never ran.</td>
+            <td class="mono">sprint</td>
+            <td class="mono">Kody / Leah + designers</td>
+            <td>First real <code>taste_judgments</code>, real nightly refits, dial-unlock evaluated on real data.</td>
+          </tr>
+          <tr>
+            <td>DNA batch backfill</td>
+            <td>Claude Batches over the ingested catalog ($40–75 per 5k). Drafts land in <code>product_dna_drafts</code>, never designer rows.</td>
+            <td class="mono">batch run</td>
+            <td class="mono">Agent-executable</td>
+            <td>Drafted DNA at scale.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Phase C — Complete the product (after B, prioritized by observed use)</h3>
+    <div class="scroll">
+      <table class="data">
+        <caption>Finishing carpentry</caption>
+        <thead>
+          <tr><th>Item</th><th>What / why</th><th>Effort</th><th>Owner</th><th>Unblocks</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Admin curation UI</td>
+            <td><code>why_phrases</code> / <code>why_phrase_alts</code>, <code>dna_vocab</code>, <code>match_weight_profiles</code>, <code>quiz_option_loadings</code> have admin RLS but no admin-portal surface — curation is SQL-only today.</td>
+            <td class="mono">feature</td>
+            <td class="mono">Agent-executable</td>
+            <td>Non-SQL curation.</td>
+          </tr>
+          <tr>
+            <td>Marketing-site quiz embed</td>
+            <td><code>@patina/aesthete-quiz</code> was built for the external marketing repo (patina.cloud): the top-of-funnel anonymous quiz → claim-on-signup flow.</td>
+            <td class="mono">feature (other repo)</td>
+            <td class="mono">Agent-executable (that repo)</td>
+            <td>Top-of-funnel acquisition.</td>
+          </tr>
+          <tr>
+            <td>iOS prod walk</td>
+            <td>Exercise <code>process_style_quiz</code> / <code>get_recommendations</code> from the Patina app against Strata on device.</td>
+            <td class="mono">walk</td>
+            <td class="mono">Kody / device</td>
+            <td>iOS taste path verified.</td>
+          </tr>
+          <tr>
+            <td>Eval at scale</td>
+            <td>Re-run <code>scripts/aesthete-eval/</code> personas against the real catalog; compare to the 34/34 seed-scale bars.</td>
+            <td class="mono">run</td>
+            <td class="mono">Agent-executable</td>
+            <td>Quality signal at scale.</td>
+          </tr>
+          <tr>
+            <td>dna-draft few-shot calibration anchors</td>
+            <td>Two <code>TODO(Wave 3D)</code> markers in <code>aesthete-dna-draft/lib.ts</code> + README — a planned quality enhancement.</td>
+            <td class="mono">enhancement</td>
+            <td class="mono">Agent-executable</td>
+            <td>Draft quality.</td>
+          </tr>
+          <tr>
+            <td>Docs refresh</td>
+            <td>The runbook + delivery docs still describe the retired Coolify deploy; rewrite <code>aesthete-engine-runbook.md</code> for the Cloudflare era (include the weights-export step).</td>
+            <td class="mono">docs</td>
+            <td class="mono">Agent-executable</td>
+            <td>A correct runbook.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Watch items</p>
+    <h2>Risks &amp; watch items</h2>
+    <ul class="list wide">
+      <li><span class="lead">Match quality is unvalidated at scale.</span> Every green bar so far ran on ≤12 seed products and synthetic judgments; the W4 designer validation sprint is the actual quality gate and hasn't run.</li>
+      <li><span class="lead">Quiz personalization is degraded until quiz-image embeddings exist.</span> Style vectors currently come from option loadings + style centroids over a 3-product catalog.</li>
+      <li><span class="lead">Analytics are dark in prod.</span> With <code>POSTHOG_KEY</code> missing, you can't yet see the funnel behavior you'd use to prioritize Phase C.</li>
+      <li><span class="lead">One shared container couples AE and Room View.</span> A scan-pipeline deploy or crash restarts the embedding lane too — acceptable now; the split is the documented trigger.</li>
+      <li><span class="lead">Stale docs are a footgun.</span> The AE runbook / prod-readiness docs predate the Cloudflare migration and describe a dead deploy path.</li>
+      <li><span class="lead">Model weights exist only on Kody's machine + the baked images</span> (gitignored, HF-pinned). Re-export works from the manifest, but the <code>make export</code> step is undocumented in the runbook.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <p class="eyebrow">Verification provenance</p>
+    <p>Facts gathered 2026-07-23 via read-only probes: <code>supabase migration list --linked</code>,
+      <code>supabase functions list</code>, <code>supabase secrets list</code> (names only),
+      <code>wrangler deployments list</code>, a <code>/healthz</code> curl, read-only SQL
+      (products / jobs / <code>cron.job_run_details</code> counts), and <code>curl -I client.patina.cloud/quiz</code>.
+      Point-in-time — re-verify before acting. Sources:
+      <code>docs/prds/AE/aesthete-engine-{system-design,delivery-log,runbook,prod-readiness}.md</code>.</p>
+  </footer>
+
+</div>
