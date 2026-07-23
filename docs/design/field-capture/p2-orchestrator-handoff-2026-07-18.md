@@ -10,8 +10,8 @@ Read it with, not instead of, the canonical sources below.
    runs (rulings → numbered plan → hard gates). P1 is COMPLETE.
 2. `docs/design/field-capture/field-capture-p2-package.md` — the ACTIVE plan.
    Part B carries Kody's R114 rulings inline; Part E is the numbered plan.
-3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I90**
-   are this program's full decision history. R115 is the latest gate; I90 is
+3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I91**
+   are this program's full decision history. R115 is the latest gate; I91 is
    the latest implementation record.
 4. `docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md` — the
    completed real-DeskDev dependency/sandbox receipt (I88).
@@ -89,29 +89,39 @@ Read it with, not instead of, the canonical sources below.
   `p2-item4a-colmap-qualification-2026-07-22.md`. The physical Field/Core Image
   raster/materializer fixture remains unqualified. Newer 4.x still needs
   separate qualification.
-- **Item 4A COLMAP qualification passed; the physical raster half remains
-  open.** Failed v1/v2 evidence and passing v3 evidence are preserved; v3's
-  canonical receipt payload SHA-256 is
+- **Item 4A COLMAP qualification passed; I91 records disabled Refine
+  boundaries, not a composed stage.** Failed v1/v2 evidence and passing v3
+  evidence are preserved; v3's canonical receipt payload SHA-256 is
   `7d60da6b6f67c864e4584b417ed36c209ceea4aee1b9811441d244574f40f278`.
-  The disabled storage/deadline/native/runner foundations are packaged but no
-  production queue handler is registered or composed yet. Before handler
-  enablement/deployment or any real run, pass the physical raster fixture,
-  then prove comparable
-  reprojection/registration/verified-loop evidence (unchanged evidence cannot
-  pass; trajectory shape is diagnostic-only), use the carried lease-aware
-  4-minute deadline, and preserve the canonical
-  refine → {fuse→mesh-solve, splat} → Present four-manifest join. Scan
-  `95266be1` remains the local-scratch proof subject before any DB/storage run.
+  The packaged runner binds distinct source-HEIC/engine-PPM identities, exact
+  engine outputs, bounded telemetry, and a strict publication contract. The
+  materializer uses descriptor-pinned bounded workspaces, and the
+  publisher/storage seam is owner-scoped, create-only, same-descriptor, and
+  manifest-last under the carried deadline. These boundaries remain
+  deliberately uncomposed: no concrete Field acquirer/HEIC decoder, killable
+  backend composition, or production queue handler exists. The materializer's
+  pinned descriptor also does not yet cross into the path-based runner/backend,
+  so absolute materializer paths remain display metadata rather than a safe
+  handoff contract.
+- **Item 4's remaining hard gates are unchanged.** Pass the physical Field/Core
+  Image raster fixture; implement concrete killable acquisition, decode, and
+  engine adapters under the single lease-aware four-minute deadline; retain a
+  descriptor-safe workspace through runner execution and publication; then
+  prove comparable reprojection/registration/verified-loop evidence on
+  local-scratch scan `95266be1` (unchanged evidence cannot pass; trajectory
+  shape is diagnostic-only). Queue replay/fork behavior, downstream consumers,
+  and the canonical refine → {fuse→mesh-solve, splat} → Present four-manifest
+  join remain unproved. No production DB or Storage run has occurred.
 - **GPU stages remain disabled and unregistered.** The observed queue-worker
   posture after I88 is inactive; its persistent `STAGES` remains the safe CPU
   set. Do not add `refine`, `fuse`, or `splat`, and do not start a GPU-stage
   worker merely because the doctor passed.
 - **Next safe execution packet:** finish the physical Field/Core Image raster
-  receipt, ratify source-to-engine image naming plus deterministic engine
-  artifacts, and build/prove the materializer/backend/publisher/lease-aware
-  Refine composition while keeping the stage unregistered. Disable DeskDev
-  suspend before any Refine enablement. Do not claim a GPU queue task or run
-  `95266be1` through production DB/Storage until those gates pass.
+  receipt, then bind concrete killable adapters to a descriptor-safe lifecycle
+  and compose them only for disabled local-scratch proof on `95266be1`.
+  Disable DeskDev suspend before any Refine enablement. Do not claim a GPU queue
+  task or run `95266be1` through production DB/Storage until that evidence is
+  reviewed.
 
 ## The operating cadence (do not drop it)
 

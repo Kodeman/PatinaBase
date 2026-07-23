@@ -123,6 +123,10 @@ per-task aggregate raster workspace ceiling, and descriptor-pinned workspace
 access. Its absolute paths are display metadata; disabled composition code must
 consume verified bytes through `RefineMaterialization.open_verified_file()` and
 then call `cleanup()`.
+The runner, materializer, and publisher are disabled contract boundaries only.
+No concrete Field acquisition/HEIC decoder or stage handler composes them;
+passing install/import tests or the synthetic COLMAP receipt does not authorize
+Refine, a queue claim, or a run on a real scan.
 Archive-mode rsync also copies the checkout directory's mode onto the staged
 tree. `--chmod=Dgo-w,Fgo-w` removes unsafe write bits during transfer; the
 explicit `chmod -R go-w` repeats that hardening as defense-in-depth.

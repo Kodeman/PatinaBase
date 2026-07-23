@@ -411,6 +411,16 @@ not telemetry artifacts. The runner and publisher both call the pure strict
 `validate_refine_result_for_publication` gate; a canonical-looking partial or
 extended manifest is not publishable.
 
+**Disabled implementation status (I91).** The runner, bounded descriptor-pinned
+materializer, and owner-scoped create-only publisher/storage boundary are
+packaged but deliberately unregistered. Source HEIC and canonical engine PPM
+identities remain separate, and the runner plus publisher share the same strict
+result/manifest validator. Materializer paths are display metadata: consumers
+must read through pinned `open_verified_file()` descriptors and retain workspace
+ownership until publication. No safe path-based materializer→runner handoff,
+concrete Field acquirer/decoder, killable engine composition, or production
+handler exists yet.
+
 The local prototype fsyncs the temporary file, atomically hard-links it, then
 fsyncs the destination directory. A real multi-process race test proves exactly
 one creator and identical no-op replays. The storage implementation should use
@@ -483,39 +493,20 @@ is represented by events, not competing scalar writes.
 
 ## What this spike does not prove
 
-The following are hard gates before deployment:
+The exact COLMAP/PyCOLMAP 4.0.2 database/model and GPU-SIFT box probe is closed
+by I90; its immutable receipt is
+`p2-item4a-colmap-qualification-2026-07-22.md`. It does not close the following
+hard gates before deployment:
 
-1. **COLMAP 4.0.2 box probe:** use
-   `services/scan-pipeline/install-colmap-4.0.2.sh` on DeskDev's Ubuntu 24.04
-   experiment to install commit
-   `d927f7e518fc20afa33390712c4cc20d85b730b8`, CUDA 11.8, GCC/G++ 11, and
-   SM 7.5. Invoke it as the normal operator with
-   `--acknowledge-experimental-ubuntu-24.04`. DeskDev may use
-   `--work-dir /mnt/ada-data/Patina/.patina-builds/patina-colmap-4.0.2-$UID`
-   after precreating the parent as operator-owned mode `0700`; otherwise the
-   default remains `/var/tmp/patina-colmap-4.0.2-$UID`. Retain the selected
-   work directory's `install.log`, and rerun with `--verify-only` for the
-   installed CLI contract. Installer success alone does not qualify item 4.
-   Then execute the repository-owned, local-only
-   `patina_scan_worker.colmap_qualification` harness on the deterministic tiny
-   multiview fixture using
-   `p2-item4a-colmap-qualification-runbook.md`. The harness contains the exact
-   qualification policy and invokes the exact shared
-   `patina_scan_worker.refine_engine` PyCOLMAP database/model calls above; both
-   modules remain unregistered from the worker. The harness also writes and
-   reopens a separate non-identity `[R|t]` seed control so the host proves full
-   pose serialization without disturbing the identity-oriented imagery used
-   for triangulation.
-   Save
-   the `colmap -h` version/build header, `pycolmap.__version__`, mismatch
-   rejection, GPU SIFT
-   result, IDs before/after camera rewrite, expected/actual non-identity
-   `cam_from_world`, both harness and engine source hashes, and the triangulated
-   model as evidence. No artifact may say validated before this passes.
-2. **Field/Core Image materialization probe:** capture a known off-centre raster
+1. **Field/Core Image materialization probe:** capture a known off-centre raster
    through the real Field `.oriented(.right)` HEIC path. Prove its pixel mapping,
    metadata/dimensions, and the box decoder/materializer result. Source inspection
    and synthetic projection math do not close this gate.
+2. **Concrete lifecycle and deadlines:** implement a real Field acquirer/HEIC
+   decoder plus a descriptor-safe materializer→runner→publisher lifecycle.
+   Acquisition, decode, engine execution, and artifact production must be
+   killable under the single carried deadline; cooperative callbacks do not
+   qualify.
 3. **Real geometric proof:** run read-only/local scratch refinement on the
    already-confirmed inputs for `95266be1`; validate registration coverage,
    same-track reprojection RMSE, verified-loop relative-pose consistency, shape

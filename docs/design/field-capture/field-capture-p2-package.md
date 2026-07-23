@@ -202,12 +202,18 @@ Part D, minted from the verified-free head. *AC:* `pnpm supabase:reset` applies 
 COLMAP 4.0.2 known-pose model → point triangulation → BA, with full corrected
 ARKit pose/intrinsics; position-prior mapper fallback behind explicit config.
 Outputs aligned poses/orientations, sparse cloud, pose deltas, diagnostic shape
-change, and separate comparable refinement evidence. Production handler
-composition and registration development are open. **I90 closes the exact
-CLI/binding 4.0.2 API and GPU-SIFT
-synthetic fixture; the physical Field/Core Image raster/materializer fixture
-remains open.** *Enablement AC:* both halves of that qualification boundary
-must pass before the stage is advertised or run; one lease-aware deadline
+change, and separate comparable refinement evidence. **I91 implements disabled,
+uncomposed runner/materializer/publisher boundaries:** source HEIC and engine
+PPM identities are distinct; the closed engine-output ledger and final manifest
+are strictly bound; materialization is descriptor-pinned and bounded; and
+publication is owner-scoped, create-only, same-descriptor, and manifest-last.
+No concrete Field acquirer/HEIC decoder, descriptor-safe runner handoff,
+killable backend composition, or queue handler exists. **I90 closes the exact
+CLI/binding 4.0.2 API and GPU-SIFT synthetic fixture; the physical Field/Core
+Image raster/materializer fixture remains open.** *Enablement AC:* the physical
+raster fixture, concrete killable lease-deadline adapters, descriptor-safe
+lifecycle, and local-scratch `95266be1` evidence must pass before the stage is
+advertised or run; one lease-aware deadline
 is `min(start+4 min, immutable conservative claim bound-60 s)`; the bound is
 request-start monotonic time plus the exact validated visibility interval, so
 response latency cannot extend the engine budget. Disable host suspend before

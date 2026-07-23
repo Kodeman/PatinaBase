@@ -4545,3 +4545,36 @@ host-suspend mitigation, registration, and GPU-stage enablement. No GPU queue
 task may be claimed yet.
 
 *Entries add: I90 · last id = I90*
+
+### I91 · Field Capture P2 item 4 · disabled Refine boundaries — 2026-07-23
+
+The combined disabled Refine code increment is integrated through tip
+`064a14c8`. It adds three unregistered, queue-independent boundaries. The runner
+binds distinct source-HEIC and engine-PPM identities, an exact closed
+six-engine-artifact set, canonical derived documents, explicit fallback
+provenance, bounded telemetry, and a pure strict publication validator. The
+materializer uses owner-anchored descriptor-pinned workspace access, bounded
+descriptor-only producer sinks, per-input/output ceilings, a 4 GiB aggregate
+raster-workspace cap, and deep canonical JSON checks. The publisher/storage seam
+revalidates the exact trusted result before owner-scoped create-only,
+same-descriptor immutable publication, with the manifest published last under
+the carried absolute deadline.
+
+The installer allowlist, service-user import smoke, wheel, and sdist carry all
+disabled modules. Final verification passed 737 scan-pipeline tests, a
+449-test combined focused gate, a 249-test post-review cross-component gate,
+Ruff, compileall, shell syntax, diff integrity, and explicit default/registry
+probes. Independent component, lifecycle, predicate, and combined code reviews
+passed after their findings were resolved. The stage registry still has no
+`scan_pipeline.refine`; defaults remain `ingest,solve,drawings`; no queue,
+Strata, Storage, or real-scan mutation occurred.
+
+**Boundary:** I90 remains only the synthetic exact COLMAP/PyCOLMAP/GPU-SIFT
+proof. I91 is not physical Field/Core Image raster proof and does not compose a
+real Field acquirer/HEIC decoder, a descriptor-safe materializer-to-runner
+lifecycle, or concrete killable deadline-enforced adapters. Local-scratch
+`95266be1` same-evidence improvement, queue replay/fork and consumer/Present join
+proof, Fuse/Splat/mesh-solve/Present, host-suspend mitigation, stage
+registration, and GPU enablement remain hard gates. No GPU task may be claimed.
+
+*Entries add: I91 · last id = I91*
