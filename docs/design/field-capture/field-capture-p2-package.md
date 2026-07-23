@@ -210,7 +210,12 @@ publication is owner-scoped, create-only, same-descriptor, and manifest-last.
 No concrete Field acquirer/HEIC decoder, descriptor-safe runner handoff,
 killable backend composition, or queue handler exists. **I90 closes the exact
 CLI/binding 4.0.2 API and GPU-SIFT synthetic fixture; the physical Field/Core
-Image raster/materializer fixture remains open.** *Enablement AC:* the physical
+Image raster/materializer fixture remains open.** The v2 raster qualification
+protocol now locks the observed ImageIO writer contract to exactly one identity
+`irot` (`rotation_ccw=0`) while rejecting zero/multiple properties, nonzero
+rotation, `imir`, `clap`, unknown transforms, metadata, or any raw/default pixel
+difference. Its physical DeskDev rerun and v2 receipt are still owed; failed v1
+evidence remains preserved. *Enablement AC:* the physical
 raster fixture, concrete killable lease-deadline adapters, descriptor-safe
 lifecycle, and local-scratch `95266be1` evidence must pass before the stage is
 advertised or run; one lease-aware deadline

@@ -306,10 +306,43 @@ int main(int argc, char **argv) {
   const int transformation_properties =
       heif_item_get_transformation_properties(
           context, heif_image_handle_get_item_id(handle), NULL, 0);
-  if (transformation_properties != 0) {
+  if (transformation_properties != 1) {
     fprintf(stderr,
-            "HEIC contains %d explicit crop/rotation/mirror properties\n",
+            "HEIC must contain exactly one identity irot property; found %d "
+            "crop/rotation/mirror properties\n",
             transformation_properties);
+    goto cleanup;
+  }
+  heif_property_id transformation_property_id = 0;
+  const int returned_transformation_properties =
+      heif_item_get_transformation_properties(
+          context, heif_image_handle_get_item_id(handle),
+          &transformation_property_id, 1);
+  if (returned_transformation_properties != 1 ||
+      transformation_property_id == 0) {
+    fprintf(stderr,
+            "libheif transformation-property enumeration changed during "
+            "probe\n");
+    goto cleanup;
+  }
+  const enum heif_item_property_type transformation_property_type =
+      heif_item_get_property_type(
+          context, heif_image_handle_get_item_id(handle),
+          transformation_property_id);
+  if (transformation_property_type !=
+      heif_item_property_type_transform_rotation) {
+    fprintf(stderr,
+            "HEIC transform property must be exactly one identity irot\n");
+    goto cleanup;
+  }
+  const int transformation_rotation_ccw =
+      heif_item_get_property_transform_rotation_ccw(
+          context, heif_image_handle_get_item_id(handle),
+          transformation_property_id);
+  if (transformation_rotation_ccw != 0) {
+    fprintf(stderr,
+            "HEIC irot property must be identity; rotation_ccw=%d\n",
+            transformation_rotation_ccw);
     goto cleanup;
   }
 
@@ -357,7 +390,7 @@ int main(int argc, char **argv) {
     goto cleanup;
   }
 
-  printf("schema=patina-field-raster-libheif-helper-v1\n");
+  printf("schema=patina-field-raster-libheif-helper-v2\n");
   printf("libheif_version=%s\n", heif_get_version());
   printf("decoder_id=%s\n", selected_decoder_id);
   printf("decoder_name=%s\n", selected_decoder_name);
@@ -367,7 +400,9 @@ int main(int argc, char **argv) {
   printf("input_mime_type=%s\n", input_mime_type);
   printf("top_level_images=1\n");
   printf("metadata_blocks=0\n");
-  printf("transformation_properties=0\n");
+  printf("transformation_properties=1\n");
+  printf("transformation_property_type=irot\n");
+  printf("transformation_rotation_ccw=%d\n", transformation_rotation_ccw);
   printf("ispe_width=%d\n", ispe_width);
   printf("ispe_height=%d\n", ispe_height);
   printf("presented_width=%d\n", presented_width);

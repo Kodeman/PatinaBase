@@ -224,12 +224,18 @@ class FakeDecoder:
         height: int = 640,
         hidden_transform: bool = False,
         metadata_blocks: int = 0,
+        transformation_property_count: int = 1,
+        transformation_property_type: str = "irot",
+        transformation_rotation_ccw: int = 0,
     ) -> None:
         self.rgb = rgb
         self.width = width
         self.height = height
         self.hidden_transform = hidden_transform
         self.metadata_blocks = metadata_blocks
+        self.transformation_property_count = transformation_property_count
+        self.transformation_property_type = transformation_property_type
+        self.transformation_rotation_ccw = transformation_rotation_ccw
 
     def decode_no_autorotate(self, heic: bytes) -> DecodedRaster:
         assert heic == b"controlled-physical-device-heic-placeholder"
@@ -253,6 +259,9 @@ class FakeDecoder:
             presented_height=self.height,
             default_width=self.width,
             default_height=self.height,
+            transformation_property_count=self.transformation_property_count,
+            transformation_property_type=self.transformation_property_type,
+            transformation_rotation_ccw=self.transformation_rotation_ccw,
             raw_default_rgb_identical=not self.hidden_transform,
             compiler_version="gcc fake",
             pkg_config_version="1.8.fake",
@@ -271,6 +280,34 @@ def _read_receipt(path: Path) -> dict:
     return json.loads(path.read_text())
 
 
+def _helper_metadata_text(**overrides: str) -> str:
+    values = {
+        "schema": "patina-field-raster-libheif-helper-v2",
+        "libheif_version": "1.17.6",
+        "decoder_id": "libde265",
+        "decoder_name": "libde265 HEVC decoder",
+        "decoder_descriptor_count": "1",
+        "matching_decoder_descriptor_count": "1",
+        "input_mime_type": "image/heic",
+        "top_level_images": "1",
+        "metadata_blocks": "0",
+        "transformation_properties": "1",
+        "transformation_property_type": "irot",
+        "transformation_rotation_ccw": "0",
+        "ispe_width": "360",
+        "ispe_height": "640",
+        "presented_width": "360",
+        "presented_height": "640",
+        "raw_width": "360",
+        "raw_height": "640",
+        "default_width": "360",
+        "default_height": "640",
+        "raw_default_rgb_identical": "1",
+    }
+    values.update(overrides)
+    return "\n".join(f"{key}={value}" for key, value in values.items())
+
+
 def test_protocol_materializes_canonical_ppm_and_receipt_without_mutating_inputs(
     tmp_path,
 ):
@@ -284,6 +321,7 @@ def test_protocol_materializes_canonical_ppm_and_receipt_without_mutating_inputs
     result = run_field_raster_qualification(config, decoder=decoder)
 
     assert result.materialized_raster_path.name == MATERIALIZED_RASTER_NAME
+    assert RECEIPT_NAME == "field-raster-qualification-receipt-v2.json"
     assert result.receipt_path.name == RECEIPT_NAME
     ppm = result.materialized_raster_path.read_bytes()
     assert ppm.startswith(b"P6\n360 640\n255\n")
@@ -304,6 +342,7 @@ def test_protocol_materializes_canonical_ppm_and_receipt_without_mutating_inputs
         ).encode()
     )
     receipt = _read_receipt(result.receipt_path)
+    assert receipt["schemaVersion"] == 2
     assert receipt["qualification"] == "p2-item4a-field-core-image-raster"
     assert receipt["status"] == "passed"
     assert len(receipt["implementation"]["qualificationHarness"]["sha256"]) == 64
@@ -329,7 +368,11 @@ def test_protocol_materializes_canonical_ppm_and_receipt_without_mutating_inputs
     assert receipt["safety"]["externalSystemsTouched"] == []
     assert (
         receipt["decoder"]["orientationProof"]["heifGeometricTransformationProperties"]
-        == 0
+        == {
+            "count": 1,
+            "propertyType": "irot",
+            "rotationCCWDegrees": 0,
+        }
     )
     assert receipt["decoder"]["orientationProof"]["embeddedMetadataBlocks"] == 0
 
@@ -452,6 +495,32 @@ def test_decoder_dimensions_and_orientation_must_show_raw_physical_rotation(tmp_
         )
 
 
+@pytest.mark.parametrize(
+    "decoder_overrides",
+    (
+        {"transformation_property_count": 0},
+        {"transformation_property_count": 2},
+        {"transformation_property_type": "imir"},
+        {"transformation_property_type": "clap"},
+        {"transformation_property_type": "unknown"},
+        {"transformation_rotation_ccw": 90},
+        {"transformation_rotation_ccw": 180},
+        {"transformation_rotation_ccw": 270},
+    ),
+)
+def test_decoder_protocol_rejects_transform_policy_drift(tmp_path, decoder_overrides):
+    config, native, _ = _write_fixture(tmp_path / "fixture")
+
+    with pytest.raises(
+        RasterQualificationError, match="exactly one identity irot"
+    ):
+        run_field_raster_qualification(
+            config,
+            decoder=FakeDecoder(_clockwise_rgb(native), **decoder_overrides),
+        )
+    assert not config.output_dir.exists()
+
+
 def test_wrong_pixel_rotation_fails_marker_mapping(tmp_path):
     config, native, _ = _write_fixture(tmp_path / "fixture")
     wrong = bytearray(360 * 640 * 3)
@@ -519,29 +588,16 @@ def test_system_libheif_backend_compiles_in_scratch_and_normalizes_ppm(tmp_path)
         assert Path(argv[1]).read_bytes() == heic
         output = Path(argv[2])
         output.write_bytes(b"P6\n# noncanonical helper comment\n3 2\n255\n" + rgb)
-        stdout = "\n".join(
-            (
-                "schema=patina-field-raster-libheif-helper-v1",
-                "libheif_version=1.17.6",
-                "decoder_id=libde265",
-                "decoder_name=libde265 HEVC decoder, version fake",
-                "decoder_descriptor_count=1",
-                "matching_decoder_descriptor_count=1",
-                "input_mime_type=image/heic",
-                "top_level_images=1",
-                "metadata_blocks=0",
-                "transformation_properties=0",
-                "ispe_width=3",
-                "ispe_height=2",
-                "presented_width=3",
-                "presented_height=2",
-                "raw_width=3",
-                "raw_height=2",
-                "default_width=3",
-                "default_height=2",
-                "raw_default_rgb_identical=1",
-                "",
-            )
+        stdout = _helper_metadata_text(
+            decoder_name="libde265 HEVC decoder, version fake",
+            ispe_width="3",
+            ispe_height="2",
+            presented_width="3",
+            presented_height="2",
+            raw_width="3",
+            raw_height="2",
+            default_width="3",
+            default_height="2",
         )
         return subprocess.CompletedProcess(argv, 0, stdout, "")
 
@@ -555,6 +611,9 @@ def test_system_libheif_backend_compiles_in_scratch_and_normalizes_ppm(tmp_path)
     assert decoded.height == 2
     assert decoded.rgb == rgb
     assert decoded.raw_default_rgb_identical is True
+    assert decoded.transformation_property_count == 1
+    assert decoded.transformation_property_type == "irot"
+    assert decoded.transformation_rotation_ccw == 0
     assert decoded.decoder_version == "1.17.6"
     assert len(calls) == 10
     compile_argv = calls[8][0]
@@ -577,7 +636,7 @@ def test_system_libheif_backend_compiles_in_scratch_and_normalizes_ppm(tmp_path)
         assert timeout > 0
 
 
-def test_packaged_helper_uses_public_no_transform_and_default_decode_contract():
+def test_packaged_helper_uses_strict_transform_and_dual_decode_contract():
     source = (
         Path(__file__).resolve().parents[1]
         / "src"
@@ -597,6 +656,11 @@ def test_packaged_helper_uses_public_no_transform_and_default_decode_contract():
     assert "raw_options->decoder_id = selected_decoder_id;" in source
     assert "default_options->decoder_id = selected_decoder_id;" in source
     assert "heif_item_get_transformation_properties(" in source
+    assert "heif_item_get_property_type(" in source
+    assert "heif_item_get_property_transform_rotation_ccw(" in source
+    assert "transformation_properties != 1" in source
+    assert "heif_item_property_type_transform_rotation" in source
+    assert "transformation_rotation_ccw != 0" in source
     assert "heif_image_handle_get_number_of_metadata_blocks(handle, NULL)" in source
     assert "memcmp(transformed.pixels, raw.pixels, raw.size)" in source
     assert "heif_init(NULL)" in source
@@ -604,28 +668,9 @@ def test_packaged_helper_uses_public_no_transform_and_default_decode_contract():
 
 
 def test_helper_metadata_rejects_unavailable_requested_decoder_evidence():
-    metadata = "\n".join(
-        (
-            "schema=patina-field-raster-libheif-helper-v1",
-            "libheif_version=1.17.6",
-            "decoder_id=builtin",
-            "decoder_name=builtin HEVC decoder",
-            "decoder_descriptor_count=1",
-            "matching_decoder_descriptor_count=1",
-            "input_mime_type=image/heic",
-            "top_level_images=1",
-            "metadata_blocks=0",
-            "transformation_properties=0",
-            "ispe_width=360",
-            "ispe_height=640",
-            "presented_width=360",
-            "presented_height=640",
-            "raw_width=360",
-            "raw_height=640",
-            "default_width=360",
-            "default_height=640",
-            "raw_default_rgb_identical=1",
-        )
+    metadata = _helper_metadata_text(
+        decoder_id="builtin",
+        decoder_name="builtin HEVC decoder",
     )
 
     with pytest.raises(
@@ -635,60 +680,69 @@ def test_helper_metadata_rejects_unavailable_requested_decoder_evidence():
 
 
 def test_helper_metadata_rejects_non_hevc_input_evidence():
-    metadata = "\n".join(
-        (
-            "schema=patina-field-raster-libheif-helper-v1",
-            "libheif_version=1.17.6",
-            "decoder_id=libde265",
-            "decoder_name=libde265 HEVC decoder",
-            "decoder_descriptor_count=1",
-            "matching_decoder_descriptor_count=1",
-            "input_mime_type=image/avif",
-            "top_level_images=1",
-            "metadata_blocks=0",
-            "transformation_properties=0",
-            "ispe_width=360",
-            "ispe_height=640",
-            "presented_width=360",
-            "presented_height=640",
-            "raw_width=360",
-            "raw_height=640",
-            "default_width=360",
-            "default_height=640",
-            "raw_default_rgb_identical=1",
-        )
-    )
+    metadata = _helper_metadata_text(input_mime_type="image/avif")
 
     with pytest.raises(RasterQualificationError, match="HEVC-compressed HEIC input"):
         qualification._parse_helper_metadata(metadata)
 
 
 def test_helper_metadata_rejects_ambiguous_libde265_descriptor_evidence():
-    metadata = "\n".join(
-        (
-            "schema=patina-field-raster-libheif-helper-v1",
-            "libheif_version=1.17.6",
-            "decoder_id=libde265",
-            "decoder_name=libde265 HEVC decoder",
-            "decoder_descriptor_count=2",
-            "matching_decoder_descriptor_count=2",
-            "input_mime_type=image/heic",
-            "top_level_images=1",
-            "metadata_blocks=0",
-            "transformation_properties=0",
-            "ispe_width=360",
-            "ispe_height=640",
-            "presented_width=360",
-            "presented_height=640",
-            "raw_width=360",
-            "raw_height=640",
-            "default_width=360",
-            "default_height=640",
-            "raw_default_rgb_identical=1",
-        )
+    metadata = _helper_metadata_text(
+        decoder_descriptor_count="2",
+        matching_decoder_descriptor_count="2",
     )
 
     with pytest.raises(RasterQualificationError, match="exactly one libde265"):
+        qualification._parse_helper_metadata(metadata)
+
+
+def test_helper_metadata_accepts_exactly_one_identity_irot():
+    metadata = qualification._parse_helper_metadata(_helper_metadata_text())
+
+    assert metadata["transformation_properties"] == "1"
+    assert metadata["transformation_property_type"] == "irot"
+    assert metadata["transformation_rotation_ccw"] == "0"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    (
+        ({"transformation_properties": "0"}, "exactly one identity irot"),
+        ({"transformation_properties": "2"}, "exactly one identity irot"),
+        ({"transformation_property_type": "imir"}, "exactly one identity irot"),
+        ({"transformation_property_type": "clap"}, "exactly one identity irot"),
+        ({"transformation_property_type": "unknown"}, "exactly one identity irot"),
+        ({"transformation_rotation_ccw": "90"}, "exactly one identity irot"),
+        ({"transformation_rotation_ccw": "180"}, "exactly one identity irot"),
+        ({"transformation_rotation_ccw": "270"}, "exactly one identity irot"),
+    ),
+)
+def test_helper_metadata_rejects_transform_policy_drift(overrides, message):
+    with pytest.raises(RasterQualificationError, match=message):
+        qualification._parse_helper_metadata(_helper_metadata_text(**overrides))
+
+
+@pytest.mark.parametrize(
+    "malformation",
+    (
+        {"transformation_properties": "not-an-int"},
+        {"transformation_rotation_ccw": "-1"},
+        {"transformation_rotation_ccw": "not-an-int"},
+    ),
+)
+def test_helper_metadata_rejects_malformed_transform_evidence(malformation):
+    with pytest.raises(RasterQualificationError):
+        qualification._parse_helper_metadata(_helper_metadata_text(**malformation))
+
+
+def test_helper_metadata_rejects_missing_transform_evidence():
+    metadata = "\n".join(
+        line
+        for line in _helper_metadata_text().splitlines()
+        if not line.startswith("transformation_property_type=")
+    )
+
+    with pytest.raises(RasterQualificationError, match="schema mismatch"):
         qualification._parse_helper_metadata(metadata)
 
 

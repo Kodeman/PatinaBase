@@ -104,9 +104,15 @@ Read it with, not instead of, the canonical sources below.
   so absolute materializer paths remain display metadata rather than a safe
   handoff contract.
 - **Item 4's remaining hard gates are unchanged.** Pass the physical Field/Core
-  Image raster fixture; implement concrete killable acquisition, decode, and
-  engine adapters under the single lease-aware four-minute deadline; retain a
-  descriptor-safe workspace through runner execution and publication; then
+  Image raster fixture. The v2 qualifier now requires the exact observed
+  ImageIO container contract—one associated identity `irot`
+  (`rotation_ccw=0`)—and still rejects zero/multiple transform properties,
+  nonzero `irot`, `imir`, `clap`, unknown transforms, metadata, or any
+  raw/default pixel difference. Failed v1 evidence stays preserved; a passing
+  physical v2 receipt is still owed. Then implement concrete killable
+  acquisition, decode, and engine adapters under the single lease-aware
+  four-minute deadline; retain a descriptor-safe workspace through runner
+  execution and publication; then
   prove comparable reprojection/registration/verified-loop evidence on
   local-scratch scan `95266be1` (unchanged evidence cannot pass; trajectory
   shape is diagnostic-only). Queue replay/fork behavior, downstream consumers,

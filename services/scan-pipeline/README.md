@@ -489,17 +489,21 @@ the raw stored raster. Instead, the Python gate copies the already-hash-verified
 HEIC bytes to private `0700` scratch, compiles the packaged C helper
 unprivileged with `/usr/bin/cc` and `/usr/bin/pkg-config`, and uses the public
 system-libheif API. The helper requires the public file-type probe to report
-exactly `image/heic` (HEIF using H.265), requires zero `irot`/`imir`/`clap`
-properties, enumerates the public HEVC decoder descriptors and requires exactly
-one available `libde265` descriptor, then decodes strict RGB twice (raw
+exactly `image/heic` (HEIF using H.265) and requires exactly one associated
+transformation property: `irot` with a `0°` counter-clockwise angle. This is
+ImageIO's identity container property, not a second pixel rotation. Zero
+properties are rejected as writer-contract drift; multiple properties, nonzero
+`irot`, `imir`, `clap`, and unknown transform types are rejected. The helper
+enumerates the public HEVC decoder descriptors and requires exactly one available
+`libde265` descriptor, then decodes strict RGB twice (raw
 `ignore_transformations=1` and default `ignore_transformations=0`) with that
-descriptor's ID and requires byte identity. It also requires zero attached
-metadata blocks, so no unseen Exif/XMP
-orientation survives the gate. The asymmetric markers independently prove
-exactly one physical clockwise rotation, and the materialized PPM deliberately
-carries no metadata. HEIC marker matching is deliberately narrow and recorded
-in the receipt: search radius `3 px`, maximum absolute error `64` in each RGB
-channel. See the upstream
+descriptor's ID and requires equal dimensions and byte identity. It also
+requires zero attached metadata blocks, so no unseen Exif/XMP orientation
+survives the gate. The asymmetric markers independently prove exactly one
+physical clockwise pixel rotation, and the materialized PPM deliberately carries
+no metadata. HEIC marker matching is deliberately narrow and recorded in the
+receipt: search radius `3 px`, maximum absolute error `64` in each RGB channel.
+See the upstream
 [libheif decode API](https://raw.githubusercontent.com/strukturag/libheif/v1.17.6/libheif/heif.h),
 [transform-property API](https://raw.githubusercontent.com/strukturag/libheif/v1.17.6/libheif/heif_properties.h),
 and [Ubuntu USN-8526-2](https://ubuntu.com/security/notices/USN-8526-2).
@@ -513,6 +517,12 @@ and are at least `1.17.6-1ubuntu4.6`. If apt metadata is stale, run
 package-status, revision, header/runtime-version, and decoder checks and records
 their exact evidence in its receipt.
 
+The helper protocol and qualification receipt are version `2`. Version `1`
+hard-coded a zero-transform assertion that does not describe ImageIO's physical
+fixture. No physical v1 qualification receipt passed; retain any failed v1
+evidence under its original name. The exported fixture/manifest remains
+`field-core-image-raster-v1`.
+
 After staging this commit and completing `install.sh --gpu --upgrade`, export
 the fixture per `apps/mobile/Capture/README.md`. Then run the root-owned,
 immutable installed package as the normal operator—never with `sudo`. The
@@ -522,7 +532,7 @@ receipt binds both installed Python harness and packaged C-helper source hashes:
 cd /mnt/ada-data/Patina/PatinaBase
 
 FIELD_RASTER_FIXTURE_DIR=/absolute/path/to/field-core-image-raster-v1-export
-FIELD_RASTER_OUTPUT_DIR="/mnt/ada-data/Patina/.patina-builds/field-raster-qualification-v1-$UID"
+FIELD_RASTER_OUTPUT_DIR="/mnt/ada-data/Patina/.patina-builds/field-raster-qualification-v2-$UID"
 FIELD_RASTER_PYTHON=/opt/patina/scan-pipeline/.venv/bin/python
 
 if [ "$(systemctl is-active patina-scan-worker || true)" != inactive ]; then
@@ -539,7 +549,7 @@ test -x "$FIELD_RASTER_PYTHON"
   --output-dir "$FIELD_RASTER_OUTPUT_DIR"
 
 python3 -m json.tool \
-  "$FIELD_RASTER_OUTPUT_DIR/field-raster-qualification-receipt-v1.json"
+  "$FIELD_RASTER_OUTPUT_DIR/field-raster-qualification-receipt-v2.json"
 sha256sum "$FIELD_RASTER_OUTPUT_DIR"/*
 systemctl is-active patina-scan-worker || true
 ```
