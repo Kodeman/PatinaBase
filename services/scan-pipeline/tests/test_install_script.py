@@ -63,6 +63,8 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/pycolmap_cuda_smoke.py",
     "src/patina_scan_worker/refine_engine.py",
     "src/patina_scan_worker/refine_adapter.py",
+    "src/patina_scan_worker/refine_native_process.py",
+    "src/patina_scan_worker/refine_runner.py",
     "src/patina_scan_worker/http.py",
     "src/patina_scan_worker/keys.py",
     "src/patina_scan_worker/queue.py",
@@ -267,6 +269,23 @@ def test_candidate_and_existing_release_smoke_runs_as_service_user():
         line.startswith('"$SMOKE_VENV/bin/patina-scan-worker"')
         for line in smoke.splitlines()
     )
+
+
+def test_candidate_smoke_imports_disabled_refine_foundations_before_activation():
+    script = INSTALL.read_text()
+    expected_imports = (
+        "'import patina_scan_worker; import patina_scan_worker.cli; "
+        "import patina_scan_worker.doctor; "
+        "import patina_scan_worker.refine_native_process; "
+        "import patina_scan_worker.refine_runner'"
+    )
+    service_user_smoke = (
+        '_run_as_service_user "$SMOKE_VENV/bin/python" -I -c \\\n  '
+        + expected_imports
+    )
+
+    assert service_user_smoke in script
+    assert script.index(expected_imports) < script.index("begin_install_transaction")
 
 
 def _path_guard(
@@ -1267,6 +1286,19 @@ def _write_minimal_installer_source(source: Path) -> None:
         )
 
 
+def test_installer_source_fixture_and_guard_allowlists_match_reviewed_tree():
+    guard = _load_path_guard_module()
+    package_root = INSTALL.parent / "src" / "patina_scan_worker"
+    actual_package_files = {
+        path.relative_to(INSTALL.parent).as_posix()
+        for path in package_root.rglob("*")
+        if path.is_file() and path.suffix in {".py", ".c"}
+    }
+
+    assert set(INSTALL_SOURCE_FILES) == set(guard.SOURCE_FILES)
+    assert actual_package_files == set(guard.SOURCE_PACKAGE_FILES)
+
+
 def _copy_reviewed_installer_source(source: Path) -> None:
     for name in INSTALL_SOURCE_FILES:
         original = INSTALL.parent / name
@@ -1381,8 +1413,25 @@ def test_transaction_source_copy_requires_exact_trusted_bytes(tmp_path):
     assert "transaction source copy differs at pyproject.toml" in result.stderr
 
 
-@pytest.mark.parametrize("extras", ["drawings", "drawings,gpu"])
-def test_local_path_build_keeps_trusted_source_byte_and_tree_clean(tmp_path, extras):
+@pytest.mark.parametrize(
+    ("extras", "deleted_worker_member"),
+    (
+        pytest.param("drawings", None, id="cpu"),
+        pytest.param(
+            "drawings,gpu",
+            "patina_scan_worker/refine_native_process.py",
+            id="gpu-missing-refine-native-process",
+        ),
+        pytest.param(
+            "drawings,gpu",
+            "patina_scan_worker/refine_runner.py",
+            id="gpu-missing-refine-runner",
+        ),
+    ),
+)
+def test_local_path_build_keeps_trusted_source_byte_and_tree_clean(
+    tmp_path, extras, deleted_worker_member
+):
     trusted = tmp_path / "trusted"
     source = trusted / "scan-pipeline-source"
     transaction_parent = trusted / "etc"
@@ -1430,6 +1479,19 @@ _prepare_isolated_source_build "$SRC_DIR"
     assert build_source == (
         transaction_parent / ".scan-worker-install-transaction" / "source-build"
     )
+    _path_guard(
+        tmp_path,
+        "validate-source-copy",
+        "--source-dir",
+        str(source),
+        "--copy-dir",
+        str(build_source),
+    )
+    for relative in (
+        "src/patina_scan_worker/refine_native_process.py",
+        "src/patina_scan_worker/refine_runner.py",
+    ):
+        assert (build_source / relative).read_bytes() == (source / relative).read_bytes()
 
     wheel_dir = trusted / "candidate-release" / ".artifacts"
     wheel_dir.mkdir(parents=True)
@@ -1500,6 +1562,26 @@ _prepare_isolated_source_build "$SRC_DIR"
         check=False,
     )
     assert installed.returncode == 0, installed.stdout + installed.stderr
+    imported = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            (
+                "import pathlib,sys; sys.path.insert(0,sys.argv[1]); "
+                "import patina_scan_worker.refine_native_process as native; "
+                "import patina_scan_worker.refine_runner as runner; "
+                "root=pathlib.Path(sys.argv[1]).resolve(); "
+                "assert pathlib.Path(native.__file__).resolve().is_relative_to(root); "
+                "assert pathlib.Path(runner.__file__).resolve().is_relative_to(root)"
+            ),
+            str(install_target),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert imported.returncode == 0, imported.stdout + imported.stderr
     direct_url = json.loads(
         (
             install_target
@@ -1526,7 +1608,7 @@ _prepare_isolated_source_build "$SRC_DIR"
     bad_wheel_dir = trusted / f"bad-wheel-{extras.replace(',', '-')}"
     shutil.copytree(wheel_dir, bad_wheel_dir)
     bad_wheel = bad_wheel_dir / wheel.name
-    if extras == "drawings":
+    if deleted_worker_member is None:
         def inject_dependency(payloads):
             metadata_name = next(
                 name for name in payloads if name.endswith(".dist-info/METADATA")
@@ -1544,7 +1626,7 @@ _prepare_isolated_source_build "$SRC_DIR"
     else:
         _rewrite_worker_wheel(
             bad_wheel,
-            lambda payloads: payloads.pop("patina_scan_worker/refine_adapter.py"),
+            lambda payloads: payloads.pop(deleted_worker_member),
         )
         expected_rejection = "package payload does not exactly match trusted source"
     rejected_wheel = _path_guard(
@@ -1682,9 +1764,15 @@ def test_source_validation_rejects_an_unreviewed_package_module(tmp_path):
 
 @pytest.mark.parametrize(
     "required_module",
-    ["colmap_qualification.py", "refine_adapter.py", "refine_engine.py"],
+    [
+        "colmap_qualification.py",
+        "refine_adapter.py",
+        "refine_engine.py",
+        "refine_native_process.py",
+        "refine_runner.py",
+    ],
 )
-def test_source_validation_requires_item4a_refine_modules(tmp_path, required_module):
+def test_source_validation_requires_reviewed_refine_modules(tmp_path, required_module):
     source = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline-source"
     _path_guard(
         tmp_path,

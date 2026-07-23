@@ -194,6 +194,8 @@ services/scan-pipeline/
     telemetry.py                 # scan_pipeline_events emitter (+ optional job_runs heartbeat)
     worker.py                    # the claim → dispatch → complete loop
     doctor.py                    # env / DB / Storage / GPU / disk preflight
+    refine_native_process.py     # disabled killable native-call boundary foundation
+    refine_runner.py             # disabled queue-independent Refine orchestration foundation
     stages/
       __init__.py                # task_type → handler dispatch table
       ingest.py                  # scan_pipeline.ingest
@@ -273,6 +275,13 @@ inodes. Raw quarantine is deleted after durable rollback/commit cleanup. A real
 prepared first-install transaction treats `LoadState=not-found` as already
 quiescent, so it can restore absent units without an impossible stop. The
 installer never runs doctor from its root shell.
+
+The installed-package smoke also imports the disabled
+`refine_native_process` and `refine_runner` foundations. This is packaging and
+import qualification only: neither module is present in the stage registry,
+neither changes default or persistent `STAGES`, and no Refine queue task is
+eligible for claiming until the later handler/rollout gates are explicitly
+completed.
 
 ---
 
