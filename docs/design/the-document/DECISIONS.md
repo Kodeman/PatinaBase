@@ -4578,3 +4578,44 @@ proof, Fuse/Splat/mesh-solve/Present, host-suspend mitigation, stage
 registration, and GPU enablement remain hard gates. No GPU task may be claimed.
 
 *Entries add: I91 · last id = I91*
+
+### I92 · Field Capture P2 item 4A · physical Field raster gate passed — 2026-07-24
+
+DeskDev passed the exact physical Field/Core Image HEIC-to-raster
+qualification from the installed immutable release
+`/opt/patina/scan-pipeline/.venv.release.5e55c004de1888d5984d0c2b` at code
+commit `df10a157`. The physical iPhone 17 Pro Max artifact and installed-run
+evidence are recorded in
+`docs/design/field-capture/p2-item4a-field-raster-qualification-2026-07-24.md`.
+The canonical v2 receipt SHA-256 is
+`930638e3e98aa49d27f6b305d886d45b51b94714aecd49a84452e0800e0feac6`;
+the materialized PPM SHA-256 is
+`78c68791b59f63fb080080d24c70bf6fdbe2fdcba6b6d798694e92c9a29e6f15`.
+All six color markers matched the physical Core Image BGRA oracle within a
+maximum per-channel error of one, while non-identity `irot` and `imir`
+mutations were rejected.
+
+The evidence boundary is split deliberately. The iOS regression owns the exact
+ImageIO `pitm`/`ipco`/`ipma` association, essential-bit, property-index, and
+identity-`irot` payload writer contract. The Linux qualifier owns only
+libheif-recognized primary-item semantic transforms and raw/default pixel
+equality; it requires one identity `irot`, rejects recognized `imir`/`clap`,
+non-identity or duplicate recognized transforms, metadata, and any decode
+difference, and makes no claim about unknown BMFF properties. Focused raster,
+full scan-pipeline, `FieldRasterEncodingTests`, Capture lint,
+negative-mutation, installer provenance, package-integrity, and
+installed-release qualification gates passed. Failed v1 console evidence
+remains preserved.
+
+The run made no queue, Strata, or Storage mutation. DeskDev's worker and doctor
+remained inactive, the persistent stages remained
+`ingest,solve,drawings`, and the installer transaction was clean.
+
+**Boundary:** This closes the physical HEIC-to-raster convention only. A
+packaged killable descriptor-safe `FieldRasterMaterializer`, Field Storage
+acquirer, materializer-to-runner-to-publisher lifetime, killable COLMAP
+backend, local-scratch `95266be1` proof, queue handler and replay/downstream
+join, Fuse/Splat/mesh-solve/Present, host-suspend mitigation, registration, and
+GPU enablement remain hard gates. No GPU task may be claimed.
+
+*Entries add: I92 · last id = I92*

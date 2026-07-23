@@ -207,21 +207,30 @@ uncomposed runner/materializer/publisher boundaries:** source HEIC and engine
 PPM identities are distinct; the closed engine-output ledger and final manifest
 are strictly bound; materialization is descriptor-pinned and bounded; and
 publication is owner-scoped, create-only, same-descriptor, and manifest-last.
-No concrete Field acquirer/HEIC decoder, descriptor-safe runner handoff,
-killable backend composition, or queue handler exists. **I90 closes the exact
-CLI/binding 4.0.2 API and GPU-SIFT synthetic fixture; the physical Field/Core
-Image raster/materializer fixture remains open.** The v2 Linux qualifier uses
+No concrete Field acquirer/production HEIC decoder adapter, descriptor-safe
+runner handoff, killable backend composition, or queue handler exists. **I90
+closes the exact CLI/binding 4.0.2 API and GPU-SIFT synthetic fixture. I92
+separately closes the physical Field/Core Image HEIC-to-raster convention, but
+not the production materializer lifecycle.** The installed immutable DeskDev
+release passed the physical iPhone 17 Pro Max fixture at commit `df10a157`.
+The canonical v2 receipt SHA-256 is
+`930638e3e98aa49d27f6b305d886d45b51b94714aecd49a84452e0800e0feac6`;
+the materialized PPM SHA-256 is
+`78c68791b59f63fb080080d24c70bf6fdbe2fdcba6b6d798694e92c9a29e6f15`.
+The v2 Linux qualifier uses
 libheif's public API to require exactly one recognized primary-item-associated
 identity `irot` (`rotation_ccw=0`) while rejecting zero/multiple recognized
 transforms, nonzero rotation, primary-item-associated `imir`/`clap`, metadata,
 or any raw/default pixel difference. It does not claim unknown BMFF properties
 or raw association/payload bytes; the separate iOS BMFF regression owns the
 exact ImageIO `pitm`/`ipco`/`ipma` association and `irot` payload writer
-contract. The physical DeskDev rerun and v2 receipt are still owed; failed v1
-evidence remains preserved. *Enablement AC:* the physical
-raster fixture, concrete killable lease-deadline adapters, descriptor-safe
-lifecycle, and local-scratch `95266be1` evidence must pass before the stage is
-advertised or run; one lease-aware deadline
+contract. Failed v1 evidence remains preserved. *Enablement AC:* concrete
+killable lease-deadline acquisition, materializer, and engine adapters; the
+descriptor-safe materializer-to-runner-to-publisher lifecycle; and
+local-scratch `95266be1` evidence must pass before the stage is advertised or
+run. The next disabled packet is a packaged `FieldRasterMaterializer` adapter
+around the qualified helper; it remains uncomposed and unregistered. One
+lease-aware deadline
 is `min(start+4 min, immutable conservative claim bound-60 s)`; the bound is
 request-start monotonic time plus the exact validated visibility interval, so
 response latency cannot extend the engine budget. Disable host suspend before

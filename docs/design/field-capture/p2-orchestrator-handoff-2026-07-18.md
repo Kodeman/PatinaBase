@@ -1,4 +1,4 @@
-# Field Capture — orchestrator handoff — active 2026-07-23
+# Field Capture — orchestrator handoff — active 2026-07-24
 
 You are picking up the Field Capture program mid-P2. This document is the
 working state an orchestrator needs beyond what the repo already records.
@@ -10,19 +10,21 @@ Read it with, not instead of, the canonical sources below.
    runs (rulings → numbered plan → hard gates). P1 is COMPLETE.
 2. `docs/design/field-capture/field-capture-p2-package.md` — the ACTIVE plan.
    Part B carries Kody's R114 rulings inline; Part E is the numbered plan.
-3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I91**
-   are this program's full decision history. R115 is the latest gate; I91 is
+3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I92**
+   are this program's full decision history. R115 is the latest gate; I92 is
    the latest implementation record.
 4. `docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md` — the
    completed real-DeskDev dependency/sandbox receipt (I88).
 5. `docs/design/field-capture/p2-item4-colmap-adapter-spike-2026-07-18.md` —
    item 4's exact engine/API/fixture decision and remaining proof boundary.
-6. `docs/design/field-capture/scan-pipeline-worker-design.md` — §10 is the
+6. `docs/design/field-capture/p2-item4a-field-raster-qualification-2026-07-24.md`
+   — the completed physical iPhone/Core Image raster receipt (I92).
+7. `docs/design/field-capture/scan-pipeline-worker-design.md` — §10 is the
    P2 stage contract (the fork-join in §10.1.1 and budgets in §10.9 are
    implementation law).
-7. Auto-memory `project_field_capture_p1.md` — the compressed ledger with
+8. Auto-memory `project_field_capture_p1.md` — the compressed ledger with
    every warning flag.
-8. `docs/design/field-capture/m4-pilot-checklist.md` — the still-owed Leah
+9. `docs/design/field-capture/m4-pilot-checklist.md` — the still-owed Leah
    pilot runbook.
 
 ## Exact position (as of this handoff)
@@ -86,9 +88,12 @@ Read it with, not instead of, the canonical sources below.
   `global_mapper` is diagnostic-only and standalone GLOMAP is archived.
   **I90 closes the exact database/model API + GPU-SIFT reconstruction half** on
   DeskDev with the immutable v3 receipt in
-  `p2-item4a-colmap-qualification-2026-07-22.md`. The physical Field/Core Image
-  raster/materializer fixture remains unqualified. Newer 4.x still needs
-  separate qualification.
+  `p2-item4a-colmap-qualification-2026-07-22.md`. **I92 closes the separate
+  physical Field/Core Image HEIC-to-raster convention** with the installed-run
+  receipt in
+  `p2-item4a-field-raster-qualification-2026-07-24.md`. The production
+  materializer lifecycle remains unqualified. Newer 4.x still needs separate
+  qualification.
 - **Item 4A COLMAP qualification passed; I91 records disabled Refine
   boundaries, not a composed stage.** Failed v1/v2 evidence and passing v3
   evidence are preserved; v3's canonical receipt payload SHA-256 is
@@ -103,17 +108,25 @@ Read it with, not instead of, the canonical sources below.
   pinned descriptor also does not yet cross into the path-based runner/backend,
   so absolute materializer paths remain display metadata rather than a safe
   handoff contract.
-- **Item 4's remaining hard gates are unchanged.** Pass the physical Field/Core
-  Image raster fixture. The v2 Linux qualifier uses libheif's public API to
+- **Item 4A physical raster qualification passed; I92 records the evidence,
+  not a production materializer.** The installed immutable release
+  `/opt/patina/scan-pipeline/.venv.release.5e55c004de1888d5984d0c2b` passed the
+  physical iPhone 17 Pro Max fixture at code commit `df10a157`. The canonical
+  v2 receipt SHA-256 is
+  `930638e3e98aa49d27f6b305d886d45b51b94714aecd49a84452e0800e0feac6`;
+  the materialized PPM SHA-256 is
+  `78c68791b59f63fb080080d24c70bf6fdbe2fdcba6b6d798694e92c9a29e6f15`.
+  The v2 Linux qualifier uses libheif's public API to
   require exactly one recognized primary-item-associated identity `irot`
   (`rotation_ccw=0`) and rejects zero/multiple recognized transforms, nonzero
   `irot`, primary-item-associated `imir`/`clap`, metadata, or any raw/default
   pixel difference. It does not claim unknown BMFF properties or raw
   association/payload bytes; the separate iOS BMFF regression owns the exact
   ImageIO `pitm`/`ipco`/`ipma` association and `irot` payload writer contract.
-  Failed v1 evidence stays preserved; a passing physical v2 receipt is still
-  owed. Then implement concrete killable acquisition, decode, and engine
-  adapters under the single lease-aware
+  Failed v1 evidence stays preserved.
+- **Item 4's remaining hard gates begin at the production lifecycle.**
+  Implement concrete killable acquisition, decode, and engine adapters under
+  the single lease-aware
   four-minute deadline; retain a descriptor-safe workspace through runner
   execution and publication; then
   prove comparable reprojection/registration/verified-loop evidence on
@@ -125,9 +138,14 @@ Read it with, not instead of, the canonical sources below.
   posture after I88 is inactive; its persistent `STAGES` remains the safe CPU
   set. Do not add `refine`, `fuse`, or `splat`, and do not start a GPU-stage
   worker merely because the doctor passed.
-- **Next safe execution packet:** finish the physical Field/Core Image raster
-  receipt, then bind concrete killable adapters to a descriptor-safe lifecycle
-  and compose them only for disabled local-scratch proof on `95266be1`.
+- **Next safe execution packet:** package a concrete killable
+  `FieldRasterMaterializer` adapter around the now-qualified helper while
+  keeping it uncomposed and unregistered. It must consume pinned descriptors,
+  retain a descriptor-safe workspace through helper execution, share the
+  carried lease-aware deadline, kill and reap its process group, and leave no
+  output on failure. After independent review, bind concrete acquisition and
+  engine adapters to the same descriptor-safe lifecycle and compose them only
+  for disabled local-scratch proof on `95266be1`.
   Disable DeskDev suspend before any Refine enablement. Do not claim a GPU queue
   task or run `95266be1` through production DB/Storage until that evidence is
   reviewed.
