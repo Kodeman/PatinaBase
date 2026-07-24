@@ -158,29 +158,42 @@ frame metadata inside a canonical member manifest; per-frame descriptors and
 `/proc/self/fd` image trees are not supported. Its pair graph emits only
 canonical engine PPM names, and its CLI child inherits the already-isolated
 native process group so the outer owner can prove quiescence. The 200--400
-frame pilot, packet extraction, output-descriptor handoff, runner path-reopen
-boundary, and aligned-model artifact construction are still explicitly
-unqualified, so the primary plan is a deterministic protocol expectation rather
-than a qualified execution path. Its provisional geometry row dataclasses are
-not yet compatible with the evidence builder and do not claim complete
-track/loop snapshots. A separate Linux-only command supervisor now preserves
-the inherited native group, temporarily enables and restores the native
-owner's prior child-subreaper state, reaps only children adopted after a
-leader-only/no-child preflight, retries interrupted waits under the carried
-deadline. It refuses a successful phase return—and therefore normal
-composition cannot start a later phase—while the native owner retains any
-adopted child. It normalizes command setup, drain, wait, log, and cleanup
-failures with cleanup precedence. Sequential quiescence and
-exception-normalization qualification still remain false: the disabled helper
-accepts an arbitrary absolute executable, and a hostile helper can escape the
-native PGID with `setsid`/`setpgid`; the supervisor detects that adopted live
-child and fails before phase two, but the outer native group owner cannot yet
-contain it without a separately reviewed pidfd or executable-identity contract.
-The CLI also inherits the native process environment; defining a bounded
-environment allowlist and pinned toolchain policy remains a separate,
-unqualified composition gate and is intentionally not supplied by this
-disabled helper.
-The position-prior fallback remains off because I90 qualified only the primary
+frame pilot, packet-extraction production gate, output-descriptor handoff,
+runner path-reopen boundary, and aligned-model artifact construction are still
+explicitly unqualified, so the primary plan is a deterministic protocol
+expectation rather than a qualified execution path. The source-only extraction
+foundation accepts only a manifest-ordered, uncompressed USTAR regular-file
+universe from the already pinned chunk descriptors. It uses positional reads,
+creates every destination descriptor-relatively below a new child-owned 0700
+workspace, rejects links/directories/devices/FIFOs/PAX/GNU/sparse metadata and
+undeclared, duplicate, colliding, or trailing content, then re-hashes each
+chunk before parsing the extracted declared request member. The manifest binds
+the outer run identifier and caps its closed role universe at one request,
+3--400 engine images, and at most one source and adapter ledger. Failure cleanup
+removes only its exact creation ledger. That child-only cleanup cannot run
+after an outer SIGKILL, however, so production composition must first
+pre-provision a parent-owned descriptor-rooted workspace and implement bounded
+secure parent cleanup. The source/adapter ledger member contents also remain
+unparsed at this layer. `PACKET_EXTRACTION_QUALIFIED` remains false pending
+those gates and independent acceptance. Its provisional geometry row
+dataclasses are not yet compatible with the evidence builder and do not claim
+complete track/loop snapshots. A separate Linux-only command supervisor now
+preserves the inherited native group, temporarily enables and restores the
+native owner's prior child-subreaper state, reaps only children adopted after a
+leader-only/no-child preflight, and retries interrupted waits under the carried
+deadline. It refuses a successful phase return—and therefore normal composition
+cannot start a later phase—while the native owner retains any adopted child. It
+normalizes command setup, drain, wait, log, and cleanup failures with cleanup
+precedence. Sequential quiescence and exception-normalization qualification
+still remain false: the disabled helper accepts an arbitrary absolute
+executable, and a hostile helper can escape the native PGID with
+`setsid`/`setpgid`; the supervisor detects that adopted live child and fails
+before phase two, but the outer native group owner cannot yet contain it without
+a separately reviewed pidfd or executable-identity contract. The CLI also
+inherits the native process environment; defining a bounded environment
+allowlist and pinned toolchain policy remains a separate, unqualified
+composition gate and is intentionally not supplied by this disabled helper. The
+position-prior fallback remains off because I90 qualified only the primary
 known-pose path. These gates must close before the backend can implement
 `RefineExecutionBackend` or produce publishable candidate outputs.
 The separate exact evidence builder is disabled and uncomposed as well. It

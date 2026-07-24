@@ -71,6 +71,7 @@ _MAX_CLEANUP_ERROR_BYTES = 256
 _ERROR_CODE_PATTERN = re.compile(r"^REFINE_[A-Z0-9_]{1,63}$")
 _PINNED_FILE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _PINNED_FILE_READ_BYTES = 1024 * 1024
+_NATIVE_CHILD_CONTEXT_SEAL = object()
 
 
 class _ChildBoundaryTimeout(TimeoutError):
@@ -92,6 +93,18 @@ class NativeChildContext:
     expires_at_monotonic_s: float
     _pinned_files: Mapping[str, int] = field(
         default_factory=lambda: MappingProxyType({}),
+        repr=False,
+        compare=False,
+    )
+    _boundary_seal: object | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _boundary_pid: int | None = field(
+        default=None,
+        init=False,
         repr=False,
         compare=False,
     )
@@ -126,6 +139,40 @@ class NativeChildContext:
                 "native child pinned file token is unavailable",
                 _INVALID_INPUT_CODE,
             ) from exc
+
+    @property
+    def is_verified_native_boundary(self) -> bool:
+        """Authenticate the context created for one isolated child entry point."""
+
+        try:
+            pid = os.getpid()
+            isolated = os.getsid(0) == pid and os.getpgrp() == pid
+        except BaseException:  # noqa: BLE001 - authentication must fail closed
+            return False
+        return (
+            self._boundary_seal is _NATIVE_CHILD_CONTEXT_SEAL
+            and self._boundary_pid == pid
+            and isolated
+        )
+
+
+def _seal_native_child_context(context: NativeChildContext) -> NativeChildContext:
+    """Seal only the final entry-point context after child descriptor receipt."""
+
+    try:
+        pid = os.getpid()
+        isolated = os.getsid(0) == pid and os.getpgrp() == pid
+    except BaseException as exc:  # noqa: BLE001 - normalize injected inspection
+        raise _ChildTransportError(
+            "native child context isolation cannot be inspected"
+        ) from exc
+    if not isolated:
+        raise _ChildTransportError(
+            "native child context cannot be sealed outside its isolated session"
+        )
+    object.__setattr__(context, "_boundary_seal", _NATIVE_CHILD_CONTEXT_SEAL)
+    object.__setattr__(context, "_boundary_pid", pid)
+    return context
 
 
 @dataclass(frozen=True)
@@ -1137,9 +1184,11 @@ def _child_entry(
             validated_ledger,
             context=context,
         )
-        context = NativeChildContext(
-            expires_at_monotonic_s,
-            received_files,
+        context = _seal_native_child_context(
+            NativeChildContext(
+                expires_at_monotonic_s,
+                received_files,
+            )
         )
         context.remaining_seconds()
         request = json.loads(request_payload.decode("utf-8"))

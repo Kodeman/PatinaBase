@@ -11,6 +11,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 import pytest
+
 from patina_scan_worker import refine_colmap_backend as backend_module
 from patina_scan_worker import refine_colmap_command as command_module
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
@@ -158,6 +159,7 @@ def _packet_fixture(
     manifest_document = {
         "schemaVersion": PACKET_SCHEMA_VERSION,
         "contract": PACKET_CONTRACT,
+        "runId": "a" * 64,
         "requestMember": "engine-request-v1.json",
         "chunks": [
             {
@@ -177,8 +179,8 @@ def _packet_fixture(
         time.monotonic() + 30.0,
         MappingProxyType(
             {
-                "packet.manifest": manifest_handle.fileno(),
                 "packet.chunk.000": chunk_handle.fileno(),
+                "packet.manifest": manifest_handle.fileno(),
             }
         ),
     )
@@ -199,6 +201,16 @@ def _packet_fixture(
         manifest_handle,
         chunk_handle,
     )
+
+
+def _replace_fixture_manifest(
+    fixture: _PacketFixture,
+    document: dict[str, object],
+) -> bytes:
+    payload = _canonical_json(document)
+    fixture.manifest_path.write_bytes(payload)
+    fixture.request["manifestSha256"] = _sha(payload)
+    return payload
 
 
 def _manifest_bound_to_payload(manifest, payload: bytes):
@@ -229,6 +241,7 @@ def test_packet_manifest_and_engine_request_are_canonical_and_descriptor_bound(
 
     assert manifest.manifest_token == "packet.manifest"
     assert [row.token for row in manifest.chunks] == ["packet.chunk.000"]
+    assert manifest.run_id == "a" * 64
     assert isinstance(request, ColmapEngineRequest)
     assert [frame.engine_image_name for frame in request.frames] == [
         "frame_000000.ppm",
@@ -237,6 +250,134 @@ def test_packet_manifest_and_engine_request_are_canonical_and_descriptor_bound(
     ]
     assert manifest_offset == 0
     assert chunk_offset == 0
+
+
+def test_two_chunk_manifest_requires_canonical_chunk_and_native_token_order(tmp_path):
+    fixture = _packet_fixture(tmp_path)
+    second_payload = b"second-immutable-chunk" * 64
+    second_path = tmp_path / "packet.chunk.001.tar"
+    second_path.write_bytes(second_payload)
+    second_handle = second_path.open("rb")
+    try:
+        document = json.loads(fixture.manifest_path.read_bytes())
+        document["chunks"].append(
+            {
+                "token": "packet.chunk.001",
+                "sha256": _sha(second_payload),
+                "sizeBytes": len(second_payload),
+            }
+        )
+        document["members"][-1]["chunkToken"] = "packet.chunk.001"
+        _replace_fixture_manifest(fixture, document)
+        context = NativeChildContext(
+            time.monotonic() + 30.0,
+            MappingProxyType(
+                {
+                    "packet.chunk.000": fixture.chunk_handle.fileno(),
+                    "packet.chunk.001": second_handle.fileno(),
+                    "packet.manifest": fixture.manifest_handle.fileno(),
+                }
+            ),
+        )
+
+        manifest = load_colmap_packet_manifest(fixture.request, context)
+
+        assert tuple(chunk.token for chunk in manifest.chunks) == (
+            "packet.chunk.000",
+            "packet.chunk.001",
+        )
+        reversed_document = {**document, "chunks": list(reversed(document["chunks"]))}
+        _replace_fixture_manifest(fixture, reversed_document)
+        with pytest.raises(AdapterError, match="canonical token order") as raised:
+            load_colmap_packet_manifest(fixture.request, context)
+    finally:
+        second_handle.close()
+        fixture.close()
+
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+def test_manifest_run_id_is_bound_against_replay(tmp_path):
+    fixture = _packet_fixture(tmp_path)
+    try:
+        document = json.loads(fixture.manifest_path.read_bytes())
+        document["runId"] = "b" * 64
+        _replace_fixture_manifest(fixture, document)
+
+        with pytest.raises(AdapterError, match="runId does not match") as raised:
+            load_colmap_packet_manifest(fixture.request, fixture.context)
+    finally:
+        fixture.close()
+
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+def test_manifest_member_count_is_capped_before_member_iteration(tmp_path):
+    fixture = _packet_fixture(tmp_path)
+    try:
+        document = json.loads(fixture.manifest_path.read_bytes())
+        document["members"] = document["members"] * 101
+        assert len(document["members"]) > 403
+        _replace_fixture_manifest(fixture, document)
+
+        with pytest.raises(AdapterError, match="member-count ceiling") as raised:
+            load_colmap_packet_manifest(fixture.request, fixture.context)
+    finally:
+        fixture.close()
+
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+def test_manifest_rejects_more_than_400_engine_images(tmp_path):
+    fixture = _packet_fixture(tmp_path)
+    try:
+        document = json.loads(fixture.manifest_path.read_bytes())
+        request_member = document["members"][0]
+        document["members"] = [
+            request_member,
+            *[
+                {
+                    "relativePath": f"images/frame_{index:06d}.ppm",
+                    "chunkToken": "packet.chunk.000",
+                    "archiveMember": f"images/frame_{index:06d}.ppm",
+                    "sha256": "0" * 64,
+                    "sizeBytes": 1,
+                    "role": "engine-image",
+                }
+                for index in range(401)
+            ],
+        ]
+        _replace_fixture_manifest(fixture, document)
+
+        with pytest.raises(AdapterError, match="between 3 and 400") as raised:
+            load_colmap_packet_manifest(fixture.request, fixture.context)
+    finally:
+        fixture.close()
+
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("roles", "detail"),
+    (
+        (("source-ledger", "source-ledger"), "at most one"),
+        (("engine-image", "source-ledger"), "between 3 and 400"),
+    ),
+)
+def test_manifest_role_cardinality_is_bounded(tmp_path, roles, detail):
+    fixture = _packet_fixture(tmp_path)
+    try:
+        document = json.loads(fixture.manifest_path.read_bytes())
+        document["members"][-2]["role"] = roles[0]
+        document["members"][-1]["role"] = roles[1]
+        _replace_fixture_manifest(fixture, document)
+
+        with pytest.raises(AdapterError, match=detail) as raised:
+            load_colmap_packet_manifest(fixture.request, fixture.context)
+    finally:
+        fixture.close()
+
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
 
 
 def test_packet_chunk_hash_change_is_rejected_without_shared_offset_change(tmp_path):

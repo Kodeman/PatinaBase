@@ -14,8 +14,9 @@ from collections.abc import Mapping
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 
-import patina_scan_worker.refine_native_process as native_process
 import pytest
+
+import patina_scan_worker.refine_native_process as native_process
 from patina_scan_worker.refine_adapter import (
     LEASE_COMPLETION_RESERVE_S,
     AdapterError,
@@ -53,6 +54,11 @@ def _echo_with_budget(request, context: NativeChildContext):
         "request": request,
         "remainingBudgetSeconds": context.remaining_seconds(),
     }
+
+
+@native_engine_entrypoint
+def _report_boundary_seal(_request, context: NativeChildContext):
+    return {"verified": context.is_verified_native_boundary}
 
 
 @native_engine_entrypoint
@@ -249,6 +255,59 @@ def test_native_child_receives_one_shared_remaining_budget():
 
     assert result["request"] == {"fixture": "known-pose"}
     assert 0.0 < result["remainingBudgetSeconds"] <= 3.0
+
+
+def test_public_native_child_context_is_never_boundary_authenticated():
+    context = NativeChildContext(time.monotonic() + 3.0)
+
+    assert context.is_verified_native_boundary is False
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+def test_only_child_entrypoint_context_is_boundary_authenticated():
+    result = run_native_engine_child(
+        _entrypoint("_report_boundary_seal"),
+        {},
+        deadline=_deadline(3.0),
+    )
+
+    assert result == {"verified": True}
+
+
+def test_boundary_authentication_rejects_pid_session_and_inspection_failures(
+    monkeypatch,
+):
+    context = NativeChildContext(time.monotonic() + 3.0)
+    pid = os.getpid()
+    object.__setattr__(context, "_boundary_pid", pid)
+    monkeypatch.setattr(native_process.os, "getsid", lambda _value: pid)
+    monkeypatch.setattr(native_process.os, "getpgrp", lambda: pid)
+
+    object.__setattr__(context, "_boundary_seal", object())
+    assert context.is_verified_native_boundary is False
+    object.__setattr__(
+        context,
+        "_boundary_seal",
+        native_process._NATIVE_CHILD_CONTEXT_SEAL,
+    )
+    assert context.is_verified_native_boundary is True
+
+    object.__setattr__(context, "_boundary_pid", pid + 1)
+    assert context.is_verified_native_boundary is False
+    object.__setattr__(context, "_boundary_pid", pid)
+    monkeypatch.setattr(native_process.os, "getsid", lambda _value: pid + 1)
+    assert context.is_verified_native_boundary is False
+
+    def fail_inspection(_value):
+        raise RuntimeError("synthetic PID/session inspection failure")
+
+    monkeypatch.setattr(native_process.os, "getsid", fail_inspection)
+    assert context.is_verified_native_boundary is False
+    with pytest.raises(
+        native_process._ChildTransportError,
+        match="cannot be inspected",
+    ):
+        native_process._seal_native_child_context(context)
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")

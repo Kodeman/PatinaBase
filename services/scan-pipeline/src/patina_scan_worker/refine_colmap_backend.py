@@ -29,7 +29,7 @@ import math
 import os
 import re
 import stat
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -57,6 +57,19 @@ from .refine_native_process import (
     NativeChildContext,
     native_engine_entrypoint,
 )
+from .refine_packet_extractor import (
+    COLMAP_PACKET_EXTRACTED_MAX_BYTES,
+    COLMAP_PACKET_MEMBER_MAX_BYTES,
+)
+from .refine_packet_extractor import (
+    ExtractedColmapPacket as _ExtractedColmapPacket,
+)
+from .refine_packet_extractor import (
+    extract_colmap_packet as _extract_colmap_packet,
+)
+
+ExtractedColmapPacket = _ExtractedColmapPacket
+extract_colmap_packet = _extract_colmap_packet
 
 PACKET_SCHEMA_VERSION = 1
 PACKET_CONTRACT = "patina-refine-colmap-input-packet-v1"
@@ -65,6 +78,9 @@ ENGINE_REQUEST_CONTRACT = "patina-refine-colmap-engine-request-v1"
 TARGET_COLMAP_VERSION = "4.0.2"
 COLMAP_PACKET_MANIFEST_MAX_BYTES = 2 * 1024 * 1024
 COLMAP_ENGINE_REQUEST_MAX_BYTES = 4 * 1024 * 1024
+COLMAP_PACKET_MAX_MEMBERS = 403
+COLMAP_PACKET_MIN_ENGINE_IMAGES = 3
+COLMAP_PACKET_MAX_ENGINE_IMAGES = 400
 PRODUCTION_ENABLEMENT = "disabled-uncomposed"
 PILOT_200_400_FRAME_RANGE_QUALIFIED = False
 OUTPUT_DESCRIPTOR_HANDOFF_QUALIFIED = False
@@ -156,9 +172,45 @@ def _canonical_relative_path(value: object, label: str) -> str:
         or value != path.as_posix()
         or any(part in ("", ".", "..") for part in path.parts)
         or any(character.isspace() for character in value)
+        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
     ):
         raise _fail(f"{label} is not a canonical safe relative path")
+    try:
+        encoded = value.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise _fail(f"{label} must use portable ASCII path components") from exc
+    if len(encoded) > 1024 or any(
+        len(part.encode("ascii")) > 255 for part in path.parts
+    ):
+        raise _fail(f"{label} exceeds the bounded portable path length")
     return value
+
+
+def _canonical_ustar_member_name(value: object, label: str) -> str:
+    name = _canonical_relative_path(value, label)
+    encoded = name.encode("ascii")
+    if len(encoded) <= 100:
+        return name
+    for separator in range(len(encoded) - 1, -1, -1):
+        if encoded[separator : separator + 1] != b"/":
+            continue
+        prefix = encoded[:separator]
+        leaf = encoded[separator + 1 :]
+        if prefix and leaf and len(prefix) <= 155 and len(leaf) <= 100:
+            return name
+    raise _fail(f"{label} is not representable by canonical USTAR")
+
+
+def _reject_file_path_collisions(
+    values: Sequence[str],
+    *,
+    label: str,
+) -> None:
+    files = {tuple(PurePosixPath(value).parts) for value in values}
+    for parts in files:
+        for length in range(1, len(parts)):
+            if parts[:length] in files:
+                raise _fail(f"{label} contains a file/directory path collision")
 
 
 def _read_exact_descriptor(
@@ -168,6 +220,7 @@ def _read_exact_descriptor(
     expected_sha256: str,
     maximum_size: int,
     label: str,
+    remaining_seconds: Callable[[], float] | None = None,
 ) -> bytes:
     if expected_size > maximum_size:
         raise _fail(f"{label} exceeds its bounded descriptor size")
@@ -181,6 +234,8 @@ def _read_exact_descriptor(
     digest = hashlib.sha256()
     offset = 0
     while offset < expected_size:
+        if remaining_seconds is not None:
+            remaining_seconds()
         try:
             block = os.pread(
                 descriptor,
@@ -206,6 +261,7 @@ def _verify_exact_descriptor(
     expected_sha256: str,
     maximum_size: int,
     label: str,
+    remaining_seconds: Callable[[], float] | None = None,
 ) -> None:
     """Hash one descriptor with ``pread`` and bounded memory."""
 
@@ -220,6 +276,8 @@ def _verify_exact_descriptor(
     digest = hashlib.sha256()
     offset = 0
     while offset < expected_size:
+        if remaining_seconds is not None:
+            remaining_seconds()
         try:
             block = os.pread(
                 descriptor,
@@ -257,6 +315,7 @@ class ColmapPacketMember:
 class ColmapPacketManifest:
     manifest_token: str
     manifest_sha256: str
+    run_id: str
     request_member: str
     chunks: tuple[ColmapPacketChunk, ...]
     members: tuple[ColmapPacketMember, ...]
@@ -298,10 +357,8 @@ def load_colmap_packet_manifest(
         raise _fail("COLMAP native request contract is unsupported")
     manifest_token = _token(request["manifestToken"], "manifestToken")
     manifest_sha256 = _sha256(request["manifestSha256"], "manifestSha256")
-    if (
-        type(request["runId"]) is not str
-        or _RUN_ID_PATTERN.fullmatch(request["runId"]) is None
-    ):
+    run_id = request["runId"]
+    if type(run_id) is not str or _RUN_ID_PATTERN.fullmatch(run_id) is None:
         raise _fail("COLMAP native request runId must be 64 lowercase hex characters")
     if request["fallbackPolicy"] != "primary-only":
         raise _fail(
@@ -319,6 +376,7 @@ def load_colmap_packet_manifest(
         expected_sha256=manifest_sha256,
         maximum_size=COLMAP_PACKET_MANIFEST_MAX_BYTES,
         label="COLMAP packet manifest",
+        remaining_seconds=context.remaining_seconds,
     )
     try:
         document = json.loads(manifest_payload)
@@ -331,6 +389,7 @@ def load_colmap_packet_manifest(
     if set(document) != {
         "schemaVersion",
         "contract",
+        "runId",
         "requestMember",
         "chunks",
         "members",
@@ -342,6 +401,13 @@ def load_colmap_packet_manifest(
         or document["contract"] != PACKET_CONTRACT
     ):
         raise _fail("COLMAP packet manifest contract is unsupported")
+    manifest_run_id = document["runId"]
+    if (
+        type(manifest_run_id) is not str
+        or _RUN_ID_PATTERN.fullmatch(manifest_run_id) is None
+        or manifest_run_id != run_id
+    ):
+        raise _fail("COLMAP packet manifest runId does not match its native request")
     request_member = _canonical_relative_path(
         document["requestMember"],
         "requestMember",
@@ -354,6 +420,8 @@ def load_colmap_packet_manifest(
         raise _fail("COLMAP packet exceeds the native pinned-file count")
     if type(member_values) is not list or not member_values:
         raise _fail("COLMAP packet manifest needs declared members")
+    if len(member_values) > COLMAP_PACKET_MAX_MEMBERS:
+        raise _fail("COLMAP packet manifest exceeds its member-count ceiling")
 
     chunks: list[ColmapPacketChunk] = []
     chunk_tokens: set[str] = set()
@@ -383,14 +451,21 @@ def load_colmap_packet_manifest(
             expected_sha256=sha256,
             maximum_size=NATIVE_CHILD_MAX_PINNED_FILE_BYTES,
             label=f"COLMAP packet archive chunk {index}",
+            remaining_seconds=context.remaining_seconds,
         )
         chunks.append(ColmapPacketChunk(token, sha256, size_bytes))
         chunk_tokens.add(token)
         aggregate_bytes += size_bytes
+    chunk_order = tuple(chunk.token for chunk in chunks)
+    if chunk_order != tuple(sorted(chunk_order)):
+        raise _fail("COLMAP packet chunks must use canonical token order")
     if aggregate_bytes > NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES:
         raise _fail("COLMAP packet exceeds the native aggregate byte ceiling")
-    if set(context.pinned_file_tokens) != {manifest_token, *chunk_tokens}:
-        raise _fail("COLMAP packet pinned token set does not exactly match its ledger")
+    expected_pinned_tokens = tuple(sorted((manifest_token, *chunk_order)))
+    if context.pinned_file_tokens != expected_pinned_tokens:
+        raise _fail(
+            "COLMAP packet pinned token set and order do not exactly match its ledger"
+        )
 
     members: list[ColmapPacketMember] = []
     member_paths: set[str] = set()
@@ -419,7 +494,7 @@ def load_colmap_packet_manifest(
             value["chunkToken"],
             f"members[{index}].chunkToken",
         )
-        archive_member = _canonical_relative_path(
+        archive_member = _canonical_ustar_member_name(
             value["archiveMember"],
             f"members[{index}].archiveMember",
         )
@@ -429,6 +504,8 @@ def load_colmap_packet_manifest(
             f"members[{index}].sizeBytes",
             minimum=1,
         )
+        if size_bytes > COLMAP_PACKET_MEMBER_MAX_BYTES:
+            raise _fail("COLMAP packet member exceeds the per-member byte ceiling")
         role = value["role"]
         if type(role) is not str or role not in allowed_roles:
             raise _fail(f"COLMAP packet member {index} has an unsupported role")
@@ -451,23 +528,60 @@ def load_colmap_packet_manifest(
         )
         member_paths.add(relative_path)
         archive_keys.add(archive_key)
+    member_order = tuple(
+        (member.chunk_token, member.archive_member) for member in members
+    )
+    if member_order != tuple(sorted(member_order)):
+        raise _fail("COLMAP packet members must use canonical chunk/member order")
+    if sum(member.size_bytes for member in members) > COLMAP_PACKET_EXTRACTED_MAX_BYTES:
+        raise _fail("COLMAP packet exceeds the extracted-member byte ceiling")
+    _reject_file_path_collisions(
+        tuple(member.relative_path for member in members),
+        label="COLMAP packet destination ledger",
+    )
+    for chunk_token in chunk_tokens:
+        _reject_file_path_collisions(
+            tuple(
+                member.archive_member
+                for member in members
+                if member.chunk_token == chunk_token
+            ),
+            label=f"COLMAP packet archive ledger {chunk_token}",
+        )
     if request_member not in member_paths:
         raise _fail("COLMAP packet requestMember is not declared")
     request_row = next(row for row in members if row.relative_path == request_member)
     if request_row.role != "engine-request":
         raise _fail("COLMAP packet requestMember has the wrong role")
-    if sum(row.role == "engine-request" for row in members) != 1:
+    if request_row.size_bytes > COLMAP_ENGINE_REQUEST_MAX_BYTES:
+        raise _fail("COLMAP packet engine request exceeds its byte ceiling")
+    role_counts = {
+        role: sum(row.role == role for row in members) for role in allowed_roles
+    }
+    if role_counts["engine-request"] != 1:
         raise _fail("COLMAP packet must contain exactly one engine request member")
+    if role_counts["source-ledger"] > 1 or role_counts["adapter-ledger"] > 1:
+        raise _fail("COLMAP packet permits at most one member for each ledger role")
+    if not (
+        COLMAP_PACKET_MIN_ENGINE_IMAGES
+        <= role_counts["engine-image"]
+        <= COLMAP_PACKET_MAX_ENGINE_IMAGES
+    ):
+        raise _fail("COLMAP packet must contain between 3 and 400 engine images")
     chunk_sizes = {chunk.token: chunk.size_bytes for chunk in chunks}
     for chunk_token, chunk_size in chunk_sizes.items():
-        declared_member_bytes = sum(
-            member.size_bytes for member in members if member.chunk_token == chunk_token
+        chunk_members = tuple(
+            member for member in members if member.chunk_token == chunk_token
         )
+        if not chunk_members:
+            raise _fail("COLMAP packet archive chunk has no declared members")
+        declared_member_bytes = sum(member.size_bytes for member in chunk_members)
         if declared_member_bytes > chunk_size:
             raise _fail("COLMAP packet members cannot fit in their declared chunk")
     return ColmapPacketManifest(
         manifest_token,
         manifest_sha256,
+        manifest_run_id,
         request_member,
         tuple(chunks),
         tuple(members),
@@ -499,11 +613,11 @@ def parse_engine_request_member(
     payload: bytes,
     manifest: ColmapPacketManifest,
 ) -> ColmapEngineRequest:
-    """Validate bytes against a manifest member, without claiming extraction.
+    """Validate bytes read from the extracted declared request member.
 
-    The caller-supplied bytes are hash/size-bound here, but this disabled packet
-    does not yet extract them from the chunk descriptor.  Production remains
-    blocked by ``PACKET_EXTRACTION_QUALIFIED = False``.
+    This parser remains separately callable for focused contract tests, but
+    production composition must use :func:`extract_colmap_packet`; it must
+    never accept a caller-provided lookalike payload.
     """
 
     request_member = manifest.member_by_path[manifest.request_member]
