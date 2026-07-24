@@ -82,6 +82,7 @@ SOURCE_PACKAGE_FILES = frozenset(
         f"{SOURCE_PACKAGE_ROOT}/queue.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_adapter.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_colmap_backend.py",
+        f"{SOURCE_PACKAGE_ROOT}/refine_evidence_builder.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_engine.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_materializer.py",
         f"{SOURCE_PACKAGE_ROOT}/refine_native_process.py",

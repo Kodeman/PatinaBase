@@ -11,7 +11,6 @@ from pathlib import Path
 from types import MappingProxyType
 
 import pytest
-
 from patina_scan_worker import refine_colmap_backend as backend_module
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.refine_colmap_backend import (
@@ -303,6 +302,91 @@ def test_fallback_policy_is_fail_closed_before_manifest_read(tmp_path):
     finally:
         fixture.close()
     assert raised.value.code == "REFINE_FALLBACK_UNQUALIFIED"
+
+
+def test_schema_versions_reject_booleans_even_when_equal_to_one(tmp_path):
+    fixture = _packet_fixture(tmp_path)
+    try:
+        with pytest.raises(AdapterError, match="schema version") as native:
+            load_colmap_packet_manifest(
+                {**fixture.request, "schemaVersion": True},
+                fixture.context,
+            )
+
+        manifest_document = json.loads(fixture.manifest_path.read_bytes())
+        manifest_document["schemaVersion"] = True
+        manifest_payload = _canonical_json(manifest_document)
+        fixture.manifest_path.write_bytes(manifest_payload)
+        with pytest.raises(AdapterError, match="contract") as manifest:
+            load_colmap_packet_manifest(
+                {
+                    **fixture.request,
+                    "manifestSha256": _sha(manifest_payload),
+                },
+                fixture.context,
+            )
+    finally:
+        fixture.close()
+    assert native.value.code == "REFINE_COLMAP_PACKET_INVALID"
+    assert manifest.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    (
+        ("schemaVersion", True, "contract"),
+        ("gpuIndex", "\N{ARABIC-INDIC DIGIT ZERO}", "decimal device index"),
+    ),
+)
+def test_engine_request_rejects_noncanonical_scalar_tokens(
+    tmp_path,
+    field,
+    value,
+    message,
+):
+    fixture = _packet_fixture(tmp_path)
+    try:
+        manifest = load_colmap_packet_manifest(fixture.request, fixture.context)
+        document = json.loads(fixture.engine_payload)
+        document[field] = value
+        changed = _canonical_json(document)
+        with pytest.raises(AdapterError, match=message) as raised:
+            parse_engine_request_member(
+                changed,
+                _manifest_bound_to_payload(manifest, changed),
+            )
+    finally:
+        fixture.close()
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+def test_engine_request_normalizes_huge_finite_number_and_unsafe_backslash(
+    tmp_path,
+):
+    fixture = _packet_fixture(tmp_path)
+    try:
+        manifest = load_colmap_packet_manifest(fixture.request, fixture.context)
+        document = json.loads(fixture.engine_payload)
+        document["frames"][0]["frameTimestampSeconds"] = 10**400
+        changed = _canonical_json(document)
+        with pytest.raises(AdapterError, match="finite number") as overflow:
+            parse_engine_request_member(
+                changed,
+                _manifest_bound_to_payload(manifest, changed),
+            )
+
+        document = json.loads(fixture.engine_payload)
+        document["frames"][0]["sourceImageName"] = r"folder\capture.heic"
+        changed = _canonical_json(document)
+        with pytest.raises(AdapterError, match="safe HEIC") as backslash:
+            parse_engine_request_member(
+                changed,
+                _manifest_bound_to_payload(manifest, changed),
+            )
+    finally:
+        fixture.close()
+    assert overflow.value.code == "REFINE_COLMAP_PACKET_INVALID"
+    assert backslash.value.code == "REFINE_COLMAP_PACKET_INVALID"
 
 
 def test_engine_request_rejects_source_heic_identity(tmp_path):

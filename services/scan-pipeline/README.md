@@ -113,9 +113,9 @@ match that trusted source manifest exactly, and its dependency/extra metadata is
 checked before pip is allowed to resolve it.
 The package manifest now includes the queue-independent
 `field_raster_materializer.py`, `field_storage_acquirer.py`,
-`refine_colmap_backend.py`, `refine_materializer.py`,
+`refine_colmap_backend.py`, `refine_evidence_builder.py`, `refine_materializer.py`,
 `refine_native_process.py`, `refine_publisher.py`, and `refine_runner.py`
-foundations, and every candidate release imports all seven
+foundations, and every candidate release imports all eight
 as the `patina` service user before activation. GPU candidates also compile the
 byte-identical
 I92-qualified `field_raster_libheif.c` into a root-owned immutable
@@ -168,6 +168,18 @@ helper inherits the native child group. The position-prior fallback remains off
 because I90 qualified only the primary known-pose path. These gates must close
 before the backend can implement `RefineExecutionBackend` or produce
 publishable candidate outputs.
+The separate exact evidence builder is disabled and uncomposed as well. It
+accepts only complete database keypoint tables, a fixed post-triangulation,
+pre-BA track universe, the same memberships after BA, and every deterministic
+candidate pair. It derives reprojection and relative-pose metrics itself,
+requires at least 80% verified connected coverage plus a verified non-temporal
+loop, and binds source HEIC, materialized PPM, database, and model snapshot
+identities into canonical digests. Its raw/refined model snapshot names are
+scratch-only evidence commitments: the runner's exact six candidate artifacts
+do not contain the raw pre-BA model, and the native boundary still has no safe
+output-descriptor channel. Therefore snapshot handoff and backend compatibility
+remain false gates; importing or unit-testing the builder does not create
+publishable provenance or authorize Refine.
 Archive-mode rsync also copies the checkout directory's mode onto the staged
 tree. `--chmod=Dgo-w,Fgo-w` removes unsafe write bits during transfer; the
 explicit `chmod -R go-w` repeats that hardening as defense-in-depth.

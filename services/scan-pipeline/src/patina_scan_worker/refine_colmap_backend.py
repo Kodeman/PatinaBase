@@ -50,6 +50,10 @@ from .refine_adapter import (
     ColmapCommandResult,
     RefineDeadline,
 )
+from .refine_evidence_builder import (
+    RAW_BASELINE_KIND,
+    REFINED_MODEL_KIND,
+)
 from .refine_native_process import (
     NATIVE_CHILD_MAX_PINNED_FILE_BYTES,
     NATIVE_CHILD_MAX_PINNED_FILES,
@@ -77,11 +81,6 @@ PRIMARY_EXECUTION_QUALIFIED = False
 SEQUENTIAL_COMMAND_QUIESCENCE_QUALIFIED = False
 COMMAND_EXCEPTION_NORMALIZATION_QUALIFIED = False
 FALLBACK_QUALIFIED = False
-RAW_BASELINE_KIND = "raw-arkit-fixed-track-triangulation-v1"
-REFINED_MODEL_KIND = "selected-engine-post-ba-fixed-track-v1"
-PRIMARY_ENGINE = "colmap-4-known-pose-triangulate-ba"
-FALLBACK_ENGINE = "colmap-4-position-prior-mapper"
-
 _PACKET_INVALID = "REFINE_COLMAP_PACKET_INVALID"
 _ENGINE_FAILED = "REFINE_ENGINE_FAILED"
 _ENGINE_TIMEOUT = "REFINE_ENGINE_TIMEOUT"
@@ -92,6 +91,10 @@ _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _RUN_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _ENGINE_NAME_PATTERN = re.compile(r"^frame_[0-9]{6}\.ppm$")
+_GPU_INDEX_PATTERN = re.compile(r"^(?:0|[1-9][0-9]*)$")
+_SOURCE_IMAGE_PATTERN = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}\.[Hh][Ee][Ii][Cc]$"
+)
 _READ_BYTES = 1024 * 1024
 
 
@@ -124,7 +127,10 @@ def _exact_int(value: object, label: str, *, minimum: int = 0) -> int:
 def _finite_float(value: object, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise _fail(f"{label} must be a finite number")
-    result = float(value)
+    try:
+        result = float(value)
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise _fail(f"{label} must be a finite number") from exc
     if not math.isfinite(result):
         raise _fail(f"{label} must be a finite number")
     return result
@@ -284,7 +290,10 @@ def load_colmap_packet_manifest(
         "fallbackPolicy",
     }:
         raise _fail("COLMAP native request has an unknown or missing field")
-    if request["schemaVersion"] != PACKET_SCHEMA_VERSION:
+    if (
+        type(request["schemaVersion"]) is not int
+        or request["schemaVersion"] != PACKET_SCHEMA_VERSION
+    ):
         raise _fail("COLMAP native request schema version is unsupported")
     if request["contract"] != PACKET_CONTRACT:
         raise _fail("COLMAP native request contract is unsupported")
@@ -329,7 +338,8 @@ def load_colmap_packet_manifest(
     }:
         raise _fail("COLMAP packet manifest has an unknown or missing field")
     if (
-        document["schemaVersion"] != PACKET_SCHEMA_VERSION
+        type(document["schemaVersion"]) is not int
+        or document["schemaVersion"] != PACKET_SCHEMA_VERSION
         or document["contract"] != PACKET_CONTRACT
     ):
         raise _fail("COLMAP packet manifest contract is unsupported")
@@ -520,13 +530,14 @@ def parse_engine_request_member(
     }:
         raise _fail("COLMAP engine request member has an unknown or missing field")
     if (
-        document["schemaVersion"] != ENGINE_REQUEST_SCHEMA_VERSION
+        type(document["schemaVersion"]) is not int
+        or document["schemaVersion"] != ENGINE_REQUEST_SCHEMA_VERSION
         or document["contract"] != ENGINE_REQUEST_CONTRACT
         or document["targetColmapVersion"] != TARGET_COLMAP_VERSION
     ):
         raise _fail("COLMAP engine request member contract is unsupported")
     gpu_index = document["gpuIndex"]
-    if type(gpu_index) is not str or not gpu_index.isdecimal():
+    if type(gpu_index) is not str or _GPU_INDEX_PATTERN.fullmatch(gpu_index) is None:
         raise _fail("COLMAP engine request gpuIndex must be a decimal device index")
     values = document["frames"]
     if type(values) is not list or len(values) < 3 or len(values) > 400:
@@ -556,9 +567,8 @@ def parse_engine_request_member(
         source_name = value["sourceImageName"]
         if (
             type(source_name) is not str
-            or PurePosixPath(source_name).name != source_name
-            or PurePosixPath(source_name).suffix.lower() != ".heic"
-            or any(character.isspace() for character in source_name)
+            or _SOURCE_IMAGE_PATTERN.fullmatch(source_name) is None
+            or ".." in source_name
         ):
             raise _fail("COLMAP source image identity must be a safe HEIC basename")
         timestamp_s = _finite_float(
