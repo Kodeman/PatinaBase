@@ -219,6 +219,70 @@ def test_non_linux_host_rejects_before_popen(monkeypatch, tmp_path):
     assert popen_called is False
 
 
+def test_argv_normalization_does_not_use_source_truthiness_or_indexing():
+    class PathologicalSequence:
+        def __bool__(self):
+            raise RuntimeError("DO_NOT_LEAK_TRUTHINESS")
+
+        def __len__(self):
+            raise RuntimeError("DO_NOT_LEAK_LENGTH")
+
+        def __getitem__(self, _index):
+            raise RuntimeError("DO_NOT_LEAK_INDEX")
+
+        def __iter__(self):
+            return iter(("/opt/colmap/4.0.2/bin/colmap", "point_triangulator"))
+
+    assert command_module._normalize_command_argv(PathologicalSequence()) == (
+        "/opt/colmap/4.0.2/bin/colmap",
+        "point_triangulator",
+    )
+
+
+def test_argv_container_exceptions_are_fixed_failures():
+    class BrokenIteration:
+        def __iter__(self):
+            raise RuntimeError("DO_NOT_LEAK_ITER")
+
+    class BrokenIndexing:
+        def __getitem__(self, _index):
+            raise RuntimeError("DO_NOT_LEAK_INDEX")
+
+    for command in (BrokenIteration(), BrokenIndexing()):
+        with pytest.raises(AdapterError) as raised:
+            command_module._normalize_command_argv(command)
+
+        assert raised.value.code == "REFINE_ENGINE_FAILED"
+        assert str(raised.value) == "cannot normalize inherited COLMAP argv"
+        assert raised.value.__cause__ is None
+        assert "DO_NOT_LEAK" not in str(raised.value)
+
+
+def test_argv_item_limit_is_explicit():
+    command = ("/opt/colmap/4.0.2/bin/colmap",) * (
+        command_module._MAX_COMMAND_ARGV_ITEMS + 1
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        command_module._normalize_command_argv(command)
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == "COLMAP command argv exceeds the item limit"
+
+
+def test_argv_total_byte_limit_is_explicit():
+    command = (
+        "/opt/colmap/4.0.2/bin/colmap",
+        "x" * command_module._MAX_COMMAND_ARGV_BYTES,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        command_module._normalize_command_argv(command)
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == "COLMAP command argv exceeds the byte limit"
+
+
 def test_post_command_wait_retries_eintr_and_reaps_all_adopted_children(
     monkeypatch,
 ):
@@ -325,6 +389,97 @@ def test_pre_command_waitid_does_not_reap_an_unexpected_child(monkeypatch):
 
     assert errors == ("dedicated native owner retained a pre-command child",)
     assert waitpid_called is False
+
+
+def test_pre_command_live_child_is_rejected(monkeypatch):
+    monkeypatch.setattr(
+        command_module.os,
+        "waitid",
+        lambda *_args: None,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        command_module.os,
+        "waitpid",
+        lambda _pid, _options: (0, 0),
+    )
+
+    errors = command_module._pre_command_child_errors(deadline=_deadline())
+
+    assert errors == ("dedicated native owner has a live pre-command child",)
+
+
+@pytest.mark.parametrize("stage", ("waitid", "waitpid"))
+def test_pre_command_eintr_retries_while_deadline_remains(monkeypatch, stage):
+    if stage == "waitid":
+        results = iter((InterruptedError(), ChildProcessError()))
+
+        def waitid(*_args):
+            result = next(results)
+            if isinstance(result, BaseException):
+                raise result
+            return result
+
+        monkeypatch.setattr(command_module.os, "waitid", waitid, raising=False)
+        monkeypatch.setattr(
+            command_module.os,
+            "waitpid",
+            lambda *_args: (_ for _ in ()).throw(AssertionError),
+        )
+    else:
+        results = iter((InterruptedError(), ChildProcessError()))
+        monkeypatch.setattr(
+            command_module.os,
+            "waitid",
+            lambda *_args: None,
+            raising=False,
+        )
+
+        def waitpid(*_args):
+            result = next(results)
+            if isinstance(result, BaseException):
+                raise result
+            return result
+
+        monkeypatch.setattr(command_module.os, "waitpid", waitpid)
+
+    assert command_module._pre_command_child_errors(deadline=_deadline()) == ()
+
+
+@pytest.mark.parametrize("stage", ("waitid", "waitpid"))
+def test_pre_command_eintr_after_deadline_is_cleanup_failure(
+    monkeypatch,
+    stage,
+):
+    def interrupted(*_args):
+        raise InterruptedError
+
+    if stage == "waitid":
+        monkeypatch.setattr(
+            command_module.os,
+            "waitid",
+            interrupted,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            command_module.os,
+            "waitpid",
+            lambda *_args: (_ for _ in ()).throw(AssertionError),
+        )
+    else:
+        monkeypatch.setattr(
+            command_module.os,
+            "waitid",
+            lambda *_args: None,
+            raising=False,
+        )
+        monkeypatch.setattr(command_module.os, "waitpid", interrupted)
+
+    errors = command_module._pre_command_child_errors(
+        deadline=RefineDeadline(time.monotonic() - 1.0)
+    )
+
+    assert errors == ("pre-command child inspection exceeded the carried deadline",)
 
 
 def test_cwd_resolve_exception_is_fixed_and_does_not_leak_details(
@@ -632,6 +787,28 @@ def test_stdout_close_exception_is_cleanup_failure_without_raw_leak(
     assert str(raised.value) == "cannot close inherited COLMAP output pipe"
     assert raised.value.__cause__ is None
     assert "DO_NOT_LEAK" not in str(raised.value)
+
+
+def test_real_nonzero_exit_retains_only_bounded_tail(monkeypatch, tmp_path):
+    marker = "NONZERO_COLMAP_TAIL"
+    fake = _fake_cli(
+        tmp_path,
+        "import sys; "
+        f"sys.stdout.write('x' * 70000 + {marker!r} + '\\n'); "
+        "sys.stdout.flush(); raise SystemExit(7)",
+    )
+    _patch_unit_host(monkeypatch)
+    log_path = tmp_path / "nonzero.log"
+
+    with pytest.raises(AdapterError) as raised:
+        _run_unit_command(tmp_path, fake, name=log_path.name)
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value).startswith("COLMAP command failed (7): ")
+    assert str(raised.value).endswith(marker + "\n")
+    assert len(str(raised.value).encode("utf-8")) <= 2100
+    assert log_path.stat().st_size <= command_module.COLMAP_LOG_TAIL_BYTES
+    assert log_path.read_text(encoding="utf-8").endswith(marker + "\n")
 
 
 def test_log_close_exception_is_cleanup_failure_without_raw_leak(

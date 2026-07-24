@@ -39,6 +39,8 @@ _ENGINE_LOG_IO = "REFINE_ENGINE_LOG_IO"
 _PR_SET_CHILD_SUBREAPER = 36
 _PR_GET_CHILD_SUBREAPER = 37
 _MAX_ADOPTED_REAPS = 4096
+_MAX_COMMAND_ARGV_ITEMS = 256
+_MAX_COMMAND_ARGV_BYTES = 64 * 1024
 
 
 def _fail(message: str, code: str) -> AdapterError:
@@ -49,6 +51,54 @@ def _fail(message: str, code: str) -> AdapterError:
 class _DirectChildCleanup:
     errors: tuple[str, ...]
     reaped: bool
+
+
+def _normalize_command_argv(command: Sequence[str]) -> tuple[str, ...]:
+    """Materialize bounded exact-string argv without trusting its container."""
+
+    try:
+        iterator = iter(command)
+    except BaseException:
+        raise _fail("cannot normalize inherited COLMAP argv", _ENGINE_FAILED) from None
+
+    argv: list[str] = []
+    total_bytes = 0
+    for index in range(_MAX_COMMAND_ARGV_ITEMS + 1):
+        try:
+            part = next(iterator)
+        except StopIteration:
+            break
+        except BaseException:
+            raise _fail(
+                "cannot normalize inherited COLMAP argv", _ENGINE_FAILED
+            ) from None
+        if index == _MAX_COMMAND_ARGV_ITEMS:
+            raise _fail("COLMAP command argv exceeds the item limit", _ENGINE_FAILED)
+        if type(part) is not str or not part or "\x00" in part:
+            raise _fail(
+                "COLMAP command must be absolute non-empty argv", _ENGINE_FAILED
+            )
+        try:
+            encoded_part = os.fsencode(part)
+        except BaseException:
+            raise _fail(
+                "cannot normalize inherited COLMAP argv", _ENGINE_FAILED
+            ) from None
+        # Include execve's terminating NUL for each exact argument.
+        total_bytes += len(encoded_part) + 1
+        if total_bytes > _MAX_COMMAND_ARGV_BYTES:
+            raise _fail("COLMAP command argv exceeds the byte limit", _ENGINE_FAILED)
+        argv.append(part)
+
+    if not argv:
+        raise _fail("COLMAP command must be absolute non-empty argv", _ENGINE_FAILED)
+    try:
+        command_is_absolute = Path(argv[0]).is_absolute()
+    except BaseException:
+        raise _fail("cannot validate inherited COLMAP argv", _ENGINE_FAILED) from None
+    if not command_is_absolute:
+        raise _fail("COLMAP command must be absolute non-empty argv", _ENGINE_FAILED)
+    return tuple(argv)
 
 
 def _direct_child_reaped(
@@ -394,16 +444,7 @@ def run_inherited_colmap_command(
             "native child session",
             _ENGINE_FAILED,
         )
-    if not command or any(
-        type(part) is not str or not part or "\x00" in part for part in command
-    ):
-        raise _fail("COLMAP command must be absolute non-empty argv", _ENGINE_FAILED)
-    try:
-        command_is_absolute = Path(command[0]).is_absolute()
-    except BaseException:
-        raise _fail("cannot validate inherited COLMAP argv", _ENGINE_FAILED) from None
-    if not command_is_absolute:
-        raise _fail("COLMAP command must be absolute non-empty argv", _ENGINE_FAILED)
+    normalized_command = _normalize_command_argv(command)
     _validate_private_command_workspace(cwd, log_path)
     _shared_remaining_seconds(context, deadline)
 
@@ -443,7 +484,7 @@ def run_inherited_colmap_command(
                 launch_attempted = True
                 try:
                     process = subprocess.Popen(
-                        list(command),
+                        list(normalized_command),
                         cwd=cwd,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT,

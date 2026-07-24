@@ -176,6 +176,10 @@ accepts an arbitrary absolute executable, and a hostile helper can escape the
 native PGID with `setsid`/`setpgid`; the supervisor detects that adopted live
 child and fails before phase two, but the outer native group owner cannot yet
 contain it without a separately reviewed pidfd or executable-identity contract.
+The CLI also inherits the native process environment; defining a bounded
+environment allowlist and pinned toolchain policy remains a separate,
+unqualified composition gate and is intentionally not supplied by this
+disabled helper.
 The position-prior fallback remains off because I90 qualified only the primary
 known-pose path. These gates must close before the backend can implement
 `RefineExecutionBackend` or produce publishable candidate outputs.
