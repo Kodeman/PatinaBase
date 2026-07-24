@@ -398,10 +398,14 @@ def _open_existing_directory_chain(
                     relative = "/".join(prefix)
                     expected_identity = expected_identities.get(relative)
                     child_metadata = os.fstat(child)
-                    if expected_identity is None or (
-                        child_metadata.st_dev,
-                        child_metadata.st_ino,
-                    ) != expected_identity:
+                    if (
+                        expected_identity is None
+                        or (
+                            child_metadata.st_dev,
+                            child_metadata.st_ino,
+                        )
+                        != expected_identity
+                    ):
                         raise _fail(
                             f"COLMAP packet directory identity changed at {relative}"
                         )
@@ -470,9 +474,7 @@ def _open_directory_chain(
                         or created_metadata.st_uid != os.geteuid()
                         or stat.S_IMODE(created_metadata.st_mode) != 0o700
                     ):
-                        raise _fail(
-                            "COLMAP packet member directory is not private"
-                        )
+                        raise _fail("COLMAP packet member directory is not private")
                 except BaseException as exc:
                     try:
                         os.rmdir(part, dir_fd=descriptor)
@@ -603,20 +605,14 @@ def _create_extracted_member(
                     dir_fd=parent_descriptor,
                     follow_symlinks=False,
                 )
-                if (
-                    not stat.S_ISREG(path_metadata.st_mode)
-                    or (
-                        path_metadata.st_dev,
-                        path_metadata.st_ino,
-                    )
-                    != (
-                        descriptor_metadata.st_dev,
-                        descriptor_metadata.st_ino,
-                    )
+                if not stat.S_ISREG(path_metadata.st_mode) or (
+                    path_metadata.st_dev,
+                    path_metadata.st_ino,
+                ) != (
+                    descriptor_metadata.st_dev,
+                    descriptor_metadata.st_ino,
                 ):
-                    raise OSError(
-                        "unledgered extracted member identity is not exact"
-                    )
+                    raise OSError("unledgered extracted member identity is not exact")
                 os.unlink(parts[-1], dir_fd=parent_descriptor)
             except BaseException as cleanup_exc:  # noqa: BLE001 - cleanup is fixed
                 cleanup_failures.append(
@@ -862,9 +858,7 @@ def _cleanup_extraction_workspace(ledger: _ExtractionLedger) -> tuple[str, ...]:
         try:
             expected_identity = ledger.file_identities.get(relative_path)
             if expected_identity is None:
-                raise _fail(
-                    f"extracted member identity is missing for {relative_path}"
-                )
+                raise _fail(f"extracted member identity is missing for {relative_path}")
             parent_descriptor = _open_existing_directory_chain(
                 ledger.root_descriptor,
                 parts[:-1],

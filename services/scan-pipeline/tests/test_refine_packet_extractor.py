@@ -12,10 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType, SimpleNamespace
 
-import pytest
-
 import patina_scan_worker.refine_colmap_backend as backend_module
 import patina_scan_worker.refine_packet_extractor as extractor_module
+import pytest
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.refine_colmap_backend import (
     ENGINE_REQUEST_CONTRACT,
@@ -871,11 +870,7 @@ def test_new_member_identity_failure_does_not_strand_workspace(
 
     def fail_member_fstat(descriptor):
         nonlocal failed
-        if (
-            failure_phase == "fstat"
-            and not failed
-            and descriptor in member_descriptors
-        ):
+        if failure_phase == "fstat" and not failed and descriptor in member_descriptors:
             failed = True
             raise OSError("DO_NOT_LEAK_MEMBER_FSTAT")
         return real_fstat(descriptor)
@@ -1469,9 +1464,7 @@ def test_cleanup_refuses_same_uid_extracted_directory_replacement(tmp_path):
 
         cleanup_errors = extractor_module._cleanup_extraction_workspace(ledger)
 
-        assert any(
-            "directory identity changed" in error for error in cleanup_errors
-        )
+        assert any("directory identity changed" in error for error in cleanup_errors)
         assert replacement_path.read_bytes() == replacement_payload
     finally:
         os.close(original_descriptor)
@@ -1556,9 +1549,7 @@ def test_reopened_request_uses_nonblocking_open_before_fifo_type_check(
 
     def require_nonblocking_request_open(path, flags, *args, **kwargs):
         nonlocal saw_nonblocking_request_open
-        if path == Path(request_member.relative_path).name and not (
-            flags & os.O_CREAT
-        ):
+        if path == Path(request_member.relative_path).name and not (flags & os.O_CREAT):
             if not flags & os.O_NONBLOCK:
                 raise AssertionError("request FIFO reopen omitted O_NONBLOCK")
             saw_nonblocking_request_open = True

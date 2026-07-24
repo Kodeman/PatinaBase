@@ -14,9 +14,8 @@ from collections.abc import Mapping
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 
-import pytest
-
 import patina_scan_worker.refine_native_process as native_process
+import pytest
 from patina_scan_worker.refine_adapter import (
     LEASE_COMPLETION_RESERVE_S,
     AdapterError,

@@ -9,7 +9,6 @@ import time
 from pathlib import Path
 
 import pytest
-
 from patina_scan_worker import refine_colmap_command as command_module
 from patina_scan_worker import refine_native_process as native_process
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
