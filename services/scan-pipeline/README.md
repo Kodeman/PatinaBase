@@ -115,8 +115,9 @@ The package manifest now includes the queue-independent
 `field_raster_materializer.py`, `field_storage_acquirer.py`,
 `refine_colmap_backend.py`, `refine_colmap_command.py`,
 `refine_evidence_builder.py`, `refine_materializer.py`,
-`refine_native_process.py`, `refine_publisher.py`, and `refine_runner.py`
-foundations, and every candidate release imports all nine
+`refine_native_process.py`, `refine_packet_extractor.py`,
+`refine_publisher.py`, and `refine_runner.py`
+foundations, and every candidate release imports all ten
 as the `patina` service user before activation. GPU candidates also compile the
 byte-identical
 I92-qualified `field_raster_libheif.c` into a root-owned immutable

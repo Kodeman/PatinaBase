@@ -64,10 +64,12 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/pycolmap_cuda_smoke.py",
     "src/patina_scan_worker/refine_adapter.py",
     "src/patina_scan_worker/refine_colmap_backend.py",
+    "src/patina_scan_worker/refine_colmap_command.py",
     "src/patina_scan_worker/refine_evidence_builder.py",
     "src/patina_scan_worker/refine_engine.py",
     "src/patina_scan_worker/refine_materializer.py",
     "src/patina_scan_worker/refine_native_process.py",
+    "src/patina_scan_worker/refine_packet_extractor.py",
     "src/patina_scan_worker/refine_publisher.py",
     "src/patina_scan_worker/refine_runner.py",
     "src/patina_scan_worker/http.py",
@@ -341,9 +343,11 @@ def test_candidate_smoke_imports_disabled_refine_foundations_before_activation()
         "import patina_scan_worker.field_raster_materializer; "
         "import patina_scan_worker.field_storage_acquirer; "
         "import patina_scan_worker.refine_colmap_backend; "
+        "import patina_scan_worker.refine_colmap_command; "
         "import patina_scan_worker.refine_evidence_builder; "
         "import patina_scan_worker.refine_materializer; "
         "import patina_scan_worker.refine_native_process; "
+        "import patina_scan_worker.refine_packet_extractor; "
         "import patina_scan_worker.refine_publisher; "
         "import patina_scan_worker.refine_runner'"
     )
@@ -1681,6 +1685,11 @@ def test_transaction_source_copy_requires_exact_trusted_bytes(tmp_path):
         ),
         pytest.param(
             "drawings,gpu",
+            "patina_scan_worker/refine_colmap_command.py",
+            id="gpu-missing-refine-colmap-command",
+        ),
+        pytest.param(
+            "drawings,gpu",
             "patina_scan_worker/refine_evidence_builder.py",
             id="gpu-missing-refine-evidence-builder",
         ),
@@ -1693,6 +1702,11 @@ def test_transaction_source_copy_requires_exact_trusted_bytes(tmp_path):
             "drawings,gpu",
             "patina_scan_worker/refine_native_process.py",
             id="gpu-missing-refine-native-process",
+        ),
+        pytest.param(
+            "drawings,gpu",
+            "patina_scan_worker/refine_packet_extractor.py",
+            id="gpu-missing-refine-packet-extractor",
         ),
         pytest.param(
             "drawings,gpu",
@@ -1768,9 +1782,11 @@ _prepare_isolated_source_build "$SRC_DIR"
         "src/patina_scan_worker/field_raster_materializer.py",
         "src/patina_scan_worker/field_storage_acquirer.py",
         "src/patina_scan_worker/refine_colmap_backend.py",
+        "src/patina_scan_worker/refine_colmap_command.py",
         "src/patina_scan_worker/refine_evidence_builder.py",
         "src/patina_scan_worker/refine_materializer.py",
         "src/patina_scan_worker/refine_native_process.py",
+        "src/patina_scan_worker/refine_packet_extractor.py",
         "src/patina_scan_worker/refine_publisher.py",
         "src/patina_scan_worker/refine_runner.py",
     ):
@@ -1855,18 +1871,22 @@ _prepare_isolated_source_build "$SRC_DIR"
                 "import patina_scan_worker.field_raster_materializer as raster; "
                 "import patina_scan_worker.field_storage_acquirer as storage_acquirer; "
                 "import patina_scan_worker.refine_colmap_backend as colmap_backend; "
+                "import patina_scan_worker.refine_colmap_command as colmap_command; "
                 "import patina_scan_worker.refine_evidence_builder as evidence_builder; "
                 "import patina_scan_worker.refine_materializer as materializer; "
                 "import patina_scan_worker.refine_native_process as native; "
+                "import patina_scan_worker.refine_packet_extractor as packet_extractor; "
                 "import patina_scan_worker.refine_publisher as publisher; "
                 "import patina_scan_worker.refine_runner as runner; "
                 "root=pathlib.Path(sys.argv[1]).resolve(); "
                 "assert pathlib.Path(raster.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(storage_acquirer.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(colmap_backend.__file__).resolve().is_relative_to(root); "
+                "assert pathlib.Path(colmap_command.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(evidence_builder.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(materializer.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(native.__file__).resolve().is_relative_to(root); "
+                "assert pathlib.Path(packet_extractor.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(publisher.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(runner.__file__).resolve().is_relative_to(root)"
             ),
@@ -2065,10 +2085,12 @@ def test_source_validation_rejects_an_unreviewed_package_module(tmp_path):
         "field_storage_acquirer.py",
         "refine_adapter.py",
         "refine_colmap_backend.py",
+        "refine_colmap_command.py",
         "refine_evidence_builder.py",
         "refine_engine.py",
         "refine_materializer.py",
         "refine_native_process.py",
+        "refine_packet_extractor.py",
         "refine_publisher.py",
         "refine_runner.py",
     ],

@@ -157,10 +157,12 @@ def test_field_raster_helper_survives_real_wheel_and_sdist_builds(tmp_path):
     assert "patina_scan_worker/field_raster_qualification.py" in wheel_names
     assert "patina_scan_worker/field_storage_acquirer.py" in wheel_names
     assert "patina_scan_worker/refine_colmap_backend.py" in wheel_names
+    assert "patina_scan_worker/refine_colmap_command.py" in wheel_names
     assert "patina_scan_worker/refine_evidence_builder.py" in wheel_names
     assert "patina_scan_worker/refine_engine.py" in wheel_names
     assert "patina_scan_worker/refine_materializer.py" in wheel_names
     assert "patina_scan_worker/refine_native_process.py" in wheel_names
+    assert "patina_scan_worker/refine_packet_extractor.py" in wheel_names
     assert "patina_scan_worker/refine_publisher.py" in wheel_names
     assert "patina_scan_worker/refine_runner.py" in wheel_names
     assert not any("field-raster-libheif-helper-v2" in name for name in wheel_names)
@@ -174,10 +176,12 @@ def test_field_raster_helper_survives_real_wheel_and_sdist_builds(tmp_path):
     assert any(name.endswith("/field_raster_qualification.py") for name in source_names)
     assert any(name.endswith("/field_storage_acquirer.py") for name in source_names)
     assert any(name.endswith("/refine_colmap_backend.py") for name in source_names)
+    assert any(name.endswith("/refine_colmap_command.py") for name in source_names)
     assert any(name.endswith("/refine_evidence_builder.py") for name in source_names)
     assert any(name.endswith("/refine_engine.py") for name in source_names)
     assert any(name.endswith("/refine_materializer.py") for name in source_names)
     assert any(name.endswith("/refine_native_process.py") for name in source_names)
+    assert any(name.endswith("/refine_packet_extractor.py") for name in source_names)
     assert any(name.endswith("/refine_publisher.py") for name in source_names)
     assert any(name.endswith("/refine_runner.py") for name in source_names)
     assert not any(
