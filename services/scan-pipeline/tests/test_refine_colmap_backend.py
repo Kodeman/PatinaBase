@@ -299,6 +299,56 @@ def test_json_integer_digit_limit_value_error_is_normalized(tmp_path, payload_ki
     assert type(raised.value.__cause__) is ValueError
 
 
+@pytest.mark.parametrize("payload_kind", ("manifest", "engine-request"))
+def test_deeply_nested_json_recursion_error_is_normalized(tmp_path, payload_kind):
+    depth = 10_000
+    nested_payload = b"[" * depth + b"0" + b"]" * depth
+    assert len(nested_payload) < 64 * 1024
+    fixture = _packet_fixture(tmp_path)
+    try:
+        if payload_kind == "manifest":
+            fixture.manifest_path.write_bytes(nested_payload)
+            fixture.request["manifestSha256"] = _sha(nested_payload)
+            with pytest.raises(
+                AdapterError,
+                match="packet manifest is not valid UTF-8 JSON",
+            ) as raised:
+                load_colmap_packet_manifest(fixture.request, fixture.context)
+        else:
+            manifest = load_colmap_packet_manifest(fixture.request, fixture.context)
+            with pytest.raises(
+                AdapterError,
+                match="engine request member is not valid UTF-8 JSON",
+            ) as raised:
+                parse_engine_request_member(
+                    nested_payload,
+                    _manifest_bound_to_payload(manifest, nested_payload),
+                )
+    finally:
+        fixture.close()
+
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+    assert type(raised.value.__cause__) is RecursionError
+
+
+def test_deeply_nested_json_canonicalization_error_is_normalized():
+    document: list[object] = []
+    cursor = document
+    for _ in range(10_000):
+        child: list[object] = []
+        cursor.append(child)
+        cursor = child
+
+    with pytest.raises(
+        AdapterError,
+        match="COLMAP packet JSON is not canonicalizable",
+    ) as raised:
+        backend_module._canonical_json_bytes(document)
+
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+    assert type(raised.value.__cause__) is RecursionError
+
+
 def test_two_chunk_manifest_requires_canonical_chunk_and_native_token_order(tmp_path):
     fixture = _packet_fixture(tmp_path)
     second_payload = b"second-immutable-chunk" * 64
