@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Mapping
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 
-import pytest
-
 import patina_scan_worker.refine_native_process as native_process
+import pytest
 from patina_scan_worker.refine_adapter import (
     LEASE_COMPLETION_RESERVE_S,
     AdapterError,
@@ -22,9 +23,13 @@ from patina_scan_worker.refine_adapter import (
 )
 from patina_scan_worker.refine_native_process import (
     NATIVE_CHILD_MAX_ERROR_BYTES,
+    NATIVE_CHILD_MAX_PINNED_FILE_BYTES,
+    NATIVE_CHILD_MAX_PINNED_FILES,
+    NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES,
     NATIVE_CHILD_MAX_REQUEST_BYTES,
     NATIVE_CHILD_MAX_RESPONSE_BYTES,
     NativeChildContext,
+    NativePinnedFile,
     native_engine_entrypoint,
     run_native_engine_child,
 )
@@ -117,6 +122,92 @@ def _spawn_late_writer(request, _context: NativeChildContext):
     return {"unreachable": True}
 
 
+@native_engine_entrypoint
+def _read_pinned_file(request, context: NativeChildContext):
+    token = request["token"]
+    descriptor = context.pinned_file_descriptor(token)
+    size = os.fstat(descriptor).st_size
+    payload = os.pread(descriptor, size, 0)
+    return {
+        "payloadHex": payload.hex(),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "tokens": list(context.pinned_file_tokens),
+        "offset": os.lseek(descriptor, 0, os.SEEK_CUR),
+    }
+
+
+@native_engine_entrypoint
+def _wait_for_pinned_mutation(request, context: NativeChildContext):
+    descriptor = context.pinned_file_descriptor(request["token"])
+    marker = Path(request["readyMarker"])
+    marker.write_text("ready\n", encoding="utf-8")
+    stop = time.monotonic() + 2.0
+    expected = request["replacement"].encode("utf-8")
+    while time.monotonic() < stop:
+        if os.pread(descriptor, len(expected), 0) == expected:
+            return {"nominal": "success"}
+        time.sleep(0.005)
+    raise RuntimeError("pinned mutation was not observed")
+
+
+@native_engine_entrypoint
+def _observe_transient_pinned_mutation(request, context: NativeChildContext):
+    descriptor = context.pinned_file_descriptor(request["token"])
+    ready_marker = Path(request["readyMarker"])
+    observed_marker = Path(request["observedMarker"])
+    restored_marker = Path(request["restoredMarker"])
+    replacement = request["replacement"].encode("utf-8")
+    original = request["original"].encode("utf-8")
+    ready_marker.write_text("ready\n", encoding="utf-8")
+
+    stop = time.monotonic() + 2.0
+    while time.monotonic() < stop:
+        if os.pread(descriptor, len(replacement), 0) == replacement:
+            observed_marker.write_text("observed\n", encoding="utf-8")
+            break
+        time.sleep(0.005)
+    else:
+        raise RuntimeError("transient pinned mutation was not observed")
+
+    while time.monotonic() < stop:
+        if (
+            restored_marker.exists()
+            and os.pread(descriptor, len(original), 0) == original
+        ):
+            return {"mustNotBeAccepted": True}
+        time.sleep(0.005)
+    raise RuntimeError("pinned bytes were not restored")
+
+
+@native_engine_entrypoint
+def _spawn_survivor_and_return(request, _context: NativeChildContext):
+    descendant_pid = Path(request["descendantPid"])
+    late_artifact = Path(request["lateArtifact"])
+    program = (
+        "import os,pathlib,signal,sys,time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        "pathlib.Path(sys.argv[1]).write_text(str(os.getpid()), encoding='utf-8'); "
+        "time.sleep(0.75); "
+        "pathlib.Path(sys.argv[2]).write_text('late-artifact\\n', encoding='utf-8')"
+    )
+    subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            program,
+            str(descendant_pid),
+            str(late_artifact),
+        ],
+        close_fds=True,
+    )
+    stop = time.monotonic() + 2.0
+    while not descendant_pid.exists():
+        if time.monotonic() >= stop:
+            raise RuntimeError("surviving descendant did not report its pid")
+        time.sleep(0.005)
+    return {"mustNotBeAccepted": True}
+
+
 def _unmarked_entrypoint(_request, _context: NativeChildContext):
     return {"unsafe": True}
 
@@ -139,6 +230,737 @@ def test_native_child_receives_one_shared_remaining_budget():
 
     assert result["request"] == {"fixture": "known-pose"}
     assert 0.0 < result["remainingBudgetSeconds"] <= 3.0
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+def test_success_group_is_frozen_and_checked_before_leader_reap(monkeypatch):
+    events: list[str] = []
+    joined = False
+    real_join = BaseProcess.join
+    real_killpg = os.killpg
+
+    def record_join(process, timeout=None):
+        nonlocal joined
+        if process.name == "patina-refine-native":
+            joined = True
+            events.append("join")
+        return real_join(process, timeout)
+
+    def record_group_signal(process_group_id, sent_signal):
+        if sent_signal == signal.SIGSTOP:
+            assert not joined
+            events.append("freeze")
+        return real_killpg(process_group_id, sent_signal)
+
+    monkeypatch.setattr(BaseProcess, "join", record_join)
+    monkeypatch.setattr(native_process.os, "killpg", record_group_signal)
+
+    result = run_native_engine_child(
+        _entrypoint("_echo_with_budget"),
+        {"fixture": "quiescence-order"},
+        deadline=_deadline(3.0),
+    )
+
+    assert result["request"] == {"fixture": "quiescence-order"}
+    assert events == ["freeze", "join"]
+
+
+def test_linux_process_stat_parser_handles_parentheses_in_command_name():
+    payload = b"123 (worker ) name) S 1 77 77 0 -1 4194560 1 2 3 4 5 6 7 8 9 10 11 12\n"
+
+    assert native_process._parse_linux_process_stat(payload) == (123, 77)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_native_child_reads_unlinked_path_swapped_pinned_bytes(tmp_path):
+    original = b"qualified-pinned-bytes"
+    replacement = b"replacement-path-bytes"
+    source_path = tmp_path / "frame.ppm"
+    source_path.write_bytes(original)
+
+    with source_path.open("rb") as source:
+        source.seek(7)
+        pinned = NativePinnedFile(
+            descriptor=source.fileno(),
+            sha256=hashlib.sha256(original).hexdigest(),
+            size_bytes=len(original),
+        )
+        source_path.unlink()
+        source_path.write_bytes(replacement)
+
+        result = run_native_engine_child(
+            _entrypoint("_read_pinned_file"),
+            {"token": "frame.000000"},
+            deadline=_deadline(3.0),
+            pinned_files={"frame.000000": pinned},
+        )
+
+        assert source.tell() == 7
+
+    assert result == {
+        "payloadHex": original.hex(),
+        "sha256": hashlib.sha256(original).hexdigest(),
+        "tokens": ["frame.000000"],
+        "offset": 7,
+    }
+    assert source_path.read_bytes() == replacement
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_pinned_descriptor_is_sent_only_after_verified_ready_ack(
+    monkeypatch,
+    tmp_path,
+):
+    from multiprocessing import reduction
+
+    payload = b"ordered-transfer"
+    source_path = tmp_path / "ordered.ppm"
+    source_path.write_bytes(payload)
+    events: list[str] = []
+    real_send_bytes = native_process.Connection.send_bytes
+    real_send_handle = reduction.send_handle
+
+    def record_ack(connection, value, *args, **kwargs):
+        if value == native_process._ACK_READY:
+            events.append("ready-ack")
+        elif value == native_process._ACK_ACCEPT:
+            events.append("result-ack")
+        return real_send_bytes(connection, value, *args, **kwargs)
+
+    def record_handle(connection, descriptor, destination_pid):
+        events.append("descriptor")
+        return real_send_handle(connection, descriptor, destination_pid)
+
+    monkeypatch.setattr(native_process.Connection, "send_bytes", record_ack)
+    monkeypatch.setattr(reduction, "send_handle", record_handle)
+
+    with source_path.open("rb") as source:
+        result = run_native_engine_child(
+            _entrypoint("_read_pinned_file"),
+            {"token": "frame"},
+            deadline=_deadline(3.0),
+            pinned_files={
+                "frame": NativePinnedFile(
+                    source.fileno(),
+                    hashlib.sha256(payload).hexdigest(),
+                    len(payload),
+                )
+            },
+        )
+
+    assert result["payloadHex"] == payload.hex()
+    assert events == ["ready-ack", "descriptor", "result-ack"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+def test_no_file_transfer_accepts_legacy_ready_without_pinned_count(monkeypatch):
+    real_receive = native_process._receive_envelope
+    stripped = False
+
+    def strip_ready_count(connection, process, deadline):
+        nonlocal stripped
+        envelope = real_receive(connection, process, deadline)
+        if not stripped and envelope.get("kind") == "ready":
+            envelope = dict(envelope)
+            envelope.pop("pinnedFileCount")
+            stripped = True
+        return envelope
+
+    monkeypatch.setattr(native_process, "_receive_envelope", strip_ready_count)
+
+    result = run_native_engine_child(
+        _entrypoint("_echo_with_budget"),
+        {"fixture": "legacy-ready"},
+        deadline=_deadline(3.0),
+    )
+
+    assert stripped
+    assert result["request"] == {"fixture": "legacy-ready"}
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_native_child_rejects_inode_mutated_during_entrypoint(tmp_path):
+    original = b"original-pinned"
+    replacement = b"mutated!-pinned"
+    assert len(original) == len(replacement)
+    source_path = tmp_path / "mutable.ppm"
+    marker = tmp_path / "child-ready"
+    source_path.write_bytes(original)
+    writer_errors: list[BaseException] = []
+
+    def mutate_after_child_readiness() -> None:
+        try:
+            stop = time.monotonic() + 3.0
+            while time.monotonic() < stop and not marker.exists():
+                time.sleep(0.005)
+            if not marker.exists():
+                raise RuntimeError("child did not reach the mutation gate")
+            with source_path.open("r+b") as writer:
+                writer.write(replacement)
+                writer.flush()
+                os.fsync(writer.fileno())
+        except Exception as exc:
+            writer_errors.append(exc)
+
+    with source_path.open("rb") as source:
+        thread = threading.Thread(target=mutate_after_child_readiness)
+        thread.start()
+        try:
+            with pytest.raises(AdapterError) as raised:
+                run_native_engine_child(
+                    _entrypoint("_wait_for_pinned_mutation"),
+                    {
+                        "token": "frame",
+                        "readyMarker": str(marker),
+                        "replacement": replacement.decode("utf-8"),
+                    },
+                    deadline=_deadline(3.0),
+                    pinned_files={
+                        "frame": NativePinnedFile(
+                            descriptor=source.fileno(),
+                            sha256=hashlib.sha256(original).hexdigest(),
+                            size_bytes=len(original),
+                        )
+                    },
+                )
+        finally:
+            thread.join(timeout=3.0)
+
+    assert not thread.is_alive()
+    assert writer_errors == []
+    assert raised.value.code == "REFINE_INPUT_INVALID"
+    assert any(
+        detail in str(raised.value)
+        for detail in (
+            "changed after transfer validation",
+            "changed during verification",
+            "sha256 does not match",
+        )
+    )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_native_child_rejects_transient_inode_mutation_restored_before_return(
+    tmp_path,
+):
+    original = b"original-pinned"
+    replacement = b"mutated!-pinned"
+    assert len(original) == len(replacement)
+    source_path = tmp_path / "transient.ppm"
+    ready_marker = tmp_path / "transient-ready"
+    observed_marker = tmp_path / "transient-observed"
+    restored_marker = tmp_path / "transient-restored"
+    source_path.write_bytes(original)
+    initial_metadata = source_path.stat()
+    writer_errors: list[BaseException] = []
+
+    def mutate_and_restore_after_child_readiness() -> None:
+        try:
+            stop = time.monotonic() + 3.0
+            while time.monotonic() < stop and not ready_marker.exists():
+                time.sleep(0.005)
+            if not ready_marker.exists():
+                raise RuntimeError("child did not reach the transient mutation gate")
+            with source_path.open("r+b") as writer:
+                writer.write(replacement)
+                writer.flush()
+                os.fsync(writer.fileno())
+                while time.monotonic() < stop and not observed_marker.exists():
+                    time.sleep(0.005)
+                if not observed_marker.exists():
+                    raise RuntimeError("child did not observe transient replacement")
+                writer.seek(0)
+                writer.write(original)
+                writer.flush()
+                os.fsync(writer.fileno())
+            os.utime(
+                source_path,
+                ns=(initial_metadata.st_atime_ns, initial_metadata.st_mtime_ns),
+            )
+            restored_marker.write_text("restored\n", encoding="utf-8")
+        except Exception as exc:
+            writer_errors.append(exc)
+
+    with source_path.open("rb") as source:
+        thread = threading.Thread(target=mutate_and_restore_after_child_readiness)
+        thread.start()
+        try:
+            with pytest.raises(AdapterError) as raised:
+                run_native_engine_child(
+                    _entrypoint("_observe_transient_pinned_mutation"),
+                    {
+                        "token": "frame",
+                        "readyMarker": str(ready_marker),
+                        "observedMarker": str(observed_marker),
+                        "restoredMarker": str(restored_marker),
+                        "original": original.decode("utf-8"),
+                        "replacement": replacement.decode("utf-8"),
+                    },
+                    deadline=_deadline(3.0),
+                    pinned_files={
+                        "frame": NativePinnedFile(
+                            descriptor=source.fileno(),
+                            sha256=hashlib.sha256(original).hexdigest(),
+                            size_bytes=len(original),
+                        )
+                    },
+                )
+        finally:
+            thread.join(timeout=3.0)
+
+    assert not thread.is_alive()
+    assert writer_errors == []
+    assert observed_marker.is_file()
+    assert source_path.read_bytes() == original
+    assert raised.value.code == "REFINE_INPUT_INVALID"
+    assert "changed after transfer validation" in str(raised.value)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+@pytest.mark.parametrize(
+    ("token", "fingerprint_change", "detail"),
+    (
+        ("../escape", None, "tokens must be"),
+        ("a" * 65, None, "tokens must be"),
+        ("\N{LATIN SMALL LETTER E WITH ACUTE}", None, "tokens must be"),
+        ("frame", "sha256", "sha256 does not match"),
+        ("frame", "size", "size does not match"),
+    ),
+)
+def test_native_pinned_file_rejects_unsafe_token_or_wrong_ledger(
+    tmp_path,
+    token,
+    fingerprint_change,
+    detail,
+):
+    payload = b"pinned-ledger"
+    source_path = tmp_path / "ledger.ppm"
+    source_path.write_bytes(payload)
+    with source_path.open("rb") as source:
+        sha256 = hashlib.sha256(payload).hexdigest()
+        size_bytes = len(payload)
+        if fingerprint_change == "sha256":
+            sha256 = "0" * 64
+        elif fingerprint_change == "size":
+            size_bytes += 1
+        with pytest.raises(AdapterError) as raised:
+            run_native_engine_child(
+                _entrypoint("_read_pinned_file"),
+                {"token": token},
+                deadline=_deadline(3.0),
+                pinned_files={
+                    token: NativePinnedFile(
+                        descriptor=source.fileno(),
+                        sha256=sha256,
+                        size_bytes=size_bytes,
+                    )
+                },
+            )
+
+    assert raised.value.code == "REFINE_INPUT_INVALID"
+    assert detail in str(raised.value)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_native_pinned_file_rejects_nonregular_writable_and_duplicate_descriptors(
+    tmp_path,
+):
+    payload = b"descriptor-contract"
+    source_path = tmp_path / "source.ppm"
+    source_path.write_bytes(payload)
+    sha256 = hashlib.sha256(payload).hexdigest()
+
+    directory_descriptor = os.open(tmp_path, os.O_RDONLY)
+    try:
+        with pytest.raises(AdapterError, match="regular file") as nonregular:
+            run_native_engine_child(
+                _entrypoint("_read_pinned_file"),
+                {"token": "frame"},
+                deadline=_deadline(3.0),
+                pinned_files={
+                    "frame": NativePinnedFile(
+                        directory_descriptor,
+                        sha256,
+                        len(payload),
+                    )
+                },
+            )
+        assert nonregular.value.code == "REFINE_INPUT_INVALID"
+    finally:
+        os.close(directory_descriptor)
+
+    writable_descriptor = os.open(source_path, os.O_RDWR)
+    try:
+        with pytest.raises(AdapterError, match="opened read-only") as writable:
+            run_native_engine_child(
+                _entrypoint("_read_pinned_file"),
+                {"token": "frame"},
+                deadline=_deadline(3.0),
+                pinned_files={
+                    "frame": NativePinnedFile(writable_descriptor, sha256, len(payload))
+                },
+            )
+        assert writable.value.code == "REFINE_INPUT_INVALID"
+    finally:
+        os.close(writable_descriptor)
+
+    with source_path.open("rb") as source:
+        value = NativePinnedFile(source.fileno(), sha256, len(payload))
+        with pytest.raises(AdapterError, match="unique non-negative") as duplicate:
+            run_native_engine_child(
+                _entrypoint("_read_pinned_file"),
+                {"token": "frame"},
+                deadline=_deadline(3.0),
+                pinned_files={"frame": value, "frame-copy": value},
+            )
+        assert duplicate.value.code == "REFINE_INPUT_INVALID"
+
+    with source_path.open("rb") as first, source_path.open("rb") as second:
+        with pytest.raises(AdapterError, match="unique regular-file") as same_inode:
+            run_native_engine_child(
+                _entrypoint("_read_pinned_file"),
+                {"token": "frame"},
+                deadline=_deadline(3.0),
+                pinned_files={
+                    "frame": NativePinnedFile(
+                        first.fileno(),
+                        sha256,
+                        len(payload),
+                    ),
+                    "frame-copy": NativePinnedFile(
+                        second.fileno(),
+                        sha256,
+                        len(payload),
+                    ),
+                },
+            )
+        assert same_inode.value.code == "REFINE_INPUT_INVALID"
+
+
+def test_native_pinned_file_rejects_closed_descriptor_before_spawn(tmp_path):
+    source_path = tmp_path / "closed.ppm"
+    payload = b"closed-descriptor"
+    source_path.write_bytes(payload)
+    descriptor = os.open(source_path, os.O_RDONLY)
+    os.close(descriptor)
+
+    with pytest.raises(AdapterError, match="could not be duplicated") as raised:
+        run_native_engine_child(
+            _entrypoint("_read_pinned_file"),
+            {"token": "frame"},
+            deadline=_deadline(3.0),
+            pinned_files={
+                "frame": NativePinnedFile(
+                    descriptor,
+                    hashlib.sha256(payload).hexdigest(),
+                    len(payload),
+                )
+            },
+        )
+
+    assert raised.value.code == "REFINE_INPUT_INVALID"
+
+
+def test_parent_closes_duplicate_when_noninheritable_setup_fails(
+    monkeypatch,
+    tmp_path,
+):
+    payload = b"noninheritable-parent"
+    source_path = tmp_path / "parent.ppm"
+    source_path.write_bytes(payload)
+    duplicates: list[int] = []
+    closed: list[int] = []
+    real_dup = os.dup
+    real_close = os.close
+    real_set_inheritable = os.set_inheritable
+
+    def record_dup(descriptor):
+        duplicate = real_dup(descriptor)
+        duplicates.append(duplicate)
+        return duplicate
+
+    def fail_noninheritable(descriptor, _inheritable):
+        if descriptor in duplicates:
+            raise OSError("synthetic non-inheritable failure")
+        return real_set_inheritable(descriptor, _inheritable)
+
+    def record_close(descriptor):
+        if descriptor in duplicates:
+            closed.append(descriptor)
+        return real_close(descriptor)
+
+    monkeypatch.setattr(native_process.os, "dup", record_dup)
+    monkeypatch.setattr(
+        native_process.os,
+        "set_inheritable",
+        fail_noninheritable,
+    )
+    monkeypatch.setattr(native_process.os, "close", record_close)
+
+    with source_path.open("rb") as source:
+        with pytest.raises(AdapterError) as raised:
+            run_native_engine_child(
+                _entrypoint("_read_pinned_file"),
+                {"token": "frame"},
+                deadline=_deadline(3.0),
+                pinned_files={
+                    "frame": NativePinnedFile(
+                        source.fileno(),
+                        hashlib.sha256(payload).hexdigest(),
+                        len(payload),
+                    )
+                },
+            )
+        assert os.pread(source.fileno(), len(payload), 0) == payload
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert duplicates
+    assert closed == duplicates
+
+
+def test_child_closes_received_descriptor_when_noninheritable_setup_fails(
+    monkeypatch,
+    tmp_path,
+):
+    payload = b"noninheritable-child"
+    source_path = tmp_path / "child.ppm"
+    source_path.write_bytes(payload)
+    real_close = os.close
+    real_set_inheritable = os.set_inheritable
+    closed: list[int] = []
+
+    class ReadyConnection:
+        def poll(self, _timeout):
+            return True
+
+    with source_path.open("rb") as source:
+        received_descriptor = os.dup(source.fileno())
+
+        def fail_noninheritable(descriptor, _inheritable):
+            if descriptor == received_descriptor:
+                raise OSError("synthetic child non-inheritable failure")
+            return real_set_inheritable(descriptor, _inheritable)
+
+        def record_close(descriptor):
+            if descriptor == received_descriptor:
+                closed.append(descriptor)
+            return real_close(descriptor)
+
+        monkeypatch.setattr(
+            "multiprocessing.reduction.recv_handle",
+            lambda _connection: received_descriptor,
+        )
+        monkeypatch.setattr(
+            native_process.os,
+            "set_inheritable",
+            fail_noninheritable,
+        )
+        monkeypatch.setattr(native_process.os, "close", record_close)
+
+        with pytest.raises(OSError, match="synthetic child non-inheritable"):
+            native_process._receive_pinned_files(
+                ReadyConnection(),
+                (("frame", hashlib.sha256(payload).hexdigest(), len(payload)),),
+                context=NativeChildContext(time.monotonic() + 3.0),
+            )
+
+    assert closed == [received_descriptor]
+
+
+@pytest.mark.parametrize(
+    ("values", "detail"),
+    (
+        (
+            {
+                "frame": NativePinnedFile(
+                    1000,
+                    "0" * 64,
+                    NATIVE_CHILD_MAX_PINNED_FILE_BYTES + 1,
+                )
+            },
+            "per-file byte limit",
+        ),
+        (
+            {
+                f"frame.{index:06d}": NativePinnedFile(
+                    1000 + index,
+                    "0" * 64,
+                    NATIVE_CHILD_MAX_PINNED_FILE_BYTES,
+                )
+                for index in range(
+                    (
+                        NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES
+                        // NATIVE_CHILD_MAX_PINNED_FILE_BYTES
+                    )
+                    + 1
+                )
+            },
+            "aggregate byte limit",
+        ),
+    ),
+)
+def test_native_pinned_file_byte_caps_are_enforced_before_duplication(
+    monkeypatch,
+    values,
+    detail,
+):
+    side_effects: list[str] = []
+    monkeypatch.setattr(
+        native_process.os,
+        "dup",
+        lambda _descriptor: side_effects.append("duplicate"),
+    )
+    monkeypatch.setattr(
+        native_process.multiprocessing,
+        "get_context",
+        lambda _method: side_effects.append("spawn-context"),
+    )
+
+    with pytest.raises(AdapterError, match=detail) as raised:
+        run_native_engine_child(
+            _entrypoint("_read_pinned_file"),
+            {"token": "frame"},
+            deadline=_deadline(3.0),
+            pinned_files=values,
+        )
+
+    assert raised.value.code == "REFINE_INPUT_INVALID"
+    assert side_effects == []
+
+
+def test_native_pinned_file_count_is_bounded_before_spawn(monkeypatch):
+    launched: list[str] = []
+    monkeypatch.setattr(
+        native_process.multiprocessing,
+        "get_context",
+        lambda _method: launched.append("context"),
+    )
+    values = {
+        f"frame.{index:06d}": NativePinnedFile(index, "0" * 64, 0)
+        for index in range(NATIVE_CHILD_MAX_PINNED_FILES + 1)
+    }
+
+    with pytest.raises(AdapterError, match="count exceeds") as raised:
+        run_native_engine_child(
+            _entrypoint("_read_pinned_file"),
+            {"token": "frame.000000"},
+            deadline=_deadline(3.0),
+            pinned_files=values,
+        )
+
+    assert raised.value.code == "REFINE_INPUT_INVALID"
+    assert launched == []
+
+
+def test_preexpired_deadline_does_not_duplicate_pinned_file_or_spawn(
+    monkeypatch,
+    tmp_path,
+):
+    payload = b"preexpired-pinned-file"
+    source_path = tmp_path / "preexpired.ppm"
+    source_path.write_bytes(payload)
+    side_effects: list[str] = []
+
+    class ExpiredDeadline:
+        expires_at_monotonic_s = 1.0
+
+        def remaining_seconds(self):
+            raise AdapterError(
+                "refine stage engine deadline is exhausted",
+                "REFINE_ENGINE_TIMEOUT",
+            )
+
+    monkeypatch.setattr(
+        native_process.os,
+        "dup",
+        lambda _descriptor: side_effects.append("duplicate"),
+    )
+    monkeypatch.setattr(
+        native_process.multiprocessing,
+        "get_context",
+        lambda _method: side_effects.append("spawn-context"),
+    )
+
+    with source_path.open("rb") as source, pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_read_pinned_file"),
+            {"token": "frame"},
+            deadline=ExpiredDeadline(),
+            pinned_files={
+                "frame": NativePinnedFile(
+                    source.fileno(),
+                    hashlib.sha256(payload).hexdigest(),
+                    len(payload),
+                )
+            },
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+    assert side_effects == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_interrupted_pinned_file_transfer_closes_duplicate_and_kills_child(
+    monkeypatch,
+    tmp_path,
+):
+    payload = b"interrupt-transfer"
+    source_path = tmp_path / "interrupt.ppm"
+    source_path.write_bytes(payload)
+    closed_tokens: list[str] = []
+    cleanup_calls: list[tuple[int | None, tuple[str, ...]]] = []
+    real_close_descriptors = native_process._close_descriptors_safely
+    real_cleanup = native_process._cleanup_process
+
+    def record_descriptor_closes(descriptors):
+        rows = tuple(descriptors)
+        closed_tokens.extend(token for token, _descriptor in rows)
+        return real_close_descriptors(rows)
+
+    def record_cleanup(process, *, group_leader_pid):
+        errors = real_cleanup(
+            process,
+            group_leader_pid=group_leader_pid,
+        )
+        cleanup_calls.append((group_leader_pid, errors))
+        return errors
+
+    def interrupt_send_handle(_connection, _descriptor, _destination_pid):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        native_process,
+        "_close_descriptors_safely",
+        record_descriptor_closes,
+    )
+    monkeypatch.setattr(native_process, "_cleanup_process", record_cleanup)
+    monkeypatch.setattr(
+        "multiprocessing.reduction.send_handle",
+        interrupt_send_handle,
+    )
+
+    with source_path.open("rb") as source:
+        with pytest.raises(KeyboardInterrupt):
+            run_native_engine_child(
+                _entrypoint("_read_pinned_file"),
+                {"token": "frame"},
+                deadline=_deadline(3.0),
+                pinned_files={
+                    "frame": NativePinnedFile(
+                        source.fileno(),
+                        hashlib.sha256(payload).hexdigest(),
+                        len(payload),
+                    )
+                },
+            )
+        assert os.pread(source.fileno(), len(payload), 0) == payload
+
+    assert closed_tokens.count("frame") == 1
+    assert len(cleanup_calls) == 1
+    group_leader_pid, cleanup_errors = cleanup_calls[0]
+    assert isinstance(group_leader_pid, int)
+    assert cleanup_errors == ()
+    assert _pid_is_gone(group_leader_pid)
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
@@ -1055,8 +1877,7 @@ def test_false_clean_primary_cleanup_is_verified_before_return_and_kills_group(
     assert "remains alive after cleanup verification" in str(failure)
     assert len(str(failure).encode("utf-8")) <= NATIVE_CHILD_MAX_ERROR_BYTES
     assert emergency_calls == [leader_pid]
-    assert verification_reports[0]
-    assert verification_reports[-1] == ()
+    assert verification_reports == [()]
     assert gone_at_return
     time.sleep(0.80)
     assert activity_log.read_text(encoding="utf-8") == "leader-ready\n"
@@ -1106,8 +1927,131 @@ def test_false_clean_primary_cleanup_with_verification_exception_is_fatal(
     assert "verification raised RuntimeError" in str(raised.value)
     assert "synthetic cleanup verification crash" in str(raised.value)
     assert len(str(raised.value).encode("utf-8")) <= NATIVE_CHILD_MAX_ERROR_BYTES
-    assert len(verify_calls) == 2
-    assert emergency_calls == [verify_calls[0]]
+    assert verify_calls == [None]
+    assert len(emergency_calls) == 1
+    assert isinstance(emergency_calls[0], int)
+
+
+def test_group_cleanup_never_addresses_pgid_after_leader_reap(monkeypatch):
+    events: list[tuple[str, object]] = []
+
+    class ReapedProcess:
+        sentinel = 101
+
+        def __init__(self):
+            self.reaped = False
+
+        def join(self, _timeout=None):
+            events.append(("join", self.reaped))
+            self.reaped = True
+
+        def is_alive(self):
+            return False
+
+        def kill(self):
+            events.append(("direct-kill", self.reaped))
+
+    process = ReapedProcess()
+
+    def record_group_signal(_group_leader_pid, sent_signal):
+        events.append(("group", (sent_signal, process.reaped)))
+
+    monkeypatch.setattr(native_process.os, "killpg", record_group_signal)
+
+    assert (
+        native_process._terminate_and_reap(
+            process,
+            group_leader_pid=424242,
+        )
+        == ()
+    )
+    group_events = [value for kind, value in events if kind == "group"]
+    assert group_events == [
+        (signal.SIGTERM, False),
+        (signal.SIGKILL, False),
+    ]
+    assert process.reaped is True
+
+    events.clear()
+    verify_calls = 0
+
+    def primary_already_reaped(candidate, *, group_leader_pid):
+        assert group_leader_pid == 424242
+        candidate.join(0)
+        return ()
+
+    def verification_uncertain(_candidate, *, group_leader_pid):
+        nonlocal verify_calls
+        verify_calls += 1
+        assert group_leader_pid is None
+        if verify_calls == 1:
+            return ("synthetic post-reap verification uncertainty",)
+        return ()
+
+    monkeypatch.setattr(
+        native_process,
+        "_terminate_and_reap",
+        primary_already_reaped,
+    )
+    monkeypatch.setattr(
+        native_process,
+        "_leader_exit_observed_without_reap",
+        lambda _candidate: (True, ()),
+    )
+    monkeypatch.setattr(
+        native_process,
+        "_verify_cleanup_complete",
+        verification_uncertain,
+    )
+
+    errors = native_process._cleanup_process(
+        process,
+        group_leader_pid=424242,
+    )
+
+    assert errors == ("synthetic post-reap verification uncertainty",)
+    assert [event for event in events if event[0] == "group"] == []
+    assert ("direct-kill", True) in events
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+def test_success_result_with_surviving_descendant_is_rejected_and_group_is_killed(
+    tmp_path,
+):
+    descendant_pid_path = tmp_path / "success-descendant.pid"
+    late_artifact = tmp_path / "published-after-success.json"
+    descendant_pid = None
+    gone_before_manual_cleanup = False
+
+    try:
+        with pytest.raises(AdapterError) as raised:
+            run_native_engine_child(
+                _entrypoint("_spawn_survivor_and_return"),
+                {
+                    "descendantPid": str(descendant_pid_path),
+                    "lateArtifact": str(late_artifact),
+                },
+                deadline=_deadline(3.0),
+            )
+
+        assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+        assert "process group was quiescent" in str(raised.value)
+        assert descendant_pid_path.is_file()
+        descendant_pid = int(descendant_pid_path.read_text(encoding="utf-8"))
+        stop = time.monotonic() + 2.0
+        while time.monotonic() < stop and not _pid_is_gone(descendant_pid):
+            time.sleep(0.01)
+        gone_before_manual_cleanup = _pid_is_gone(descendant_pid)
+    finally:
+        if descendant_pid is not None and not _pid_is_gone(descendant_pid):
+            try:
+                os.kill(descendant_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+    assert gone_before_manual_cleanup
+    time.sleep(0.80)
+    assert not late_artifact.exists()
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
