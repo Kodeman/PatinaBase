@@ -151,6 +151,7 @@ class _PinnedFileTransfer:
     descriptor: int
     sha256: str
     size_bytes: int
+    original_offset: int | None = None
 
 
 def native_engine_entrypoint(target):
@@ -629,7 +630,19 @@ def _receive_exact_child_ack(
         )
 
 
-def _descriptor_snapshot(metadata: os.stat_result) -> tuple[int, ...]:
+def _descriptor_snapshot(
+    metadata: os.stat_result,
+    descriptor: int,
+    *,
+    token: str,
+) -> tuple[int, ...]:
+    try:
+        offset = os.lseek(descriptor, 0, os.SEEK_CUR)
+    except OSError as exc:
+        raise AdapterError(
+            f"native pinned file {token} offset is unavailable",
+            _INVALID_INPUT_CODE,
+        ) from exc
     return (
         metadata.st_dev,
         metadata.st_ino,
@@ -637,7 +650,23 @@ def _descriptor_snapshot(metadata: os.stat_result) -> tuple[int, ...]:
         metadata.st_size,
         metadata.st_mtime_ns,
         metadata.st_ctime_ns,
+        offset,
     )
+
+
+def _restore_descriptor_offset(
+    descriptor: int,
+    *,
+    token: str,
+    offset: int,
+) -> None:
+    try:
+        os.lseek(descriptor, offset, os.SEEK_SET)
+    except OSError as exc:
+        raise AdapterError(
+            f"native pinned file {token} shared offset could not be restored",
+            _CLEANUP_FAILED_CODE,
+        ) from exc
 
 
 def _descriptor_access_mode(descriptor: int) -> int:
@@ -689,12 +718,6 @@ def _validate_pinned_descriptor(
             f"native pinned file {token} descriptor is unavailable",
             _INVALID_INPUT_CODE,
         ) from exc
-    before_snapshot = _descriptor_snapshot(before)
-    if expected_snapshot is not None and before_snapshot != expected_snapshot:
-        raise AdapterError(
-            f"native pinned file {token} changed after transfer validation",
-            _INVALID_INPUT_CODE,
-        )
     if not stat.S_ISREG(before.st_mode):
         raise AdapterError(
             f"native pinned file {token} must be a regular file",
@@ -703,6 +726,25 @@ def _validate_pinned_descriptor(
     if _descriptor_access_mode(descriptor) != os.O_RDONLY:
         raise AdapterError(
             f"native pinned file {token} must be opened read-only",
+            _INVALID_INPUT_CODE,
+        )
+    before_snapshot = _descriptor_snapshot(
+        before,
+        descriptor,
+        token=token,
+    )
+    if expected_snapshot is not None and before_snapshot != expected_snapshot:
+        if (
+            len(expected_snapshot) == len(before_snapshot)
+            and before_snapshot[-1] != expected_snapshot[-1]
+        ):
+            _restore_descriptor_offset(
+                descriptor,
+                token=token,
+                offset=expected_snapshot[-1],
+            )
+        raise AdapterError(
+            f"native pinned file {token} changed after transfer validation",
             _INVALID_INPUT_CODE,
         )
     if before.st_size != expected_size:
@@ -743,8 +785,18 @@ def _validate_pinned_descriptor(
             f"native pinned file {token} exceeds its declared size",
             _INVALID_INPUT_CODE,
         )
-    after_snapshot = _descriptor_snapshot(after)
+    after_snapshot = _descriptor_snapshot(
+        after,
+        descriptor,
+        token=token,
+    )
     if before_snapshot != after_snapshot:
+        if before_snapshot[-1] != after_snapshot[-1]:
+            _restore_descriptor_offset(
+                descriptor,
+                token=token,
+                offset=before_snapshot[-1],
+            )
         raise AdapterError(
             f"native pinned file {token} changed during verification",
             _INVALID_INPUT_CODE,
@@ -922,6 +974,13 @@ def _prepare_pinned_files(
                     _INVALID_INPUT_CODE,
                 )
             seen_identities.add(identity)
+            prepared[-1] = _PinnedFileTransfer(
+                token=contract.token,
+                descriptor=duplicate,
+                sha256=contract.sha256,
+                size_bytes=contract.size_bytes,
+                original_offset=snapshot[-1],
+            )
     except BaseException as exc:
         close_errors = _close_descriptors_safely(
             (value.token, value.descriptor) for value in prepared
@@ -1458,10 +1517,7 @@ def _terminate_and_reap(
         error = _signal_group(group_leader_pid, signal.SIGKILL)
         if error is not None:
             message = _signal_error(signal.SIGKILL, error)
-            if not (
-                sys.platform == "darwin"
-                and isinstance(error, PermissionError)
-            ):
+            if not (sys.platform == "darwin" and isinstance(error, PermissionError)):
                 errors.append(message)
             # Darwin reports EPERM when the group contains only our dead,
             # unreaped leader. Every live descendant of this unprivileged
@@ -1826,9 +1882,7 @@ def _cleanup_process(
             *observation_errors,
             "native child leader remains alive after cleanup verification",
         )
-    emergency_group_leader_pid = (
-        group_leader_pid if exit_observed is False else None
-    )
+    emergency_group_leader_pid = group_leader_pid if exit_observed is False else None
     emergency_errors: tuple[str, ...] = ()
     emergency_attempted = force_emergency or exit_observed is not True
     if emergency_attempted:
@@ -1962,6 +2016,63 @@ def _send_pinned_files(
             ),
             _FAILED_CODE,
         ) from exc
+
+
+def _restore_transfer_offsets_safely(
+    transfers: Iterable[_PinnedFileTransfer],
+) -> tuple[str, ...]:
+    """Restore shared open-file-description offsets before parent fd close."""
+
+    errors: list[str] = []
+    for transfer in transfers:
+        original_offset = transfer.original_offset
+        if original_offset is None:
+            continue
+        try:
+            current_offset = os.lseek(
+                transfer.descriptor,
+                0,
+                os.SEEK_CUR,
+            )
+        except OSError as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot inspect native pinned file ",
+                    transfer.token,
+                    " shared offset during parent cleanup: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            continue
+        if current_offset == original_offset:
+            continue
+        try:
+            os.lseek(
+                transfer.descriptor,
+                original_offset,
+                os.SEEK_SET,
+            )
+        except OSError as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot restore native pinned file ",
+                    transfer.token,
+                    " shared offset during parent cleanup: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            continue
+        errors.append(
+            _bounded_diagnostic(
+                "native pinned file ",
+                transfer.token,
+                " changed its shared offset; parent cleanup restored it",
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            )
+        )
+    return tuple(errors)
 
 
 def run_native_engine_child(
@@ -2396,6 +2507,7 @@ def run_native_engine_child(
                 )
             )
         )
+        offset_restore_errors = _restore_transfer_offsets_safely(transfers)
         resource_errors.extend(
             _close_descriptors_safely(
                 (transfer.token, transfer.descriptor) for transfer in transfers
@@ -2424,8 +2536,12 @@ def run_native_engine_child(
                         )
                     )
 
-        all_final_errors = (*final_cleanup_errors, *resource_errors)
-        if final_cleanup_errors:
+        all_final_errors = (
+            *final_cleanup_errors,
+            *offset_restore_errors,
+            *resource_errors,
+        )
+        if final_cleanup_errors or offset_restore_errors:
             raise _cleanup_failed_error(
                 "refine native child cleanup failed",
                 all_final_errors,

@@ -137,6 +137,25 @@ def _read_pinned_file(request, context: NativeChildContext):
 
 
 @native_engine_entrypoint
+def _advance_pinned_file_offset(request, context: NativeChildContext):
+    descriptor = context.pinned_file_descriptor(request["token"])
+    os.read(descriptor, 1)
+    return {"unexpected": "success"}
+
+
+@native_engine_entrypoint
+def _advance_pinned_file_offset_then_sleep(
+    request,
+    context: NativeChildContext,
+):
+    descriptor = context.pinned_file_descriptor(request["token"])
+    os.read(descriptor, 1)
+    Path(request["readyMarker"]).write_text("advanced\n", encoding="utf-8")
+    time.sleep(30.0)
+    return {"unexpected": "success"}
+
+
+@native_engine_entrypoint
 def _wait_for_pinned_mutation(request, context: NativeChildContext):
     descriptor = context.pinned_file_descriptor(request["token"])
     marker = Path(request["readyMarker"])
@@ -304,6 +323,67 @@ def test_native_child_reads_unlinked_path_swapped_pinned_bytes(tmp_path):
         "offset": 7,
     }
     assert source_path.read_bytes() == replacement
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_native_child_rejects_and_restores_shared_offset_mutation(tmp_path):
+    payload = b"qualified-pinned-bytes"
+    source_path = tmp_path / "offset.ppm"
+    source_path.write_bytes(payload)
+
+    with source_path.open("rb") as source:
+        source.seek(7)
+        pinned = NativePinnedFile(
+            descriptor=source.fileno(),
+            sha256=hashlib.sha256(payload).hexdigest(),
+            size_bytes=len(payload),
+        )
+
+        with pytest.raises(
+            AdapterError,
+            match="changed after transfer validation",
+        ) as raised:
+            run_native_engine_child(
+                _entrypoint("_advance_pinned_file_offset"),
+                {"token": "frame.000000"},
+                deadline=_deadline(3.0),
+                pinned_files={"frame.000000": pinned},
+            )
+
+        assert raised.value.code == "REFINE_INPUT_INVALID"
+        assert source.tell() == 7
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_parent_restores_shared_offset_when_mutating_child_times_out(tmp_path):
+    payload = b"qualified-pinned-bytes"
+    source_path = tmp_path / "timeout-offset.ppm"
+    ready_marker = tmp_path / "offset-advanced"
+    source_path.write_bytes(payload)
+
+    with source_path.open("rb") as source:
+        source.seek(7)
+        pinned = NativePinnedFile(
+            descriptor=source.fileno(),
+            sha256=hashlib.sha256(payload).hexdigest(),
+            size_bytes=len(payload),
+        )
+
+        with pytest.raises(AdapterError) as raised:
+            run_native_engine_child(
+                _entrypoint("_advance_pinned_file_offset_then_sleep"),
+                {
+                    "token": "frame.000000",
+                    "readyMarker": str(ready_marker),
+                },
+                deadline=_deadline(1.0),
+                pinned_files={"frame.000000": pinned},
+            )
+
+        assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+        assert "shared offset; parent cleanup restored it" in str(raised.value)
+        assert ready_marker.read_text(encoding="utf-8") == "advanced\n"
+        assert source.tell() == 7
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
