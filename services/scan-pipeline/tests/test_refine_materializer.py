@@ -113,17 +113,21 @@ def _regular(name: str, payload: bytes) -> tuple[tarfile.TarInfo, bytes]:
 class _MemoryAcquirer:
     def __init__(self, objects: dict[str, bytes]) -> None:
         self.objects = objects
-        self.calls: list[tuple[str, object, RefineDeadline]] = []
+        self.calls: list[
+            tuple[RefineSourceArtifact, str, str, object, RefineDeadline]
+        ] = []
 
     def acquire(
         self,
         *,
-        object_key: str,
+        source: RefineSourceArtifact,
+        user_id: str,
+        scan_id: str,
         destination,
         deadline: RefineDeadline,
     ) -> None:
-        self.calls.append((object_key, destination, deadline))
-        destination.write(self.objects[object_key])
+        self.calls.append((source, user_id, scan_id, destination, deadline))
+        destination.write(self.objects[source.object_key])
 
 
 class _PrematerializedRaster:
@@ -359,14 +363,15 @@ def test_materializes_private_deterministic_runner_seam(tmp_path):
         row.engine_sha256 == _sha256(row.engine_path.read_bytes())
         for row in result.frames
     )
-    assert all(call[2] is deadline for call in acquirer.calls)
+    assert all(call[4] is deadline for call in acquirer.calls)
     assert all(call[4] is deadline for call in raster.calls)
-    assert [call[0] for call in acquirer.calls] == [
+    assert [call[0].object_key for call in acquirer.calls] == [
         fixture.manifest.object_key,
         fixture.index.object_key,
         fixture.summary.object_key,
         fixture.archive.object_key,
     ]
+    assert all(call[1:3] == (USER_ID, SCAN_ID) for call in acquirer.calls)
     assert not (result.workspace_root / "incoming").exists()
     assert not (result.workspace_root / "raster-incoming").exists()
     with result.open_verified_file(
@@ -420,10 +425,18 @@ def test_acquirer_write_is_hard_bounded_during_the_injected_call(tmp_path):
     class _OverflowAcquirer(_MemoryAcquirer):
         overflow_returned = False
 
-        def acquire(self, *, object_key, destination, deadline):
-            self.calls.append((object_key, destination, deadline))
+        def acquire(
+            self,
+            *,
+            source,
+            user_id,
+            scan_id,
+            destination,
+            deadline,
+        ):
+            self.calls.append((source, user_id, scan_id, destination, deadline))
             assert not isinstance(destination, Path)
-            destination.write(self.objects[object_key] + b"x")
+            destination.write(self.objects[source.object_key] + b"x")
             self.overflow_returned = True
 
     acquirer = _OverflowAcquirer(fixture.objects)
@@ -458,9 +471,19 @@ def test_deadline_expiry_after_acquirer_is_fail_closed(tmp_path):
     deadline = _deadline()
 
     class _ExpiringAcquirer(_MemoryAcquirer):
-        def acquire(self, *, object_key, destination, deadline):
+        def acquire(
+            self,
+            *,
+            source,
+            user_id,
+            scan_id,
+            destination,
+            deadline,
+        ):
             super().acquire(
-                object_key=object_key,
+                source=source,
+                user_id=user_id,
+                scan_id=scan_id,
                 destination=destination,
                 deadline=deadline,
             )
@@ -476,6 +499,63 @@ def test_deadline_expiry_after_acquirer_is_fail_closed(tmp_path):
         materializer.materialize(fixture.request, deadline=deadline)
 
     assert caught.value.code is MaterializerFailureCode.DEADLINE
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("adapter_code", "expected_code"),
+    (
+        (
+            MaterializerFailureCode.DEADLINE.value,
+            MaterializerFailureCode.DEADLINE,
+        ),
+        (
+            MaterializerFailureCode.INPUT_IO.value,
+            MaterializerFailureCode.INPUT_IO,
+        ),
+        (
+            MaterializerFailureCode.INPUT_INVALID.value,
+            MaterializerFailureCode.INPUT_INVALID,
+        ),
+        (
+            MaterializerFailureCode.OWNERSHIP.value,
+            MaterializerFailureCode.OWNERSHIP,
+        ),
+        ("REFINE_UNKNOWN_ACQUISITION", MaterializerFailureCode.INPUT_IO),
+    ),
+)
+def test_acquirer_error_codes_are_stably_mapped_and_cleanup(
+    tmp_path,
+    adapter_code,
+    expected_code,
+):
+    fixture = _Fixture(tmp_path)
+
+    class _FailingAcquirer(_MemoryAcquirer):
+        def acquire(
+            self,
+            *,
+            source,
+            user_id,
+            scan_id,
+            destination,
+            deadline,
+        ):
+            self.calls.append((source, user_id, scan_id, destination, deadline))
+            raise AdapterError("classified acquisition failure", adapter_code)
+
+    acquirer = _FailingAcquirer(fixture.objects)
+    materializer = RefineMaterializer(
+        acquirer=acquirer,
+        raster_materializer=_PrematerializedRaster(),
+    )
+
+    with pytest.raises(RefineMaterializerError) as caught:
+        materializer.materialize(fixture.request, deadline=_deadline())
+
+    assert caught.value.code is expected_code
+    assert acquirer.calls[0][0] == fixture.manifest
+    assert acquirer.calls[0][1:3] == (USER_ID, SCAN_ID)
     assert list(tmp_path.iterdir()) == []
 
 
@@ -917,9 +997,19 @@ def test_acquirer_ancestor_swap_never_redirects_freeze_or_cleanup(tmp_path):
     class _SwappingAcquirer(_MemoryAcquirer):
         swapped = False
 
-        def acquire(self, *, object_key, destination, deadline):
+        def acquire(
+            self,
+            *,
+            source,
+            user_id,
+            scan_id,
+            destination,
+            deadline,
+        ):
             super().acquire(
-                object_key=object_key,
+                source=source,
+                user_id=user_id,
+                scan_id=scan_id,
                 destination=destination,
                 deadline=deadline,
             )

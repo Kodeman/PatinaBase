@@ -885,7 +885,7 @@ else
 fi
 echo "-- smoke-checking package imports and console entrypoint"
 _run_as_service_user "$SMOKE_VENV/bin/python" -I -c \
-  'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor; import patina_scan_worker.field_raster_materializer; import patina_scan_worker.refine_materializer; import patina_scan_worker.refine_native_process; import patina_scan_worker.refine_publisher; import patina_scan_worker.refine_runner'
+  'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor; import patina_scan_worker.field_raster_materializer; import patina_scan_worker.field_storage_acquirer; import patina_scan_worker.refine_materializer; import patina_scan_worker.refine_native_process; import patina_scan_worker.refine_publisher; import patina_scan_worker.refine_runner'
 if [ "$GPU" -eq 1 ]; then
   _run_as_service_user /usr/bin/test -x \
     "$SMOKE_VENV/libexec/patina/field-raster-libheif-helper-v2"

@@ -112,10 +112,11 @@ points at deleted transaction state. Its package member names and bytes must
 match that trusted source manifest exactly, and its dependency/extra metadata is
 checked before pip is allowed to resolve it.
 The package manifest now includes the queue-independent
-`field_raster_materializer.py`, `refine_materializer.py`,
-`refine_native_process.py`, `refine_publisher.py`, and `refine_runner.py`
-foundations, and every candidate release imports all five as the `patina`
-service user before activation. GPU candidates also compile the byte-identical
+`field_raster_materializer.py`, `field_storage_acquirer.py`,
+`refine_materializer.py`, `refine_native_process.py`, `refine_publisher.py`,
+and `refine_runner.py` foundations, and every candidate release imports all six
+as the `patina` service user before activation. GPU candidates also compile the
+byte-identical
 I92-qualified `field_raster_libheif.c` into a root-owned immutable
 `libexec/patina/field-raster-libheif-helper-v2`; CPU candidates do not install
 that executable. The concrete Field raster adapter accepts only the physically
@@ -123,6 +124,19 @@ qualified 360x640 HEIC profile, pins the installed helper and private scratch
 directory by descriptor, and streams validated canonical PPM bytes only after
 unlinking the helper output. It intentionally rejects variable-size keyframes
 until a new helper protocol and physical-device receipt qualify them.
+The concrete Field Storage adapter repeats owner/scan anchoring before creating
+its service-role HTTP client, requests identity-encoded raw bytes, and requires
+an exact status, content length, streamed byte count, and SHA-256 before it
+returns. It writes only through the materializer-owned bounded descriptor sink
+and never receives a destination path. The same absolute Refine deadline
+cancels the asynchronous request, body stream, and response cleanup and is
+checked immediately before and after each synchronous bounded regular-file
+write. A genuinely kernel-blocked local write cannot be preempted by this
+in-process adapter; a later killable composition boundary must close that gate
+before production enablement.
+Storage authentication failures (401/403), retryable statuses, and server
+failures are operational nonfatal `REFINE_INPUT_IO` failures; a missing object
+(404) and other response-ledger drift remain fatal `REFINE_INPUT_INVALID`.
 These foundations remain deliberately unregistered:
 installing or importing them does not add `scan_pipeline.refine` to the stage
 registry or change persistent/default `STAGES`.
@@ -131,10 +145,11 @@ per-task aggregate raster workspace ceiling, and descriptor-pinned workspace
 access. Its absolute paths are display metadata; disabled composition code must
 consume verified bytes through `RefineMaterialization.open_verified_file()` and
 then call `cleanup()`.
-The runner, materializer, concrete exact-profile Field raster adapter, and
-publisher remain disabled contract boundaries only. No stage handler composes
-them; passing install/import tests or the physical raster/COLMAP receipts does
-not authorize Refine, a queue claim, or a run on a real scan.
+The runner, materializer, concrete Field Storage and exact-profile Field raster
+adapters, and publisher remain disabled contract boundaries only. No stage
+handler composes them; passing install/import tests or the physical
+raster/COLMAP receipts does not authorize Refine, a queue claim, or a run on a
+real scan.
 Archive-mode rsync also copies the checkout directory's mode onto the staged
 tree. `--chmod=Dgo-w,Fgo-w` removes unsafe write bits during transfer; the
 explicit `chmod -R go-w` repeats that hardening as defense-in-depth.

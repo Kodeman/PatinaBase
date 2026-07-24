@@ -1,15 +1,13 @@
 """Disabled, queue-independent input materializer for P2 Refine.
 
-This module stops before the unqualified Field/Core Image raster boundary.  It
-owns a private workspace for one task lease, acquires the four immutable Field
-inputs through an injected adapter, verifies each acquisition from one
-nonblocking/no-follow descriptor, and extracts ``keyframes.tar`` only after a
-complete bounded preflight.
+This module owns a private workspace for one task lease, acquires the four
+immutable Field inputs through an injected adapter, verifies each acquisition
+from one nonblocking/no-follow descriptor, and extracts ``keyframes.tar`` only
+after a complete bounded preflight.
 
-``FieldRasterMaterializer`` is intentionally a protocol with no production
-implementation here.  The physical iPhone/Core Image fixture must qualify that
-implementation before Refine can be registered.  Tests use a deterministic
-pre-materialized PPM fake.
+Concrete Field Storage and Field/Core Image adapters are packaged separately,
+but remain disabled and uncomposed. Tests use deterministic in-memory Storage
+and pre-materialized PPM fakes.
 
 The result deliberately does not import :mod:`refine_runner`.  A later disabled
 composition layer can adapt each :class:`MaterializedRefineFrame` to the
@@ -125,6 +123,13 @@ def _fail(code: MaterializerFailureCode, message: str) -> NoReturn:
     raise RefineMaterializerError(code, message)
 
 
+def _fail_acquisition(exc: AdapterError) -> NoReturn:
+    for code in MaterializerFailureCode:
+        if exc.code == code.value:
+            _fail(code, str(exc))
+    _fail(MaterializerFailureCode.INPUT_IO, str(exc))
+
+
 @dataclass(frozen=True)
 class RefineSourceArtifact:
     """Expected immutable fingerprint and owner-anchored Storage object key."""
@@ -178,7 +183,13 @@ class RefineMaterializationLimits:
 
 
 class RefineBoundedWriter(Protocol):
-    """Materializer-owned write sink that enforces an exact byte ceiling."""
+    """Materializer-owned private regular-file sink with an exact byte ceiling.
+
+    Its synchronous ``write`` checkpoints the carried deadline around bounded
+    ``os.write`` calls. In-process code cannot preempt a kernel-blocked regular
+    file write, so future production composition still needs a killable
+    execution boundary before Refine can be enabled.
+    """
 
     def write(self, payload: bytes | bytearray | memoryview) -> int: ...
 
@@ -198,15 +209,22 @@ class RefinePinnedSource(Protocol):
 class RefineArtifactAcquirer(Protocol):
     """Injected authenticated acquisition seam.
 
-    The implementation must stream only through ``destination`` and obey the
-    supplied absolute deadline. The sink enforces the reviewed source size while
-    the callback is running; no unrestricted destination path is exposed.
+    The implementation receives the exact validated source fingerprint and
+    owner identity. It must repeat owner scoping before service-role I/O, stream
+    only through ``destination``, and obey the supplied absolute deadline. The
+    sink is the materializer-owned private regular-file writer and enforces the
+    reviewed source size while the callback is running; no unrestricted
+    destination path is exposed. Implementations must checkpoint the deadline
+    immediately before and after each synchronous sink write. They cannot claim
+    to preempt a kernel-blocked write while running in-process.
     """
 
     def acquire(
         self,
         *,
-        object_key: str,
+        source: RefineSourceArtifact,
+        user_id: str,
+        scan_id: str,
         destination: RefineBoundedWriter,
         deadline: RefineDeadline,
     ) -> None: ...
@@ -224,7 +242,7 @@ class FieldRasterMaterialization:
 
 
 class FieldRasterMaterializer(Protocol):
-    """Still-unqualified Field/Core Image HEIC-to-engine-raster seam.
+    """Field/Core Image HEIC-to-engine-raster seam.
 
     The implementation receives a pinned read-only source view, its reviewed
     archive name, and a bounded output sink; it never receives workspace paths.
@@ -797,6 +815,7 @@ class _BoundedFileWriter:
                 )
             offset += written
             self._written += written
+            self._checkpoint()
         return payload_size
 
     def finish(self) -> None:
@@ -2468,16 +2487,16 @@ class RefineMaterializer:
                         label=f"{kind} acquisition",
                     ) as destination:
                         self._acquirer.acquire(
-                            object_key=source.object_key,
+                            source=source,
+                            user_id=request.user_id,
+                            scan_id=request.scan_id,
                             destination=destination,
                             deadline=deadline,
                         )
                 except RefineMaterializerError:
                     raise
                 except AdapterError as exc:
-                    if exc.code == MaterializerFailureCode.DEADLINE.value:
-                        _fail(MaterializerFailureCode.DEADLINE, str(exc))
-                    _fail(MaterializerFailureCode.INPUT_IO, str(exc))
+                    _fail_acquisition(exc)
                 except Exception as exc:  # noqa: BLE001 - normalize injected acquisition
                     _fail(
                         MaterializerFailureCode.INPUT_IO,

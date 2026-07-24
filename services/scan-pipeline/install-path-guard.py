@@ -75,6 +75,7 @@ SOURCE_PACKAGE_FILES = frozenset(
         f"{SOURCE_PACKAGE_ROOT}/field_raster_libheif.c",
         f"{SOURCE_PACKAGE_ROOT}/field_raster_materializer.py",
         f"{SOURCE_PACKAGE_ROOT}/field_raster_qualification.py",
+        f"{SOURCE_PACKAGE_ROOT}/field_storage_acquirer.py",
         f"{SOURCE_PACKAGE_ROOT}/http.py",
         f"{SOURCE_PACKAGE_ROOT}/keys.py",
         f"{SOURCE_PACKAGE_ROOT}/pycolmap_cuda_smoke.py",
