@@ -69,7 +69,8 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 # Ship the byte-identical validator plus the reviewed libheif helper source used
-# by the standalone Field raster qualification gate.
+# by both the standalone physical gate and the installer-built disabled runtime
+# adapter. Compiled helpers are release-local artifacts, never wheel members.
 patina_scan_worker = ["stages/validator.py", "field_raster_libheif.c"]
 
 [tool.pytest.ini_options]

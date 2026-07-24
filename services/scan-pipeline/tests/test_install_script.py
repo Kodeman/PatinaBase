@@ -23,7 +23,6 @@ from types import SimpleNamespace
 
 import pytest
 
-
 INSTALL = Path(__file__).resolve().parent.parent / "install.sh"
 README = Path(__file__).resolve().parent.parent / "README.md"
 VENV_LIB = Path(__file__).resolve().parent.parent / "install-venv-lib.sh"
@@ -59,6 +58,7 @@ INSTALL_SOURCE_FILES = (
     "src/patina_scan_worker/drawing/units.py",
     "src/patina_scan_worker/errors.py",
     "src/patina_scan_worker/field_raster_libheif.c",
+    "src/patina_scan_worker/field_raster_materializer.py",
     "src/patina_scan_worker/field_raster_qualification.py",
     "src/patina_scan_worker/pycolmap_cuda_smoke.py",
     "src/patina_scan_worker/refine_engine.py",
@@ -127,7 +127,7 @@ def test_gpu_install_ensures_direct_field_raster_libheif_toolchain():
         "libheif-plugin-libde265",
     ):
         assert dependency in native_libs
-    assert 'VERSION_ID="?24\\.04"?' in native_libs
+    assert 'VERSION_ID="?24\\.04"?' in script
     assert "/usr/bin/cc" in native_libs
     assert "/usr/bin/pkg-config --exists libheif" in native_libs
     assert "/usr/bin/dpkg-query -W" in native_libs
@@ -135,6 +135,63 @@ def test_gpu_install_ensures_direct_field_raster_libheif_toolchain():
     assert '/usr/bin/dpkg --compare-versions "$raster_package_version" ge' in native_libs
     assert "apt-get update" in native_libs
     assert "PKG_CONFIG_LIBDIR=/usr/lib/x86_64-linux-gnu/pkgconfig" in native_libs
+    raster_gate = native_libs[
+        native_libs.index(
+            "-- validating the preinstalled Field raster C/libheif toolchain"
+        ) :
+        native_libs.index(
+            'if [ "$GPU" -eq 1 ] && ! command -v nvidia-smi'
+        )
+    ]
+    assert "apt-get install" not in raster_gate
+
+
+def test_gpu_install_rejects_non_noble_before_native_or_release_mutation():
+    script = INSTALL.read_text()
+    gate = 'echo "ERROR: --gpu Field raster execution is qualified only on Ubuntu 24.04."'
+    assert gate in script
+    assert script.index(gate) < script.index("# 0. native libs")
+    assert script.index(gate) < script.index("# 1. service user")
+    assert script.index(gate) < script.index("prepare_install_transaction")
+
+
+def test_gpu_candidate_compiles_and_validates_exact_field_raster_helper():
+    script = INSTALL.read_text()
+    build = script[
+        script.index("# 2. immutable Python candidate") :
+        script.index("# 3. stage a complete candidate systemd tree")
+    ]
+    compile_helper = build.index("_compile_field_raster_helper")
+    harden = build.index(
+        '_path_guard harden-release --app-dir "$APP_DIR" --path "$STAGED_VENV"'
+    )
+    transaction = script.index("begin_install_transaction")
+
+    assert "4840e0e6d3c98bbebecc4354349bae3963718583fb5c882f9807b0d222bee9c3" in script
+    assert "field-raster-libheif-helper-v2" in script
+    assert 'helper_manifest="$helper_output.manifest.json"' in script
+    assert 'if [ "$GPU" -eq 1 ]; then' in build[:compile_helper]
+    assert script.index('    "-x",\n    "c",') < script.index(
+        'f"/proc/self/fd/{{SOURCE_FD}}"'
+    )
+    assert "pass_fds=(compile_source_fd,)" in script
+    assert compile_helper < harden < transaction
+    assert "FIELD_RASTER_RELEASE_GUARD_ARGS" in script[harden:transaction]
+    assert '"pkgConfigFlags": list(pkg_flags)' in script
+    assert "--expected-field-raster-libheif-package-version" in script
+    assert "--expected-field-raster-libheif-pkg-config-version" in script
+    assert "--expected-field-raster-pkg-config-flags-json" in script
+    assert (
+        '_run_as_service_user /usr/bin/test -x \\\n'
+        '    "$SMOKE_VENV/libexec/patina/field-raster-libheif-helper-v2"'
+    ) in script
+    assert "_run_as_service_user /usr/bin/timeout 5" in script
+    assert "usage: field-raster-libheif INPUT.heic OUTPUT.ppm" in script
+    reprobe = script.index(
+        "-- revalidating Field raster libheif identity before activation"
+    )
+    assert harden < reprobe < transaction
+    assert script.count("_probe_field_raster_libheif_toolchain") >= 3
 
 
 def test_candidate_is_checked_smoked_and_verified_before_transaction_activation():
@@ -278,6 +335,7 @@ def test_candidate_smoke_imports_disabled_refine_foundations_before_activation()
     expected_imports = (
         "'import patina_scan_worker; import patina_scan_worker.cli; "
         "import patina_scan_worker.doctor; "
+        "import patina_scan_worker.field_raster_materializer; "
         "import patina_scan_worker.refine_materializer; "
         "import patina_scan_worker.refine_native_process; "
         "import patina_scan_worker.refine_publisher; "
@@ -1117,6 +1175,185 @@ def test_release_validation_rejects_escape_and_untrusted_targets(tmp_path):
     assert "writable" in writable.stderr.lower()
 
 
+def test_release_validation_requires_exact_field_raster_helper(tmp_path):
+    guard = _load_path_guard_module()
+    app = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
+    _path_guard(
+        tmp_path,
+        "ensure-trusted-dir",
+        "--path",
+        str(app),
+        "--mode",
+        "0755",
+    )
+    release = app / ".venv.release.deadbeefdeadbeefdeadbeef"
+    _path_guard(
+        tmp_path,
+        "create-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        str(release),
+    )
+    helper = (
+        release
+        / "libexec"
+        / "patina"
+        / "field-raster-libheif-helper-v2"
+    )
+    helper.parent.mkdir(parents=True, mode=0o700)
+    helper_payload = b"\x7fELFqualified helper fixture"
+    helper.write_bytes(helper_payload)
+    helper.chmod(0o755)
+    manifest = helper.with_name(helper.name + ".manifest.json")
+    manifest_value = {
+        "binarySha256": hashlib.sha256(helper_payload).hexdigest(),
+        "compileFlags": list(guard.FIELD_RASTER_HELPER_COMPILE_FLAGS),
+        "compilerPath": "/usr/bin/cc",
+        "compilerVersion": "fixture cc 1.0",
+        "libheifPackageVersion": "1.17.6-1ubuntu4.6",
+        "libheifPkgConfigVersion": "1.17.6",
+        "pkgConfigFlags": ["-lheif"],
+        "schema": guard.FIELD_RASTER_HELPER_MANIFEST_SCHEMA,
+        "sourceSha256": guard.FIELD_RASTER_HELPER_SOURCE_SHA256,
+    }
+    manifest.write_text(
+        json.dumps(
+            manifest_value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    manifest.chmod(0o644)
+    field_raster_args = (
+        "--require-field-raster-helper",
+        "--expected-field-raster-libheif-package-version",
+        "1.17.6-1ubuntu4.6",
+        "--expected-field-raster-libheif-pkg-config-version",
+        "1.17.6",
+        "--expected-field-raster-pkg-config-flags-json",
+        '["-lheif"]',
+    )
+    _path_guard(
+        tmp_path,
+        "harden-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        str(release),
+    )
+
+    _path_guard(
+        tmp_path,
+        "validate-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        str(release),
+        *field_raster_args,
+    )
+
+    stale = _path_guard(
+        tmp_path,
+        "validate-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        str(release),
+        "--require-field-raster-helper",
+        "--expected-field-raster-libheif-package-version",
+        "1.17.6-1ubuntu4.7",
+        "--expected-field-raster-libheif-pkg-config-version",
+        "1.17.6",
+        "--expected-field-raster-pkg-config-flags-json",
+        '["-lheif"]',
+        expected_ok=False,
+    )
+    assert "manifest contract failed" in stale.stderr.lower()
+
+    malformed_manifest = dict(manifest_value)
+    malformed_manifest["compilerVersion"] = float("nan")
+    manifest.write_text(
+        json.dumps(
+            malformed_manifest,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    invalid_json = _path_guard(
+        tmp_path,
+        "validate-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        str(release),
+        *field_raster_args,
+        expected_ok=False,
+    )
+    assert "manifest is invalid" in invalid_json.stderr.lower()
+    manifest.write_text(
+        json.dumps(
+            manifest_value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    manifest.chmod(0o644)
+
+    helper.chmod(0o755 | stat.S_IWGRP)
+    rejected = _path_guard(
+        tmp_path,
+        "validate-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        str(release),
+        *field_raster_args,
+        expected_ok=False,
+    )
+    assert "writable" in rejected.stderr.lower() or "0755" in rejected.stderr
+
+    helper.chmod(0o755)
+    helper.write_bytes(b"\x7fELFtampered helper fixture")
+    helper.chmod(0o755)
+    tampered = _path_guard(
+        tmp_path,
+        "validate-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        str(release),
+        *field_raster_args,
+        expected_ok=False,
+    )
+    assert "hash differs" in tampered.stderr.lower()
+    helper.write_bytes(helper_payload)
+    helper.chmod(0o755)
+
+    real_libexec = release / "real-libexec"
+    (release / "libexec").rename(real_libexec)
+    (release / "libexec").symlink_to("real-libexec")
+    symlinked = _path_guard(
+        tmp_path,
+        "validate-release",
+        "--app-dir",
+        str(app),
+        "--path",
+        str(release),
+        *field_raster_args,
+        expected_ok=False,
+    )
+    assert symlinked.returncode != 0
+
+
 def test_harden_release_removes_service_write_without_following_symlinks(tmp_path):
     app = tmp_path / "trusted" / "opt" / "patina" / "scan-pipeline"
     _path_guard(
@@ -1423,6 +1660,11 @@ def test_transaction_source_copy_requires_exact_trusted_bytes(tmp_path):
         pytest.param("drawings", None, id="cpu"),
         pytest.param(
             "drawings,gpu",
+            "patina_scan_worker/field_raster_materializer.py",
+            id="gpu-missing-field-raster-materializer",
+        ),
+        pytest.param(
+            "drawings,gpu",
             "patina_scan_worker/refine_materializer.py",
             id="gpu-missing-refine-materializer",
         ),
@@ -1502,6 +1744,7 @@ _prepare_isolated_source_build "$SRC_DIR"
         str(build_source),
     )
     for relative in (
+        "src/patina_scan_worker/field_raster_materializer.py",
         "src/patina_scan_worker/refine_materializer.py",
         "src/patina_scan_worker/refine_native_process.py",
         "src/patina_scan_worker/refine_publisher.py",
@@ -1585,11 +1828,13 @@ _prepare_isolated_source_build "$SRC_DIR"
             "-c",
             (
                 "import pathlib,sys; sys.path.insert(0,sys.argv[1]); "
+                "import patina_scan_worker.field_raster_materializer as raster; "
                 "import patina_scan_worker.refine_materializer as materializer; "
                 "import patina_scan_worker.refine_native_process as native; "
                 "import patina_scan_worker.refine_publisher as publisher; "
                 "import patina_scan_worker.refine_runner as runner; "
                 "root=pathlib.Path(sys.argv[1]).resolve(); "
+                "assert pathlib.Path(raster.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(materializer.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(native.__file__).resolve().is_relative_to(root); "
                 "assert pathlib.Path(publisher.__file__).resolve().is_relative_to(root); "
@@ -1786,6 +2031,7 @@ def test_source_validation_rejects_an_unreviewed_package_module(tmp_path):
     "required_module",
     [
         "colmap_qualification.py",
+        "field_raster_materializer.py",
         "refine_adapter.py",
         "refine_engine.py",
         "refine_materializer.py",

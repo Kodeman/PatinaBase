@@ -230,6 +230,262 @@ _run_candidate_python() {
     "$candidate_python" -I "$@"
 }
 
+_compile_field_raster_helper() {
+  local candidate_venv="$1"
+  local qualified_package_version="$2"
+  local qualified_pkg_config_version="$3"
+  local qualified_pkg_config_flags_json="$4"
+  local candidate_python="$candidate_venv/bin/python"
+  local helper_source
+  local helper_dir="$candidate_venv/libexec/patina"
+  local helper_output="$helper_dir/field-raster-libheif-helper-v2"
+  local helper_manifest="$helper_output.manifest.json"
+  local compiler
+  local pkg_config
+
+  compiler="$(_path_guard validate-trusted-executable --path /usr/bin/cc)"
+  pkg_config="$(_path_guard validate-trusted-executable --path /usr/bin/pkg-config)"
+  helper_source="$(_run_candidate_python "$candidate_python" -c \
+    'from pathlib import Path; import patina_scan_worker; print(Path(patina_scan_worker.__file__).with_name("field_raster_libheif.c"))')"
+  install -d -m 0700 "$candidate_venv/libexec" "$helper_dir"
+  _run_candidate_python "$candidate_python" - \
+    "$compiler" "$pkg_config" "$helper_source" "$helper_output" \
+    "$helper_manifest" "$qualified_package_version" \
+    "$qualified_pkg_config_version" "$qualified_pkg_config_flags_json" <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import stat
+import subprocess
+import sys
+
+from patina_scan_worker.field_raster_qualification import (
+    _validated_pkg_config_tokens,
+)
+
+compiler = pathlib.Path(sys.argv[1])
+pkg_config = pathlib.Path(sys.argv[2])
+source = pathlib.Path(sys.argv[3])
+output = pathlib.Path(sys.argv[4])
+manifest = pathlib.Path(sys.argv[5])
+qualified_package_version = sys.argv[6]
+qualified_pkg_config_version = sys.argv[7]
+qualified_pkg_config_flags = json.loads(sys.argv[8])
+expected_source_sha256 = (
+    "4840e0e6d3c98bbebecc4354349bae3963718583fb5c882f9807b0d222bee9c3"
+)
+flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+source_fd = os.open(source, flags)
+try:
+    before = os.lstat(source)
+    opened = os.fstat(source_fd)
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or stat.S_ISLNK(before.st_mode)
+        or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino)
+        or before.st_uid != os.geteuid()
+        or before.st_gid != os.getegid()
+        or before.st_mode & 0o022
+        or before.st_nlink != 1
+    ):
+        raise SystemExit("installed Field raster helper source is untrusted")
+    digest = hashlib.sha256()
+    while chunk := os.read(source_fd, 1024 * 1024):
+        digest.update(chunk)
+finally:
+    os.close(source_fd)
+if digest.hexdigest() != expected_source_sha256:
+    raise SystemExit("installed Field raster helper source is not the I92-qualified bytes")
+for candidate in (output, manifest):
+    if candidate.exists() or candidate.is_symlink():
+        raise SystemExit(f"Field raster helper output already exists: {candidate}")
+
+tool_env = {
+    "PATH": "/usr/bin:/bin",
+    "LANG": "C",
+    "LC_ALL": "C",
+    "PKG_CONFIG_LIBDIR": (
+        "/usr/lib/x86_64-linux-gnu/pkgconfig:"
+        "/usr/lib/pkgconfig:/usr/share/pkgconfig"
+    ),
+}
+pkg = subprocess.run(
+    [str(pkg_config), "--cflags", "--libs", "libheif"],
+    env=tool_env,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+    check=False,
+)
+if pkg.returncode != 0:
+    raise SystemExit("pkg-config could not resolve the qualified system libheif")
+pkg_flags = _validated_pkg_config_tokens(pkg.stdout)
+if list(pkg_flags) != qualified_pkg_config_flags:
+    raise SystemExit("libheif pkg-config flags changed before helper compilation")
+base_flags = [
+    "-std=c11",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-D_FORTIFY_SOURCE=3",
+    "-fstack-protector-strong",
+    "-fPIE",
+    "-pie",
+    "-Wl,-z,relro,-z,now",
+    "-x",
+    "c",
+]
+command = [
+    str(compiler),
+    *base_flags,
+    f"/proc/self/fd/{{SOURCE_FD}}",
+    "-o",
+    str(output),
+    *pkg_flags,
+]
+if not pathlib.Path("/proc/self/fd").is_dir():
+    raise SystemExit("Field raster helper compilation requires /proc/self/fd")
+compile_source_fd = os.open(source, flags)
+try:
+    compile_source = os.fstat(compile_source_fd)
+    identity = lambda value: (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+    if identity(compile_source) != identity(opened):
+        raise SystemExit("installed Field raster helper source changed before compilation")
+    command[command.index(f"/proc/self/fd/{{SOURCE_FD}}")] = (
+        f"/proc/self/fd/{compile_source_fd}"
+    )
+    compiled = subprocess.run(
+        command,
+        env=tool_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        pass_fds=(compile_source_fd,),
+    )
+finally:
+    os.close(compile_source_fd)
+if compiled.returncode != 0:
+    detail = compiled.stderr.decode("utf-8", errors="replace")[-4096:]
+    raise SystemExit(f"Field raster helper compilation failed: {detail}")
+os.chmod(output, 0o755)
+helper_fd = os.open(output, flags)
+try:
+    final = os.lstat(output)
+    held = os.fstat(helper_fd)
+    if (
+        not stat.S_ISREG(final.st_mode)
+        or stat.S_ISLNK(final.st_mode)
+        or (final.st_dev, final.st_ino) != (held.st_dev, held.st_ino)
+        or final.st_uid != os.geteuid()
+        or final.st_gid != os.getegid()
+        or stat.S_IMODE(final.st_mode) != 0o755
+        or final.st_nlink != 1
+        or final.st_size <= 0
+    ):
+        raise SystemExit("compiled Field raster helper is untrusted")
+    helper_digest = hashlib.sha256()
+    helper_offset = 0
+    while chunk := os.pread(helper_fd, 1024 * 1024, helper_offset):
+        helper_digest.update(chunk)
+        helper_offset += len(chunk)
+    os.fsync(helper_fd)
+finally:
+    os.close(helper_fd)
+compiler_probe = subprocess.run(
+    [str(compiler), "--version"],
+    env=tool_env,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    check=False,
+)
+libheif_probe = subprocess.run(
+    [str(pkg_config), "--modversion", "libheif"],
+    env=tool_env,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    check=False,
+)
+if compiler_probe.returncode != 0 or libheif_probe.returncode != 0:
+    raise SystemExit("could not record the Field raster helper toolchain")
+compiler_version = (
+    compiler_probe.stdout.decode("utf-8", errors="strict").splitlines()[0]
+)
+libheif_version = libheif_probe.stdout.decode("ascii", errors="strict").strip()
+if (
+    not compiler_version
+    or len(compiler_version.encode("utf-8")) > 256
+    or not libheif_version
+    or len(libheif_version) > 128
+    or libheif_version != qualified_pkg_config_version
+    or not qualified_package_version
+    or len(qualified_package_version) > 128
+):
+    raise SystemExit("Field raster helper toolchain identity is invalid")
+manifest_value = {
+    "binarySha256": helper_digest.hexdigest(),
+    "compileFlags": base_flags,
+    "compilerPath": str(compiler),
+    "compilerVersion": compiler_version,
+    "libheifPackageVersion": qualified_package_version,
+    "libheifPkgConfigVersion": libheif_version,
+    "pkgConfigFlags": list(pkg_flags),
+    "schema": "patina-field-raster-helper-manifest-v1",
+    "sourceSha256": expected_source_sha256,
+}
+manifest_payload = (
+    json.dumps(
+        manifest_value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+    + "\n"
+).encode("ascii")
+manifest_fd = os.open(
+    manifest,
+    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+    0o600,
+)
+try:
+    written = 0
+    while written < len(manifest_payload):
+        count = os.write(manifest_fd, manifest_payload[written:])
+        if count <= 0:
+            raise SystemExit("Field raster helper manifest write made no progress")
+        written += count
+    os.fchmod(manifest_fd, 0o644)
+    manifest_stat = os.fstat(manifest_fd)
+    if (
+        not stat.S_ISREG(manifest_stat.st_mode)
+        or manifest_stat.st_uid != os.geteuid()
+        or manifest_stat.st_gid != os.getegid()
+        or stat.S_IMODE(manifest_stat.st_mode) != 0o644
+        or manifest_stat.st_nlink != 1
+        or manifest_stat.st_size != len(manifest_payload)
+        or manifest_stat.st_size > 4096
+    ):
+        raise SystemExit("compiled Field raster helper manifest is untrusted")
+    os.fsync(manifest_fd)
+finally:
+    os.close(manifest_fd)
+directory_fd = os.open(output.parent, os.O_RDONLY | os.O_DIRECTORY)
+try:
+    os.fsync(directory_fd)
+finally:
+    os.close(directory_fd)
+PY
+}
+
 _validate_direct_wheel_report() {
   local candidate_python="$1"
   local report_path="$2"
@@ -328,6 +584,13 @@ if [ "$GPU" -eq 1 ] && [ ! -x "$NVIDIA_MODPROBE" ]; then
   echo "       Install the NVIDIA driver's nvidia-modprobe package first." >&2
   exit 2
 fi
+if [ "$GPU" -eq 1 ] && \
+   { ! /usr/bin/grep -Eq '^ID=ubuntu$' /etc/os-release || \
+     ! /usr/bin/grep -Eq '^VERSION_ID="?24\.04"?$' /etc/os-release; }; then
+  echo "ERROR: --gpu Field raster execution is qualified only on Ubuntu 24.04." >&2
+  echo "       Use a Noble x86_64 host or complete a new physical qualification." >&2
+  exit 2
+fi
 
 # The ordinary pycolmap==4.0.2 index wheel is CPU-only. Validate the separately
 # built immutable CUDA artifact and the target interpreter ABI before apt,
@@ -360,6 +623,74 @@ echo "== Patina scan-pipeline worker install (gpu=$GPU upgrade=$UPGRADE) =="
 echo "source: $SRC_DIR"
 
 # 0. native libs — cairosvg (PDF sheets, item 11) needs libcairo2
+_probe_field_raster_libheif_toolchain() {
+  local raster_package
+  local raster_package_version
+  local raster_pkg_config_flags
+  local raster_min_libheif_version=1.17.6-1ubuntu4.6
+
+  for raster_package in \
+    build-essential pkg-config zlib1g-dev libheif1 libheif-dev \
+    libheif-plugin-libde265; do
+    if [ "$(/usr/bin/dpkg-query -W -f='${db:Status-Abbrev}' \
+      "$raster_package" 2>/dev/null)" != "ii " ]; then
+      echo "ERROR: required Field raster package is not installed: $raster_package" >&2
+      echo "       Install the complete Noble toolchain before rerunning --gpu." >&2
+      exit 2
+    fi
+  done
+  if [ ! -x /usr/bin/cc ] || [ ! -x /usr/bin/pkg-config ] || \
+     ! /usr/bin/env -i \
+       PATH=/usr/bin:/bin \
+       PKG_CONFIG_LIBDIR=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig \
+       /usr/bin/pkg-config --exists libheif; then
+    echo "ERROR: the installed Field raster qualification toolchain is incomplete." >&2
+    exit 2
+  fi
+
+  raster_reference_libheif_version=
+  for raster_package in libheif1 libheif-dev libheif-plugin-libde265; do
+    raster_package_version="$(/usr/bin/dpkg-query -W -f='${Version}' \
+      "$raster_package" 2>/dev/null)"
+    if ! /usr/bin/dpkg --compare-versions "$raster_package_version" ge \
+      "$raster_min_libheif_version"; then
+      echo "ERROR: $raster_package $raster_package_version is older than the" >&2
+      echo "       required Noble security revision $raster_min_libheif_version." >&2
+      echo "       Run apt-get update, install the listed packages, and rerun." >&2
+      exit 2
+    fi
+    if [ -z "$raster_reference_libheif_version" ]; then
+      raster_reference_libheif_version="$raster_package_version"
+    elif [ "$raster_package_version" != "$raster_reference_libheif_version" ]; then
+      echo "ERROR: Noble libheif runtime/dev/plugin package versions do not match." >&2
+      exit 2
+    fi
+  done
+
+  raster_pkg_config_libheif_version="$(
+    /usr/bin/env -i \
+      PATH=/usr/bin:/bin \
+      PKG_CONFIG_LIBDIR=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig \
+      /usr/bin/pkg-config --modversion libheif
+  )"
+  raster_pkg_config_flags="$(
+    /usr/bin/env -i \
+      PATH=/usr/bin:/bin \
+      PKG_CONFIG_LIBDIR=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig \
+      /usr/bin/pkg-config --cflags --libs libheif
+  )"
+  raster_pkg_config_flags_json="$(
+    _run_privileged_python -c \
+      'import json,re,shlex,sys; tokens=shlex.split(sys.argv[1],posix=True); allowed=lambda x: x=="-pthread" or re.fullmatch(r"-l[A-Za-z0-9_+.-]+",x) or re.fullmatch(r"-[IL]/[A-Za-z0-9_+.,/@:-]+",x) or re.fullmatch(r"-D[A-Za-z_][A-Za-z0-9_]*(?:=[A-Za-z0-9_+.,-]+)?",x); assert tokens and "-lheif" in tokens and all(allowed(x) for x in tokens); print(json.dumps(tokens,separators=(",",":"),ensure_ascii=True,allow_nan=False))' \
+      "$raster_pkg_config_flags"
+  )"
+  if [[ ! "$raster_reference_libheif_version" =~ ^[0-9A-Za-z.+:~_-]{1,128}$ ]] || \
+     [[ ! "$raster_pkg_config_libheif_version" =~ ^[0-9A-Za-z.+:~_-]{1,128}$ ]]; then
+    echo "ERROR: the installed Field raster libheif identity is invalid." >&2
+    exit 2
+  fi
+}
+
 if command -v apt-get >/dev/null 2>&1; then
   echo "-- ensuring libcairo2 is present (cairosvg → PDF)"
   apt-get install -y --no-install-recommends libcairo2 >/dev/null 2>&1 || \
@@ -373,50 +704,21 @@ if [ "$GPU" -eq 1 ] && ! command -v ninja >/dev/null 2>&1; then
     exit 2
   fi
 fi
-if [ "$GPU" -eq 1 ] && \
-   /usr/bin/grep -Eq '^ID=ubuntu$' /etc/os-release && \
-   /usr/bin/grep -Eq '^VERSION_ID="?24\.04"?$' /etc/os-release; then
-  echo "-- ensuring the Field raster qualification C/libheif toolchain"
-  if ! command -v apt-get >/dev/null 2>&1 || \
-     ! apt-get install -y --no-install-recommends \
-       build-essential pkg-config zlib1g-dev libheif1 libheif-dev \
-       libheif-plugin-libde265 >/dev/null 2>&1; then
-    echo "ERROR: Noble --gpu requires the compiler/pkg-config/zlib/libheif packages" >&2
-    echo "       for the local Field/Core Image raster qualification gate." >&2
-    exit 2
-  fi
-  if [ ! -x /usr/bin/cc ] || [ ! -x /usr/bin/pkg-config ] || \
-     ! /usr/bin/env -i \
-       PATH=/usr/bin:/bin \
-       PKG_CONFIG_LIBDIR=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig \
-       /usr/bin/pkg-config --exists libheif; then
-    echo "ERROR: the installed Field raster qualification toolchain is incomplete." >&2
-    exit 2
-  fi
-  raster_min_libheif_version=1.17.6-1ubuntu4.6
-  raster_reference_libheif_version=
-  for raster_package in libheif1 libheif-dev libheif-plugin-libde265; do
-    if [ "$(/usr/bin/dpkg-query -W -f='${db:Status-Abbrev}' \
-      "$raster_package" 2>/dev/null)" != "ii " ]; then
-      echo "ERROR: required Field raster package is not installed: $raster_package" >&2
-      exit 2
-    fi
-    raster_package_version="$(/usr/bin/dpkg-query -W -f='${Version}' \
-      "$raster_package" 2>/dev/null)"
-    if ! /usr/bin/dpkg --compare-versions "$raster_package_version" ge \
-      "$raster_min_libheif_version"; then
-      echo "ERROR: $raster_package $raster_package_version is older than the" >&2
-      echo "       required Noble security revision $raster_min_libheif_version." >&2
-      echo "       Run apt-get update, then rerun this --gpu install." >&2
-      exit 2
-    fi
-    if [ -z "$raster_reference_libheif_version" ]; then
-      raster_reference_libheif_version="$raster_package_version"
-    elif [ "$raster_package_version" != "$raster_reference_libheif_version" ]; then
-      echo "ERROR: Noble libheif runtime/dev/plugin package versions do not match." >&2
-      exit 2
-    fi
-  done
+if [ "$GPU" -eq 1 ]; then
+  echo "-- validating the preinstalled Field raster C/libheif toolchain"
+  _probe_field_raster_libheif_toolchain
+  raster_install_libheif_package_version="$raster_reference_libheif_version"
+  raster_install_libheif_pkg_config_version="$raster_pkg_config_libheif_version"
+  raster_install_pkg_config_flags_json="$raster_pkg_config_flags_json"
+  FIELD_RASTER_RELEASE_GUARD_ARGS=(
+    --require-field-raster-helper
+    --expected-field-raster-libheif-package-version
+    "$raster_install_libheif_package_version"
+    --expected-field-raster-libheif-pkg-config-version
+    "$raster_install_libheif_pkg_config_version"
+    --expected-field-raster-pkg-config-flags-json
+    "$raster_install_pkg_config_flags_json"
+  )
 fi
 if [ "$GPU" -eq 1 ] && ! command -v nvidia-smi >/dev/null 2>&1; then
   echo "   WARNING: --gpu given but nvidia-smi not found. Install the NVIDIA driver"
@@ -479,6 +781,12 @@ if [ ! -d "$VENV" ] || [ ! -L "$VENV" ] || [ "$UPGRADE" -eq 1 ]; then
   BUILD_VENV=1
 elif [ "$GPU" -eq 1 ] && [ ! -f "$DROPIN_DIR/gpu.conf" ]; then
   BUILD_VENV=1
+elif [ "$GPU" -eq 1 ]; then
+  if ! _path_guard validate-release --app-dir "$APP_DIR" --path "$VENV" \
+    --stable-link "${FIELD_RASTER_RELEASE_GUARD_ARGS[@]}" >/dev/null 2>&1; then
+    echo "-- existing GPU release helper is missing, invalid, or stale; rebuilding"
+    BUILD_VENV=1
+  fi
 fi
 if [ "$BUILD_VENV" -eq 1 ] && [ "$GPU" -eq 0 ] && [ -f "$DROPIN_DIR/gpu.conf" ]; then
   echo "ERROR: this GPU install needs --gpu whenever its Python release is rebuilt." >&2
@@ -545,21 +853,58 @@ if [ "$BUILD_VENV" -eq 1 ]; then
   _path_guard validate-source-tree --source-dir "$SRC_DIR"
   _run_candidate_python "$STAGED_VENV/bin/python" -m pip \
     --isolated --disable-pip-version-check check
+  if [ "$GPU" -eq 1 ]; then
+    echo "-- compiling exact I92-qualified Field raster helper"
+    _compile_field_raster_helper \
+      "$STAGED_VENV" "$raster_install_libheif_package_version" \
+      "$raster_install_libheif_pkg_config_version" \
+      "$raster_install_pkg_config_flags_json"
+  fi
   _path_guard harden-release --app-dir "$APP_DIR" --path "$STAGED_VENV" >/dev/null
   SMOKE_VENV="$STAGED_VENV"
 else
   echo "-- existing venv left untouched (use --upgrade to rebuild from source)"
 fi
 if [ "$SMOKE_VENV" = "$VENV" ]; then
-  _path_guard validate-release --app-dir "$APP_DIR" --path "$SMOKE_VENV" \
-    --stable-link --require-executables >/dev/null
+  if [ "$GPU" -eq 1 ]; then
+    _path_guard validate-release --app-dir "$APP_DIR" --path "$SMOKE_VENV" \
+      --stable-link --require-executables \
+      "${FIELD_RASTER_RELEASE_GUARD_ARGS[@]}" >/dev/null
+  else
+    _path_guard validate-release --app-dir "$APP_DIR" --path "$SMOKE_VENV" \
+      --stable-link --require-executables >/dev/null
+  fi
 else
-  _path_guard validate-release --app-dir "$APP_DIR" --path "$SMOKE_VENV" \
-    --require-executables >/dev/null
+  if [ "$GPU" -eq 1 ]; then
+    _path_guard validate-release --app-dir "$APP_DIR" --path "$SMOKE_VENV" \
+      --require-executables "${FIELD_RASTER_RELEASE_GUARD_ARGS[@]}" >/dev/null
+  else
+    _path_guard validate-release --app-dir "$APP_DIR" --path "$SMOKE_VENV" \
+      --require-executables >/dev/null
+  fi
 fi
 echo "-- smoke-checking package imports and console entrypoint"
 _run_as_service_user "$SMOKE_VENV/bin/python" -I -c \
-  'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor; import patina_scan_worker.refine_materializer; import patina_scan_worker.refine_native_process; import patina_scan_worker.refine_publisher; import patina_scan_worker.refine_runner'
+  'import patina_scan_worker; import patina_scan_worker.cli; import patina_scan_worker.doctor; import patina_scan_worker.field_raster_materializer; import patina_scan_worker.refine_materializer; import patina_scan_worker.refine_native_process; import patina_scan_worker.refine_publisher; import patina_scan_worker.refine_runner'
+if [ "$GPU" -eq 1 ]; then
+  _run_as_service_user /usr/bin/test -x \
+    "$SMOKE_VENV/libexec/patina/field-raster-libheif-helper-v2"
+  if FIELD_RASTER_HELPER_SMOKE="$(
+    _run_as_service_user /usr/bin/timeout 5 \
+      "$SMOKE_VENV/libexec/patina/field-raster-libheif-helper-v2" 2>&1
+  )"; then
+    FIELD_RASTER_HELPER_SMOKE_STATUS=0
+  else
+    FIELD_RASTER_HELPER_SMOKE_STATUS=$?
+  fi
+  if [ "$FIELD_RASTER_HELPER_SMOKE_STATUS" -ne 2 ] || \
+     [ "$FIELD_RASTER_HELPER_SMOKE" != \
+       "usage: field-raster-libheif INPUT.heic OUTPUT.ppm" ]; then
+    echo "ERROR: Field raster helper no-argument smoke returned" \
+      "$FIELD_RASTER_HELPER_SMOKE_STATUS with unexpected output." >&2
+    exit 1
+  fi
+fi
 if [ "$BUILD_VENV" -eq 1 ]; then
   echo "-- verifying durable direct worker-wheel provenance"
   _run_as_service_user "$SMOKE_VENV/bin/python" -I - \
@@ -698,6 +1043,32 @@ if [ ! -f "$ENV_FILE" ]; then
   install -o root -g root -m 0600 "$SRC_DIR/scan-worker.env.example" "$ENV_FILE"
 else
   echo "-- $ENV_FILE exists; leaving it untouched"
+fi
+
+# A GPU candidate can take many minutes to build. Re-probe the immutable helper
+# ABI immediately before activation so a concurrent package update cannot bind
+# an old manifest to a newly loaded libheif.
+if [ "$GPU" -eq 1 ]; then
+  echo "-- revalidating Field raster libheif identity before activation"
+  _probe_field_raster_libheif_toolchain
+  if [ "$raster_reference_libheif_version" != \
+       "$raster_install_libheif_package_version" ] || \
+     [ "$raster_pkg_config_libheif_version" != \
+       "$raster_install_libheif_pkg_config_version" ] || \
+     [ "$raster_pkg_config_flags_json" != \
+       "$raster_install_pkg_config_flags_json" ]; then
+    echo "ERROR: the Field raster libheif toolchain changed during installation." >&2
+    echo "       Rerun --gpu so a fresh helper is built against the current host." >&2
+    exit 2
+  fi
+  if [ "$SMOKE_VENV" = "$VENV" ]; then
+    _path_guard validate-release --app-dir "$APP_DIR" --path "$SMOKE_VENV" \
+      --stable-link --require-executables \
+      "${FIELD_RASTER_RELEASE_GUARD_ARGS[@]}" >/dev/null
+  else
+    _path_guard validate-release --app-dir "$APP_DIR" --path "$SMOKE_VENV" \
+      --require-executables "${FIELD_RASTER_RELEASE_GUARD_ARGS[@]}" >/dev/null
+  fi
 fi
 
 # 4. Snapshot installed units + release, then activate the whole candidate as a

@@ -44,11 +44,11 @@ so those items only replace a stub body.
 ## Install on a Linux box
 
 Ubuntu 22.04/24.04 LTS or Debian 12, x86_64, Python 3.11+ with `venv`
-(`apt install python3-venv`). Those bases support CPU workers. The CUDA 11.8
-GPU pilot is officially qualified only on Ubuntu 22.04; Ubuntu 24.04 and Debian
-12 GPU installs remain explicit qualification experiments and must not claim
-GPU-stage tasks before the doctor and real fixtures pass. Outbound 443 only —
-the host firewall may deny all inbound.
+(`apt install python3-venv`). Those bases support CPU workers. The complete
+CUDA 11.8 + physical Field raster pilot is qualified only on the recorded
+DeskDev Ubuntu 24.04 x86_64 profile; `install.sh --gpu` rejects Ubuntu 22.04,
+Debian, and other hosts until a new physical qualification packet exists.
+Outbound 443 only — the host firewall may deny all inbound.
 
 ```bash
 # Stop the worker and fail unless the service UID holds no old source inode.
@@ -112,10 +112,18 @@ points at deleted transaction state. Its package member names and bytes must
 match that trusted source manifest exactly, and its dependency/extra metadata is
 checked before pip is allowed to resolve it.
 The package manifest now includes the queue-independent
-`refine_materializer.py`, `refine_native_process.py`, `refine_publisher.py`, and
-`refine_runner.py` foundations, and every candidate release imports all four as
-the `patina`
-service user before activation. They remain deliberately unregistered:
+`field_raster_materializer.py`, `refine_materializer.py`,
+`refine_native_process.py`, `refine_publisher.py`, and `refine_runner.py`
+foundations, and every candidate release imports all five as the `patina`
+service user before activation. GPU candidates also compile the byte-identical
+I92-qualified `field_raster_libheif.c` into a root-owned immutable
+`libexec/patina/field-raster-libheif-helper-v2`; CPU candidates do not install
+that executable. The concrete Field raster adapter accepts only the physically
+qualified 360x640 HEIC profile, pins the installed helper and private scratch
+directory by descriptor, and streams validated canonical PPM bytes only after
+unlinking the helper output. It intentionally rejects variable-size keyframes
+until a new helper protocol and physical-device receipt qualify them.
+These foundations remain deliberately unregistered:
 installing or importing them does not add `scan_pipeline.refine` to the stage
 registry or change persistent/default `STAGES`.
 The materializer enforces exact in-call source/raster write ceilings, a 4 GiB
@@ -123,10 +131,10 @@ per-task aggregate raster workspace ceiling, and descriptor-pinned workspace
 access. Its absolute paths are display metadata; disabled composition code must
 consume verified bytes through `RefineMaterialization.open_verified_file()` and
 then call `cleanup()`.
-The runner, materializer, and publisher are disabled contract boundaries only.
-No concrete Field acquisition/HEIC decoder or stage handler composes them;
-passing install/import tests or the synthetic COLMAP receipt does not authorize
-Refine, a queue claim, or a run on a real scan.
+The runner, materializer, concrete exact-profile Field raster adapter, and
+publisher remain disabled contract boundaries only. No stage handler composes
+them; passing install/import tests or the physical raster/COLMAP receipts does
+not authorize Refine, a queue claim, or a run on a real scan.
 Archive-mode rsync also copies the checkout directory's mode onto the staged
 tree. `--chmod=Dgo-w,Fgo-w` removes unsafe write bits during transfer; the
 explicit `chmod -R go-w` repeats that hardening as defense-in-depth.
@@ -181,7 +189,13 @@ Prereqs to install **before** `./install.sh --gpu`:
    doctor without changing the host's global CUDA selection. Architecture
    selection stays box-local so the same package can serve Turing, Ampere, and
    Ada workers; the DeskDev acceptance override below pins `7.5` explicitly.
-4. **COLMAP CLI and CUDA PyCOLMAP 4.0.2 artifact**, with the CLI exposing
+4. **Noble Field-raster C/libheif toolchain**: `build-essential`,
+   `pkg-config`, `zlib1g-dev`, `libheif1`, `libheif-dev`, and
+   `libheif-plugin-libde265`. Install these explicitly before the GPU
+   installer; it validates but never apt-installs or upgrades them. The three
+   libheif packages must have the same version and be at least
+   `1.17.6-1ubuntu4.6`.
+5. **COLMAP CLI and CUDA PyCOLMAP 4.0.2 artifact**, with the CLI exposing
    `feature_extractor`, `sequential_matcher`,
    `exhaustive_matcher`, `point_triangulator`, `bundle_adjuster`, and
    `pose_prior_mapper`. `pyproject.toml` retains the truthful
@@ -250,10 +264,11 @@ Prereqs to install **before** `./install.sh --gpu`:
    ```
 
    A green installer closes the pinned CLI, binding-build, and bounded synthetic
-   GPU-SIFT installation gates. It does **not** qualify item 4; the database/API
-   fixture and real Field raster evidence below are still required.
+   GPU-SIFT installation gates. It does **not** replace the retained Item4A
+   COLMAP receipt or I92 physical Field-raster receipt; both remain required
+   rollout evidence.
 
-5. **Full Open3D wheel/build with CUDA**, not `open3d-cpu`. `doctor` requires
+6. **Full Open3D wheel/build with CUDA**, not `open3d-cpu`. `doctor` requires
    Open3D's public CUDA availability probe and at least one visible device for
    `fuse`; an importable CPU-only wheel is a failure.
 
@@ -282,6 +297,18 @@ expand device-path globs; a future multi-GPU box must add one exact
 `CUDA_CACHE_PATH`, and `TORCH_EXTENSIONS_DIR` under `APP_DIR/.cache` so
 `ProtectSystem=strict` never redirects model, kernel, or extension-build caches
 outside the app-owned write surface.
+
+The GPU release also contains a root-owned native Field-raster helper and a
+canonical manifest binding its source hash, binary hash, compiler flags,
+`pkg-config` flags, and exact host libheif package/header versions. A plain
+`--gpu` run reuses that release only while the manifest still matches the live
+host. A missing, malformed, or stale helper triggers an automatic immutable
+release rebuild; `--gpu --upgrade` always rebuilds. The installer re-probes the
+host immediately before activation and aborts if packages changed during the
+build. If later activation fails, transaction rollback may restore the previous
+helper-less or older release so the prior CPU worker can resume; rerun `--gpu`
+after correcting the failure to create a currently qualified helper. The
+persistent stage list remains unchanged throughout this migration.
 
 `install.sh` does not run doctor from its root shell. Normal service activation
 is gated by `ExecStartPre` in the worker unit. A separate
@@ -515,14 +542,17 @@ association/index encoding, and the `irot` payload. See the upstream
 [transform-property API](https://raw.githubusercontent.com/strukturag/libheif/v1.17.6/libheif/heif_properties.h),
 and [Ubuntu USN-8526-2](https://ubuntu.com/security/notices/USN-8526-2).
 
-On Ubuntu 24.04, `install.sh --gpu` directly installs `build-essential`,
-`pkg-config`, `zlib1g-dev` (required by Noble's `libheif.pc`), `libheif1`,
-`libheif-dev`, and
-`libheif-plugin-libde265`, then fails unless all three libheif packages match
-and are at least `1.17.6-1ubuntu4.6`. If apt metadata is stale, run
-`sudo apt-get update` and rerun the GPU install. The qualifier repeats the OS,
-package-status, revision, header/runtime-version, and decoder checks and records
-their exact evidence in its receipt.
+On Ubuntu 24.04, provision `build-essential`, `pkg-config`, `zlib1g-dev`
+(required by Noble's `libheif.pc`), `libheif1`, `libheif-dev`, and
+`libheif-plugin-libde265` before running `install.sh --gpu`. The transactional
+installer validates but never installs or upgrades those decoder packages, so
+a candidate rollback cannot leave the live worker on a newly mutated system
+libheif. It fails unless all three libheif packages match and are at least
+`1.17.6-1ubuntu4.6`. If apt metadata is stale, run `sudo apt-get update`,
+install the listed packages explicitly while the worker is stopped, and rerun
+the GPU install. The qualifier repeats the OS, package-status, revision,
+header/runtime-version, and decoder checks and records their exact evidence in
+its receipt.
 
 The helper protocol and qualification receipt are version `2`. Version `1`
 hard-coded a zero-transform assertion that does not describe ImageIO's physical
