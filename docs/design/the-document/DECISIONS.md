@@ -4725,3 +4725,49 @@ Fuse/Splat/mesh-solve/Present, host-suspend mitigation, registration, and GPU
 enablement remain hard gates. No GPU task may be claimed.
 
 *Entries add: I94 · last id = I94*
+
+### I95 · Field Capture P2 item 4 · disabled evidence and COLMAP protocol foundations — 2026-07-24
+
+The disabled Refine foundation packet adds one exact evidence builder and one
+lower-level COLMAP protocol scaffold without composing or registering a stage.
+The evidence builder consumes complete immutable source/raster identities,
+database keypoint tables, raw post-triangulation/pre-BA and refined post-BA
+models, and every pair in the deterministic candidate graph. It derives the
+existing `RefinementEvidence` contract from model geometry rather than caller
+scalars, requires identical fixed-track memberships, validates every database
+point2D and inlier index, requires at least 80% verified connected coverage and
+one verified non-temporal loop, and binds source, raster, database, model, and
+pair identities into canonical SHA-256 commitments. Frame input is capped at
+400, carries the existing absolute deadline, and normalizes arithmetic overflow
+to the adapter error contract.
+
+The lower-level scaffold defines a bounded archive-chunk packet instead of one
+descriptor per frame, canonical timestamp/source ordering and engine PPM
+identities, the reviewed known-pose seed → point triangulation → bundle
+adjustment operation plan, and a COLMAP CLI child that inherits the already
+isolated native process group. Parser hardening rejects boolean schema versions,
+Unicode or noncanonical GPU indices, unsafe source basenames, huge-number
+overflow, manifest drift, and undeclared frame members. The backend and evidence
+builder share the raw/refined snapshot semantic constants, but the provisional
+backend measurement rows are intentionally not the builder request contract.
+
+Verification passed 338 Refine regression tests and all 144
+installer/packaging tests. Focused Ruff correctness and formatting, Python
+compilation, shell syntax, diff integrity, exact source/wheel member checks, and
+independent adversarial review passed. The review verdict is PASS to land only
+as disabled/uncomposed foundations and NO-GO for execution or publishable
+evidence. No install, deployment, queue, Strata, Storage, DeskDev, or real-scan
+mutation occurred.
+
+**Boundary:** packet extraction, the native output-descriptor channel, removal
+of runner display-path reopening, aligned-output construction, and an artifact
+contract carrying both the raw pre-BA and refined models remain unqualified.
+The evidence builder's raw/refined snapshot identities are scratch-only and do
+not fit the runner's exact six candidate artifacts. Sequential COLMAP
+command-group quiescence, complete command-exception normalization, the
+200–400-frame physical packet, position-prior fallback, local-scratch scan
+`95266be1`, registration, and every GPU queue stage remain hard gates.
+`scan_pipeline.refine` stays unregistered and persistent/default stages remain
+`ingest,solve,drawings`.
+
+*Entries add: I95 · last id = I95*
