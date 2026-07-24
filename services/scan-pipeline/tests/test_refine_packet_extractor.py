@@ -417,17 +417,167 @@ def test_exact_ustar_packet_extracts_in_native_child_and_cleans_workspace(
     assert PACKET_EXTRACTION_QUALIFIED is False
 
 
-def test_extraction_rejects_parent_process_even_with_valid_pinned_descriptors(tmp_path):
+def test_extraction_rejects_unsealed_context_before_source_or_workspace_action(
+    tmp_path,
+    monkeypatch,
+):
     fixture = _packet_fixture(tmp_path)
+    source_touched = False
+    workspace_touched = False
+
+    def reject_source(*_args, **_kwargs):
+        nonlocal source_touched
+        source_touched = True
+        raise AssertionError("source must not be touched")
+
+    def reject_workspace(*_args, **_kwargs):
+        nonlocal workspace_touched
+        workspace_touched = True
+        raise AssertionError("workspace must not be touched")
+
+    monkeypatch.setattr(backend_module, "load_colmap_packet_manifest", reject_source)
+    monkeypatch.setattr(extractor_module.tempfile, "mkdtemp", reject_workspace)
     try:
         with (
-            pytest.raises(AdapterError, match="dedicated native child") as raised,
+            pytest.raises(AdapterError, match="verified native child") as raised,
             extract_colmap_packet(fixture.request, fixture.direct_context()),
         ):
             pytest.fail("parent process entered the extraction context")
     finally:
         fixture.close()
     assert raised.value.code == "REFINE_BACKEND_DISABLED"
+    assert raised.value.__cause__ is None
+    assert source_touched is False
+    assert workspace_touched is False
+
+
+def test_context_lookalike_cannot_claim_verified_boundary_before_actions(
+    tmp_path,
+    monkeypatch,
+):
+    fixture = _packet_fixture(tmp_path)
+    source_touched = False
+    workspace_touched = False
+
+    class ForgedContext:
+        is_verified_native_boundary = True
+
+        def remaining_seconds(self):
+            return 30.0
+
+    def reject_source(*_args, **_kwargs):
+        nonlocal source_touched
+        source_touched = True
+        raise AssertionError("source must not be touched")
+
+    def reject_workspace(*_args, **_kwargs):
+        nonlocal workspace_touched
+        workspace_touched = True
+        raise AssertionError("workspace must not be touched")
+
+    monkeypatch.setattr(backend_module, "load_colmap_packet_manifest", reject_source)
+    monkeypatch.setattr(extractor_module.tempfile, "mkdtemp", reject_workspace)
+    try:
+        with (
+            pytest.raises(AdapterError) as raised,
+            extract_colmap_packet(fixture.request, ForgedContext()),
+        ):
+            pytest.fail("forged context entered the extraction context")
+    finally:
+        fixture.close()
+
+    assert raised.value.code == "REFINE_BACKEND_DISABLED"
+    assert str(raised.value) == (
+        "COLMAP packet extraction requires a verified native child boundary"
+    )
+    assert raised.value.__cause__ is None
+    assert source_touched is False
+    assert workspace_touched is False
+
+
+def test_boundary_inspection_failure_is_fixed_before_actions(tmp_path, monkeypatch):
+    fixture = _packet_fixture(tmp_path)
+    context = fixture.direct_context()
+    source_touched = False
+    workspace_touched = False
+
+    def inspect_boundary(_context):
+        raise RuntimeError("DO_NOT_LEAK_BOUNDARY")
+
+    def reject_source(*_args, **_kwargs):
+        nonlocal source_touched
+        source_touched = True
+        raise AssertionError("source must not be touched")
+
+    def reject_workspace(*_args, **_kwargs):
+        nonlocal workspace_touched
+        workspace_touched = True
+        raise AssertionError("workspace must not be touched")
+
+    monkeypatch.setattr(
+        NativeChildContext,
+        "is_verified_native_boundary",
+        property(inspect_boundary),
+    )
+    monkeypatch.setattr(backend_module, "load_colmap_packet_manifest", reject_source)
+    monkeypatch.setattr(extractor_module.tempfile, "mkdtemp", reject_workspace)
+    try:
+        with (
+            pytest.raises(AdapterError) as raised,
+            extract_colmap_packet(fixture.request, context),
+        ):
+            pytest.fail("uninspectable context entered the extraction context")
+    finally:
+        fixture.close()
+
+    assert raised.value.code == "REFINE_BACKEND_DISABLED"
+    assert str(raised.value) == (
+        "cannot authenticate COLMAP packet native child boundary"
+    )
+    assert raised.value.__cause__ is None
+    assert "DO_NOT_LEAK" not in str(raised.value)
+    assert source_touched is False
+    assert workspace_touched is False
+
+
+def test_truthy_non_boolean_boundary_is_rejected(tmp_path, monkeypatch):
+    fixture = _packet_fixture(tmp_path)
+    context = fixture.direct_context()
+    source_touched = False
+    workspace_touched = False
+
+    def reject_source(*_args, **_kwargs):
+        nonlocal source_touched
+        source_touched = True
+        raise AssertionError("source must not be touched")
+
+    def reject_workspace(*_args, **_kwargs):
+        nonlocal workspace_touched
+        workspace_touched = True
+        raise AssertionError("workspace must not be touched")
+
+    monkeypatch.setattr(
+        NativeChildContext,
+        "is_verified_native_boundary",
+        property(lambda _context: 1),
+    )
+    monkeypatch.setattr(backend_module, "load_colmap_packet_manifest", reject_source)
+    monkeypatch.setattr(extractor_module.tempfile, "mkdtemp", reject_workspace)
+    try:
+        with (
+            pytest.raises(AdapterError) as raised,
+            extract_colmap_packet(fixture.request, context),
+        ):
+            pytest.fail("truthy non-boolean context entered the extraction context")
+    finally:
+        fixture.close()
+
+    assert raised.value.code == "REFINE_BACKEND_DISABLED"
+    assert str(raised.value) == (
+        "COLMAP packet extraction requires a verified native child boundary"
+    )
+    assert source_touched is False
+    assert workspace_touched is False
 
 
 def test_missing_descriptor_capability_fails_before_source_or_workspace_action(
@@ -645,6 +795,128 @@ def test_failed_workspace_creation_surfaces_cleanup_uncertainty(
 
     assert failed is True
     assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert list(scratch.glob("patina-refine-colmap-packet-*")) == []
+
+
+@pytest.mark.parametrize("failure_phase", ("stat", "open"))
+def test_new_directory_identity_failure_does_not_strand_workspace(
+    tmp_path,
+    monkeypatch,
+    failure_phase,
+):
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    monkeypatch.setattr(extractor_module.tempfile, "tempdir", str(scratch))
+    ledger = extractor_module._new_extraction_workspace()
+    real_stat = os.stat
+    real_open = os.open
+    failed = False
+
+    def fail_created_stat(path, *args, **kwargs):
+        nonlocal failed
+        if failure_phase == "stat" and not failed and path == "child":
+            failed = True
+            raise OSError("DO_NOT_LEAK_CREATED_STAT")
+        return real_stat(path, *args, **kwargs)
+
+    def fail_created_open(path, flags, *args, **kwargs):
+        nonlocal failed
+        if (
+            failure_phase == "open"
+            and not failed
+            and path == "child"
+            and flags & os.O_DIRECTORY
+        ):
+            failed = True
+            raise OSError("DO_NOT_LEAK_CREATED_OPEN")
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(extractor_module.os, "stat", fail_created_stat)
+    monkeypatch.setattr(extractor_module.os, "open", fail_created_open)
+    try:
+        with pytest.raises(
+            AdapterError,
+            match="cannot create or open a private",
+        ) as raised:
+            extractor_module._open_directory_chain(ledger, ("child",))
+        assert "DO_NOT_LEAK" not in str(raised.value)
+    finally:
+        assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+
+    assert failed is True
+    assert list(scratch.glob("patina-refine-colmap-packet-*")) == []
+
+
+@pytest.mark.parametrize("failure_phase", ("fstat", "set-inheritable"))
+def test_new_member_identity_failure_does_not_strand_workspace(
+    tmp_path,
+    monkeypatch,
+    failure_phase,
+):
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    monkeypatch.setattr(extractor_module.tempfile, "tempdir", str(scratch))
+    ledger = extractor_module._new_extraction_workspace()
+    real_open = os.open
+    real_fstat = os.fstat
+    real_set_inheritable = os.set_inheritable
+    member_descriptors: set[int] = set()
+    failed = False
+
+    def record_member_open(path, flags, *args, **kwargs):
+        descriptor = real_open(path, flags, *args, **kwargs)
+        if path == "member.bin" and flags & os.O_CREAT:
+            member_descriptors.add(descriptor)
+        return descriptor
+
+    def fail_member_fstat(descriptor):
+        nonlocal failed
+        if (
+            failure_phase == "fstat"
+            and not failed
+            and descriptor in member_descriptors
+        ):
+            failed = True
+            raise OSError("DO_NOT_LEAK_MEMBER_FSTAT")
+        return real_fstat(descriptor)
+
+    def fail_member_set_inheritable(descriptor, inheritable):
+        nonlocal failed
+        if (
+            failure_phase == "set-inheritable"
+            and not failed
+            and descriptor in member_descriptors
+        ):
+            failed = True
+            raise OSError("DO_NOT_LEAK_MEMBER_INHERITABLE")
+        return real_set_inheritable(descriptor, inheritable)
+
+    monkeypatch.setattr(extractor_module.os, "open", record_member_open)
+    monkeypatch.setattr(extractor_module.os, "fstat", fail_member_fstat)
+    monkeypatch.setattr(
+        extractor_module.os,
+        "set_inheritable",
+        fail_member_set_inheritable,
+    )
+    try:
+        with pytest.raises(AdapterError, match="cannot create") as raised:
+            extractor_module._create_extracted_member(
+                ledger,
+                SimpleNamespace(relative_path="member.bin"),
+            )
+        assert "DO_NOT_LEAK" not in str(raised.value)
+        if failure_phase == "fstat":
+            assert ledger.files == []
+            assert ledger.file_identities == {}
+            assert not (ledger.workspace / "member.bin").exists()
+        else:
+            assert ledger.files == ["member.bin"]
+            assert set(ledger.file_identities) == {"member.bin"}
+    finally:
+        assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+
+    assert failed is True
+    assert member_descriptors
     assert list(scratch.glob("patina-refine-colmap-packet-*")) == []
 
 
@@ -1106,6 +1378,8 @@ def test_reopened_request_descriptor_identity_is_revalidated(
             return SimpleNamespace(
                 st_mode=metadata.st_mode,
                 st_uid=metadata.st_uid,
+                st_dev=metadata.st_dev,
+                st_ino=metadata.st_ino,
                 st_size=metadata.st_size,
                 st_nlink=2,
             )
@@ -1129,6 +1403,197 @@ def test_reopened_request_descriptor_identity_is_revalidated(
         fixture.close()
     assert request_descriptors
     assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+def test_cleanup_refuses_same_uid_extracted_member_replacement(tmp_path):
+    fixture = _packet_fixture(tmp_path)
+    manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture)
+    assert request_payload is not None
+    request_member = manifest.member_by_path[manifest.request_member]
+    request_path = ledger.workspace / request_member.relative_path
+    original_descriptor = os.open(request_path, os.O_RDONLY | os.O_CLOEXEC)
+    replacement_payload = b"same-uid replacement must survive refused cleanup"
+    cleanup_errors: tuple[str, ...] = ()
+    try:
+        request_path.unlink()
+        request_path.write_bytes(replacement_payload)
+        request_path.chmod(0o600)
+        replacement_metadata = os.lstat(request_path)
+        assert (
+            replacement_metadata.st_dev,
+            replacement_metadata.st_ino,
+        ) != ledger.file_identities[request_member.relative_path]
+
+        cleanup_errors = extractor_module._cleanup_extraction_workspace(ledger)
+
+        assert any(
+            "extracted member identity changed before cleanup" in error
+            for error in cleanup_errors
+        )
+        assert request_path.read_bytes() == replacement_payload
+    finally:
+        os.close(original_descriptor)
+        fixture.close()
+        if request_path.exists():
+            request_path.unlink()
+        if ledger.workspace.exists():
+            ledger.workspace.rmdir()
+
+    assert cleanup_errors
+
+
+def test_cleanup_refuses_same_uid_extracted_directory_replacement(tmp_path):
+    fixture = _packet_fixture(tmp_path)
+    _manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture)
+    assert request_payload is not None
+    directory_path = ledger.workspace / "images"
+    original_descriptor = os.open(
+        directory_path,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+    )
+    replacement_payload = b"same-uid directory replacement must survive cleanup"
+    replacement_path = directory_path / "replacement.bin"
+    cleanup_errors: tuple[str, ...] = ()
+    try:
+        for child in directory_path.iterdir():
+            child.unlink()
+        directory_path.rmdir()
+        directory_path.mkdir(mode=0o700)
+        replacement_path.write_bytes(replacement_payload)
+        replacement_path.chmod(0o600)
+        replacement_metadata = os.lstat(directory_path)
+        assert (
+            replacement_metadata.st_dev,
+            replacement_metadata.st_ino,
+        ) != ledger.directory_identities["images"]
+
+        cleanup_errors = extractor_module._cleanup_extraction_workspace(ledger)
+
+        assert any(
+            "directory identity changed" in error for error in cleanup_errors
+        )
+        assert replacement_path.read_bytes() == replacement_payload
+    finally:
+        os.close(original_descriptor)
+        fixture.close()
+        if replacement_path.exists():
+            replacement_path.unlink()
+        if directory_path.exists():
+            directory_path.rmdir()
+        if ledger.workspace.exists():
+            ledger.workspace.rmdir()
+
+    assert cleanup_errors
+
+
+@pytest.mark.parametrize(
+    ("target", "expected_error"),
+    (
+        ("file", "cannot remove extracted member member.bin"),
+        ("directory", "cannot remove extracted directory child"),
+    ),
+)
+def test_cleanup_os_errors_are_fixed_and_do_not_leak(
+    tmp_path,
+    monkeypatch,
+    target,
+    expected_error,
+):
+    monkeypatch.setattr(extractor_module.tempfile, "tempdir", str(tmp_path))
+    ledger = extractor_module._new_extraction_workspace()
+    real_unlink = os.unlink
+    real_rmdir = os.rmdir
+    if target == "file":
+        descriptor = extractor_module._create_extracted_member(
+            ledger,
+            SimpleNamespace(relative_path="member.bin"),
+        )
+    else:
+        descriptor = extractor_module._open_directory_chain(ledger, ("child",))
+    os.close(descriptor)
+
+    def fail_unlink(*_args, **_kwargs):
+        raise OSError("DO_NOT_LEAK_UNLINK")
+
+    def fail_rmdir(path, *args, **kwargs):
+        if path == "child":
+            raise OSError("DO_NOT_LEAK_RMDIR")
+        return real_rmdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(extractor_module.os, "unlink", fail_unlink)
+    monkeypatch.setattr(extractor_module.os, "rmdir", fail_rmdir)
+    errors = extractor_module._cleanup_extraction_workspace(ledger)
+
+    assert errors == (expected_error,)
+    assert "DO_NOT_LEAK" not in " ".join(errors)
+
+    monkeypatch.setattr(extractor_module.os, "unlink", real_unlink)
+    monkeypatch.setattr(extractor_module.os, "rmdir", real_rmdir)
+    if target == "file":
+        real_unlink(ledger.workspace / "member.bin")
+    else:
+        real_rmdir(ledger.workspace / "child")
+    real_rmdir(ledger.workspace)
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "mkfifo"),
+    reason="FIFO replacement requires POSIX mkfifo",
+)
+def test_reopened_request_uses_nonblocking_open_before_fifo_type_check(
+    tmp_path,
+    monkeypatch,
+):
+    fixture = _packet_fixture(tmp_path)
+    manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture)
+    assert request_payload is not None
+    request_member = manifest.member_by_path[manifest.request_member]
+    request_path = ledger.workspace / request_member.relative_path
+    original_descriptor = os.open(request_path, os.O_RDONLY | os.O_CLOEXEC)
+    real_open = extractor_module.os.open
+    saw_nonblocking_request_open = False
+    cleanup_errors: tuple[str, ...] = ()
+
+    def require_nonblocking_request_open(path, flags, *args, **kwargs):
+        nonlocal saw_nonblocking_request_open
+        if path == Path(request_member.relative_path).name and not (
+            flags & os.O_CREAT
+        ):
+            if not flags & os.O_NONBLOCK:
+                raise AssertionError("request FIFO reopen omitted O_NONBLOCK")
+            saw_nonblocking_request_open = True
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(extractor_module.os, "open", require_nonblocking_request_open)
+    try:
+        request_path.unlink()
+        os.mkfifo(request_path, mode=0o600)
+        with pytest.raises(
+            AdapterError,
+            match="request identity is not exact",
+        ) as raised:
+            extractor_module._read_and_parse_extracted_request(
+                ledger=ledger,
+                manifest=manifest,
+                context=fixture.direct_context(),
+                expected_request_payload=request_payload,
+            )
+        cleanup_errors = extractor_module._cleanup_extraction_workspace(ledger)
+
+        assert saw_nonblocking_request_open is True
+        assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+        assert stat.S_ISFIFO(os.lstat(request_path).st_mode)
+        assert any(
+            "extracted member identity changed before cleanup" in error
+            for error in cleanup_errors
+        )
+    finally:
+        os.close(original_descriptor)
+        fixture.close()
+        if request_path.exists():
+            request_path.unlink()
+        if ledger.workspace.exists():
+            ledger.workspace.rmdir()
 
 
 @pytest.mark.parametrize(

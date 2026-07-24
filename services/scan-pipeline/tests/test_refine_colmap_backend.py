@@ -253,6 +253,52 @@ def test_packet_manifest_and_engine_request_are_canonical_and_descriptor_bound(
     assert chunk_offset == 0
 
 
+@pytest.mark.parametrize("payload_kind", ("manifest", "engine-request"))
+def test_json_integer_digit_limit_value_error_is_normalized(tmp_path, payload_kind):
+    integer_limit = sys.get_int_max_str_digits()
+    if integer_limit == 0:
+        pytest.skip("interpreter integer digit limit is disabled")
+    oversized_integer = b"9" * (integer_limit + 1)
+    fixture = _packet_fixture(tmp_path)
+    try:
+        if payload_kind == "manifest":
+            original_manifest = fixture.manifest_path.read_bytes()
+            changed = original_manifest.replace(
+                b'"schemaVersion":1',
+                b'"schemaVersion":' + oversized_integer,
+                1,
+            )
+            assert changed != original_manifest
+            fixture.manifest_path.write_bytes(changed)
+            fixture.request["manifestSha256"] = _sha(changed)
+            with pytest.raises(
+                AdapterError,
+                match="not valid UTF-8 JSON",
+            ) as raised:
+                load_colmap_packet_manifest(fixture.request, fixture.context)
+        else:
+            manifest = load_colmap_packet_manifest(fixture.request, fixture.context)
+            changed = fixture.engine_payload.replace(
+                b'"schemaVersion":1',
+                b'"schemaVersion":' + oversized_integer,
+                1,
+            )
+            assert changed != fixture.engine_payload
+            with pytest.raises(
+                AdapterError,
+                match="not valid UTF-8 JSON",
+            ) as raised:
+                parse_engine_request_member(
+                    changed,
+                    _manifest_bound_to_payload(manifest, changed),
+                )
+    finally:
+        fixture.close()
+
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+    assert type(raised.value.__cause__) is ValueError
+
+
 def test_two_chunk_manifest_requires_canonical_chunk_and_native_token_order(tmp_path):
     fixture = _packet_fixture(tmp_path)
     second_payload = b"second-immutable-chunk" * 64

@@ -20,7 +20,7 @@ import stat
 import tempfile
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 
@@ -50,7 +50,7 @@ _READ_BYTES = 1024 * 1024
 _ZERO_BLOCK = b"\x00" * COLMAP_PACKET_TAR_BLOCK_BYTES
 _USTAR_MAGIC = b"ustar\x00"
 _USTAR_VERSION = b"00"
-_REQUIRED_DIR_FD_FUNCTIONS = (os.open, os.mkdir, os.unlink, os.rmdir)
+_REQUIRED_DIR_FD_FUNCTIONS = (os.open, os.mkdir, os.stat, os.unlink, os.rmdir)
 
 
 def _fail(message: str, code: str = _PACKET_INVALID) -> AdapterError:
@@ -74,20 +74,42 @@ class _ExtractionLedger:
     root_identity: tuple[int, int]
     files: list[str]
     directories: list[str]
+    file_identities: dict[str, tuple[int, int]] = field(default_factory=dict)
+    directory_identities: dict[str, tuple[int, int]] = field(default_factory=dict)
 
 
 def _require_native_child_session(context: NativeChildContext) -> None:
-    context.remaining_seconds()
-    if not context.is_verified_native_boundary:
+    if type(context) is not NativeChildContext:
         raise _fail(
-            "COLMAP packet extraction requires the dedicated native child session",
+            "COLMAP packet extraction requires a verified native child boundary",
             _BACKEND_DISABLED,
         )
+    try:
+        verified_native_boundary = context.is_verified_native_boundary
+    except BaseException:  # noqa: BLE001 - boundary inspection must fail closed
+        raise _fail(
+            "cannot authenticate COLMAP packet native child boundary",
+            _BACKEND_DISABLED,
+        ) from None
+    if verified_native_boundary is not True:
+        raise _fail(
+            "COLMAP packet extraction requires a verified native child boundary",
+            _BACKEND_DISABLED,
+        )
+    context.remaining_seconds()
 
 
 def _require_extraction_platform_capabilities() -> None:
-    required_constants = ("O_NOFOLLOW", "O_DIRECTORY", "O_CLOEXEC")
-    required_functions = ("open", "mkdir", "unlink", "rmdir", "pread", "pwrite")
+    required_constants = ("O_NOFOLLOW", "O_DIRECTORY", "O_CLOEXEC", "O_NONBLOCK")
+    required_functions = (
+        "open",
+        "mkdir",
+        "stat",
+        "unlink",
+        "rmdir",
+        "pread",
+        "pwrite",
+    )
     try:
         supported = (
             os.name == "posix"
@@ -101,6 +123,8 @@ def _require_extraction_platform_capabilities() -> None:
                 function in os.supports_dir_fd
                 for function in _REQUIRED_DIR_FD_FUNCTIONS
             )
+            and hasattr(os, "supports_follow_symlinks")
+            and os.stat in os.supports_follow_symlinks
         )
     except BaseException:  # noqa: BLE001 - platform inspection must fail closed
         supported = False
@@ -355,16 +379,40 @@ def _new_extraction_workspace() -> _ExtractionLedger:
 def _open_existing_directory_chain(
     root_descriptor: int,
     parts: Sequence[str],
+    *,
+    expected_identities: Mapping[str, tuple[int, int]] | None = None,
 ) -> int:
     descriptor = os.dup(root_descriptor)
+    prefix: list[str] = []
     try:
         os.set_inheritable(descriptor, False)
         for part in parts:
+            prefix.append(part)
             child = os.open(
                 part,
                 os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
                 dir_fd=descriptor,
             )
+            if expected_identities is not None:
+                try:
+                    relative = "/".join(prefix)
+                    expected_identity = expected_identities.get(relative)
+                    child_metadata = os.fstat(child)
+                    if expected_identity is None or (
+                        child_metadata.st_dev,
+                        child_metadata.st_ino,
+                    ) != expected_identity:
+                        raise _fail(
+                            f"COLMAP packet directory identity changed at {relative}"
+                        )
+                except BaseException as exc:
+                    close_failure = _attempt_descriptor_close(
+                        child,
+                        "replaced COLMAP packet directory-chain descriptor",
+                    )
+                    if close_failure is not None:
+                        _raise_cleanup_failures([close_failure], cause=exc)
+                    raise
             previous = descriptor
             descriptor = -1
             close_failure = _attempt_descriptor_close(
@@ -404,9 +452,50 @@ def _open_directory_chain(
         for part in parts:
             prefix.append(part)
             relative = "/".join(prefix)
-            if relative not in ledger.directories:
+            expected_identity = ledger.directory_identities.get(relative)
+            if expected_identity is None:
+                if relative in ledger.directories:
+                    raise _fail(
+                        f"COLMAP packet directory identity is missing at {relative}"
+                    )
                 os.mkdir(part, mode=0o700, dir_fd=descriptor)
+                try:
+                    created_metadata = os.stat(
+                        part,
+                        dir_fd=descriptor,
+                        follow_symlinks=False,
+                    )
+                    if (
+                        not stat.S_ISDIR(created_metadata.st_mode)
+                        or created_metadata.st_uid != os.geteuid()
+                        or stat.S_IMODE(created_metadata.st_mode) != 0o700
+                    ):
+                        raise _fail(
+                            "COLMAP packet member directory is not private"
+                        )
+                except BaseException as exc:
+                    try:
+                        os.rmdir(part, dir_fd=descriptor)
+                    except OSError as cleanup_exc:
+                        _raise_cleanup_failures(
+                            [
+                                (
+                                    (
+                                        "cannot roll back unledgered COLMAP "
+                                        "packet member directory"
+                                    ),
+                                    cleanup_exc,
+                                )
+                            ],
+                            cause=exc,
+                        )
+                    raise
+                expected_identity = (
+                    created_metadata.st_dev,
+                    created_metadata.st_ino,
+                )
                 ledger.directories.append(relative)
+                ledger.directory_identities[relative] = expected_identity
             child = os.open(
                 part,
                 os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
@@ -418,8 +507,15 @@ def _open_directory_chain(
                     not stat.S_ISDIR(child_metadata.st_mode)
                     or child_metadata.st_uid != os.geteuid()
                     or stat.S_IMODE(child_metadata.st_mode) != 0o700
+                    or (
+                        child_metadata.st_dev,
+                        child_metadata.st_ino,
+                    )
+                    != expected_identity
                 ):
-                    raise _fail("COLMAP packet member directory is not private")
+                    raise _fail(
+                        f"COLMAP packet member directory identity changed at {relative}"
+                    )
             except BaseException as exc:
                 close_failure = _attempt_descriptor_close(
                     child,
@@ -474,6 +570,7 @@ def _create_extracted_member(
     parts = PurePosixPath(member.relative_path).parts
     parent_descriptor = _open_directory_chain(ledger, parts[:-1])
     descriptor: int | None = None
+    identity_recorded = False
     try:
         descriptor = os.open(
             parts[-1],
@@ -481,17 +578,57 @@ def _create_extracted_member(
             0o600,
             dir_fd=parent_descriptor,
         )
-        ledger.files.append(member.relative_path)
-        os.set_inheritable(descriptor, False)
         metadata = os.fstat(descriptor)
+        identity = (metadata.st_dev, metadata.st_ino)
+        if member.relative_path in ledger.file_identities:
+            raise _fail("COLMAP packet file creation ledger contains a duplicate")
+        ledger.files.append(member.relative_path)
+        ledger.file_identities[member.relative_path] = identity
+        identity_recorded = True
+        os.set_inheritable(descriptor, False)
         if (
             not stat.S_ISREG(metadata.st_mode)
             or metadata.st_uid != os.geteuid()
             or stat.S_IMODE(metadata.st_mode) != 0o600
+            or metadata.st_nlink != 1
         ):
             raise _fail("extracted COLMAP packet member is not private")
     except BaseException as exc:
         cleanup_failures: list[tuple[str, OSError]] = []
+        if descriptor is not None and not identity_recorded:
+            try:
+                descriptor_metadata = os.fstat(descriptor)
+                path_metadata = os.stat(
+                    parts[-1],
+                    dir_fd=parent_descriptor,
+                    follow_symlinks=False,
+                )
+                if (
+                    not stat.S_ISREG(path_metadata.st_mode)
+                    or (
+                        path_metadata.st_dev,
+                        path_metadata.st_ino,
+                    )
+                    != (
+                        descriptor_metadata.st_dev,
+                        descriptor_metadata.st_ino,
+                    )
+                ):
+                    raise OSError(
+                        "unledgered extracted member identity is not exact"
+                    )
+                os.unlink(parts[-1], dir_fd=parent_descriptor)
+            except BaseException as cleanup_exc:  # noqa: BLE001 - cleanup is fixed
+                cleanup_failures.append(
+                    (
+                        "cannot roll back unledgered extracted COLMAP packet member",
+                        (
+                            cleanup_exc
+                            if isinstance(cleanup_exc, OSError)
+                            else OSError("unledgered member rollback failed")
+                        ),
+                    )
+                )
         if descriptor is not None:
             close_failure = _attempt_descriptor_close(
                 descriptor,
@@ -723,12 +860,32 @@ def _cleanup_extraction_workspace(ledger: _ExtractionLedger) -> tuple[str, ...]:
         parts = PurePosixPath(relative_path).parts
         parent_descriptor: int | None = None
         try:
+            expected_identity = ledger.file_identities.get(relative_path)
+            if expected_identity is None:
+                raise _fail(
+                    f"extracted member identity is missing for {relative_path}"
+                )
             parent_descriptor = _open_existing_directory_chain(
                 ledger.root_descriptor,
                 parts[:-1],
+                expected_identities=ledger.directory_identities,
             )
+            metadata = os.stat(
+                parts[-1],
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or (metadata.st_dev, metadata.st_ino) != expected_identity
+            ):
+                raise _fail(
+                    f"extracted member identity changed before cleanup: {relative_path}"
+                )
             os.unlink(parts[-1], dir_fd=parent_descriptor)
-        except (AdapterError, OSError):
+        except AdapterError as exc:
+            errors.append(str(exc))
+        except OSError:
             errors.append(f"cannot remove extracted member {relative_path}")
         finally:
             if parent_descriptor is not None:
@@ -746,12 +903,32 @@ def _cleanup_extraction_workspace(ledger: _ExtractionLedger) -> tuple[str, ...]:
         parts = PurePosixPath(relative_path).parts
         parent_descriptor = None
         try:
+            expected_identity = ledger.directory_identities.get(relative_path)
+            if expected_identity is None:
+                raise _fail(
+                    f"extracted directory identity is missing for {relative_path}"
+                )
             parent_descriptor = _open_existing_directory_chain(
                 ledger.root_descriptor,
                 parts[:-1],
+                expected_identities=ledger.directory_identities,
             )
+            metadata = os.stat(
+                parts[-1],
+                dir_fd=parent_descriptor,
+                follow_symlinks=False,
+            )
+            if (
+                not stat.S_ISDIR(metadata.st_mode)
+                or (metadata.st_dev, metadata.st_ino) != expected_identity
+            ):
+                raise _fail(
+                    f"extracted directory identity changed before cleanup: {relative_path}"
+                )
             os.rmdir(parts[-1], dir_fd=parent_descriptor)
-        except (AdapterError, OSError):
+        except AdapterError as exc:
+            errors.append(str(exc))
+        except OSError:
             errors.append(f"cannot remove extracted directory {relative_path}")
         finally:
             if parent_descriptor is not None:
@@ -800,6 +977,7 @@ def _read_and_parse_extracted_request(
         request_directory = _open_existing_directory_chain(
             ledger.root_descriptor,
             parts[:-1],
+            expected_identities=ledger.directory_identities,
         )
     except OSError as exc:
         raise _fail(
@@ -809,7 +987,7 @@ def _read_and_parse_extracted_request(
     try:
         request_descriptor = os.open(
             parts[-1],
-            os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC,
             dir_fd=request_directory,
         )
     except BaseException as exc:

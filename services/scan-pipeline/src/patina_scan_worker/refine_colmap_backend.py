@@ -380,7 +380,7 @@ def load_colmap_packet_manifest(
     )
     try:
         document = json.loads(manifest_payload)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, ValueError) as exc:
         raise _fail("COLMAP packet manifest is not valid UTF-8 JSON") from exc
     if type(document) is not dict or manifest_payload != _canonical_json_bytes(
         document
@@ -630,7 +630,7 @@ def parse_engine_request_member(
         raise _fail("COLMAP engine request payload does not match its packet member")
     try:
         document = json.loads(payload)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, ValueError) as exc:
         raise _fail("COLMAP engine request member is not valid UTF-8 JSON") from exc
     if type(document) is not dict or payload != _canonical_json_bytes(document):
         raise _fail("COLMAP engine request member is not canonical JSON")
