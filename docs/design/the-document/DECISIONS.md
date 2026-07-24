@@ -4771,3 +4771,60 @@ command-group quiescence, complete command-exception normalization, the
 `ingest,solve,drawings`.
 
 *Entries add: I95 · last id = I95*
+
+### I96 · Field Capture P2 item 4 · disabled packet extraction and command supervision foundations — 2026-07-24
+
+The disabled I96 safety packet is integrated through code tip `68495fd9`. Its
+packet extractor accepts only the exact manifest-ordered, uncompressed USTAR
+regular-file universe from pinned chunk descriptors. It uses positional reads
+and descriptor-relative creation, rejects noncanonical metadata, links, special
+files, undeclared or colliding members and trailing bytes, revalidates every
+chunk, and parses the extracted declared request. The hardened boundary requires
+the exact privately sealed native-child context, opens the request
+nonblockingly before type verification, binds file and directory cleanup to
+their recorded inode identities, rolls back objects created before ledger
+completion, and normalizes oversized-integer and recursive JSON failures.
+
+The separate Linux command supervisor carries the native process group and
+single deadline across sequential commands. It requires the same exact sealed
+context, temporarily enables and restores child-subreaper ownership, refuses
+phase advancement while an adopted child remains, performs bounded
+terminate/kill/reap cleanup, and normalizes setup, drain, wait, log, and cleanup
+failures with cleanup precedence. Both modules are present in the exact
+installer source guard, candidate smoke imports, trusted source-copy checks,
+wheel and sdist assertions, and missing-module refusal cases.
+
+The reviewed future output contract is seven child-to-parent descriptors in
+transit: the six persistent engine artifacts (`adapter-v2.json`,
+`pairs-v2.txt`, `database-v1.db`, `seed-model-v1.tar`,
+`aligned-sparse-model-v1.tar`, and
+`engine-command-evidence-v1.json`) plus one scratch raw pre-BA model snapshot.
+The child may propose Sim3/aligned bytes, but the parent must recompute and
+verify alignment and the pose digest before acceptance. This is a design
+constraint only; I96 does not implement the output handoff.
+
+Verification passed 458 Refine tests with five expected Linux-only lifecycle
+skips on macOS and all 148 isolated installer/packaging tests. Focused Ruff
+correctness and formatting, Python compilation, shell syntax, diff integrity,
+posture probes, and independent adversarial review passed. The review verdict
+is GO only for disabled/uncomposed landing and NO-GO for activation,
+registration, GPU queue claims, real-scan execution, or publishable output.
+Every backend qualification flag remains false, `scan_pipeline.refine` remains
+unregistered, and default/persistent stages remain `ingest,solve,drawings`. No
+install, deployment, queue, Strata, Storage, DeskDev, or real-scan mutation
+occurred.
+
+**Boundary:** extraction scratch is still child-owned and can survive SIGKILL;
+the optional source/adapter ledger contents remain unparsed; stable-identity
+cleanup still needs exclusive parent-owned workspace control across the
+non-atomic stat-to-unlink/rmdir window. Escaped descendants are detected but
+not contained, and executable identity, command/environment allowlists, a
+pinned toolchain contract, and real Linux child-subreaper evidence remain open.
+The parent-owned descriptor workspace and reverse lease, seven-descriptor
+output channel, runner path-reopen removal, aligned-model construction,
+parent-side alignment/pose verification, evidence composition, physical
+200–400-frame packet, position-prior fallback, local-scratch scan `95266be1`,
+queue replay/fork, downstream four-manifest join, registration, and every GPU
+queue stage remain hard gates.
+
+*Entries add: I96 · last id = I96*

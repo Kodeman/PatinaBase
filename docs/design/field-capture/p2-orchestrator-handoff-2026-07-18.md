@@ -10,8 +10,8 @@ Read it with, not instead of, the canonical sources below.
    runs (rulings → numbered plan → hard gates). P1 is COMPLETE.
 2. `docs/design/field-capture/field-capture-p2-package.md` — the ACTIVE plan.
    Part B carries Kody's R114 rulings inline; Part E is the numbered plan.
-3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I95**
-   are this program's full decision history. R115 is the latest gate; I95 is
+3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I96**
+   are this program's full decision history. R115 is the latest gate; I96 is
    the latest implementation record.
 4. `docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md` — the
    completed real-DeskDev dependency/sandbox receipt (I88).
@@ -97,6 +97,8 @@ Read it with, not instead of, the canonical sources below.
   native-process prerequisite while keeping Refine unregistered.**
   **I95 adds the reviewed exact evidence-builder contract and lower-level
   COLMAP backend scaffold, still disabled and uncomposed.**
+  **I96 adds exact packet-extraction and COLMAP command-supervision
+  foundations, still disabled, unqualified, and uncomposed.**
   The broader acquisition→runner→publisher lifecycle remains unqualified.
   Newer 4.x still needs separate qualification.
 - **Item 4A COLMAP qualification passed; I91 records disabled Refine
@@ -181,15 +183,50 @@ Read it with, not instead of, the canonical sources below.
   execution or publishable evidence. Verification passed 338 Refine regression
   tests and all 144 installer/packaging tests. No install, deployment, queue,
   Strata, Storage, or real-scan run occurred.
+- **I96 hardens two disabled boundaries without enabling Refine.** The packet
+  extractor accepts only the exact manifest-ordered uncompressed USTAR
+  regular-file universe from pinned chunk descriptors, uses positional and
+  descriptor-relative I/O, rejects noncanonical metadata, undeclared or
+  colliding members and trailing bytes, revalidates every chunk, and parses the
+  extracted declared request. The command supervisor carries the native process
+  group and deadline across sequential commands, uses Linux child-subreaper
+  ownership plus exact reaping to refuse phase advancement while an adopted
+  child remains, and normalizes setup, drain, wait, log, and cleanup failures
+  with cleanup precedence. Both modules are in the exact installer and package
+  trust lists, but all qualification flags remain false. Packet scratch is
+  still child-owned and can survive SIGKILL, source/adapter ledger contents are
+  not parsed, escaped descendants are detected but not contained, the command
+  environment/toolchain is not bounded, and actual Linux lifecycle evidence is
+  still missing.
+  The reviewed output-handoff design is seven child→parent descriptors in
+  transit: the six exact persistent engine artifacts (`adapter-v2.json`,
+  `pairs-v2.txt`, `database-v1.db`, `seed-model-v1.tar`,
+  `aligned-sparse-model-v1.tar`, and
+  `engine-command-evidence-v1.json`) plus a scratch raw pre-BA model snapshot.
+  The child may compute a proposed Sim3 and aligned bytes, but the parent must
+  recompute and verify the alignment and pose digest before accepting them.
+  That parent-owned descriptor lease/workspace is a design constraint, not an
+  I96 implementation. Verification passed all 458 Refine tests with five
+  Linux-only lifecycle skips on macOS and all 148 isolated
+  installer/packaging tests. Focused Ruff correctness and formatting, Python
+  compilation, shell syntax, diff integrity, posture probes, and independent
+  adversarial review passed. The review verdict is GO only for this
+  disabled/uncomposed landing and NO-GO for activation or publishable output.
+  No install, deployment, queue, Strata, Storage, DeskDev, or real-scan run
+  occurred.
 - **Item 4's remaining hard gates begin at the disabled production
-  lifecycle.** Packet extraction, a safe native output-descriptor channel,
-  runner-path-reopen removal, aligned-output construction, and an artifact
-  contract that carries both the raw pre-BA and refined models must close before
-  the I95 builder can consume real engine snapshots. Sequential COLMAP
-  command-group quiescence and complete exception normalization also remain
-  unproved. Only then may a descriptor-safe
-  materializer→raster→backend→runner→publisher lifetime compose the I93/I94/I95
-  prerequisites under the single carried lease-aware deadline.
+  lifecycle.** I96 supplies source-only packet extraction and command
+  supervision, but neither is qualified for composition. Parent-provisioned
+  descriptor-rooted extraction with kill-safe cleanup, source/adapter ledger
+  parsing, escaped-descendant containment, a pinned environment/toolchain
+  contract, exclusive workspace ownership across the cleanup
+  stat→unlink/rmdir window, and real Linux lifecycle evidence remain open. A
+  safe native output-descriptor channel, runner-path-reopen removal,
+  aligned-output construction, and the seven-descriptor raw/refined artifact
+  contract must also close before the I95 builder can consume real engine
+  snapshots. Only then may a descriptor-safe
+  materializer→raster→backend→runner→publisher lifetime compose the
+  I93/I94/I95/I96 prerequisites under the single carried lease-aware deadline.
   Only after independent review may that composition produce comparable
   reprojection/registration/verified-loop evidence on local-scratch scan
   `95266be1`; unchanged evidence cannot pass and trajectory shape remains
@@ -200,13 +237,18 @@ Read it with, not instead of, the canonical sources below.
   remain inactive; persistent `STAGES` remains `ingest,solve,drawings`. Do not
   register `scan_pipeline.refine`, add a GPU stage, or start a GPU worker merely
   because the adapter and doctor pass.
-- **Next safe execution packet:** implement and adversarially qualify archive
-  extraction, the native output-descriptor handoff, raw/refined model snapshot
-  construction, sequential command quiescence, exception normalization, and
-  removal of runner display-path reopening. Then compose the I93 raster
+- **Next safe execution packet:** move extraction into a parent-provisioned
+  descriptor-rooted workspace with a bounded reverse-FD lease and parent
+  cleanup after every child outcome; parse the optional ledgers; add
+  escaped-descendant containment, a pinned command environment/toolchain, and
+  real Linux lifecycle evidence. Implement the seven-descriptor native output
+  handoff, raw/refined model snapshot construction, parent-side
+  alignment/pose-digest verification, and removal of runner display-path
+  reopening. Then compose the I93 raster
   adapter, I94 owner-scoped acquirer/native descriptor transport, I95
-  backend/evidence contracts, and existing runner/publisher boundaries under
-  one descriptor-safe workspace and the single carried deadline. Enforce I94's
+  backend/evidence contracts, I96 packet/supervision foundations, and existing
+  runner/publisher boundaries under one descriptor-safe workspace and the
+  single carried deadline. Enforce I94's
   service-owned local-file contract (or move parent hashing behind a killable
   helper); the current synchronous `pread` cannot preempt a kernel-stalled
   FUSE/network file. The archive packet must be proven for 200–400 frames
