@@ -29,17 +29,12 @@ import math
 import os
 import re
 import stat
-import subprocess
-import threading
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .refine_adapter import (
-    COLMAP_LOG_TAIL_BYTES,
-    COLMAP_PROCESS_KILL_REAP_S,
-    COLMAP_PROCESS_TERM_GRACE_S,
     MAX_SPATIAL_NEIGHBORS,
     MIN_CONNECTED_FRACTION,
     MIN_VERIFIED_INLIERS,
@@ -47,8 +42,9 @@ from .refine_adapter import (
     SPATIAL_RADIUS_M,
     TEMPORAL_WINDOW,
     AdapterError,
-    ColmapCommandResult,
-    RefineDeadline,
+)
+from .refine_colmap_command import (
+    run_inherited_colmap_command as _run_inherited_colmap_command,
 )
 from .refine_evidence_builder import (
     RAW_BASELINE_KIND,
@@ -96,6 +92,9 @@ _SOURCE_IMAGE_PATTERN = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}\.[Hh][Ee][Ii][Cc]$"
 )
 _READ_BYTES = 1024 * 1024
+
+# Stable public surface retained for existing disabled backend callers/tests.
+run_inherited_colmap_command = _run_inherited_colmap_command
 
 
 def _fail(message: str, code: str = _PACKET_INVALID) -> AdapterError:
@@ -1000,219 +999,6 @@ class RefineColmapBackend:
             "COLMAP position-prior fallback is not I90-qualified",
             _FALLBACK_UNQUALIFIED,
         )
-
-
-def _terminate_direct_child(process: subprocess.Popen[bytes]) -> tuple[str, ...]:
-    errors: list[str] = []
-    if process.poll() is not None:
-        return ()
-    try:
-        process.terminate()
-    except ProcessLookupError:
-        pass
-    except OSError:
-        errors.append("cannot terminate inherited COLMAP child")
-    try:
-        process.wait(timeout=COLMAP_PROCESS_TERM_GRACE_S)
-    except subprocess.TimeoutExpired:
-        try:
-            process.kill()
-        except ProcessLookupError:
-            pass
-        except OSError:
-            errors.append("cannot kill inherited COLMAP child")
-        try:
-            process.wait(timeout=COLMAP_PROCESS_KILL_REAP_S)
-        except subprocess.TimeoutExpired:
-            errors.append("inherited COLMAP child could not be reaped")
-    return tuple(errors)
-
-
-def _validate_private_command_workspace(cwd: Path, log_path: Path) -> None:
-    if not cwd.is_absolute() or not log_path.is_absolute():
-        raise _fail(
-            "COLMAP command workspace and log path must be absolute", _ENGINE_FAILED
-        )
-    try:
-        cwd_metadata = os.lstat(cwd)
-    except OSError as exc:
-        raise _fail("cannot inspect COLMAP command workspace", _ENGINE_FAILED) from exc
-    if (
-        not stat.S_ISDIR(cwd_metadata.st_mode)
-        or stat.S_ISLNK(cwd_metadata.st_mode)
-        or cwd_metadata.st_uid != os.geteuid()
-        or stat.S_IMODE(cwd_metadata.st_mode) != 0o700
-    ):
-        raise _fail(
-            "COLMAP command workspace must be an owned private 0700 directory",
-            _ENGINE_FAILED,
-        )
-    try:
-        resolved_cwd = cwd.resolve(strict=True)
-    except OSError as exc:
-        raise _fail("cannot resolve COLMAP command workspace", _ENGINE_FAILED) from exc
-    if resolved_cwd != cwd:
-        raise _fail(
-            "COLMAP command workspace may not traverse a symlink", _ENGINE_FAILED
-        )
-    if log_path.parent != cwd or log_path.exists() or log_path.is_symlink():
-        raise _fail(
-            "COLMAP command log must be a new direct workspace child",
-            _ENGINE_FAILED,
-        )
-
-
-def run_inherited_colmap_command(
-    command: Sequence[str],
-    *,
-    context: NativeChildContext,
-    deadline: RefineDeadline,
-    log_path: Path,
-    cwd: Path,
-) -> ColmapCommandResult:
-    """Run one CLI phase without escaping the native child's process group."""
-
-    if os.name != "posix" or os.getsid(0) != os.getpid() or os.getpgrp() != os.getpid():
-        raise _fail(
-            "inherited COLMAP commands require the dedicated native child session",
-            _ENGINE_FAILED,
-        )
-    if (
-        not command
-        or not Path(command[0]).is_absolute()
-        or any(type(part) is not str or not part or "\x00" in part for part in command)
-    ):
-        raise _fail("COLMAP command must be absolute non-empty argv", _ENGINE_FAILED)
-    _validate_private_command_workspace(cwd, log_path)
-    remaining = min(context.remaining_seconds(), deadline.remaining_seconds())
-    tail = bytearray()
-    drain_errors: list[str] = []
-    try:
-        log_descriptor = os.open(
-            log_path,
-            os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0),
-            0o600,
-        )
-    except OSError as exc:
-        raise _fail(
-            "cannot create inherited COLMAP log", "REFINE_ENGINE_LOG_IO"
-        ) from exc
-    try:
-        process = subprocess.Popen(
-            list(command),
-            cwd=cwd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            bufsize=0,
-            start_new_session=False,
-        )
-    except OSError as exc:
-        os.close(log_descriptor)
-        try:
-            log_path.unlink()
-        except OSError:
-            pass
-        raise _fail("cannot start inherited COLMAP child", _ENGINE_FAILED) from exc
-
-    def drain() -> None:
-        assert process.stdout is not None
-        try:
-            while True:
-                block = process.stdout.read(16 * 1024)
-                if not block:
-                    break
-                tail.extend(block)
-                if len(tail) > COLMAP_LOG_TAIL_BYTES:
-                    del tail[: len(tail) - COLMAP_LOG_TAIL_BYTES]
-                os.ftruncate(log_descriptor, 0)
-                offset = 0
-                while offset < len(tail):
-                    written = os.pwrite(log_descriptor, tail[offset:], offset)
-                    if written <= 0:
-                        raise OSError("short inherited COLMAP log write")
-                    offset += written
-        except OSError:
-            drain_errors.append("cannot retain bounded inherited COLMAP output")
-
-    thread = threading.Thread(target=drain, name="colmap-inherited-log-drain")
-    try:
-        thread.start()
-    except RuntimeError as exc:
-        cleanup_errors = _terminate_direct_child(process)
-        if process.stdout is not None:
-            try:
-                process.stdout.close()
-            except OSError:
-                cleanup_errors = (*cleanup_errors, "cannot close COLMAP output pipe")
-        try:
-            os.close(log_descriptor)
-        except OSError:
-            cleanup_errors = (*cleanup_errors, "cannot close inherited COLMAP log")
-        if cleanup_errors:
-            raise _fail("; ".join(cleanup_errors), _ENGINE_CLEANUP_FAILED) from exc
-        raise _fail("cannot start COLMAP log drain", _ENGINE_FAILED) from exc
-    timed_out = False
-    cleanup_errors: tuple[str, ...] = ()
-    wait_error: OSError | None = None
-    try:
-        process.wait(timeout=remaining)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        cleanup_errors = _terminate_direct_child(process)
-    except OSError as exc:
-        wait_error = exc
-    finally:
-        if process.poll() is None:
-            cleanup_errors = (*cleanup_errors, *_terminate_direct_child(process))
-        thread.join(COLMAP_PROCESS_KILL_REAP_S)
-        if thread.is_alive():
-            if process.stdout is not None:
-                try:
-                    process.stdout.close()
-                except OSError:
-                    pass
-            thread.join(COLMAP_PROCESS_KILL_REAP_S)
-        if thread.is_alive():
-            cleanup_errors = (
-                *cleanup_errors,
-                "inherited COLMAP log drain did not stop",
-            )
-        try:
-            os.fsync(log_descriptor)
-        except OSError:
-            cleanup_errors = (
-                *cleanup_errors,
-                "cannot synchronize inherited COLMAP log",
-            )
-        try:
-            os.close(log_descriptor)
-        except OSError:
-            cleanup_errors = (*cleanup_errors, "cannot close inherited COLMAP log")
-    if cleanup_errors:
-        raise _fail("; ".join(cleanup_errors), _ENGINE_CLEANUP_FAILED)
-    if drain_errors:
-        raise _fail(drain_errors[0], "REFINE_ENGINE_LOG_IO")
-    if wait_error is not None:
-        raise _fail(
-            "cannot wait for inherited COLMAP child", _ENGINE_FAILED
-        ) from wait_error
-    if timed_out:
-        raise _fail(
-            "COLMAP command exceeded the carried RefineDeadline", _ENGINE_TIMEOUT
-        )
-    context.remaining_seconds()
-    deadline.remaining_seconds()
-    if process.returncode != 0:
-        raise _fail(
-            f"COLMAP command failed ({process.returncode}): "
-            + bytes(tail[-2000:]).decode("utf-8", errors="replace"),
-            _ENGINE_FAILED,
-        )
-    return ColmapCommandResult(
-        process.returncode,
-        log_path,
-        bytes(tail).decode("utf-8", errors="replace"),
-    )
 
 
 @native_engine_entrypoint

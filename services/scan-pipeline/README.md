@@ -113,9 +113,10 @@ match that trusted source manifest exactly, and its dependency/extra metadata is
 checked before pip is allowed to resolve it.
 The package manifest now includes the queue-independent
 `field_raster_materializer.py`, `field_storage_acquirer.py`,
-`refine_colmap_backend.py`, `refine_evidence_builder.py`, `refine_materializer.py`,
+`refine_colmap_backend.py`, `refine_colmap_command.py`,
+`refine_evidence_builder.py`, `refine_materializer.py`,
 `refine_native_process.py`, `refine_publisher.py`, and `refine_runner.py`
-foundations, and every candidate release imports all eight
+foundations, and every candidate release imports all nine
 as the `patina` service user before activation. GPU candidates also compile the
 byte-identical
 I92-qualified `field_raster_libheif.c` into a root-owned immutable
@@ -162,12 +163,22 @@ boundary, and aligned-model artifact construction are still explicitly
 unqualified, so the primary plan is a deterministic protocol expectation rather
 than a qualified execution path. Its provisional geometry row dataclasses are
 not yet compatible with the evidence builder and do not claim complete
-track/loop snapshots. Sequential command-group quiescence and complete
-exception normalization are also still gated, even though the one fake CLI
-helper inherits the native child group. The position-prior fallback remains off
-because I90 qualified only the primary known-pose path. These gates must close
-before the backend can implement `RefineExecutionBackend` or produce
-publishable candidate outputs.
+track/loop snapshots. A separate Linux-only command supervisor now preserves
+the inherited native group, temporarily enables and restores the native
+owner's prior child-subreaper state, reaps only children adopted after a
+leader-only/no-child preflight, retries interrupted waits under the carried
+deadline. It refuses a successful phase return—and therefore normal
+composition cannot start a later phase—while the native owner retains any
+adopted child. It normalizes command setup, drain, wait, log, and cleanup
+failures with cleanup precedence. Sequential quiescence and
+exception-normalization qualification still remain false: the disabled helper
+accepts an arbitrary absolute executable, and a hostile helper can escape the
+native PGID with `setsid`/`setpgid`; the supervisor detects that adopted live
+child and fails before phase two, but the outer native group owner cannot yet
+contain it without a separately reviewed pidfd or executable-identity contract.
+The position-prior fallback remains off because I90 qualified only the primary
+known-pose path. These gates must close before the backend can implement
+`RefineExecutionBackend` or produce publishable candidate outputs.
 The separate exact evidence builder is disabled and uncomposed as well. It
 accepts only complete database keypoint tables, a fixed post-triangulation,
 pre-BA track universe, the same memberships after BA, and every deterministic

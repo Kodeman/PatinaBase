@@ -12,6 +12,7 @@ from types import MappingProxyType
 
 import pytest
 from patina_scan_worker import refine_colmap_backend as backend_module
+from patina_scan_worker import refine_colmap_command as command_module
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.refine_colmap_backend import (
     ALIGNED_MODEL_BUILD_QUALIFIED,
@@ -676,10 +677,22 @@ def test_inherited_command_cleanup_failure_precedes_late_deadline(
 ):
     fake = _fake_cli(tmp_path, "print('done')")
     pid = os.getpid()
-    monkeypatch.setattr(backend_module.os, "getsid", lambda _pid: pid)
-    monkeypatch.setattr(backend_module.os, "getpgrp", lambda: pid)
+    monkeypatch.setattr(command_module.sys, "platform", "linux")
+    monkeypatch.setattr(command_module.os, "getsid", lambda _pid: pid)
+    monkeypatch.setattr(command_module.os, "getpgrp", lambda: pid)
+    monkeypatch.setattr(command_module, "_enable_linux_child_subreaper", lambda: True)
     monkeypatch.setattr(
-        backend_module.os,
+        command_module,
+        "_pre_command_child_errors",
+        lambda **_kwargs: (),
+    )
+    monkeypatch.setattr(
+        command_module,
+        "_post_command_quiescence_errors",
+        lambda **_kwargs: (),
+    )
+    monkeypatch.setattr(
+        command_module.os,
         "fsync",
         lambda _descriptor: (_ for _ in ()).throw(OSError("synthetic fsync failure")),
     )
@@ -704,7 +717,7 @@ def test_inherited_command_cleanup_failure_precedes_late_deadline(
             cwd=tmp_path,
         )
     assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
-    assert deadline.calls == 1
+    assert deadline.calls == 2
 
 
 @native_engine_entrypoint
@@ -733,7 +746,10 @@ def _fake_cli(tmp_path: Path, program: str) -> Path:
     return path
 
 
-@pytest.mark.skipif(os.name != "posix", reason="native Refine requires POSIX")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"),
+    reason="inherited command quiescence requires Linux child subreapers",
+)
 def test_fake_cli_inherits_native_session_and_retains_only_bounded_tail(tmp_path):
     fake = _fake_cli(
         tmp_path,
@@ -755,7 +771,10 @@ def test_fake_cli_inherits_native_session_and_retains_only_bounded_tail(tmp_path
     assert log_path.stat().st_size <= 64 * 1024
 
 
-@pytest.mark.skipif(os.name != "posix", reason="native Refine requires POSIX")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"),
+    reason="inherited command quiescence requires Linux child subreapers",
+)
 def test_fake_cli_timeout_is_killed_and_reaped_by_native_owner(tmp_path):
     pid_path = tmp_path / "fake.pid"
     fake = _fake_cli(
@@ -784,15 +803,21 @@ def test_fake_cli_timeout_is_killed_and_reaped_by_native_owner(tmp_path):
             os.kill(pid, 0)
 
 
-@pytest.mark.skipif(os.name != "posix", reason="native Refine requires POSIX")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"),
+    reason="inherited command quiescence requires Linux child subreapers",
+)
 def test_fake_cli_surviving_descendant_prevents_native_success(tmp_path):
     descendant_pid_path = tmp_path / "descendant.pid"
+    descendant_program = (
+        "import os,pathlib,time; "
+        f"pathlib.Path({str(descendant_pid_path)!r}).write_text(str(os.getpid())); "
+        "time.sleep(30)"
+    )
     fake = _fake_cli(
         tmp_path,
         "import subprocess,sys; "
-        "subprocess.Popen([sys.executable,'-c',"
-        f'"import os,pathlib,time; pathlib.Path({str(descendant_pid_path)!r}).write_text(str(os.getpid())); time.sleep(30)"'
-        "])",
+        f"subprocess.Popen([sys.executable,'-c',{descendant_program!r}])",
     )
     descendant_pid: int | None = None
     try:
