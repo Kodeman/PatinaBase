@@ -113,8 +113,9 @@ match that trusted source manifest exactly, and its dependency/extra metadata is
 checked before pip is allowed to resolve it.
 The package manifest now includes the queue-independent
 `field_raster_materializer.py`, `field_storage_acquirer.py`,
-`refine_materializer.py`, `refine_native_process.py`, `refine_publisher.py`,
-and `refine_runner.py` foundations, and every candidate release imports all six
+`refine_colmap_backend.py`, `refine_materializer.py`,
+`refine_native_process.py`, `refine_publisher.py`, and `refine_runner.py`
+foundations, and every candidate release imports all seven
 as the `patina` service user before activation. GPU candidates also compile the
 byte-identical
 I92-qualified `field_raster_libheif.c` into a root-owned immutable
@@ -150,6 +151,23 @@ adapters, and publisher remain disabled contract boundaries only. No stage
 handler composes them; passing install/import tests or the physical
 raster/COLMAP receipts does not authorize Refine, a queue claim, or a run on a
 real scan.
+The lower-level COLMAP backend contract is disabled and uncomposed too. It
+requires immutable archive chunks (at most 64 pinned files, 128 MiB each) with
+frame metadata inside a canonical member manifest; per-frame descriptors and
+`/proc/self/fd` image trees are not supported. Its pair graph emits only
+canonical engine PPM names, and its CLI child inherits the already-isolated
+native process group so the outer owner can prove quiescence. The 200--400
+frame pilot, packet extraction, output-descriptor handoff, runner path-reopen
+boundary, and aligned-model artifact construction are still explicitly
+unqualified, so the primary plan is a deterministic protocol expectation rather
+than a qualified execution path. Its provisional geometry row dataclasses are
+not yet compatible with the evidence builder and do not claim complete
+track/loop snapshots. Sequential command-group quiescence and complete
+exception normalization are also still gated, even though the one fake CLI
+helper inherits the native child group. The position-prior fallback remains off
+because I90 qualified only the primary known-pose path. These gates must close
+before the backend can implement `RefineExecutionBackend` or produce
+publishable candidate outputs.
 Archive-mode rsync also copies the checkout directory's mode onto the staged
 tree. `--chmod=Dgo-w,Fgo-w` removes unsafe write bits during transfer; the
 explicit `chmod -R go-w` repeats that hardening as defense-in-depth.
