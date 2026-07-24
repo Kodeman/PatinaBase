@@ -207,11 +207,12 @@ uncomposed runner/materializer/publisher boundaries:** source HEIC and engine
 PPM identities are distinct; the closed engine-output ledger and final manifest
 are strictly bound; materialization is descriptor-pinned and bounded; and
 publication is owner-scoped, create-only, same-descriptor, and manifest-last.
-No concrete Field acquirer/production HEIC decoder adapter, descriptor-safe
-runner handoff, killable backend composition, or queue handler exists. **I90
-closes the exact CLI/binding 4.0.2 API and GPU-SIFT synthetic fixture. I92
-separately closes the physical Field/Core Image HEIC-to-raster convention, but
-not the production materializer lifecycle.** The installed immutable DeskDev
+No concrete Field Storage acquirer, descriptor-safe runner handoff, killable
+backend composition, or queue handler exists. **I90 closes the exact
+CLI/binding 4.0.2 API and GPU-SIFT synthetic fixture. I92 separately closes the
+physical Field/Core Image HEIC-to-raster convention. I93 packages and deploys
+the exact-profile adapter while keeping it disabled, uncomposed, and
+unregistered.** The installed immutable DeskDev
 release passed the physical iPhone 17 Pro Max fixture at commit `df10a157`.
 The canonical v2 receipt SHA-256 is
 `930638e3e98aa49d27f6b305d886d45b51b94714aecd49a84452e0800e0feac6`;
@@ -224,13 +225,18 @@ transforms, nonzero rotation, primary-item-associated `imir`/`clap`, metadata,
 or any raw/default pixel difference. It does not claim unknown BMFF properties
 or raw association/payload bytes; the separate iOS BMFF regression owns the
 exact ImageIO `pitm`/`ipco`/`ipma` association and `irot` payload writer
-contract. Failed v1 evidence remains preserved. *Enablement AC:* concrete
-killable lease-deadline acquisition, materializer, and engine adapters; the
-descriptor-safe materializer-to-runner-to-publisher lifecycle; and
-local-scratch `95266be1` evidence must pass before the stage is advertised or
-run. The next disabled packet is a packaged `FieldRasterMaterializer` adapter
-around the qualified helper; it remains uncomposed and unregistered. One
-lease-aware deadline
+contract. Failed v1 evidence remains preserved. I93's adapter pins the
+source/helper/scratch descriptors, kills and reaps its helper process group,
+validates and unlinks exact output before streaming, and binds the compiled
+helper to a canonical manifest plus the live Noble libheif identity across
+reuse, activation, and runtime. Main `a7aee1f4` is installed at
+`/opt/patina/scan-pipeline/.venv.release.2fcccaf0feafa92fdca3fd2a`; its retained
+deployment replay produced the exact I92 PPM hash. *Enablement AC:* concrete
+owner-scoped lease-deadline acquisition and engine adapters; the descriptor-safe
+materializer-to-runner-to-publisher lifecycle; and local-scratch `95266be1`
+evidence must pass before the stage is advertised or run. The next disabled
+packet binds a concrete Field Storage acquirer and killable COLMAP backend to
+the existing boundaries without registering the stage. One lease-aware deadline
 is `min(start+4 min, immutable conservative claim bound-60 s)`; the bound is
 request-start monotonic time plus the exact validated visibility interval, so
 response latency cannot extend the engine budget. Disable host suspend before

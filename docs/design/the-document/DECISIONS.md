@@ -4619,3 +4619,58 @@ join, Fuse/Splat/mesh-solve/Present, host-suspend mitigation, registration, and
 GPU enablement remain hard gates. No GPU task may be claimed.
 
 *Entries add: I92 · last id = I92*
+
+### I93 · Field Capture P2 item 4 · disabled physical raster adapter deployed — 2026-07-24
+
+The exact-profile production adapter is integrated on remote `main` at
+`a7aee1f4` and installed on DeskDev as immutable release
+`/opt/patina/scan-pipeline/.venv.release.2fcccaf0feafa92fdca3fd2a`. It accepts
+only the I92-qualified 360×640 ImageIO HEIC profile, consumes a pinned source
+descriptor, copies into a private service-owned scratch directory, executes the
+root-owned helper through pinned `/proc/self/fd` aliases under the carried
+lease-aware deadline, kills and reaps the complete process group on failure,
+validates and unlinks the exact PPM output before streaming, and fails closed
+on cleanup or provenance uncertainty. It remains deliberately uncomposed:
+`production_enablement` is `disabled`, `scan_pipeline.refine` is not registered,
+and default/persistent stages remain `ingest,solve,drawings`.
+
+The installer now compiles the byte-identical I92 helper source into each GPU
+release and publishes a canonical root-owned manifest binding source and binary
+hashes, hardening/compiler flags, actual `pkg-config` flags, and the exact
+Noble libheif package/header identity. Release reuse requires those values to
+match the live host, candidate activation re-probes them after the long build,
+and runtime execution requires the helper-reported loaded libheif version to
+match the manifest. Missing, malformed, stale, symlinked, writable, non-ELF, or
+hash-divergent helper state fails closed or causes an immutable rebuild before
+activation. The deployed helper-manifest SHA-256 is
+`b59ba22121ca09d56a9cad9cc8aba978c93e33c613ab34972cfac115559697bc`.
+
+The installed adapter independently replayed the retained physical iPhone 17
+Pro Max HEIC. Input SHA-256
+`89b98d8ff82d1421a973f1a5f7a39f9c3a69f4488b20a3ec1229b4c7abc86379`
+produced the exact 691,215-byte I92 PPM with SHA-256
+`78c68791b59f63fb080080d24c70bf6fdbe2fdcba6b6d798694e92c9a29e6f15`
+and materializer identity
+`patina-field-raster-libheif-helper-v2-4840e0e6d3c9-libheif-1.17.6-libde265`.
+Deployment evidence is retained at
+`/var/lib/patina/scan-work/qualification/deploy-a7aee1f4-field-raster-v1`;
+its canonical receipt SHA-256 is
+`e2eace6f258df17cd6af6a9655937a879e11813a8612b758bcf1497dac1afc90`.
+
+Verification passed 648 queue-independent scan-pipeline tests with seven
+platform skips, 138 privileged-installer/packaging tests, all 30 Linux adapter
+tests on DeskDev, the real installer wheel/provenance/CUDA-SIFT gates, exact
+helper-manifest/live-host checks, and independent adversarial review with no
+remaining blocker. No queue, Strata, or Storage mutation occurred. The worker
+and doctor remain inactive; the installer transaction, runtime override, and
+adapter scratch are clean.
+
+**Boundary:** this closes the packaged physical decode adapter only. Concrete
+owner-scoped Field Storage acquisition, the descriptor-safe
+materializer→runner→publisher lifetime, concrete killable COLMAP backend
+composition, and reviewed local-scratch evidence on `95266be1` remain before
+any queue handler, registration, or GPU-stage enablement. Host suspend must
+also be disabled or the lease clock contract made suspend-aware before Refine
+can run.
+
+*Entries add: I93 · last id = I93*

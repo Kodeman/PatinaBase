@@ -10,8 +10,8 @@ Read it with, not instead of, the canonical sources below.
    runs (rulings → numbered plan → hard gates). P1 is COMPLETE.
 2. `docs/design/field-capture/field-capture-p2-package.md` — the ACTIVE plan.
    Part B carries Kody's R114 rulings inline; Part E is the numbered plan.
-3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I92**
-   are this program's full decision history. R115 is the latest gate; I92 is
+3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I93**
+   are this program's full decision history. R115 is the latest gate; I93 is
    the latest implementation record.
 4. `docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md` — the
    completed real-DeskDev dependency/sandbox receipt (I88).
@@ -91,9 +91,10 @@ Read it with, not instead of, the canonical sources below.
   `p2-item4a-colmap-qualification-2026-07-22.md`. **I92 closes the separate
   physical Field/Core Image HEIC-to-raster convention** with the installed-run
   receipt in
-  `p2-item4a-field-raster-qualification-2026-07-24.md`. The production
-  materializer lifecycle remains unqualified. Newer 4.x still needs separate
-  qualification.
+  `p2-item4a-field-raster-qualification-2026-07-24.md`. **I93 packages and
+  deploys the exact-profile adapter while keeping it disabled and uncomposed.**
+  The broader acquisition→runner→publisher lifecycle remains unqualified.
+  Newer 4.x still needs separate qualification.
 - **Item 4A COLMAP qualification passed; I91 records disabled Refine
   boundaries, not a composed stage.** Failed v1/v2 evidence and passing v3
   evidence are preserved; v3's canonical receipt payload SHA-256 is
@@ -103,8 +104,8 @@ Read it with, not instead of, the canonical sources below.
   materializer uses descriptor-pinned bounded workspaces, and the
   publisher/storage seam is owner-scoped, create-only, same-descriptor, and
   manifest-last under the carried deadline. These boundaries remain
-  deliberately uncomposed: no concrete Field acquirer/HEIC decoder, killable
-  backend composition, or production queue handler exists. The materializer's
+  deliberately uncomposed: no concrete Field Storage acquirer, killable backend
+  composition, or production queue handler exists. The materializer's
   pinned descriptor also does not yet cross into the path-based runner/backend,
   so absolute materializer paths remain display metadata rather than a safe
   handoff contract.
@@ -124,31 +125,42 @@ Read it with, not instead of, the canonical sources below.
   association/payload bytes; the separate iOS BMFF regression owns the exact
   ImageIO `pitm`/`ipco`/`ipma` association and `irot` payload writer contract.
   Failed v1 evidence stays preserved.
-- **Item 4's remaining hard gates begin at the production lifecycle.**
-  Implement concrete killable acquisition, decode, and engine adapters under
-  the single lease-aware
-  four-minute deadline; retain a descriptor-safe workspace through runner
-  execution and publication; then
-  prove comparable reprojection/registration/verified-loop evidence on
-  local-scratch scan `95266be1` (unchanged evidence cannot pass; trajectory
-  shape is diagnostic-only). Queue replay/fork behavior, downstream consumers,
-  and the canonical refine → {fuse→mesh-solve, splat} → Present four-manifest
-  join remain unproved. No production DB or Storage run has occurred.
-- **GPU stages remain disabled and unregistered.** The observed queue-worker
-  posture after I88 is inactive; its persistent `STAGES` remains the safe CPU
-  set. Do not add `refine`, `fuse`, or `splat`, and do not start a GPU-stage
-  worker merely because the doctor passed.
-- **Next safe execution packet:** package a concrete killable
-  `FieldRasterMaterializer` adapter around the now-qualified helper while
-  keeping it uncomposed and unregistered. It must consume pinned descriptors,
-  retain a descriptor-safe workspace through helper execution, share the
-  carried lease-aware deadline, kill and reap its process group, and leave no
-  output on failure. After independent review, bind concrete acquisition and
-  engine adapters to the same descriptor-safe lifecycle and compose them only
-  for disabled local-scratch proof on `95266be1`.
-  Disable DeskDev suspend before any Refine enablement. Do not claim a GPU queue
-  task or run `95266be1` through production DB/Storage until that evidence is
-  reviewed.
+- **I93 packages and deploys the disabled physical raster adapter.** Main
+  `a7aee1f4` is installed as
+  `/opt/patina/scan-pipeline/.venv.release.2fcccaf0feafa92fdca3fd2a`.
+  The adapter pins source/helper/scratch descriptors, shares the carried
+  deadline, kills and reaps the helper process group, validates and unlinks
+  exact-profile output before streaming, and fails closed on cleanup or
+  provenance uncertainty. Its canonical helper manifest binds binary/source
+  hashes, compiler and pkg-config flags, and the exact live Noble libheif
+  identity; reuse, activation, and runtime all reject drift. The installed
+  adapter replayed the retained physical HEIC to the exact I92 PPM SHA-256
+  `78c68791b59f63fb080080d24c70bf6fdbe2fdcba6b6d798694e92c9a29e6f15`.
+  Deployment evidence is retained at
+  `/var/lib/patina/scan-work/qualification/deploy-a7aee1f4-field-raster-v1`.
+- **Item 4's remaining hard gates begin at the disabled production
+  lifecycle.** Concrete owner-scoped Field Storage acquisition, a
+  descriptor-safe materializer→runner→publisher lifetime, and a concrete
+  killable COLMAP backend must share the single carried lease-aware deadline.
+  Only after independent review may that composition produce comparable
+  reprojection/registration/verified-loop evidence on local-scratch scan
+  `95266be1`; unchanged evidence cannot pass and trajectory shape remains
+  diagnostic-only. Queue replay/fork behavior, downstream consumers, and the
+  canonical refine → {fuse→mesh-solve, splat} → Present four-manifest join
+  remain unproved. No production DB or Storage run has occurred.
+- **GPU stages remain disabled and unregistered.** DeskDev's worker and doctor
+  remain inactive; persistent `STAGES` remains `ingest,solve,drawings`. Do not
+  register `scan_pipeline.refine`, add a GPU stage, or start a GPU worker merely
+  because the adapter and doctor pass.
+- **Next safe execution packet:** implement a concrete owner-scoped Field
+  Storage acquirer and concrete killable COLMAP backend, then compose them with
+  the deployed raster adapter and existing materializer→runner→publisher
+  boundaries under one descriptor-safe workspace and the single carried
+  deadline. Keep `production_enablement=disabled`, keep the composition
+  unregistered, and exercise it only on reviewed local scratch. Do not claim a
+  GPU queue task or run `95266be1` through production DB/Storage. Disable
+  DeskDev suspend before any Refine enablement, or first make the lease-clock
+  contract suspend-aware.
 
 ## The operating cadence (do not drop it)
 
