@@ -4674,3 +4674,54 @@ also be disabled or the lease clock contract made suspend-aware before Refine
 can run.
 
 *Entries add: I93 · last id = I93*
+
+### I94 · Field Capture P2 item 4 · disabled acquisition and native lifecycle prerequisites — 2026-07-24
+
+The disabled Refine lifecycle-prerequisite packet is integrated through code
+tip `73a27b37`. It adds a concrete owner-scoped Field Storage acquirer and
+extends the materializer producer seam to carry the exact source artifact,
+`user_id`, `scan_id`, bounded private-file sink, and the single lease-aware
+deadline. Before any credentialed client exists, the acquirer validates the
+owner/key ledger. It then performs one identity-encoded raw object GET, requires
+the exact status/content-length/byte-count/SHA-256 contract, and writes only
+through the bounded sink. Operational auth, rate-limit, and 5xx failures remain
+retryable; missing or identity-invalid input is fatal. HTTP/runtime failures are
+normalized without retaining credential-bearing cause, context, or output.
+
+The native boundary now transfers a canonical ledger of unique read-only local
+regular-file descriptors with SCM_RIGHTS only after the child proves its
+dedicated POSIX session. Parent and child independently enforce token, count,
+per-file, aggregate, inode, size, and hash limits; the child revalidates the
+original stat snapshot and shared open-file-description offset after engine
+return. Parent finalization restores and rejects any shared-offset mutation on
+success, timeout, error, or interruption before closing its duplicate.
+Process-group TERM/KILL and success-quiescence signals occur only while the
+unreaped original leader still owns its PID/PGID; after reap, verification and
+retry never address that numeric process group. Descriptor, connection, child,
+and descendant cleanup fail closed on uncertainty.
+
+Final verification passed 146 focused Storage/materializer/native tests, 720
+broader queue-independent tests with seven platform skips, and 140 isolated
+privileged-installer/packaging tests: 860 passed and seven skipped across the
+split suite. Compileall, focused Ruff correctness and formatting, shell syntax,
+diff integrity, exact package-member/import checks, and explicit posture probes
+passed. Independent component and combined adversarial reviews passed after
+credential classification, exception-secret, sink-deadline, PID-reuse, and
+shared-offset findings were resolved. `FieldStorageArtifactAcquirer` remains
+`production_enablement=disabled`; `scan_pipeline.refine` is unregistered;
+defaults remain `ingest,solve,drawings`. No queue, Strata, Storage, or DeskDev
+runtime mutation occurred.
+
+**Boundary:** I94 is not the evidence builder or a concrete COLMAP backend and
+does not compose the I93 raster adapter with the runner/publisher. Parent-side
+hashing is synchronous and therefore limited to service-owned local files until
+it moves behind a killable boundary; FUSE/network files are forbidden. The
+native proof is capped at 64 unique files, 128 MiB per file, and 4 GiB
+aggregate, so a larger scan needs an explicitly reviewed batch/file-backed
+protocol rather than truncation. The descriptor-safe composition, unchanged
+evidence rejection and comparable improvement on local-scratch scan
+`95266be1`, queue replay/fork, downstream four-manifest join,
+Fuse/Splat/mesh-solve/Present, host-suspend mitigation, registration, and GPU
+enablement remain hard gates. No GPU task may be claimed.
+
+*Entries add: I94 · last id = I94*

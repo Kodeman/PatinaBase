@@ -10,8 +10,8 @@ Read it with, not instead of, the canonical sources below.
    runs (rulings → numbered plan → hard gates). P1 is COMPLETE.
 2. `docs/design/field-capture/field-capture-p2-package.md` — the ACTIVE plan.
    Part B carries Kody's R114 rulings inline; Part E is the numbered plan.
-3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I93**
-   are this program's full decision history. R115 is the latest gate; I93 is
+3. `docs/design/the-document/DECISIONS.md` — entries **R108–R115 and I84–I94**
+   are this program's full decision history. R115 is the latest gate; I94 is
    the latest implementation record.
 4. `docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md` — the
    completed real-DeskDev dependency/sandbox receipt (I88).
@@ -93,6 +93,8 @@ Read it with, not instead of, the canonical sources below.
   receipt in
   `p2-item4a-field-raster-qualification-2026-07-24.md`. **I93 packages and
   deploys the exact-profile adapter while keeping it disabled and uncomposed.**
+  **I94 adds the disabled owner-scoped Storage acquirer and descriptor-transfer
+  native-process prerequisite while keeping Refine unregistered.**
   The broader acquisition→runner→publisher lifecycle remains unqualified.
   Newer 4.x still needs separate qualification.
 - **Item 4A COLMAP qualification passed; I91 records disabled Refine
@@ -104,10 +106,12 @@ Read it with, not instead of, the canonical sources below.
   materializer uses descriptor-pinned bounded workspaces, and the
   publisher/storage seam is owner-scoped, create-only, same-descriptor, and
   manifest-last under the carried deadline. These boundaries remain
-  deliberately uncomposed: no concrete Field Storage acquirer, killable backend
-  composition, or production queue handler exists. The materializer's
-  pinned descriptor also does not yet cross into the path-based runner/backend,
-  so absolute materializer paths remain display metadata rather than a safe
+  deliberately uncomposed. I94 now supplies a disabled concrete Field Storage
+  acquirer and a bounded SCM_RIGHTS transport for read-only local-file
+  descriptors, but no evidence builder, concrete COLMAP backend composition, or
+  production queue handler exists. The materializer's pinned descriptor still
+  does not cross through a composed raster→runner→publisher lifetime, so
+  absolute materializer paths remain display metadata rather than a safe
   handoff contract.
 - **Item 4A physical raster qualification passed; I92 records the evidence,
   not a production materializer.** The installed immutable release
@@ -138,10 +142,30 @@ Read it with, not instead of, the canonical sources below.
   `78c68791b59f63fb080080d24c70bf6fdbe2fdcba6b6d798694e92c9a29e6f15`.
   Deployment evidence is retained at
   `/var/lib/patina/scan-work/qualification/deploy-a7aee1f4-field-raster-v1`.
+- **I94 adds two reviewed, disabled lifecycle prerequisites.** The Field
+  Storage acquirer validates the exact owner/key ledger before constructing an
+  HTTP client, performs one identity-encoded raw object GET with service-role
+  credentials, checks status, declared length, exact byte count, and SHA-256,
+  and writes only through the materializer's bounded private-file sink under
+  the carried deadline. Operational auth/rate-limit/5xx failures stay
+  retryable; missing or identity-invalid input is fatal. Credential-bearing
+  exceptions are normalized without cause/context leakage. The native boundary
+  transfers unique read-only regular-file descriptors with SCM_RIGHTS only
+  after verified `setsid`, independently checks capped token/size/hash/inode
+  ledgers in parent and child, revalidates the original stat snapshot and bytes
+  after engine return, and closes descriptors on every path. The current proof
+  boundary is 64 unique files, 128 MiB per file, and 4 GiB aggregate; a
+  production evidence builder must fit that ceiling deliberately or introduce
+  a separately reviewed batch/file-backed protocol. Process-group
+  signals occur only while the unreaped original leader still owns its PGID;
+  post-reap retry and verification never address that numeric group.
+  Both pieces remain `production_enablement=disabled` or uncomposed
+  prerequisites and made no queue, Strata, or Storage call.
 - **Item 4's remaining hard gates begin at the disabled production
-  lifecycle.** Concrete owner-scoped Field Storage acquisition, a
-  descriptor-safe materializer→runner→publisher lifetime, and a concrete
-  killable COLMAP backend must share the single carried lease-aware deadline.
+  lifecycle.** A concrete evidence builder, descriptor-safe
+  materializer→raster→runner→publisher lifetime, and concrete killable COLMAP
+  backend must compose the I93/I94 prerequisites under the single carried
+  lease-aware deadline.
   Only after independent review may that composition produce comparable
   reprojection/registration/verified-loop evidence on local-scratch scan
   `95266be1`; unchanged evidence cannot pass and trajectory shape remains
@@ -152,15 +176,19 @@ Read it with, not instead of, the canonical sources below.
   remain inactive; persistent `STAGES` remains `ingest,solve,drawings`. Do not
   register `scan_pipeline.refine`, add a GPU stage, or start a GPU worker merely
   because the adapter and doctor pass.
-- **Next safe execution packet:** implement a concrete owner-scoped Field
-  Storage acquirer and concrete killable COLMAP backend, then compose them with
-  the deployed raster adapter and existing materializer→runner→publisher
-  boundaries under one descriptor-safe workspace and the single carried
-  deadline. Keep `production_enablement=disabled`, keep the composition
-  unregistered, and exercise it only on reviewed local scratch. Do not claim a
-  GPU queue task or run `95266be1` through production DB/Storage. Disable
-  DeskDev suspend before any Refine enablement, or first make the lease-clock
-  contract suspend-aware.
+- **Next safe execution packet:** implement the exact evidence builder and
+  concrete killable COLMAP backend, then compose the I93 raster adapter, I94
+  owner-scoped acquirer/native descriptor transport, and existing
+  materializer→runner→publisher boundaries under one descriptor-safe workspace
+  and the single carried deadline. Enforce I94's service-owned local-file
+  contract (or move parent hashing behind a killable helper); the current
+  synchronous `pread` cannot preempt a kernel-stalled FUSE/network file. Also
+  resolve the 64-descriptor proof ceiling explicitly rather than silently
+  truncating a larger scan.
+  Keep `production_enablement=disabled`, keep the composition unregistered, and
+  exercise it only on reviewed local scratch. Do not claim a GPU queue task or
+  run `95266be1` through production DB/Storage. Disable DeskDev suspend before
+  any Refine enablement, or first make the lease-clock contract suspend-aware.
 
 ## The operating cadence (do not drop it)
 
