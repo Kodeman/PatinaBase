@@ -14,6 +14,7 @@ import pytest
 
 from patina_scan_worker import refine_colmap_backend as backend_module
 from patina_scan_worker import refine_colmap_command as command_module
+from patina_scan_worker import refine_native_process as native_process
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.refine_colmap_backend import (
     ALIGNED_MODEL_BUILD_QUALIFIED,
@@ -852,7 +853,9 @@ def test_inherited_command_cleanup_failure_precedes_late_deadline(
     with pytest.raises(AdapterError, match="synchronize") as raised:
         run_inherited_colmap_command(
             (str(fake), "point_triangulator"),
-            context=NativeChildContext(time.monotonic() + 30.0),
+            context=native_process._seal_native_child_context(
+                NativeChildContext(time.monotonic() + 30.0)
+            ),
             deadline=deadline,
             log_path=tmp_path / "fsync-failure.log",
             cwd=tmp_path,

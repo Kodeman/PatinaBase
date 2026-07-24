@@ -444,6 +444,23 @@ def run_inherited_colmap_command(
             "native child session",
             _ENGINE_FAILED,
         )
+    if type(context) is not NativeChildContext:
+        raise _fail(
+            "inherited COLMAP commands require a verified native child boundary",
+            _ENGINE_FAILED,
+        )
+    try:
+        verified_native_boundary = context.is_verified_native_boundary
+    except BaseException:
+        raise _fail(
+            "cannot authenticate inherited COLMAP native child boundary",
+            _ENGINE_FAILED,
+        ) from None
+    if verified_native_boundary is not True:
+        raise _fail(
+            "inherited COLMAP commands require a verified native child boundary",
+            _ENGINE_FAILED,
+        )
     normalized_command = _normalize_command_argv(command)
     _validate_private_command_workspace(cwd, log_path)
     _shared_remaining_seconds(context, deadline)

@@ -9,7 +9,9 @@ import time
 from pathlib import Path
 
 import pytest
+
 from patina_scan_worker import refine_colmap_command as command_module
+from patina_scan_worker import refine_native_process as native_process
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.refine_colmap_backend import run_inherited_colmap_command
 from patina_scan_worker.refine_native_process import (
@@ -61,7 +63,9 @@ def _run_unit_command(tmp_path: Path, fake: Path, name: str = "command.log"):
     tmp_path.chmod(0o700)
     return run_inherited_colmap_command(
         (str(fake), "point_triangulator"),
-        context=NativeChildContext(time.monotonic() + 30.0),
+        context=native_process._seal_native_child_context(
+            NativeChildContext(time.monotonic() + 30.0)
+        ),
         deadline=_deadline(10.0),
         log_path=tmp_path / name,
         cwd=tmp_path,
@@ -217,6 +221,111 @@ def test_non_linux_host_rejects_before_popen(monkeypatch, tmp_path):
     assert raised.value.code == "REFINE_ENGINE_FAILED"
     assert "dedicated Linux native child session" in str(raised.value)
     assert popen_called is False
+
+
+def test_unsealed_context_is_rejected_before_popen(monkeypatch, tmp_path):
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    _patch_unit_host(monkeypatch)
+    popen_called = False
+
+    def popen(*_args, **_kwargs):
+        nonlocal popen_called
+        popen_called = True
+        raise AssertionError
+
+    monkeypatch.setattr(command_module.subprocess, "Popen", popen)
+
+    with pytest.raises(AdapterError) as raised:
+        run_inherited_colmap_command(
+            (str(fake), "point_triangulator"),
+            context=NativeChildContext(time.monotonic() + 30.0),
+            deadline=_deadline(),
+            log_path=tmp_path / "never-created.log",
+            cwd=tmp_path,
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "inherited COLMAP commands require a verified native child boundary"
+    )
+    assert raised.value.__cause__ is None
+    assert popen_called is False
+    assert not (tmp_path / "never-created.log").exists()
+
+
+def test_context_lookalike_cannot_claim_verified_boundary(monkeypatch, tmp_path):
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    _patch_unit_host(monkeypatch)
+
+    class ForgedContext:
+        is_verified_native_boundary = True
+
+        def remaining_seconds(self):
+            return 30.0
+
+    monkeypatch.setattr(
+        command_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        run_inherited_colmap_command(
+            (str(fake), "point_triangulator"),
+            context=ForgedContext(),
+            deadline=_deadline(),
+            log_path=tmp_path / "never-created.log",
+            cwd=tmp_path,
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "inherited COLMAP commands require a verified native child boundary"
+    )
+    assert raised.value.__cause__ is None
+    assert not (tmp_path / "never-created.log").exists()
+
+
+def test_boundary_inspection_failure_is_fixed_without_cause(monkeypatch, tmp_path):
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    _patch_unit_host(monkeypatch)
+    context = native_process._seal_native_child_context(
+        NativeChildContext(time.monotonic() + 30.0)
+    )
+
+    def inspect_boundary(_context):
+        raise RuntimeError("DO_NOT_LEAK_BOUNDARY")
+
+    monkeypatch.setattr(
+        NativeChildContext,
+        "is_verified_native_boundary",
+        property(inspect_boundary),
+    )
+    monkeypatch.setattr(
+        command_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        run_inherited_colmap_command(
+            (str(fake), "point_triangulator"),
+            context=context,
+            deadline=_deadline(),
+            log_path=tmp_path / "never-created.log",
+            cwd=tmp_path,
+        )
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "cannot authenticate inherited COLMAP native child boundary"
+    )
+    assert raised.value.__cause__ is None
+    assert "DO_NOT_LEAK" not in str(raised.value)
+    assert not (tmp_path / "never-created.log").exists()
 
 
 def test_argv_normalization_does_not_use_source_truthiness_or_indexing():
