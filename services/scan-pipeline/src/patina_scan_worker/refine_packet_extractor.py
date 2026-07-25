@@ -15,11 +15,19 @@ registration remain separate disabled gates.
 
 The two optional provenance ledgers (``source-ledger`` and ``adapter-ledger``)
 are parsed here rather than left opaque.  Their bytes are bound to the packet
-manifest exactly like every other member, and their rows are cross-checked
-against the manifest-declared member universe and the extracted engine request.
-What they cannot do is prove anything about objects outside the packet: the
-source HEIC digests a source ledger declares have no counterpart inside the
-archive, so they stay carried claims rather than verified identities.
+manifest exactly like every other member.  Past that the two carry very
+different weight, and the docstrings below say so per ledger rather than in one
+blurred sentence:
+
+* A ``source-ledger`` row names an object that is *not* in this packet -- a
+  pre-raster capture HEIC.  No source row is compared against any manifest
+  member, because there is no member to compare it to.  Rows are checked for
+  shape, for internal consistency, and against the extracted engine request's
+  frame identities; the declared digests stay carried claims.
+* The ``adapter-ledger`` carries no rows at all.  Every per-frame fact a row
+  could state is already proven by ``parse_engine_request_member`` binding each
+  frame to its declared ``engine-image`` member, so the document is reduced to
+  the one thing nothing else in the packet records: its ``materializerId``.
 """
 
 from __future__ import annotations
@@ -81,9 +89,22 @@ COLMAP_PACKET_LEDGER_MEMBER_PATHS: Mapping[str, str] = {
     COLMAP_PACKET_ADAPTER_LEDGER_ROLE: "adapter-ledger-v1.json",
 }
 # A ledger is read into memory whole, so it carries the same 4 MiB envelope the
-# engine request uses, not the 128 MiB per-member archive ceiling.  400 rows of
-# either schema is well under 200 KiB.
+# engine request uses, not the 128 MiB per-member archive ceiling.  400 source
+# rows are well under 200 KiB, and an adapter ledger is a single rowless object.
 COLMAP_PACKET_LEDGER_MAX_BYTES = 4 * 1024 * 1024
+# A source-ledger row describes an object that is not in this packet, so its
+# declared size cannot be measured here -- only bounded.  The bound reused is
+# the per-file native pinned-file ceiling every packet member already obeys
+# (``NATIVE_CHILD_MAX_PINNED_FILE_BYTES``, 128 MiB).  That is a convention, not
+# a derivation: nothing in this process has seen the object, and the capture
+# bundle spec bounds the *bundle* (B-4's 300--600 MB budget, B-16's tar'd heavy
+# streams) rather than bounding an individual HEIC at all.  A real Field capture
+# HEIC is single-digit MB, so this ceiling is far too loose to catch a plausible
+# lie; its whole job is to refuse the arithmetically impossible -- a row
+# claiming 10**60 bytes -- so an absurd number cannot ride into evidence
+# unchallenged.  Engine-request sizes need no such ceiling: they are bound to
+# real declared members and are therefore measured, not asserted.
+COLMAP_PACKET_SOURCE_OBJECT_MAX_BYTES = COLMAP_PACKET_MEMBER_MAX_BYTES
 SOURCE_LEDGER_SCHEMA_VERSION = 1
 SOURCE_LEDGER_CONTRACT = "patina-refine-colmap-source-ledger-v1"
 ADAPTER_LEDGER_SCHEMA_VERSION = 1
@@ -139,10 +160,19 @@ def _fail(message: str, code: str = _PACKET_INVALID) -> AdapterError:
 class ColmapSourceLedgerRow:
     """One declared pre-raster source object for a single engine frame.
 
-    Every field except the digest/size pair is cross-checked: the ordinal and
-    image name must match the extracted engine request, and the member basename
-    must match the image name.  ``source_sha256``/``source_size_bytes`` describe
-    an object that is not in the packet and are therefore unverifiable here.
+    Three of the six fields are cross-checked against something outside the row
+    itself: ``ordinal`` against its position in the array, ``source_image_name``
+    against the extracted engine request's frame at that ordinal, and
+    ``source_member`` against that same image name by basename equality.
+
+    The other three are checked for shape and for consistency with each other,
+    and nothing more.  ``source_archive_key`` must be a canonical relative path
+    and is half of a per-row uniqueness tuple, but no owner, scan, or run is
+    anchored to it -- see the residual list on :func:`_parse_source_ledger`.
+    ``source_sha256`` and ``source_size_bytes`` describe an object that is not
+    in this packet: the digest is never recomputed, and the size is only bounded
+    by :data:`COLMAP_PACKET_SOURCE_OBJECT_MAX_BYTES` and required to be the same
+    everywhere one digest appears.
     """
 
     ordinal: int
@@ -163,30 +193,25 @@ class ColmapSourceLedger:
 
 
 @dataclass(frozen=True)
-class ColmapAdapterLedgerRow:
-    """One declared raster-adapter output, fully bound to a packet member."""
-
-    ordinal: int
-    engine_image_name: str
-    engine_relative_path: str
-    engine_sha256: str
-    engine_size_bytes: int
-
-
-@dataclass(frozen=True)
 class ColmapAdapterLedger:
     """The parsed optional ``adapter-ledger`` member, bound to this packet.
 
-    ``rows`` covers the manifest's ``engine-image`` universe exactly: a row for
-    an undeclared member and a declared member without a row both fail closed.
-    ``materializer_id`` is an opaque identity token; nothing here proves which
-    adapter build actually produced the bytes.
+    This ledger deliberately carries no per-frame rows.  Everything a row could
+    have said about an engine image -- its name, its packet-relative path, its
+    digest, its size -- is already proven by ``parse_engine_request_member``,
+    which binds every frame to exactly one declared ``engine-image`` member
+    carrying exactly those values.  Rows would have been a derived copy of
+    facts already verified elsewhere (~80 KB at 400 frames) and one more
+    surface for a future producer to contradict itself on.
+
+    What survives is the one fact nothing else in the packet records:
+    ``materializer_id``.  It is an opaque identity token checked for shape
+    only; nothing here proves which adapter build produced the bytes.
     """
 
     relative_path: str
     sha256: str
     materializer_id: str
-    rows: tuple[ColmapAdapterLedgerRow, ...]
 
 
 @dataclass(frozen=True)
@@ -324,11 +349,24 @@ def _validate_packet_member_roles(
 ) -> _PacketLedgerMembers:
     """Close the role universe and ledger cardinality before touching the disk.
 
-    This repeats bounds ``load_colmap_packet_manifest`` also applies.  That is
-    intentional: extraction is reachable from tests and future callers with a
-    manifest object it did not build itself, and it must not create a single
+    Five of the seven bounds below restate ones ``load_colmap_packet_manifest``
+    also applies: the closed role universe, at most one member per ledger role,
+    exactly one engine request, the 3--400 engine-image count, and a request
+    member that is both declared and carries the request role.  Restating them
+    is intentional -- extraction is reachable from tests and future callers with
+    a manifest object it did not build itself, and it must not create a single
     file on the strength of somebody else's validation.  The engine-image bound
-    is imported from the backend rather than restated so the two cannot drift.
+    is imported from the backend rather than retyped so the two cannot drift.
+
+    The remaining two exist **only here**; a reader will not find them in
+    ``load_colmap_packet_manifest``:
+
+    * a ledger member must sit at its exact packet-root path
+      (:data:`COLMAP_PACKET_LEDGER_MEMBER_PATHS`) -- the backend accepts a
+      ledger role at any canonical relative path;
+    * a ledger member may not exceed :data:`COLMAP_PACKET_LEDGER_MAX_BYTES`
+      (4 MiB, the whole-document envelope), where the backend applies only the
+      128 MiB per-member archive ceiling.
     """
 
     from .refine_colmap_backend import (
@@ -434,9 +472,17 @@ def _ledger_relative_path(value: object, label: str) -> str:
     return _canonical_relative_path(value, label)
 
 
-def _ledger_exact_int(value: object, label: str, *, minimum: int) -> int:
+def _ledger_exact_int(
+    value: object,
+    label: str,
+    *,
+    minimum: int,
+    maximum: int | None = None,
+) -> int:
     if type(value) is not int or value < minimum:
         raise _fail(f"{label} must be an integer >= {minimum}")
+    if maximum is not None and value > maximum:
+        raise _fail(f"{label} must be an integer <= {maximum}")
     return value
 
 
@@ -1379,7 +1425,13 @@ def _parse_ledger_document(
     fields: frozenset[str],
     label: str,
 ) -> Mapping[str, Any]:
-    """Validate the envelope every ledger shares, including its run binding."""
+    """Validate the envelope every ledger shares, including its run binding.
+
+    Only the envelope: canonical JSON, the exact field set, the contract and
+    schema version, and the manifest run binding.  ``frames`` is not part of
+    the shared envelope -- the source ledger owns that array and checks it
+    itself, and the adapter ledger has none.
+    """
 
     try:
         document = json.loads(payload)
@@ -1397,9 +1449,6 @@ def _parse_ledger_document(
         raise _fail(f"COLMAP packet {label} contract is unsupported")
     if document["runId"] != manifest.run_id:
         raise _fail(f"COLMAP packet {label} runId does not match its manifest")
-    rows = document["frames"]
-    if type(rows) is not list:
-        raise _fail(f"COLMAP packet {label} frames must be an exact JSON array")
     return document
 
 
@@ -1412,10 +1461,33 @@ def _parse_source_ledger(
 ) -> ColmapSourceLedger:
     """Bind pre-raster source provenance to the extracted engine frames.
 
-    Coverage is exact: one row per engine frame, in frame order.  What this
-    does not do is verify the declared source digests -- those objects are
-    outside the packet -- so a wrong ``sourceSha256`` is caught only if the
-    downstream acquirer re-hashes the real object.
+    Coverage is exact: one row per engine frame, in frame order.  Each row's
+    image identity must equal its frame's ``sourceImageName``, its member
+    basename must equal that image name, and no two rows may name the same
+    ``(archiveKey, member)`` object.  Self-consistency is enforced where it can
+    be: one ``sourceSha256`` may not appear at two different
+    ``sourceSizeBytes``, since that is impossible for real objects and needs
+    nothing outside the document to detect.
+
+    The residual is everything that would require reading an object this
+    process never sees, and it is larger than "digests are unverified":
+
+    * ``sourceSha256`` is never recomputed.  Nothing downstream of the packet
+      re-reads a source HEIC either.  ``field_storage_acquirer`` does re-hash
+      what it streams, but it is *upstream* -- it acquires the capture bundle
+      before any packet exists, and it checks against the ingest manifest's
+      digest, never against a ledger row.  A wrong ``sourceSha256`` is
+      therefore caught by nothing in this pipeline today.
+    * ``sourceSizeBytes`` is bounded, not measured; see
+      :data:`COLMAP_PACKET_SOURCE_OBJECT_MAX_BYTES` for why that bound is a
+      convention rather than a derivation.
+    * ``sourceArchiveKey`` is anchored to nothing.  The packet manifest carries
+      only a 64-hex ``runId`` -- no owner id, no scan id -- so a row naming
+      another owner's archive path is accepted here and flows into
+      :class:`ColmapSourceLedgerRow`.  ``refine_evidence_builder._canonical_path``
+      does not anchor it either, so the value can reach published evidence
+      unanchored.  Closing this needs an owner/scan binding in the manifest
+      itself; it cannot be closed inside this function.
     """
 
     label = "source ledger"
@@ -1428,11 +1500,14 @@ def _parse_source_ledger(
         label=label,
     )
     rows = document["frames"]
+    if type(rows) is not list:
+        raise _fail(f"COLMAP packet {label} frames must be an exact JSON array")
     frames = engine_request.frames
     if len(rows) != len(frames):
         raise _fail("COLMAP packet source ledger does not cover every engine frame")
     parsed: list[ColmapSourceLedgerRow] = []
     seen_source_objects: set[tuple[str, str]] = set()
+    declared_sizes: dict[str, int] = {}
     for index, row in enumerate(rows):
         if type(row) is not dict or set(row) != {
             "ordinal",
@@ -1473,21 +1548,33 @@ def _parse_source_ledger(
         if source_object in seen_source_objects:
             raise _fail("COLMAP packet source ledger repeats a source object identity")
         seen_source_objects.add(source_object)
+        source_sha256 = _ledger_sha256(
+            row["sourceSha256"],
+            f"source ledger row {index} sourceSha256",
+        )
+        source_size_bytes = _ledger_exact_int(
+            row["sourceSizeBytes"],
+            f"source ledger row {index} sourceSizeBytes",
+            minimum=1,
+            maximum=COLMAP_PACKET_SOURCE_OBJECT_MAX_BYTES,
+        )
+        # Two rows may legitimately repeat one (digest, size) pair -- two frames
+        # can be rastered from byte-identical sources.  One digest at two sizes
+        # cannot happen for real objects, and needs nothing outside this
+        # document to detect, so it is refused rather than carried.
+        first_size = declared_sizes.setdefault(source_sha256, source_size_bytes)
+        if first_size != source_size_bytes:
+            raise _fail(
+                "COLMAP packet source ledger declares one source digest at two sizes"
+            )
         parsed.append(
             ColmapSourceLedgerRow(
                 ordinal,
                 archive_key,
                 source_member,
                 image_name,
-                _ledger_sha256(
-                    row["sourceSha256"],
-                    f"source ledger row {index} sourceSha256",
-                ),
-                _ledger_exact_int(
-                    row["sourceSizeBytes"],
-                    f"source ledger row {index} sourceSizeBytes",
-                    minimum=1,
-                ),
+                source_sha256,
+                source_size_bytes,
             )
         )
     return ColmapSourceLedger(
@@ -1502,25 +1589,27 @@ def _parse_adapter_ledger(
     *,
     manifest: ColmapPacketManifest,
     member: ColmapPacketMember,
-    engine_request: ColmapEngineRequest,
 ) -> ColmapAdapterLedger:
-    """Bind raster-adapter provenance to the manifest's engine-image universe.
+    """Parse the rowless raster-adapter envelope.
 
-    Every row must name a declared ``engine-image`` member and repeat its exact
-    digest and size, and every declared engine image must have a row.  The
-    materializer identity is checked for shape only; no build is authenticated.
+    The document is ``{schemaVersion, contract, runId, materializerId}`` and
+    nothing else -- a ``frames`` key is refused by the envelope's exact field
+    set like any other unknown field.  See :class:`ColmapAdapterLedger` for why
+    per-frame rows were removed rather than validated: every fact they could
+    carry is already proven by ``parse_engine_request_member``.
+
+    ``materializerId`` is checked for shape only.  It is an opaque token: this
+    function cannot tell a real adapter build id from a well-formed invention,
+    and no adapter build is authenticated anywhere in this path.
     """
 
-    label = "adapter ledger"
     document = _parse_ledger_document(
         payload,
         manifest=manifest,
         contract=ADAPTER_LEDGER_CONTRACT,
         schema_version=ADAPTER_LEDGER_SCHEMA_VERSION,
-        fields=frozenset(
-            {"schemaVersion", "contract", "runId", "materializerId", "frames"}
-        ),
-        label=label,
+        fields=frozenset({"schemaVersion", "contract", "runId", "materializerId"}),
+        label="adapter ledger",
     )
     materializer_id = document["materializerId"]
     if (
@@ -1528,93 +1617,10 @@ def _parse_adapter_ledger(
         or _MATERIALIZER_ID_PATTERN.fullmatch(materializer_id) is None
     ):
         raise _fail("COLMAP packet adapter ledger materializerId is not canonical")
-    rows = document["frames"]
-    frames = engine_request.frames
-    if len(rows) != len(frames):
-        raise _fail("COLMAP packet adapter ledger does not cover every engine frame")
-    declared_members = manifest.member_by_path
-    engine_member_paths = {
-        row.relative_path
-        for row in manifest.members
-        if row.role == COLMAP_PACKET_ENGINE_IMAGE_ROLE
-    }
-    parsed: list[ColmapAdapterLedgerRow] = []
-    covered_paths: set[str] = set()
-    for index, row in enumerate(rows):
-        if type(row) is not dict or set(row) != {
-            "ordinal",
-            "engineImageName",
-            "engineRelativePath",
-            "engineSha256",
-            "engineSizeBytes",
-        }:
-            raise _fail(
-                f"COLMAP packet adapter ledger row {index} has an invalid shape"
-            )
-        ordinal = _ledger_exact_int(
-            row["ordinal"],
-            f"adapter ledger row {index} ordinal",
-            minimum=0,
-        )
-        if ordinal != index:
-            raise _fail(
-                "COLMAP packet adapter ledger ordinals must be dense and ordered"
-            )
-        frame = frames[index]
-        image_name = row["engineImageName"]
-        relative_path = _ledger_relative_path(
-            row["engineRelativePath"],
-            f"adapter ledger row {index} engineRelativePath",
-        )
-        if (
-            type(image_name) is not str
-            or image_name != frame.engine_image_name
-            or relative_path != frame.engine_relative_path
-        ):
-            raise _fail(
-                "COLMAP packet adapter ledger row does not match its engine frame"
-            )
-        sha256 = _ledger_sha256(
-            row["engineSha256"],
-            f"adapter ledger row {index} engineSha256",
-        )
-        size_bytes = _ledger_exact_int(
-            row["engineSizeBytes"],
-            f"adapter ledger row {index} engineSizeBytes",
-            minimum=1,
-        )
-        declared = declared_members.get(relative_path)
-        if (
-            declared is None
-            or declared.role != COLMAP_PACKET_ENGINE_IMAGE_ROLE
-            or declared.sha256 != sha256
-            or declared.size_bytes != size_bytes
-        ):
-            raise _fail(
-                "COLMAP packet adapter ledger row is not bound to a declared "
-                "engine image"
-            )
-        # A repeated path needs no separate rejection: the exact-coverage check
-        # below fails closed because some declared engine image is then missing.
-        covered_paths.add(relative_path)
-        parsed.append(
-            ColmapAdapterLedgerRow(
-                ordinal,
-                image_name,
-                relative_path,
-                sha256,
-                size_bytes,
-            )
-        )
-    if covered_paths != engine_member_paths:
-        raise _fail(
-            "COLMAP packet adapter ledger must account for every declared engine image"
-        )
     return ColmapAdapterLedger(
         member.relative_path,
         member.sha256,
         materializer_id,
-        tuple(parsed),
     )
 
 
@@ -1629,10 +1635,14 @@ def _read_and_parse_optional_ledgers(
 ) -> tuple[ColmapSourceLedger | None, ColmapAdapterLedger | None]:
     """Read and parse whichever optional ledgers this packet declared.
 
-    Ledger rows are bound to engine frames by ordinal, so the extracted request
-    and the manifest-declared engine-image universe must first agree on how many
-    frames exist.  That agreement is checked here rather than assumed from the
-    request parser.
+    Source-ledger rows are bound to engine frames by ordinal, so the extracted
+    request and the manifest-declared engine-image universe must first agree on
+    how many frames exist.  That agreement is checked here rather than assumed
+    from the request parser, and it is checked unconditionally: it also
+    establishes -- together with ``parse_engine_request_member`` binding each
+    frame to a distinct declared ``engine-image`` member -- that the request's
+    frames cover that member universe exactly.  The adapter ledger relies on
+    exactly that fact instead of restating it row by row.
     """
 
     if len(engine_request.frames) != members.engine_image_count:
@@ -1665,7 +1675,6 @@ def _read_and_parse_optional_ledgers(
             ),
             manifest=manifest,
             member=members.adapter,
-            engine_request=engine_request,
         )
     return source_ledger, adapter_ledger
 
