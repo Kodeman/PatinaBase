@@ -27,9 +27,12 @@ the path and never removes the root, so a SIGKILLed child cannot strand it.
 Containment rests on parent ownership, not on path secrecy: a compromised child
 could still resolve its own descriptor through Linux procfs, and a hostile
 same-UID actor that already knows the container can still race the cleanup
-window. Cleanup therefore quarantine-renames each entry to an unguessable name
-inside the pinned directory and refuses to remove anything whose identity
-changed, which bounds that race rather than eliminating it.
+window. Cleanup therefore pins each entry by descriptor before touching it —
+which is what makes an inode-number comparison sound on a filesystem that
+recycles inode numbers — quarantine-renames it to an unguessable name inside
+the pinned directory, and refuses to remove anything whose identity changed.
+That bounds the race rather than eliminating it: the final removal is still
+name-based. See ``_purge_leased_entry`` for exactly what is and is not claimed.
 """
 
 from __future__ import annotations
@@ -69,6 +72,13 @@ NATIVE_WORKSPACE_QUARANTINE_PREFIX = "patina-refine-native-purge-"
 NATIVE_WORKSPACE_MAX_ENTRIES = 4096
 NATIVE_WORKSPACE_MAX_DEPTH = 8
 NATIVE_WORKSPACE_NAME_ATTEMPTS = 8
+# ``O_PATH`` references an entry of any type — symlink, unix socket, mode-0
+# file — without reading it, following it, or blocking.  Linux has it and the
+# qualified production host is Linux; macOS does not, so a few entry types
+# there fall back to an unpinned name stat whose identity is only as strong as
+# the filesystem's inode-number reuse policy.  This flag exists so that
+# degradation is inspectable instead of implied.
+NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL = hasattr(os, "O_PATH")
 
 _PROTOCOL_VERSION = 1
 _ENTRYPOINT_PATTERN = re.compile(r"^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*$")
@@ -2264,6 +2274,61 @@ def _workspace_directory_flags() -> int:
     return os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 
 
+def _workspace_entry_pin_flags() -> int:
+    """Reference an entry itself: no symlink traversal, no read, no blocking."""
+
+    if NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL:
+        return os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC
+    # No ``O_PATH`` here (macOS).  ``O_NONBLOCK`` keeps a FIFO open from waiting
+    # on a peer and ``O_NOFOLLOW`` keeps the reference on the named entry, but
+    # this still cannot reference a unix socket or a mode-0 file.
+    return os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC
+
+
+def _pin_leased_entry(
+    directory_descriptor: int,
+    name: str,
+) -> tuple[int | None, OSError | None]:
+    """Hold one entry's inode open so its inode number cannot be recycled.
+
+    A held descriptor keeps the inode referenced, so the filesystem cannot free
+    — and therefore cannot re-issue — its inode number while cleanup runs.  That
+    is the whole reason the later ``(st_dev, st_ino)`` comparison means anything
+    on Linux; see :func:`_purge_leased_entry`.
+    """
+
+    try:
+        return (
+            os.open(
+                name,
+                _workspace_entry_pin_flags(),
+                dir_fd=directory_descriptor,
+            ),
+            None,
+        )
+    except FileNotFoundError as exc:
+        return None, exc
+    except OSError as exc:
+        if NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL:
+            return None, exc
+        failure: OSError = exc
+    symlink_flag = getattr(os, "O_SYMLINK", None)
+    if type(symlink_flag) is int:
+        # The macOS spelling for "reference the symlink, not its target".
+        try:
+            return (
+                os.open(
+                    name,
+                    symlink_flag | os.O_RDONLY | os.O_CLOEXEC,
+                    dir_fd=directory_descriptor,
+                ),
+                None,
+            )
+        except OSError as exc:
+            failure = exc
+    return None, failure
+
+
 def _workspace_scratch_name(prefix: str) -> str:
     return prefix + secrets.token_hex(16)
 
@@ -2409,133 +2474,230 @@ def _purge_leased_entry(
     budget: list[int],
     errors: list[str],
 ) -> None:
-    """Remove one entry without ever unlinking a changed or escaped identity.
+    """Remove one entry, refusing any object whose identity changed.
 
-    Each entry is first renamed to an unguessable quarantine name inside the
-    same pinned directory.  Only after the quarantined name re-resolves to the
-    exact identity observed before the rename is it unlinked, so a hostile
-    same-UID actor can no longer control which name the final removal targets.
+    ``(st_dev, st_ino)`` is not by itself an identity on Linux: ext4 hands a
+    just-freed inode number straight back to the next creator, so an attacker
+    who unlinks and recreates an entry inside the inspect/rename window presents
+    a *different* object carrying the *same* number.  Measured on this
+    repository's own gate, unlink+recreate recycled the inode number 20/20 times
+    on Linux and 0/20 times on APFS.  The entry is therefore first pinned by
+    descriptor: a held reference keeps the inode from being freed, so its number
+    cannot be re-issued while cleanup runs, and only then does equality actually
+    mean sameness.  The pin also removes the older inspect/rename gap, because
+    the recorded identity comes from ``fstat`` on that descriptor rather than
+    from a second lookup of the name.
+
+    The entry is then renamed to an unguessable quarantine name inside the same
+    pinned directory and removed only if the quarantined name still resolves to
+    the pinned identity.
+
+    What this does **not** buy: the final ``unlinkat``/``rmdir`` is still
+    name-based, so a same-UID actor that can ``readdir`` this directory may swap
+    the quarantine name after that check.  For non-directory entries that
+    residual swap is caught after the fact — the pinned inode's link count must
+    strictly drop — unless the attacker also removes the pinned object; for
+    directories it is not caught at all.  What holds unconditionally is blast
+    radius: every mutation is a single-component ``renameat``/``unlinkat``/
+    ``rmdir`` relative to a pinned descriptor, which cannot follow a symlink and
+    cannot traverse out of this directory.
+
+    Without ``O_PATH`` (macOS) a unix socket or a mode-0 file cannot be pinned
+    side-effect-free; those degrade to the unpinned name stat, which is only as
+    strong as the filesystem's inode-reuse policy.  On Linux — the qualified
+    production platform — a failed pin is anomalous and refuses the removal.
     """
 
     if type(name) is not str or name in (".", "..") or "/" in name or not name:
         errors.append("leased native workspace entry name is not a safe component")
         return
+    pin, pin_failure = _pin_leased_entry(directory_descriptor, name)
     try:
-        before = os.stat(name, dir_fd=directory_descriptor, follow_symlinks=False)
-    except FileNotFoundError:
-        return
-    except OSError as exc:
-        errors.append(
-            _bounded_diagnostic(
-                "cannot inspect a leased native workspace entry: ",
-                _exception_summary(exc),
-                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
-            )
-        )
-        return
-    identity = (before.st_dev, before.st_ino)
-    if before.st_dev != root_device:
-        errors.append("leased native workspace entry crosses a filesystem boundary")
-        return
-    quarantine = _workspace_scratch_name(NATIVE_WORKSPACE_QUARANTINE_PREFIX)
-    try:
-        os.rename(
-            name,
-            quarantine,
-            src_dir_fd=directory_descriptor,
-            dst_dir_fd=directory_descriptor,
-        )
-    except FileNotFoundError:
-        return
-    except OSError as exc:
-        errors.append(
-            _bounded_diagnostic(
-                "cannot quarantine a leased native workspace entry: ",
-                _exception_summary(exc),
-                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
-            )
-        )
-        return
-    try:
-        quarantined = os.stat(
-            quarantine,
-            dir_fd=directory_descriptor,
-            follow_symlinks=False,
-        )
-    except OSError as exc:
-        errors.append(
-            _bounded_diagnostic(
-                "cannot inspect a quarantined native workspace entry: ",
-                _exception_summary(exc),
-                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
-            )
-        )
-        return
-    if (quarantined.st_dev, quarantined.st_ino) != identity:
-        errors.append("leased native workspace entry identity changed before removal")
-        return
-    if stat.S_ISDIR(quarantined.st_mode):
-        child_descriptor: int | None = None
-        try:
-            child_descriptor = os.open(
-                quarantine,
-                _workspace_directory_flags(),
-                dir_fd=directory_descriptor,
-            )
-            child_metadata = os.fstat(child_descriptor)
-            if (child_metadata.st_dev, child_metadata.st_ino) != identity:
+        if pin is not None:
+            try:
+                before = os.fstat(pin)
+            except OSError as exc:
                 errors.append(
-                    "leased native workspace directory identity changed before removal"
-                )
-                return
-            _purge_leased_directory(
-                child_descriptor,
-                root_device=root_device,
-                depth=depth + 1,
-                budget=budget,
-                errors=errors,
-            )
-        except OSError as exc:
-            errors.append(
-                _bounded_diagnostic(
-                    "cannot open a quarantined native workspace directory: ",
-                    _exception_summary(exc),
-                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
-                )
-            )
-            return
-        finally:
-            if child_descriptor is not None:
-                errors.extend(
-                    _close_workspace_descriptors(
-                        (("quarantined native workspace directory", child_descriptor),)
+                    _bounded_diagnostic(
+                        "cannot inspect a pinned leased native workspace entry: ",
+                        _exception_summary(exc),
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
                     )
                 )
+                return
+        else:
+            if type(pin_failure) is FileNotFoundError:
+                return
+            if NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL:
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot pin a leased native workspace entry: ",
+                        _exception_summary(pin_failure),
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+                return
+            try:
+                before = os.stat(
+                    name,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                return
+            except OSError as exc:
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot inspect a leased native workspace entry: ",
+                        _exception_summary(exc),
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+                return
+        identity = (before.st_dev, before.st_ino)
+        entry_type = stat.S_IFMT(before.st_mode)
+        if before.st_dev != root_device:
+            errors.append("leased native workspace entry crosses a filesystem boundary")
+            return
+        quarantine = _workspace_scratch_name(NATIVE_WORKSPACE_QUARANTINE_PREFIX)
         try:
-            os.rmdir(quarantine, dir_fd=directory_descriptor)
+            os.rename(
+                name,
+                quarantine,
+                src_dir_fd=directory_descriptor,
+                dst_dir_fd=directory_descriptor,
+            )
         except FileNotFoundError:
             return
         except OSError as exc:
             errors.append(
                 _bounded_diagnostic(
-                    "cannot remove a quarantined native workspace directory: ",
+                    "cannot quarantine a leased native workspace entry: ",
                     _exception_summary(exc),
                     maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
                 )
             )
-        return
-    try:
-        os.unlink(quarantine, dir_fd=directory_descriptor)
-    except FileNotFoundError:
-        return
-    except OSError as exc:
-        errors.append(
-            _bounded_diagnostic(
-                "cannot remove a quarantined native workspace entry: ",
-                _exception_summary(exc),
-                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            return
+        try:
+            quarantined = os.stat(
+                quarantine,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
             )
-        )
+        except OSError as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot inspect a quarantined native workspace entry: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            return
+        if (quarantined.st_dev, quarantined.st_ino) != identity or stat.S_IFMT(
+            quarantined.st_mode
+        ) != entry_type:
+            errors.append(
+                "leased native workspace entry identity changed before removal"
+            )
+            return
+        if stat.S_ISDIR(quarantined.st_mode):
+            child_descriptor: int | None = None
+            try:
+                child_descriptor = os.open(
+                    quarantine,
+                    _workspace_directory_flags(),
+                    dir_fd=directory_descriptor,
+                )
+                child_metadata = os.fstat(child_descriptor)
+                if (child_metadata.st_dev, child_metadata.st_ino) != identity:
+                    errors.append(
+                        "leased native workspace directory identity changed "
+                        "before removal"
+                    )
+                    return
+                _purge_leased_directory(
+                    child_descriptor,
+                    root_device=root_device,
+                    depth=depth + 1,
+                    budget=budget,
+                    errors=errors,
+                )
+            except OSError as exc:
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot open a quarantined native workspace directory: ",
+                        _exception_summary(exc),
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+                return
+            finally:
+                if child_descriptor is not None:
+                    errors.extend(
+                        _close_workspace_descriptors(
+                            (
+                                (
+                                    "quarantined native workspace directory",
+                                    child_descriptor,
+                                ),
+                            )
+                        )
+                    )
+            try:
+                os.rmdir(quarantine, dir_fd=directory_descriptor)
+            except FileNotFoundError:
+                return
+            except OSError as exc:
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot remove a quarantined native workspace directory: ",
+                        _exception_summary(exc),
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+            # A directory's link count is not a portable removal witness: after
+            # ``rmdir`` Linux reports 0 while macOS still reports 2.  The
+            # post-quarantine swap window therefore stays undetected here.
+            return
+        try:
+            os.unlink(quarantine, dir_fd=directory_descriptor)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot remove a quarantined native workspace entry: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            return
+        if pin is None:
+            return
+        # Post-hoc, not preventive: the removal targeted a name, so prove the
+        # pinned object actually lost a link.  This catches a swap of the
+        # quarantine name itself, which the identity check above cannot, but
+        # stays silent if the attacker also removed the pinned object.
+        try:
+            after = os.fstat(pin)
+        except OSError as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot confirm removal of a pinned native workspace entry: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            return
+        if after.st_nlink >= before.st_nlink:
+            errors.append("leased native workspace entry survived its own removal")
+    finally:
+        if pin is not None:
+            errors.extend(
+                _close_workspace_descriptors(
+                    (("pinned native workspace entry", pin),)
+                )
+            )
 
 
 def _purge_leased_directory(

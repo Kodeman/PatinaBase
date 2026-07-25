@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import signal
+import socket
 import stat
 import subprocess
 import sys
@@ -2520,6 +2521,97 @@ def test_workspace_cleanup_refuses_to_unlink_a_swapped_identity(tmp_path, monkey
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_workspace_cleanup_refuses_a_swap_that_recycles_the_inode_number(
+    tmp_path,
+    monkeypatch,
+):
+    """The swap must be refused even when the replacement reuses the number.
+
+    On ext4 an unlink+recreate hands the freed inode number straight back, so
+    ``(st_dev, st_ino)`` equality is not identity.  This test records the
+    replacement's inode number and asserts cleanup refused regardless of whether
+    the filesystem recycled it, so the guard cannot be satisfied by a platform
+    that merely happens not to reuse numbers.
+    """
+
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    workspace = Path(lease.path)
+    victim = workspace / "member.bin"
+    victim.write_bytes(b"original scratch")
+    original_inode = victim.stat().st_ino
+    replacement_inode: int | None = None
+    real_rename = os.rename
+    swapped = False
+
+    def swap_before_quarantine(src, dst, *args, **kwargs):
+        nonlocal swapped, replacement_inode
+        if not swapped and src == "member.bin":
+            swapped = True
+            victim.unlink()
+            victim.write_bytes(b"attacker replacement")
+            replacement_inode = victim.stat().st_ino
+        return real_rename(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(native_process.os, "rename", swap_before_quarantine)
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
+    monkeypatch.undo()
+
+    assert swapped is True
+    assert replacement_inode is not None
+    # Recorded, not asserted: ext4 recycles here, APFS does not.  Either way the
+    # swap must be refused.
+    recycled = replacement_inode == original_inode
+    assert any("identity changed before removal" in error for error in errors), (
+        f"cleanup accepted a swapped entry (inode recycled: {recycled})"
+    )
+    survivors = list(workspace.iterdir())
+    assert len(survivors) == 1
+    assert survivors[0].read_bytes() == b"attacker replacement"
+    survivors[0].unlink()
+    workspace.rmdir()
+
+
+@pytest.mark.skipif(
+    not native_process.NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL,
+    reason="universal side-effect-free entry pinning requires O_PATH",
+)
+def test_every_workspace_entry_type_is_pinnable_on_the_qualified_platform(tmp_path):
+    """Linux must never fall back to an unpinned identity for any entry type."""
+
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    workspace = Path(lease.path)
+    (workspace / "regular.bin").write_bytes(b"x")
+    (workspace / "unreadable.bin").touch(mode=0o000)
+    (workspace / "nested").mkdir(mode=0o700)
+    os.symlink("/etc/passwd", workspace / "dangling-or-not")
+    os.mkfifo(workspace / "pipe", 0o600)
+    listener = socket.socket(socket.AF_UNIX)
+    # AF_UNIX paths cap at ~107 bytes, well below a pytest tmp_path, so bind
+    # short and move the bound node into the workspace.
+    bound = f"/tmp/patina-refine-pin-{os.getpid()}"
+    listener.bind(bound)
+    os.rename(bound, "endpoint", dst_dir_fd=lease.descriptor)
+    try:
+        for name in sorted(os.listdir(lease.descriptor)):
+            pin, failure = native_process._pin_leased_entry(lease.descriptor, name)
+            assert pin is not None, f"{name} could not be pinned: {failure}"
+            os.close(pin)
+    finally:
+        listener.close()
+    assert native_process._release_workspace_lease(lease, leader_quiescent=True) == ()
+    assert list(container.iterdir()) == []
+    assert Path("/etc/passwd").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
 def test_workspace_cleanup_reports_a_live_child_and_bounded_depth(tmp_path):
     container = _lease_container(tmp_path)
     lease = native_process.provision_native_workspace_lease(
@@ -2714,11 +2806,14 @@ def test_workspace_cleanup_refuses_a_cross_device_entry(tmp_path, monkeypatch):
     )
     workspace = Path(lease.path)
     (workspace / "foreign.bin").write_bytes(b"pretend this is another mount")
-    real_stat = os.stat
+    # The device now comes from the pinned descriptor, not from a name lookup,
+    # so the injection has to target that descriptor's inode.
+    foreign_inode = (workspace / "foreign.bin").stat().st_ino
+    real_fstat = os.fstat
 
-    def foreign_device(target, *args, **kwargs):
-        metadata = real_stat(target, *args, **kwargs)
-        if target == "foreign.bin":
+    def foreign_device(descriptor):
+        metadata = real_fstat(descriptor)
+        if metadata.st_ino == foreign_inode:
             return os.stat_result(
                 (
                     metadata.st_mode,
@@ -2735,7 +2830,7 @@ def test_workspace_cleanup_refuses_a_cross_device_entry(tmp_path, monkeypatch):
             )
         return metadata
 
-    monkeypatch.setattr(native_process.os, "stat", foreign_device)
+    monkeypatch.setattr(native_process.os, "fstat", foreign_device)
     errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
     monkeypatch.undo()
 
