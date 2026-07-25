@@ -17,6 +17,7 @@ from _colmap_toolchain import (
     write_toolchain,
 )
 
+from patina_scan_worker import pycolmap_cuda_smoke
 from patina_scan_worker import refine_colmap_toolchain as toolchain_module
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.refine_colmap_toolchain import (
@@ -73,20 +74,28 @@ def test_toolchain_policy_flags_remain_false_and_owed_values_are_listed():
 
 def test_pinned_constants_match_the_in_repo_colmap_builder():
     builder = (UNIT_DIR / "install-colmap-4.0.2.sh").read_text(encoding="utf-8")
-    assert f"readonly COLMAP_PREFIX={QUALIFIED_COLMAP_PREFIX}" in builder
-    assert (
-        f"readonly EXPECTED_COMMIT={toolchain_module.QUALIFIED_COLMAP_SOURCE_COMMIT}"
-        in builder
-    )
-    assert (
-        f"readonly EXPECTED_SOURCE_TREE={toolchain_module.QUALIFIED_COLMAP_SOURCE_TREE}"
-        in builder
-    )
-    assert f"readonly CUDA_ROOT={QUALIFIED_CUDA_ROOT}" in builder
-    assert f"readonly CC_11={toolchain_module.QUALIFIED_HOST_C_COMPILER}" in builder
-    assert f"readonly CXX_11={toolchain_module.QUALIFIED_HOST_CXX_COMPILER}" in builder
-    assert f"readonly COLMAP_VERSION={toolchain_module.QUALIFIED_COLMAP_VERSION}" in (
-        builder
+    # Every pin is asserted as the builder's own complete `readonly` line, so a
+    # constant that merely *resembles* the receipt -- a dropped parenthesis, a
+    # truncated prefix -- can no longer satisfy a substring match.  This is the
+    # class of drift that shipped `colmapBuildBanner` without its parentheses:
+    # an operator transcribing the second line of `colmap -h` got a hard
+    # rejection from a constant that looked right.
+    for line in (
+        f"readonly COLMAP_PREFIX={QUALIFIED_COLMAP_PREFIX}",
+        f"readonly EXPECTED_COMMIT={toolchain_module.QUALIFIED_COLMAP_SOURCE_COMMIT}",
+        f"readonly EXPECTED_SOURCE_TREE={toolchain_module.QUALIFIED_COLMAP_SOURCE_TREE}",
+        f'readonly EXPECTED_BUILD="{toolchain_module.QUALIFIED_COLMAP_BUILD_BANNER}"',
+        f"readonly CUDA_ROOT={QUALIFIED_CUDA_ROOT}",
+        f"readonly CC_11={toolchain_module.QUALIFIED_HOST_C_COMPILER}",
+        f"readonly CXX_11={toolchain_module.QUALIFIED_HOST_CXX_COMPILER}",
+        f"readonly COLMAP_VERSION={toolchain_module.QUALIFIED_COLMAP_VERSION}",
+    ):
+        assert line in builder.splitlines(), line
+    # The banner is the parenthesized `colmap -h` line.  PyCOLMAP's
+    # `COLMAP_build` attribute is the same text without them; the two surfaces
+    # must stay distinct, so neither pin may be "fixed" into the other.
+    assert toolchain_module.QUALIFIED_COLMAP_BUILD_BANNER == (
+        f"({pycolmap_cuda_smoke.EXPECTED_BUILD})"
     )
 
 
@@ -313,9 +322,63 @@ def test_elf_requirement_rejects_a_shebang_script(tmp_path):
             prefix,
             remaining_seconds=lambda: 30.0,
             require_elf=True,
+            owner_uid=os.geteuid(),
         )
 
     assert str(raised.value) == "COLMAP toolchain executable is not an ELF binary"
+
+
+def test_the_installed_prefix_must_be_owned_by_root_by_default(tmp_path):
+    """A prefix owned by the *executing* identity is no longer trusted.
+
+    ``_trusted_metadata_ok`` used to accept ``st_uid in (0, os.geteuid())``.
+    For a prefix owned by whoever runs the worker that guarantee is worthless
+    after the hash: the same identity can rewrite the binary at any time.  The
+    qualified box installs ``root:root`` ``0755``, so the production default is
+    ``root`` and nothing else.
+    """
+
+    prefix = tmp_path / "colmap"
+    write_toolchain(prefix)
+    assert prefix.stat().st_uid == os.geteuid() != 0
+
+    with pytest.raises(AdapterError) as raised:
+        load_colmap_toolchain(
+            prefix,
+            remaining_seconds=lambda: 30.0,
+            require_elf=False,
+        )
+
+    assert raised.value.code == "REFINE_TOOLCHAIN_UNQUALIFIED"
+    assert str(raised.value) == "COLMAP toolchain prefix has unsafe ownership or mode"
+
+
+@pytest.mark.parametrize("owner_uid", (-1, True, 1.0, "0", None))
+def test_the_declared_owner_uid_must_be_an_exact_non_negative_int(tmp_path, owner_uid):
+    prefix = tmp_path / "colmap"
+    write_toolchain(prefix)
+
+    with pytest.raises(AdapterError) as raised:
+        load_colmap_toolchain(
+            prefix,
+            remaining_seconds=lambda: 30.0,
+            require_elf=False,
+            owner_uid=owner_uid,
+        )
+
+    assert str(raised.value) == "COLMAP toolchain load requires a declared owner uid"
+
+
+def test_the_recorded_identity_carries_the_inode_timestamps(tmp_path):
+    prefix = tmp_path / "colmap"
+    binary = write_toolchain(prefix)
+    toolchain = load_fake_toolchain(prefix)
+    try:
+        metadata = binary.stat()
+        assert toolchain.identity.ctime_ns == metadata.st_ctime_ns
+        assert toolchain.identity.mtime_ns == metadata.st_mtime_ns
+    finally:
+        toolchain.close()
 
 
 def test_executable_identity_rejects_a_swapped_inode(tmp_path):
@@ -330,6 +393,41 @@ def test_executable_identity_rejects_a_swapped_inode(tmp_path):
         replacement.write_bytes(binary.read_bytes())
         replacement.chmod(0o755)
         replacement.replace(binary)
+
+        with pytest.raises(AdapterError) as raised:
+            verify_executable_identity(
+                toolchain.identity, toolchain.executable_descriptor
+            )
+    finally:
+        toolchain.close()
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "pinned COLMAP executable identity changed before execution"
+    )
+
+
+def test_executable_identity_rejects_an_in_place_byte_swap(tmp_path):
+    """Same-length ``pwrite`` into the verified inode must be rejected.
+
+    Nothing about the inode changes: only the bytes do, and the qualified path
+    execs that very descriptor.
+    """
+
+    prefix = tmp_path / "colmap"
+    binary = write_toolchain(prefix, program="print('unused')")
+    toolchain = load_fake_toolchain(prefix)
+    try:
+        verify_executable_identity(toolchain.identity, toolchain.executable_descriptor)
+        original = binary.read_bytes()
+        swapped = original.replace(b"print('unused')", b"print('pwned!')")
+        assert len(swapped) == len(original)
+        assert swapped != original
+        descriptor = os.open(binary, os.O_WRONLY)
+        try:
+            assert os.pwrite(descriptor, swapped, 0) == len(swapped)
+        finally:
+            os.close(descriptor)
 
         with pytest.raises(AdapterError) as raised:
             verify_executable_identity(
@@ -362,6 +460,8 @@ def test_executable_identity_missing_path_is_a_fixed_failure(tmp_path):
         mode=0o100755,
         uid=0,
         gid=0,
+        ctime_ns=1,
+        mtime_ns=1,
     )
 
     with pytest.raises(AdapterError) as raised:
@@ -822,7 +922,12 @@ def test_binary_hashing_observes_the_carried_deadline(tmp_path):
         return 10.0
 
     with pytest.raises(AdapterError) as raised:
-        load_colmap_toolchain(prefix, remaining_seconds=probe, require_elf=False)
+        load_colmap_toolchain(
+            prefix,
+            remaining_seconds=probe,
+            require_elf=False,
+            owner_uid=os.geteuid(),
+        )
 
     assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
     assert calls["count"] == 3
@@ -854,7 +959,12 @@ def test_a_failed_hash_releases_the_executable_descriptor(monkeypatch, tmp_path)
         return 10.0
 
     with pytest.raises(AdapterError):
-        load_colmap_toolchain(prefix, remaining_seconds=probe, require_elf=False)
+        load_colmap_toolchain(
+            prefix,
+            remaining_seconds=probe,
+            require_elf=False,
+            owner_uid=os.geteuid(),
+        )
 
     assert set(opened) == set(closed)
 
@@ -900,10 +1010,15 @@ def test_a_handbuilt_pinned_command_is_never_verified(tmp_path):
             mode=0o100755,
             uid=0,
             gid=0,
+            ctime_ns=1,
+            mtime_ns=1,
         ),
         executable_descriptor=0,
         executable_alias="/bin/sh",
-        descriptor_pinned=False,
+        # Claiming the production shape by hand buys nothing: the seal, not the
+        # flags, is what proves this module built the plan in this process.
+        descriptor_pinned=True,
+        qualified=True,
     )
 
     assert forged.is_verified_pinned_command is False
@@ -1021,11 +1136,15 @@ def test_qualified_planner_still_rechecks_the_box_identity(tmp_path):
 def test_qualified_loader_uses_only_the_pinned_prefix(monkeypatch):
     seen: dict[str, object] = {}
 
-    def fake_load(prefix, *, remaining_seconds, require_elf, qualified):
+    def fake_load(prefix, *, remaining_seconds, require_elf, qualified, **extra):
         seen.update(
             prefix=prefix,
             require_elf=require_elf,
             qualified=qualified,
+            # Production must not pass an owner uid at all: it takes the root
+            # default.  A test-only relaxation leaking into this path would be
+            # exactly the amplifier the review found.
+            extra=extra,
         )
         raise AdapterError("stop", "REFINE_TOOLCHAIN_UNQUALIFIED")
 
@@ -1041,12 +1160,71 @@ def test_qualified_loader_uses_only_the_pinned_prefix(monkeypatch):
         "prefix": Path(QUALIFIED_COLMAP_PREFIX),
         "require_elf": True,
         "qualified": True,
+        "extra": {},
     }
+
+
+def test_a_plan_carries_its_qualification_and_descriptor_pinning(monkeypatch, tmp_path):
+    """The two facts the supervisor needs must travel inside the sealed plan.
+
+    Without them a plan built from any prefix with ``descriptor_exec=False``
+    was structurally indistinguishable from the production form.
+    """
+
+    prefix = tmp_path / "colmap"
+    write_toolchain(prefix)
+    workspace = _workspace(tmp_path)
+    fake_proc = tmp_path / "proc-fd"
+    fake_proc.mkdir()
+    monkeypatch.setattr(toolchain_module, "_PROC_FD_ROOT", PurePosixPath(fake_proc))
+
+    for toolchain_qualified in (False, True):
+        toolchain = load_fake_toolchain(prefix, qualified=toolchain_qualified)
+        try:
+            for descriptor_exec in (False, True):
+                execution = plan_pinned_colmap_command(
+                    allowlisted_argv(toolchain.identity.path, workspace),
+                    toolchain=toolchain,
+                    workspace=workspace,
+                    remaining_seconds=lambda: 30.0,
+                    descriptor_exec=descriptor_exec,
+                )
+                assert execution.qualified is toolchain_qualified
+                assert execution.descriptor_pinned is descriptor_exec
+        finally:
+            toolchain.close()
+
+
+@pytest.mark.parametrize("descriptor_exec", (1, 0, "yes", None))
+def test_planning_requires_an_exact_descriptor_exec_flag(tmp_path, descriptor_exec):
+    prefix = tmp_path / "colmap"
+    write_toolchain(prefix)
+    workspace = _workspace(tmp_path)
+    toolchain = load_fake_toolchain(prefix, qualified=True)
+    try:
+        with pytest.raises(AdapterError) as raised:
+            plan_pinned_colmap_command(
+                allowlisted_argv(toolchain.identity.path, workspace),
+                toolchain=toolchain,
+                workspace=workspace,
+                remaining_seconds=lambda: 30.0,
+                descriptor_exec=descriptor_exec,
+            )
+    finally:
+        toolchain.close()
+
+    assert str(raised.value) == (
+        "pinned COLMAP planning requires an exact descriptor_exec flag"
+    )
 
 
 @pytest.mark.skipif(
     not sys.platform.startswith("linux"),
-    reason="descriptor-pinned execve requires Linux /proc/self/fd",
+    # This test asserts only the alias *string*; it launches nothing.  What it
+    # proves off a real /proc is that planning resolves the live descriptor
+    # number, not that the descriptor is what gets exec'd -- that is
+    # test_descriptor_pinned_child_runs_the_pinned_inode_on_linux.
+    reason="the real /proc/self/fd alias string exists only on Linux",
 )
 def test_real_proc_fd_alias_is_used_on_linux(tmp_path):
     prefix = tmp_path / "colmap"
@@ -1080,6 +1258,8 @@ def test_planning_requires_a_real_toolchain(tmp_path):
             mode=0o100755,
             uid=0,
             gid=0,
+            ctime_ns=1,
+            mtime_ns=1,
         )
         manifest = _qualified_manifest()
         executable_descriptor = 0

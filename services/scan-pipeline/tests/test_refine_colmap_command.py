@@ -14,6 +14,7 @@ import pytest
 from _colmap_toolchain import (
     load_fake_toolchain,
     plan_fake_command,
+    plan_supervised_command,
     write_toolchain,
 )
 
@@ -46,10 +47,14 @@ def _fake_cli(tmp_path: Path, program: str) -> Path:
 
 
 def _pinned(fake: Path, workspace: Path):
-    """Load the fake toolchain and seal one allowlisted plan for it."""
+    """Load the fake toolchain and seal one supervisable plan for it.
 
-    toolchain = load_fake_toolchain(fake.parent.parent)
-    return toolchain, plan_fake_command(toolchain, workspace)
+    The supervisor accepts only a qualified, descriptor-pinned plan, so every
+    test that launches a child must build that exact shape.
+    """
+
+    toolchain = load_fake_toolchain(fake.parent.parent, qualified=True)
+    return toolchain, plan_supervised_command(toolchain, workspace)
 
 
 def _patch_unit_host(monkeypatch) -> None:
@@ -1351,8 +1356,8 @@ def test_execution_planned_for_another_workspace_is_rejected(monkeypatch, tmp_pa
     other.mkdir()
     other.chmod(0o700)
     tmp_path.chmod(0o700)
-    toolchain = load_fake_toolchain(fake.parent.parent)
-    execution = plan_fake_command(toolchain, other)
+    toolchain = load_fake_toolchain(fake.parent.parent, qualified=True)
+    execution = plan_supervised_command(toolchain, other)
     _patch_unit_host(monkeypatch)
     monkeypatch.setattr(
         command_module.subprocess,
@@ -1447,6 +1452,242 @@ def test_executable_swapped_after_planning_is_rejected_before_popen(
     )
     assert popen_called is False
     assert not (tmp_path / "swapped.log").exists()
+
+
+def test_executable_bytes_swapped_in_place_are_rejected_before_popen(
+    monkeypatch,
+    tmp_path,
+):
+    """An in-place same-length ``pwrite`` must not survive to ``execve``.
+
+    ``test_executable_swapped_after_planning_is_rejected_before_popen`` only
+    covers a *rename* swap, which changes the inode.  Overwriting the bytes of
+    the already-verified inode leaves ``st_dev``/``st_ino``/``st_size``/
+    ``st_nlink``/``st_mode``/``st_uid``/``st_gid`` identical, and the qualified
+    path execs that same descriptor -- so the substituted bytes are precisely
+    what would run.
+    """
+
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    pinned = _pinned(fake, tmp_path)
+    original = fake.read_bytes()
+    swapped = original.replace(b"print('unused')", b"print('pwned!')")
+    assert len(swapped) == len(original)
+    assert swapped != original
+    descriptor = os.open(fake, os.O_WRONLY)
+    try:
+        assert os.pwrite(descriptor, swapped, 0) == len(swapped)
+    finally:
+        os.close(descriptor)
+    assert fake.stat().st_size == len(original)
+    _patch_unit_host(monkeypatch)
+
+    with pytest.raises(AdapterError) as raised:
+        _run_unit_command(tmp_path, fake, name="in-place.log", pinned=pinned)
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "pinned COLMAP executable identity changed before execution"
+    )
+    assert not (tmp_path / "in-place.log").exists()
+
+
+def test_hostile_unqualified_plan_is_refused_by_the_supervisor(monkeypatch, tmp_path):
+    """A plan built from an arbitrary prefix may not reach ``Popen``.
+
+    ``plan_pinned_colmap_command`` is public and takes ``descriptor_exec``.  The
+    supervisor authenticated only the module seal and the pid, so a plan built
+    from a hostile prefix with ``descriptor_exec=False`` -- a full path-lookup
+    exec with no TOCTOU protection -- was accepted indistinguishably from the
+    descriptor-pinned qualified form.
+    """
+
+    workspace = tmp_path / "work"
+    workspace.mkdir()
+    workspace.chmod(0o700)
+    hostile = tmp_path / "hostile"
+    marker = tmp_path / "hostile-ran"
+    write_toolchain(
+        hostile,
+        program=(
+            "import pathlib; "
+            f"pathlib.Path({str(marker)!r}).write_text('owned')"
+        ),
+    )
+    toolchain = load_fake_toolchain(hostile)
+    execution = plan_fake_command(toolchain, workspace)
+    _patch_unit_host(monkeypatch)
+
+    try:
+        assert execution.is_verified_pinned_command is True
+        assert execution.descriptor_pinned is False
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                execution,
+                context=native_process._seal_native_child_context(
+                    NativeChildContext(time.monotonic() + 30.0)
+                ),
+                deadline=_deadline(10.0),
+                log_path=workspace / "hostile.log",
+                cwd=workspace,
+            )
+    finally:
+        toolchain.close()
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "inherited COLMAP commands require a qualified descriptor-pinned execution"
+    )
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize(
+    ("toolchain_qualified", "descriptor_exec"),
+    (
+        (False, False),
+        (True, False),
+        (False, True),
+    ),
+)
+def test_only_a_qualified_descriptor_pinned_plan_reaches_popen(
+    monkeypatch,
+    tmp_path,
+    toolchain_qualified,
+    descriptor_exec,
+):
+    """Both facts are required; either one alone is refused before ``Popen``."""
+
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    toolchain = load_fake_toolchain(fake.parent.parent, qualified=toolchain_qualified)
+    execution = (
+        plan_supervised_command(toolchain, tmp_path)
+        if descriptor_exec
+        else plan_fake_command(toolchain, tmp_path)
+    )
+    _patch_unit_host(monkeypatch)
+    monkeypatch.setattr(
+        command_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
+    )
+
+    try:
+        assert execution.is_verified_pinned_command is True
+        assert execution.qualified is toolchain_qualified
+        assert execution.descriptor_pinned is descriptor_exec
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                execution,
+                context=native_process._seal_native_child_context(
+                    NativeChildContext(time.monotonic() + 30.0)
+                ),
+                deadline=_deadline(),
+                log_path=tmp_path / "never-created.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "inherited COLMAP commands require a qualified descriptor-pinned execution"
+    )
+    assert not (tmp_path / "never-created.log").exists()
+
+
+def test_plan_qualification_inspection_failure_is_fixed_without_cause(
+    monkeypatch,
+    tmp_path,
+):
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    toolchain, execution = _pinned(fake, tmp_path)
+    _patch_unit_host(monkeypatch)
+    # A ``property`` on the class is a data descriptor, so it wins over the
+    # dataclass field held in the instance ``__dict__``.
+    monkeypatch.setattr(
+        PinnedColmapCommand,
+        "qualified",
+        property(
+            lambda _self: (_ for _ in ()).throw(RuntimeError("DO_NOT_LEAK_PLAN"))
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        command_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
+    )
+
+    try:
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                execution,
+                context=native_process._seal_native_child_context(
+                    NativeChildContext(time.monotonic() + 30.0)
+                ),
+                deadline=_deadline(),
+                log_path=tmp_path / "never-created.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "cannot authenticate the pinned COLMAP toolchain qualification"
+    )
+    assert raised.value.__cause__ is None
+    assert "DO_NOT_LEAK" not in str(raised.value)
+
+
+@pytest.mark.skipif(
+    not _HOST_PLATFORM.startswith("linux"),
+    # On Linux this launches a real child through the live
+    # `/proc/self/fd/<fd>` alias and proves the child ran the *pinned inode*.
+    # macOS has no /proc, so the plan is descriptor-pinned against a symlink
+    # farm instead: running it there would prove that a symlink resolves, not
+    # that an open descriptor is what execve consumed.  Do not relax this.
+    reason=(
+        "fd-backed execve needs Linux /proc/self/fd; off Linux this would prove"
+        " only that a symlink resolved, not that the descriptor was exec'd"
+    ),
+)
+def test_descriptor_pinned_child_runs_the_pinned_inode_on_linux(monkeypatch, tmp_path):
+    fake = _fake_cli(
+        tmp_path,
+        "import json,os,sys; "
+        "metadata = os.stat(sys.argv[0]); "
+        "sys.stdout.write(json.dumps({"
+        "'argv0': sys.argv[0], "
+        "'dev': metadata.st_dev, "
+        "'ino': metadata.st_ino}))",
+    )
+    tmp_path.chmod(0o700)
+    pinned = _pinned(fake, tmp_path)
+    toolchain, execution = pinned
+    assert execution.descriptor_pinned is True
+    assert execution.executable_alias == (
+        f"/proc/self/fd/{toolchain.executable_descriptor}"
+    )
+    assert execution.passed_descriptors() == (toolchain.executable_descriptor,)
+    _patch_unit_host(monkeypatch)
+
+    result = _run_unit_command(tmp_path, fake, name="descriptor.log", pinned=pinned)
+
+    assert result.returncode == 0
+    observed = json.loads(result.output_tail)
+    # The child was exec'd through the inherited descriptor, not a path lookup.
+    assert observed["argv0"] == execution.executable_alias
+    # ...and that descriptor resolved to exactly the inode that was hashed.
+    assert observed["dev"] == execution.identity.device
+    assert observed["ino"] == execution.identity.inode
+    assert (observed["dev"], observed["ino"]) == (
+        fake.stat().st_dev,
+        fake.stat().st_ino,
+    )
 
 
 def test_identity_reverification_faults_are_fixed_and_remove_the_log(

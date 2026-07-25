@@ -11,7 +11,11 @@ from pathlib import Path
 from types import MappingProxyType
 
 import pytest
-from _colmap_toolchain import load_fake_toolchain, plan_fake_command, write_toolchain
+from _colmap_toolchain import (
+    load_fake_toolchain,
+    plan_supervised_command,
+    write_toolchain,
+)
 
 from patina_scan_worker import refine_colmap_backend as backend_module
 from patina_scan_worker import refine_colmap_command as command_module
@@ -947,11 +951,11 @@ def test_inherited_command_cleanup_failure_precedes_late_deadline(
             return 10.0
 
     deadline = ExpiresAfterLaunch()
-    toolchain = load_fake_toolchain(fake.parent.parent)
+    toolchain = load_fake_toolchain(fake.parent.parent, qualified=True)
     try:
         with pytest.raises(AdapterError, match="synchronize") as raised:
             run_inherited_colmap_command(
-                plan_fake_command(toolchain, tmp_path),
+                plan_supervised_command(toolchain, tmp_path),
                 context=native_process._seal_native_child_context(
                     NativeChildContext(time.monotonic() + 30.0)
                 ),
@@ -971,10 +975,10 @@ def test_inherited_command_cleanup_failure_precedes_late_deadline(
 def _run_fake_cli(request, context: NativeChildContext):
     deadline = RefineDeadline(context.expires_at_monotonic_s)
     workspace = Path(request["cwd"])
-    toolchain = load_fake_toolchain(Path(request["prefix"]))
+    toolchain = load_fake_toolchain(Path(request["prefix"]), qualified=True)
     try:
         result = run_inherited_colmap_command(
-            plan_fake_command(toolchain, workspace),
+            plan_supervised_command(toolchain, workspace),
             context=context,
             deadline=deadline,
             log_path=Path(request["logPath"]),

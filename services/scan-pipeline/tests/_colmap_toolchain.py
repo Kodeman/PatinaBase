@@ -9,11 +9,14 @@ rejected by the supervisor, which is itself part of the contract under test.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import os
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
+from patina_scan_worker import refine_colmap_toolchain as toolchain_module
 from patina_scan_worker.refine_colmap_toolchain import (
     QUALIFIED_APP_DIR,
     QUALIFIED_COLMAP_BUILD_BANNER,
@@ -37,6 +40,10 @@ from patina_scan_worker.refine_colmap_toolchain import (
     load_colmap_toolchain,
     plan_pinned_colmap_command,
 )
+
+#: Captured at import, before any test patches ``sys.platform`` to fake the
+#: Linux-only supervisor host.  The descriptor alias is a real-host question.
+_HOST_PLATFORM = sys.platform
 
 FAKE_DIGEST = "0" * 64
 QUALIFIED_MANIFEST_FIELDS = {
@@ -128,10 +135,19 @@ def load_fake_toolchain(
     remaining_seconds=None,
     qualified: bool = False,
 ) -> ColmapToolchain:
+    """Load a fake prefix through the real loader.
+
+    ``owner_uid`` defaults to ``root`` in production; a fake prefix built under
+    ``tmp_path`` is owned by whoever runs the suite, so the declared owner is
+    this euid.  That substitution is the *only* ownership relaxation: the
+    exact-owner comparison itself is still the production one.
+    """
+
     return load_colmap_toolchain(
         prefix,
         remaining_seconds=remaining_seconds or (lambda: 30.0),
         require_elf=False,
+        owner_uid=os.geteuid(),
         qualified=qualified,
     )
 
@@ -164,6 +180,14 @@ def plan_fake_command(
     command=None,
     remaining_seconds=None,
 ) -> PinnedColmapCommand:
+    """Plan an UNQUALIFIED, path-lookup command.
+
+    The supervisor refuses this shape outright, which is itself part of the
+    contract under test.  Use it only to exercise planning (argv allowlist,
+    environment, deadline carriage); anything that must actually launch a child
+    has to go through :func:`plan_supervised_command`.
+    """
+
     return plan_pinned_colmap_command(
         command
         if command is not None
@@ -175,6 +199,58 @@ def plan_fake_command(
     )
 
 
+@contextlib.contextmanager
+def descriptor_alias_root(toolchain: ColmapToolchain):
+    """Make the module's descriptor alias reachable on a non-Linux host.
+
+    Production resolves ``/proc/self/fd/<fd>``, which exists only on Linux.  Off
+    Linux we point the module at a directory holding one symlink named for the
+    open descriptor, so the plan is genuinely descriptor-pinned, the fd is
+    genuinely passed to the child, and the exec genuinely goes through the
+    alias -- only the alias's *location* is faked.  Nothing here relaxes the
+    supervisor's requirement that a plan be qualified and descriptor-pinned; the
+    fd-backed form itself is proved by the Linux-gated
+    ``test_descriptor_pinned_child_runs_the_pinned_inode_on_linux``.
+    """
+
+    if _HOST_PLATFORM.startswith("linux"):
+        yield
+        return
+    root = Path(toolchain.identity.path).parents[2] / ".fd-alias-root"
+    root.mkdir(exist_ok=True)
+    alias = root / str(toolchain.executable_descriptor)
+    if alias.is_symlink() or alias.exists():
+        alias.unlink()
+    alias.symlink_to(toolchain.identity.path)
+    previous = toolchain_module._PROC_FD_ROOT
+    toolchain_module._PROC_FD_ROOT = PurePosixPath(str(root))
+    try:
+        yield
+    finally:
+        toolchain_module._PROC_FD_ROOT = previous
+
+
+def plan_supervised_command(
+    toolchain: ColmapToolchain,
+    workspace: Path,
+    *,
+    command=None,
+    remaining_seconds=None,
+) -> PinnedColmapCommand:
+    """Plan the one shape the supervisor accepts: qualified + descriptor-pinned."""
+
+    with descriptor_alias_root(toolchain):
+        return plan_pinned_colmap_command(
+            command
+            if command is not None
+            else allowlisted_argv(toolchain.identity.path, workspace),
+            toolchain=toolchain,
+            workspace=workspace,
+            remaining_seconds=remaining_seconds or (lambda: 30.0),
+            descriptor_exec=True,
+        )
+
+
 def pinned_command(
     prefix: Path,
     workspace: Path,
@@ -184,5 +260,5 @@ def pinned_command(
     """Build a ready-to-run sealed plan for one fake COLMAP installation."""
 
     write_toolchain(prefix, program=program)
-    toolchain = load_fake_toolchain(prefix)
-    return toolchain, plan_fake_command(toolchain, workspace)
+    toolchain = load_fake_toolchain(prefix, qualified=True)
+    return toolchain, plan_supervised_command(toolchain, workspace)
