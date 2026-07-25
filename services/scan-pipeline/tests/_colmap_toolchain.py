@@ -151,6 +151,45 @@ def age_past_the_inode_timestamp_tick(reference_ns: int, *, near: Path) -> None:
             pass
 
 
+#: Every directory of an installed prefix, exactly as ``install-colmap-4.0.2.sh``
+#: leaves it: readable and traversable, writable by its owner alone.
+TRUSTED_DIRECTORY_MODE = 0o755
+
+
+def make_trusted_directory(directory: Path) -> Path:
+    """Create ``directory`` and any missing ancestor at an exact 0o755.
+
+    ``Path.mkdir()`` with no ``mode`` derives its permissions from the process
+    umask, and with ``parents=True`` it ignores ``mode`` for the parents it
+    creates anyway.  On a stock Ubuntu login shell -- ``USERGROUPS_ENAB yes``
+    plus ``pam_umask``, i.e. umask 0002, which is what the qualified host runs
+    -- that lands 0o775, and the real loader then *correctly* refuses the
+    prefix as group-writable.  That is a false assumption in the harness, not a
+    finding about the product: the installer sets ``umask 077``, installs under
+    ``(umask 022)`` and chmods 0755 explicitly, and the systemd unit declares
+    no ``UMask=`` so it inherits 0022.  Nothing in production depends on the
+    caller's umask, so neither may this fixture.
+
+    ``chmod`` rather than ``mkdir(mode=...)`` alone: mkdir's mode is still
+    masked, so a hostile umask could only make it *more* restrictive, but an
+    exact mode is what the assertion in
+    ``test_fixture_prefix_is_never_group_or_world_writable`` can be pinned to.
+    """
+
+    missing: list[Path] = []
+    probe = directory
+    while not probe.is_dir():
+        missing.append(probe)
+        if probe.parent == probe:
+            break
+        probe = probe.parent
+    for path in reversed(missing):
+        path.mkdir(mode=TRUSTED_DIRECTORY_MODE)
+    for path in (*missing, directory):
+        path.chmod(TRUSTED_DIRECTORY_MODE)
+    return directory
+
+
 def write_toolchain(
     prefix: Path,
     *,
@@ -164,16 +203,20 @@ def write_toolchain(
     The installed binary is aged past its own ctime tick before this returns --
     see :func:`age_past_the_inode_timestamp_tick` for why a fixture that skips
     that makes the in-place-byte-swap tests pass without testing anything.
+
+    Every directory and file it writes carries an explicit mode: see
+    :func:`make_trusted_directory` for why inheriting the umask makes the whole
+    suite unrunnable on the qualified host.
     """
 
     binary = prefix / "bin" / "colmap"
-    binary.parent.mkdir(parents=True, exist_ok=True)
+    make_trusted_directory(binary.parent)
     binary.write_text(f"#!{sys.executable}\n{program}\n", encoding="utf-8")
     binary.chmod(executable_mode)
     payload = binary.read_bytes()
 
     manifest_path = prefix / TOOLCHAIN_MANIFEST_RELATIVE_PATH
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    make_trusted_directory(manifest_path.parent)
     if manifest_bytes is None:
         fields = {
             "appDir": str(prefix / "app"),
