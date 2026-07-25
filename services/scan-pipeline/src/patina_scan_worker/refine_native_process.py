@@ -602,9 +602,7 @@ class NativeEngineOutputs:
                 "native engine outputs do not match their requested token set",
                 _FAILED_CODE,
             )
-        self._received = MappingProxyType(
-            {output.token: output for output in outputs}
-        )
+        self._received = MappingProxyType({output.token: output for output in outputs})
         self._populated = True
 
     def close(self) -> tuple[str, ...]:
@@ -1772,8 +1770,7 @@ def _output_ledger_rows(
     transfers: tuple[_OutputTransfer, ...],
 ) -> list[list[Any]]:
     return [
-        [transfer.token, transfer.sha256, transfer.size_bytes]
-        for transfer in transfers
+        [transfer.token, transfer.sha256, transfer.size_bytes] for transfer in transfers
     ]
 
 
