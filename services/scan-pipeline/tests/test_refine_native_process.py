@@ -2626,10 +2626,86 @@ def test_workspace_cleanup_reports_a_live_child_and_bounded_depth(tmp_path):
 
     assert any("without a proven-dead native child" in error for error in errors)
     assert any("bounded cleanup depth" in error for error in errors)
+    # The retained root has to be findable from the error alone, not by a
+    # prefix scan of the container.
+    assert any(lease.name in error for error in errors), errors
     # Fail-closed: the refused depth stops removal instead of recursing forever.
     assert Path(lease.path).is_dir()
     assert list(Path(lease.path).iterdir())
     shutil.rmtree(lease.path)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_one_full_directory_does_not_starve_its_siblings(tmp_path):
+    """The per-directory cap and the whole-tree budget are separate bounds.
+
+    Sharing one number meant a single directory at the per-directory cap
+    exhausted the budget for the whole tree, so every sibling cleanup had not
+    reached yet was abandoned and stranded permanently.
+    """
+
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(30.0),
+    )
+    workspace = Path(lease.path)
+    full = workspace / "full"
+    full.mkdir(mode=0o700)
+    for index in range(native_process.NATIVE_WORKSPACE_MAX_DIRECTORY_ENTRIES):
+        (full / f"entry{index:05d}.bin").write_bytes(b"")
+    sibling = workspace / "sibling"
+    sibling.mkdir(mode=0o700)
+    (sibling / "kept.bin").write_bytes(b"")
+
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
+
+    assert errors == ()
+    assert list(container.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_workspace_cleanup_names_an_orphan_created_after_its_snapshot(
+    tmp_path,
+    monkeypatch,
+):
+    """A post-snapshot entry must not produce an unfindable random-named orphan.
+
+    ``_purge_leased_directory`` works from one ``listdir`` snapshot, so an entry
+    created after it is taken leaves no purge error at all.  The root removal
+    used to rename first and discover ENOTEMPTY second, stranding a live
+    directory under an unguessable quarantine name that appeared in no returned
+    error.
+    """
+
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    workspace = Path(lease.path)
+    real_listdir = os.listdir
+    created = False
+
+    def create_after_snapshot(target, *args, **kwargs):
+        nonlocal created
+        names = real_listdir(target, *args, **kwargs)
+        if not created and target == lease.descriptor:
+            created = True
+            (workspace / "late.bin").write_bytes(b"late")
+        return names
+
+    monkeypatch.setattr(native_process.os, "listdir", create_after_snapshot)
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
+    monkeypatch.undo()
+
+    assert created is True
+    residue = list(container.iterdir())
+    assert [entry.name for entry in residue] == [lease.name]
+    assert [entry.name for entry in residue[0].iterdir()] == ["late.bin"]
+    assert any(lease.name in error for error in errors), errors
+    assert any("late.bin" in error for error in errors), errors
+    shutil.rmtree(workspace)
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
@@ -2644,7 +2720,7 @@ def test_workspace_cleanup_reports_an_exhausted_entry_budget(tmp_path, monkeypat
         (workspace / branch).mkdir(mode=0o700)
         for index in range(2):
             (workspace / branch / f"entry{index}.bin").write_bytes(b"x")
-    monkeypatch.setattr(native_process, "NATIVE_WORKSPACE_MAX_ENTRIES", 2)
+    monkeypatch.setattr(native_process, "NATIVE_WORKSPACE_MAX_TOTAL_ENTRIES", 2)
     errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
     monkeypatch.undo()
 
@@ -2664,7 +2740,7 @@ def test_workspace_cleanup_refuses_an_oversized_directory(tmp_path, monkeypatch)
     workspace = Path(lease.path)
     for index in range(3):
         (workspace / f"entry{index}.bin").write_bytes(b"x")
-    monkeypatch.setattr(native_process, "NATIVE_WORKSPACE_MAX_ENTRIES", 1)
+    monkeypatch.setattr(native_process, "NATIVE_WORKSPACE_MAX_DIRECTORY_ENTRIES", 1)
     errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
     monkeypatch.undo()
 

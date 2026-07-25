@@ -69,8 +69,14 @@ NATIVE_CHILD_TERM_GRACE_S = 0.10
 NATIVE_CHILD_KILL_REAP_S = 1.0
 NATIVE_WORKSPACE_NAME_PREFIX = "patina-refine-native-workspace-"
 NATIVE_WORKSPACE_QUARANTINE_PREFIX = "patina-refine-native-purge-"
-NATIVE_WORKSPACE_MAX_ENTRIES = 4096
-NATIVE_WORKSPACE_MAX_DEPTH = 8
+# Two distinct bounds, not one.  Sharing a single number made a directory at
+# the per-directory cap consume the entire whole-tree budget, so cleanup
+# abandoned every sibling it had not reached yet and stranded them for good.
+NATIVE_WORKSPACE_MAX_DIRECTORY_ENTRIES = 4096
+NATIVE_WORKSPACE_MAX_TOTAL_ENTRIES = 65536
+# COLMAP runs under ``work/`` — one level down from the lease root — so the
+# bound has to leave a working tree real headroom below that.
+NATIVE_WORKSPACE_MAX_DEPTH = 16
 NATIVE_WORKSPACE_NAME_ATTEMPTS = 8
 # ``O_PATH`` references an entry of any type — symlink, unix socket, mode-0
 # file — without reading it, following it, or blocking.  Linux has it and the
@@ -2724,7 +2730,7 @@ def _purge_leased_directory(
             )
         )
         return
-    if len(names) > NATIVE_WORKSPACE_MAX_ENTRIES:
+    if len(names) > NATIVE_WORKSPACE_MAX_DIRECTORY_ENTRIES:
         errors.append(
             "leased native workspace directory exceeds its bounded entry count"
         )
@@ -2744,9 +2750,61 @@ def _purge_leased_directory(
         )
 
 
-def _remove_leased_workspace_root(lease: NativeWorkspaceLease) -> tuple[str, ...]:
-    """Quarantine and remove the workspace itself relative to its pinned parent."""
+def _restore_quarantined_workspace_root(
+    lease: NativeWorkspaceLease,
+    quarantine: str,
+) -> str:
+    """Put the provisioned name back so a stranded root stays findable."""
 
+    try:
+        os.rename(
+            quarantine,
+            lease.name,
+            src_dir_fd=lease.parent_descriptor,
+            dst_dir_fd=lease.parent_descriptor,
+        )
+    except OSError:
+        return quarantine
+    return lease.name
+
+
+def _remove_leased_workspace_root(lease: NativeWorkspaceLease) -> tuple[str, ...]:
+    """Quarantine and remove the workspace itself relative to its pinned parent.
+
+    The lease descriptor holds the root inode open for the whole of cleanup, so
+    the root's ``(st_dev, st_ino)`` is already recycle-proof here for the reason
+    :func:`_purge_leased_entry` has to construct a pin to obtain.
+
+    Emptiness is probed through that descriptor *before* the quarantine rename.
+    An entry created after :func:`_purge_leased_directory` took its snapshot
+    used to arrive here with no purge error at all, so the root was renamed and
+    only then failed ``rmdir`` with ENOTEMPTY — leaving a live orphan under an
+    unguessable name that appeared in no returned error.  Every failure path
+    below therefore names the directory it left behind.
+    """
+
+    try:
+        residue = os.listdir(lease.descriptor)
+    except OSError as exc:
+        return (
+            _bounded_diagnostic(
+                "cannot re-enumerate the leased native workspace root before "
+                "removal: ",
+                _exception_summary(exc),
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
+    if residue:
+        return (
+            _bounded_diagnostic(
+                "leased native workspace root gained an entry after its purge (",
+                lease.name,
+                " retains ",
+                _truncate_utf8(sorted(residue)[0], 96),
+                ")",
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
     try:
         named = os.stat(
             lease.name,
@@ -2790,19 +2848,33 @@ def _remove_leased_workspace_root(lease: NativeWorkspaceLease) -> tuple[str, ...
     except OSError as exc:
         return (
             _bounded_diagnostic(
-                "cannot inspect the quarantined native workspace root: ",
+                "cannot inspect the quarantined native workspace root (",
+                quarantine,
+                " retained): ",
                 _exception_summary(exc),
                 maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
             ),
         )
     if (moved.st_dev, moved.st_ino) != lease.identity:
-        return ("leased native workspace root identity changed before removal",)
+        # Something else now answers to the provisioned name, so the object
+        # under the quarantine name is not ours to move back.
+        return (
+            _bounded_diagnostic(
+                "leased native workspace root identity changed before removal (",
+                quarantine,
+                " retained)",
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
     try:
         os.rmdir(quarantine, dir_fd=lease.parent_descriptor)
     except OSError as exc:
+        orphan = _restore_quarantined_workspace_root(lease, quarantine)
         return (
             _bounded_diagnostic(
-                "cannot remove the leased native workspace root: ",
+                "cannot remove the leased native workspace root (",
+                orphan,
+                " retained): ",
                 _exception_summary(exc),
                 maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
             ),
@@ -2848,15 +2920,23 @@ def _release_workspace_lease(
                 lease.descriptor,
                 root_device=root_metadata.st_dev,
                 depth=0,
-                budget=[NATIVE_WORKSPACE_MAX_ENTRIES],
+                budget=[NATIVE_WORKSPACE_MAX_TOTAL_ENTRIES],
                 errors=purge_errors,
             )
             errors.extend(purge_errors)
             if purge_errors:
                 # An incomplete purge must not rename or remove the root: the
                 # retained directory keeps its provisioned name for forensics.
+                # That name is only forensics if it reaches the caller, so it
+                # is carried in the error rather than left to a prefix scan.
                 errors.append(
-                    "leased native workspace root retained after an incomplete purge"
+                    _bounded_diagnostic(
+                        "leased native workspace root retained after an "
+                        "incomplete purge (",
+                        lease.name,
+                        " retained)",
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
                 )
             else:
                 errors.extend(_remove_leased_workspace_root(lease))
@@ -2870,7 +2950,16 @@ def _release_workspace_lease(
     )
     normalized = _normalize_cleanup_errors(tuple(errors))
     if normalized is None:
-        return ("leased native workspace cleanup produced excessive uncertainty",)
+        # Collapsing an over-long report must not also lose the one string an
+        # operator needs to find what was left behind.
+        return (
+            _bounded_diagnostic(
+                "leased native workspace cleanup produced excessive uncertainty (",
+                lease.name,
+                " may be retained)",
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
     return normalized
 
 
