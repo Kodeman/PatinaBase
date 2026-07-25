@@ -191,12 +191,14 @@ def _request(tmp_path: Path) -> RefineRunRequest:
         frames.append(
             RefineFrameInput(
                 frame=frame,
+                source_descriptor=_borrowed_artifact_descriptor(source),
                 relative_source_path=f"extracted/keyframes/{frame.image_name}",
                 source_archive_key="keyframes/user-1/room-1/keyframes.tar",
                 source_member=frame.heic_path,
                 source_sha256=hashlib.sha256(payload).hexdigest(),
                 source_size_bytes=len(payload),
                 engine_name=engine_name,
+                engine_descriptor=_borrowed_artifact_descriptor(engine),
                 engine_relative_path=f"images/{engine_name}",
                 engine_sha256=hashlib.sha256(engine_payload).hexdigest(),
                 engine_size_bytes=len(engine_payload),
@@ -433,33 +435,6 @@ def _with_manifest_document(result, document):
         manifest_sha256=manifest.sha256,
         files=(*result.files[:-1], manifest),
     )
-
-
-def _install_open_substitution(
-    monkeypatch,
-    *,
-    target: Path,
-    replacement_kind: str,
-    symlink_target: Path,
-) -> dict[str, int]:
-    real_open = os.open
-    observed: dict[str, int] = {}
-
-    def _racing_open(path, flags, *args, **kwargs):
-        if os.fspath(path) == os.fspath(target) and not observed:
-            observed["flags"] = flags
-            target.unlink()
-            if replacement_kind == "fifo":
-                os.mkfifo(target, 0o600)
-            elif replacement_kind == "symlink":
-                symlink_target.write_bytes(b"must-not-be-hashed\n")
-                target.symlink_to(symlink_target)
-            else:  # pragma: no cover - test helper contract
-                raise AssertionError(replacement_kind)
-        return real_open(path, flags, *args, **kwargs)
-
-    monkeypatch.setattr(refine_runner.os, "open", _racing_open)
-    return observed
 
 
 def test_primary_success_builds_byte_deterministic_manifest_last_artifacts(tmp_path):
@@ -1214,53 +1189,6 @@ def test_engine_artifact_hash_is_reverified_before_manifest_construction(tmp_pat
     assert raised.value.fatal is True
 
 
-@pytest.mark.parametrize("replacement_kind", ("fifo", "symlink"))
-def test_frame_hash_substitution_fails_promptly_before_backend_or_manifest(
-    tmp_path,
-    monkeypatch,
-    replacement_kind,
-):
-    request = _request(tmp_path)
-    target = request.workspace_root / request.frames[0].relative_source_path
-    observed = _install_open_substitution(
-        monkeypatch,
-        target=target,
-        replacement_kind=replacement_kind,
-        symlink_target=tmp_path / "outside-frame.bin",
-    )
-    backend = _FakeBackend(primary=_candidate())
-    builder = _FakeArtifactBuilder()
-    manifest_calls = []
-
-    def _manifest_trap(*args, **kwargs):
-        manifest_calls.append((args, kwargs))
-        raise AssertionError("manifest construction must not run")
-
-    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
-    started = time.monotonic()
-
-    with pytest.raises(RefineRunError) as raised:
-        RefineRunner(backend=backend, artifact_builder=builder).run(
-            request,
-            deadline=_deadline(),
-        )
-
-    assert time.monotonic() - started < 2.0
-    assert raised.value.code is RefineFailureCode.INPUT_INVALID
-    assert raised.value.fatal is True
-    assert str(target) not in str(raised.value)
-    assert observed
-    if hasattr(os, "O_CLOEXEC"):
-        assert observed["flags"] & os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        assert observed["flags"] & os.O_NOFOLLOW
-    if hasattr(os, "O_NONBLOCK"):
-        assert observed["flags"] & os.O_NONBLOCK
-    assert backend.calls == []
-    assert builder.calls == []
-    assert manifest_calls == []
-
-
 @pytest.mark.parametrize("replacement_kind", ("fifo", "symlink", "regular"))
 def test_engine_artifact_substituted_at_its_path_is_simply_not_consulted(
     tmp_path,
@@ -1326,114 +1254,162 @@ def test_engine_artifact_substituted_at_its_path_is_simply_not_consulted(
     )
 
 
-def test_frame_hash_fails_closed_before_open_when_nonblocking_is_unavailable(
-    tmp_path,
-    monkeypatch,
-):
+def test_a_successful_run_never_opens_any_path(tmp_path, monkeypatch):
+    """The end state of the reopen removal, asserted as one property.
+
+    Frames and engine artifacts both arrive as borrowed descriptors now, so a
+    whole successful run has no reason to call ``open`` at all.  Making that
+    fatal is the only assertion that cannot rot as the internals move around.
+    """
+
     request = _request(tmp_path)
-    backend = _FakeBackend(primary=_candidate())
     builder = _FakeArtifactBuilder()
-    open_calls = []
-    manifest_calls = []
+    opened: list[str] = []
+    real_open = refine_runner.os.open
 
-    def _open_trap(*args, **kwargs):
-        open_calls.append((args, kwargs))
-        raise AssertionError("os.open must not run without O_NONBLOCK")
+    def guarded_open(path, *args, **kwargs):
+        # The fake builder opens the artifacts it is handing over, exactly as a
+        # real materializer/native sink would before the runner is entered.
+        if not builder.calls:
+            opened.append(os.fspath(path))
+            raise AssertionError(f"the runner must not open {path!r}")
+        return real_open(path, *args, **kwargs)
 
-    def _manifest_trap(*args, **kwargs):
-        manifest_calls.append((args, kwargs))
-        raise AssertionError("manifest construction must not run")
+    monkeypatch.setattr(refine_runner.os, "open", guarded_open)
 
-    monkeypatch.delattr(refine_runner.os, "O_NONBLOCK", raising=False)
-    monkeypatch.setattr(refine_runner.os, "open", _open_trap)
-    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=builder,
+    ).run(request, deadline=_deadline())
+
+    assert opened == []
+    assert result.files[-1].name == REFINE_MANIFEST_NAME
+
+
+def test_a_frame_swapped_at_its_path_is_simply_not_consulted(tmp_path):
+    """The materializer's pinned descriptor now survives the whole run."""
+
+    request = _request(tmp_path)
+    first = request.frames[0]
+    engine_path = request.workspace_root / first.engine_relative_path
+    original = engine_path.read_bytes()
+    engine_path.unlink()
+    os.mkfifo(engine_path, 0o600)
     started = time.monotonic()
 
-    with pytest.raises(RefineRunError) as raised:
-        RefineRunner(backend=backend, artifact_builder=builder).run(
-            request,
-            deadline=_deadline(),
-        )
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_FakeArtifactBuilder(),
+    ).run(request, deadline=_deadline())
 
-    assert time.monotonic() - started < 2.0
-    assert raised.value.code is RefineFailureCode.INPUT_INVALID
-    assert raised.value.fatal is True
-    assert "nonblocking source opens are unavailable" in str(raised.value)
-    assert open_calls == []
-    assert backend.calls == []
-    assert builder.calls == []
-    assert manifest_calls == []
+    # A blocking reopen of that FIFO would never return.
+    assert time.monotonic() - started < 5.0
+    assert os.pread(first.engine_descriptor, len(original), 0) == original
+    assert result.frame_inputs[0].engine_descriptor == first.engine_descriptor
 
 
-def test_engine_artifact_hash_fails_closed_before_open_when_nonblocking_is_unavailable(
-    tmp_path,
-    monkeypatch,
-):
+def test_a_frame_descriptor_that_disagrees_with_its_ledger_is_refused(tmp_path):
     request = _request(tmp_path)
-    backend = _FakeBackend(primary=_candidate())
-    builder = _FakeArtifactBuilder()
-    open_calls = []
-    manifest_calls = []
-
-    def _open_trap(*args, **kwargs):
-        open_calls.append((args, kwargs))
-        raise AssertionError("os.open must not run without O_NONBLOCK")
-
-    def _manifest_trap(*args, **kwargs):
-        manifest_calls.append((args, kwargs))
-        raise AssertionError("manifest construction must not run")
-
-    monkeypatch.delattr(refine_runner.os, "O_NONBLOCK", raising=False)
-    monkeypatch.setattr(refine_runner.os, "open", _open_trap)
-    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
-    started = time.monotonic()
+    corrupted = replace(request.frames[0], engine_sha256="0" * 64)
+    request = replace(request, frames=(corrupted, *request.frames[1:]))
 
     with pytest.raises(RefineRunError) as raised:
-        RefineRunner(backend=backend, artifact_builder=builder).run(
-            request,
-            deadline=_deadline(),
-        )
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
 
-    assert time.monotonic() - started < 2.0
     assert raised.value.code is RefineFailureCode.INPUT_INVALID
-    assert raised.value.fatal is True
-    assert "nonblocking source opens are unavailable" in str(raised.value)
-    assert open_calls == []
-    # Frame validation runs before the builder, so the engine never started.
-    assert backend.calls == []
-    assert builder.calls == []
-    assert manifest_calls == []
+    assert "frame engine PPM sha256 does not match its ledger" in str(raised.value)
 
 
-def test_stable_file_hash_uses_the_descriptor_opened_before_path_replacement(
-    tmp_path,
-    monkeypatch,
-):
+def test_a_frame_may_not_reuse_another_frames_inode(tmp_path):
+    request = _request(tmp_path)
+    first, second = request.frames[0], request.frames[1]
+    shared = replace(
+        second,
+        engine_descriptor=first.engine_descriptor,
+        engine_sha256=first.engine_sha256,
+        engine_size_bytes=first.engine_size_bytes,
+    )
+    request = replace(request, frames=(first, shared, *request.frames[2:]))
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert "unique file identities" in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "descriptor",
+    (-1, "not-a-descriptor", None, 4096),
+)
+def test_a_frame_descriptor_must_be_a_usable_borrowed_handle(tmp_path, descriptor):
+    request = _request(tmp_path)
+    request = replace(
+        request,
+        frames=(
+            replace(request.frames[0], source_descriptor=descriptor),
+            *request.frames[1:],
+        ),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
+
+    assert raised.value.code in (
+        RefineFailureCode.INPUT_INVALID,
+        RefineFailureCode.INPUT_IO,
+    )
+
+
+def test_a_writable_frame_descriptor_is_refused(tmp_path):
+    request = _request(tmp_path)
+    first = request.frames[0]
+    writable = os.open(
+        request.workspace_root / first.relative_source_path,
+        os.O_RDWR,
+    )
+    _OPEN_ARTIFACT_DESCRIPTORS.append(writable)
+    request = replace(
+        request,
+        frames=(replace(first, source_descriptor=writable), *request.frames[1:]),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert "must be borrowed read-only" in str(raised.value)
+
+
+def test_the_descriptor_hasher_ignores_a_path_level_replacement(tmp_path):
     target = tmp_path / "source.bin"
     original = b"descriptor-bound-original\n"
-    replacement = b"path-level-replacement\n"
+    replacement = b"path-level-replacement!!!\n"
+    assert len(original) == len(replacement)
     target.write_bytes(original)
     original_stat = target.stat()
-    real_open = os.open
-    opened = False
+    descriptor = _borrowed_artifact_descriptor(target)
+    target.unlink()
+    target.write_bytes(replacement)
 
-    def _open_then_replace(path, flags, *args, **kwargs):
-        nonlocal opened
-        descriptor = real_open(path, flags, *args, **kwargs)
-        if os.fspath(path) == os.fspath(target) and not opened:
-            opened = True
-            target.unlink()
-            target.write_bytes(replacement)
-        return descriptor
-
-    monkeypatch.setattr(refine_runner.os, "open", _open_then_replace)
-
-    digest, stable_stat = refine_runner._stable_file_sha256(
-        target,
+    digest, stable_stat = refine_runner._stable_descriptor_sha256(
+        descriptor,
+        expected_size=len(original),
         deadline=_deadline(),
     )
 
-    assert opened is True
     assert digest == hashlib.sha256(original).hexdigest()
     assert (stable_stat.st_dev, stable_stat.st_ino) == (
         original_stat.st_dev,
@@ -1441,6 +1417,23 @@ def test_stable_file_hash_uses_the_descriptor_opened_before_path_replacement(
     )
     assert target.read_bytes() == replacement
     assert target.stat().st_ino != stable_stat.st_ino
+
+
+def test_the_descriptor_hasher_leaves_the_borrowed_offset_alone(tmp_path):
+    target = tmp_path / "source.bin"
+    payload = b"y" * ((1 << 20) + 3)
+    target.write_bytes(payload)
+    descriptor = _borrowed_artifact_descriptor(target)
+    os.lseek(descriptor, 7, os.SEEK_SET)
+
+    digest, _ = refine_runner._stable_descriptor_sha256(
+        descriptor,
+        expected_size=len(payload),
+        deadline=_deadline(),
+    )
+
+    assert digest == hashlib.sha256(payload).hexdigest()
+    assert os.lseek(descriptor, 0, os.SEEK_CUR) == 7
 
 
 def test_engine_artifact_path_must_remain_inside_the_workspace(tmp_path):
@@ -2005,7 +1998,7 @@ def test_deadline_is_checked_periodically_while_hashing_large_inputs(tmp_path):
         def remaining_seconds(self, *, now_monotonic_s=None):
             del now_monotonic_s
             if any(
-                frame_info.function == "_stable_file_sha256"
+                frame_info.function == "_stable_descriptor_sha256"
                 for frame_info in inspect.stack()
             ):
                 type(self).hash_checks += 1
@@ -2026,6 +2019,7 @@ def test_deadline_is_checked_periodically_while_hashing_large_inputs(tmp_path):
         frames=(
             replace(
                 first,
+                source_descriptor=_borrowed_artifact_descriptor(first_path),
                 source_sha256=hashlib.sha256(payload).hexdigest(),
                 source_size_bytes=len(payload),
             ),
@@ -2219,5 +2213,8 @@ def test_runner_remains_independent_of_queue_storage_db_and_stage_registry():
     assert "from .stages" not in source
     assert "BORROWED read-only descriptor" in (RefineFileArtifact.__doc__ or "")
     assert "Nothing may open it" in (RefineFileArtifact.__doc__ or "")
-    assert "do not make a path TOCTOU-safe" in (PreparedRefineFrame.__doc__ or "")
+    assert "descriptor identity" in (
+        refine_runner._verified_frame_descriptor.__doc__ or ""
+    )
+    assert "The descriptors are borrowed" in (PreparedRefineFrame.__doc__ or "")
     assert get_handler("scan_pipeline.refine") is None

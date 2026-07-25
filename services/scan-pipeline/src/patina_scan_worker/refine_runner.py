@@ -15,7 +15,6 @@ this state machine without a GPU, database, network, or physical raster fixture.
 
 from __future__ import annotations
 
-import errno
 import hashlib
 import json
 import math
@@ -300,15 +299,23 @@ class RefineRunRequest:
 
 @dataclass(frozen=True)
 class RefineFrameInput:
-    """One source HEIC and its distinct canonical materialized engine PPM."""
+    """One source HEIC and its distinct canonical materialized engine PPM.
+
+    Both files arrive as BORROWED read-only descriptors opened by whoever
+    produced them -- the acquirer for the source, the raster materializer for the
+    engine PPM.  The runner reads them and never closes them.  The two relative
+    paths are manifest/display metadata; nothing opens them.
+    """
 
     frame: NormalizedFrame
+    source_descriptor: int
     relative_source_path: str
     source_archive_key: str
     source_member: str
     source_sha256: str
     source_size_bytes: int
     engine_name: str
+    engine_descriptor: int
     engine_relative_path: str
     engine_sha256: str
     engine_size_bytes: int
@@ -317,23 +324,27 @@ class RefineFrameInput:
 
 @dataclass(frozen=True)
 class PreparedRefineFrame:
-    """Runner-time path snapshot for a backend handoff.
+    """Verified descriptor snapshot for a backend handoff.
 
-    Containment and checksum validation do not make a path TOCTOU-safe.  A
-    concrete backend must bind its read to a no-follow descriptor (or an
-    equivalently isolated immutable workspace) instead of validating one open
-    and consuming another.
+    Containment plus a checksum never made a path TOCTOU-safe -- the object could
+    change between the check and the ``open``, and between the runner's ``open``
+    and the backend's.  Both files are therefore pinned to the descriptor their
+    producer already holds: the runner verifies that descriptor and the backend
+    reads that same descriptor, so the gap has no place left to exist.
+
+    The descriptors are borrowed.  Their owner is the composed caller, which must
+    keep them open for the whole run and close them afterwards.
     """
 
     frame: NormalizedFrame
-    source_path: Path
+    source_descriptor: int
     relative_source_path: str
     source_archive_key: str
     source_member: str
     source_sha256: str
     source_size_bytes: int
     engine_name: str
-    engine_path: Path
+    engine_descriptor: int
     engine_relative_path: str
     engine_sha256: str
     engine_size_bytes: int
@@ -769,104 +780,17 @@ def _safe_relative_path(
     return path
 
 
-def _stable_file_sha256(
-    path: Path,
-    *,
-    deadline: RefineDeadline,
-) -> tuple[str, os.stat_result]:
-    """Stream one regular file while proving its identity stayed unchanged."""
-
-    _require_engine_budget(deadline)
-    try:
-        nonblocking_flag = os.O_NONBLOCK
-    except AttributeError as exc:
-        raise ValueError("nonblocking source opens are unavailable") from exc
-    try:
-        path_snapshot = os.lstat(path)
-    except OSError as exc:
-        raise OSError("source path could not be inspected safely") from exc
-    if not stat.S_ISREG(path_snapshot.st_mode):
-        raise ValueError("source is not a regular non-symlink file")
-
-    flags = (
-        os.O_RDONLY
-        | getattr(os, "O_CLOEXEC", 0)
-        | getattr(os, "O_NOFOLLOW", 0)
-        | nonblocking_flag
-    )
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as exc:
-        if exc.errno == errno.ELOOP:
-            raise ValueError(
-                "source changed to a symbolic link before hashing"
-            ) from exc
-        raise OSError("source could not be opened safely") from exc
-
-    digest = hashlib.sha256()
-    pending_error = False
-    try:
-        before = os.fstat(descriptor)
-        if not stat.S_ISREG(before.st_mode):
-            raise ValueError("source is not a regular non-symlink file")
-        if (before.st_dev, before.st_ino) != (
-            path_snapshot.st_dev,
-            path_snapshot.st_ino,
-        ):
-            raise ValueError("source changed identity before hashing")
-        chunk_index = 0
-        while True:
-            _deadline_checkpoint(deadline, chunk_index)
-            chunk = os.read(descriptor, 1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-            chunk_index += 1
-        after = os.fstat(descriptor)
-    except OSError as exc:
-        pending_error = True
-        raise OSError("source descriptor could not be consumed safely") from exc
-    except BaseException:  # preserve typed runner failures while closing the descriptor
-        pending_error = True
-        raise
-    finally:
-        try:
-            os.close(descriptor)
-        except OSError as exc:
-            if not pending_error:
-                raise OSError("source descriptor could not be closed safely") from exc
-    _require_engine_budget(deadline)
-    stable_fields_before = (
-        before.st_dev,
-        before.st_ino,
-        before.st_mode,
-        before.st_size,
-        before.st_mtime_ns,
-        before.st_ctime_ns,
-    )
-    stable_fields_after = (
-        after.st_dev,
-        after.st_ino,
-        after.st_mode,
-        after.st_size,
-        after.st_mtime_ns,
-        after.st_ctime_ns,
-    )
-    if stable_fields_before != stable_fields_after:
-        raise ValueError("source changed while it was hashed")
-    return digest.hexdigest(), after
-
-
 def _borrowed_descriptor_stat(
     descriptor: object,
     *,
     label: str,
+    failure_code: RefineFailureCode = RefineFailureCode.ARTIFACT_INVALID,
 ) -> os.stat_result:
     """Fail closed on anything that is not a borrowed read-only regular file."""
 
     if type(descriptor) is not int or descriptor < 0:
         _fail(
-            RefineFailureCode.ARTIFACT_INVALID,
+            failure_code,
             f"{label} descriptor must be a non-negative integer",
         )
     try:
@@ -875,7 +799,7 @@ def _borrowed_descriptor_stat(
         _fail(RefineFailureCode.INPUT_IO, f"cannot inspect {label}: {exc}")
     if not stat.S_ISREG(metadata.st_mode):
         _fail(
-            RefineFailureCode.ARTIFACT_INVALID,
+            failure_code,
             f"{label} must be a regular file",
         )
     try:
@@ -886,7 +810,7 @@ def _borrowed_descriptor_stat(
         _fail(RefineFailureCode.INPUT_IO, f"cannot inspect {label} flags: {exc}")
     if access_mode != os.O_RDONLY:
         _fail(
-            RefineFailureCode.ARTIFACT_INVALID,
+            failure_code,
             f"{label} must be borrowed read-only",
         )
     return metadata
@@ -950,34 +874,34 @@ def _stable_descriptor_sha256(
     return digest.hexdigest(), after
 
 
-def _verified_frame_file(
+def _verified_frame_descriptor(
     *,
-    workspace_root: Path,
+    descriptor: object,
     relative_path: object,
     expected_name: str,
     expected_sha256: object,
     expected_size_bytes: object,
     label: str,
     deadline: RefineDeadline,
-) -> Path:
+) -> tuple[int, int]:
+    """Verify one borrowed frame descriptor and return its ``(dev, ino)``.
+
+    The declared relative path is still validated -- it goes into the manifest --
+    but it is never joined, resolved, or opened.  Containment is no longer the
+    safety property; descriptor identity is.
+    """
+
     relative = _safe_relative_path(relative_path, f"{label} path")
     if relative.name != expected_name:
         _fail(
             RefineFailureCode.INPUT_INVALID,
             f"{label} basename must equal its declared image name",
         )
-    candidate = workspace_root.joinpath(*relative.parts)
-    try:
-        resolved = candidate.resolve(strict=True)
-        resolved.relative_to(workspace_root)
-        file_stat = resolved.stat()
-    except (OSError, ValueError) as exc:
-        _fail(RefineFailureCode.INPUT_INVALID, f"frame source is not contained: {exc}")
-    if resolved != candidate or not stat.S_ISREG(file_stat.st_mode):
-        _fail(
-            RefineFailureCode.INPUT_INVALID,
-            "frame source must be a contained regular file without symlinks",
-        )
+    file_stat = _borrowed_descriptor_stat(
+        descriptor,
+        label=label,
+        failure_code=RefineFailureCode.INPUT_INVALID,
+    )
     if (
         type(expected_size_bytes) is not int
         or expected_size_bytes <= 0
@@ -996,8 +920,9 @@ def _verified_frame_file(
             f"{label} sha256 must be lowercase hexadecimal",
         )
     try:
-        actual_sha256, stable_stat = _stable_file_sha256(
-            resolved,
+        actual_sha256, stable_stat = _stable_descriptor_sha256(
+            descriptor,
+            expected_size=expected_size_bytes,
             deadline=deadline,
         )
     except OSError as exc:
@@ -1011,7 +936,7 @@ def _verified_frame_file(
             RefineFailureCode.INPUT_INVALID,
             f"{label} sha256 does not match its ledger",
         )
-    return resolved
+    return (stable_stat.st_dev, stable_stat.st_ino)
 
 
 def _validate_request(
@@ -1073,6 +998,7 @@ def _validate_request(
     names: set[str] = set()
     engine_names: set[str] = set()
     ordinals: set[int] = set()
+    frame_identities: set[tuple[int, int]] = set()
     prepared_frames: list[PreparedRefineFrame] = []
     for frame_index, frame_input in enumerate(frame_values):
         _deadline_checkpoint(deadline, frame_index)
@@ -1161,8 +1087,8 @@ def _validate_request(
                 RefineFailureCode.INPUT_INVALID,
                 "frame materializer id must be a bounded visible string",
             )
-        source_path = _verified_frame_file(
-            workspace_root=workspace_root,
+        source_identity = _verified_frame_descriptor(
+            descriptor=frame_input.source_descriptor,
             relative_path=frame_input.relative_source_path,
             expected_name=name,
             expected_sha256=frame_input.source_sha256,
@@ -1170,8 +1096,8 @@ def _validate_request(
             label="frame source HEIC",
             deadline=deadline,
         )
-        engine_path = _verified_frame_file(
-            workspace_root=workspace_root,
+        engine_identity = _verified_frame_descriptor(
+            descriptor=frame_input.engine_descriptor,
             relative_path=frame_input.engine_relative_path,
             expected_name=frame_input.engine_name,
             expected_sha256=frame_input.engine_sha256,
@@ -1179,17 +1105,28 @@ def _validate_request(
             label="frame engine PPM",
             deadline=deadline,
         )
+        # The source HEIC and its materialized engine PPM are distinct objects by
+        # contract; one inode standing in for both would mean the raster step
+        # never ran.  Reusing an inode across frames would mean two frames share
+        # pixels, which the pose solve would silently accept.
+        for identity in (source_identity, engine_identity):
+            if identity in frame_identities:
+                _fail(
+                    RefineFailureCode.INPUT_INVALID,
+                    "frame files must reference unique file identities",
+                )
+            frame_identities.add(identity)
         prepared_frames.append(
             PreparedRefineFrame(
                 frame=frame,
-                source_path=source_path,
+                source_descriptor=frame_input.source_descriptor,
                 relative_source_path=frame_input.relative_source_path,
                 source_archive_key=str(source_archive_key),
                 source_member=str(source_member),
                 source_sha256=frame_input.source_sha256,
                 source_size_bytes=frame_input.source_size_bytes,
                 engine_name=frame_input.engine_name,
-                engine_path=engine_path,
+                engine_descriptor=frame_input.engine_descriptor,
                 engine_relative_path=frame_input.engine_relative_path,
                 engine_sha256=frame_input.engine_sha256,
                 engine_size_bytes=frame_input.engine_size_bytes,
