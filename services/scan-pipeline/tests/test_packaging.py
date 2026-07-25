@@ -158,6 +158,7 @@ def test_field_raster_helper_survives_real_wheel_and_sdist_builds(tmp_path):
     assert "patina_scan_worker/field_storage_acquirer.py" in wheel_names
     assert "patina_scan_worker/refine_colmap_backend.py" in wheel_names
     assert "patina_scan_worker/refine_colmap_command.py" in wheel_names
+    assert "patina_scan_worker/refine_colmap_toolchain.py" in wheel_names
     assert "patina_scan_worker/refine_evidence_builder.py" in wheel_names
     assert "patina_scan_worker/refine_engine.py" in wheel_names
     assert "patina_scan_worker/refine_materializer.py" in wheel_names
@@ -177,6 +178,9 @@ def test_field_raster_helper_survives_real_wheel_and_sdist_builds(tmp_path):
     assert any(name.endswith("/field_storage_acquirer.py") for name in source_names)
     assert any(name.endswith("/refine_colmap_backend.py") for name in source_names)
     assert any(name.endswith("/refine_colmap_command.py") for name in source_names)
+    assert any(
+        name.endswith("/refine_colmap_toolchain.py") for name in source_names
+    )
     assert any(name.endswith("/refine_evidence_builder.py") for name in source_names)
     assert any(name.endswith("/refine_engine.py") for name in source_names)
     assert any(name.endswith("/refine_materializer.py") for name in source_names)

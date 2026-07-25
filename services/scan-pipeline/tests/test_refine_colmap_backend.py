@@ -11,6 +11,12 @@ from pathlib import Path
 from types import MappingProxyType
 
 import pytest
+from _colmap_toolchain import (
+    load_fake_toolchain,
+    plan_supervised_command,
+    write_toolchain,
+)
+
 from patina_scan_worker import refine_colmap_backend as backend_module
 from patina_scan_worker import refine_colmap_command as command_module
 from patina_scan_worker import refine_native_process as native_process
@@ -945,30 +951,41 @@ def test_inherited_command_cleanup_failure_precedes_late_deadline(
             return 10.0
 
     deadline = ExpiresAfterLaunch()
-    with pytest.raises(AdapterError, match="synchronize") as raised:
-        run_inherited_colmap_command(
-            (str(fake), "point_triangulator"),
-            context=native_process._seal_native_child_context(
-                NativeChildContext(time.monotonic() + 30.0)
-            ),
-            deadline=deadline,
-            log_path=tmp_path / "fsync-failure.log",
-            cwd=tmp_path,
-        )
+    toolchain = load_fake_toolchain(fake.parent.parent, qualified=True)
+    try:
+        with pytest.raises(AdapterError, match="synchronize") as raised:
+            run_inherited_colmap_command(
+                plan_supervised_command(toolchain, tmp_path),
+                context=native_process._seal_native_child_context(
+                    NativeChildContext(time.monotonic() + 30.0)
+                ),
+                deadline=deadline,
+                log_path=tmp_path / "fsync-failure.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
     assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
-    assert deadline.calls == 2
+    # The pre-launch probe and the pre-wait probe are mandatory; the log drain
+    # now observes the same carried deadline, so later probes may also land.
+    assert deadline.calls >= 2
 
 
 @native_engine_entrypoint
 def _run_fake_cli(request, context: NativeChildContext):
     deadline = RefineDeadline(context.expires_at_monotonic_s)
-    result = run_inherited_colmap_command(
-        tuple(request["command"]),
-        context=context,
-        deadline=deadline,
-        log_path=Path(request["logPath"]),
-        cwd=Path(request["cwd"]),
-    )
+    workspace = Path(request["cwd"])
+    toolchain = load_fake_toolchain(Path(request["prefix"]), qualified=True)
+    try:
+        result = run_inherited_colmap_command(
+            plan_supervised_command(toolchain, workspace),
+            context=context,
+            deadline=deadline,
+            log_path=Path(request["logPath"]),
+            cwd=workspace,
+        )
+    finally:
+        toolchain.close()
     return {
         "returncode": result.returncode,
         "tail": result.output_tail,
@@ -979,10 +996,7 @@ def _run_fake_cli(request, context: NativeChildContext):
 
 
 def _fake_cli(tmp_path: Path, program: str) -> Path:
-    path = tmp_path / "fake-colmap"
-    path.write_text(f"#!{sys.executable}\n{program}\n", encoding="utf-8")
-    path.chmod(0o700)
-    return path
+    return write_toolchain(tmp_path / "colmap", program=program)
 
 
 @pytest.mark.skipif(
@@ -998,7 +1012,7 @@ def test_fake_cli_inherits_native_session_and_retains_only_bounded_tail(tmp_path
     result = run_native_engine_child(
         f"{__name__}:_run_fake_cli",
         {
-            "command": [str(fake), "point_triangulator"],
+            "prefix": str(fake.parent.parent),
             "logPath": str(log_path),
             "cwd": str(tmp_path),
         },
@@ -1026,7 +1040,7 @@ def test_fake_cli_timeout_is_killed_and_reaped_by_native_owner(tmp_path):
         run_native_engine_child(
             f"{__name__}:_run_fake_cli",
             {
-                "command": [str(fake), "point_triangulator"],
+                "prefix": str(fake.parent.parent),
                 "logPath": str(tmp_path / "timeout.log"),
                 "cwd": str(tmp_path),
             },
@@ -1064,7 +1078,7 @@ def test_fake_cli_surviving_descendant_prevents_native_success(tmp_path):
             run_native_engine_child(
                 f"{__name__}:_run_fake_cli",
                 {
-                    "command": [str(fake), "point_triangulator"],
+                    "prefix": str(fake.parent.parent),
                     "logPath": str(tmp_path / "survivor.log"),
                     "cwd": str(tmp_path),
                 },
