@@ -3045,7 +3045,22 @@ def test_child_workspace_receipt_requires_a_matching_declaration_and_transport()
 
     # A leased child must be handed a bounded absolute path, never a relative
     # one and never a /proc/self/fd alias standing in for the real directory.
-    for rejected in (None, "", 7, "relative/path", "/" + "a" * 8192):
+    #
+    # The bound is NATIVE_WORKSPACE_MAX_PATH_BYTES, which the parent's
+    # provisioner owns and this module imports -- one budget with one owner,
+    # read downstream, not a second derivation of it.  That is exactly why the
+    # boundary case below has to be exact: an 8192-byte path is over any
+    # plausible ceiling, so it stayed green against the pre-I97 4096 and proved
+    # only that *some* bound existed.
+    maximum = native_process.NATIVE_WORKSPACE_MAX_PATH_BYTES
+    for rejected in (
+        None,
+        "",
+        7,
+        "relative/path",
+        "/" + "a" * maximum,  # exactly maximum + 1 bytes
+        "/" + "a" * 8192,
+    ):
         with pytest.raises(transport_error) as bad_path:
             native_process._receive_workspace_lease(
                 object(),
@@ -3054,6 +3069,25 @@ def test_child_workspace_receipt_requires_a_matching_declaration_and_transport()
                 context=context,
             )
         assert "bounded absolute path" in str(bad_path.value)
+
+    # ...and a path of exactly the maximum clears the length check, so the
+    # bound is pinned from both sides rather than "somewhere below 8192".  A
+    # connection that never becomes ready takes the next branch, which is the
+    # cheapest observable proof that the length check let this one through.
+    class _NeverReady:
+        def poll(self, _timeout):
+            return False
+
+    with pytest.raises(AdapterError) as reached_transport:
+        native_process._receive_workspace_lease(
+            _NeverReady(),
+            leased=True,
+            path="/" + "a" * (maximum - 1),
+            context=context,
+        )
+    assert "lease transfer exceeded the shared deadline" in str(
+        reached_transport.value
+    )
 
     assert (
         native_process._receive_workspace_lease(

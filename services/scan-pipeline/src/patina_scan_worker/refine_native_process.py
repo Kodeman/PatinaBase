@@ -82,7 +82,40 @@ NATIVE_WORKSPACE_SUBDIRECTORIES = (
     NATIVE_WORKSPACE_TEMP_SUBDIRECTORY,
     NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
 )
-NATIVE_WORKSPACE_MAX_PATH_BYTES = 4096
+#: Every leased scratch name is ``NATIVE_WORKSPACE_NAME_PREFIX`` plus 32 hex
+#: characters from :func:`_workspace_scratch_name`, so the lease root's length
+#: is fully determined by the operator's container path.
+NATIVE_WORKSPACE_NAME_BYTES = len(NATIVE_WORKSPACE_NAME_PREFIX) + 32
+# --- One argv byte budget, spent by two layers. ------------------------------
+# The COLMAP command layer caps every argv item; ``refine_colmap_toolchain``
+# imports the ceiling below as ``_MAX_OPTION_VALUE_BYTES`` rather than restating
+# it.  Every path option it accepts is the lease root plus a
+# ``/<surface>/<name>`` tail, so the two numbers are one budget and were split
+# across two modules that could not see each other: provisioning accepted a
+# container up to 4096 bytes while argv refused anything over 1024, and a
+# scratch root in the gap minted a lease that provisioned cleanly and then made
+# every command permanently unplannable.  That gap is unreachable on macOS,
+# whose PATH_MAX is 1024, which is why it survived a full review cycle.
+#
+# The budget is declared HERE, in the layer that mints the path, and imported
+# upward.  ``refine_colmap_toolchain`` already imports this module, so the
+# reverse edge would be a cycle; and the direction is right on the merits --
+# the command layer only has to *read* a ceiling, while this module cannot mint
+# a usable lease without knowing it.
+NATIVE_WORKSPACE_MAX_ARGV_ITEM_BYTES = 1024
+#: Bytes reserved inside that ceiling for the ``/<surface>/<name>`` tail a leased
+#: path option appends to the lease root.  The longest tail in the reviewed I87
+#: operation plan and seven-descriptor output design is
+#: ``/work/engine-command-evidence-v1.json`` (37 bytes).  This is a guaranteed
+#: floor, not a cap: a short container leaves far more than 64 bytes of tail
+#: room, and the argv ceiling remains the thing actually enforced on argv.
+NATIVE_WORKSPACE_MAX_ARGV_PATH_TAIL_BYTES = 64
+#: The usable lease-root budget that follows.  Deliberately *not* PATH_MAX: a
+#: lease longer than this is refused at provisioning, because the alternative is
+#: a directory that exists and can never carry a command.
+NATIVE_WORKSPACE_MAX_PATH_BYTES = (
+    NATIVE_WORKSPACE_MAX_ARGV_ITEM_BYTES - NATIVE_WORKSPACE_MAX_ARGV_PATH_TAIL_BYTES
+)
 # Contract for the COLMAP command supervisor (item 3), which is NOT satisfied
 # by this module alone:
 #   * cwd  = context.workspace_subdirectory_path("work")
@@ -2483,11 +2516,18 @@ def provision_native_workspace_lease(
     boundary an operator can act on, and additionally rejects ``.``/``..``
     segments and trailing slashes, so the transported string is unambiguous.
 
-    Residual, unchanged: the check binds the string to the pinned descriptor at
-    this instant.  Replacing an intermediate component afterwards is still not
-    prevented here -- it requires write access to the operator's own container
-    path, which remains trusted deployment configuration rather than
-    child-controlled input.
+    ``parent_directory`` must also be **short enough**.  The leased root is the
+    prefix of every COLMAP path option, and the command layer caps each argv item
+    at :data:`NATIVE_WORKSPACE_MAX_ARGV_ITEM_BYTES`, so a container in the
+    former gap between the two bounds provisioned cleanly and then made every
+    command unplannable.  A container that cannot host a usable command is now
+    refused up front, naming the actual and maximum byte counts.
+
+    Residual, unchanged: the canonical check binds the string to the pinned
+    descriptor at this instant.  Replacing an intermediate component afterwards
+    is still not prevented here -- it requires write access to the operator's
+    own container path, which remains trusted deployment configuration rather
+    than child-controlled input.
     """
 
     _require_workspace_platform_capabilities()
@@ -2502,6 +2542,22 @@ def provision_native_workspace_lease(
         # relative one would mean something different in the child's cwd.
         raise AdapterError(
             "native workspace parent directory must be an absolute path",
+            _INVALID_INPUT_CODE,
+        )
+    # Refuse a container that cannot host a usable command BEFORE anything is
+    # created.  The lease root's length is fully determined here -- container
+    # plus "/" plus a fixed-width scratch name -- so an unusable lease is an
+    # operator configuration error, and it is reported as one, with the numbers
+    # to act on.  Without this the lease provisioned fine and the failure
+    # surfaced much later as "pinned COLMAP argv item exceeds its byte ceiling",
+    # which names neither the lease nor the scratch root that caused it.
+    lease_bytes = len(os.fsencode(parent_directory)) + 1 + NATIVE_WORKSPACE_NAME_BYTES
+    if lease_bytes > NATIVE_WORKSPACE_MAX_PATH_BYTES:
+        raise AdapterError(
+            f"native workspace lease path would be {lease_bytes} bytes, over the "
+            f"{NATIVE_WORKSPACE_MAX_PATH_BYTES}-byte maximum that leaves room for a "
+            f"COLMAP path option; shorten the configured scratch root by at least "
+            f"{lease_bytes - NATIVE_WORKSPACE_MAX_PATH_BYTES} bytes",
             _INVALID_INPUT_CODE,
         )
     flags = _workspace_directory_flags()
@@ -2591,6 +2647,10 @@ def provision_native_workspace_lease(
             )
         path = os.path.join(parent_directory, name)
         if len(os.fsencode(path)) > NATIVE_WORKSPACE_MAX_PATH_BYTES:
+            # Unreachable while `_workspace_scratch_name` yields exactly
+            # NATIVE_WORKSPACE_NAME_BYTES, which the container check above
+            # already budgeted for.  Retained so a change to the name generator
+            # fails closed here rather than in argv validation.
             raise AdapterError(
                 "native workspace lease path exceeds its bounded length",
                 _INVALID_INPUT_CODE,

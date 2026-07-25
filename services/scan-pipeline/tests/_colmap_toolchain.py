@@ -43,6 +43,10 @@ from patina_scan_worker.refine_colmap_toolchain import (
     load_colmap_toolchain,
     plan_pinned_colmap_command,
 )
+from patina_scan_worker.refine_native_process import (
+    NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+    NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
+)
 
 #: Captured at import, before any test patches ``sys.platform`` to fake the
 #: Linux-only supervisor host.  The descriptor alias is a real-host question.
@@ -248,17 +252,27 @@ def load_fake_toolchain(
 
 
 def allowlisted_argv(executable: Path | str, workspace: Path) -> tuple[str, ...]:
+    """The one legal shape: images read from ``packet/``, engine writes in ``work/``.
+
+    ``workspace`` is the lease root, so every path option carries the surface it
+    is declared for.  A flat ``<workspace>/database.db`` was accepted while all
+    four options shared one confinement root; it is not a legal argv any more,
+    and neither is ``--output_path <workspace>/packet/...``.
+    """
+
+    packet = workspace / NATIVE_WORKSPACE_PACKET_SUBDIRECTORY
+    work = workspace / NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY
     return (
         str(executable),
         "point_triangulator",
         "--database_path",
-        str(workspace / "database.db"),
+        str(work / "database.db"),
         "--image_path",
-        str(workspace / "images"),
+        str(packet / "images"),
         "--input_path",
-        str(workspace / "seed"),
+        str(work / "seed"),
         "--output_path",
-        str(workspace / "triangulated"),
+        str(work / "triangulated"),
         "--clear_points",
         "1",
         "--refine_intrinsics",
