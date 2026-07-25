@@ -13,6 +13,7 @@ from pathlib import Path
 from types import MappingProxyType, SimpleNamespace
 
 import patina_scan_worker.refine_colmap_backend as backend_module
+import patina_scan_worker.refine_native_process as native_process
 import patina_scan_worker.refine_packet_extractor as extractor_module
 import pytest
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
@@ -27,7 +28,9 @@ from patina_scan_worker.refine_colmap_backend import (
 from patina_scan_worker.refine_native_process import (
     NativeChildContext,
     NativePinnedFile,
+    NativeWorkspaceLease,
     native_engine_entrypoint,
+    provision_native_workspace_lease,
     run_native_engine_child,
 )
 from patina_scan_worker.refine_packet_extractor import (
@@ -207,7 +210,10 @@ class _PacketFixture:
             ),
         }
 
-    def direct_context(self) -> NativeChildContext:
+    def direct_context(
+        self,
+        workspace_descriptor: int | None = None,
+    ) -> NativeChildContext:
         return NativeChildContext(
             time.monotonic() + 10.0,
             MappingProxyType(
@@ -216,6 +222,7 @@ class _PacketFixture:
                     "packet.manifest": self.manifest_handle.fileno(),
                 }
             ),
+            workspace_descriptor,
         )
 
     def close(self) -> None:
@@ -327,20 +334,96 @@ def _entrypoint(name: str) -> str:
     return f"{__name__}:{name}"
 
 
+def _lease(directory: Path) -> NativeWorkspaceLease:
+    """Provision the parent-side workspace a direct-call test would receive."""
+
+    directory.mkdir(mode=0o700, exist_ok=True)
+    return provision_native_workspace_lease(str(directory), deadline=_deadline(30.0))
+
+
+def _release(lease: NativeWorkspaceLease) -> tuple[str, ...]:
+    return native_process._release_workspace_lease(lease, leader_quiescent=True)
+
+
+def _lease_context(
+    lease: NativeWorkspaceLease,
+    seconds: float = 30.0,
+) -> NativeChildContext:
+    return NativeChildContext(
+        time.monotonic() + seconds,
+        MappingProxyType({}),
+        lease.descriptor,
+    )
+
+
+def _packet_root(lease: NativeWorkspaceLease) -> Path:
+    """Extraction lands in the lease's packet/ child, not in the lease root."""
+
+    return Path(lease.path) / native_process.NATIVE_WORKSPACE_PACKET_SUBDIRECTORY
+
+
+def _leased_ledger(lease: NativeWorkspaceLease):
+    return extractor_module._lease_extraction_workspace(_lease_context(lease))
+
+
+def _member_mode(workspace_descriptor: int, relative_path: str) -> int:
+    parts = relative_path.split("/")
+    directory = workspace_descriptor
+    opened: list[int] = []
+    try:
+        for part in parts[:-1]:
+            directory = os.open(
+                part,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                dir_fd=directory,
+            )
+            opened.append(directory)
+        return stat.S_IMODE(
+            os.stat(parts[-1], dir_fd=directory, follow_symlinks=False).st_mode
+        )
+    finally:
+        for descriptor in opened:
+            os.close(descriptor)
+
+
 @native_engine_entrypoint
 def _extract_packet_probe(request, context: NativeChildContext):
     with extract_colmap_packet(request, context) as packet:
-        workspace_metadata = os.lstat(packet.workspace)
+        workspace_metadata = os.fstat(packet.workspace_descriptor)
+        leased_metadata = os.fstat(context.workspace_descriptor())
+        packet_metadata = os.stat(
+            native_process.NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
+            dir_fd=context.workspace_descriptor(),
+            follow_symlinks=False,
+        )
         member_modes = {
-            relative_path: stat.S_IMODE(
-                os.lstat(packet.workspace / relative_path).st_mode
-            )
+            relative_path: _member_mode(packet.workspace_descriptor, relative_path)
             for relative_path in packet.extracted_relative_paths
         }
         result = {
-            "workspace": str(packet.workspace),
             "workspaceMode": stat.S_IMODE(workspace_metadata.st_mode),
             "workspaceOwner": workspace_metadata.st_uid,
+            "workspaceIsLeasedRoot": (
+                workspace_metadata.st_dev,
+                workspace_metadata.st_ino,
+            )
+            == (leased_metadata.st_dev, leased_metadata.st_ino),
+            "workspaceIsPacketSubdirectory": (
+                workspace_metadata.st_dev,
+                workspace_metadata.st_ino,
+            )
+            == (packet_metadata.st_dev, packet_metadata.st_ino),
+            "leaseEntries": sorted(os.listdir(context.workspace_descriptor())),
+            "workspacePathMatchesLease": os.path.dirname(context.workspace_path())
+            != "",
+            "commandPath": os.path.basename(
+                context.workspace_subdirectory_path(
+                    native_process.NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY
+                )
+            ),
+            "workspaceIsDistinctDescriptor": (
+                packet.workspace_descriptor != context.workspace_descriptor()
+            ),
             "memberModes": member_modes,
             "runId": packet.manifest.run_id,
             "frameNames": [
@@ -351,12 +434,14 @@ def _extract_packet_probe(request, context: NativeChildContext):
     return result
 
 
-def _run(fixture: _PacketFixture):
+def _run(fixture: _PacketFixture, workspace_parent: Path):
+    workspace_parent.mkdir(mode=0o700, exist_ok=True)
     return run_native_engine_child(
         _entrypoint("_extract_packet_probe"),
         fixture.request,
         deadline=_deadline(),
         pinned_files=fixture.pinned_files,
+        workspace_parent_directory=str(workspace_parent),
     )
 
 
@@ -364,9 +449,9 @@ def _load_manifest(fixture: _PacketFixture):
     return load_colmap_packet_manifest(fixture.request, fixture.direct_context())
 
 
-def _extract_direct_chunk(fixture: _PacketFixture):
+def _extract_direct_chunk(fixture: _PacketFixture, lease: NativeWorkspaceLease):
     manifest = _load_manifest(fixture)
-    ledger = extractor_module._new_extraction_workspace()
+    ledger = _leased_ledger(lease)
     extracted_paths: set[str] = set()
     payload = extractor_module._extract_archive_chunk(
         chunk=manifest.chunks[0],
@@ -390,7 +475,7 @@ def test_exact_ustar_packet_extracts_in_native_child_and_cleans_workspace(
     try:
         fixture.manifest_handle.seek(3)
         fixture.chunk_handle.seek(17)
-        result = _run(fixture)
+        result = _run(fixture, scratch)
         assert fixture.manifest_handle.tell() == 3
         assert fixture.chunk_handle.tell() == 17
     finally:
@@ -398,6 +483,14 @@ def test_exact_ustar_packet_extracts_in_native_child_and_cleans_workspace(
 
     assert result["workspaceMode"] == 0o700
     assert result["workspaceOwner"] == os.geteuid()
+    # Extraction owns packet/, not the lease root: item 3's TMPDIR and cwd are
+    # siblings inside the same one-purge tree.
+    assert result["workspaceIsLeasedRoot"] is False
+    assert result["workspaceIsPacketSubdirectory"] is True
+    assert result["workspaceIsDistinctDescriptor"] is True
+    assert result["leaseEntries"] == ["packet", "tmp", "work"]
+    assert result["workspacePathMatchesLease"] is True
+    assert result["commandPath"] == "work"
     assert result["runId"] == "a" * 64
     assert set(result["memberModes"].values()) == {0o600}
     assert result["frameNames"] == [
@@ -411,8 +504,8 @@ def test_exact_ustar_packet_extracts_in_native_child_and_cleans_workspace(
         "images/frame_000001.ppm",
         "images/frame_000002.ppm",
     ]
-    assert not Path(result["workspace"]).exists()
-    assert list(scratch.glob("patina-refine-colmap-packet-*")) == []
+    # The parent removes its own workspace after the child exits.
+    assert list(scratch.iterdir()) == []
     assert PACKET_EXTRACTION_QUALIFIED is False
 
 
@@ -435,7 +528,11 @@ def test_extraction_rejects_unsealed_context_before_source_or_workspace_action(
         raise AssertionError("workspace must not be touched")
 
     monkeypatch.setattr(backend_module, "load_colmap_packet_manifest", reject_source)
-    monkeypatch.setattr(extractor_module.tempfile, "mkdtemp", reject_workspace)
+    monkeypatch.setattr(
+        extractor_module,
+        "_lease_extraction_workspace",
+        reject_workspace,
+    )
     try:
         with (
             pytest.raises(AdapterError, match="verified native child") as raised,
@@ -475,7 +572,11 @@ def test_context_lookalike_cannot_claim_verified_boundary_before_actions(
         raise AssertionError("workspace must not be touched")
 
     monkeypatch.setattr(backend_module, "load_colmap_packet_manifest", reject_source)
-    monkeypatch.setattr(extractor_module.tempfile, "mkdtemp", reject_workspace)
+    monkeypatch.setattr(
+        extractor_module,
+        "_lease_extraction_workspace",
+        reject_workspace,
+    )
     try:
         with (
             pytest.raises(AdapterError) as raised,
@@ -519,7 +620,11 @@ def test_boundary_inspection_failure_is_fixed_before_actions(tmp_path, monkeypat
         property(inspect_boundary),
     )
     monkeypatch.setattr(backend_module, "load_colmap_packet_manifest", reject_source)
-    monkeypatch.setattr(extractor_module.tempfile, "mkdtemp", reject_workspace)
+    monkeypatch.setattr(
+        extractor_module,
+        "_lease_extraction_workspace",
+        reject_workspace,
+    )
     try:
         with (
             pytest.raises(AdapterError) as raised,
@@ -561,7 +666,11 @@ def test_truthy_non_boolean_boundary_is_rejected(tmp_path, monkeypatch):
         property(lambda _context: 1),
     )
     monkeypatch.setattr(backend_module, "load_colmap_packet_manifest", reject_source)
-    monkeypatch.setattr(extractor_module.tempfile, "mkdtemp", reject_workspace)
+    monkeypatch.setattr(
+        extractor_module,
+        "_lease_extraction_workspace",
+        reject_workspace,
+    )
     try:
         with (
             pytest.raises(AdapterError) as raised,
@@ -599,7 +708,11 @@ def test_missing_descriptor_capability_fails_before_source_or_workspace_action(
 
     monkeypatch.setattr(extractor_module.os, "supports_dir_fd", frozenset())
     monkeypatch.setattr(extractor_module.os, "pread", reject_source)
-    monkeypatch.setattr(extractor_module.tempfile, "mkdtemp", reject_workspace)
+    monkeypatch.setattr(
+        extractor_module,
+        "_lease_extraction_workspace",
+        reject_workspace,
+    )
     try:
         with (
             pytest.raises(AdapterError, match="descriptor safety") as raised,
@@ -658,7 +771,6 @@ def test_directory_chain_closes_duplicate_when_noninheritable_setup_fails(
             else:
                 extractor_module._open_directory_chain(
                     extractor_module._ExtractionLedger(
-                        tmp_path,
                         root_descriptor,
                         (root_metadata.st_dev, root_metadata.st_ino),
                         [],
@@ -714,7 +826,6 @@ def test_directory_chain_closes_new_child_when_old_descriptor_close_fails(
     monkeypatch.setattr(extractor_module.os, "open", record_open)
     monkeypatch.setattr(extractor_module.os, "close", fail_old_close)
     ledger = extractor_module._ExtractionLedger(
-        tmp_path,
         root_descriptor,
         (root_metadata.st_dev, root_metadata.st_ino),
         [],
@@ -743,58 +854,117 @@ def test_directory_chain_closes_new_child_when_old_descriptor_close_fails(
             os.fstat(descriptor)
 
 
-@pytest.mark.parametrize("failure_target", ("descriptor-close", "workspace-rmdir"))
-def test_failed_workspace_creation_surfaces_cleanup_uncertainty(
+def test_workspace_lease_is_required_before_any_extraction_scratch(tmp_path):
+    fixture = _packet_fixture(tmp_path)
+    try:
+        with pytest.raises(AdapterError, match="workspace lease is unavailable"):
+            extractor_module._lease_extraction_workspace(fixture.direct_context())
+    finally:
+        fixture.close()
+
+
+@pytest.mark.parametrize(
+    "poison",
+    ("mode", "occupied"),
+)
+def test_workspace_lease_borrow_rejects_an_unclean_or_public_lease(tmp_path, poison):
+    lease = _lease(tmp_path / "lease")
+    try:
+        if poison == "mode":
+            os.chmod(lease.path, 0o755)
+            expected = "not a private owned directory"
+        else:
+            (
+                Path(lease.path)
+                / native_process.NATIVE_WORKSPACE_PACKET_SUBDIRECTORY
+                / "squatter.bin"
+            ).write_bytes(b"x")
+            expected = "not empty"
+        with pytest.raises(AdapterError, match=expected) as raised:
+            _leased_ledger(lease)
+        assert raised.value.code == "REFINE_ENGINE_FAILED"
+    finally:
+        os.chmod(lease.path, 0o700)
+        assert _release(lease) == ()
+    assert list((tmp_path / "lease").iterdir()) == []
+
+
+def test_failed_workspace_lease_borrow_surfaces_cleanup_uncertainty(
     tmp_path,
     monkeypatch,
-    failure_target,
 ):
-    scratch = tmp_path / "scratch"
-    scratch.mkdir(mode=0o700)
-    monkeypatch.setattr(extractor_module.tempfile, "tempdir", str(scratch))
+    lease = _lease(tmp_path / "lease")
     real_fstat = os.fstat
     real_close = os.close
-    real_rmdir = os.rmdir
+    real_open = os.open
+    borrowed: list[int] = []
     failed = False
 
-    def wrong_identity(descriptor):
+    def public_borrow(descriptor):
         metadata = real_fstat(descriptor)
-        return SimpleNamespace(
-            st_dev=metadata.st_dev,
-            st_ino=metadata.st_ino + 1,
-            st_uid=metadata.st_uid,
-            st_mode=metadata.st_mode,
-        )
+        if descriptor in borrowed:
+            return SimpleNamespace(
+                st_dev=metadata.st_dev,
+                st_ino=metadata.st_ino,
+                st_uid=metadata.st_uid,
+                st_mode=stat.S_IFDIR | 0o755,
+            )
+        return metadata
+
+    def record_open(path, *args, **kwargs):
+        descriptor = real_open(path, *args, **kwargs)
+        if path == native_process.NATIVE_WORKSPACE_PACKET_SUBDIRECTORY:
+            borrowed.append(descriptor)
+        return descriptor
 
     def inject_close_failure(descriptor):
         nonlocal failed
-        if failure_target == "descriptor-close" and not failed:
+        if not failed and descriptor in borrowed:
             failed = True
             real_close(descriptor)
-            raise OSError("synthetic workspace descriptor close failure")
+            raise OSError("synthetic workspace lease borrow close failure")
         return real_close(descriptor)
 
-    def inject_rmdir_failure(path, *args, **kwargs):
-        nonlocal failed
-        if (
-            failure_target == "workspace-rmdir"
-            and not failed
-            and Path(path).name.startswith("patina-refine-colmap-packet-")
-        ):
-            failed = True
-            real_rmdir(path, *args, **kwargs)
-            raise OSError("synthetic workspace rmdir failure")
-        return real_rmdir(path, *args, **kwargs)
-
-    monkeypatch.setattr(extractor_module.os, "fstat", wrong_identity)
+    monkeypatch.setattr(extractor_module.os, "open", record_open)
+    monkeypatch.setattr(extractor_module.os, "fstat", public_borrow)
     monkeypatch.setattr(extractor_module.os, "close", inject_close_failure)
-    monkeypatch.setattr(extractor_module.os, "rmdir", inject_rmdir_failure)
-    with pytest.raises(AdapterError, match="cannot (?:close|remove)") as raised:
-        extractor_module._new_extraction_workspace()
+    try:
+        with pytest.raises(AdapterError, match="cannot close") as raised:
+            _leased_ledger(lease)
+    finally:
+        monkeypatch.undo()
+        assert _release(lease) == ()
 
     assert failed is True
+    assert borrowed
     assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
-    assert list(scratch.glob("patina-refine-colmap-packet-*")) == []
+    assert list((tmp_path / "lease").iterdir()) == []
+
+
+def test_parent_lease_provisioning_failure_removes_its_own_directory(
+    tmp_path,
+    monkeypatch,
+):
+    container = tmp_path / "lease"
+    container.mkdir(mode=0o700)
+    real_fstat = os.fstat
+    inspections = 0
+
+    def fail_workspace_inspection(descriptor):
+        nonlocal inspections
+        inspections += 1
+        if inspections == 2:
+            raise OSError("synthetic workspace lease inspection failure")
+        return real_fstat(descriptor)
+
+    monkeypatch.setattr(native_process.os, "fstat", fail_workspace_inspection)
+    with pytest.raises(AdapterError, match="cannot provision a private") as raised:
+        provision_native_workspace_lease(str(container), deadline=_deadline(30.0))
+    monkeypatch.undo()
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    # The parent removes the half-provisioned workspace it created itself.
+    assert list(container.iterdir()) == []
 
 
 @pytest.mark.parametrize("failure_phase", ("stat", "open"))
@@ -803,10 +973,8 @@ def test_new_directory_identity_failure_does_not_strand_workspace(
     monkeypatch,
     failure_phase,
 ):
-    scratch = tmp_path / "scratch"
-    scratch.mkdir(mode=0o700)
-    monkeypatch.setattr(extractor_module.tempfile, "tempdir", str(scratch))
-    ledger = extractor_module._new_extraction_workspace()
+    lease = _lease(tmp_path / "lease")
+    ledger = _leased_ledger(lease)
     real_stat = os.stat
     real_open = os.open
     failed = False
@@ -841,9 +1009,11 @@ def test_new_directory_identity_failure_does_not_strand_workspace(
         assert "DO_NOT_LEAK" not in str(raised.value)
     finally:
         assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+        monkeypatch.undo()
 
     assert failed is True
-    assert list(scratch.glob("patina-refine-colmap-packet-*")) == []
+    assert _release(lease) == ()
+    assert list((tmp_path / "lease").iterdir()) == []
 
 
 @pytest.mark.parametrize("failure_phase", ("fstat", "set-inheritable"))
@@ -852,10 +1022,8 @@ def test_new_member_identity_failure_does_not_strand_workspace(
     monkeypatch,
     failure_phase,
 ):
-    scratch = tmp_path / "scratch"
-    scratch.mkdir(mode=0o700)
-    monkeypatch.setattr(extractor_module.tempfile, "tempdir", str(scratch))
-    ledger = extractor_module._new_extraction_workspace()
+    lease = _lease(tmp_path / "lease")
+    ledger = _leased_ledger(lease)
     real_open = os.open
     real_fstat = os.fstat
     real_set_inheritable = os.set_inheritable
@@ -903,26 +1071,26 @@ def test_new_member_identity_failure_does_not_strand_workspace(
         if failure_phase == "fstat":
             assert ledger.files == []
             assert ledger.file_identities == {}
-            assert not (ledger.workspace / "member.bin").exists()
+            assert not (_packet_root(lease) / "member.bin").exists()
         else:
             assert ledger.files == ["member.bin"]
             assert set(ledger.file_identities) == {"member.bin"}
     finally:
         assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+        monkeypatch.undo()
 
     assert failed is True
     assert member_descriptors
-    assert list(scratch.glob("patina-refine-colmap-packet-*")) == []
+    assert _release(lease) == ()
+    assert list((tmp_path / "lease").iterdir()) == []
 
 
 def test_member_parent_close_failure_closes_new_member_descriptor(
     tmp_path,
     monkeypatch,
 ):
-    scratch = tmp_path / "scratch"
-    scratch.mkdir(mode=0o700)
-    monkeypatch.setattr(extractor_module.tempfile, "tempdir", str(scratch))
-    ledger = extractor_module._new_extraction_workspace()
+    lease = _lease(tmp_path / "lease")
+    ledger = _leased_ledger(lease)
     real_dup = os.dup
     real_open = os.open
     real_close = os.close
@@ -961,6 +1129,7 @@ def test_member_parent_close_failure_closes_new_member_descriptor(
             )
     finally:
         assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+        monkeypatch.undo()
 
     assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
     assert failed is True
@@ -968,7 +1137,8 @@ def test_member_parent_close_failure_closes_new_member_descriptor(
     for descriptor in member_descriptors:
         with pytest.raises(OSError):
             os.fstat(descriptor)
-    assert list(scratch.glob("patina-refine-colmap-packet-*")) == []
+    assert _release(lease) == ()
+    assert list((tmp_path / "lease").iterdir()) == []
 
 
 @pytest.mark.parametrize(
@@ -1029,7 +1199,7 @@ def test_archive_rejects_every_nonregular_and_extension_type(tmp_path, typeflag)
     fixture = _packet_fixture(tmp_path, entry_transform=transform)
     try:
         with pytest.raises(AdapterError, match="rejects links") as raised:
-            _run(fixture)
+            _run(fixture, tmp_path / "lease")
     finally:
         fixture.close()
     assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
@@ -1089,7 +1259,7 @@ def test_archive_universe_and_terminator_are_exact(
     )
     try:
         with pytest.raises(AdapterError, match=detail) as raised:
-            _run(fixture)
+            _run(fixture, tmp_path / "lease")
     finally:
         fixture.close()
     assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
@@ -1117,7 +1287,7 @@ def test_archive_rejects_corrupt_checksum_or_member_padding(
     fixture = _packet_fixture(tmp_path, archive_transform=archive_transform)
     try:
         with pytest.raises(AdapterError, match=detail) as raised:
-            _run(fixture)
+            _run(fixture, tmp_path / "lease")
     finally:
         fixture.close()
     assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
@@ -1152,7 +1322,7 @@ def test_archive_rejects_noncanonical_ustar_metadata(
     )
     try:
         with pytest.raises(AdapterError, match="metadata is not canonical") as raised:
-            _run(fixture)
+            _run(fixture, tmp_path / "lease")
     finally:
         fixture.close()
     assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
@@ -1175,11 +1345,12 @@ def test_archive_rejects_member_hash_mismatch_and_cleans_partial_workspace(
     fixture = _packet_fixture(tmp_path, member_transform=transform)
     try:
         with pytest.raises(AdapterError, match="SHA-256") as raised:
-            _run(fixture)
+            _run(fixture, tmp_path / "lease")
     finally:
         fixture.close()
     assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
-    assert list(scratch.glob("patina-refine-colmap-packet-*")) == []
+    # A failed extraction still leaves the parent-owned workspace removed.
+    assert list((tmp_path / "lease").iterdir()) == []
 
 
 def test_chunk_is_revalidated_after_copy_before_request_parse(
@@ -1188,7 +1359,8 @@ def test_chunk_is_revalidated_after_copy_before_request_parse(
 ):
     fixture = _packet_fixture(tmp_path)
     manifest = _load_manifest(fixture)
-    ledger = extractor_module._new_extraction_workspace()
+    lease = _lease(tmp_path / "lease")
+    ledger = _leased_ledger(lease)
     extracted_paths: set[str] = set()
     real_revalidate = extractor_module._revalidate_chunk_after_extraction
     mutation_count = 0
@@ -1226,6 +1398,8 @@ def test_chunk_is_revalidated_after_copy_before_request_parse(
         assert fixture.chunk_handle.tell() == original_offset
     finally:
         assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+        monkeypatch.undo()
+        assert _release(lease) == ()
         fixture.close()
 
     assert mutation_count == 1
@@ -1315,12 +1489,10 @@ def test_partial_write_failure_cleans_only_created_workspace_ledger(
     tmp_path,
     monkeypatch,
 ):
-    scratch = tmp_path / "scratch"
-    scratch.mkdir(mode=0o700)
     fixture = _packet_fixture(tmp_path)
-    monkeypatch.setattr(extractor_module.tempfile, "tempdir", str(scratch))
+    lease = _lease(tmp_path / "lease")
     manifest = _load_manifest(fixture)
-    ledger = extractor_module._new_extraction_workspace()
+    ledger = _leased_ledger(lease)
     extracted_paths: set[str] = set()
     real_pwrite = extractor_module.os.pwrite
     write_count = 0
@@ -1344,10 +1516,12 @@ def test_partial_write_failure_cleans_only_created_workspace_ledger(
             )
     finally:
         assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+        monkeypatch.undo()
+        assert _release(lease) == ()
         fixture.close()
     assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
     assert write_count == 2
-    assert list(scratch.glob("patina-refine-colmap-packet-*")) == []
+    assert list((tmp_path / "lease").iterdir()) == []
 
 
 def test_reopened_request_descriptor_identity_is_revalidated(
@@ -1355,7 +1529,8 @@ def test_reopened_request_descriptor_identity_is_revalidated(
     monkeypatch,
 ):
     fixture = _packet_fixture(tmp_path)
-    manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture)
+    lease = _lease(tmp_path / "lease")
+    manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture, lease)
     assert request_payload is not None
     real_open = extractor_module.os.open
     real_fstat = extractor_module.os.fstat
@@ -1402,10 +1577,11 @@ def test_reopened_request_descriptor_identity_is_revalidated(
 
 def test_cleanup_refuses_same_uid_extracted_member_replacement(tmp_path):
     fixture = _packet_fixture(tmp_path)
-    manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture)
+    lease = _lease(tmp_path / "lease")
+    manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture, lease)
     assert request_payload is not None
     request_member = manifest.member_by_path[manifest.request_member]
-    request_path = ledger.workspace / request_member.relative_path
+    request_path = _packet_root(lease) / request_member.relative_path
     original_descriptor = os.open(request_path, os.O_RDONLY | os.O_CLOEXEC)
     replacement_payload = b"same-uid replacement must survive refused cleanup"
     cleanup_errors: tuple[str, ...] = ()
@@ -1429,19 +1605,21 @@ def test_cleanup_refuses_same_uid_extracted_member_replacement(tmp_path):
     finally:
         os.close(original_descriptor)
         fixture.close()
-        if request_path.exists():
-            request_path.unlink()
-        if ledger.workspace.exists():
-            ledger.workspace.rmdir()
+        # The parent owns the workspace, so its bounded cleanup still succeeds
+        # even after the child ledger refused the swapped identity.
+        assert _release(lease) == ()
 
     assert cleanup_errors
+    assert not request_path.exists()
+    assert list((tmp_path / "lease").iterdir()) == []
 
 
 def test_cleanup_refuses_same_uid_extracted_directory_replacement(tmp_path):
     fixture = _packet_fixture(tmp_path)
-    _manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture)
+    lease = _lease(tmp_path / "lease")
+    _manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture, lease)
     assert request_payload is not None
-    directory_path = ledger.workspace / "images"
+    directory_path = _packet_root(lease) / "images"
     original_descriptor = os.open(
         directory_path,
         os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
@@ -1469,14 +1647,11 @@ def test_cleanup_refuses_same_uid_extracted_directory_replacement(tmp_path):
     finally:
         os.close(original_descriptor)
         fixture.close()
-        if replacement_path.exists():
-            replacement_path.unlink()
-        if directory_path.exists():
-            directory_path.rmdir()
-        if ledger.workspace.exists():
-            ledger.workspace.rmdir()
+        assert _release(lease) == ()
 
     assert cleanup_errors
+    assert not directory_path.exists()
+    assert list((tmp_path / "lease").iterdir()) == []
 
 
 @pytest.mark.parametrize(
@@ -1492,9 +1667,8 @@ def test_cleanup_os_errors_are_fixed_and_do_not_leak(
     target,
     expected_error,
 ):
-    monkeypatch.setattr(extractor_module.tempfile, "tempdir", str(tmp_path))
-    ledger = extractor_module._new_extraction_workspace()
-    real_unlink = os.unlink
+    lease = _lease(tmp_path / "lease")
+    ledger = _leased_ledger(lease)
     real_rmdir = os.rmdir
     if target == "file":
         descriptor = extractor_module._create_extracted_member(
@@ -1520,13 +1694,10 @@ def test_cleanup_os_errors_are_fixed_and_do_not_leak(
     assert errors == (expected_error,)
     assert "DO_NOT_LEAK" not in " ".join(errors)
 
-    monkeypatch.setattr(extractor_module.os, "unlink", real_unlink)
-    monkeypatch.setattr(extractor_module.os, "rmdir", real_rmdir)
-    if target == "file":
-        real_unlink(ledger.workspace / "member.bin")
-    else:
-        real_rmdir(ledger.workspace / "child")
-    real_rmdir(ledger.workspace)
+    monkeypatch.undo()
+    # The parent-owned lease still removes what the child ledger could not.
+    assert _release(lease) == ()
+    assert list((tmp_path / "lease").iterdir()) == []
 
 
 @pytest.mark.skipif(
@@ -1538,10 +1709,11 @@ def test_reopened_request_uses_nonblocking_open_before_fifo_type_check(
     monkeypatch,
 ):
     fixture = _packet_fixture(tmp_path)
-    manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture)
+    lease = _lease(tmp_path / "lease")
+    manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture, lease)
     assert request_payload is not None
     request_member = manifest.member_by_path[manifest.request_member]
-    request_path = ledger.workspace / request_member.relative_path
+    request_path = _packet_root(lease) / request_member.relative_path
     original_descriptor = os.open(request_path, os.O_RDONLY | os.O_CLOEXEC)
     real_open = extractor_module.os.open
     saw_nonblocking_request_open = False
@@ -1581,10 +1753,12 @@ def test_reopened_request_uses_nonblocking_open_before_fifo_type_check(
     finally:
         os.close(original_descriptor)
         fixture.close()
-        if request_path.exists():
-            request_path.unlink()
-        if ledger.workspace.exists():
-            ledger.workspace.rmdir()
+        monkeypatch.undo()
+        # A FIFO the parent never created is still removed by parent cleanup.
+        assert _release(lease) == ()
+
+    assert not request_path.exists()
+    assert list((tmp_path / "lease").iterdir()) == []
 
 
 @pytest.mark.parametrize(
@@ -1596,12 +1770,10 @@ def test_destination_and_request_close_failures_are_normalized_and_cleaned(
     monkeypatch,
     failure_target,
 ):
-    scratch = tmp_path / "scratch"
-    scratch.mkdir(mode=0o700)
     fixture = _packet_fixture(tmp_path)
-    monkeypatch.setattr(extractor_module.tempfile, "tempdir", str(scratch))
+    lease = _lease(tmp_path / "lease")
     manifest = _load_manifest(fixture)
-    ledger = extractor_module._new_extraction_workspace()
+    ledger = _leased_ledger(lease)
     real_open = extractor_module.os.open
     real_dup = extractor_module.os.dup
     real_close = extractor_module.os.close
@@ -1667,10 +1839,12 @@ def test_destination_and_request_close_failures_are_normalized_and_cleaned(
                 )
     finally:
         assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+        monkeypatch.undo()
+        assert _release(lease) == ()
         fixture.close()
     assert failed
     assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
-    assert list(scratch.glob("patina-refine-colmap-packet-*")) == []
+    assert list((tmp_path / "lease").iterdir()) == []
 
 
 @pytest.mark.skipif(os.name != "posix", reason="native Refine requires POSIX")
@@ -1698,7 +1872,7 @@ def test_archive_rejects_manifest_file_directory_collision_before_extraction(tmp
     )
     try:
         with pytest.raises(AdapterError, match="path collision") as raised:
-            _run(fixture)
+            _run(fixture, tmp_path / "lease")
     finally:
         fixture.close()
     assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
@@ -1710,7 +1884,27 @@ def test_native_request_cannot_supply_a_lookalike_engine_payload(tmp_path):
     fixture.request["enginePayload"] = "{}"
     try:
         with pytest.raises(AdapterError, match="unknown or missing field") as raised:
-            _run(fixture)
+            _run(fixture, tmp_path / "lease")
     finally:
         fixture.close()
     assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="native Refine requires POSIX")
+def test_native_extraction_without_a_parent_lease_is_refused(tmp_path):
+    fixture = _packet_fixture(tmp_path)
+    try:
+        with pytest.raises(
+            AdapterError,
+            match="workspace lease is unavailable",
+        ) as raised:
+            run_native_engine_child(
+                _entrypoint("_extract_packet_probe"),
+                fixture.request,
+                deadline=_deadline(),
+                pinned_files=fixture.pinned_files,
+            )
+    finally:
+        fixture.close()
+    assert raised.value.code == "REFINE_INPUT_INVALID"
+    assert PACKET_EXTRACTION_QUALIFIED is False

@@ -5,7 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import signal
+import socket
+import stat
 import subprocess
 import sys
 import threading
@@ -2233,3 +2236,904 @@ def test_timeout_kills_group_reaps_leader_and_prevents_late_publication(tmp_path
     assert activity_log.read_text(encoding="utf-8") == "leader-ready\n"
     assert not late_artifact.exists()
     assert not accepted_artifact.exists()
+
+
+def _identity(metadata) -> tuple[int, int]:
+    return (metadata.st_dev, metadata.st_ino)
+
+
+def _write_workspace_tree(root_descriptor: int) -> list[str]:
+    """Populate the leased workspace the way a real engine child would."""
+
+    top = os.open(
+        "top.bin",
+        os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_CLOEXEC,
+        0o600,
+        dir_fd=root_descriptor,
+    )
+    try:
+        os.write(top, b"top-scratch")
+    finally:
+        os.close(top)
+    os.mkdir("nested", mode=0o700, dir_fd=root_descriptor)
+    nested = os.open(
+        "nested",
+        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+        dir_fd=root_descriptor,
+    )
+    try:
+        member = os.open(
+            "member.bin",
+            os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_CLOEXEC,
+            0o600,
+            dir_fd=nested,
+        )
+        try:
+            os.write(member, b"nested-scratch")
+        finally:
+            os.close(member)
+        os.symlink("/etc/passwd", "escape-hatch", dir_fd=nested)
+    finally:
+        os.close(nested)
+    return sorted(os.listdir(root_descriptor))
+
+
+@native_engine_entrypoint
+def _report_workspace_lease(_request, context: NativeChildContext):
+    descriptor = context.workspace_descriptor()
+    metadata = os.fstat(descriptor)
+    return {
+        "hasLease": context.has_leased_workspace,
+        "isDirectory": stat.S_ISDIR(metadata.st_mode),
+        "mode": stat.S_IMODE(metadata.st_mode),
+        "owner": metadata.st_uid,
+        "entriesAtReceipt": sorted(os.listdir(descriptor)),
+        "inheritable": os.get_inheritable(descriptor),
+        "leasePath": context.workspace_path(),
+        # The path is exec surface only; it is usable because it lstats to the
+        # same object as the authoritative descriptor.
+        "verifiedLeasePath": (
+            context.workspace_path()
+            if _identity(os.stat(context.workspace_path(), follow_symlinks=False))
+            == _identity(metadata)
+            else "unverified"
+        ),
+        "subdirectoryPaths": [
+            context.workspace_subdirectory_path(name)
+            for name in ("packet", "tmp", "work")
+        ],
+        "entriesAfterWrite": _write_workspace_tree(descriptor),
+    }
+
+
+@native_engine_entrypoint
+def _report_absent_workspace_lease(_request, context: NativeChildContext):
+    try:
+        context.workspace_descriptor()
+    except AdapterError as exc:
+        return {"hasLease": context.has_leased_workspace, "code": exc.code}
+    raise AssertionError("an unleased child must not receive a workspace")
+
+
+@native_engine_entrypoint
+def _populate_flat_workspace(_request, context: NativeChildContext):
+    descriptor = context.workspace_descriptor()
+    handle = os.open(
+        "only.bin",
+        os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_CLOEXEC,
+        0o600,
+        dir_fd=descriptor,
+    )
+    os.close(handle)
+    return {"entries": sorted(os.listdir(descriptor))}
+
+
+@native_engine_entrypoint
+def _populate_workspace_then_hang(_request, context: NativeChildContext):
+    _write_workspace_tree(context.workspace_descriptor())
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    time.sleep(30.0)
+    raise AssertionError("the hanging workspace child must never return")
+
+
+@native_engine_entrypoint
+def _populate_workspace_then_fail(_request, context: NativeChildContext):
+    _write_workspace_tree(context.workspace_descriptor())
+    raise RuntimeError("engine failed after writing scratch")
+
+
+def _lease_container(tmp_path: Path) -> Path:
+    container = tmp_path / "lease-container"
+    container.mkdir(mode=0o700)
+    return container
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_leased_workspace_is_private_empty_and_removed_after_normal_return(tmp_path):
+    container = _lease_container(tmp_path)
+    result = run_native_engine_child(
+        _entrypoint("_report_workspace_lease"),
+        {},
+        deadline=_deadline(10.0),
+        workspace_parent_directory=str(container),
+    )
+
+    assert result["hasLease"] is True
+    assert result["isDirectory"] is True
+    assert result["mode"] == 0o700
+    assert result["owner"] == os.geteuid()
+    # The root is a container: packet/ for extraction, tmp/ and work/ for the
+    # exec'd engine item 3 supervises.
+    assert result["entriesAtReceipt"] == ["packet", "tmp", "work"]
+    assert result["inheritable"] is False
+    assert result["entriesAfterWrite"] == [
+        "nested",
+        "packet",
+        "tmp",
+        "top.bin",
+        "work",
+    ]
+    assert result["leasePath"] == result["verifiedLeasePath"]
+    assert result["subdirectoryPaths"] == [
+        result["leasePath"] + "/packet",
+        result["leasePath"] + "/tmp",
+        result["leasePath"] + "/work",
+    ]
+    # The child wrote a tree and a symlink; the parent removed all of it.
+    assert list(container.iterdir()) == []
+    assert Path("/etc/passwd").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX process groups")
+def test_child_without_a_lease_cannot_reach_any_workspace(tmp_path):
+    result = run_native_engine_child(
+        _entrypoint("_report_absent_workspace_lease"),
+        {},
+        deadline=_deadline(10.0),
+    )
+    assert result == {"hasLease": False, "code": "REFINE_INPUT_INVALID"}
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_leased_workspace_is_removed_after_a_failed_child(tmp_path):
+    container = _lease_container(tmp_path)
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_populate_workspace_then_fail"),
+            {},
+            deadline=_deadline(10.0),
+            workspace_parent_directory=str(container),
+        )
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert list(container.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_leased_workspace_is_removed_after_timeout_sigterm_and_sigkill(tmp_path):
+    container = _lease_container(tmp_path)
+    started = time.monotonic()
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_populate_workspace_then_hang"),
+            {},
+            deadline=_deadline(0.60),
+            workspace_parent_directory=str(container),
+        )
+
+    # The child ignores SIGTERM, so cleanup must escalate to SIGKILL; the child
+    # therefore never runs Python cleanup of its own scratch.
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT", str(raised.value)
+    assert time.monotonic() - started < 5.0
+    assert list(container.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_workspace_lease_cleanup_failure_is_reported_after_a_successful_child(
+    tmp_path,
+    monkeypatch,
+):
+    container = _lease_container(tmp_path)
+    real_provision = native_process.provision_native_workspace_lease
+    real_rmdir = os.rmdir
+    leases: list[native_process.NativeWorkspaceLease] = []
+    blocked = False
+
+    def capture_lease(*args, **kwargs):
+        lease = real_provision(*args, **kwargs)
+        leases.append(lease)
+        return lease
+
+    def refuse_root_rmdir(path, *args, **kwargs):
+        nonlocal blocked
+        # Refuse only the final root removal, relative to the lease container,
+        # so the entry purge underneath it still completes.
+        if (
+            leases
+            and kwargs.get("dir_fd") == leases[0].parent_descriptor
+            and type(path) is str
+            and path.startswith(native_process.NATIVE_WORKSPACE_QUARANTINE_PREFIX)
+        ):
+            blocked = True
+            raise OSError("synthetic workspace removal failure")
+        return real_rmdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(
+        native_process,
+        "provision_native_workspace_lease",
+        capture_lease,
+    )
+    monkeypatch.setattr(native_process.os, "rmdir", refuse_root_rmdir)
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_populate_flat_workspace"),
+            {},
+            deadline=_deadline(10.0),
+            workspace_parent_directory=str(container),
+        )
+    monkeypatch.undo()
+
+    assert blocked is True
+    assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+    assert "workspace" in str(raised.value)
+    stranded = list(container.iterdir())
+    assert len(stranded) == 1
+    # The purge itself succeeded; only the final root removal was refused, and
+    # the retained directory kept the provisioned name the error reports.
+    assert list(stranded[0].iterdir()) == []
+    assert stranded[0].name == leases[0].name
+    assert leases[0].name in str(raised.value)
+    stranded[0].rmdir()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_workspace_lease_rejects_an_unsafely_writable_container(tmp_path):
+    container = _lease_container(tmp_path)
+    container.chmod(0o777)
+    try:
+        with pytest.raises(AdapterError, match="unsafely writable") as raised:
+            run_native_engine_child(
+                _entrypoint("_report_workspace_lease"),
+                {},
+                deadline=_deadline(10.0),
+                workspace_parent_directory=str(container),
+            )
+    finally:
+        container.chmod(0o700)
+    assert raised.value.code == "REFINE_INPUT_INVALID"
+    assert list(container.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_provisioned_lease_is_private_noninheritable_and_descriptor_rooted(tmp_path):
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    try:
+        metadata = os.fstat(lease.descriptor)
+        named = os.stat(lease.path, follow_symlinks=False)
+        assert stat.S_ISDIR(metadata.st_mode)
+        assert stat.S_IMODE(metadata.st_mode) == 0o700
+        assert metadata.st_uid == os.geteuid()
+        assert (metadata.st_dev, metadata.st_ino) == lease.identity
+        assert (named.st_dev, named.st_ino) == lease.identity
+        assert os.get_inheritable(lease.descriptor) is False
+        assert os.get_inheritable(lease.parent_descriptor) is False
+        assert lease.name.startswith(native_process.NATIVE_WORKSPACE_NAME_PREFIX)
+        assert Path(lease.path).parent == container
+    finally:
+        assert (
+            native_process._release_workspace_lease(
+                lease,
+                leader_quiescent=True,
+            )
+            == ()
+        )
+    assert list(container.iterdir()) == []
+    with pytest.raises(OSError):
+        os.fstat(lease.descriptor)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_workspace_cleanup_refuses_to_unlink_a_swapped_identity(tmp_path, monkeypatch):
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    workspace = Path(lease.path)
+    victim = workspace / "member.bin"
+    victim.write_bytes(b"original scratch")
+    replacement_payload = b"same-uid replacement must survive refused cleanup"
+    real_rename = os.rename
+    swapped = False
+
+    def swap_before_quarantine(src, dst, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and src == "member.bin":
+            swapped = True
+            victim.unlink()
+            victim.write_bytes(replacement_payload)
+        return real_rename(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(native_process.os, "rename", swap_before_quarantine)
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
+    monkeypatch.undo()
+
+    assert swapped is True
+    assert any("identity changed before removal" in error for error in errors)
+    assert any("retained after an incomplete purge" in error for error in errors)
+    survivors = list(workspace.iterdir())
+    assert len(survivors) == 1
+    assert survivors[0].read_bytes() == replacement_payload
+    survivors[0].unlink()
+    workspace.rmdir()
+
+
+@native_engine_entrypoint
+def _populate_every_workspace_subdirectory(_request, context: NativeChildContext):
+    """Write through the descriptor into all three parent-created children."""
+
+    descriptor = context.workspace_descriptor()
+    written: dict[str, str] = {}
+    for name in ("packet", "tmp", "work"):
+        child = os.open(
+            name,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            dir_fd=descriptor,
+        )
+        try:
+            os.mkdir("deeper", mode=0o700, dir_fd=child)
+            handle = os.open(
+                "scratch.bin",
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_CLOEXEC,
+                0o600,
+                dir_fd=child,
+            )
+            os.close(handle)
+            # The transported path names the same object as the descriptor.
+            named = os.stat(
+                context.workspace_subdirectory_path(name),
+                follow_symlinks=False,
+            )
+            opened = os.fstat(child)
+            written[name] = (
+                "matched"
+                if (named.st_dev, named.st_ino) == (opened.st_dev, opened.st_ino)
+                else "mismatched"
+            )
+        finally:
+            os.close(child)
+    return written
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_one_purge_reclaims_every_leased_subdirectory(tmp_path):
+    container = _lease_container(tmp_path)
+    result = run_native_engine_child(
+        _entrypoint("_populate_every_workspace_subdirectory"),
+        {},
+        deadline=_deadline(10.0),
+        workspace_parent_directory=str(container),
+    )
+
+    assert result == {"packet": "matched", "tmp": "matched", "work": "matched"}
+    assert list(container.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_child_rejects_a_transported_path_that_is_not_its_leased_descriptor(
+    tmp_path,
+    monkeypatch,
+):
+    """The descriptor is authoritative; the path is accepted only if it agrees.
+
+    The decoy is a perfectly valid private 0700 directory carrying the exact
+    subdirectory set, so nothing but the descriptor/path identity check can
+    reject it.
+    """
+
+    container = _lease_container(tmp_path)
+    decoy = tmp_path / "decoy"
+    decoy.mkdir(mode=0o700)
+    for name in native_process.NATIVE_WORKSPACE_SUBDIRECTORIES:
+        (decoy / name).mkdir(mode=0o700)
+    real_provision = native_process.provision_native_workspace_lease
+
+    def substitute_path(*args, **kwargs):
+        lease = real_provision(*args, **kwargs)
+        return native_process.NativeWorkspaceLease(
+            lease.parent_descriptor,
+            lease.name,
+            lease.descriptor,
+            lease.identity,
+            str(decoy),
+        )
+
+    monkeypatch.setattr(
+        native_process,
+        "provision_native_workspace_lease",
+        substitute_path,
+    )
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_report_workspace_lease"),
+            {},
+            deadline=_deadline(10.0),
+            workspace_parent_directory=str(container),
+        )
+    monkeypatch.undo()
+
+    assert raised.value.code == "REFINE_INPUT_INVALID"
+    assert "does not resolve to its lease" in str(raised.value)
+    assert list(container.iterdir()) == []
+    # The decoy was never touched; only the leased tree is ever removed.
+    assert sorted(entry.name for entry in decoy.iterdir()) == ["packet", "tmp", "work"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_ready_envelope_must_echo_the_exact_transported_workspace_path(
+    tmp_path,
+    monkeypatch,
+):
+    container = _lease_container(tmp_path)
+    real_receive = native_process._receive_envelope
+    forged_ready = False
+
+    def forge_path(connection, process, deadline):
+        nonlocal forged_ready
+        envelope = real_receive(connection, process, deadline)
+        if not forged_ready and envelope.get("kind") == "ready":
+            forged_ready = True
+            return {**envelope, "workspacePath": "/tmp/patina-refine-forged"}
+        return envelope
+
+    monkeypatch.setattr(native_process, "_receive_envelope", forge_path)
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_report_workspace_lease"),
+            {},
+            deadline=_deadline(10.0),
+            workspace_parent_directory=str(container),
+        )
+    monkeypatch.undo()
+
+    assert forged_ready is True
+    assert "dedicated POSIX session" in str(raised.value)
+    assert list(container.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_workspace_cleanup_refuses_a_swap_that_recycles_the_inode_number(
+    tmp_path,
+    monkeypatch,
+):
+    """The swap must be refused even when the replacement reuses the number.
+
+    On ext4 an unlink+recreate hands the freed inode number straight back, so
+    ``(st_dev, st_ino)`` equality is not identity.  This test records the
+    replacement's inode number and asserts cleanup refused regardless of whether
+    the filesystem recycled it, so the guard cannot be satisfied by a platform
+    that merely happens not to reuse numbers.
+    """
+
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    workspace = Path(lease.path)
+    victim = workspace / "member.bin"
+    victim.write_bytes(b"original scratch")
+    original_inode = victim.stat().st_ino
+    replacement_inode: int | None = None
+    real_rename = os.rename
+    swapped = False
+
+    def swap_before_quarantine(src, dst, *args, **kwargs):
+        nonlocal swapped, replacement_inode
+        if not swapped and src == "member.bin":
+            swapped = True
+            victim.unlink()
+            victim.write_bytes(b"attacker replacement")
+            replacement_inode = victim.stat().st_ino
+        return real_rename(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(native_process.os, "rename", swap_before_quarantine)
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
+    monkeypatch.undo()
+
+    assert swapped is True
+    assert replacement_inode is not None
+    # Recorded, not asserted: ext4 recycles here, APFS does not.  Either way the
+    # swap must be refused.
+    recycled = replacement_inode == original_inode
+    assert any("identity changed before removal" in error for error in errors), (
+        f"cleanup accepted a swapped entry (inode recycled: {recycled})"
+    )
+    survivors = list(workspace.iterdir())
+    assert len(survivors) == 1
+    assert survivors[0].read_bytes() == b"attacker replacement"
+    survivors[0].unlink()
+    workspace.rmdir()
+
+
+@pytest.mark.skipif(
+    not native_process.NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL,
+    reason="universal side-effect-free entry pinning requires O_PATH",
+)
+def test_every_workspace_entry_type_is_pinnable_on_the_qualified_platform(tmp_path):
+    """Linux must never fall back to an unpinned identity for any entry type."""
+
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    workspace = Path(lease.path)
+    (workspace / "regular.bin").write_bytes(b"x")
+    (workspace / "unreadable.bin").touch(mode=0o000)
+    (workspace / "nested").mkdir(mode=0o700)
+    os.symlink("/etc/passwd", workspace / "dangling-or-not")
+    os.mkfifo(workspace / "pipe", 0o600)
+    listener = socket.socket(socket.AF_UNIX)
+    # AF_UNIX paths cap at ~107 bytes, well below a pytest tmp_path, so bind
+    # short and move the bound node into the workspace.
+    bound = f"/tmp/patina-refine-pin-{os.getpid()}"
+    listener.bind(bound)
+    os.rename(bound, "endpoint", dst_dir_fd=lease.descriptor)
+    try:
+        for name in sorted(os.listdir(lease.descriptor)):
+            pin, failure = native_process._pin_leased_entry(lease.descriptor, name)
+            assert pin is not None, f"{name} could not be pinned: {failure}"
+            os.close(pin)
+    finally:
+        listener.close()
+    assert native_process._release_workspace_lease(lease, leader_quiescent=True) == ()
+    assert list(container.iterdir()) == []
+    assert Path("/etc/passwd").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_workspace_cleanup_reports_a_live_child_and_bounded_depth(tmp_path):
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    deep = Path(lease.path)
+    for level in range(native_process.NATIVE_WORKSPACE_MAX_DEPTH + 2):
+        deep = deep / f"level{level}"
+        deep.mkdir(mode=0o700)
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=False)
+
+    assert any("without a proven-dead native child" in error for error in errors)
+    assert any("bounded cleanup depth" in error for error in errors)
+    # The retained root has to be findable from the error alone, not by a
+    # prefix scan of the container.
+    assert any(lease.name in error for error in errors), errors
+    # Fail-closed: the refused depth stops removal instead of recursing forever.
+    assert Path(lease.path).is_dir()
+    assert list(Path(lease.path).iterdir())
+    shutil.rmtree(lease.path)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_one_full_directory_does_not_starve_its_siblings(tmp_path):
+    """The per-directory cap and the whole-tree budget are separate bounds.
+
+    Sharing one number meant a single directory at the per-directory cap
+    exhausted the budget for the whole tree, so every sibling cleanup had not
+    reached yet was abandoned and stranded permanently.
+    """
+
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(30.0),
+    )
+    workspace = Path(lease.path)
+    full = workspace / "full"
+    full.mkdir(mode=0o700)
+    for index in range(native_process.NATIVE_WORKSPACE_MAX_DIRECTORY_ENTRIES):
+        (full / f"entry{index:05d}.bin").write_bytes(b"")
+    sibling = workspace / "sibling"
+    sibling.mkdir(mode=0o700)
+    (sibling / "kept.bin").write_bytes(b"")
+
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
+
+    assert errors == ()
+    assert list(container.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_workspace_cleanup_names_an_orphan_created_after_its_snapshot(
+    tmp_path,
+    monkeypatch,
+):
+    """A post-snapshot entry must not produce an unfindable random-named orphan.
+
+    ``_purge_leased_directory`` works from one ``listdir`` snapshot, so an entry
+    created after it is taken leaves no purge error at all.  The root removal
+    used to rename first and discover ENOTEMPTY second, stranding a live
+    directory under an unguessable quarantine name that appeared in no returned
+    error.
+    """
+
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    workspace = Path(lease.path)
+    real_listdir = os.listdir
+    created = False
+
+    def create_after_snapshot(target, *args, **kwargs):
+        nonlocal created
+        names = real_listdir(target, *args, **kwargs)
+        if not created and target == lease.descriptor:
+            created = True
+            (workspace / "late.bin").write_bytes(b"late")
+        return names
+
+    monkeypatch.setattr(native_process.os, "listdir", create_after_snapshot)
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
+    monkeypatch.undo()
+
+    assert created is True
+    residue = list(container.iterdir())
+    assert [entry.name for entry in residue] == [lease.name]
+    assert [entry.name for entry in residue[0].iterdir()] == ["late.bin"]
+    assert any(lease.name in error for error in errors), errors
+    assert any("late.bin" in error for error in errors), errors
+    shutil.rmtree(workspace)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_workspace_cleanup_reports_an_exhausted_entry_budget(tmp_path, monkeypatch):
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    workspace = Path(lease.path)
+    for branch in ("a", "b"):
+        (workspace / branch).mkdir(mode=0o700)
+        for index in range(2):
+            (workspace / branch / f"entry{index}.bin").write_bytes(b"x")
+    monkeypatch.setattr(native_process, "NATIVE_WORKSPACE_MAX_TOTAL_ENTRIES", 2)
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
+    monkeypatch.undo()
+
+    assert any("exhausted its entry budget" in error for error in errors)
+    assert any("retained after an incomplete purge" in error for error in errors)
+    assert workspace.is_dir()
+    shutil.rmtree(workspace)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_workspace_cleanup_refuses_an_oversized_directory(tmp_path, monkeypatch):
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    workspace = Path(lease.path)
+    for index in range(3):
+        (workspace / f"entry{index}.bin").write_bytes(b"x")
+    monkeypatch.setattr(native_process, "NATIVE_WORKSPACE_MAX_DIRECTORY_ENTRIES", 1)
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
+    monkeypatch.undo()
+
+    assert any("bounded entry count" in error for error in errors)
+    # Nothing is removed once the directory is refused as unbounded.
+    assert len(list(workspace.iterdir())) == 3 + len(
+        native_process.NATIVE_WORKSPACE_SUBDIRECTORIES
+    )
+    shutil.rmtree(workspace)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_workspace_cleanup_refuses_a_changed_root_identity(tmp_path, monkeypatch):
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    real_fstat = os.fstat
+
+    def foreign_root(descriptor):
+        metadata = real_fstat(descriptor)
+        if descriptor == lease.descriptor:
+            return os.stat_result(
+                (
+                    metadata.st_mode,
+                    metadata.st_ino + 1,
+                    metadata.st_dev,
+                    metadata.st_nlink,
+                    metadata.st_uid,
+                    metadata.st_gid,
+                    metadata.st_size,
+                    0,
+                    0,
+                    0,
+                )
+            )
+        return metadata
+
+    monkeypatch.setattr(native_process.os, "fstat", foreign_root)
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
+    monkeypatch.undo()
+
+    assert errors == ("leased native workspace identity changed before cleanup",)
+    # Nothing was removed and both descriptors were still released.
+    assert Path(lease.path).is_dir()
+    assert sorted(entry.name for entry in Path(lease.path).iterdir()) == sorted(
+        native_process.NATIVE_WORKSPACE_SUBDIRECTORIES
+    )
+    shutil.rmtree(lease.path)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_workspace_lease_rejects_a_missing_or_public_container(tmp_path):
+    missing = tmp_path / "absent"
+    with pytest.raises(AdapterError) as raised:
+        native_process.provision_native_workspace_lease(
+            str(missing),
+            deadline=_deadline(10.0),
+        )
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    # A relative container would make the transported lease path mean something
+    # different inside the child's working directory.
+    for value in ("", None, 7, "relative/container"):
+        with pytest.raises(AdapterError) as invalid:
+            native_process.provision_native_workspace_lease(
+                value,
+                deadline=_deadline(10.0),
+            )
+        assert invalid.value.code == "REFINE_INPUT_INVALID"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_child_workspace_receipt_requires_a_matching_declaration_and_transport():
+    transport_error = native_process._ChildTransportError
+    context = NativeChildContext(time.monotonic() + 10.0)
+
+    with pytest.raises(transport_error) as missing:
+        native_process._receive_workspace_lease(
+            None,
+            leased=True,
+            path="/tmp/patina-refine-absent",
+            context=context,
+        )
+    assert "transport is unavailable" in str(missing.value)
+
+    with pytest.raises(transport_error) as unexpected:
+        native_process._receive_workspace_lease(
+            object(),
+            leased=False,
+            path=None,
+            context=context,
+        )
+    assert "unexpected workspace lease transport" in str(unexpected.value)
+
+    with pytest.raises(transport_error) as orphan_path:
+        native_process._receive_workspace_lease(
+            None,
+            leased=False,
+            path="/tmp/patina-refine-absent",
+            context=context,
+        )
+    assert "workspace path without a lease" in str(orphan_path.value)
+
+    for forged in (1, "true", None):
+        with pytest.raises(transport_error):
+            native_process._receive_workspace_lease(
+                object(),
+                leased=forged,
+                path="/tmp/patina-refine-absent",
+                context=context,
+            )
+
+    # A leased child must be handed a bounded absolute path, never a relative
+    # one and never a /proc/self/fd alias standing in for the real directory.
+    for rejected in (None, "", 7, "relative/path", "/" + "a" * 8192):
+        with pytest.raises(transport_error) as bad_path:
+            native_process._receive_workspace_lease(
+                object(),
+                leased=True,
+                path=rejected,
+                context=context,
+            )
+        assert "bounded absolute path" in str(bad_path.value)
+
+    assert (
+        native_process._receive_workspace_lease(
+            None,
+            leased=False,
+            path=None,
+            context=context,
+        )
+        is None
+    )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_ready_envelope_must_match_the_parent_workspace_declaration(
+    tmp_path,
+    monkeypatch,
+):
+    container = _lease_container(tmp_path)
+    real_receive = native_process._receive_envelope
+    forged_ready = False
+
+    def forge_ready(connection, process, deadline):
+        nonlocal forged_ready
+        envelope = real_receive(connection, process, deadline)
+        if not forged_ready and envelope.get("kind") == "ready":
+            forged_ready = True
+            return {**envelope, "workspaceLeased": False}
+        return envelope
+
+    monkeypatch.setattr(native_process, "_receive_envelope", forge_ready)
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_report_workspace_lease"),
+            {},
+            deadline=_deadline(10.0),
+            workspace_parent_directory=str(container),
+        )
+    monkeypatch.undo()
+
+    assert forged_ready is True
+    assert raised.value.code in {
+        "REFINE_ENGINE_FAILED",
+        "REFINE_ENGINE_CLEANUP_FAILED",
+    }
+    assert "dedicated POSIX session" in str(raised.value)
+    assert list(container.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
+def test_workspace_cleanup_refuses_a_cross_device_entry(tmp_path, monkeypatch):
+    container = _lease_container(tmp_path)
+    lease = native_process.provision_native_workspace_lease(
+        str(container),
+        deadline=_deadline(10.0),
+    )
+    workspace = Path(lease.path)
+    (workspace / "foreign.bin").write_bytes(b"pretend this is another mount")
+    # The device now comes from the pinned descriptor, not from a name lookup,
+    # so the injection has to target that descriptor's inode.
+    foreign_inode = (workspace / "foreign.bin").stat().st_ino
+    real_fstat = os.fstat
+
+    def foreign_device(descriptor):
+        metadata = real_fstat(descriptor)
+        if metadata.st_ino == foreign_inode:
+            return os.stat_result(
+                (
+                    metadata.st_mode,
+                    metadata.st_ino,
+                    metadata.st_dev + 1,
+                    metadata.st_nlink,
+                    metadata.st_uid,
+                    metadata.st_gid,
+                    metadata.st_size,
+                    0,
+                    0,
+                    0,
+                )
+            )
+        return metadata
+
+    monkeypatch.setattr(native_process.os, "fstat", foreign_device)
+    errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
+    monkeypatch.undo()
+
+    assert any("crosses a filesystem boundary" in error for error in errors)
+    assert (workspace / "foreign.bin").is_file()
+    shutil.rmtree(workspace)

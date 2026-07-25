@@ -3,12 +3,15 @@
 This module owns only the child-side extraction boundary.  It never opens a
 caller display path or ``/proc/self/fd`` alias: source archive reads are
 positional reads from descriptors already pinned by ``refine_native_process``.
-Destinations are created descriptor-relatively beneath one new private 0700
-workspace.  Execution, output handoff, publication, fallback, and stage
-registration remain separate disabled gates.  This child-owned scratch model is
-also not timeout-safe: SIGKILL can strand it before Python cleanup runs.
-Production composition therefore still requires a parent-provisioned,
-descriptor-rooted workspace with bounded parent-owned cleanup.
+Destinations are created descriptor-relatively beneath the ``packet/`` child of
+the parent-provisioned 0700 workspace leased through
+:meth:`NativeChildContext.workspace_descriptor`.  The extractor borrows that
+directory; it never creates, names, or removes the workspace root or any of its
+siblings, so a SIGKILLed child can no longer strand scratch — the parent
+performs bounded descriptor-relative cleanup after every child outcome.  The
+child-side ledger cleanup retained here is a fast-path courtesy, not the
+authority.  Execution, output handoff, publication, fallback, and stage
+registration remain separate disabled gates.
 """
 
 from __future__ import annotations
@@ -17,17 +20,17 @@ import hashlib
 import os
 import re
 import stat
-import tempfile
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from .refine_adapter import AdapterError
 from .refine_native_process import (
     NATIVE_CHILD_MAX_PINNED_FILE_BYTES,
     NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES,
+    NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
     NativeChildContext,
 )
 
@@ -59,9 +62,14 @@ def _fail(message: str, code: str = _PACKET_INVALID) -> AdapterError:
 
 @dataclass(frozen=True)
 class ExtractedColmapPacket:
-    """One child-owned extraction, valid only while its context is open."""
+    """One extraction into the leased workspace, valid while its context is open.
 
-    workspace: Path
+    ``workspace_descriptor`` is a borrowed directory descriptor, not a path:
+    consumers must stay descriptor-relative.  The parent owns the underlying
+    directory and removes it after the child exits by any route.
+    """
+
+    workspace_descriptor: int
     manifest: ColmapPacketManifest
     engine_request: ColmapEngineRequest
     extracted_relative_paths: tuple[str, ...]
@@ -69,7 +77,6 @@ class ExtractedColmapPacket:
 
 @dataclass
 class _ExtractionLedger:
-    workspace: Path
     root_descriptor: int
     root_identity: tuple[int, int]
     files: list[str]
@@ -125,6 +132,8 @@ def _require_extraction_platform_capabilities() -> None:
             )
             and hasattr(os, "supports_follow_symlinks")
             and os.stat in os.supports_follow_symlinks
+            and hasattr(os, "supports_fd")
+            and os.listdir in os.supports_fd
         )
     except BaseException:  # noqa: BLE001 - platform inspection must fail closed
         supported = False
@@ -313,64 +322,71 @@ def _raise_cleanup_failures(
     raise error from (cause if cause is not None else failures[0][1])
 
 
-def _new_extraction_workspace() -> _ExtractionLedger:
-    workspace: Path | None = None
+def _lease_extraction_workspace(context: NativeChildContext) -> _ExtractionLedger:
+    """Borrow the parent-provisioned ``packet/`` directory; never own the root.
+
+    Extraction takes the ``packet/`` child of the lease rather than the lease
+    root itself.  The root is shared: item 3 points an exec'd COLMAP's
+    ``TMPDIR`` and ``cwd`` at its siblings ``tmp/`` and ``work/``, so requiring
+    an empty *root* here would break the moment those orderings shifted.  The
+    empty-at-borrow precondition therefore belongs to ``packet/``, which nothing
+    else writes.  Removal of the whole tree still stays exclusively with the
+    parent.
+    """
+
+    leased_descriptor = context.workspace_descriptor()
     root_descriptor: int | None = None
     try:
-        temporary_parent = Path(tempfile.gettempdir()).resolve(strict=True)
-        workspace = Path(
-            tempfile.mkdtemp(
-                prefix="patina-refine-colmap-packet-",
-                dir=temporary_parent,
-            )
-        )
-        metadata = os.lstat(workspace)
+        metadata = os.fstat(leased_descriptor)
         if (
             not stat.S_ISDIR(metadata.st_mode)
-            or stat.S_ISLNK(metadata.st_mode)
             or metadata.st_uid != os.geteuid()
             or stat.S_IMODE(metadata.st_mode) != 0o700
-            or workspace.resolve(strict=True) != workspace
         ):
-            raise OSError("new extraction workspace is not private")
+            raise _fail(
+                "COLMAP packet workspace lease is not a private owned directory",
+                _ENGINE_FAILED,
+            )
         root_descriptor = os.open(
-            workspace,
+            NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
             os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            dir_fd=leased_descriptor,
         )
+        os.set_inheritable(root_descriptor, False)
         root_metadata = os.fstat(root_descriptor)
         if (
-            (root_metadata.st_dev, root_metadata.st_ino)
-            != (metadata.st_dev, metadata.st_ino)
+            not stat.S_ISDIR(root_metadata.st_mode)
             or root_metadata.st_uid != os.geteuid()
             or stat.S_IMODE(root_metadata.st_mode) != 0o700
+            or (root_metadata.st_dev, root_metadata.st_ino)
+            == (metadata.st_dev, metadata.st_ino)
         ):
-            raise OSError("extraction workspace descriptor identity changed")
+            raise _fail(
+                "COLMAP packet workspace lease is not a private owned directory",
+                _ENGINE_FAILED,
+            )
+        if os.listdir(root_descriptor):
+            raise _fail(
+                "COLMAP packet workspace lease is not empty",
+                _ENGINE_FAILED,
+            )
     except BaseException as exc:
-        cleanup_failures: list[tuple[str, OSError]] = []
         if root_descriptor is not None:
             close_failure = _attempt_descriptor_close(
                 root_descriptor,
-                "failed COLMAP packet workspace descriptor",
+                "failed COLMAP packet workspace borrow",
             )
             if close_failure is not None:
-                cleanup_failures.append(close_failure)
-        if workspace is not None:
-            try:
-                os.rmdir(workspace)
-            except OSError as cleanup_exc:
-                cleanup_failures.append(
-                    ("cannot remove failed COLMAP packet workspace", cleanup_exc)
-                )
-        if cleanup_failures:
-            _raise_cleanup_failures(cleanup_failures, cause=exc)
+                _raise_cleanup_failures([close_failure], cause=exc)
+        if isinstance(exc, AdapterError):
+            raise
         raise _fail(
-            "cannot create a private child-owned COLMAP packet workspace",
+            "cannot borrow the parent-provisioned COLMAP packet workspace",
             _ENGINE_FAILED,
         ) from exc
     return _ExtractionLedger(
-        workspace,
         root_descriptor,
-        (metadata.st_dev, metadata.st_ino),
+        (root_metadata.st_dev, root_metadata.st_ino),
         [],
         [],
     )
@@ -934,25 +950,18 @@ def _cleanup_extraction_workspace(ledger: _ExtractionLedger) -> tuple[str, ...]:
                     errors.append(close_failure[0])
     try:
         live_metadata = os.fstat(ledger.root_descriptor)
-        path_metadata = os.lstat(ledger.workspace)
-        if (live_metadata.st_dev, live_metadata.st_ino) != ledger.root_identity or (
-            path_metadata.st_dev,
-            path_metadata.st_ino,
-        ) != ledger.root_identity:
+        if (live_metadata.st_dev, live_metadata.st_ino) != ledger.root_identity:
             errors.append("COLMAP packet workspace identity changed before cleanup")
     except OSError:
         errors.append("cannot verify COLMAP packet workspace before cleanup")
+    # The leased root itself is never removed here: the parent owns it and
+    # removes it after this child exits by any route, including SIGKILL.
     root_close_failure = _attempt_descriptor_close(
         ledger.root_descriptor,
         "COLMAP packet workspace descriptor",
     )
     if root_close_failure is not None:
         errors.append(root_close_failure[0])
-    if not errors:
-        try:
-            os.rmdir(ledger.workspace)
-        except OSError:
-            errors.append("cannot remove COLMAP packet workspace")
     return tuple(errors)
 
 
@@ -1063,7 +1072,7 @@ def extract_colmap_packet(
     _require_extraction_platform_capabilities()
     _require_native_child_session(context)
     manifest = load_colmap_packet_manifest(request, context)
-    ledger = _new_extraction_workspace()
+    ledger = _lease_extraction_workspace(context)
     extracted_paths: set[str] = set()
     request_payload: bytes | None = None
     try:
@@ -1088,7 +1097,7 @@ def extract_colmap_packet(
             expected_request_payload=request_payload,
         )
         yield ExtractedColmapPacket(
-            ledger.workspace,
+            ledger.root_descriptor,
             manifest,
             engine_request,
             tuple(sorted(extracted_paths)),

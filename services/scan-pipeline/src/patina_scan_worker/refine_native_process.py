@@ -18,6 +18,21 @@ group; successful cleanup relies on this narrower contract. Any durable
 artifact publication remains parent-only and must occur only after this
 function returns successfully. The Item 4A qualifier remains in-process until
 the production handler contract is built and separately qualified.
+
+Scratch is parent-owned. When a caller asks for one, the parent provisions a
+private 0700 workspace, pins it and its container by descriptor, leases a
+duplicate descriptor down to the child over SCM_RIGHTS, and performs bounded
+descriptor-relative cleanup after every child outcome. The child is never given
+the path and never removes the root, so a SIGKILLed child cannot strand it.
+Containment rests on parent ownership, not on path secrecy: a compromised child
+could still resolve its own descriptor through Linux procfs, and a hostile
+same-UID actor that already knows the container can still race the cleanup
+window. Cleanup therefore pins each entry by descriptor before touching it —
+which is what makes an inode-number comparison sound on a filesystem that
+recycles inode numbers — quarantine-renames it to an unguessable name inside
+the pinned directory, and refuses to remove anything whose identity changed.
+That bounds the race rather than eliminating it: the final removal is still
+name-based. See ``_purge_leased_entry`` for exactly what is and is not claimed.
 """
 
 from __future__ import annotations
@@ -29,6 +44,7 @@ import math
 import multiprocessing
 import os
 import re
+import secrets
 import signal
 import stat
 import sys
@@ -51,6 +67,50 @@ NATIVE_CHILD_MAX_PINNED_FILE_BYTES = 128 * 1024 * 1024
 NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES = 4 * 1024 * 1024 * 1024
 NATIVE_CHILD_TERM_GRACE_S = 0.10
 NATIVE_CHILD_KILL_REAP_S = 1.0
+NATIVE_WORKSPACE_NAME_PREFIX = "patina-refine-native-workspace-"
+NATIVE_WORKSPACE_QUARANTINE_PREFIX = "patina-refine-native-purge-"
+# The lease root is a container, never a working directory.  Packet extraction
+# requires an empty directory at borrow, and an exec'd COLMAP given TMPDIR/cwd
+# would violate that precondition the moment ordering shifted, so each consumer
+# gets its own child of the root.  One purge still reclaims everything, at
+# depth 2.
+NATIVE_WORKSPACE_PACKET_SUBDIRECTORY = "packet"
+NATIVE_WORKSPACE_TEMP_SUBDIRECTORY = "tmp"
+NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY = "work"
+NATIVE_WORKSPACE_SUBDIRECTORIES = (
+    NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
+    NATIVE_WORKSPACE_TEMP_SUBDIRECTORY,
+    NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+)
+NATIVE_WORKSPACE_MAX_PATH_BYTES = 4096
+# Contract for the COLMAP command supervisor (item 3), which is NOT satisfied
+# by this module alone:
+#   * cwd  = context.workspace_subdirectory_path("work")
+#   * TMPDIR = context.workspace_subdirectory_path("tmp")
+#     Both are absolute, verified against the leased descriptor at receipt, and
+#     free of a /proc/self/fd alias, so `resolve(strict=True) == path` holds and
+#     an argv allowlist that rejects relative paths is satisfiable.
+#   * The supervisor receives a directory it did NOT create.  Its private
+#     workspace validation must accept a pre-existing owned 0700 directory and
+#     must not assume ownership of removal: the parent removes the whole lease
+#     tree after every child outcome, including SIGKILL.  A child-side rmdir of
+#     work/ or tmp/ would fight the parent's purge, not help it.
+# Two distinct bounds, not one.  Sharing a single number made a directory at
+# the per-directory cap consume the entire whole-tree budget, so cleanup
+# abandoned every sibling it had not reached yet and stranded them for good.
+NATIVE_WORKSPACE_MAX_DIRECTORY_ENTRIES = 4096
+NATIVE_WORKSPACE_MAX_TOTAL_ENTRIES = 65536
+# COLMAP runs under ``work/`` — one level down from the lease root — so the
+# bound has to leave a working tree real headroom below that.
+NATIVE_WORKSPACE_MAX_DEPTH = 16
+NATIVE_WORKSPACE_NAME_ATTEMPTS = 8
+# ``O_PATH`` references an entry of any type — symlink, unix socket, mode-0
+# file — without reading it, following it, or blocking.  Linux has it and the
+# qualified production host is Linux; macOS does not, so a few entry types
+# there fall back to an unpinned name stat whose identity is only as strong as
+# the filesystem's inode-number reuse policy.  This flag exists so that
+# degradation is inspectable instead of implied.
+NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL = hasattr(os, "O_PATH")
 
 _PROTOCOL_VERSION = 1
 _ENTRYPOINT_PATTERN = re.compile(r"^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*$")
@@ -96,6 +156,21 @@ class NativeChildContext:
         repr=False,
         compare=False,
     )
+    _workspace_descriptor: int | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
+    _workspace_path: str | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
+    _workspace_subdirectory_paths: Mapping[str, str] = field(
+        default_factory=lambda: MappingProxyType({}),
+        repr=False,
+        compare=False,
+    )
     _boundary_seal: object | None = field(
         default=None,
         init=False,
@@ -137,6 +212,77 @@ class NativeChildContext:
         except KeyError as exc:
             raise AdapterError(
                 "native child pinned file token is unavailable",
+                _INVALID_INPUT_CODE,
+            ) from exc
+
+    @property
+    def has_leased_workspace(self) -> bool:
+        """Report whether the parent leased a writable workspace to this child."""
+
+        return type(self._workspace_descriptor) is int
+
+    def workspace_descriptor(self) -> int:
+        """Borrow the parent-owned workspace root for descriptor-relative writes.
+
+        This is the reverse of :meth:`pinned_file_descriptor`: pinned files are
+        read-only inputs the parent hands down, while the workspace is the one
+        writable directory the child may populate, and its contents travel back
+        to the parent.  The child is not given a path, does not create the
+        directory, and must not remove it; the parent provisions it before
+        ``spawn`` and performs bounded cleanup after every child outcome,
+        including SIGKILL.
+
+        Known and deliberately unaddressed here (items 2/5 inherit it): this
+        accessor does not itself re-authenticate the boundary, matching
+        ``pinned_file_descriptor``'s existing posture.  Callers that must not
+        touch scratch outside a verified child check
+        ``is_verified_native_boundary`` first, as the extractor does.
+        """
+
+        descriptor = self._workspace_descriptor
+        if type(descriptor) is not int:
+            raise AdapterError(
+                "native child workspace lease is unavailable",
+                _INVALID_INPUT_CODE,
+            )
+        return descriptor
+
+    def workspace_path(self) -> str:
+        """Return the leased root's absolute path for exec surfaces only.
+
+        A path exists here because an exec'd binary cannot be handed a
+        descriptor: ``cwd=`` and ``getenv("TMPDIR")`` are path-typed by libc
+        contract, and this module deliberately marks its descriptors
+        non-inheritable, so nothing survives the exec.  The parent transports
+        this string explicitly rather than letting anyone derive it from
+        ``/proc/self/fd/N``: explicit transport is auditable, does not depend on
+        procfs under ``ProtectSystem=strict``, and unlike a procfs alias it
+        survives a consumer's ``resolve(strict=True) == path`` check.  The
+        descriptor stays authoritative for every I/O and every cleanup; the
+        child verified this string against it on receipt.
+        """
+
+        path = self._workspace_path
+        if type(path) is not str:
+            raise AdapterError(
+                "native child workspace lease path is unavailable",
+                _INVALID_INPUT_CODE,
+            )
+        return path
+
+    def workspace_subdirectory_path(self, name: str) -> str:
+        """Return one verified absolute child of the leased root."""
+
+        if type(name) is not str:
+            raise AdapterError(
+                "native child workspace subdirectory name must be a string",
+                _INVALID_INPUT_CODE,
+            )
+        try:
+            return self._workspace_subdirectory_paths[name]
+        except KeyError as exc:
+            raise AdapterError(
+                "native child workspace subdirectory is unavailable",
                 _INVALID_INPUT_CODE,
             ) from exc
 
@@ -190,6 +336,31 @@ class NativePinnedFile:
     descriptor: int
     sha256: str
     size_bytes: int
+
+
+@dataclass(frozen=True)
+class NativeWorkspaceLease:
+    """One parent-provisioned, descriptor-rooted 0700 workspace for a child.
+
+    The parent creates the directory before any child exists, pins both the
+    containing directory and the workspace itself by descriptor, and never
+    re-resolves either by path for any I/O or any cleanup.  The child receives a
+    duplicate of ``descriptor`` over SCM_RIGHTS, so it cannot outlive the
+    workspace: cleanup is the parent's obligation on every outcome, including a
+    SIGKILLed child that never ran Python cleanup at all.
+
+    ``path`` is also transported, as an explicit protocol field, because an
+    exec'd engine binary cannot receive a descriptor — ``cwd=`` and ``TMPDIR``
+    are path-typed by libc contract.  Path secrecy was never a control here (a
+    compromised child can read its own ``/proc/self/fd``); parent ownership is.
+    The child verifies the string against its leased descriptor before use.
+    """
+
+    parent_descriptor: int
+    name: str
+    descriptor: int
+    identity: tuple[int, int]
+    path: str
 
 
 @dataclass(frozen=True)
@@ -1144,6 +1315,9 @@ def _child_entry(
     connection: Connection,
     pinned_connection: Connection | None,
     pinned_ledger: tuple[tuple[str, str, int], ...],
+    workspace_connection: Connection | None,
+    workspace_leased: bool,
+    workspace_path: str | None,
     entrypoint: str,
     request_payload: bytes,
     expires_at_monotonic_s: float,
@@ -1152,11 +1326,16 @@ def _child_entry(
 
     received_files: Mapping[str, int] = MappingProxyType({})
     received_snapshots: Mapping[str, tuple[int, ...]] = MappingProxyType({})
+    workspace_descriptor: int | None = None
     terminal: Mapping[str, Any] | None = None
     try:
         if os.name != "posix" or not hasattr(os, "setsid"):
             raise _ChildTransportError(
                 "refine native child requires POSIX session isolation"
+            )
+        if workspace_leased is not True and workspace_leased is not False:
+            raise _ChildTransportError(
+                "native child workspace lease declaration must be an exact boolean"
             )
         os.setsid()
         pid = os.getpid()
@@ -1169,6 +1348,8 @@ def _child_entry(
                 "processGroupId": os.getpgrp(),
                 "sessionId": os.getsid(0),
                 "pinnedFileCount": len(pinned_ledger),
+                "workspaceLeased": workspace_leased,
+                "workspacePath": workspace_path,
             },
         )
         context = NativeChildContext(expires_at_monotonic_s)
@@ -1184,10 +1365,27 @@ def _child_entry(
             validated_ledger,
             context=context,
         )
+        workspace_lease = _receive_workspace_lease(
+            workspace_connection,
+            leased=workspace_leased,
+            path=workspace_path,
+            context=context,
+        )
+        workspace_subdirectory_paths: Mapping[str, str] = MappingProxyType({})
+        verified_workspace_path: str | None = None
+        if workspace_lease is not None:
+            (
+                workspace_descriptor,
+                verified_workspace_path,
+                workspace_subdirectory_paths,
+            ) = workspace_lease
         context = _seal_native_child_context(
             NativeChildContext(
                 expires_at_monotonic_s,
                 received_files,
+                workspace_descriptor,
+                verified_workspace_path,
+                workspace_subdirectory_paths,
             )
         )
         context.remaining_seconds()
@@ -1222,9 +1420,21 @@ def _child_entry(
         terminal = _error_envelope(exc)
     finally:
         cleanup_errors = list(_close_descriptors_safely(received_files.items()))
+        if workspace_descriptor is not None:
+            cleanup_errors.extend(
+                _close_descriptors_safely(
+                    (("child workspace lease", workspace_descriptor),)
+                )
+            )
         if pinned_connection is not None:
             cleanup_errors.extend(
                 _close_connections_safely((("child pinned-file", pinned_connection),))
+            )
+        if workspace_connection is not None:
+            cleanup_errors.extend(
+                _close_connections_safely(
+                    (("child workspace lease", workspace_connection),)
+                )
             )
         if cleanup_errors:
             terminal = _error_envelope(
@@ -2124,12 +2334,983 @@ def _restore_transfer_offsets_safely(
     return tuple(errors)
 
 
+_WORKSPACE_REQUIRED_DIR_FD_FUNCTIONS = (
+    os.open,
+    os.mkdir,
+    os.stat,
+    os.unlink,
+    os.rmdir,
+    os.rename,
+)
+
+
+def _require_workspace_platform_capabilities() -> None:
+    """Refuse a workspace lease unless every removal can stay descriptor-bound."""
+
+    try:
+        supported = (
+            os.name == "posix"
+            and all(
+                hasattr(os, constant)
+                for constant in ("O_RDONLY", "O_DIRECTORY", "O_NOFOLLOW", "O_CLOEXEC")
+            )
+            and os.O_DIRECTORY != 0
+            and os.O_NOFOLLOW != 0
+            and hasattr(os, "supports_dir_fd")
+            and all(
+                function in os.supports_dir_fd
+                for function in _WORKSPACE_REQUIRED_DIR_FD_FUNCTIONS
+            )
+            and hasattr(os, "supports_fd")
+            and os.listdir in os.supports_fd
+            and hasattr(os, "supports_follow_symlinks")
+            and os.stat in os.supports_follow_symlinks
+        )
+    except BaseException:  # noqa: BLE001 - platform inspection must fail closed
+        supported = False
+    if not supported:
+        raise AdapterError(
+            "native workspace leases require descriptor-relative directory support",
+            _FAILED_CODE,
+        )
+
+
+def _workspace_directory_flags() -> int:
+    return os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+
+
+def _workspace_entry_pin_flags() -> int:
+    """Reference an entry itself: no symlink traversal, no read, no blocking."""
+
+    if NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL:
+        return os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC
+    # No ``O_PATH`` here (macOS).  ``O_NONBLOCK`` keeps a FIFO open from waiting
+    # on a peer and ``O_NOFOLLOW`` keeps the reference on the named entry, but
+    # this still cannot reference a unix socket or a mode-0 file.
+    return os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC
+
+
+def _pin_leased_entry(
+    directory_descriptor: int,
+    name: str,
+) -> tuple[int | None, OSError | None]:
+    """Hold one entry's inode open so its inode number cannot be recycled.
+
+    A held descriptor keeps the inode referenced, so the filesystem cannot free
+    — and therefore cannot re-issue — its inode number while cleanup runs.  That
+    is the whole reason the later ``(st_dev, st_ino)`` comparison means anything
+    on Linux; see :func:`_purge_leased_entry`.
+    """
+
+    try:
+        return (
+            os.open(
+                name,
+                _workspace_entry_pin_flags(),
+                dir_fd=directory_descriptor,
+            ),
+            None,
+        )
+    except FileNotFoundError as exc:
+        return None, exc
+    except OSError as exc:
+        if NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL:
+            return None, exc
+        failure: OSError = exc
+    symlink_flag = getattr(os, "O_SYMLINK", None)
+    if type(symlink_flag) is int:
+        # The macOS spelling for "reference the symlink, not its target".
+        try:
+            return (
+                os.open(
+                    name,
+                    symlink_flag | os.O_RDONLY | os.O_CLOEXEC,
+                    dir_fd=directory_descriptor,
+                ),
+                None,
+            )
+        except OSError as exc:
+            failure = exc
+    return None, failure
+
+
+def _workspace_scratch_name(prefix: str) -> str:
+    return prefix + secrets.token_hex(16)
+
+
+def _close_workspace_descriptors(
+    descriptors: tuple[tuple[str, int | None], ...],
+) -> tuple[str, ...]:
+    return _close_descriptors_safely(
+        (label, descriptor)
+        for label, descriptor in descriptors
+        if type(descriptor) is int
+    )
+
+
+def provision_native_workspace_lease(
+    parent_directory: str,
+    *,
+    deadline: RefineDeadline,
+) -> NativeWorkspaceLease:
+    """Create one private 0700 workspace and pin it plus its container by fd.
+
+    Known and deliberately unaddressed here (items 2/5 inherit it):
+    ``O_NOFOLLOW`` guards only the final component of ``parent_directory``, so
+    an intermediate symlink in the operator-configured container path is still
+    followed.  The container path is trusted deployment configuration, not
+    child-controlled input; a descriptor-walked open of every component would
+    be the fix if that ever stops holding.
+    """
+
+    _require_workspace_platform_capabilities()
+    deadline.remaining_seconds()
+    if type(parent_directory) is not str or not parent_directory:
+        raise AdapterError(
+            "native workspace parent directory must be a non-empty path",
+            _INVALID_INPUT_CODE,
+        )
+    if not os.path.isabs(parent_directory):
+        # The leased path is transported to the child as an exec surface, and a
+        # relative one would mean something different in the child's cwd.
+        raise AdapterError(
+            "native workspace parent directory must be an absolute path",
+            _INVALID_INPUT_CODE,
+        )
+    flags = _workspace_directory_flags()
+    parent_descriptor: int | None = None
+    workspace_descriptor: int | None = None
+    name: str | None = None
+    created_subdirectories: list[str] = []
+    try:
+        parent_descriptor = os.open(parent_directory, flags)
+        os.set_inheritable(parent_descriptor, False)
+        parent_metadata = os.fstat(parent_descriptor)
+        parent_mode = stat.S_IMODE(parent_metadata.st_mode)
+        if (
+            not stat.S_ISDIR(parent_metadata.st_mode)
+            or parent_metadata.st_uid != os.geteuid()
+        ):
+            raise AdapterError(
+                "native workspace parent directory must be an owned directory",
+                _INVALID_INPUT_CODE,
+            )
+        if (
+            parent_mode & (stat.S_IWGRP | stat.S_IWOTH)
+            and not parent_mode & stat.S_ISVTX
+        ):
+            # A non-sticky group/world-writable container lets a foreign account
+            # rename the leased workspace out from under its pinned descriptor.
+            raise AdapterError(
+                "native workspace parent directory is unsafely writable",
+                _INVALID_INPUT_CODE,
+            )
+        for _attempt in range(NATIVE_WORKSPACE_NAME_ATTEMPTS):
+            deadline.remaining_seconds()
+            candidate = _workspace_scratch_name(NATIVE_WORKSPACE_NAME_PREFIX)
+            try:
+                os.mkdir(candidate, mode=0o700, dir_fd=parent_descriptor)
+            except FileExistsError:
+                continue
+            name = candidate
+            break
+        if name is None:
+            raise AdapterError(
+                "cannot create a unique native workspace lease",
+                _FAILED_CODE,
+            )
+        workspace_descriptor = os.open(name, flags, dir_fd=parent_descriptor)
+        os.set_inheritable(workspace_descriptor, False)
+        metadata = os.fstat(workspace_descriptor)
+        named_metadata = os.stat(
+            name,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
+        )
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+            or (metadata.st_dev, metadata.st_ino)
+            != (named_metadata.st_dev, named_metadata.st_ino)
+            or metadata.st_dev != parent_metadata.st_dev
+            or os.listdir(workspace_descriptor)
+        ):
+            raise AdapterError(
+                "native workspace lease is not a fresh private directory",
+                _FAILED_CODE,
+            )
+        path = os.path.join(parent_directory, name)
+        if len(os.fsencode(path)) > NATIVE_WORKSPACE_MAX_PATH_BYTES:
+            raise AdapterError(
+                "native workspace lease path exceeds its bounded length",
+                _INVALID_INPUT_CODE,
+            )
+        for subdirectory in NATIVE_WORKSPACE_SUBDIRECTORIES:
+            os.mkdir(subdirectory, mode=0o700, dir_fd=workspace_descriptor)
+            created_subdirectories.append(subdirectory)
+    except BaseException as exc:
+        cleanup_errors: list[str] = []
+        for subdirectory in reversed(created_subdirectories):
+            if workspace_descriptor is None:  # pragma: no cover - defensive
+                break
+            try:
+                os.rmdir(subdirectory, dir_fd=workspace_descriptor)
+            except OSError as cleanup_exc:
+                cleanup_errors.append(
+                    _bounded_diagnostic(
+                        "cannot remove a failed native workspace subdirectory: ",
+                        _exception_summary(cleanup_exc),
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+        if name is not None and parent_descriptor is not None:
+            if cleanup_errors:
+                # A subdirectory survived, so the root rmdir cannot succeed;
+                # name what is being left behind instead of guessing at it.
+                cleanup_errors.append(
+                    _bounded_diagnostic(
+                        "failed native workspace lease retained (",
+                        name,
+                        " retained)",
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+            else:
+                try:
+                    os.rmdir(name, dir_fd=parent_descriptor)
+                except OSError as cleanup_exc:
+                    cleanup_errors.append(
+                        _bounded_diagnostic(
+                            "cannot remove a failed native workspace lease (",
+                            name,
+                            " retained): ",
+                            _exception_summary(cleanup_exc),
+                            maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                        )
+                    )
+        cleanup_errors.extend(
+            _close_workspace_descriptors(
+                (
+                    ("failed workspace lease", workspace_descriptor),
+                    ("failed workspace lease container", parent_descriptor),
+                )
+            )
+        )
+        if cleanup_errors:
+            raise _cleanup_failed_error(
+                "native workspace lease provisioning failed",
+                tuple(cleanup_errors),
+            ) from exc
+        if type(exc) is AdapterError:
+            raise
+        if isinstance(exc, OSError):
+            raise AdapterError(
+                _bounded_diagnostic(
+                    "cannot provision a private native workspace lease: ",
+                    _exception_summary(exc),
+                ),
+                _FAILED_CODE,
+            ) from exc
+        raise
+    return NativeWorkspaceLease(
+        parent_descriptor,
+        name,
+        workspace_descriptor,
+        (metadata.st_dev, metadata.st_ino),
+        path,
+    )
+
+
+def _purge_leased_entry(
+    directory_descriptor: int,
+    name: str,
+    *,
+    root_device: int,
+    depth: int,
+    budget: list[int],
+    errors: list[str],
+) -> None:
+    """Remove one entry, refusing any object whose identity changed.
+
+    ``(st_dev, st_ino)`` is not by itself an identity on Linux: ext4 hands a
+    just-freed inode number straight back to the next creator, so an attacker
+    who unlinks and recreates an entry inside the inspect/rename window presents
+    a *different* object carrying the *same* number.  Measured on this
+    repository's own gate, unlink+recreate recycled the inode number 20/20 times
+    on Linux and 0/20 times on APFS.  The entry is therefore first pinned by
+    descriptor: a held reference keeps the inode from being freed, so its number
+    cannot be re-issued while cleanup runs, and only then does equality actually
+    mean sameness.  The pin also removes the older inspect/rename gap, because
+    the recorded identity comes from ``fstat`` on that descriptor rather than
+    from a second lookup of the name.
+
+    The entry is then renamed to an unguessable quarantine name inside the same
+    pinned directory and removed only if the quarantined name still resolves to
+    the pinned identity.
+
+    What this does **not** buy: the final ``unlinkat``/``rmdir`` is still
+    name-based, so a same-UID actor that can ``readdir`` this directory may swap
+    the quarantine name after that check.  For non-directory entries that
+    residual swap is caught after the fact — the pinned inode's link count must
+    strictly drop — unless the attacker also removes the pinned object; for
+    directories it is not caught at all.  What holds unconditionally is blast
+    radius: every mutation is a single-component ``renameat``/``unlinkat``/
+    ``rmdir`` relative to a pinned descriptor, which cannot follow a symlink and
+    cannot traverse out of this directory.
+
+    Without ``O_PATH`` (macOS) a unix socket or a mode-0 file cannot be pinned
+    side-effect-free; those degrade to the unpinned name stat, which is only as
+    strong as the filesystem's inode-reuse policy.  On Linux — the qualified
+    production platform — a failed pin is anomalous and refuses the removal.
+    """
+
+    if type(name) is not str or name in (".", "..") or "/" in name or not name:
+        errors.append("leased native workspace entry name is not a safe component")
+        return
+    pin, pin_failure = _pin_leased_entry(directory_descriptor, name)
+    try:
+        if pin is not None:
+            try:
+                before = os.fstat(pin)
+            except OSError as exc:
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot inspect a pinned leased native workspace entry: ",
+                        _exception_summary(exc),
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+                return
+        else:
+            if type(pin_failure) is FileNotFoundError:
+                return
+            if NATIVE_WORKSPACE_ENTRY_PIN_IS_UNIVERSAL:
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot pin a leased native workspace entry: ",
+                        _exception_summary(pin_failure),
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+                return
+            try:
+                before = os.stat(
+                    name,
+                    dir_fd=directory_descriptor,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                return
+            except OSError as exc:
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot inspect a leased native workspace entry: ",
+                        _exception_summary(exc),
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+                return
+        identity = (before.st_dev, before.st_ino)
+        entry_type = stat.S_IFMT(before.st_mode)
+        if before.st_dev != root_device:
+            errors.append("leased native workspace entry crosses a filesystem boundary")
+            return
+        quarantine = _workspace_scratch_name(NATIVE_WORKSPACE_QUARANTINE_PREFIX)
+        try:
+            os.rename(
+                name,
+                quarantine,
+                src_dir_fd=directory_descriptor,
+                dst_dir_fd=directory_descriptor,
+            )
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot quarantine a leased native workspace entry: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            return
+        try:
+            quarantined = os.stat(
+                quarantine,
+                dir_fd=directory_descriptor,
+                follow_symlinks=False,
+            )
+        except OSError as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot inspect a quarantined native workspace entry: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            return
+        if (quarantined.st_dev, quarantined.st_ino) != identity or stat.S_IFMT(
+            quarantined.st_mode
+        ) != entry_type:
+            errors.append(
+                "leased native workspace entry identity changed before removal"
+            )
+            return
+        if stat.S_ISDIR(quarantined.st_mode):
+            child_descriptor: int | None = None
+            try:
+                child_descriptor = os.open(
+                    quarantine,
+                    _workspace_directory_flags(),
+                    dir_fd=directory_descriptor,
+                )
+                child_metadata = os.fstat(child_descriptor)
+                if (child_metadata.st_dev, child_metadata.st_ino) != identity:
+                    errors.append(
+                        "leased native workspace directory identity changed "
+                        "before removal"
+                    )
+                    return
+                _purge_leased_directory(
+                    child_descriptor,
+                    root_device=root_device,
+                    depth=depth + 1,
+                    budget=budget,
+                    errors=errors,
+                )
+            except OSError as exc:
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot open a quarantined native workspace directory: ",
+                        _exception_summary(exc),
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+                return
+            finally:
+                if child_descriptor is not None:
+                    errors.extend(
+                        _close_workspace_descriptors(
+                            (
+                                (
+                                    "quarantined native workspace directory",
+                                    child_descriptor,
+                                ),
+                            )
+                        )
+                    )
+            try:
+                os.rmdir(quarantine, dir_fd=directory_descriptor)
+            except FileNotFoundError:
+                return
+            except OSError as exc:
+                errors.append(
+                    _bounded_diagnostic(
+                        "cannot remove a quarantined native workspace directory: ",
+                        _exception_summary(exc),
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+            # A directory's link count is not a portable removal witness: after
+            # ``rmdir`` Linux reports 0 while macOS still reports 2.  The
+            # post-quarantine swap window therefore stays undetected here.
+            return
+        try:
+            os.unlink(quarantine, dir_fd=directory_descriptor)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot remove a quarantined native workspace entry: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            return
+        if pin is None:
+            return
+        # Post-hoc, not preventive: the removal targeted a name, so prove the
+        # pinned object actually lost a link.  This catches a swap of the
+        # quarantine name itself, which the identity check above cannot, but
+        # stays silent if the attacker also removed the pinned object.
+        try:
+            after = os.fstat(pin)
+        except OSError as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot confirm removal of a pinned native workspace entry: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            return
+        if after.st_nlink >= before.st_nlink:
+            errors.append("leased native workspace entry survived its own removal")
+    finally:
+        if pin is not None:
+            errors.extend(
+                _close_workspace_descriptors(
+                    (("pinned native workspace entry", pin),)
+                )
+            )
+
+
+def _purge_leased_directory(
+    directory_descriptor: int,
+    *,
+    root_device: int,
+    depth: int,
+    budget: list[int],
+    errors: list[str],
+) -> None:
+    """Empty one pinned directory within a fixed depth and entry budget."""
+
+    if depth > NATIVE_WORKSPACE_MAX_DEPTH:
+        errors.append("leased native workspace exceeds its bounded cleanup depth")
+        return
+    try:
+        names = os.listdir(directory_descriptor)
+    except OSError as exc:
+        errors.append(
+            _bounded_diagnostic(
+                "cannot enumerate a leased native workspace directory: ",
+                _exception_summary(exc),
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            )
+        )
+        return
+    if len(names) > NATIVE_WORKSPACE_MAX_DIRECTORY_ENTRIES:
+        errors.append(
+            "leased native workspace directory exceeds its bounded entry count"
+        )
+        return
+    for name in names:
+        if budget[0] <= 0:
+            errors.append("leased native workspace cleanup exhausted its entry budget")
+            return
+        budget[0] -= 1
+        _purge_leased_entry(
+            directory_descriptor,
+            name,
+            root_device=root_device,
+            depth=depth,
+            budget=budget,
+            errors=errors,
+        )
+
+
+def _restore_quarantined_workspace_root(
+    lease: NativeWorkspaceLease,
+    quarantine: str,
+) -> str:
+    """Put the provisioned name back so a stranded root stays findable."""
+
+    try:
+        os.rename(
+            quarantine,
+            lease.name,
+            src_dir_fd=lease.parent_descriptor,
+            dst_dir_fd=lease.parent_descriptor,
+        )
+    except OSError:
+        return quarantine
+    return lease.name
+
+
+def _remove_leased_workspace_root(lease: NativeWorkspaceLease) -> tuple[str, ...]:
+    """Quarantine and remove the workspace itself relative to its pinned parent.
+
+    The lease descriptor holds the root inode open for the whole of cleanup, so
+    the root's ``(st_dev, st_ino)`` is already recycle-proof here for the reason
+    :func:`_purge_leased_entry` has to construct a pin to obtain.
+
+    Emptiness is probed through that descriptor *before* the quarantine rename.
+    An entry created after :func:`_purge_leased_directory` took its snapshot
+    used to arrive here with no purge error at all, so the root was renamed and
+    only then failed ``rmdir`` with ENOTEMPTY — leaving a live orphan under an
+    unguessable name that appeared in no returned error.  Every failure path
+    below therefore names the directory it left behind.
+    """
+
+    try:
+        residue = os.listdir(lease.descriptor)
+    except OSError as exc:
+        return (
+            _bounded_diagnostic(
+                "cannot re-enumerate the leased native workspace root before "
+                "removal: ",
+                _exception_summary(exc),
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
+    if residue:
+        return (
+            _bounded_diagnostic(
+                "leased native workspace root gained an entry after its purge (",
+                lease.name,
+                " retains ",
+                _truncate_utf8(sorted(residue)[0], 96),
+                ")",
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
+    try:
+        named = os.stat(
+            lease.name,
+            dir_fd=lease.parent_descriptor,
+            follow_symlinks=False,
+        )
+    except FileNotFoundError:
+        return ("leased native workspace root disappeared before cleanup",)
+    except OSError as exc:
+        return (
+            _bounded_diagnostic(
+                "cannot inspect the leased native workspace root: ",
+                _exception_summary(exc),
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
+    if (named.st_dev, named.st_ino) != lease.identity:
+        return ("leased native workspace root name no longer resolves to the lease",)
+    quarantine = _workspace_scratch_name(NATIVE_WORKSPACE_QUARANTINE_PREFIX)
+    try:
+        os.rename(
+            lease.name,
+            quarantine,
+            src_dir_fd=lease.parent_descriptor,
+            dst_dir_fd=lease.parent_descriptor,
+        )
+    except OSError as exc:
+        return (
+            _bounded_diagnostic(
+                "cannot quarantine the leased native workspace root: ",
+                _exception_summary(exc),
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
+    try:
+        moved = os.stat(
+            quarantine,
+            dir_fd=lease.parent_descriptor,
+            follow_symlinks=False,
+        )
+    except OSError as exc:
+        return (
+            _bounded_diagnostic(
+                "cannot inspect the quarantined native workspace root (",
+                quarantine,
+                " retained): ",
+                _exception_summary(exc),
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
+    if (moved.st_dev, moved.st_ino) != lease.identity:
+        # Something else now answers to the provisioned name, so the object
+        # under the quarantine name is not ours to move back.
+        return (
+            _bounded_diagnostic(
+                "leased native workspace root identity changed before removal (",
+                quarantine,
+                " retained)",
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
+    try:
+        os.rmdir(quarantine, dir_fd=lease.parent_descriptor)
+    except OSError as exc:
+        orphan = _restore_quarantined_workspace_root(lease, quarantine)
+        return (
+            _bounded_diagnostic(
+                "cannot remove the leased native workspace root (",
+                orphan,
+                " retained): ",
+                _exception_summary(exc),
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
+    return ()
+
+
+def _release_workspace_lease(
+    lease: NativeWorkspaceLease,
+    *,
+    leader_quiescent: bool,
+) -> tuple[str, ...]:
+    """Purge and remove the leased workspace, then close both pinned descriptors.
+
+    This runs after every child outcome — normal return, timeout, SIGTERM, and
+    SIGKILL — because the parent, not the child, owns the directory.  Work is
+    bounded by depth and entry budget rather than the shared deadline so an
+    exhausted deadline can never strand scratch.
+
+    Known and deliberately unaddressed here (items 2/5 inherit both):
+
+    * The bound is on *count and depth, not time*.  Every syscall below runs
+      inside a ``finally`` and none of them is preemptible, so a stalled FUSE or
+      network filesystem under the lease container makes the stage never
+      complete — the queue lease then expires with a live orphan.  The workspace
+      container must be a local filesystem.
+    * A non-quiescent leader is reported but does not stop the purge, so a
+      still-live child could race the entries being removed.  Refusing instead
+      would trade a race for a guaranteed orphan, which is why it stands.
+    """
+
+    errors: list[str] = []
+    if leader_quiescent is not True:
+        errors.append(
+            "leased native workspace cleanup ran without a proven-dead native child"
+        )
+    root_metadata: os.stat_result | None = None
+    try:
+        root_metadata = os.fstat(lease.descriptor)
+    except OSError as exc:
+        errors.append(
+            _bounded_diagnostic(
+                "cannot inspect the leased native workspace before cleanup: ",
+                _exception_summary(exc),
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            )
+        )
+    if root_metadata is not None:
+        if (root_metadata.st_dev, root_metadata.st_ino) != lease.identity:
+            errors.append("leased native workspace identity changed before cleanup")
+        else:
+            purge_errors: list[str] = []
+            _purge_leased_directory(
+                lease.descriptor,
+                root_device=root_metadata.st_dev,
+                depth=0,
+                budget=[NATIVE_WORKSPACE_MAX_TOTAL_ENTRIES],
+                errors=purge_errors,
+            )
+            errors.extend(purge_errors)
+            if purge_errors:
+                # An incomplete purge must not rename or remove the root: the
+                # retained directory keeps its provisioned name for forensics.
+                # That name is only forensics if it reaches the caller, so it
+                # is carried in the error rather than left to a prefix scan.
+                errors.append(
+                    _bounded_diagnostic(
+                        "leased native workspace root retained after an "
+                        "incomplete purge (",
+                        lease.name,
+                        " retained)",
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+            else:
+                errors.extend(_remove_leased_workspace_root(lease))
+    errors.extend(
+        _close_workspace_descriptors(
+            (
+                ("native workspace lease", lease.descriptor),
+                ("native workspace lease container", lease.parent_descriptor),
+            )
+        )
+    )
+    normalized = _normalize_cleanup_errors(tuple(errors))
+    if normalized is None:
+        # Collapsing an over-long report must not also lose the one string an
+        # operator needs to find what was left behind.
+        return (
+            _bounded_diagnostic(
+                "leased native workspace cleanup produced excessive uncertainty (",
+                lease.name,
+                " may be retained)",
+                maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+            ),
+        )
+    return normalized
+
+
+def _send_workspace_lease(
+    connection: Connection | None,
+    lease: NativeWorkspaceLease | None,
+    *,
+    destination_pid: int,
+    deadline: RefineDeadline,
+) -> None:
+    if lease is None:
+        if connection is not None:
+            raise AdapterError(
+                "native workspace lease transport exists without a lease",
+                _FAILED_CODE,
+            )
+        return
+    if connection is None:
+        raise AdapterError(
+            "native workspace lease transport is unavailable",
+            _FAILED_CODE,
+        )
+    try:
+        from multiprocessing.reduction import send_handle
+
+        deadline.remaining_seconds()
+        # Known and deliberately unaddressed here (items 2/5 inherit it): on
+        # macOS CPython's sendfds waits on an untimed sock.recv(1)
+        # acknowledgement, so this call is not preemptible by the deadline
+        # bracketing it.  Linux — the qualified platform — does not acknowledge.
+        # This is the pre-existing I94 pinned-file transport pattern.
+        send_handle(connection, lease.descriptor, destination_pid)
+        deadline.remaining_seconds()
+    except AdapterError:
+        raise
+    except OSError as exc:
+        raise AdapterError(
+            _bounded_diagnostic(
+                "cannot transfer the native workspace lease descriptor: ",
+                _exception_summary(exc),
+            ),
+            _FAILED_CODE,
+        ) from exc
+
+
+def _verify_leased_workspace_subdirectory(
+    root_descriptor: int,
+    root_path: str,
+    name: str,
+) -> str:
+    """Bind one subdirectory's transported path to its own descriptor."""
+
+    descriptor = os.open(
+        name,
+        _workspace_directory_flags(),
+        dir_fd=root_descriptor,
+    )
+    try:
+        metadata = os.fstat(descriptor)
+        path = os.path.join(root_path, name)
+        named = os.stat(path, follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+            or (metadata.st_dev, metadata.st_ino)
+            != (named.st_dev, named.st_ino)
+        ):
+            raise AdapterError(
+                "native child workspace subdirectory does not match its lease",
+                _INVALID_INPUT_CODE,
+            )
+        if os.listdir(descriptor):
+            raise AdapterError(
+                "native child workspace subdirectory is not empty at receipt",
+                _INVALID_INPUT_CODE,
+            )
+    finally:
+        close_errors = _close_descriptors_safely(
+            (("workspace lease subdirectory", descriptor),)
+        )
+        if close_errors:
+            raise AdapterError(
+                _bounded_cleanup_report(
+                    "native child workspace subdirectory receipt failed",
+                    close_errors,
+                ),
+                _CLEANUP_FAILED_CODE,
+            )
+    return path
+
+
+def _receive_workspace_lease(
+    connection: Connection | None,
+    *,
+    leased: bool,
+    path: str | None,
+    context: NativeChildContext,
+) -> tuple[int, str, Mapping[str, str]] | None:
+    """Receive and independently verify the parent's writable workspace root.
+
+    The descriptor is authoritative.  ``path`` is the exec surface item 3 needs
+    for ``cwd=``/``TMPDIR``, and it is accepted only after ``lstat`` on the
+    string and ``fstat`` on the descriptor agree on ``(st_dev, st_ino)``, so a
+    substituted or symlinked path cannot be used even though it arrives as text.
+    """
+
+    if leased is not True:
+        if connection is not None:
+            raise _ChildTransportError(
+                "native child received an unexpected workspace lease transport"
+            )
+        if path is not None:
+            raise _ChildTransportError(
+                "native child received a workspace path without a lease"
+            )
+        return None
+    if connection is None:
+        raise _ChildTransportError(
+            "native child workspace lease transport is unavailable"
+        )
+    if (
+        type(path) is not str
+        or not path
+        or not os.path.isabs(path)
+        or len(os.fsencode(path)) > NATIVE_WORKSPACE_MAX_PATH_BYTES
+    ):
+        raise _ChildTransportError(
+            "native child workspace lease path is not a bounded absolute path"
+        )
+    from multiprocessing.reduction import recv_handle
+
+    if not connection.poll(context.remaining_seconds()):
+        raise AdapterError(
+            "native workspace lease transfer exceeded the shared deadline",
+            _TIMEOUT_CODE,
+        )
+    descriptor = recv_handle(connection)
+    try:
+        os.set_inheritable(descriptor, False)
+        metadata = os.fstat(descriptor)
+        named = os.stat(path, follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+        ):
+            raise AdapterError(
+                "native child workspace lease is not a private owned directory",
+                _INVALID_INPUT_CODE,
+            )
+        if (metadata.st_dev, metadata.st_ino) != (named.st_dev, named.st_ino):
+            raise AdapterError(
+                "native child workspace lease path does not resolve to its lease",
+                _INVALID_INPUT_CODE,
+            )
+        if sorted(os.listdir(descriptor)) != sorted(NATIVE_WORKSPACE_SUBDIRECTORIES):
+            raise AdapterError(
+                "native child workspace lease does not hold its exact "
+                "subdirectory set at receipt",
+                _INVALID_INPUT_CODE,
+            )
+        subdirectory_paths = MappingProxyType(
+            {
+                name: _verify_leased_workspace_subdirectory(descriptor, path, name)
+                for name in NATIVE_WORKSPACE_SUBDIRECTORIES
+            }
+        )
+    except BaseException as exc:
+        close_errors = _close_descriptors_safely((("workspace lease", descriptor),))
+        if close_errors:
+            raise AdapterError(
+                _bounded_cleanup_report(
+                    "native child workspace lease receipt failed",
+                    close_errors,
+                ),
+                _CLEANUP_FAILED_CODE,
+            ) from exc
+        raise
+    return descriptor, path, subdirectory_paths
+
+
 def run_native_engine_child(
     entrypoint: str,
     request: Mapping[str, Any],
     *,
     deadline: RefineDeadline,
     pinned_files: Mapping[str, NativePinnedFile] | None = None,
+    workspace_parent_directory: str | None = None,
 ) -> Any:
     """Run one importable JSON engine operation in a killable child session.
 
@@ -2138,6 +3319,12 @@ def run_native_engine_child(
     terminal result is not returned until the child leader exits and the shared
     deadline is checked again, so callers cannot enter publication after a
     timed-out native operation.
+
+    ``workspace_parent_directory`` opts into one parent-provisioned 0700 scratch
+    workspace.  The parent creates and pins it before the child exists, leases a
+    descriptor down over SCM_RIGHTS, and removes it with bounded
+    descriptor-relative cleanup after every outcome, so a SIGKILLed child cannot
+    strand scratch.
     """
 
     if os.name != "posix" or not hasattr(os, "killpg"):
@@ -2178,13 +3365,64 @@ def run_native_engine_child(
         ) from exc
 
     transfers = _prepare_pinned_files(pinned_files, deadline=deadline)
+    workspace_lease: NativeWorkspaceLease | None = None
+    if workspace_parent_directory is not None:
+        try:
+            workspace_lease = provision_native_workspace_lease(
+                workspace_parent_directory,
+                deadline=deadline,
+            )
+        except BaseException as exc:
+            descriptor_errors = _close_descriptors_safely(
+                (transfer.token, transfer.descriptor) for transfer in transfers
+            )
+            if descriptor_errors:
+                raise _cleanup_failed_error(
+                    "cannot provision the refine native workspace lease",
+                    descriptor_errors,
+                ) from exc
+            raise
     parent_pinned_connection: Connection | None = None
     child_pinned_connection: Connection | None = None
+    parent_workspace_connection: Connection | None = None
+    child_workspace_connection: Connection | None = None
+
+    def _optional_transports() -> tuple[tuple[str, Any], ...]:
+        return (
+            *(
+                (
+                    ("parent pinned-file", parent_pinned_connection),
+                    ("child pinned-file", child_pinned_connection),
+                )
+                if parent_pinned_connection is not None
+                and child_pinned_connection is not None
+                else ()
+            ),
+            *(
+                (
+                    ("parent workspace lease", parent_workspace_connection),
+                    ("child workspace lease", child_workspace_connection),
+                )
+                if parent_workspace_connection is not None
+                and child_workspace_connection is not None
+                else ()
+            ),
+        )
+
+    def _release_lease_for_setup_failure() -> tuple[str, ...]:
+        if workspace_lease is None:
+            return ()
+        return _release_workspace_lease(workspace_lease, leader_quiescent=True)
+
     try:
         context = multiprocessing.get_context("spawn")
         parent_connection, child_connection = context.Pipe(duplex=True)
         if transfers:
             parent_pinned_connection, child_pinned_connection = context.Pipe(
+                duplex=True
+            )
+        if workspace_lease is not None:
+            parent_workspace_connection, child_workspace_connection = context.Pipe(
                 duplex=True
             )
     except BaseException as exc:
@@ -2194,12 +3432,14 @@ def run_native_engine_child(
                 (
                     ("parent", parent_connection),
                     ("child", child_connection),
+                    *_optional_transports(),
                 ),
             )
         descriptor_errors = _close_descriptors_safely(
             (transfer.token, transfer.descriptor) for transfer in transfers
         )
-        cleanup_errors = (*connection_errors, *descriptor_errors)
+        workspace_errors = _release_lease_for_setup_failure()
+        cleanup_errors = (*connection_errors, *descriptor_errors, *workspace_errors)
         message = _bounded_diagnostic(
             "cannot create refine native child transport: ",
             _safe_exception_message(
@@ -2220,6 +3460,9 @@ def run_native_engine_child(
                 child_connection,
                 child_pinned_connection,
                 pinned_ledger,
+                child_workspace_connection,
+                workspace_lease is not None,
+                None if workspace_lease is None else workspace_lease.path,
                 entrypoint,
                 request_payload,
                 deadline.expires_at_monotonic_s,
@@ -2232,20 +3475,13 @@ def run_native_engine_child(
             (
                 ("parent", parent_connection),
                 ("child", child_connection),
-                *(
-                    (
-                        ("parent pinned-file", parent_pinned_connection),
-                        ("child pinned-file", child_pinned_connection),
-                    )
-                    if parent_pinned_connection is not None
-                    and child_pinned_connection is not None
-                    else ()
-                ),
+                *_optional_transports(),
             )
         )
         descriptor_errors = _close_descriptors_safely(
             (transfer.token, transfer.descriptor) for transfer in transfers
         )
+        workspace_errors = _release_lease_for_setup_failure()
         message = _bounded_diagnostic(
             "cannot prepare refine native child: ",
             _safe_exception_message(
@@ -2253,7 +3489,7 @@ def run_native_engine_child(
                 fallback="process construction failed",
             ),
         )
-        cleanup_errors = (*close_errors, *descriptor_errors)
+        cleanup_errors = (*close_errors, *descriptor_errors, *workspace_errors)
         if cleanup_errors:
             raise _cleanup_failed_error(message, cleanup_errors) from exc
         raise AdapterError(message, _FAILED_CODE) from exc
@@ -2283,6 +3519,8 @@ def run_native_engine_child(
             child_connection.close()
             if child_pinned_connection is not None:
                 child_pinned_connection.close()
+            if child_workspace_connection is not None:
+                child_workspace_connection.close()
         except OSError as exc:
             raise AdapterError(
                 _bounded_diagnostic(
@@ -2316,6 +3554,9 @@ def run_native_engine_child(
             or ready.get("sessionId") != pid
             or (bool(transfers) and reported_pinned_count != len(transfers))
             or (not transfers and reported_pinned_count not in (None, 0))
+            or ready.get("workspaceLeased") is not (workspace_lease is not None)
+            or ready.get("workspacePath")
+            != (None if workspace_lease is None else workspace_lease.path)
         ):
             raise AdapterError(
                 "refine native child did not establish its dedicated POSIX session",
@@ -2338,6 +3579,12 @@ def run_native_engine_child(
         _send_pinned_files(
             parent_pinned_connection,
             transfers,
+            destination_pid=pid,
+            deadline=deadline,
+        )
+        _send_workspace_lease(
+            parent_workspace_connection,
+            workspace_lease,
             destination_pid=pid,
             deadline=deadline,
         )
@@ -2544,15 +3791,7 @@ def run_native_engine_child(
                 (
                     ("parent", parent_connection),
                     ("child", child_connection),
-                    *(
-                        (
-                            ("parent pinned-file", parent_pinned_connection),
-                            ("child pinned-file", child_pinned_connection),
-                        )
-                        if parent_pinned_connection is not None
-                        and child_pinned_connection is not None
-                        else ()
-                    ),
+                    *_optional_transports(),
                 )
             )
         )
@@ -2562,6 +3801,7 @@ def run_native_engine_child(
                 (transfer.token, transfer.descriptor) for transfer in transfers
             )
         )
+        leader_quiescent = not started
         if started:
             try:
                 leader_alive = process.is_alive()
@@ -2575,6 +3815,7 @@ def run_native_engine_child(
                 )
                 leader_alive = True
             if not leader_alive:
+                leader_quiescent = True
                 try:
                     process.close()
                 except BaseException as exc:
@@ -2585,12 +3826,23 @@ def run_native_engine_child(
                         )
                     )
 
+        # The workspace is parent-owned, so it is removed after every outcome:
+        # normal return, timeout, SIGTERM, and SIGKILL all arrive here with the
+        # leader already reaped by the cleanup above.
+        workspace_cleanup_errors: tuple[str, ...] = ()
+        if workspace_lease is not None:
+            workspace_cleanup_errors = _release_workspace_lease(
+                workspace_lease,
+                leader_quiescent=leader_quiescent,
+            )
+
         all_final_errors = (
             *final_cleanup_errors,
             *offset_restore_errors,
+            *workspace_cleanup_errors,
             *resource_errors,
         )
-        if final_cleanup_errors or offset_restore_errors:
+        if final_cleanup_errors or offset_restore_errors or workspace_cleanup_errors:
             raise _cleanup_failed_error(
                 "refine native child cleanup failed",
                 all_final_errors,
