@@ -39,6 +39,7 @@ from patina_scan_worker.refine_colmap_toolchain import (
     ColmapToolchain,
     PinnedColmapCommand,
     QualifiedBoxLocation,
+    leased_command_surfaces,
     load_colmap_toolchain,
     plan_pinned_colmap_command,
 )
@@ -340,6 +341,37 @@ def plan_supervised_command(
             else allowlisted_argv(toolchain.identity.path, workspace),
             toolchain=toolchain,
             workspace=workspace,
+            remaining_seconds=remaining_seconds or (lambda: 30.0),
+            descriptor_exec=True,
+        )
+
+
+def plan_leased_supervised_command(
+    toolchain: ColmapToolchain,
+    context,
+    *,
+    command=None,
+    remaining_seconds=None,
+) -> PinnedColmapCommand:
+    """The leased three-surface shape, minus the production-location assertion.
+
+    ``plan_leased_colmap_command`` re-asserts that the toolchain sits at the
+    real ``/opt/colmap/4.0.2``, which a ``tmp_path`` prefix can never satisfy.
+    This mirrors :func:`plan_supervised_command`: the surfaces come from the
+    real :func:`leased_command_surfaces`, and only the install location is
+    substituted.
+    """
+
+    workspace, cwd, temp_directory = leased_command_surfaces(context)
+    with descriptor_alias_root(toolchain):
+        return plan_pinned_colmap_command(
+            command
+            if command is not None
+            else allowlisted_argv(toolchain.identity.path, workspace),
+            toolchain=toolchain,
+            workspace=workspace,
+            cwd=cwd,
+            temp_directory=temp_directory,
             remaining_seconds=remaining_seconds or (lambda: 30.0),
             descriptor_exec=True,
         )

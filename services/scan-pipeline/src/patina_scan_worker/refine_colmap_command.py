@@ -486,16 +486,22 @@ def _validate_pinned_execution(
             "inherited COLMAP commands require a qualified descriptor-pinned execution",
             _ENGINE_FAILED,
         )
+    # The plan carries three surfaces: the argv confinement root, the working
+    # directory, and TMPDIR.  Under the parent-provisioned lease the root is the
+    # lease itself (so `<lease>/packet/images` is an admissible argv path) while
+    # this supervisor launches the child in `<lease>/work`.  Binding `cwd=`
+    # against the root would therefore compare a directory against its own
+    # parent and never match; `cwd` is the surface that must agree.
     try:
-        workspace_matches = execution.workspace == os.fspath(cwd)
+        working_directory_matches = execution.cwd == os.fspath(cwd)
     except BaseException:
         raise _fail(
-            "cannot compare the pinned COLMAP execution workspace",
+            "cannot compare the pinned COLMAP execution working directory",
             _ENGINE_FAILED,
         ) from None
-    if not workspace_matches:
+    if not working_directory_matches:
         raise _fail(
-            "pinned COLMAP execution was planned for a different workspace",
+            "pinned COLMAP execution was planned for a different working directory",
             _ENGINE_FAILED,
         )
     try:

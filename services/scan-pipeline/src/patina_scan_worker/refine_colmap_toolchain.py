@@ -30,6 +30,28 @@ Three closed contracts live here:
   or the private workspace.  That confinement is what keeps the systemd
   ``ProtectSystem=strict`` sandbox intact.
 
+Three surfaces, not one
+-----------------------
+
+``workspace``, ``cwd``, and ``temp_directory`` used to be a single string.  They
+are not the same thing, and collapsing them is what made the parent-provisioned
+workspace lease unusable:
+
+* ``workspace`` is the **argv confinement root**.  Under the lease it is
+  ``context.workspace_path()`` -- the lease root itself -- because the engine's
+  ``--image_path`` points into the extracted packet at ``<lease>/packet/images``
+  and ``--output_path`` into ``<lease>/work``.  Rooting confinement at the
+  working directory instead would reject the packet outright.
+* ``cwd`` is ``context.workspace_subdirectory_path("work")``.
+* ``temp_directory`` is ``context.workspace_subdirectory_path("tmp")`` and is
+  the only value ``TMPDIR`` may take.
+
+All three default to the same directory so a caller with one flat workspace
+behaves exactly as before; :func:`plan_leased_colmap_command` is the binding
+that hands the lease's three real surfaces to the planner.  The parent owns the
+lease tree and purges it after every child outcome, so nothing here creates or
+removes any of the three.
+
 The toolchain pin follows the I93 helper-manifest precedent: values that this
 repository already receipts (COLMAP 4.0.2 / commit ``d927f7e`` / CUDA 11.8 /
 ``gcc-11`` / ``sm_75``) are pinned here and rejected on drift, while values that
@@ -57,7 +79,11 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 from .refine_adapter import AdapterError, RefineDeadline
-from .refine_native_process import NativeChildContext
+from .refine_native_process import (
+    NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+    NATIVE_WORKSPACE_TEMP_SUBDIRECTORY,
+    NativeChildContext,
+)
 
 TOOLCHAIN_MANIFEST_SCHEMA = "patina-refine-colmap-toolchain-manifest-v1"
 TOOLCHAIN_MANIFEST_RELATIVE_PATH = PurePosixPath(
@@ -308,6 +334,40 @@ def _validate_workspace_path(value: str, *, workspace: PurePosixPath) -> None:
         or not candidate.is_relative_to(workspace)
     ):
         raise _fail("pinned COLMAP path option must stay inside its workspace")
+
+
+def _confined_directory(
+    value: Path,
+    *,
+    workspace: PurePosixPath,
+    label: str,
+) -> str:
+    """Bind one exec surface (``cwd``/``TMPDIR``) inside the confinement root.
+
+    The root is allowed to be the value itself: a caller with a single flat
+    workspace gets exactly its previous behaviour.  Under the parent-provisioned
+    lease the two are distinct children of the root, and neither is created or
+    removed here -- the parent owns the whole lease tree.
+    """
+
+    try:
+        is_absolute = value.is_absolute()
+    except BaseException:
+        raise _fail(f"cannot inspect the COLMAP command {label}") from None
+    if not is_absolute:
+        raise _fail(f"COLMAP command {label} must be absolute")
+    try:
+        raw = os.fspath(value)
+    except BaseException:
+        raise _fail(f"cannot inspect the COLMAP command {label}") from None
+    candidate = PurePosixPath(raw)
+    if raw != candidate.as_posix() or any(
+        part in ("", ".", "..") for part in candidate.parts[1:]
+    ):
+        raise _fail(f"COLMAP command {label} must be a canonical path")
+    if not candidate.is_relative_to(workspace):
+        raise _fail(f"COLMAP command {label} must stay inside its workspace")
+    return candidate.as_posix()
 
 
 def validate_allowlisted_argv(
@@ -989,8 +1049,15 @@ def build_command_environment(
     manifest: ColmapToolchainManifest,
     *,
     workspace: Path,
+    temp_directory: Path | None = None,
 ) -> tuple[tuple[str, str], ...]:
-    """Build the exact closed environment; the ambient one is never inherited."""
+    """Build the exact closed environment; the ambient one is never inherited.
+
+    ``workspace`` is the confinement root; ``temp_directory`` is the child of it
+    the engine may fill with scratch and is the only value ``TMPDIR`` may take.
+    It defaults to ``workspace`` so a flat single-directory caller is unchanged;
+    under the workspace lease it is ``<lease>/tmp``.
+    """
 
     if type(manifest) is not ColmapToolchainManifest:
         raise _fail("COLMAP command environment requires a validated manifest")
@@ -1001,6 +1068,11 @@ def build_command_environment(
     if not workspace_is_absolute:
         raise _fail("COLMAP command workspace must be absolute")
     workspace_value = PurePosixPath(os.fspath(workspace)).as_posix()
+    temp_value = _confined_directory(
+        workspace if temp_directory is None else temp_directory,
+        workspace=PurePosixPath(workspace_value),
+        label="TMPDIR",
+    )
     app_dir = PurePosixPath(manifest.app_dir)
     cuda_root = PurePosixPath(manifest.cuda_root)
     environ = {
@@ -1017,13 +1089,18 @@ def build_command_environment(
         "PATH": (cuda_root / "bin").as_posix(),
         # COLMAP links Qt; force headless so no display is ever attempted.
         "QT_QPA_PLATFORM": "offscreen",
-        "TMPDIR": workspace_value,
+        "TMPDIR": temp_value,
         "XDG_CACHE_HOME": (app_dir / ".cache").as_posix(),
         "XDG_CONFIG_HOME": (app_dir / ".config").as_posix(),
         "XDG_DATA_HOME": (app_dir / ".data").as_posix(),
         "XDG_STATE_HOME": (app_dir / ".state").as_posix(),
     }
-    return validate_command_environment(environ, manifest=manifest, workspace=workspace)
+    return validate_command_environment(
+        environ,
+        manifest=manifest,
+        workspace=workspace,
+        temp_directory=temp_directory,
+    )
 
 
 def validate_command_environment(
@@ -1031,8 +1108,14 @@ def validate_command_environment(
     *,
     manifest: ColmapToolchainManifest,
     workspace: Path,
+    temp_directory: Path | None = None,
 ) -> tuple[tuple[str, str], ...]:
-    """Prove one environment is exactly the allowlist and stays confined."""
+    """Prove one environment is exactly the allowlist and stays confined.
+
+    ``TMPDIR`` is checked against ``temp_directory`` -- the scratch child of the
+    confinement root -- not against the root itself.  The key set is unchanged;
+    only which of the three surfaces ``TMPDIR`` must equal has been made exact.
+    """
 
     if type(environ) is not dict:
         raise _fail("COLMAP command environment must be an exact mapping")
@@ -1040,6 +1123,11 @@ def validate_command_environment(
         raise _fail("COLMAP command environment is not exactly the allowlist")
     app_dir = PurePosixPath(manifest.app_dir)
     workspace_value = PurePosixPath(os.fspath(workspace)).as_posix()
+    temp_value = _confined_directory(
+        workspace if temp_directory is None else temp_directory,
+        workspace=PurePosixPath(workspace_value),
+        label="TMPDIR",
+    )
     total = 0
     rows: list[tuple[str, str]] = []
     for name in COMMAND_ENVIRONMENT_ALLOWLIST:
@@ -1058,7 +1146,7 @@ def validate_command_environment(
         rows.append((name, value))
     if total > _MAX_ENVIRONMENT_BYTES:
         raise _fail("COLMAP command environment exceeds its aggregate byte ceiling")
-    if environ["TMPDIR"] != workspace_value:
+    if environ["TMPDIR"] != temp_value:
         raise _fail("COLMAP command TMPDIR must be the private command workspace")
     for name in _APP_DIR_CONFINED_ENVIRONMENT:
         candidate = PurePosixPath(environ[name])
@@ -1083,11 +1171,19 @@ class PinnedColmapCommand:
     plan looked alike: a plan built from any prefix with ``descriptor_exec=
     False`` -- a path-lookup exec with no TOCTOU protection -- was structurally
     indistinguishable from the qualified descriptor-pinned form.
+
+    ``workspace`` is the argv confinement root, ``cwd`` the directory the child
+    is launched in, and ``temp_directory`` the one ``TMPDIR`` names.  The
+    supervisor binds its own ``cwd=`` argument against :attr:`cwd`, so a plan
+    built for one working directory can never be run in another even though all
+    three live under the same root.
     """
 
     argv: tuple[str, ...]
     environ: tuple[tuple[str, str], ...]
     workspace: str
+    cwd: str
+    temp_directory: str
     identity: ColmapExecutableIdentity
     executable_descriptor: int
     executable_alias: str
@@ -1134,6 +1230,8 @@ def plan_pinned_colmap_command(
     *,
     toolchain: ColmapToolchain,
     workspace: Path,
+    cwd: Path | None = None,
+    temp_directory: Path | None = None,
     remaining_seconds: Callable[[], float],
     descriptor_exec: bool,
 ) -> PinnedColmapCommand:
@@ -1150,6 +1248,13 @@ def plan_pinned_colmap_command(
     function re-proves the box identity against the location the toolchain was
     loaded with before stamping the flag, so there is no route to a
     supervisor-acceptable plan on which the box-identity check never ran.
+
+    ``workspace`` bounds argv; ``cwd`` and ``temp_directory`` are the two exec
+    surfaces inside it and both default to ``workspace``.  Under the
+    parent-provisioned lease they are ``<lease>/work`` and ``<lease>/tmp`` while
+    ``workspace`` stays the lease root, which is what lets an ``--image_path``
+    into ``<lease>/packet/images`` pass the allowlist.  See
+    :func:`plan_leased_colmap_command`.
     """
 
     if type(toolchain) is not ColmapToolchain:
@@ -1168,7 +1273,22 @@ def plan_pinned_colmap_command(
         executable_path=toolchain.identity.path,
         workspace=workspace,
     )
-    environ = build_command_environment(toolchain.manifest, workspace=workspace)
+    workspace_posix = PurePosixPath(os.fspath(workspace))
+    command_cwd = _confined_directory(
+        workspace if cwd is None else cwd,
+        workspace=workspace_posix,
+        label="working directory",
+    )
+    temp_value = _confined_directory(
+        workspace if temp_directory is None else temp_directory,
+        workspace=workspace_posix,
+        label="TMPDIR",
+    )
+    environ = build_command_environment(
+        toolchain.manifest,
+        workspace=workspace,
+        temp_directory=Path(temp_value),
+    )
     verify_executable_identity(toolchain.identity, toolchain.executable_descriptor)
     if descriptor_exec:
         if not Path(_PROC_FD_ROOT).is_dir():
@@ -1183,7 +1303,9 @@ def plan_pinned_colmap_command(
         PinnedColmapCommand(
             argv=argv,
             environ=environ,
-            workspace=PurePosixPath(os.fspath(workspace)).as_posix(),
+            workspace=workspace_posix.as_posix(),
+            cwd=command_cwd,
+            temp_directory=temp_value,
             identity=toolchain.identity,
             executable_descriptor=toolchain.executable_descriptor,
             executable_alias=alias,
@@ -1198,6 +1320,8 @@ def plan_qualified_colmap_command(
     *,
     toolchain: ColmapToolchain,
     workspace: Path,
+    cwd: Path | None = None,
+    temp_directory: Path | None = None,
     context: NativeChildContext,
     deadline: RefineDeadline,
 ) -> PinnedColmapCommand:
@@ -1210,6 +1334,78 @@ def plan_qualified_colmap_command(
         command,
         toolchain=toolchain,
         workspace=workspace,
+        cwd=cwd,
+        temp_directory=temp_directory,
         remaining_seconds=carried_deadline_probe(context, deadline),
         descriptor_exec=True,
+    )
+
+
+def leased_command_surfaces(
+    context: NativeChildContext,
+) -> tuple[Path, Path, Path]:
+    """Return ``(confinement root, cwd, TMPDIR)`` for one leased native context.
+
+    This is the whole reason the surfaces were split.  Confinement is the lease
+    **root**, so an ``--image_path`` into ``<lease>/packet/images`` -- written by
+    the packet extractor, not by this command -- is admissible while anything
+    outside the lease is still refused.  The child is launched in
+    ``<lease>/work`` and given ``TMPDIR=<lease>/tmp``.
+
+    Nothing is created or removed here.  The parent created all three at 0700
+    inside the lease root before the child existed and purges the whole tree
+    after every child outcome, including SIGKILL; a child-side ``rmdir`` would
+    fight that purge, and the accessors below only read transported strings that
+    the child already verified against its leased descriptor at receipt.
+    """
+
+    if type(context) is not NativeChildContext:
+        raise _fail(
+            "leased COLMAP planning requires the carried native child context",
+            _ENGINE_FAILED,
+        )
+    try:
+        workspace = Path(context.workspace_path())
+        cwd = Path(
+            context.workspace_subdirectory_path(NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY)
+        )
+        temp_directory = Path(
+            context.workspace_subdirectory_path(NATIVE_WORKSPACE_TEMP_SUBDIRECTORY)
+        )
+    except AdapterError:
+        raise
+    except BaseException:
+        raise _fail(
+            "cannot read the leased COLMAP command workspace",
+            _ENGINE_FAILED,
+        ) from None
+    return workspace, cwd, temp_directory
+
+
+def plan_leased_colmap_command(
+    command: Sequence[str],
+    *,
+    toolchain: ColmapToolchain,
+    context: NativeChildContext,
+    deadline: RefineDeadline,
+) -> PinnedColmapCommand:
+    """Plan the production shape against the workspace lease's three surfaces.
+
+    This keeps :func:`plan_qualified_colmap_command`'s guard that the toolchain
+    was installed at the *production* location, so a toolchain loaded against a
+    substituted prefix cannot reach the supervisor through this door.  Tests
+    that must use a fake prefix go through :func:`leased_command_surfaces` plus
+    :func:`plan_pinned_colmap_command`, exactly as they already do for the
+    non-leased shape.
+    """
+
+    workspace, cwd, temp_directory = leased_command_surfaces(context)
+    return plan_qualified_colmap_command(
+        command,
+        toolchain=toolchain,
+        workspace=workspace,
+        cwd=cwd,
+        temp_directory=temp_directory,
+        context=context,
+        deadline=deadline,
     )

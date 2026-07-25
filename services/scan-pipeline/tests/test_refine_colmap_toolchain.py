@@ -1012,6 +1012,8 @@ def test_a_handbuilt_pinned_command_is_never_verified(tmp_path):
         argv=("/opt/colmap/4.0.2/bin/colmap", "point_triangulator"),
         environ=(),
         workspace=str(tmp_path),
+        cwd=str(tmp_path / "work"),
+        temp_directory=str(tmp_path / "tmp"),
         identity=ColmapExecutableIdentity(
             path="/opt/colmap/4.0.2/bin/colmap",
             sha256="0" * 64,

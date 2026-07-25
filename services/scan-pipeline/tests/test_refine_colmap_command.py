@@ -1377,7 +1377,9 @@ def test_plan_authentication_failure_is_fixed_without_cause(monkeypatch, tmp_pat
     assert "DO_NOT_LEAK" not in str(raised.value)
 
 
-def test_execution_planned_for_another_workspace_is_rejected(monkeypatch, tmp_path):
+def test_execution_planned_for_another_working_directory_is_rejected(
+    monkeypatch, tmp_path
+):
     fake = _fake_cli(tmp_path, "print('unused')")
     other = tmp_path / "other"
     other.mkdir()
@@ -1407,7 +1409,7 @@ def test_execution_planned_for_another_workspace_is_rejected(monkeypatch, tmp_pa
         toolchain.close()
 
     assert str(raised.value) == (
-        "pinned COLMAP execution was planned for a different workspace"
+        "pinned COLMAP execution was planned for a different working directory"
     )
     assert not (tmp_path / "never-created.log").exists()
 
