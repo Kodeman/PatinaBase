@@ -33,6 +33,7 @@ from patina_scan_worker.refine_colmap_command import (
     _validate_private_command_workspace,
 )
 from patina_scan_worker.refine_colmap_toolchain import (
+    COLMAP_COMMAND_ALLOWLIST,
     _MAX_OPTION_VALUE_BYTES,
     plan_leased_colmap_command,
     plan_pinned_colmap_command,
@@ -121,6 +122,14 @@ def _lease_argv(executable: str, root: str) -> tuple[str, ...]:
         "--Mapper.random_seed",
         "0",
     )
+
+
+def _with_option(argv: tuple[str, ...], option: str, value: str) -> tuple[str, ...]:
+    """Return ``argv`` with one option's value replaced, order untouched."""
+
+    replaced = list(argv)
+    replaced[replaced.index(option) + 1] = value
+    return tuple(replaced)
 
 
 @contextlib.contextmanager
@@ -358,6 +367,164 @@ def test_the_confinement_root_itself_is_still_not_an_argv_value(tmp_path):
     assert str(raised.value) == (
         "pinned COLMAP path option must stay inside its workspace"
     )
+
+
+# ---------------------------------------------------------------------------
+# The packet is a read-only input surface; work/ is the only writable one
+# ---------------------------------------------------------------------------
+#
+# Widening the confinement root from ``<lease>/work`` to the lease root made
+# ``packet/`` a legal value for EVERY path option, not just ``--image_path``.
+# The four options are not interchangeable: two of them are where COLMAP
+# *writes*, and pointing either at ``packet/`` puts the reconstruction on top of
+# the hash-validated extracted source images the evidence builder later binds
+# to.  Each option is therefore rooted at the one surface it belongs to.
+
+
+def test_the_packet_is_not_a_legal_output_target(tmp_path):
+    """The confirmed F-1 probe: ``--output_path`` over the extracted images."""
+
+    with _leased_context(_container(tmp_path)) as (lease, context):
+        with _toolchain(tmp_path) as toolchain:
+            argv = _with_option(
+                _lease_argv(toolchain.identity.path, lease.path),
+                "--output_path",
+                f"{lease.path}/{NATIVE_WORKSPACE_PACKET_SUBDIRECTORY}/images",
+            )
+            with pytest.raises(AdapterError) as raised:
+                plan_leased_supervised_command(toolchain, context, command=argv)
+
+    assert str(raised.value) == (
+        "pinned COLMAP path option must stay inside its workspace"
+    )
+
+
+def test_the_packet_is_not_a_legal_database_target(tmp_path):
+    """``--database_path`` is opened read-write; it may not name the packet."""
+
+    with _leased_context(_container(tmp_path)) as (lease, context):
+        with _toolchain(tmp_path) as toolchain:
+            argv = _with_option(
+                _lease_argv(toolchain.identity.path, lease.path),
+                "--database_path",
+                f"{lease.path}/{NATIVE_WORKSPACE_PACKET_SUBDIRECTORY}/database-v1.db",
+            )
+            with pytest.raises(AdapterError) as raised:
+                plan_leased_supervised_command(toolchain, context, command=argv)
+
+    assert str(raised.value) == (
+        "pinned COLMAP path option must stay inside its workspace"
+    )
+
+
+def test_no_write_option_may_name_the_scratch_surface_either(tmp_path):
+    """``tmp/`` is TMPDIR, not an engine artifact surface."""
+
+    with _leased_context(_container(tmp_path)) as (lease, context):
+        with _toolchain(tmp_path) as toolchain:
+            argv = _with_option(
+                _lease_argv(toolchain.identity.path, lease.path),
+                "--output_path",
+                f"{lease.path}/{NATIVE_WORKSPACE_TEMP_SUBDIRECTORY}/triangulated",
+            )
+            with pytest.raises(AdapterError) as raised:
+                plan_leased_supervised_command(toolchain, context, command=argv)
+
+    assert str(raised.value) == (
+        "pinned COLMAP path option must stay inside its workspace"
+    )
+
+
+def test_the_image_surface_may_not_be_moved_out_of_the_packet(tmp_path):
+    """The packet is the only place engine images are allowed to come from."""
+
+    with _leased_context(_container(tmp_path)) as (lease, context):
+        with _toolchain(tmp_path) as toolchain:
+            argv = _with_option(
+                _lease_argv(toolchain.identity.path, lease.path),
+                "--image_path",
+                f"{lease.path}/{NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY}/images",
+            )
+            with pytest.raises(AdapterError) as raised:
+                plan_leased_supervised_command(toolchain, context, command=argv)
+
+    assert str(raised.value) == (
+        "pinned COLMAP path option must stay inside its workspace"
+    )
+
+
+def test_the_seed_model_is_read_from_work_not_the_packet(tmp_path):
+    """``--input_path`` reads ``pycolmap.build_known_pose_seed``'s own output.
+
+    The I87 primary plan constructs the known-pose seed model in-process and
+    writes it under ``work/``; the packet universe is a declared request, engine
+    images, and at most one source and one adapter ledger.  No model seed ships
+    in the packet, so ``--input_path`` is rooted at ``work/`` with the other two
+    child-produced surfaces rather than at the read-only input surface.
+    """
+
+    with _leased_context(_container(tmp_path)) as (lease, context):
+        with _toolchain(tmp_path) as toolchain:
+            argv = _with_option(
+                _lease_argv(toolchain.identity.path, lease.path),
+                "--input_path",
+                f"{lease.path}/{NATIVE_WORKSPACE_PACKET_SUBDIRECTORY}/seed",
+            )
+            with pytest.raises(AdapterError) as raised:
+                plan_leased_supervised_command(toolchain, context, command=argv)
+
+    assert str(raised.value) == (
+        "pinned COLMAP path option must stay inside its workspace"
+    )
+
+
+def test_each_path_option_declares_the_one_surface_it_belongs_to():
+    """The spec is a per-option mapping, not one shared confinement root."""
+
+    spec = COLMAP_COMMAND_ALLOWLIST["point_triangulator"]
+
+    assert dict(spec.workspace_path_options) == {
+        "--database_path": NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+        "--image_path": NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
+        "--input_path": NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+        "--output_path": NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+    }
+    # Every declared surface is a real leased subdirectory, so no option can be
+    # rooted at a directory the parent never provisions.
+    assert set(spec.workspace_path_options.values()) <= set(
+        NATIVE_WORKSPACE_SUBDIRECTORIES
+    )
+
+
+def test_the_packet_extractor_precondition_holds_again(tmp_path):
+    """``packet/`` is the surface "nothing else writes" -- provably, now.
+
+    ``refine_packet_extractor`` states an empty-at-borrow precondition for
+    ``packet/`` on the grounds that nothing else writes it.  While every path
+    option shared one confinement root that statement was false: a sealed,
+    supervisor-acceptable plan could name ``packet/`` as its output.  This test
+    is the executable form of the extractor's claim.
+    """
+
+    with _leased_context(_container(tmp_path)) as (lease, context):
+        packet = f"{lease.path}/{NATIVE_WORKSPACE_PACKET_SUBDIRECTORY}"
+        with _toolchain(tmp_path) as toolchain:
+            base = _lease_argv(toolchain.identity.path, lease.path)
+            for option in ("--database_path", "--output_path"):
+                with pytest.raises(AdapterError):
+                    plan_leased_supervised_command(
+                        toolchain,
+                        context,
+                        command=_with_option(base, option, f"{packet}/written"),
+                    )
+
+            # The one read-only use of the packet still plans.
+            execution = plan_leased_supervised_command(
+                toolchain, context, command=base
+            )
+            assert execution.argv[execution.argv.index("--image_path") + 1] == (
+                f"{packet}/images"
+            )
 
 
 # ---------------------------------------------------------------------------

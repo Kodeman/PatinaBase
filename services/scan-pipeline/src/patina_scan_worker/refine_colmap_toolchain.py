@@ -21,9 +21,9 @@ Three closed contracts live here:
   prefix; the timestamps are the detector, not the barrier.
 * **Command allowlist** -- argv is not "any bounded absolute argv".  It must be
   the pinned executable followed by one allowlisted COLMAP subcommand and that
-  subcommand's exact ordered option sequence.  Path-valued options must stay
-  inside the private command workspace; every other option must equal one
-  allowlisted literal.
+  subcommand's exact ordered option sequence.  Each path-valued option must stay
+  inside the *one leased surface it is declared for*; every other option must
+  equal one allowlisted literal.
 * **Environment allowlist** -- the child never inherits the ambient process
   environment.  It receives exactly :data:`COMMAND_ENVIRONMENT_ALLOWLIST`,
   built from the manifest, with every writable surface confined to ``APP_DIR``
@@ -37,20 +37,27 @@ Three surfaces, not one
 are not the same thing, and collapsing them is what made the parent-provisioned
 workspace lease unusable:
 
-* ``workspace`` is the **argv confinement root**.  Under the lease it is
-  ``context.workspace_path()`` -- the lease root itself -- because the engine's
-  ``--image_path`` points into the extracted packet at ``<lease>/packet/images``
-  and ``--output_path`` into ``<lease>/work``.  Rooting confinement at the
-  working directory instead would reject the packet outright.
+* ``workspace`` is the **lease root**.  Under the lease it is
+  ``context.workspace_path()``.  It is not itself a confinement root: each path
+  option is confined to the one named child of it declared in
+  :class:`ColmapCommandSpec`.  ``--image_path`` reads ``<lease>/packet``;
+  ``--database_path``, ``--input_path`` and ``--output_path`` live in
+  ``<lease>/work``.  Rooting every option at the lease root instead -- the first
+  shape of this split -- admitted ``--output_path <lease>/packet/images``, which
+  writes the reconstruction over the extracted source images.  Rooting all of
+  them at the working directory rejects the packet outright.  Neither single
+  root is correct, which is why the mapping is per option.
 * ``cwd`` is ``context.workspace_subdirectory_path("work")``.
 * ``temp_directory`` is ``context.workspace_subdirectory_path("tmp")`` and is
   the only value ``TMPDIR`` may take.
 
-All three default to the same directory so a caller with one flat workspace
-behaves exactly as before; :func:`plan_leased_colmap_command` is the binding
-that hands the lease's three real surfaces to the planner.  The parent owns the
-lease tree and purges it after every child outcome, so nothing here creates or
-removes any of the three.
+``cwd`` and ``temp_directory`` default to ``workspace``, so a caller that passes
+one flat directory gets the previous *exec-surface* behaviour.  Argv is not flat
+and never was after this split: a path option always names ``<workspace>/packet``
+or ``<workspace>/work``, whether or not the caller went through a real lease.
+:func:`plan_leased_colmap_command` is the binding that hands the lease's three
+real surfaces to the planner.  The parent owns the lease tree and purges it
+after every child outcome, so nothing here creates or removes any of the three.
 
 The toolchain pin follows the I93 helper-manifest precedent: values that this
 repository already receipts (COLMAP 4.0.2 / commit ``d927f7e`` / CUDA 11.8 /
@@ -77,10 +84,13 @@ import stat
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 
 from .refine_adapter import AdapterError, RefineDeadline
 from .refine_native_process import (
     NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+    NATIVE_WORKSPACE_MAX_ARGV_ITEM_BYTES,
+    NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
     NATIVE_WORKSPACE_TEMP_SUBDIRECTORY,
     NativeChildContext,
 )
@@ -178,7 +188,11 @@ _MAX_TOOLCHAIN_MANIFEST_BYTES = 8 * 1024
 _MAX_ENVIRONMENT_VALUE_BYTES = 4096
 _MAX_ENVIRONMENT_BYTES = 64 * 1024
 _MAX_ARGV_ITEMS = 64
-_MAX_OPTION_VALUE_BYTES = 1024
+#: One number, owned by the layer that mints the leased path this bounds.  See
+#: ``NATIVE_WORKSPACE_MAX_ARGV_ITEM_BYTES``: the lease provisioner refuses any
+#: container that cannot fit a path option inside this ceiling, so an operator's
+#: scratch root can no longer land in a gap between the two bounds.
+_MAX_OPTION_VALUE_BYTES = NATIVE_WORKSPACE_MAX_ARGV_ITEM_BYTES
 _READ_BYTES = 1024 * 1024
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -251,11 +265,16 @@ def carried_deadline_probe(
 
 @dataclass(frozen=True)
 class ColmapCommandSpec:
-    """One allowlisted COLMAP subcommand and its exact ordered option shape."""
+    """One allowlisted COLMAP subcommand and its exact ordered option shape.
+
+    ``workspace_path_options`` maps each path-valued option to the **one leased
+    surface** its value must stay inside, not to a shared confinement root.  The
+    four options are not interchangeable: two of them are where COLMAP writes.
+    """
 
     subcommand: str
     option_order: tuple[str, ...]
-    workspace_path_options: frozenset[str]
+    workspace_path_options: Mapping[str, str]
     literal_options: Mapping[str, frozenset[str]]
 
 
@@ -270,12 +289,29 @@ _POINT_TRIANGULATOR = ColmapCommandSpec(
         "--refine_intrinsics",
         "--Mapper.random_seed",
     ),
-    workspace_path_options=frozenset(
+    # Read-vs-write, stated per option:
+    #
+    # * ``--image_path`` READS the extracted engine images, so it is rooted at
+    #   ``packet/`` -- the read-only input surface the packet extractor fills
+    #   and, by its own documented precondition, "nothing else writes".
+    # * ``--input_path`` READS the known-pose seed model, which the I87 primary
+    #   plan *builds in-process* (``pycolmap.build_known_pose_seed``) under
+    #   ``work/``.  No model seed ships in the packet -- its universe is one
+    #   declared request, 3-400 engine images, and at most one source and one
+    #   adapter ledger -- so this option is rooted at ``work/`` with the other
+    #   child-produced surfaces.  If a seed model is ever packaged, moving this
+    #   one entry to ``packet/`` is the whole change.
+    # * ``--database_path`` and ``--output_path`` are WRITE surfaces: the
+    #   feature/match database and the triangulated model.  Both are rooted at
+    #   ``work/``, the only writable engine surface.
+    #
+    # ``tmp/`` appears nowhere: it is TMPDIR scratch, not an artifact surface.
+    workspace_path_options=MappingProxyType(
         {
-            "--database_path",
-            "--image_path",
-            "--input_path",
-            "--output_path",
+            "--database_path": NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+            "--image_path": NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
+            "--input_path": NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+            "--output_path": NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
         }
     ),
     literal_options={
@@ -322,6 +358,18 @@ def _bounded_argv(command: Sequence[str]) -> tuple[str, ...]:
 
 
 def _validate_workspace_path(value: str, *, workspace: PurePosixPath) -> None:
+    """Confine one path option lexically inside one leased surface.
+
+    Lexical, and only lexical: this compares strings and never calls
+    ``realpath``, so a symlink planted inside ``work/`` by a same-UID actor
+    still points a confined-looking option outside the lease.  That residual is
+    pre-existing and unchanged by the per-surface split -- narrowing each option
+    to one child of the lease root shrinks the set of names an option may take
+    without touching what a name may resolve to.  Closing it needs a
+    descriptor-rooted (``O_NOFOLLOW`` walk) resolution of every option value,
+    which belongs with the parent-owned workspace work, not here.
+    """
+
     if not value.startswith("/"):
         raise _fail("pinned COLMAP path option must be absolute")
     if any(ord(character) < 0x20 or ord(character) == 0x7F for character in value):
@@ -376,7 +424,17 @@ def validate_allowlisted_argv(
     executable_path: str,
     workspace: Path,
 ) -> tuple[str, ...]:
-    """Bind argv to one allowlisted subcommand, the pinned binary, and a cwd."""
+    """Bind argv to one allowlisted subcommand, the pinned binary, and surfaces.
+
+    ``workspace`` is the lease **root**, not a single confinement root for every
+    option.  Each path option is confined to ``workspace / <its declared
+    surface>``: reads of the extracted packet to ``packet/``, everything the
+    engine writes to ``work/``.  Rooting all four at ``workspace`` -- which is
+    what widening confinement from ``work/`` to the lease root did in order to
+    admit ``--image_path`` -- made ``--output_path <lease>/packet/images`` an
+    admissible, sealable plan that writes the reconstruction over the
+    hash-validated extracted source images.
+    """
 
     if type(executable_path) is not str or not executable_path.startswith("/"):
         raise _fail("pinned COLMAP executable path must be absolute")
@@ -403,8 +461,9 @@ def validate_allowlisted_argv(
         value = options[2 * index + 1]
         if name != expected_option:
             raise _fail("COLMAP subcommand options must use the allowlisted order")
-        if name in spec.workspace_path_options:
-            _validate_workspace_path(value, workspace=workspace_posix)
+        surface = spec.workspace_path_options.get(name)
+        if surface is not None:
+            _validate_workspace_path(value, workspace=workspace_posix / surface)
             continue
         allowed = spec.literal_options.get(name)
         if allowed is None or value not in allowed:
@@ -1247,13 +1306,32 @@ def plan_pinned_colmap_command(
     A plan may not claim ``qualified`` on the toolchain's say-so either: this
     function re-proves the box identity against the location the toolchain was
     loaded with before stamping the flag, so there is no route to a
-    supervisor-acceptable plan on which the box-identity check never ran.
+    supervisor-acceptable plan on which **a** box-identity check never ran --
+    against a caller-declared location.
 
-    ``workspace`` bounds argv; ``cwd`` and ``temp_directory`` are the two exec
+    That last clause is the whole of the guarantee, and it is weaker than it
+    reads at a glance.  ``QualifiedBoxLocation`` is caller-declared, so a caller
+    with arbitrary in-process Python can load a toolchain from a prefix it
+    controls, declare that prefix as the location, and mint a plan the
+    supervisor's validator accepts -- the identity check ran, it simply ran
+    against a hostile declaration.  What that costs the attacker is total: it
+    needs code execution inside this worker, at which point the plan is not the
+    weakest link.  Both production doors -- :func:`plan_qualified_colmap_command`
+    and :func:`plan_leased_colmap_command` -- compare against
+    :data:`QUALIFIED_BOX_LOCATION` and refuse a substituted prefix outright.
+    Closing the remaining route structurally would mean deleting the substitutable
+    location, which makes the mechanism testable only on the real
+    ``/opt/colmap/4.0.2`` as Linux root -- exactly the shape that hid three
+    findings from the macOS gate for a full review cycle.  It is a documented
+    residual, not a closed hole.
+
+    ``workspace`` is the lease root each path option is confined *under*, one
+    named surface per option; ``cwd`` and ``temp_directory`` are the two exec
     surfaces inside it and both default to ``workspace``.  Under the
     parent-provisioned lease they are ``<lease>/work`` and ``<lease>/tmp`` while
     ``workspace`` stays the lease root, which is what lets an ``--image_path``
-    into ``<lease>/packet/images`` pass the allowlist.  See
+    into ``<lease>/packet/images`` pass the allowlist while ``--output_path``
+    into that same directory does not.  See
     :func:`plan_leased_colmap_command`.
     """
 
@@ -1344,12 +1422,13 @@ def plan_qualified_colmap_command(
 def leased_command_surfaces(
     context: NativeChildContext,
 ) -> tuple[Path, Path, Path]:
-    """Return ``(confinement root, cwd, TMPDIR)`` for one leased native context.
+    """Return ``(lease root, cwd, TMPDIR)`` for one leased native context.
 
-    This is the whole reason the surfaces were split.  Confinement is the lease
-    **root**, so an ``--image_path`` into ``<lease>/packet/images`` -- written by
-    the packet extractor, not by this command -- is admissible while anything
-    outside the lease is still refused.  The child is launched in
+    This is the whole reason the surfaces were split.  Confinement is resolved
+    per option beneath the lease **root**, so an ``--image_path`` into
+    ``<lease>/packet/images`` -- written by the packet extractor, not by this
+    command -- is admissible, while a write option naming that same directory,
+    and anything outside the lease, are both refused.  The child is launched in
     ``<lease>/work`` and given ``TMPDIR=<lease>/tmp``.
 
     Nothing is created or removed here.  The parent created all three at 0700

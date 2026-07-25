@@ -552,12 +552,15 @@ def test_the_backend_argv_builder_satisfies_the_allowlist(tmp_path):
     )
 
     workspace = _workspace(tmp_path)
+    # The builder's paths are surface-typed, not merely "somewhere under the
+    # lease": images are read from the packet, everything the engine writes
+    # lands in work/.
     argv = primary_point_triangulator_argv(
         colmap=Path("/opt/colmap/4.0.2/bin/colmap"),
-        database_path=workspace / "database.db",
-        image_path=workspace / "images",
-        seed_model_path=workspace / "seed",
-        triangulated_model_path=workspace / "triangulated",
+        database_path=workspace / "work" / "database.db",
+        image_path=workspace / "packet" / "images",
+        seed_model_path=workspace / "work" / "seed",
+        triangulated_model_path=workspace / "work" / "triangulated",
     )
 
     assert (
