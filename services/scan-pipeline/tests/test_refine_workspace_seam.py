@@ -7,9 +7,11 @@ not either half:
 * the lease transports **three** distinct surfaces -- an argv confinement root,
   a working directory, and a scratch directory -- where the toolchain used to
   have one ``workspace`` string;
-* the confinement root must be the lease root, or the extracted packet at
-  ``<lease>/packet/images`` is refused by the very allowlist that is supposed to
-  admit it;
+* confinement resolves *beneath* the lease root, one declared surface per path
+  option -- rooting every option at ``<lease>/work`` refuses the extracted
+  packet at ``<lease>/packet/images`` that the allowlist is supposed to admit,
+  and rooting every option at the lease root admits ``--output_path
+  <lease>/packet/images``, which writes over it;
 * the transported path really does satisfy ``resolve(strict=True) == path``, the
   check the lease's own contract block promises and the toolchain's private
   workspace validation actually performs.
@@ -355,7 +357,19 @@ def test_the_confinement_root_still_rejects_a_path_outside_the_lease(tmp_path):
     )
 
 
-def test_the_confinement_root_itself_is_still_not_an_argv_value(tmp_path):
+def test_the_lease_root_itself_is_not_a_legal_option_value(tmp_path):
+    """Renamed, because per-option confinement changed what this proves.
+
+    While all four options shared one confinement root, ``<lease>`` *was* that
+    root and this case pinned the ``candidate == workspace`` clause.  Rooting
+    ``--output_path`` at ``<lease>/work`` moved the lease root outside its
+    surface, so the same input is now refused by ``is_relative_to`` instead and
+    the equality clause needs its own inputs -- one per surface, in
+    :func:`test_a_surface_root_itself_is_not_a_legal_option_value` below.  The
+    case is still worth keeping: it is the "one directory up" shape, and it is
+    the only one here that names the lease root itself.
+    """
+
     with _leased_context(_container(tmp_path)) as (lease, context):
         argv = list(_lease_argv("PLACEHOLDER", lease.path))
         argv[argv.index("--output_path") + 1] = lease.path
@@ -363,6 +377,116 @@ def test_the_confinement_root_itself_is_still_not_an_argv_value(tmp_path):
             argv[0] = toolchain.identity.path
             with pytest.raises(AdapterError) as raised:
                 plan_leased_supervised_command(toolchain, context, command=tuple(argv))
+
+    assert str(raised.value) == (
+        "pinned COLMAP path option must stay inside its workspace"
+    )
+
+
+@pytest.mark.parametrize(
+    ("option", "surface"),
+    (
+        pytest.param(
+            "--output_path", NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY, id="output-work"
+        ),
+        pytest.param(
+            "--database_path", NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY, id="database-work"
+        ),
+        pytest.param(
+            "--input_path", NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY, id="input-work"
+        ),
+        pytest.param(
+            "--image_path", NATIVE_WORKSPACE_PACKET_SUBDIRECTORY, id="image-packet"
+        ),
+    ),
+)
+def test_a_surface_root_itself_is_not_a_legal_option_value(tmp_path, option, surface):
+    """An option must name something *in* its surface, never the surface.
+
+    The behavioural stake is small -- ``--output_path <lease>/work`` writes into
+    the writable surface anyway, ``--database_path <lease>/work`` would open a
+    directory as a SQLite file and fail at runtime, ``--image_path
+    <lease>/packet`` reads the packet root -- but the clause that refuses it is
+    a real disjunct of the guard, and after the per-option split nothing else
+    reached it: ``is_relative_to`` admits a path equal to its own root.
+    """
+
+    with _leased_context(_container(tmp_path)) as (lease, context):
+        with _toolchain(tmp_path) as toolchain:
+            argv = _with_option(
+                _lease_argv(toolchain.identity.path, lease.path),
+                option,
+                f"{lease.path}/{surface}",
+            )
+            with pytest.raises(AdapterError) as raised:
+                plan_leased_supervised_command(toolchain, context, command=argv)
+
+    assert str(raised.value) == (
+        "pinned COLMAP path option must stay inside its workspace"
+    )
+
+
+@pytest.mark.parametrize(
+    ("option", "declared", "reached"),
+    (
+        pytest.param(
+            "--output_path",
+            NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+            f"{NATIVE_WORKSPACE_PACKET_SUBDIRECTORY}/images",
+            id="output-into-the-packet",
+        ),
+        pytest.param(
+            "--database_path",
+            NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+            f"{NATIVE_WORKSPACE_PACKET_SUBDIRECTORY}/manifest.json",
+            id="database-into-the-packet",
+        ),
+        pytest.param(
+            "--output_path",
+            NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+            f"{NATIVE_WORKSPACE_TEMP_SUBDIRECTORY}/triangulated",
+            id="output-into-the-scratch-surface",
+        ),
+        pytest.param(
+            "--image_path",
+            NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
+            f"{NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY}/images",
+            id="image-into-work",
+        ),
+    ),
+)
+def test_a_path_option_may_not_traverse_out_of_its_surface(
+    tmp_path, option, declared, reached
+):
+    """F-1 reopened by traversal instead of by direct naming.
+
+    ``--output_path <lease>/work/../packet/images`` is *lexically relative to*
+    ``<lease>/work``, so per-option confinement's ``is_relative_to`` check
+    admits it; it is canonical as a string, so the ``as_posix`` check admits it;
+    and it is not equal to its root.  Only the ``".."`` rejection keeps the
+    reconstruction off the extracted source images.  Delete that one disjunct
+    and every row here is accepted and sealed into a plan.
+
+    The direct-naming form of the same write is covered by
+    :func:`test_the_packet_is_not_a_legal_output_target`; these rows exist
+    because that form is caught by a *different* clause and therefore proves
+    nothing about this one.
+    """
+
+    with _leased_context(_container(tmp_path)) as (lease, context):
+        value = f"{lease.path}/{declared}/../{reached}"
+        # Not vacuous: the value really does resolve into another surface, so a
+        # missing ".." rejection is a real escape and not a naming quibble.
+        assert os.path.normpath(value) == f"{lease.path}/{reached}"
+        assert not Path(os.path.normpath(value)).is_relative_to(
+            Path(f"{lease.path}/{declared}")
+        )
+        with _toolchain(tmp_path) as toolchain:
+            argv = _with_option(
+                _lease_argv(toolchain.identity.path, lease.path), option, value
+            )
+            with pytest.raises(AdapterError) as raised:
+                plan_leased_supervised_command(toolchain, context, command=argv)
 
     assert str(raised.value) == (
         "pinned COLMAP path option must stay inside its workspace"

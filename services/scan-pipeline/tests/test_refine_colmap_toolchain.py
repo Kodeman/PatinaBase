@@ -45,7 +45,11 @@ from patina_scan_worker.refine_colmap_toolchain import (
     validate_command_environment,
     verify_executable_identity,
 )
-from patina_scan_worker.refine_native_process import NativeChildContext
+from patina_scan_worker.refine_native_process import (
+    NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+    NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
+    NativeChildContext,
+)
 
 UNIT_DIR = Path(__file__).resolve().parents[1]
 
@@ -662,21 +666,68 @@ def test_literal_option_values_are_exact(tmp_path, index, value):
     assert str(raised.value) == "COLMAP subcommand option value is not allowlisted"
 
 
+_CONFINEMENT_MESSAGE = "pinned COLMAP path option must stay inside its workspace"
+
+
 @pytest.mark.parametrize(
-    "value",
+    ("template", "message"),
     (
-        "/etc/passwd",
-        "relative/database.db",
-        "/tmp/../etc/shadow",
-        "",
+        pytest.param(
+            "relative/database.db",
+            "pinned COLMAP path option must be absolute",
+            id="not-absolute",
+        ),
+        pytest.param(
+            "{surface}/data\x01base.db",
+            "pinned COLMAP path option contains control characters",
+            id="control-characters",
+        ),
+        pytest.param(
+            "{surface}//database.db",
+            _CONFINEMENT_MESSAGE,
+            id="not-canonical",
+        ),
+        pytest.param(
+            "{surface}/../{packet}/database.db",
+            _CONFINEMENT_MESSAGE,
+            id="traverses-out-of-its-surface",
+        ),
+        pytest.param("{surface}", _CONFINEMENT_MESSAGE, id="the-surface-root-itself"),
+        pytest.param("/etc/passwd", _CONFINEMENT_MESSAGE, id="outside-the-lease"),
     ),
 )
-def test_path_options_must_stay_inside_the_workspace(tmp_path, value):
+def test_each_path_option_guard_clause_refuses_its_own_shape(
+    tmp_path, template, message
+):
+    """One input per disjunct of ``_validate_workspace_path``, exact message.
+
+    This replaces an assertion on the substring ``"pinned COLMAP path option"``,
+    which matches **every** message the guard emits.  Under that assertion any
+    clause could be satisfied by whichever clause happened to fire first, so
+    three of the six could be deleted without turning a test red.
+
+    Each row here is chosen so that exactly one clause rejects it -- delete that
+    clause and the row either goes green or reports a different message, and the
+    exact-message assertion catches both.  The two that are not obvious:
+
+    * ``{surface}//database.db`` is *lexically inside* its surface and contains
+      no traversal; only ``value != candidate.as_posix()`` refuses it, because
+      ``PurePosixPath`` collapses the empty component.  (That collapse is also
+      why ``""`` and ``"."`` can never appear in ``candidate.parts`` -- the
+      only member of that tuple the guard can ever observe is ``".."``.)
+    * ``{surface}/../{packet}/...`` stays lexically relative to ``{surface}``,
+      so ``is_relative_to`` admits it and only the ``".."`` rejection keeps it
+      out.  See ``test_a_path_option_may_not_traverse_out_of_its_surface`` in
+      the workspace-seam suite for the leased form of the same hole.
+    """
+
     workspace = _workspace(tmp_path)
     argv = list(allowlisted_argv("/opt/colmap/4.0.2/bin/colmap", workspace))
-    argv[3] = value or "x"
-    if not value:
-        argv[3] = str(workspace)
+    # argv[3] is --database_path, whose declared surface is <workspace>/work.
+    argv[3] = template.format(
+        surface=workspace / NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+        packet=NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
+    )
 
     with pytest.raises(AdapterError) as raised:
         validate_allowlisted_argv(
@@ -685,7 +736,7 @@ def test_path_options_must_stay_inside_the_workspace(tmp_path, value):
             workspace=workspace,
         )
 
-    assert "pinned COLMAP path option" in str(raised.value)
+    assert str(raised.value) == message
 
 
 def test_path_options_reject_workspace_traversal(tmp_path):
