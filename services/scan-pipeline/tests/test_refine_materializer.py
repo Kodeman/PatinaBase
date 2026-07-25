@@ -950,7 +950,11 @@ def test_workspace_parent_ancestor_swap_never_redirects_creation_or_cleanup(
 ):
     stable_ancestor = tmp_path / "stable"
     workspace_parent = stable_ancestor / "work"
-    workspace_parent.mkdir(parents=True)
+    # Explicit 0o700: the production materializer refuses a workspace parent
+    # that is group- or world-writable, and a bare mkdir() inherits the umask
+    # (0002 on a stock Ubuntu login shell), which made this fixture unbuildable
+    # on the qualified host.
+    workspace_parent.mkdir(parents=True, mode=0o700)
     attacker = tmp_path / "attacker"
     attacker.mkdir()
     moved_ancestor = tmp_path / "moved-stable"
@@ -981,7 +985,11 @@ def test_workspace_parent_ancestor_swap_never_redirects_creation_or_cleanup(
 def test_acquirer_ancestor_swap_never_redirects_freeze_or_cleanup(tmp_path):
     stable_ancestor = tmp_path / "stable"
     workspace_parent = stable_ancestor / "work"
-    workspace_parent.mkdir(parents=True)
+    # Explicit 0o700: the production materializer refuses a workspace parent
+    # that is group- or world-writable, and a bare mkdir() inherits the umask
+    # (0002 on a stock Ubuntu login shell), which made this fixture unbuildable
+    # on the qualified host.
+    workspace_parent.mkdir(parents=True, mode=0o700)
     moved_ancestor = tmp_path / "moved-stable"
     attacker = tmp_path / "attacker"
     attacker_workspace = (
@@ -1038,7 +1046,11 @@ def test_returned_materialization_rejects_unpinned_handoff_after_ancestor_swap(
 ):
     stable_ancestor = tmp_path / "stable"
     workspace_parent = stable_ancestor / "work"
-    workspace_parent.mkdir(parents=True)
+    # Explicit 0o700: the production materializer refuses a workspace parent
+    # that is group- or world-writable, and a bare mkdir() inherits the umask
+    # (0002 on a stock Ubuntu login shell), which made this fixture unbuildable
+    # on the qualified host.
+    workspace_parent.mkdir(parents=True, mode=0o700)
     moved_ancestor = tmp_path / "moved-stable"
     attacker = tmp_path / "attacker"
     fixture = _Fixture(workspace_parent)

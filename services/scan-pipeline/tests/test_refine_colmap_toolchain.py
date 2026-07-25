@@ -108,6 +108,41 @@ def test_pinned_constants_match_the_in_repo_colmap_builder():
 # ---------------------------------------------------------------------------
 
 
+def test_fixture_prefix_is_never_group_or_world_writable(tmp_path):
+    """The fake prefix must be trusted under any umask, including 0o000.
+
+    The qualified Linux host logs in with umask 0002 (Ubuntu's
+    ``USERGROUPS_ENAB yes`` plus ``pam_umask``).  While the fixture let
+    ``mkdir`` inherit that, it built a group-writable prefix, the real loader
+    refused it -- correctly -- and a hundred-odd tests in this suite collapsed
+    on the one host they most need to run on.  Production never depended on a
+    umask: ``install-colmap-4.0.2.sh`` runs under ``umask 077``, installs under
+    ``(umask 022)`` and chmods 0755 explicitly, and ``patina-scan-worker.service``
+    declares no ``UMask=`` so systemd's 0022 applies.  So the harness may not
+    depend on one either, and umask 0o000 is the strictly harshest proof of it.
+    """
+
+    previous = os.umask(0o000)
+    try:
+        prefix = tmp_path / "colmap"
+        binary = write_toolchain(prefix)
+    finally:
+        os.umask(previous)
+
+    # Everything the fixture installs, not just the two paths the loader walks
+    # today -- a later fixture addition inside the prefix is covered too.
+    for path in (prefix, *sorted(prefix.rglob("*"))):
+        assert path.stat().st_mode & 0o022 == 0, f"{path} is group/world writable"
+
+    # The loader is the judge that actually matters: it must accept the prefix
+    # the fixture just built.
+    toolchain = load_fake_toolchain(prefix)
+    try:
+        assert toolchain.identity.path == str(binary)
+    finally:
+        toolchain.close()
+
+
 def test_loading_binds_the_manifest_digest_to_the_installed_binary(tmp_path):
     prefix = tmp_path / "colmap"
     binary = write_toolchain(prefix)
