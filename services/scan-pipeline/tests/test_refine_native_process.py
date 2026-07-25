@@ -2238,6 +2238,10 @@ def test_timeout_kills_group_reaps_leader_and_prevents_late_publication(tmp_path
     assert not accepted_artifact.exists()
 
 
+def _identity(metadata) -> tuple[int, int]:
+    return (metadata.st_dev, metadata.st_ino)
+
+
 def _write_workspace_tree(root_descriptor: int) -> list[str]:
     """Populate the leased workspace the way a real engine child would."""
 
@@ -2285,6 +2289,19 @@ def _report_workspace_lease(_request, context: NativeChildContext):
         "owner": metadata.st_uid,
         "entriesAtReceipt": sorted(os.listdir(descriptor)),
         "inheritable": os.get_inheritable(descriptor),
+        "leasePath": context.workspace_path(),
+        # The path is exec surface only; it is usable because it lstats to the
+        # same object as the authoritative descriptor.
+        "verifiedLeasePath": (
+            context.workspace_path()
+            if _identity(os.stat(context.workspace_path(), follow_symlinks=False))
+            == _identity(metadata)
+            else "unverified"
+        ),
+        "subdirectoryPaths": [
+            context.workspace_subdirectory_path(name)
+            for name in ("packet", "tmp", "work")
+        ],
         "entriesAfterWrite": _write_workspace_tree(descriptor),
     }
 
@@ -2345,9 +2362,23 @@ def test_leased_workspace_is_private_empty_and_removed_after_normal_return(tmp_p
     assert result["isDirectory"] is True
     assert result["mode"] == 0o700
     assert result["owner"] == os.geteuid()
-    assert result["entriesAtReceipt"] == []
+    # The root is a container: packet/ for extraction, tmp/ and work/ for the
+    # exec'd engine item 3 supervises.
+    assert result["entriesAtReceipt"] == ["packet", "tmp", "work"]
     assert result["inheritable"] is False
-    assert result["entriesAfterWrite"] == ["nested", "top.bin"]
+    assert result["entriesAfterWrite"] == [
+        "nested",
+        "packet",
+        "tmp",
+        "top.bin",
+        "work",
+    ]
+    assert result["leasePath"] == result["verifiedLeasePath"]
+    assert result["subdirectoryPaths"] == [
+        result["leasePath"] + "/packet",
+        result["leasePath"] + "/tmp",
+        result["leasePath"] + "/work",
+    ]
     # The child wrote a tree and a symlink; the parent removed all of it.
     assert list(container.iterdir()) == []
     assert Path("/etc/passwd").exists()
@@ -2402,19 +2433,36 @@ def test_workspace_lease_cleanup_failure_is_reported_after_a_successful_child(
     monkeypatch,
 ):
     container = _lease_container(tmp_path)
+    real_provision = native_process.provision_native_workspace_lease
     real_rmdir = os.rmdir
+    leases: list[native_process.NativeWorkspaceLease] = []
     blocked = False
 
-    def refuse_workspace_rmdir(path, *args, **kwargs):
+    def capture_lease(*args, **kwargs):
+        lease = real_provision(*args, **kwargs)
+        leases.append(lease)
+        return lease
+
+    def refuse_root_rmdir(path, *args, **kwargs):
         nonlocal blocked
-        if type(path) is str and path.startswith(
-            native_process.NATIVE_WORKSPACE_QUARANTINE_PREFIX
+        # Refuse only the final root removal, relative to the lease container,
+        # so the entry purge underneath it still completes.
+        if (
+            leases
+            and kwargs.get("dir_fd") == leases[0].parent_descriptor
+            and type(path) is str
+            and path.startswith(native_process.NATIVE_WORKSPACE_QUARANTINE_PREFIX)
         ):
             blocked = True
             raise OSError("synthetic workspace removal failure")
         return real_rmdir(path, *args, **kwargs)
 
-    monkeypatch.setattr(native_process.os, "rmdir", refuse_workspace_rmdir)
+    monkeypatch.setattr(
+        native_process,
+        "provision_native_workspace_lease",
+        capture_lease,
+    )
+    monkeypatch.setattr(native_process.os, "rmdir", refuse_root_rmdir)
     with pytest.raises(AdapterError) as raised:
         run_native_engine_child(
             _entrypoint("_populate_flat_workspace"),
@@ -2429,8 +2477,11 @@ def test_workspace_lease_cleanup_failure_is_reported_after_a_successful_child(
     assert "workspace" in str(raised.value)
     stranded = list(container.iterdir())
     assert len(stranded) == 1
-    # The purge itself succeeded; only the final root removal was refused.
+    # The purge itself succeeded; only the final root removal was refused, and
+    # the retained directory kept the provisioned name the error reports.
     assert list(stranded[0].iterdir()) == []
+    assert stranded[0].name == leases[0].name
+    assert leases[0].name in str(raised.value)
     stranded[0].rmdir()
 
 
@@ -2518,6 +2569,139 @@ def test_workspace_cleanup_refuses_to_unlink_a_swapped_identity(tmp_path, monkey
     assert survivors[0].read_bytes() == replacement_payload
     survivors[0].unlink()
     workspace.rmdir()
+
+
+@native_engine_entrypoint
+def _populate_every_workspace_subdirectory(_request, context: NativeChildContext):
+    """Write through the descriptor into all three parent-created children."""
+
+    descriptor = context.workspace_descriptor()
+    written: dict[str, str] = {}
+    for name in ("packet", "tmp", "work"):
+        child = os.open(
+            name,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            dir_fd=descriptor,
+        )
+        try:
+            os.mkdir("deeper", mode=0o700, dir_fd=child)
+            handle = os.open(
+                "scratch.bin",
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_CLOEXEC,
+                0o600,
+                dir_fd=child,
+            )
+            os.close(handle)
+            # The transported path names the same object as the descriptor.
+            named = os.stat(
+                context.workspace_subdirectory_path(name),
+                follow_symlinks=False,
+            )
+            opened = os.fstat(child)
+            written[name] = (
+                "matched"
+                if (named.st_dev, named.st_ino) == (opened.st_dev, opened.st_ino)
+                else "mismatched"
+            )
+        finally:
+            os.close(child)
+    return written
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_one_purge_reclaims_every_leased_subdirectory(tmp_path):
+    container = _lease_container(tmp_path)
+    result = run_native_engine_child(
+        _entrypoint("_populate_every_workspace_subdirectory"),
+        {},
+        deadline=_deadline(10.0),
+        workspace_parent_directory=str(container),
+    )
+
+    assert result == {"packet": "matched", "tmp": "matched", "work": "matched"}
+    assert list(container.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_child_rejects_a_transported_path_that_is_not_its_leased_descriptor(
+    tmp_path,
+    monkeypatch,
+):
+    """The descriptor is authoritative; the path is accepted only if it agrees.
+
+    The decoy is a perfectly valid private 0700 directory carrying the exact
+    subdirectory set, so nothing but the descriptor/path identity check can
+    reject it.
+    """
+
+    container = _lease_container(tmp_path)
+    decoy = tmp_path / "decoy"
+    decoy.mkdir(mode=0o700)
+    for name in native_process.NATIVE_WORKSPACE_SUBDIRECTORIES:
+        (decoy / name).mkdir(mode=0o700)
+    real_provision = native_process.provision_native_workspace_lease
+
+    def substitute_path(*args, **kwargs):
+        lease = real_provision(*args, **kwargs)
+        return native_process.NativeWorkspaceLease(
+            lease.parent_descriptor,
+            lease.name,
+            lease.descriptor,
+            lease.identity,
+            str(decoy),
+        )
+
+    monkeypatch.setattr(
+        native_process,
+        "provision_native_workspace_lease",
+        substitute_path,
+    )
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_report_workspace_lease"),
+            {},
+            deadline=_deadline(10.0),
+            workspace_parent_directory=str(container),
+        )
+    monkeypatch.undo()
+
+    assert raised.value.code == "REFINE_INPUT_INVALID"
+    assert "does not resolve to its lease" in str(raised.value)
+    assert list(container.iterdir()) == []
+    # The decoy was never touched; only the leased tree is ever removed.
+    assert sorted(entry.name for entry in decoy.iterdir()) == ["packet", "tmp", "work"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
+def test_ready_envelope_must_echo_the_exact_transported_workspace_path(
+    tmp_path,
+    monkeypatch,
+):
+    container = _lease_container(tmp_path)
+    real_receive = native_process._receive_envelope
+    forged_ready = False
+
+    def forge_path(connection, process, deadline):
+        nonlocal forged_ready
+        envelope = real_receive(connection, process, deadline)
+        if not forged_ready and envelope.get("kind") == "ready":
+            forged_ready = True
+            return {**envelope, "workspacePath": "/tmp/patina-refine-forged"}
+        return envelope
+
+    monkeypatch.setattr(native_process, "_receive_envelope", forge_path)
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_report_workspace_lease"),
+            {},
+            deadline=_deadline(10.0),
+            workspace_parent_directory=str(container),
+        )
+    monkeypatch.undo()
+
+    assert forged_ready is True
+    assert "dedicated POSIX session" in str(raised.value)
+    assert list(container.iterdir()) == []
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
@@ -2746,7 +2930,9 @@ def test_workspace_cleanup_refuses_an_oversized_directory(tmp_path, monkeypatch)
 
     assert any("bounded entry count" in error for error in errors)
     # Nothing is removed once the directory is refused as unbounded.
-    assert len(list(workspace.iterdir())) == 3
+    assert len(list(workspace.iterdir())) == 3 + len(
+        native_process.NATIVE_WORKSPACE_SUBDIRECTORIES
+    )
     shutil.rmtree(workspace)
 
 
@@ -2785,7 +2971,10 @@ def test_workspace_cleanup_refuses_a_changed_root_identity(tmp_path, monkeypatch
     assert errors == ("leased native workspace identity changed before cleanup",)
     # Nothing was removed and both descriptors were still released.
     assert Path(lease.path).is_dir()
-    Path(lease.path).rmdir()
+    assert sorted(entry.name for entry in Path(lease.path).iterdir()) == sorted(
+        native_process.NATIVE_WORKSPACE_SUBDIRECTORIES
+    )
+    shutil.rmtree(lease.path)
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires POSIX directories")
@@ -2797,7 +2986,9 @@ def test_workspace_lease_rejects_a_missing_or_public_container(tmp_path):
             deadline=_deadline(10.0),
         )
     assert raised.value.code == "REFINE_ENGINE_FAILED"
-    for value in ("", None, 7):
+    # A relative container would make the transported lease path mean something
+    # different inside the child's working directory.
+    for value in ("", None, 7, "relative/container"):
         with pytest.raises(AdapterError) as invalid:
             native_process.provision_native_workspace_lease(
                 value,
@@ -2812,27 +3003,60 @@ def test_child_workspace_receipt_requires_a_matching_declaration_and_transport()
     context = NativeChildContext(time.monotonic() + 10.0)
 
     with pytest.raises(transport_error) as missing:
-        native_process._receive_workspace_lease(None, leased=True, context=context)
+        native_process._receive_workspace_lease(
+            None,
+            leased=True,
+            path="/tmp/patina-refine-absent",
+            context=context,
+        )
     assert "transport is unavailable" in str(missing.value)
 
     with pytest.raises(transport_error) as unexpected:
         native_process._receive_workspace_lease(
             object(),
             leased=False,
+            path=None,
             context=context,
         )
     assert "unexpected workspace lease transport" in str(unexpected.value)
+
+    with pytest.raises(transport_error) as orphan_path:
+        native_process._receive_workspace_lease(
+            None,
+            leased=False,
+            path="/tmp/patina-refine-absent",
+            context=context,
+        )
+    assert "workspace path without a lease" in str(orphan_path.value)
 
     for forged in (1, "true", None):
         with pytest.raises(transport_error):
             native_process._receive_workspace_lease(
                 object(),
                 leased=forged,
+                path="/tmp/patina-refine-absent",
                 context=context,
             )
 
+    # A leased child must be handed a bounded absolute path, never a relative
+    # one and never a /proc/self/fd alias standing in for the real directory.
+    for rejected in (None, "", 7, "relative/path", "/" + "a" * 8192):
+        with pytest.raises(transport_error) as bad_path:
+            native_process._receive_workspace_lease(
+                object(),
+                leased=True,
+                path=rejected,
+                context=context,
+            )
+        assert "bounded absolute path" in str(bad_path.value)
+
     assert (
-        native_process._receive_workspace_lease(None, leased=False, context=context)
+        native_process._receive_workspace_lease(
+            None,
+            leased=False,
+            path=None,
+            context=context,
+        )
         is None
     )
 

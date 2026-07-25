@@ -356,6 +356,12 @@ def _lease_context(
     )
 
 
+def _packet_root(lease: NativeWorkspaceLease) -> Path:
+    """Extraction lands in the lease's packet/ child, not in the lease root."""
+
+    return Path(lease.path) / native_process.NATIVE_WORKSPACE_PACKET_SUBDIRECTORY
+
+
 def _leased_ledger(lease: NativeWorkspaceLease):
     return extractor_module._lease_extraction_workspace(_lease_context(lease))
 
@@ -385,6 +391,11 @@ def _extract_packet_probe(request, context: NativeChildContext):
     with extract_colmap_packet(request, context) as packet:
         workspace_metadata = os.fstat(packet.workspace_descriptor)
         leased_metadata = os.fstat(context.workspace_descriptor())
+        packet_metadata = os.stat(
+            native_process.NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
+            dir_fd=context.workspace_descriptor(),
+            follow_symlinks=False,
+        )
         member_modes = {
             relative_path: _member_mode(packet.workspace_descriptor, relative_path)
             for relative_path in packet.extracted_relative_paths
@@ -397,6 +408,19 @@ def _extract_packet_probe(request, context: NativeChildContext):
                 workspace_metadata.st_ino,
             )
             == (leased_metadata.st_dev, leased_metadata.st_ino),
+            "workspaceIsPacketSubdirectory": (
+                workspace_metadata.st_dev,
+                workspace_metadata.st_ino,
+            )
+            == (packet_metadata.st_dev, packet_metadata.st_ino),
+            "leaseEntries": sorted(os.listdir(context.workspace_descriptor())),
+            "workspacePathMatchesLease": os.path.dirname(context.workspace_path())
+            != "",
+            "commandPath": os.path.basename(
+                context.workspace_subdirectory_path(
+                    native_process.NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY
+                )
+            ),
             "workspaceIsDistinctDescriptor": (
                 packet.workspace_descriptor != context.workspace_descriptor()
             ),
@@ -459,8 +483,14 @@ def test_exact_ustar_packet_extracts_in_native_child_and_cleans_workspace(
 
     assert result["workspaceMode"] == 0o700
     assert result["workspaceOwner"] == os.geteuid()
-    assert result["workspaceIsLeasedRoot"] is True
+    # Extraction owns packet/, not the lease root: item 3's TMPDIR and cwd are
+    # siblings inside the same one-purge tree.
+    assert result["workspaceIsLeasedRoot"] is False
+    assert result["workspaceIsPacketSubdirectory"] is True
     assert result["workspaceIsDistinctDescriptor"] is True
+    assert result["leaseEntries"] == ["packet", "tmp", "work"]
+    assert result["workspacePathMatchesLease"] is True
+    assert result["commandPath"] == "work"
     assert result["runId"] == "a" * 64
     assert set(result["memberModes"].values()) == {0o600}
     assert result["frameNames"] == [
@@ -844,7 +874,11 @@ def test_workspace_lease_borrow_rejects_an_unclean_or_public_lease(tmp_path, poi
             os.chmod(lease.path, 0o755)
             expected = "not a private owned directory"
         else:
-            (Path(lease.path) / "squatter.bin").write_bytes(b"x")
+            (
+                Path(lease.path)
+                / native_process.NATIVE_WORKSPACE_PACKET_SUBDIRECTORY
+                / "squatter.bin"
+            ).write_bytes(b"x")
             expected = "not empty"
         with pytest.raises(AdapterError, match=expected) as raised:
             _leased_ledger(lease)
@@ -862,36 +896,37 @@ def test_failed_workspace_lease_borrow_surfaces_cleanup_uncertainty(
     lease = _lease(tmp_path / "lease")
     real_fstat = os.fstat
     real_close = os.close
-    real_dup = os.dup
-    duplicates: list[int] = []
+    real_open = os.open
+    borrowed: list[int] = []
     failed = False
 
-    def wrong_identity(descriptor):
+    def public_borrow(descriptor):
         metadata = real_fstat(descriptor)
-        if descriptor in duplicates:
+        if descriptor in borrowed:
             return SimpleNamespace(
                 st_dev=metadata.st_dev,
-                st_ino=metadata.st_ino + 1,
+                st_ino=metadata.st_ino,
                 st_uid=metadata.st_uid,
-                st_mode=metadata.st_mode,
+                st_mode=stat.S_IFDIR | 0o755,
             )
         return metadata
 
-    def record_dup(descriptor):
-        duplicate = real_dup(descriptor)
-        duplicates.append(duplicate)
-        return duplicate
+    def record_open(path, *args, **kwargs):
+        descriptor = real_open(path, *args, **kwargs)
+        if path == native_process.NATIVE_WORKSPACE_PACKET_SUBDIRECTORY:
+            borrowed.append(descriptor)
+        return descriptor
 
     def inject_close_failure(descriptor):
         nonlocal failed
-        if not failed and descriptor in duplicates:
+        if not failed and descriptor in borrowed:
             failed = True
             real_close(descriptor)
-            raise OSError("synthetic workspace lease duplicate close failure")
+            raise OSError("synthetic workspace lease borrow close failure")
         return real_close(descriptor)
 
-    monkeypatch.setattr(extractor_module.os, "dup", record_dup)
-    monkeypatch.setattr(extractor_module.os, "fstat", wrong_identity)
+    monkeypatch.setattr(extractor_module.os, "open", record_open)
+    monkeypatch.setattr(extractor_module.os, "fstat", public_borrow)
     monkeypatch.setattr(extractor_module.os, "close", inject_close_failure)
     try:
         with pytest.raises(AdapterError, match="cannot close") as raised:
@@ -901,7 +936,7 @@ def test_failed_workspace_lease_borrow_surfaces_cleanup_uncertainty(
         assert _release(lease) == ()
 
     assert failed is True
-    assert duplicates
+    assert borrowed
     assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
     assert list((tmp_path / "lease").iterdir()) == []
 
@@ -1036,7 +1071,7 @@ def test_new_member_identity_failure_does_not_strand_workspace(
         if failure_phase == "fstat":
             assert ledger.files == []
             assert ledger.file_identities == {}
-            assert not (Path(lease.path) / "member.bin").exists()
+            assert not (_packet_root(lease) / "member.bin").exists()
         else:
             assert ledger.files == ["member.bin"]
             assert set(ledger.file_identities) == {"member.bin"}
@@ -1546,7 +1581,7 @@ def test_cleanup_refuses_same_uid_extracted_member_replacement(tmp_path):
     manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture, lease)
     assert request_payload is not None
     request_member = manifest.member_by_path[manifest.request_member]
-    request_path = Path(lease.path) / request_member.relative_path
+    request_path = _packet_root(lease) / request_member.relative_path
     original_descriptor = os.open(request_path, os.O_RDONLY | os.O_CLOEXEC)
     replacement_payload = b"same-uid replacement must survive refused cleanup"
     cleanup_errors: tuple[str, ...] = ()
@@ -1584,7 +1619,7 @@ def test_cleanup_refuses_same_uid_extracted_directory_replacement(tmp_path):
     lease = _lease(tmp_path / "lease")
     _manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture, lease)
     assert request_payload is not None
-    directory_path = Path(lease.path) / "images"
+    directory_path = _packet_root(lease) / "images"
     original_descriptor = os.open(
         directory_path,
         os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
@@ -1678,7 +1713,7 @@ def test_reopened_request_uses_nonblocking_open_before_fifo_type_check(
     manifest, ledger, _paths, request_payload = _extract_direct_chunk(fixture, lease)
     assert request_payload is not None
     request_member = manifest.member_by_path[manifest.request_member]
-    request_path = Path(lease.path) / request_member.relative_path
+    request_path = _packet_root(lease) / request_member.relative_path
     original_descriptor = os.open(request_path, os.O_RDONLY | os.O_CLOEXEC)
     real_open = extractor_module.os.open
     saw_nonblocking_request_open = False

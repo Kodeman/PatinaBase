@@ -3,10 +3,11 @@
 This module owns only the child-side extraction boundary.  It never opens a
 caller display path or ``/proc/self/fd`` alias: source archive reads are
 positional reads from descriptors already pinned by ``refine_native_process``.
-Destinations are created descriptor-relatively beneath the parent-provisioned
-0700 workspace leased through :meth:`NativeChildContext.workspace_descriptor`.
-The extractor borrows that lease; it never creates, names, or removes the
-workspace root, so a SIGKILLed child can no longer strand scratch — the parent
+Destinations are created descriptor-relatively beneath the ``packet/`` child of
+the parent-provisioned 0700 workspace leased through
+:meth:`NativeChildContext.workspace_descriptor`.  The extractor borrows that
+directory; it never creates, names, or removes the workspace root or any of its
+siblings, so a SIGKILLed child can no longer strand scratch — the parent
 performs bounded descriptor-relative cleanup after every child outcome.  The
 child-side ledger cleanup retained here is a fast-path courtesy, not the
 authority.  Execution, output handoff, publication, fallback, and stage
@@ -29,6 +30,7 @@ from .refine_adapter import AdapterError
 from .refine_native_process import (
     NATIVE_CHILD_MAX_PINNED_FILE_BYTES,
     NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES,
+    NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
     NativeChildContext,
 )
 
@@ -321,12 +323,15 @@ def _raise_cleanup_failures(
 
 
 def _lease_extraction_workspace(context: NativeChildContext) -> _ExtractionLedger:
-    """Borrow the parent-provisioned workspace; never create or own the root.
+    """Borrow the parent-provisioned ``packet/`` directory; never own the root.
 
-    The lease must arrive as an empty, private, self-owned directory.  A
-    duplicate is taken so this module's own ledger cleanup can close its
-    descriptor without invalidating the context's copy, and so the removal of
-    the root itself stays exclusively with the parent.
+    Extraction takes the ``packet/`` child of the lease rather than the lease
+    root itself.  The root is shared: item 3 points an exec'd COLMAP's
+    ``TMPDIR`` and ``cwd`` at its siblings ``tmp/`` and ``work/``, so requiring
+    an empty *root* here would break the moment those orderings shifted.  The
+    empty-at-borrow precondition therefore belongs to ``packet/``, which nothing
+    else writes.  Removal of the whole tree still stays exclusively with the
+    parent.
     """
 
     leased_descriptor = context.workspace_descriptor()
@@ -342,12 +347,11 @@ def _lease_extraction_workspace(context: NativeChildContext) -> _ExtractionLedge
                 "COLMAP packet workspace lease is not a private owned directory",
                 _ENGINE_FAILED,
             )
-        if os.listdir(leased_descriptor):
-            raise _fail(
-                "COLMAP packet workspace lease is not empty",
-                _ENGINE_FAILED,
-            )
-        root_descriptor = os.dup(leased_descriptor)
+        root_descriptor = os.open(
+            NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            dir_fd=leased_descriptor,
+        )
         os.set_inheritable(root_descriptor, False)
         root_metadata = os.fstat(root_descriptor)
         if (
@@ -355,17 +359,22 @@ def _lease_extraction_workspace(context: NativeChildContext) -> _ExtractionLedge
             or root_metadata.st_uid != os.geteuid()
             or stat.S_IMODE(root_metadata.st_mode) != 0o700
             or (root_metadata.st_dev, root_metadata.st_ino)
-            != (metadata.st_dev, metadata.st_ino)
+            == (metadata.st_dev, metadata.st_ino)
         ):
             raise _fail(
-                "COLMAP packet workspace lease identity changed",
+                "COLMAP packet workspace lease is not a private owned directory",
+                _ENGINE_FAILED,
+            )
+        if os.listdir(root_descriptor):
+            raise _fail(
+                "COLMAP packet workspace lease is not empty",
                 _ENGINE_FAILED,
             )
     except BaseException as exc:
         if root_descriptor is not None:
             close_failure = _attempt_descriptor_close(
                 root_descriptor,
-                "failed COLMAP packet workspace lease duplicate",
+                "failed COLMAP packet workspace borrow",
             )
             if close_failure is not None:
                 _raise_cleanup_failures([close_failure], cause=exc)
@@ -377,7 +386,7 @@ def _lease_extraction_workspace(context: NativeChildContext) -> _ExtractionLedge
         ) from exc
     return _ExtractionLedger(
         root_descriptor,
-        (metadata.st_dev, metadata.st_ino),
+        (root_metadata.st_dev, root_metadata.st_ino),
         [],
         [],
     )

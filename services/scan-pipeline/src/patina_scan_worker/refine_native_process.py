@@ -69,6 +69,32 @@ NATIVE_CHILD_TERM_GRACE_S = 0.10
 NATIVE_CHILD_KILL_REAP_S = 1.0
 NATIVE_WORKSPACE_NAME_PREFIX = "patina-refine-native-workspace-"
 NATIVE_WORKSPACE_QUARANTINE_PREFIX = "patina-refine-native-purge-"
+# The lease root is a container, never a working directory.  Packet extraction
+# requires an empty directory at borrow, and an exec'd COLMAP given TMPDIR/cwd
+# would violate that precondition the moment ordering shifted, so each consumer
+# gets its own child of the root.  One purge still reclaims everything, at
+# depth 2.
+NATIVE_WORKSPACE_PACKET_SUBDIRECTORY = "packet"
+NATIVE_WORKSPACE_TEMP_SUBDIRECTORY = "tmp"
+NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY = "work"
+NATIVE_WORKSPACE_SUBDIRECTORIES = (
+    NATIVE_WORKSPACE_PACKET_SUBDIRECTORY,
+    NATIVE_WORKSPACE_TEMP_SUBDIRECTORY,
+    NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+)
+NATIVE_WORKSPACE_MAX_PATH_BYTES = 4096
+# Contract for the COLMAP command supervisor (item 3), which is NOT satisfied
+# by this module alone:
+#   * cwd  = context.workspace_subdirectory_path("work")
+#   * TMPDIR = context.workspace_subdirectory_path("tmp")
+#     Both are absolute, verified against the leased descriptor at receipt, and
+#     free of a /proc/self/fd alias, so `resolve(strict=True) == path` holds and
+#     an argv allowlist that rejects relative paths is satisfiable.
+#   * The supervisor receives a directory it did NOT create.  Its private
+#     workspace validation must accept a pre-existing owned 0700 directory and
+#     must not assume ownership of removal: the parent removes the whole lease
+#     tree after every child outcome, including SIGKILL.  A child-side rmdir of
+#     work/ or tmp/ would fight the parent's purge, not help it.
 # Two distinct bounds, not one.  Sharing a single number made a directory at
 # the per-directory cap consume the entire whole-tree budget, so cleanup
 # abandoned every sibling it had not reached yet and stranded them for good.
@@ -135,6 +161,16 @@ class NativeChildContext:
         repr=False,
         compare=False,
     )
+    _workspace_path: str | None = field(
+        default=None,
+        repr=False,
+        compare=False,
+    )
+    _workspace_subdirectory_paths: Mapping[str, str] = field(
+        default_factory=lambda: MappingProxyType({}),
+        repr=False,
+        compare=False,
+    )
     _boundary_seal: object | None = field(
         default=None,
         init=False,
@@ -195,6 +231,12 @@ class NativeChildContext:
         directory, and must not remove it; the parent provisions it before
         ``spawn`` and performs bounded cleanup after every child outcome,
         including SIGKILL.
+
+        Known and deliberately unaddressed here (items 2/5 inherit it): this
+        accessor does not itself re-authenticate the boundary, matching
+        ``pinned_file_descriptor``'s existing posture.  Callers that must not
+        touch scratch outside a verified child check
+        ``is_verified_native_boundary`` first, as the extractor does.
         """
 
         descriptor = self._workspace_descriptor
@@ -204,6 +246,45 @@ class NativeChildContext:
                 _INVALID_INPUT_CODE,
             )
         return descriptor
+
+    def workspace_path(self) -> str:
+        """Return the leased root's absolute path for exec surfaces only.
+
+        A path exists here because an exec'd binary cannot be handed a
+        descriptor: ``cwd=`` and ``getenv("TMPDIR")`` are path-typed by libc
+        contract, and this module deliberately marks its descriptors
+        non-inheritable, so nothing survives the exec.  The parent transports
+        this string explicitly rather than letting anyone derive it from
+        ``/proc/self/fd/N``: explicit transport is auditable, does not depend on
+        procfs under ``ProtectSystem=strict``, and unlike a procfs alias it
+        survives a consumer's ``resolve(strict=True) == path`` check.  The
+        descriptor stays authoritative for every I/O and every cleanup; the
+        child verified this string against it on receipt.
+        """
+
+        path = self._workspace_path
+        if type(path) is not str:
+            raise AdapterError(
+                "native child workspace lease path is unavailable",
+                _INVALID_INPUT_CODE,
+            )
+        return path
+
+    def workspace_subdirectory_path(self, name: str) -> str:
+        """Return one verified absolute child of the leased root."""
+
+        if type(name) is not str:
+            raise AdapterError(
+                "native child workspace subdirectory name must be a string",
+                _INVALID_INPUT_CODE,
+            )
+        try:
+            return self._workspace_subdirectory_paths[name]
+        except KeyError as exc:
+            raise AdapterError(
+                "native child workspace subdirectory is unavailable",
+                _INVALID_INPUT_CODE,
+            ) from exc
 
     @property
     def is_verified_native_boundary(self) -> bool:
@@ -263,11 +344,16 @@ class NativeWorkspaceLease:
 
     The parent creates the directory before any child exists, pins both the
     containing directory and the workspace itself by descriptor, and never
-    re-resolves either by path afterwards.  ``path`` is retained for parent-side
-    diagnostics only and is never transported to the child.  The child receives
-    only a duplicate of ``descriptor`` over SCM_RIGHTS, so it cannot outlive the
+    re-resolves either by path for any I/O or any cleanup.  The child receives a
+    duplicate of ``descriptor`` over SCM_RIGHTS, so it cannot outlive the
     workspace: cleanup is the parent's obligation on every outcome, including a
     SIGKILLed child that never ran Python cleanup at all.
+
+    ``path`` is also transported, as an explicit protocol field, because an
+    exec'd engine binary cannot receive a descriptor — ``cwd=`` and ``TMPDIR``
+    are path-typed by libc contract.  Path secrecy was never a control here (a
+    compromised child can read its own ``/proc/self/fd``); parent ownership is.
+    The child verifies the string against its leased descriptor before use.
     """
 
     parent_descriptor: int
@@ -1231,6 +1317,7 @@ def _child_entry(
     pinned_ledger: tuple[tuple[str, str, int], ...],
     workspace_connection: Connection | None,
     workspace_leased: bool,
+    workspace_path: str | None,
     entrypoint: str,
     request_payload: bytes,
     expires_at_monotonic_s: float,
@@ -1262,6 +1349,7 @@ def _child_entry(
                 "sessionId": os.getsid(0),
                 "pinnedFileCount": len(pinned_ledger),
                 "workspaceLeased": workspace_leased,
+                "workspacePath": workspace_path,
             },
         )
         context = NativeChildContext(expires_at_monotonic_s)
@@ -1277,16 +1365,27 @@ def _child_entry(
             validated_ledger,
             context=context,
         )
-        workspace_descriptor = _receive_workspace_lease(
+        workspace_lease = _receive_workspace_lease(
             workspace_connection,
             leased=workspace_leased,
+            path=workspace_path,
             context=context,
         )
+        workspace_subdirectory_paths: Mapping[str, str] = MappingProxyType({})
+        verified_workspace_path: str | None = None
+        if workspace_lease is not None:
+            (
+                workspace_descriptor,
+                verified_workspace_path,
+                workspace_subdirectory_paths,
+            ) = workspace_lease
         context = _seal_native_child_context(
             NativeChildContext(
                 expires_at_monotonic_s,
                 received_files,
                 workspace_descriptor,
+                verified_workspace_path,
+                workspace_subdirectory_paths,
             )
         )
         context.remaining_seconds()
@@ -2354,7 +2453,15 @@ def provision_native_workspace_lease(
     *,
     deadline: RefineDeadline,
 ) -> NativeWorkspaceLease:
-    """Create one private 0700 workspace and pin it plus its container by fd."""
+    """Create one private 0700 workspace and pin it plus its container by fd.
+
+    Known and deliberately unaddressed here (items 2/5 inherit it):
+    ``O_NOFOLLOW`` guards only the final component of ``parent_directory``, so
+    an intermediate symlink in the operator-configured container path is still
+    followed.  The container path is trusted deployment configuration, not
+    child-controlled input; a descriptor-walked open of every component would
+    be the fix if that ever stops holding.
+    """
 
     _require_workspace_platform_capabilities()
     deadline.remaining_seconds()
@@ -2363,10 +2470,18 @@ def provision_native_workspace_lease(
             "native workspace parent directory must be a non-empty path",
             _INVALID_INPUT_CODE,
         )
+    if not os.path.isabs(parent_directory):
+        # The leased path is transported to the child as an exec surface, and a
+        # relative one would mean something different in the child's cwd.
+        raise AdapterError(
+            "native workspace parent directory must be an absolute path",
+            _INVALID_INPUT_CODE,
+        )
     flags = _workspace_directory_flags()
     parent_descriptor: int | None = None
     workspace_descriptor: int | None = None
     name: str | None = None
+    created_subdirectories: list[str] = []
     try:
         parent_descriptor = os.open(parent_directory, flags)
         os.set_inheritable(parent_descriptor, False)
@@ -2425,19 +2540,55 @@ def provision_native_workspace_lease(
                 "native workspace lease is not a fresh private directory",
                 _FAILED_CODE,
             )
+        path = os.path.join(parent_directory, name)
+        if len(os.fsencode(path)) > NATIVE_WORKSPACE_MAX_PATH_BYTES:
+            raise AdapterError(
+                "native workspace lease path exceeds its bounded length",
+                _INVALID_INPUT_CODE,
+            )
+        for subdirectory in NATIVE_WORKSPACE_SUBDIRECTORIES:
+            os.mkdir(subdirectory, mode=0o700, dir_fd=workspace_descriptor)
+            created_subdirectories.append(subdirectory)
     except BaseException as exc:
         cleanup_errors: list[str] = []
-        if name is not None and parent_descriptor is not None:
+        for subdirectory in reversed(created_subdirectories):
+            if workspace_descriptor is None:  # pragma: no cover - defensive
+                break
             try:
-                os.rmdir(name, dir_fd=parent_descriptor)
+                os.rmdir(subdirectory, dir_fd=workspace_descriptor)
             except OSError as cleanup_exc:
                 cleanup_errors.append(
                     _bounded_diagnostic(
-                        "cannot remove a failed native workspace lease: ",
+                        "cannot remove a failed native workspace subdirectory: ",
                         _exception_summary(cleanup_exc),
                         maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
                     )
                 )
+        if name is not None and parent_descriptor is not None:
+            if cleanup_errors:
+                # A subdirectory survived, so the root rmdir cannot succeed;
+                # name what is being left behind instead of guessing at it.
+                cleanup_errors.append(
+                    _bounded_diagnostic(
+                        "failed native workspace lease retained (",
+                        name,
+                        " retained)",
+                        maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                    )
+                )
+            else:
+                try:
+                    os.rmdir(name, dir_fd=parent_descriptor)
+                except OSError as cleanup_exc:
+                    cleanup_errors.append(
+                        _bounded_diagnostic(
+                            "cannot remove a failed native workspace lease (",
+                            name,
+                            " retained): ",
+                            _exception_summary(cleanup_exc),
+                            maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                        )
+                    )
         cleanup_errors.extend(
             _close_workspace_descriptors(
                 (
@@ -2467,7 +2618,7 @@ def provision_native_workspace_lease(
         name,
         workspace_descriptor,
         (metadata.st_dev, metadata.st_ino),
-        os.path.join(parent_directory, name),
+        path,
     )
 
 
@@ -2893,6 +3044,17 @@ def _release_workspace_lease(
     SIGKILL — because the parent, not the child, owns the directory.  Work is
     bounded by depth and entry budget rather than the shared deadline so an
     exhausted deadline can never strand scratch.
+
+    Known and deliberately unaddressed here (items 2/5 inherit both):
+
+    * The bound is on *count and depth, not time*.  Every syscall below runs
+      inside a ``finally`` and none of them is preemptible, so a stalled FUSE or
+      network filesystem under the lease container makes the stage never
+      complete — the queue lease then expires with a live orphan.  The workspace
+      container must be a local filesystem.
+    * A non-quiescent leader is reported but does not stop the purge, so a
+      still-live child could race the entries being removed.  Refusing instead
+      would trade a race for a guaranteed orphan, which is why it stands.
     """
 
     errors: list[str] = []
@@ -2986,6 +3148,11 @@ def _send_workspace_lease(
         from multiprocessing.reduction import send_handle
 
         deadline.remaining_seconds()
+        # Known and deliberately unaddressed here (items 2/5 inherit it): on
+        # macOS CPython's sendfds waits on an untimed sock.recv(1)
+        # acknowledgement, so this call is not preemptible by the deadline
+        # bracketing it.  Linux — the qualified platform — does not acknowledge.
+        # This is the pre-existing I94 pinned-file transport pattern.
         send_handle(connection, lease.descriptor, destination_pid)
         deadline.remaining_seconds()
     except AdapterError:
@@ -3000,23 +3167,90 @@ def _send_workspace_lease(
         ) from exc
 
 
+def _verify_leased_workspace_subdirectory(
+    root_descriptor: int,
+    root_path: str,
+    name: str,
+) -> str:
+    """Bind one subdirectory's transported path to its own descriptor."""
+
+    descriptor = os.open(
+        name,
+        _workspace_directory_flags(),
+        dir_fd=root_descriptor,
+    )
+    try:
+        metadata = os.fstat(descriptor)
+        path = os.path.join(root_path, name)
+        named = os.stat(path, follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+            or (metadata.st_dev, metadata.st_ino)
+            != (named.st_dev, named.st_ino)
+        ):
+            raise AdapterError(
+                "native child workspace subdirectory does not match its lease",
+                _INVALID_INPUT_CODE,
+            )
+        if os.listdir(descriptor):
+            raise AdapterError(
+                "native child workspace subdirectory is not empty at receipt",
+                _INVALID_INPUT_CODE,
+            )
+    finally:
+        close_errors = _close_descriptors_safely(
+            (("workspace lease subdirectory", descriptor),)
+        )
+        if close_errors:
+            raise AdapterError(
+                _bounded_cleanup_report(
+                    "native child workspace subdirectory receipt failed",
+                    close_errors,
+                ),
+                _CLEANUP_FAILED_CODE,
+            )
+    return path
+
+
 def _receive_workspace_lease(
     connection: Connection | None,
     *,
     leased: bool,
+    path: str | None,
     context: NativeChildContext,
-) -> int | None:
-    """Receive and independently verify the parent's writable workspace root."""
+) -> tuple[int, str, Mapping[str, str]] | None:
+    """Receive and independently verify the parent's writable workspace root.
+
+    The descriptor is authoritative.  ``path`` is the exec surface item 3 needs
+    for ``cwd=``/``TMPDIR``, and it is accepted only after ``lstat`` on the
+    string and ``fstat`` on the descriptor agree on ``(st_dev, st_ino)``, so a
+    substituted or symlinked path cannot be used even though it arrives as text.
+    """
 
     if leased is not True:
         if connection is not None:
             raise _ChildTransportError(
                 "native child received an unexpected workspace lease transport"
             )
+        if path is not None:
+            raise _ChildTransportError(
+                "native child received a workspace path without a lease"
+            )
         return None
     if connection is None:
         raise _ChildTransportError(
             "native child workspace lease transport is unavailable"
+        )
+    if (
+        type(path) is not str
+        or not path
+        or not os.path.isabs(path)
+        or len(os.fsencode(path)) > NATIVE_WORKSPACE_MAX_PATH_BYTES
+    ):
+        raise _ChildTransportError(
+            "native child workspace lease path is not a bounded absolute path"
         )
     from multiprocessing.reduction import recv_handle
 
@@ -3029,6 +3263,7 @@ def _receive_workspace_lease(
     try:
         os.set_inheritable(descriptor, False)
         metadata = os.fstat(descriptor)
+        named = os.stat(path, follow_symlinks=False)
         if (
             not stat.S_ISDIR(metadata.st_mode)
             or metadata.st_uid != os.geteuid()
@@ -3038,11 +3273,23 @@ def _receive_workspace_lease(
                 "native child workspace lease is not a private owned directory",
                 _INVALID_INPUT_CODE,
             )
-        if os.listdir(descriptor):
+        if (metadata.st_dev, metadata.st_ino) != (named.st_dev, named.st_ino):
             raise AdapterError(
-                "native child workspace lease is not empty at receipt",
+                "native child workspace lease path does not resolve to its lease",
                 _INVALID_INPUT_CODE,
             )
+        if sorted(os.listdir(descriptor)) != sorted(NATIVE_WORKSPACE_SUBDIRECTORIES):
+            raise AdapterError(
+                "native child workspace lease does not hold its exact "
+                "subdirectory set at receipt",
+                _INVALID_INPUT_CODE,
+            )
+        subdirectory_paths = MappingProxyType(
+            {
+                name: _verify_leased_workspace_subdirectory(descriptor, path, name)
+                for name in NATIVE_WORKSPACE_SUBDIRECTORIES
+            }
+        )
     except BaseException as exc:
         close_errors = _close_descriptors_safely((("workspace lease", descriptor),))
         if close_errors:
@@ -3054,7 +3301,7 @@ def _receive_workspace_lease(
                 _CLEANUP_FAILED_CODE,
             ) from exc
         raise
-    return descriptor
+    return descriptor, path, subdirectory_paths
 
 
 def run_native_engine_child(
@@ -3215,6 +3462,7 @@ def run_native_engine_child(
                 pinned_ledger,
                 child_workspace_connection,
                 workspace_lease is not None,
+                None if workspace_lease is None else workspace_lease.path,
                 entrypoint,
                 request_payload,
                 deadline.expires_at_monotonic_s,
@@ -3307,6 +3555,8 @@ def run_native_engine_child(
             or (bool(transfers) and reported_pinned_count != len(transfers))
             or (not transfers and reported_pinned_count not in (None, 0))
             or ready.get("workspaceLeased") is not (workspace_lease is not None)
+            or ready.get("workspacePath")
+            != (None if workspace_lease is None else workspace_lease.path)
         ):
             raise AdapterError(
                 "refine native child did not establish its dedicated POSIX session",
