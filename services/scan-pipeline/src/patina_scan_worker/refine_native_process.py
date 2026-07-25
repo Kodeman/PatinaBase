@@ -89,7 +89,15 @@ NATIVE_WORKSPACE_MAX_PATH_BYTES = 4096
 #   * TMPDIR = context.workspace_subdirectory_path("tmp")
 #     Both are absolute, verified against the leased descriptor at receipt, and
 #     free of a /proc/self/fd alias, so `resolve(strict=True) == path` holds and
-#     an argv allowlist that rejects relative paths is satisfiable.
+#     an argv allowlist that rejects relative paths is satisfiable.  That claim
+#     is only true because `provision_native_workspace_lease` now REFUSES a
+#     `workspace_parent_directory` that is not its own realpath: with a
+#     symlinked component anywhere in the operator's container path the check
+#     fails and the supervisor rejects the leased work/ outright.
+#   * The argv confinement root is context.workspace_path() -- the LEASE ROOT,
+#     not work/.  packet/, tmp/ and work/ are all inside it, so an --image_path
+#     into the extracted packet is admissible while anything outside the lease
+#     is refused.  Rooting confinement at cwd rejects the packet.
 #   * The supervisor receives a directory it did NOT create.  Its private
 #     workspace validation must accept a pre-existing owned 0700 directory and
 #     must not assume ownership of removal: the parent removes the whole lease
@@ -260,6 +268,14 @@ class NativeChildContext:
         survives a consumer's ``resolve(strict=True) == path`` check.  The
         descriptor stays authoritative for every I/O and every cleanup; the
         child verified this string against it on receipt.
+
+        The ``resolve(strict=True)`` claim rests on
+        :func:`provision_native_workspace_lease` refusing a container that is
+        not its own realpath.  Without that guard the claim was simply false --
+        an operator scratch root reached through a symlink produced a lease the
+        command supervisor rejected with "COLMAP command workspace may not
+        traverse a symlink".  The operator constraint is therefore explicit: the
+        configured scratch root must contain no symlinked component.
         """
 
         path = self._workspace_path
@@ -2455,12 +2471,23 @@ def provision_native_workspace_lease(
 ) -> NativeWorkspaceLease:
     """Create one private 0700 workspace and pin it plus its container by fd.
 
-    Known and deliberately unaddressed here (items 2/5 inherit it):
-    ``O_NOFOLLOW`` guards only the final component of ``parent_directory``, so
-    an intermediate symlink in the operator-configured container path is still
-    followed.  The container path is trusted deployment configuration, not
-    child-controlled input; a descriptor-walked open of every component would
-    be the fix if that ever stops holding.
+    ``parent_directory`` must be **canonical**: equal to its own ``realpath``.
+    That is not cosmetic.  The leased root's path is transported to the child as
+    the ``cwd=``/``TMPDIR`` exec surface, and the consumer of those surfaces
+    (the pinned COLMAP command supervisor) refuses any directory for which
+    ``resolve(strict=True) != path``.  ``O_NOFOLLOW`` guards only the final
+    component, so a symlinked *intermediate* component used to be followed
+    silently and produced a lease whose transported path the supervisor then
+    rejected outright -- a contract this module's own accessor claimed to
+    satisfy.  Requiring the canonical form closes that disagreement at the one
+    boundary an operator can act on, and additionally rejects ``.``/``..``
+    segments and trailing slashes, so the transported string is unambiguous.
+
+    Residual, unchanged: the check binds the string to the pinned descriptor at
+    this instant.  Replacing an intermediate component afterwards is still not
+    prevented here -- it requires write access to the operator's own container
+    path, which remains trusted deployment configuration rather than
+    child-controlled input.
     """
 
     _require_workspace_platform_capabilities()
@@ -2487,6 +2514,28 @@ def provision_native_workspace_lease(
         os.set_inheritable(parent_descriptor, False)
         parent_metadata = os.fstat(parent_descriptor)
         parent_mode = stat.S_IMODE(parent_metadata.st_mode)
+        # The leased path is joined onto this string and transported as the
+        # child's cwd/TMPDIR.  If any component is a symlink the transported
+        # path fails the consumer's `resolve(strict=True) == path` check, so
+        # refuse the container rather than mint a lease nobody can use.
+        canonical_parent = os.path.realpath(parent_directory)
+        if canonical_parent != parent_directory:
+            raise AdapterError(
+                "native workspace parent directory must not traverse a symlink",
+                _INVALID_INPUT_CODE,
+            )
+        # Bind that string to the descriptor actually pinned above, so the
+        # canonical form is proven to name this leased container and not a
+        # same-named directory elsewhere.
+        canonical_metadata = os.stat(canonical_parent)
+        if (canonical_metadata.st_dev, canonical_metadata.st_ino) != (
+            parent_metadata.st_dev,
+            parent_metadata.st_ino,
+        ):
+            raise AdapterError(
+                "native workspace parent directory changed identity while opening",
+                _INVALID_INPUT_CODE,
+            )
         if (
             not stat.S_ISDIR(parent_metadata.st_mode)
             or parent_metadata.st_uid != os.geteuid()
@@ -3066,16 +3115,29 @@ def _release_workspace_lease(
     try:
         root_metadata = os.fstat(lease.descriptor)
     except OSError as exc:
+        # Both of these branches leave the tree in place.  Name it, exactly as
+        # the incomplete-purge branch below does: a retained directory is only
+        # forensics if the caller learns which one it is, and neither branch
+        # used to say.
         errors.append(
             _bounded_diagnostic(
-                "cannot inspect the leased native workspace before cleanup: ",
+                "cannot inspect the leased native workspace before cleanup (",
+                lease.name,
+                " retained): ",
                 _exception_summary(exc),
                 maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
             )
         )
     if root_metadata is not None:
         if (root_metadata.st_dev, root_metadata.st_ino) != lease.identity:
-            errors.append("leased native workspace identity changed before cleanup")
+            errors.append(
+                _bounded_diagnostic(
+                    "leased native workspace identity changed before cleanup (",
+                    lease.name,
+                    " retained)",
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
         else:
             purge_errors: list[str] = []
             _purge_leased_directory(

@@ -2968,7 +2968,12 @@ def test_workspace_cleanup_refuses_a_changed_root_identity(tmp_path, monkeypatch
     errors = native_process._release_workspace_lease(lease, leader_quiescent=True)
     monkeypatch.undo()
 
-    assert errors == ("leased native workspace identity changed before cleanup",)
+    # The tree is retained, so the report has to name which one -- otherwise the
+    # caller is told scratch was stranded but not where.
+    assert errors == (
+        "leased native workspace identity changed before cleanup "
+        f"({lease.name} retained)",
+    )
     # Nothing was removed and both descriptors were still released.
     assert Path(lease.path).is_dir()
     assert sorted(entry.name for entry in Path(lease.path).iterdir()) == sorted(
