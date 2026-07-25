@@ -22,7 +22,7 @@ import math
 import os
 import re
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
@@ -353,21 +353,32 @@ class PreparedRefineRunRequest:
 
 @dataclass(frozen=True)
 class RefineFileArtifact:
-    """Streaming publisher input; binary payload is never retained in memory.
+    """Streaming publisher input bound to one BORROWED read-only descriptor.
 
-    This is a handoff descriptor, not a durable attestation.  The create-only
-    publisher MUST open without following links and hash, size, and publish the
-    exact same open descriptor; validating one path open and uploading from a
-    second is not sufficient.  Runner-time verification cannot stop a workspace
-    file from changing after :meth:`RefineRunner.run` returns.
+    ``descriptor`` is the handoff.  It is not opened here and not closed here:
+    its owner is whoever opened it -- in the composed pipeline, the
+    ``NativeEngineOutputs`` sink the native boundary populated.  The runner
+    verifies that exact descriptor and the publisher uploads that exact
+    descriptor, so there is no window in which the object being measured and the
+    object being published could differ.  Every read on it is positional, so the
+    owner's file offset is never disturbed.
+
+    ``display_path`` is exactly what its name says: metadata for humans and for
+    the manifest.  Nothing may open it.  It was previously a ``source_path`` that
+    the runner resolved and hashed and the publisher then opened a SECOND time,
+    which is the reopen this contract exists to remove.
     """
 
     name: str
-    source_path: Path
+    # A file-descriptor NUMBER is an incidental handle, not part of the
+    # artifact's value: two runs over identical bytes must still compare equal,
+    # and the byte-determinism contract is carried by ``sha256``/``size_bytes``.
+    descriptor: int = field(compare=False)
     sha256: str
     size_bytes: int
     transport_content_type: str
     semantic_media_type: str
+    display_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -824,6 +835,99 @@ def _stable_file_sha256(
         except OSError as exc:
             if not pending_error:
                 raise OSError("source descriptor could not be closed safely") from exc
+    _require_engine_budget(deadline)
+    stable_fields_before = (
+        before.st_dev,
+        before.st_ino,
+        before.st_mode,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    )
+    stable_fields_after = (
+        after.st_dev,
+        after.st_ino,
+        after.st_mode,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    )
+    if stable_fields_before != stable_fields_after:
+        raise ValueError("source changed while it was hashed")
+    return digest.hexdigest(), after
+
+
+def _borrowed_descriptor_stat(
+    descriptor: object,
+    *,
+    label: str,
+) -> os.stat_result:
+    """Fail closed on anything that is not a borrowed read-only regular file."""
+
+    if type(descriptor) is not int or descriptor < 0:
+        _fail(
+            RefineFailureCode.ARTIFACT_INVALID,
+            f"{label} descriptor must be a non-negative integer",
+        )
+    try:
+        metadata = os.fstat(descriptor)
+    except OSError as exc:
+        _fail(RefineFailureCode.INPUT_IO, f"cannot inspect {label}: {exc}")
+    if not stat.S_ISREG(metadata.st_mode):
+        _fail(
+            RefineFailureCode.ARTIFACT_INVALID,
+            f"{label} must be a regular file",
+        )
+    try:
+        import fcntl
+
+        access_mode = fcntl.fcntl(descriptor, fcntl.F_GETFL) & os.O_ACCMODE
+    except (ImportError, OSError) as exc:
+        _fail(RefineFailureCode.INPUT_IO, f"cannot inspect {label} flags: {exc}")
+    if access_mode != os.O_RDONLY:
+        _fail(
+            RefineFailureCode.ARTIFACT_INVALID,
+            f"{label} must be borrowed read-only",
+        )
+    return metadata
+
+
+def _stable_descriptor_sha256(
+    descriptor: int,
+    *,
+    expected_size: int,
+    deadline: RefineDeadline,
+) -> tuple[str, os.stat_result]:
+    """Hash a borrowed descriptor positionally, proving its identity held still.
+
+    ``pread`` rather than ``read``: the descriptor belongs to someone else, so
+    consuming its offset would corrupt an owner that reads it before or after
+    this call -- and, unlike the removed path-based hasher, there is no second
+    ``open`` here for an attacker to aim at.
+    """
+
+    _require_engine_budget(deadline)
+    if not hasattr(os, "pread"):
+        raise ValueError("descriptor-relative reads are unavailable")
+    before = os.fstat(descriptor)
+    if not stat.S_ISREG(before.st_mode):
+        raise ValueError("source is not a regular file")
+    if before.st_size != expected_size:
+        raise ValueError("source size does not match its ledger")
+    digest = hashlib.sha256()
+    offset = 0
+    chunk_index = 0
+    while offset < expected_size:
+        _deadline_checkpoint(deadline, chunk_index)
+        chunk = os.pread(descriptor, min(1024 * 1024, expected_size - offset), offset)
+        if not chunk:
+            raise ValueError("source ended before its declared size")
+        digest.update(chunk)
+        offset += len(chunk)
+        chunk_index += 1
+    if os.pread(descriptor, 1, expected_size):
+        raise ValueError("source exceeds its declared size")
+    after = os.fstat(descriptor)
     _require_engine_budget(deadline)
     stable_fields_before = (
         before.st_dev,
@@ -2018,10 +2122,17 @@ def _pose_documents(
 def _validate_engine_artifacts(
     values: object,
     *,
-    workspace_root: Path,
     expected_outputs: tuple[RefineEngineOutputReference, ...],
     deadline: RefineDeadline,
 ) -> tuple[RefineFileArtifact, ...]:
+    """Verify every engine artifact through its borrowed descriptor only.
+
+    There is no path here on purpose.  ``workspace_root`` containment used to be
+    the safety story, but a containment check followed by an ``open`` is only as
+    good as the gap between them; binding to the descriptor the builder already
+    holds removes the gap instead of narrowing it.
+    """
+
     artifacts = _snapshot_sequence(
         values,
         label="artifact builder output",
@@ -2029,6 +2140,7 @@ def _validate_engine_artifacts(
         deadline=deadline,
     )
     seen: set[str] = set()
+    seen_identities: set[tuple[int, int]] = set()
     expected_by_name = {reference.name: reference for reference in expected_outputs}
     validated: list[RefineFileArtifact] = []
     for artifact_index, artifact in enumerate(artifacts):
@@ -2067,45 +2179,30 @@ def _validate_engine_artifacts(
                 RefineFailureCode.ARTIFACT_INVALID,
                 "artifact semantic media type does not match its canonical name",
             )
-        if (
-            not isinstance(artifact.source_path, Path)
-            or not artifact.source_path.is_absolute()
+        if artifact.display_path is not None and (
+            type(artifact.display_path) is not str or not artifact.display_path
         ):
             _fail(
                 RefineFailureCode.ARTIFACT_INVALID,
-                "artifact source path must be absolute",
+                "artifact display path must be absent or a non-empty string",
             )
-        try:
-            resolved = artifact.source_path.resolve(strict=True)
-            resolved.relative_to(workspace_root)
-            file_stat = resolved.stat()
-        except OSError as exc:
-            _fail(RefineFailureCode.INPUT_IO, f"cannot inspect engine artifact: {exc}")
-        except ValueError as exc:
-            _fail(
-                RefineFailureCode.ARTIFACT_INVALID,
-                f"engine artifact escapes workspace: {exc}",
-            )
-        if resolved != artifact.source_path or not stat.S_ISREG(file_stat.st_mode):
-            _fail(
-                RefineFailureCode.ARTIFACT_INVALID,
-                "engine artifact must be a contained regular file without symlinks",
-            )
+        file_stat = _borrowed_descriptor_stat(
+            artifact.descriptor,
+            label="engine artifact",
+        )
         reference = expected_by_name.get(artifact.name)
         if reference is None:
             _fail(
                 RefineFailureCode.ARTIFACT_INVALID,
                 "engine artifact is absent from the candidate output references",
             )
-        try:
-            relative_path = resolved.relative_to(workspace_root).as_posix()
-        except ValueError as exc:  # pragma: no cover - containment checked above
-            _fail(RefineFailureCode.ARTIFACT_INVALID, str(exc))
-        if relative_path != reference.relative_path:
+        identity = (file_stat.st_dev, file_stat.st_ino)
+        if identity in seen_identities:
             _fail(
                 RefineFailureCode.ARTIFACT_INVALID,
-                "engine artifact path disagrees with its candidate output reference",
+                "engine artifacts must reference unique file identities",
             )
+        seen_identities.add(identity)
         if (
             type(artifact.size_bytes) is not int
             or artifact.size_bytes <= 0
@@ -2123,8 +2220,9 @@ def _validate_engine_artifacts(
                 "engine artifact sha256 is malformed",
             )
         try:
-            actual_sha256, stable_stat = _stable_file_sha256(
-                resolved,
+            actual_sha256, stable_stat = _stable_descriptor_sha256(
+                artifact.descriptor,
+                expected_size=artifact.size_bytes,
                 deadline=deadline,
             )
         except OSError as exc:
@@ -2155,11 +2253,12 @@ def _validate_engine_artifacts(
         validated.append(
             RefineFileArtifact(
                 name=artifact.name,
-                source_path=resolved,
+                descriptor=artifact.descriptor,
                 sha256=artifact.sha256,
                 size_bytes=artifact.size_bytes,
                 transport_content_type=artifact.transport_content_type,
                 semantic_media_type=artifact.semantic_media_type,
+                display_path=artifact.display_path,
             )
         )
     missing = _REQUIRED_ENGINE_ARTIFACT_NAMES - seen
@@ -2941,7 +3040,6 @@ class RefineRunner:
         _require_engine_budget(deadline)
         engine_artifacts = _validate_engine_artifacts(
             built_artifacts,
-            workspace_root=prepared.workspace_root,
             expected_outputs=candidate.outputs,
             deadline=deadline,
         )

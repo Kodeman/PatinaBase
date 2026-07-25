@@ -9,7 +9,6 @@ object endpoint with the service-role key.
 from __future__ import annotations
 
 import asyncio
-import errno
 import hashlib
 import math
 import os
@@ -85,8 +84,31 @@ def _bounded_file_chunks(
         yield chunk
 
 
-def _stage_verified_file(
-    source: BinaryIO,
+def _descriptor_snapshot(descriptor: int) -> tuple[int, int, int, int, int, int]:
+    try:
+        metadata = os.fstat(descriptor)
+    except OSError as exc:
+        raise PermanentError(
+            "immutable storage publication source descriptor is unusable",
+            token="REFINE_ARTIFACT_SOURCE",
+        ) from exc
+    if not stat.S_ISREG(metadata.st_mode):
+        raise PermanentError(
+            "immutable storage publication source is not a regular file",
+            token="REFINE_ARTIFACT_SOURCE",
+        )
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _stage_verified_descriptor(
+    descriptor: int,
     frozen: BinaryIO,
     *,
     expected_sha256: str,
@@ -94,17 +116,15 @@ def _stage_verified_file(
     deadline: RefineDeadline | None = None,
     reserve_seconds: float = 0,
 ) -> None:
-    """Copy one stable source generation into a private upload descriptor.
+    """Copy one stable generation of a BORROWED descriptor into private scratch.
 
-    The service must never stream a caller-writable inode directly into a
-    create-only object. If that inode changes between upload chunks, the remote
-    key can otherwise be committed with mixed bytes before the client notices.
-    ``frozen`` is an unlinked, mode-0600 temporary file owned only by this
-    process; no network call occurs until its bytes and the live source metadata
-    have both been verified.
+    Reads are positional, so the owner's offset is never observed or moved and
+    the same descriptor can be published more than once.  ``frozen`` is an
+    unlinked mode-0600 temporary owned only by this process; no network call
+    happens until its bytes and the source's metadata have both been verified.
     """
 
-    initial_snapshot = _file_snapshot(source)
+    initial_snapshot = _descriptor_snapshot(descriptor)
     if initial_snapshot[3] != expected_size:
         raise TransientError(
             "immutable publication source size no longer matches its manifest",
@@ -113,26 +133,29 @@ def _stage_verified_file(
 
     digest = hashlib.sha256()
     copied = 0
-    source_chunks = (
-        _bounded_file_chunks(source)
-        if deadline is None and reserve_seconds == 0
-        else _bounded_file_chunks(
-            source,
-            deadline=deadline,
-            reserve_seconds=reserve_seconds,
+    while copied < expected_size:
+        _deadline_remaining(deadline, reserve_seconds=reserve_seconds)
+        chunk = os.pread(
+            descriptor,
+            min(_TRANSFER_CHUNK_BYTES, expected_size - copied),
+            copied,
         )
-    )
-    for chunk in source_chunks:
-        copied += len(chunk)
-        if copied > expected_size:
+        if not chunk:
             raise TransientError(
-                "immutable publication source grew while staging",
+                "immutable publication source ended before its manifest size",
                 token="REFINE_ARTIFACT_IO",
             )
+        copied += len(chunk)
         digest.update(chunk)
         frozen.write(chunk)
+    _deadline_remaining(deadline, reserve_seconds=reserve_seconds)
+    if os.pread(descriptor, 1, expected_size):
+        raise TransientError(
+            "immutable publication source grew while staging",
+            token="REFINE_ARTIFACT_IO",
+        )
 
-    staged_snapshot = _file_snapshot(source)
+    staged_snapshot = _descriptor_snapshot(descriptor)
     if staged_snapshot != initial_snapshot or copied != expected_size:
         raise TransientError(
             "immutable publication source changed while staging",
@@ -643,10 +666,10 @@ class StorageClient:
                 token="REFINE_ARTIFACT_IO",
             ) from exc
 
-    def publish_immutable_file(
+    def publish_immutable_descriptor(
         self,
         object_key: str,
-        source_path: str | os.PathLike[str],
+        source_descriptor: int,
         content_type: str,
         *,
         expected_sha256: str,
@@ -662,6 +685,13 @@ class StorageClient:
         publish its manifest commit marker last. Returns ``True`` when this call
         created the object and ``False`` for an identical concurrent/replayed
         object. A divergent existing object is a permanent stable conflict.
+
+        The source is a BORROWED read-only descriptor, never a path.  Publishing
+        by name meant the caller validated one open and this method uploaded from
+        a second, so a same-UID actor could swap the object between the two; a
+        descriptor cannot be swapped.  Every read here is positional, so the
+        owner's file offset is neither observed nor disturbed, and this method
+        never closes what it did not open.
 
         ``expected_sha256`` and ``expected_size`` bind the object to the
         already-built manifest. The source is copied into a private frozen
@@ -688,106 +718,76 @@ class StorageClient:
                 token="REFINE_ARTIFACT_VERIFY",
             )
 
+        if isinstance(source_descriptor, bool) or not isinstance(
+            source_descriptor, int
+        ):
+            raise PermanentError(
+                "immutable storage publication requires a borrowed descriptor",
+                token="REFINE_ARTIFACT_SOURCE",
+            )
+
         _deadline_remaining(deadline, reserve_seconds=reserve_seconds)
         url = f"/storage/v1/object/{self._bucket}/{object_key}"
-        source_name = os.fspath(source_path)
         try:
-            source_lstat = os.lstat(source_name)
-            if stat.S_ISLNK(source_lstat.st_mode) or not stat.S_ISREG(
-                source_lstat.st_mode
-            ):
-                raise PermanentError(
-                    "immutable storage publication source is not a regular file",
-                    token="REFINE_ARTIFACT_SOURCE",
+            with tempfile.TemporaryFile(
+                mode="w+b",
+                prefix="patina-refine-upload-",
+                dir=self._cfg.work_dir,
+            ) as frozen:
+                _stage_verified_descriptor(
+                    source_descriptor,
+                    frozen,
+                    expected_sha256=expected_sha256,
+                    expected_size=expected_size,
+                    deadline=deadline,
+                    reserve_seconds=reserve_seconds,
                 )
-            try:
-                nonblocking_flag = os.O_NONBLOCK
-            except AttributeError as exc:
-                raise PermanentError(
-                    "nonblocking immutable source opens are unavailable",
-                    token="REFINE_ARTIFACT_SOURCE",
-                ) from exc
-            flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
-            flags |= getattr(os, "O_NOFOLLOW", 0)
-            flags |= nonblocking_flag
-            try:
-                descriptor = os.open(source_name, flags)
-            except OSError as exc:
-                if exc.errno == errno.ELOOP:
-                    raise PermanentError(
-                        "immutable storage publication source is a symbolic link",
-                        token="REFINE_ARTIFACT_SOURCE",
-                    ) from exc
-                raise
-            with os.fdopen(descriptor, "rb") as source:
-                initial_snapshot = _file_snapshot(source)
-                if initial_snapshot[:2] != (
-                    source_lstat.st_dev,
-                    source_lstat.st_ino,
-                ):
-                    raise TransientError(
-                        f"immutable publication source changed while opening: {source_path}",
-                        token="REFINE_ARTIFACT_IO",
-                    )
-                with tempfile.TemporaryFile(
-                    mode="w+b",
-                    prefix="patina-refine-upload-",
-                    dir=self._cfg.work_dir,
-                ) as frozen:
-                    _stage_verified_file(
-                        source,
+
+                uploaded_digest = hashlib.sha256()
+                uploaded_size = 0
+
+                def upload_chunks() -> Iterator[bytes]:
+                    nonlocal uploaded_size
+                    frozen_chunks = _bounded_file_chunks(frozen)
+                    for chunk in frozen_chunks:
+                        uploaded_digest.update(chunk)
+                        uploaded_size += len(chunk)
+                        yield chunk
+
+                async def upload_chunks_refine():
+                    nonlocal uploaded_size
+                    for chunk in _bounded_file_chunks(
                         frozen,
-                        expected_sha256=expected_sha256,
-                        expected_size=expected_size,
                         deadline=deadline,
                         reserve_seconds=reserve_seconds,
+                    ):
+                        uploaded_digest.update(chunk)
+                        uploaded_size += len(chunk)
+                        yield chunk
+
+                headers = {
+                    "content-type": content_type,
+                    "content-length": str(expected_size),
+                    "x-upsert": "false",
+                }
+                if deadline is None:
+                    resp = self._s.post(
+                        url,
+                        content=upload_chunks(),
+                        headers=headers,
                     )
-
-                    uploaded_digest = hashlib.sha256()
-                    uploaded_size = 0
-
-                    def upload_chunks() -> Iterator[bytes]:
-                        nonlocal uploaded_size
-                        frozen_chunks = _bounded_file_chunks(frozen)
-                        for chunk in frozen_chunks:
-                            uploaded_digest.update(chunk)
-                            uploaded_size += len(chunk)
-                            yield chunk
-
-                    async def upload_chunks_refine():
-                        nonlocal uploaded_size
-                        for chunk in _bounded_file_chunks(
-                            frozen,
-                            deadline=deadline,
-                            reserve_seconds=reserve_seconds,
-                        ):
-                            uploaded_digest.update(chunk)
-                            uploaded_size += len(chunk)
-                            yield chunk
-
-                    headers = {
-                        "content-type": content_type,
-                        "content-length": str(expected_size),
-                        "x-upsert": "false",
-                    }
-                    if deadline is None:
-                        resp = self._s.post(
+                else:
+                    resp = self._run_refine_io(
+                        lambda: self._publish_refine(
                             url,
-                            content=upload_chunks(),
+                            object_key,
+                            content=upload_chunks_refine(),
                             headers=headers,
-                        )
-                    else:
-                        resp = self._run_refine_io(
-                            lambda: self._publish_refine(
-                                url,
-                                object_key,
-                                content=upload_chunks_refine(),
-                                headers=headers,
-                            ),
-                            deadline=deadline,
-                            reserve_seconds=reserve_seconds,
-                            description=f"storage immutable PUT {object_key}",
-                        )
+                        ),
+                        deadline=deadline,
+                        reserve_seconds=reserve_seconds,
+                        description=f"storage immutable PUT {object_key}",
+                    )
         except (httpx.HTTPError, OSError) as exc:
             raise TransientError(
                 f"storage immutable PUT {object_key}: {exc}",
@@ -800,7 +800,7 @@ class StorageClient:
                 or uploaded_digest.hexdigest() != expected_sha256
             ):
                 raise PermanentError(
-                    f"immutable publication source changed during upload: {source_path}",
+                    f"immutable publication source changed during upload: {object_key}",
                     token="REFINE_ARTIFACT_CONFLICT",
                 )
             return True

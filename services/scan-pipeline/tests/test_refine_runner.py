@@ -338,6 +338,32 @@ class _FakeBackend:
         return self._return_or_raise(self.fallback)
 
 
+#: Engine-artifact descriptors a fake builder opened, released after each test.
+#: In production these are owned by the ``NativeEngineOutputs`` sink; here the
+#: test session owns them, and either way the runner and publisher only borrow.
+_OPEN_ARTIFACT_DESCRIPTORS: list[int] = []
+
+
+@pytest.fixture(autouse=True)
+def _release_artifact_descriptors():
+    yield
+    while _OPEN_ARTIFACT_DESCRIPTORS:
+        try:
+            os.close(_OPEN_ARTIFACT_DESCRIPTORS.pop())
+        except OSError:
+            pass
+
+
+def _borrowed_artifact_descriptor(path: Path) -> int:
+    flags = os.O_RDONLY
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    flags |= getattr(os, "O_NONBLOCK", 0)
+    descriptor = os.open(path, flags)
+    _OPEN_ARTIFACT_DESCRIPTORS.append(descriptor)
+    return descriptor
+
+
 class _FakeArtifactBuilder:
     def __init__(self, *, large_aligned_model: bool = False) -> None:
         self.calls = []
@@ -349,11 +375,12 @@ class _FakeArtifactBuilder:
             digest = hashlib.file_digest(handle, "sha256").hexdigest()
         return RefineFileArtifact(
             name=name,
-            source_path=path,
+            descriptor=_borrowed_artifact_descriptor(path),
             sha256=digest,
             size_bytes=path.stat().st_size,
             transport_content_type="application/octet-stream",
             semantic_media_type=semantic_media_type,
+            display_path=str(path),
         )
 
     def build_engine_artifacts(
@@ -1166,7 +1193,7 @@ def test_large_engine_artifact_stays_file_backed_and_is_stream_verified(
     )
     assert isinstance(aligned, RefineFileArtifact)
     assert aligned.size_bytes == 8 * 1024 * 1024
-    assert aligned.source_path.is_file()
+    assert os.fstat(aligned.descriptor).st_size == 8 * 1024 * 1024
     assert not hasattr(aligned, "payload")
 
 
@@ -1234,51 +1261,69 @@ def test_frame_hash_substitution_fails_promptly_before_backend_or_manifest(
     assert manifest_calls == []
 
 
-@pytest.mark.parametrize("replacement_kind", ("fifo", "symlink"))
-def test_engine_artifact_hash_substitution_fails_before_manifest(
+@pytest.mark.parametrize("replacement_kind", ("fifo", "symlink", "regular"))
+def test_engine_artifact_substituted_at_its_path_is_simply_not_consulted(
     tmp_path,
     monkeypatch,
     replacement_kind,
 ):
+    """The reopen this contract removed, probed from the attacker's side.
+
+    The builder hands over a descriptor and the object at that name is then
+    replaced -- with a FIFO that would hang a blocking open, a symlink that
+    would redirect one, or a plain file with different bytes.  A runner that
+    still reopened by path would hang, hash the wrong inode, or fail.  This one
+    never looks at the name, so the run completes on the original bytes.
+    """
+
+    target_name = "database-v1.db"
+    decoy = tmp_path / "outside-engine-artifact.bin"
+
+    class _SwappingBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            artifacts = super().build_engine_artifacts(**kwargs)
+            nonlocal armed
+            armed = True
+            target = (
+                kwargs["request"].workspace_root / "engine-artifacts" / target_name
+            )
+            target.unlink()
+            if replacement_kind == "fifo":
+                os.mkfifo(target, 0o600)
+            elif replacement_kind == "symlink":
+                decoy.write_bytes(b"must-not-be-hashed\n")
+                target.symlink_to(decoy)
+            else:
+                target.write_bytes(b"must-not-be-hashed\n")
+            return artifacts
+
     request = _request(tmp_path)
-    target = request.workspace_root / "engine-artifacts" / "database-v1.db"
-    observed = _install_open_substitution(
-        monkeypatch,
-        target=target,
-        replacement_kind=replacement_kind,
-        symlink_target=tmp_path / "outside-engine-artifact.bin",
-    )
-    backend = _FakeBackend(primary=_candidate())
-    builder = _FakeArtifactBuilder()
-    manifest_calls = []
+    forbidden = request.workspace_root / "engine-artifacts" / target_name
+    real_open = refine_runner.os.open
+    armed = False
 
-    def _manifest_trap(*args, **kwargs):
-        manifest_calls.append((args, kwargs))
-        raise AssertionError("manifest construction must not run")
+    def guarded_open(path, *args, **kwargs):
+        if armed and os.fspath(path) == os.fspath(forbidden):
+            raise AssertionError("the runner must not reopen an artifact by path")
+        return real_open(path, *args, **kwargs)
 
-    monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
+    monkeypatch.setattr(refine_runner.os, "open", guarded_open)
     started = time.monotonic()
 
-    with pytest.raises(RefineRunError) as raised:
-        RefineRunner(backend=backend, artifact_builder=builder).run(
-            request,
-            deadline=_deadline(),
-        )
+    result = RefineRunner(
+        backend=_FakeBackend(primary=_candidate()),
+        artifact_builder=_SwappingBuilder(),
+    ).run(request, deadline=_deadline())
 
-    assert time.monotonic() - started < 2.0
-    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
-    assert raised.value.fatal is True
-    assert str(target) not in str(raised.value)
-    assert observed
-    if hasattr(os, "O_CLOEXEC"):
-        assert observed["flags"] & os.O_CLOEXEC
-    if hasattr(os, "O_NOFOLLOW"):
-        assert observed["flags"] & os.O_NOFOLLOW
-    if hasattr(os, "O_NONBLOCK"):
-        assert observed["flags"] & os.O_NONBLOCK
-    assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
-    assert len(builder.calls) == 1
-    assert manifest_calls == []
+    assert time.monotonic() - started < 5.0
+    published = next(
+        artifact for artifact in result.files if artifact.name == target_name
+    )
+    assert published.sha256 == hashlib.sha256(_ENGINE_PAYLOADS[target_name]).hexdigest()
+    assert (
+        os.pread(published.descriptor, published.size_bytes, 0)
+        == _ENGINE_PAYLOADS[target_name]
+    )
 
 
 def test_frame_hash_fails_closed_before_open_when_nonblocking_is_unavailable(
@@ -1327,15 +1372,8 @@ def test_engine_artifact_hash_fails_closed_before_open_when_nonblocking_is_unava
     request = _request(tmp_path)
     backend = _FakeBackend(primary=_candidate())
     builder = _FakeArtifactBuilder()
-    real_stable_file_sha256 = refine_runner._stable_file_sha256
     open_calls = []
     manifest_calls = []
-
-    def _frame_hash_then_real_artifact_hash(path, *, deadline):
-        if "engine-artifacts" in path.parts:
-            return real_stable_file_sha256(path, deadline=deadline)
-        payload = path.read_bytes()
-        return hashlib.sha256(payload).hexdigest(), path.stat()
 
     def _open_trap(*args, **kwargs):
         open_calls.append((args, kwargs))
@@ -1347,11 +1385,6 @@ def test_engine_artifact_hash_fails_closed_before_open_when_nonblocking_is_unava
 
     monkeypatch.delattr(refine_runner.os, "O_NONBLOCK", raising=False)
     monkeypatch.setattr(refine_runner.os, "open", _open_trap)
-    monkeypatch.setattr(
-        refine_runner,
-        "_stable_file_sha256",
-        _frame_hash_then_real_artifact_hash,
-    )
     monkeypatch.setattr(refine_runner, "_inline_json", _manifest_trap)
     started = time.monotonic()
 
@@ -1362,12 +1395,13 @@ def test_engine_artifact_hash_fails_closed_before_open_when_nonblocking_is_unava
         )
 
     assert time.monotonic() - started < 2.0
-    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
     assert raised.value.fatal is True
     assert "nonblocking source opens are unavailable" in str(raised.value)
     assert open_calls == []
-    assert [name for name, _ in backend.calls] == [PRIMARY_ENGINE]
-    assert len(builder.calls) == 1
+    # Frame validation runs before the builder, so the engine never started.
+    assert backend.calls == []
+    assert builder.calls == []
     assert manifest_calls == []
 
 
@@ -2183,6 +2217,7 @@ def test_runner_remains_independent_of_queue_storage_db_and_stage_registry():
     assert "from .storage" not in source
     assert "from .db" not in source
     assert "from .stages" not in source
-    assert "exact same open descriptor" in (RefineFileArtifact.__doc__ or "")
+    assert "BORROWED read-only descriptor" in (RefineFileArtifact.__doc__ or "")
+    assert "Nothing may open it" in (RefineFileArtifact.__doc__ or "")
     assert "do not make a path TOCTOU-safe" in (PreparedRefineFrame.__doc__ or "")
     assert get_handler("scan_pipeline.refine") is None

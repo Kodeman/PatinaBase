@@ -25,6 +25,7 @@ from test_refine_runner import (
     _FakeArtifactBuilder,
     _FakeBackend,
     _candidate,
+    _release_artifact_descriptors,  # noqa: F401 - autouse fd cleanup fixture
     _request,
 )
 
@@ -40,10 +41,10 @@ class _RecordingStorage(StorageClient):
         self.fail_at = fail_at
         self.calls: list[dict[str, object]] = []
 
-    def publish_immutable_file(
+    def publish_immutable_descriptor(
         self,
         object_key,
-        source_path,
+        source_descriptor,
         content_type,
         *,
         expected_sha256,
@@ -53,11 +54,17 @@ class _RecordingStorage(StorageClient):
         deadline=None,
         reserve_seconds=0,
     ):
-        payload = Path(source_path).read_bytes()
+        # Positional read: the publisher borrows this descriptor, so a fake
+        # that consumed its offset would not model the real storage client.
+        metadata = os.fstat(source_descriptor)
+        payload = os.pread(source_descriptor, metadata.st_size, 0)
         self.calls.append(
             {
                 "key": object_key,
-                "path": Path(source_path),
+                "descriptor": source_descriptor,
+                "identity": (metadata.st_dev, metadata.st_ino),
+                "nlink": metadata.st_nlink,
+                "offset": os.lseek(source_descriptor, 0, os.SEEK_CUR),
                 "contentType": content_type,
                 "sha256": expected_sha256,
                 "sizeBytes": expected_size,
@@ -232,8 +239,95 @@ def test_inline_spools_are_private_ephemeral_regular_files(tmp_path):
         if str(call["key"]).rsplit("/", 1)[-1] in inline_names
     ]
     assert inline_calls
-    assert all(not Path(call["path"]).exists() for call in inline_calls)
+    # Unlinked before publication: the spool has no name to substitute at.
+    assert all(call["nlink"] == 0 for call in inline_calls)
     assert list((tmp_path / "spool").iterdir()) == []
+
+
+def test_file_artifacts_publish_the_runner_verified_descriptor_itself(tmp_path):
+    """No reopen anywhere on the runner->publisher seam.
+
+    The identity the publisher hands to storage must be the identity the runner
+    measured, and the publisher must not open the artifact's name to get there.
+    """
+
+    result = _result(tmp_path)
+    storage = _RecordingStorage()
+    file_artifacts = {
+        artifact.name: artifact
+        for artifact in result.files
+        if type(artifact) is not RefineInlineArtifact
+    }
+    assert file_artifacts
+
+    _publisher(storage, tmp_path).publish(
+        result,
+        user_id="user-1",
+        scan_id="scan-1",
+        deadline=_deadline(),
+    )
+
+    for call in storage.calls:
+        name = str(call["key"]).rsplit("/", 1)[-1]
+        artifact = file_artifacts.get(name)
+        if artifact is None:
+            continue
+        assert call["descriptor"] == artifact.descriptor
+        metadata = os.fstat(artifact.descriptor)
+        assert call["identity"] == (metadata.st_dev, metadata.st_ino)
+
+
+def test_publication_never_opens_a_file_artifact_by_its_display_path(
+    tmp_path,
+    monkeypatch,
+):
+    result = _result(tmp_path)
+    display_paths = {
+        artifact.display_path
+        for artifact in result.files
+        if type(artifact) is not RefineInlineArtifact
+    }
+    assert display_paths and None not in display_paths
+    real_open = publisher_module.os.open
+
+    def guarded_open(path, *args, **kwargs):
+        if os.fspath(path) in display_paths:
+            raise AssertionError("the publisher must not reopen an artifact by path")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(publisher_module.os, "open", guarded_open)
+    storage = _RecordingStorage()
+
+    _publisher(storage, tmp_path).publish(
+        result,
+        user_id="user-1",
+        scan_id="scan-1",
+        deadline=_deadline(),
+    )
+
+    assert len(storage.calls) == len(result.files)
+
+
+def test_publication_leaves_every_borrowed_offset_untouched(tmp_path):
+    result = _result(tmp_path)
+    borrowed = [
+        artifact
+        for artifact in result.files
+        if type(artifact) is not RefineInlineArtifact
+    ]
+    for index, artifact in enumerate(borrowed):
+        os.lseek(artifact.descriptor, index + 1, os.SEEK_SET)
+    storage = _RecordingStorage()
+
+    _publisher(storage, tmp_path).publish(
+        result,
+        user_id="user-1",
+        scan_id="scan-1",
+        deadline=_deadline(),
+    )
+
+    for index, artifact in enumerate(borrowed):
+        assert os.lseek(artifact.descriptor, 0, os.SEEK_CUR) == index + 1
 
 
 def test_boolean_manifest_schema_is_rejected_before_storage(tmp_path):
