@@ -18,12 +18,21 @@ import patina_scan_worker.refine_packet_extractor as extractor_module
 import pytest
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.refine_colmap_backend import (
+    COLMAP_PACKET_MAX_ENGINE_IMAGES,
+    COLMAP_PACKET_MIN_ENGINE_IMAGES,
     ENGINE_REQUEST_CONTRACT,
     ENGINE_REQUEST_SCHEMA_VERSION,
     PACKET_CONTRACT,
     PACKET_EXTRACTION_QUALIFIED,
     PACKET_SCHEMA_VERSION,
+    PILOT_200_400_FRAME_RANGE_QUALIFIED,
+    ColmapEngineFrame,
+    ColmapEngineRequest,
+    ColmapPacketChunk,
+    ColmapPacketManifest,
+    ColmapPacketMember,
     load_colmap_packet_manifest,
+    parse_engine_request_member,
 )
 from patina_scan_worker.refine_native_process import (
     NativeChildContext,
@@ -185,6 +194,25 @@ def _replace_header_name_split(
     return bytes(changed)
 
 
+def _fixture_images(count: int = 3) -> list[bytes]:
+    return [f"P6\n1 1\n255\n{index:03d}".encode() for index in range(count)]
+
+
+def _engine_request_payload(count: int = 3) -> bytes:
+    return _canonical_json(
+        {
+            "schemaVersion": ENGINE_REQUEST_SCHEMA_VERSION,
+            "contract": ENGINE_REQUEST_CONTRACT,
+            "targetColmapVersion": "4.0.2",
+            "gpuIndex": "0",
+            "frames": [
+                _frame(index, payload)
+                for index, payload in enumerate(_fixture_images(count))
+            ],
+        }
+    )
+
+
 @dataclass
 class _PacketFixture:
     request: dict[str, object]
@@ -242,17 +270,8 @@ def _packet_fixture(
         Callable[[list[dict[str, object]]], list[dict[str, object]]] | None
     ) = None,
 ) -> _PacketFixture:
-    images = [f"P6\n1 1\n255\n{i:03d}".encode() for i in range(3)]
-    frames = [_frame(index, payload) for index, payload in enumerate(images)]
-    engine_payload = _canonical_json(
-        {
-            "schemaVersion": ENGINE_REQUEST_SCHEMA_VERSION,
-            "contract": ENGINE_REQUEST_CONTRACT,
-            "targetColmapVersion": "4.0.2",
-            "gpuIndex": "0",
-            "frames": frames,
-        }
-    )
+    images = _fixture_images()
+    engine_payload = _engine_request_payload()
     entries = [
         ("engine-request-v1.json", engine_payload, b"0"),
         *[
@@ -425,6 +444,34 @@ def _extract_packet_probe(request, context: NativeChildContext):
                 packet.workspace_descriptor != context.workspace_descriptor()
             ),
             "memberModes": member_modes,
+            "sourceLedger": (
+                None
+                if packet.source_ledger is None
+                else {
+                    "relativePath": packet.source_ledger.relative_path,
+                    "sha256": packet.source_ledger.sha256,
+                    "imageNames": [
+                        row.source_image_name for row in packet.source_ledger.rows
+                    ],
+                    "members": [row.source_member for row in packet.source_ledger.rows],
+                    "sizes": [
+                        row.source_size_bytes for row in packet.source_ledger.rows
+                    ],
+                }
+            ),
+            "adapterLedger": (
+                None
+                if packet.adapter_ledger is None
+                else {
+                    "relativePath": packet.adapter_ledger.relative_path,
+                    "materializerId": packet.adapter_ledger.materializer_id,
+                    "imageNames": [
+                        row.engine_image_name for row in packet.adapter_ledger.rows
+                    ],
+                }
+            ),
+            "engineImageCount": packet.engine_image_count,
+            "withinPilotFrameRange": packet.within_pilot_frame_range,
             "runId": packet.manifest.run_id,
             "frameNames": [
                 frame.engine_image_name for frame in packet.engine_request.frames
@@ -1908,3 +1955,1161 @@ def test_native_extraction_without_a_parent_lease_is_refused(tmp_path):
         fixture.close()
     assert raised.value.code == "REFINE_INPUT_INVALID"
     assert PACKET_EXTRACTION_QUALIFIED is False
+
+
+# ---------------------------------------------------------------------------
+# Optional source/adapter ledgers: cardinality, identity, manifest relationship,
+# the closed role universe, and the enforced-vs-pilot frame cap.
+# ---------------------------------------------------------------------------
+
+_SOURCE_ROLE = extractor_module.COLMAP_PACKET_SOURCE_LEDGER_ROLE
+_ADAPTER_ROLE = extractor_module.COLMAP_PACKET_ADAPTER_LEDGER_ROLE
+_REQUEST_ROLE = extractor_module.COLMAP_PACKET_ENGINE_REQUEST_ROLE
+_IMAGE_ROLE = extractor_module.COLMAP_PACKET_ENGINE_IMAGE_ROLE
+_SOURCE_LEDGER_PATH = extractor_module.COLMAP_PACKET_LEDGER_MEMBER_PATHS[_SOURCE_ROLE]
+_ADAPTER_LEDGER_PATH = extractor_module.COLMAP_PACKET_LEDGER_MEMBER_PATHS[_ADAPTER_ROLE]
+_MATERIALIZER_ID = "field-raster-v1.2fcccaf0feafa92fdca3fd2a"
+_RUN_ID = "a" * 64
+
+
+def _source_ledger_document(count=3, row_transform=None, **overrides):
+    rows = [
+        {
+            "ordinal": index,
+            "sourceArchiveKey": (
+                f"room_capture/74056c2a/843b273a/capture-{index:06d}.tar"
+            ),
+            "sourceMember": f"images/capture_{index:06d}.heic",
+            "sourceImageName": f"capture_{index:06d}.heic",
+            "sourceSha256": _sha256(f"source-{index}".encode()),
+            "sourceSizeBytes": 4096 + index,
+        }
+        for index in range(count)
+    ]
+    if row_transform is not None:
+        rows = row_transform(rows)
+    document = {
+        "schemaVersion": extractor_module.SOURCE_LEDGER_SCHEMA_VERSION,
+        "contract": extractor_module.SOURCE_LEDGER_CONTRACT,
+        "runId": _RUN_ID,
+        "frames": rows,
+    }
+    document.update(overrides)
+    return document
+
+
+def _adapter_ledger_document(count=3, row_transform=None, **overrides):
+    rows = [
+        {
+            "ordinal": index,
+            "engineImageName": f"frame_{index:06d}.ppm",
+            "engineRelativePath": f"images/frame_{index:06d}.ppm",
+            "engineSha256": _sha256(payload),
+            "engineSizeBytes": len(payload),
+        }
+        for index, payload in enumerate(_fixture_images(count))
+    ]
+    if row_transform is not None:
+        rows = row_transform(rows)
+    document = {
+        "schemaVersion": extractor_module.ADAPTER_LEDGER_SCHEMA_VERSION,
+        "contract": extractor_module.ADAPTER_LEDGER_CONTRACT,
+        "runId": _RUN_ID,
+        "materializerId": _MATERIALIZER_ID,
+        "frames": rows,
+    }
+    document.update(overrides)
+    return document
+
+
+def _ledger_entries(
+    *,
+    source=None,
+    adapter=None,
+    source_path=_SOURCE_LEDGER_PATH,
+    adapter_path=_ADAPTER_LEDGER_PATH,
+):
+    entries = []
+    if source is not None:
+        entries.append((_SOURCE_ROLE, source_path, source))
+    if adapter is not None:
+        entries.append((_ADAPTER_ROLE, adapter_path, adapter))
+    return tuple(entries)
+
+
+def _packet_fixture_with_ledgers(tmp_path, ledgers) -> _PacketFixture:
+    """Add ledger members in the canonical archive/manifest order."""
+
+    def entry_transform(entries):
+        combined = [*entries, *[(path, payload, b"0") for _r, path, payload in ledgers]]
+        return sorted(combined, key=lambda entry: entry[0])
+
+    def member_transform(members):
+        combined = [
+            *members,
+            *[
+                {
+                    "relativePath": path,
+                    "chunkToken": "packet.chunk.000",
+                    "archiveMember": path,
+                    "sha256": _sha256(payload),
+                    "sizeBytes": len(payload),
+                    "role": role,
+                }
+                for role, path, payload in ledgers
+            ],
+        ]
+        return sorted(
+            combined,
+            key=lambda member: (member["chunkToken"], member["archiveMember"]),
+        )
+
+    return _packet_fixture(
+        tmp_path,
+        entry_transform=entry_transform,
+        member_transform=member_transform,
+    )
+
+
+def _ledger_parse_inputs(tmp_path, ledgers):
+    """Return (manifest, engine_request) for a packet carrying ``ledgers``."""
+
+    fixture = _packet_fixture_with_ledgers(tmp_path, ledgers)
+    try:
+        manifest = _load_manifest(fixture)
+    finally:
+        fixture.close()
+    return manifest, parse_engine_request_member(_engine_request_payload(), manifest)
+
+
+def _packet_member(path, role, *, sha256=None, size_bytes=16, chunk="packet.chunk.000"):
+    return ColmapPacketMember(
+        path,
+        chunk,
+        path,
+        sha256 or ("0" * 64),
+        size_bytes,
+        role,
+    )
+
+
+def _base_members(images=3):
+    return [
+        _packet_member("engine-request-v1.json", _REQUEST_ROLE),
+        *[
+            _packet_member(f"images/frame_{index:06d}.ppm", _IMAGE_ROLE)
+            for index in range(images)
+        ],
+    ]
+
+
+def _manifest_of(members, *, request_member="engine-request-v1.json"):
+    return ColmapPacketManifest(
+        "packet.manifest",
+        "1" * 64,
+        _RUN_ID,
+        request_member,
+        (ColmapPacketChunk("packet.chunk.000", "2" * 64, 512),),
+        tuple(members),
+    )
+
+
+# --- closed role universe and ledger cardinality ---------------------------
+
+
+def test_role_validation_rejects_a_role_outside_the_closed_universe():
+    members = [*_base_members(), _packet_member("notes.json", "engine-ledger")]
+    with pytest.raises(AdapterError, match="role outside the universe") as raised:
+        extractor_module._validate_packet_member_roles(_manifest_of(members))
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("role", "path"),
+    ((_SOURCE_ROLE, _SOURCE_LEDGER_PATH), (_ADAPTER_ROLE, _ADAPTER_LEDGER_PATH)),
+)
+def test_role_validation_rejects_a_second_ledger_for_one_role(role, path):
+    members = [
+        *_base_members(),
+        _packet_member(path, role),
+        _packet_member(path, role),
+    ]
+    with pytest.raises(AdapterError, match="more than one ledger for a role"):
+        extractor_module._validate_packet_member_roles(_manifest_of(members))
+
+
+@pytest.mark.parametrize("requests", (0, 2))
+def test_role_validation_requires_exactly_one_engine_request(requests):
+    members = [
+        *[
+            _packet_member(f"engine-request-v{index}.json", _REQUEST_ROLE)
+            for index in range(requests)
+        ],
+        *[
+            _packet_member(f"images/frame_{index:06d}.ppm", _IMAGE_ROLE)
+            for index in range(3)
+        ],
+    ]
+    with pytest.raises(AdapterError, match="exactly one engine request"):
+        extractor_module._validate_packet_member_roles(
+            _manifest_of(members, request_member="engine-request-v0.json")
+        )
+
+
+@pytest.mark.parametrize("images", (0, 1, 2, 401, 512))
+def test_role_validation_enforces_the_authoritative_engine_image_bound(images):
+    with pytest.raises(AdapterError, match="between 3 and 400 engine images"):
+        extractor_module._validate_packet_member_roles(
+            _manifest_of(_base_members(images))
+        )
+
+
+@pytest.mark.parametrize("images", (3, 200, 400))
+def test_role_validation_accepts_the_authoritative_engine_image_bound(images):
+    validated = extractor_module._validate_packet_member_roles(
+        _manifest_of(_base_members(images))
+    )
+    assert validated.engine_image_count == images
+    assert (validated.source, validated.adapter) == (None, None)
+    assert validated.declared_roles == frozenset()
+
+
+@pytest.mark.parametrize(
+    ("role", "path"),
+    (
+        (_SOURCE_ROLE, "images/source-ledger-v1.json"),
+        (_SOURCE_ROLE, _ADAPTER_LEDGER_PATH),
+        (_ADAPTER_ROLE, "ledgers/adapter-ledger-v1.json"),
+    ),
+)
+def test_role_validation_rejects_a_ledger_outside_its_exact_path(role, path):
+    members = [*_base_members(), _packet_member(path, role)]
+    with pytest.raises(AdapterError, match="not at its exact declared path"):
+        extractor_module._validate_packet_member_roles(_manifest_of(members))
+
+
+def test_role_validation_rejects_an_oversized_ledger_member():
+    members = [
+        *_base_members(),
+        _packet_member(
+            _SOURCE_LEDGER_PATH,
+            _SOURCE_ROLE,
+            size_bytes=extractor_module.COLMAP_PACKET_LEDGER_MAX_BYTES + 1,
+        ),
+    ]
+    with pytest.raises(AdapterError, match="ledger exceeds its byte ceiling"):
+        extractor_module._validate_packet_member_roles(_manifest_of(members))
+
+
+@pytest.mark.parametrize(
+    "request_member",
+    ("missing-request.json", "images/frame_000000.ppm"),
+)
+def test_role_validation_rejects_an_undeclared_or_misrouted_request(request_member):
+    with pytest.raises(AdapterError, match="undeclared or misrouted"):
+        extractor_module._validate_packet_member_roles(
+            _manifest_of(_base_members(), request_member=request_member)
+        )
+
+
+def test_role_validation_reports_both_optional_ledgers():
+    members = [
+        *_base_members(),
+        _packet_member(_SOURCE_LEDGER_PATH, _SOURCE_ROLE),
+        _packet_member(_ADAPTER_LEDGER_PATH, _ADAPTER_ROLE),
+    ]
+    validated = extractor_module._validate_packet_member_roles(_manifest_of(members))
+    assert validated.source is not None
+    assert validated.adapter is not None
+    assert validated.source.relative_path == _SOURCE_LEDGER_PATH
+    assert validated.adapter.relative_path == _ADAPTER_LEDGER_PATH
+    assert validated.declared_roles == frozenset({_SOURCE_ROLE, _ADAPTER_ROLE})
+    assert validated.engine_image_count == 3
+
+
+@pytest.mark.parametrize("role", sorted(extractor_module.COLMAP_PACKET_MEMBER_ROLES))
+def test_packet_role_universe_matches_the_manifest_loader(tmp_path, role):
+    """Drift guard: the extractor's closed set is the loader's accepted set."""
+
+    if role == _REQUEST_ROLE:
+        # A packet declares exactly one engine request, so the role is proven
+        # accepted by the baseline fixture rather than by adding a second one.
+        fixture = _packet_fixture(tmp_path)
+        try:
+            manifest = _load_manifest(fixture)
+        finally:
+            fixture.close()
+        assert manifest.member_by_path[manifest.request_member].role == _REQUEST_ROLE
+        return
+    path = {
+        _IMAGE_ROLE: "images/frame_000003.ppm",
+        _SOURCE_ROLE: _SOURCE_LEDGER_PATH,
+        _ADAPTER_ROLE: _ADAPTER_LEDGER_PATH,
+    }[role]
+    payload = b"{}\n"
+    fixture = _packet_fixture_with_ledgers(tmp_path, ((role, path, payload),))
+    try:
+        manifest = _load_manifest(fixture)
+    finally:
+        fixture.close()
+    assert manifest.member_by_path[path].role == role
+
+
+def test_manifest_loader_rejects_a_role_the_extractor_does_not_declare(tmp_path):
+    unknown_role = "engine-ledger"
+    assert unknown_role not in extractor_module.COLMAP_PACKET_MEMBER_ROLES
+    fixture = _packet_fixture_with_ledgers(
+        tmp_path,
+        ((unknown_role, "engine-ledger-v1.json", b"{}\n"),),
+    )
+    try:
+        with pytest.raises(AdapterError, match="unsupported role"):
+            _load_manifest(fixture)
+    finally:
+        fixture.close()
+
+
+# --- the enforced 3--400 bound versus the unqualified 200--400 pilot band ---
+
+
+def test_pilot_frame_range_is_explicit_subrange_and_is_not_enforced():
+    pilot_minimum = extractor_module.COLMAP_PACKET_PILOT_MIN_ENGINE_IMAGES
+    pilot_maximum = extractor_module.COLMAP_PACKET_PILOT_MAX_ENGINE_IMAGES
+    assert (pilot_minimum, pilot_maximum) == (200, 400)
+    assert COLMAP_PACKET_MIN_ENGINE_IMAGES < pilot_minimum
+    assert pilot_maximum == COLMAP_PACKET_MAX_ENGINE_IMAGES
+    # The pilot band is a classification, never a rejection: the enforced bound
+    # still admits packets below it, and the band itself stays unqualified.
+    assert (
+        extractor_module._validate_packet_member_roles(
+            _manifest_of(_base_members(COLMAP_PACKET_MIN_ENGINE_IMAGES))
+        ).engine_image_count
+        == COLMAP_PACKET_MIN_ENGINE_IMAGES
+    )
+    assert PILOT_200_400_FRAME_RANGE_QUALIFIED is False
+
+
+@pytest.mark.parametrize(
+    ("images", "within"),
+    ((3, False), (199, False), (200, True), (400, True)),
+)
+def test_extracted_packet_reports_whether_it_is_in_the_pilot_band(images, within):
+    packet = extractor_module.ExtractedColmapPacket(
+        -1,
+        _manifest_of(_base_members(images)),
+        None,
+        (),
+    )
+    assert packet.engine_image_count == images
+    assert packet.within_pilot_frame_range is within
+    assert (packet.source_ledger, packet.adapter_ledger) == (None, None)
+
+
+# --- end-to-end extraction with the optional ledgers -----------------------
+
+
+@pytest.mark.skipif(os.name != "posix", reason="native Refine requires POSIX")
+def test_packet_with_both_ledgers_is_parsed_and_bound_to_the_manifest(
+    tmp_path,
+    monkeypatch,
+):
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    monkeypatch.setenv("TMPDIR", str(scratch))
+    source_payload = _canonical_json(_source_ledger_document())
+    adapter_payload = _canonical_json(_adapter_ledger_document())
+    fixture = _packet_fixture_with_ledgers(
+        tmp_path,
+        _ledger_entries(source=source_payload, adapter=adapter_payload),
+    )
+    try:
+        result = _run(fixture, scratch)
+    finally:
+        fixture.close()
+
+    assert result["paths"] == [
+        _ADAPTER_LEDGER_PATH,
+        "engine-request-v1.json",
+        "images/frame_000000.ppm",
+        "images/frame_000001.ppm",
+        "images/frame_000002.ppm",
+        _SOURCE_LEDGER_PATH,
+    ]
+    assert result["sourceLedger"] == {
+        "relativePath": _SOURCE_LEDGER_PATH,
+        "sha256": _sha256(source_payload),
+        "imageNames": [
+            "capture_000000.heic",
+            "capture_000001.heic",
+            "capture_000002.heic",
+        ],
+        "members": [
+            "images/capture_000000.heic",
+            "images/capture_000001.heic",
+            "images/capture_000002.heic",
+        ],
+        "sizes": [4096, 4097, 4098],
+    }
+    assert result["adapterLedger"] == {
+        "relativePath": _ADAPTER_LEDGER_PATH,
+        "materializerId": _MATERIALIZER_ID,
+        "imageNames": [
+            "frame_000000.ppm",
+            "frame_000001.ppm",
+            "frame_000002.ppm",
+        ],
+    }
+    assert result["engineImageCount"] == 3
+    assert result["withinPilotFrameRange"] is False
+    assert set(result["memberModes"].values()) == {0o600}
+    # The parent still removes every extracted ledger with its workspace.
+    assert list(scratch.iterdir()) == []
+    assert PACKET_EXTRACTION_QUALIFIED is False
+
+
+@pytest.mark.skipif(os.name != "posix", reason="native Refine requires POSIX")
+@pytest.mark.parametrize("present", ("none", "source", "adapter"))
+def test_optional_ledgers_are_absent_without_failing_extraction(
+    tmp_path,
+    monkeypatch,
+    present,
+):
+    scratch = tmp_path / "scratch"
+    scratch.mkdir(mode=0o700)
+    monkeypatch.setenv("TMPDIR", str(scratch))
+    ledgers = {
+        "none": (),
+        "source": _ledger_entries(source=_canonical_json(_source_ledger_document())),
+        "adapter": _ledger_entries(adapter=_canonical_json(_adapter_ledger_document())),
+    }[present]
+    fixture = _packet_fixture_with_ledgers(tmp_path, ledgers)
+    try:
+        result = _run(fixture, scratch)
+    finally:
+        fixture.close()
+    assert (result["sourceLedger"] is None) is (present != "source")
+    assert (result["adapterLedger"] is None) is (present != "adapter")
+    assert list(scratch.iterdir()) == []
+
+
+@pytest.mark.skipif(os.name != "posix", reason="native Refine requires POSIX")
+@pytest.mark.parametrize(
+    ("ledgers", "detail"),
+    (
+        (
+            _ledger_entries(
+                source=_canonical_json(_source_ledger_document()),
+                source_path="engine-inputs/source-ledger-v1.json",
+            ),
+            "not at its exact declared path",
+        ),
+        (
+            _ledger_entries(source=b"{}\n"),
+            "unknown or missing field",
+        ),
+        (
+            _ledger_entries(source=b"not-json\n"),
+            "not valid UTF-8 JSON",
+        ),
+        (
+            _ledger_entries(
+                adapter=_canonical_json(_adapter_ledger_document(count=2)),
+            ),
+            "does not cover every engine frame",
+        ),
+    ),
+)
+def test_native_extraction_fails_closed_on_a_bad_ledger(tmp_path, ledgers, detail):
+    fixture = _packet_fixture_with_ledgers(tmp_path, ledgers)
+    try:
+        with pytest.raises(AdapterError, match=detail) as raised:
+            _run(fixture, tmp_path / "lease")
+    finally:
+        fixture.close()
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+    assert list((tmp_path / "lease").iterdir()) == []
+
+
+# --- ledger document parsing ----------------------------------------------
+
+
+def _row_change(index, **changes):
+    def transform(rows):
+        rows[index] = {**rows[index], **changes}
+        return rows
+
+    return transform
+
+
+def _row_without(index, key):
+    def transform(rows):
+        rows[index] = {
+            name: value for name, value in rows[index].items() if name != key
+        }
+        return rows
+
+    return transform
+
+
+def _row_replaced(index, value):
+    def transform(rows):
+        rows[index] = value
+        return rows
+
+    return transform
+
+
+def _parse_source(tmp_path, payload):
+    manifest, engine_request = _ledger_parse_inputs(
+        tmp_path,
+        _ledger_entries(source=_canonical_json(_source_ledger_document())),
+    )
+    return extractor_module._parse_source_ledger(
+        payload,
+        manifest=manifest,
+        member=manifest.member_by_path[_SOURCE_LEDGER_PATH],
+        engine_request=engine_request,
+    )
+
+
+def _parse_adapter(tmp_path, payload):
+    manifest, engine_request = _ledger_parse_inputs(
+        tmp_path,
+        _ledger_entries(adapter=_canonical_json(_adapter_ledger_document())),
+    )
+    return extractor_module._parse_adapter_ledger(
+        payload,
+        manifest=manifest,
+        member=manifest.member_by_path[_ADAPTER_LEDGER_PATH],
+        engine_request=engine_request,
+    )
+
+
+def test_source_ledger_happy_path_binds_every_frame(tmp_path):
+    payload = _canonical_json(_source_ledger_document())
+    parsed = _parse_source(tmp_path, payload)
+    assert parsed.relative_path == _SOURCE_LEDGER_PATH
+    assert parsed.sha256 == _sha256(payload)
+    assert [row.ordinal for row in parsed.rows] == [0, 1, 2]
+    assert [row.source_image_name for row in parsed.rows] == [
+        "capture_000000.heic",
+        "capture_000001.heic",
+        "capture_000002.heic",
+    ]
+    assert parsed.rows[2].source_archive_key.endswith("capture-000002.tar")
+    assert parsed.rows[2].source_size_bytes == 4098
+    assert parsed.rows[2].source_sha256 == _sha256(b"source-2")
+
+
+def test_adapter_ledger_happy_path_covers_the_engine_image_universe(tmp_path):
+    payload = _canonical_json(_adapter_ledger_document())
+    parsed = _parse_adapter(tmp_path, payload)
+    assert parsed.relative_path == _ADAPTER_LEDGER_PATH
+    assert parsed.sha256 == _sha256(payload)
+    assert parsed.materializer_id == _MATERIALIZER_ID
+    assert [row.engine_relative_path for row in parsed.rows] == [
+        "images/frame_000000.ppm",
+        "images/frame_000001.ppm",
+        "images/frame_000002.ppm",
+    ]
+    assert [row.engine_size_bytes for row in parsed.rows] == [
+        len(payload_bytes) for payload_bytes in _fixture_images()
+    ]
+
+
+@pytest.mark.parametrize(
+    ("payload_factory", "detail"),
+    (
+        (lambda: b"{", "not valid UTF-8 JSON"),
+        (lambda: b"\xff\xfe\n", "not valid UTF-8 JSON"),
+        (lambda: b"[]\n", "not canonical JSON"),
+        (
+            lambda: json.dumps(_source_ledger_document()).encode(),
+            "not canonical JSON",
+        ),
+        (
+            lambda: _canonical_json({**_source_ledger_document(), "extra": 1}),
+            "unknown or missing field",
+        ),
+        (
+            lambda: _canonical_json(
+                {
+                    name: value
+                    for name, value in _source_ledger_document().items()
+                    if name != "runId"
+                }
+            ),
+            "unknown or missing field",
+        ),
+        (
+            lambda: _canonical_json(_source_ledger_document(schemaVersion=2)),
+            "contract is unsupported",
+        ),
+        (
+            lambda: _canonical_json(_source_ledger_document(schemaVersion=True)),
+            "contract is unsupported",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(contract="patina-refine-colmap-source-ledger")
+            ),
+            "contract is unsupported",
+        ),
+        (
+            lambda: _canonical_json(_source_ledger_document(runId="b" * 64)),
+            "runId does not match its manifest",
+        ),
+        (
+            lambda: _canonical_json(_source_ledger_document(frames={})),
+            "frames must be an exact JSON array",
+        ),
+        (
+            lambda: _canonical_json(_source_ledger_document(count=2)),
+            "does not cover every engine frame",
+        ),
+        (
+            lambda: _canonical_json(_source_ledger_document(count=4)),
+            "does not cover every engine frame",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(row_transform=_row_replaced(1, "row"))
+            ),
+            "row 1 has an invalid shape",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(row_transform=_row_change(0, extra=1))
+            ),
+            "row 0 has an invalid shape",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(row_transform=_row_without(2, "sourceSha256"))
+            ),
+            "row 2 has an invalid shape",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(row_transform=_row_change(1, ordinal=0))
+            ),
+            "ordinals must be dense and ordered",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(row_transform=_row_change(1, ordinal=True))
+            ),
+            "ordinal must be an integer",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(row_transform=_row_change(1, ordinal=-1))
+            ),
+            "ordinal must be an integer",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(
+                    row_transform=_row_change(0, sourceImageName="capture_000009.heic")
+                )
+            ),
+            "row does not match its engine frame",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(row_transform=_row_change(0, sourceImageName=5))
+            ),
+            "row does not match its engine frame",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(
+                    row_transform=_row_change(0, sourceMember="images/other.heic")
+                )
+            ),
+            "member does not match its image identity",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(
+                    row_transform=_row_change(0, sourceArchiveKey="/absolute/key.tar")
+                )
+            ),
+            "not a canonical safe relative path",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(
+                    row_transform=_row_change(0, sourceArchiveKey="../escape.tar")
+                )
+            ),
+            "not a canonical safe relative path",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(
+                    row_transform=_row_change(0, sourceArchiveKey=7)
+                )
+            ),
+            "must be a non-empty POSIX relative path",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(
+                    row_transform=_row_change(0, sourceSha256="A" * 64)
+                )
+            ),
+            "must be a lowercase SHA-256",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(row_transform=_row_change(0, sourceSizeBytes=0))
+            ),
+            "sourceSizeBytes must be an integer >= 1",
+        ),
+        (
+            lambda: _canonical_json(
+                _source_ledger_document(
+                    row_transform=_row_change(0, sourceSizeBytes=True)
+                )
+            ),
+            "sourceSizeBytes must be an integer >= 1",
+        ),
+    ),
+)
+def test_source_ledger_rejections(tmp_path, payload_factory, detail):
+    with pytest.raises(AdapterError, match=detail) as raised:
+        _parse_source(tmp_path, payload_factory())
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("payload_factory", "detail"),
+    (
+        (lambda: b"{", "not valid UTF-8 JSON"),
+        (
+            lambda: _canonical_json(_adapter_ledger_document(runId="c" * 64)),
+            "runId does not match its manifest",
+        ),
+        (
+            lambda: _canonical_json(_adapter_ledger_document(schemaVersion=99)),
+            "contract is unsupported",
+        ),
+        (
+            lambda: _canonical_json(_adapter_ledger_document(materializerId="")),
+            "materializerId is not canonical",
+        ),
+        (
+            lambda: _canonical_json(
+                _adapter_ledger_document(materializerId=f" {_MATERIALIZER_ID} ")
+            ),
+            "materializerId is not canonical",
+        ),
+        (
+            lambda: _canonical_json(_adapter_ledger_document(materializerId=None)),
+            "materializerId is not canonical",
+        ),
+        (
+            lambda: _canonical_json(_adapter_ledger_document(materializerId="x" * 129)),
+            "materializerId is not canonical",
+        ),
+        (
+            lambda: _canonical_json(_adapter_ledger_document(count=4)),
+            "does not cover every engine frame",
+        ),
+        (
+            lambda: _canonical_json(
+                _adapter_ledger_document(row_transform=_row_change(2, ordinal=1))
+            ),
+            "ordinals must be dense and ordered",
+        ),
+        (
+            lambda: _canonical_json(
+                _adapter_ledger_document(
+                    row_transform=_row_change(1, engineImageName="frame_000009.ppm")
+                )
+            ),
+            "row does not match its engine frame",
+        ),
+        (
+            lambda: _canonical_json(
+                _adapter_ledger_document(
+                    row_transform=_row_change(
+                        1,
+                        engineRelativePath="engine/frame_000001.ppm",
+                    )
+                )
+            ),
+            "row does not match its engine frame",
+        ),
+        (
+            lambda: _canonical_json(
+                _adapter_ledger_document(
+                    row_transform=_row_change(
+                        1,
+                        engineRelativePath="images//frame_000001.ppm",
+                    )
+                )
+            ),
+            "not a canonical safe relative path",
+        ),
+        (
+            lambda: _canonical_json(
+                _adapter_ledger_document(
+                    row_transform=_row_change(0, engineSha256="0" * 64)
+                )
+            ),
+            "not bound to a declared engine image",
+        ),
+        (
+            lambda: _canonical_json(
+                _adapter_ledger_document(
+                    row_transform=_row_change(0, engineSizeBytes=999)
+                )
+            ),
+            "not bound to a declared engine image",
+        ),
+        (
+            lambda: _canonical_json(
+                _adapter_ledger_document(
+                    row_transform=_row_change(0, engineSha256="zz" + "0" * 62)
+                )
+            ),
+            "must be a lowercase SHA-256",
+        ),
+        (
+            lambda: _canonical_json(
+                _adapter_ledger_document(
+                    row_transform=_row_change(0, engineSizeBytes=0)
+                )
+            ),
+            "engineSizeBytes must be an integer >= 1",
+        ),
+    ),
+)
+def test_adapter_ledger_rejections(tmp_path, payload_factory, detail):
+    with pytest.raises(AdapterError, match=detail) as raised:
+        _parse_adapter(tmp_path, payload_factory())
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+@pytest.mark.parametrize("ledger_kind", ("source", "adapter"))
+def test_deeply_nested_ledger_json_recursion_error_is_normalized(
+    tmp_path,
+    ledger_kind,
+):
+    depth = 10_000
+    nested_payload = b"[" * depth + b"0" + b"]" * depth
+    parse = _parse_source if ledger_kind == "source" else _parse_adapter
+    with pytest.raises(AdapterError, match="not valid UTF-8 JSON") as raised:
+        parse(tmp_path, nested_payload)
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+    assert type(raised.value.__cause__) is RecursionError
+
+
+def _duplicated_frame_request(engine_request):
+    """A hand-built request whose frame identities repeat.
+
+    ``parse_engine_request_member`` can never produce this; the ledger parsers
+    must still refuse it rather than trust their caller.
+    """
+
+    frames = engine_request.frames
+    return ColmapEngineRequest((frames[0], frames[1], frames[1]), "0")
+
+
+def test_source_ledger_refuses_a_repeated_source_object(tmp_path):
+    manifest, engine_request = _ledger_parse_inputs(
+        tmp_path,
+        _ledger_entries(source=_canonical_json(_source_ledger_document())),
+    )
+    rows = _source_ledger_document()["frames"]
+    rows[2] = {**rows[1], "ordinal": 2}
+    payload = _canonical_json(_source_ledger_document(row_transform=lambda _r: rows))
+    with pytest.raises(AdapterError, match="repeats a source object identity"):
+        extractor_module._parse_source_ledger(
+            payload,
+            manifest=manifest,
+            member=manifest.member_by_path[_SOURCE_LEDGER_PATH],
+            engine_request=_duplicated_frame_request(engine_request),
+        )
+
+
+def test_adapter_ledger_refuses_an_unaccounted_declared_engine_image(tmp_path):
+    manifest, engine_request = _ledger_parse_inputs(
+        tmp_path,
+        _ledger_entries(adapter=_canonical_json(_adapter_ledger_document())),
+    )
+    rows = _adapter_ledger_document()["frames"]
+    rows[2] = {**rows[1], "ordinal": 2}
+    payload = _canonical_json(_adapter_ledger_document(row_transform=lambda _r: rows))
+    with pytest.raises(AdapterError, match="account for every declared engine image"):
+        extractor_module._parse_adapter_ledger(
+            payload,
+            manifest=manifest,
+            member=manifest.member_by_path[_ADAPTER_LEDGER_PATH],
+            engine_request=_duplicated_frame_request(engine_request),
+        )
+
+
+def test_adapter_ledger_refuses_a_row_naming_an_undeclared_member(tmp_path):
+    manifest, engine_request = _ledger_parse_inputs(
+        tmp_path,
+        _ledger_entries(adapter=_canonical_json(_adapter_ledger_document())),
+    )
+    absent = "images/frame_000009.ppm"
+    assert absent not in manifest.member_by_path
+    frames = engine_request.frames
+    undeclared_frame = ColmapEngineFrame(
+        2,
+        frames[2].source_image_name,
+        frames[2].frame_timestamp_s,
+        "frame_000009.ppm",
+        absent,
+        frames[2].engine_sha256,
+        frames[2].engine_size_bytes,
+        frames[2].intrinsics,
+        frames[2].cam_from_world_rotation,
+        frames[2].cam_from_world_translation,
+        frames[2].raw_camera_center_m,
+    )
+    rows = _adapter_ledger_document()["frames"]
+    rows[2] = {
+        **rows[2],
+        "engineImageName": "frame_000009.ppm",
+        "engineRelativePath": absent,
+    }
+    payload = _canonical_json(_adapter_ledger_document(row_transform=lambda _r: rows))
+    with pytest.raises(AdapterError, match="not bound to a declared engine image"):
+        extractor_module._parse_adapter_ledger(
+            payload,
+            manifest=manifest,
+            member=manifest.member_by_path[_ADAPTER_LEDGER_PATH],
+            engine_request=ColmapEngineRequest(
+                (frames[0], frames[1], undeclared_frame),
+                "0",
+            ),
+        )
+
+
+# --- capture, re-read identity, and internal fail-closed seams -------------
+
+
+def _hand_built_manifest(fixture, ledger_members):
+    """Build a manifest object the backend loader would refuse to produce."""
+
+    engine_payload = _engine_request_payload()
+    members = [
+        ColmapPacketMember(
+            "engine-request-v1.json",
+            "packet.chunk.000",
+            "engine-request-v1.json",
+            _sha256(engine_payload),
+            len(engine_payload),
+            _REQUEST_ROLE,
+        ),
+        *[
+            ColmapPacketMember(
+                f"images/frame_{index:06d}.ppm",
+                "packet.chunk.000",
+                f"images/frame_{index:06d}.ppm",
+                _sha256(payload),
+                len(payload),
+                _IMAGE_ROLE,
+            )
+            for index, payload in enumerate(_fixture_images())
+        ],
+        *[
+            ColmapPacketMember(
+                path,
+                "packet.chunk.000",
+                path,
+                _sha256(payload),
+                len(payload),
+                role,
+            )
+            for role, path, payload in ledger_members
+        ],
+    ]
+    members.sort(key=lambda member: (member.chunk_token, member.archive_member))
+    chunk = ColmapPacketChunk(
+        "packet.chunk.000",
+        _sha256(fixture.chunk_payload),
+        len(fixture.chunk_payload),
+    )
+    return ColmapPacketManifest(
+        "packet.manifest",
+        _sha256(fixture.manifest_payload),
+        _RUN_ID,
+        "engine-request-v1.json",
+        (chunk,),
+        tuple(members),
+    )
+
+
+def test_extract_chunk_refuses_a_ledger_with_nowhere_to_be_captured(tmp_path):
+    fixture = _packet_fixture_with_ledgers(
+        tmp_path,
+        _ledger_entries(source=_canonical_json(_source_ledger_document())),
+    )
+    lease = _lease(tmp_path / "lease")
+    manifest = _load_manifest(fixture)
+    ledger = _leased_ledger(lease)
+    try:
+        with pytest.raises(AdapterError, match="nowhere to be captured") as raised:
+            extractor_module._extract_archive_chunk(
+                chunk=manifest.chunks[0],
+                manifest=manifest,
+                context=fixture.direct_context(),
+                ledger=ledger,
+                extracted_paths=set(),
+            )
+    finally:
+        assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+        assert _release(lease) == ()
+        fixture.close()
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+def test_extract_chunk_rejects_a_repeated_ledger_role(tmp_path):
+    payload = _canonical_json(_source_ledger_document())
+    second_payload = _canonical_json(_source_ledger_document(count=3))
+    ledger_members = (
+        (_SOURCE_ROLE, "source-ledger-v1.json", payload),
+        (_SOURCE_ROLE, "source-ledger-v2.json", second_payload),
+    )
+    fixture = _packet_fixture_with_ledgers(tmp_path, ledger_members)
+    manifest = _hand_built_manifest(fixture, ledger_members)
+    lease = _lease(tmp_path / "lease")
+    ledger = _leased_ledger(lease)
+    try:
+        with pytest.raises(AdapterError, match="repeats a ledger role") as raised:
+            extractor_module._extract_archive_chunk(
+                chunk=manifest.chunks[0],
+                manifest=manifest,
+                context=fixture.direct_context(),
+                ledger=ledger,
+                extracted_paths=set(),
+                ledger_payloads={},
+            )
+    finally:
+        assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+        assert _release(lease) == ()
+        fixture.close()
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+    assert list((tmp_path / "lease").iterdir()) == []
+
+
+def test_copy_member_rejects_an_oversized_ledger_before_any_descriptor_use(tmp_path):
+    fixture = _packet_fixture(tmp_path)
+    oversized = ColmapPacketMember(
+        _SOURCE_LEDGER_PATH,
+        "packet.chunk.000",
+        _SOURCE_LEDGER_PATH,
+        "0" * 64,
+        extractor_module.COLMAP_PACKET_LEDGER_MAX_BYTES + 1,
+        _SOURCE_ROLE,
+    )
+    try:
+        # Both descriptors are invalid on purpose: the ceiling must reject the
+        # member before a single read or write is attempted.
+        with pytest.raises(AdapterError, match="ledger exceeds its byte ceiling"):
+            extractor_module._copy_archive_member(
+                -1,
+                source_offset=0,
+                destination_descriptor=-1,
+                member=oversized,
+                context=fixture.direct_context(),
+            )
+    finally:
+        fixture.close()
+
+
+def test_read_extracted_member_payload_requires_a_captured_payload(tmp_path):
+    fixture = _packet_fixture_with_ledgers(
+        tmp_path,
+        _ledger_entries(source=_canonical_json(_source_ledger_document())),
+    )
+    lease = _lease(tmp_path / "lease")
+    manifest = _load_manifest(fixture)
+    ledger = _leased_ledger(lease)
+    try:
+        with pytest.raises(AdapterError, match="was never captured") as raised:
+            extractor_module._read_extracted_member_payload(
+                ledger=ledger,
+                member=manifest.member_by_path[_SOURCE_LEDGER_PATH],
+                context=fixture.direct_context(),
+                expected_payload=None,
+                label="source ledger",
+            )
+    finally:
+        assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+        assert _release(lease) == ()
+        fixture.close()
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+
+
+def test_extracted_ledger_identity_change_is_detected_on_reread(tmp_path):
+    source_payload = _canonical_json(_source_ledger_document())
+    fixture = _packet_fixture_with_ledgers(
+        tmp_path,
+        _ledger_entries(source=source_payload),
+    )
+    lease = _lease(tmp_path / "lease")
+    manifest = _load_manifest(fixture)
+    ledger = _leased_ledger(lease)
+    ledger_payloads: dict[str, bytes] = {}
+    try:
+        extractor_module._extract_archive_chunk(
+            chunk=manifest.chunks[0],
+            manifest=manifest,
+            context=fixture.direct_context(),
+            ledger=ledger,
+            extracted_paths=set(),
+            ledger_payloads=ledger_payloads,
+        )
+        assert ledger_payloads[_SOURCE_ROLE] == source_payload
+        extracted = _packet_root(lease) / _SOURCE_LEDGER_PATH
+        original = extracted.read_bytes()
+        with extracted.open("r+b") as changed:
+            changed.seek(len(original) - 2)
+            changed.write(bytes([original[-2] ^ 1]))
+            changed.flush()
+            os.fsync(changed.fileno())
+        with pytest.raises(AdapterError, match="identity changed") as raised:
+            extractor_module._read_extracted_member_payload(
+                ledger=ledger,
+                member=manifest.member_by_path[_SOURCE_LEDGER_PATH],
+                context=fixture.direct_context(),
+                expected_payload=ledger_payloads[_SOURCE_ROLE],
+                label="source ledger",
+            )
+    finally:
+        assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+        assert _release(lease) == ()
+        fixture.close()
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
+    assert list((tmp_path / "lease").iterdir()) == []
+
+
+def test_optional_ledger_read_requires_frame_count_agreement(tmp_path):
+    fixture = _packet_fixture(tmp_path)
+    lease = _lease(tmp_path / "lease")
+    manifest = _load_manifest(fixture)
+    ledger = _leased_ledger(lease)
+    engine_request = parse_engine_request_member(_engine_request_payload(), manifest)
+    try:
+        with pytest.raises(AdapterError, match="frame count disagrees") as raised:
+            extractor_module._read_and_parse_optional_ledgers(
+                ledger=ledger,
+                manifest=manifest,
+                context=fixture.direct_context(),
+                engine_request=engine_request,
+                members=extractor_module._PacketLedgerMembers(None, None, 4),
+                ledger_payloads={},
+            )
+    finally:
+        assert extractor_module._cleanup_extraction_workspace(ledger) == ()
+        assert _release(lease) == ()
+        fixture.close()
+    assert raised.value.code == "REFINE_COLMAP_PACKET_INVALID"
