@@ -7,6 +7,15 @@ descendants with Linux ``PR_SET_CHILD_SUBREAPER``, and refuses to return while
 any descendant remains. More precisely, residue prevents a successful return;
 an escaped adopted descendant is detected but not yet contained. It never
 signals a scanned numeric PID or PGID.
+
+The supervisor no longer accepts free argv or an ambient environment.  It runs
+only a sealed :class:`~patina_scan_worker.refine_colmap_toolchain.
+PinnedColmapCommand`: an allowlisted subcommand bound to a hash-verified
+executable identity and to the exact closed environment allowlist.  The
+recorded identity is re-proved immediately before ``execve``, and the child
+receives no inherited environment variable at all.  One lease-aware deadline is
+carried through workspace validation, toolchain re-verification, the child
+wait, the log-drain thread, and every quiescence probe.
 """
 
 from __future__ import annotations
@@ -29,6 +38,10 @@ from .refine_adapter import (
     AdapterError,
     ColmapCommandResult,
     RefineDeadline,
+)
+from .refine_colmap_toolchain import (
+    PinnedColmapCommand,
+    verify_executable_identity,
 )
 from .refine_native_process import NativeChildContext
 
@@ -415,8 +428,78 @@ def _shared_remaining_seconds(
         raise _fail("cannot read inherited COLMAP deadline", _ENGINE_FAILED) from None
 
 
+def _drain_deadline_exhausted(
+    context: NativeChildContext,
+    deadline: RefineDeadline,
+) -> bool:
+    """Let the drain thread observe the one carried lease-aware deadline."""
+
+    try:
+        _shared_remaining_seconds(context, deadline)
+    except BaseException:
+        return True
+    return False
+
+
+def _validate_pinned_execution(
+    execution: PinnedColmapCommand,
+    cwd: Path,
+) -> tuple[str, ...]:
+    """Authenticate the sealed plan and bind it to this exact workspace."""
+
+    if type(execution) is not PinnedColmapCommand:
+        raise _fail(
+            "inherited COLMAP commands require a pinned toolchain execution",
+            _ENGINE_FAILED,
+        )
+    try:
+        verified_plan = execution.is_verified_pinned_command
+    except BaseException:
+        raise _fail(
+            "cannot authenticate the pinned COLMAP toolchain execution",
+            _ENGINE_FAILED,
+        ) from None
+    if verified_plan is not True:
+        raise _fail(
+            "inherited COLMAP commands require a pinned toolchain execution",
+            _ENGINE_FAILED,
+        )
+    try:
+        workspace_matches = execution.workspace == os.fspath(cwd)
+    except BaseException:
+        raise _fail(
+            "cannot compare the pinned COLMAP execution workspace",
+            _ENGINE_FAILED,
+        ) from None
+    if not workspace_matches:
+        raise _fail(
+            "pinned COLMAP execution was planned for a different workspace",
+            _ENGINE_FAILED,
+        )
+    try:
+        environ = execution.environment()
+        descriptors = execution.passed_descriptors()
+        alias = execution.executable_alias
+    except BaseException:
+        raise _fail(
+            "cannot materialize the pinned COLMAP command environment",
+            _ENGINE_FAILED,
+        ) from None
+    if (
+        type(environ) is not dict
+        or type(descriptors) is not tuple
+        or type(alias) is not str
+        or not alias
+    ):
+        raise _fail(
+            "pinned COLMAP execution has an invalid environment or alias",
+            _ENGINE_FAILED,
+        )
+    return _normalize_command_argv(execution.argv)
+
+
 def run_inherited_colmap_command(
-    command: Sequence[str],
+    execution: PinnedColmapCommand,
     *,
     context: NativeChildContext,
     deadline: RefineDeadline,
@@ -461,12 +544,12 @@ def run_inherited_colmap_command(
             "inherited COLMAP commands require a verified native child boundary",
             _ENGINE_FAILED,
         )
-    normalized_command = _normalize_command_argv(command)
     _validate_private_command_workspace(cwd, log_path)
+    normalized_command = _validate_pinned_execution(execution, cwd)
     _shared_remaining_seconds(context, deadline)
 
     tail = bytearray()
-    drain_errors: list[str] = []
+    drain_errors: list[tuple[str, str]] = []
     drain_cleanup_errors: list[str] = []
     cleanup_errors: list[str] = []
     previous_subreaper: bool | None = None
@@ -498,14 +581,37 @@ def run_inherited_colmap_command(
                     "cannot create inherited COLMAP log", _ENGINE_LOG_IO
                 )
             if log_descriptor is not None:
+                # Re-prove the recorded inode identity in the last instant
+                # before execve; the plan hashed it, but only this check is
+                # adjacent to the launch itself.
+                try:
+                    verify_executable_identity(
+                        execution.identity,
+                        execution.executable_descriptor,
+                    )
+                except AdapterError as exc:
+                    primary_error = exc
+                    remove_log = True
+                except BaseException:
+                    primary_error = _fail(
+                        "cannot re-verify the pinned COLMAP executable identity",
+                        _ENGINE_FAILED,
+                    )
+                    remove_log = True
+            if log_descriptor is not None and primary_error is None:
                 launch_attempted = True
                 try:
                     process = subprocess.Popen(
                         list(normalized_command),
+                        executable=execution.executable_alias,
                         cwd=cwd,
+                        env=execution.environment(),
+                        stdin=subprocess.DEVNULL,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT,
                         bufsize=0,
+                        close_fds=True,
+                        pass_fds=execution.passed_descriptors(),
                         start_new_session=False,
                     )
                 except BaseException:
@@ -532,6 +638,22 @@ def run_inherited_colmap_command(
                     assert log_descriptor is not None
                     try:
                         while True:
+                            # The drain carries the same lease-aware deadline as
+                            # the command wait; a chatty child may not extend the
+                            # phase past it.  A silent child that merely holds the
+                            # pipe open is bounded by the parent's close/join and
+                            # its fail-closed cleanup error instead.
+                            if _drain_deadline_exhausted(context, deadline):
+                                drain_errors.append(
+                                    (
+                                        (
+                                            "inherited COLMAP log drain exceeded"
+                                            " the carried deadline"
+                                        ),
+                                        _ENGINE_TIMEOUT,
+                                    )
+                                )
+                                break
                             block = output_stream.read(16 * 1024)
                             if not block:
                                 break
@@ -551,7 +673,10 @@ def run_inherited_colmap_command(
                                 offset += written
                     except BaseException:
                         drain_errors.append(
-                            "cannot retain bounded inherited COLMAP output"
+                            (
+                                "cannot retain bounded inherited COLMAP output",
+                                _ENGINE_LOG_IO,
+                            )
                         )
                     finally:
                         try:
@@ -686,7 +811,8 @@ def run_inherited_colmap_command(
             _ENGINE_CLEANUP_FAILED,
         ) from None
     if drain_errors:
-        raise _fail(drain_errors[0], _ENGINE_LOG_IO) from None
+        drain_message, drain_code = drain_errors[0]
+        raise _fail(drain_message, drain_code) from None
     if primary_error is not None:
         raise primary_error from None
     _shared_remaining_seconds(context, deadline)

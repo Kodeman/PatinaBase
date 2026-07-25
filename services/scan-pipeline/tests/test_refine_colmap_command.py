@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import dataclasses
 import io
+import json
 import os
 import signal
 import subprocess
@@ -9,15 +11,28 @@ import time
 from pathlib import Path
 
 import pytest
+from _colmap_toolchain import (
+    load_fake_toolchain,
+    plan_fake_command,
+    write_toolchain,
+)
+
 from patina_scan_worker import refine_colmap_command as command_module
 from patina_scan_worker import refine_native_process as native_process
 from patina_scan_worker.refine_adapter import AdapterError, RefineDeadline
 from patina_scan_worker.refine_colmap_backend import run_inherited_colmap_command
+from patina_scan_worker.refine_colmap_toolchain import (
+    COMMAND_ENVIRONMENT_ALLOWLIST,
+    PinnedColmapCommand,
+)
 from patina_scan_worker.refine_native_process import (
     NativeChildContext,
     native_engine_entrypoint,
     run_native_engine_child,
 )
+
+#: Captured before any test patches ``sys.platform`` for the Linux-only paths.
+_HOST_PLATFORM = sys.platform
 
 
 def _deadline(seconds: float = 5.0) -> RefineDeadline:
@@ -25,10 +40,16 @@ def _deadline(seconds: float = 5.0) -> RefineDeadline:
 
 
 def _fake_cli(tmp_path: Path, program: str) -> Path:
-    path = tmp_path / "fake-colmap"
-    path.write_text(f"#!{sys.executable}\n{program}\n", encoding="utf-8")
-    path.chmod(0o700)
-    return path
+    """Install a fake COLMAP prefix and return its pinned executable."""
+
+    return write_toolchain(tmp_path / "colmap", program=program)
+
+
+def _pinned(fake: Path, workspace: Path):
+    """Load the fake toolchain and seal one allowlisted plan for it."""
+
+    toolchain = load_fake_toolchain(fake.parent.parent)
+    return toolchain, plan_fake_command(toolchain, workspace)
 
 
 def _patch_unit_host(monkeypatch) -> None:
@@ -58,17 +79,26 @@ def _patch_unit_host(monkeypatch) -> None:
     )
 
 
-def _run_unit_command(tmp_path: Path, fake: Path, name: str = "command.log"):
+def _run_unit_command(
+    tmp_path: Path,
+    fake: Path,
+    name: str = "command.log",
+    pinned=None,
+):
     tmp_path.chmod(0o700)
-    return run_inherited_colmap_command(
-        (str(fake), "point_triangulator"),
-        context=native_process._seal_native_child_context(
-            NativeChildContext(time.monotonic() + 30.0)
-        ),
-        deadline=_deadline(10.0),
-        log_path=tmp_path / name,
-        cwd=tmp_path,
-    )
+    toolchain, execution = _pinned(fake, tmp_path) if pinned is None else pinned
+    try:
+        return run_inherited_colmap_command(
+            execution,
+            context=native_process._seal_native_child_context(
+                NativeChildContext(time.monotonic() + 30.0)
+            ),
+            deadline=_deadline(10.0),
+            log_path=tmp_path / name,
+            cwd=tmp_path,
+        )
+    finally:
+        toolchain.close()
 
 
 def test_subreaper_prior_state_is_restored_only_when_runner_changed_it(
@@ -198,6 +228,7 @@ def test_subreaper_restore_failure_is_fixed_cleanup_error(monkeypatch):
 def test_non_linux_host_rejects_before_popen(monkeypatch, tmp_path):
     fake = _fake_cli(tmp_path, "print('unused')")
     tmp_path.chmod(0o700)
+    toolchain, execution = _pinned(fake, tmp_path)
     popen_called = False
     monkeypatch.setattr(command_module.sys, "platform", "darwin")
 
@@ -208,14 +239,17 @@ def test_non_linux_host_rejects_before_popen(monkeypatch, tmp_path):
 
     monkeypatch.setattr(command_module.subprocess, "Popen", popen)
 
-    with pytest.raises(AdapterError) as raised:
-        run_inherited_colmap_command(
-            (str(fake), "point_triangulator"),
-            context=NativeChildContext(time.monotonic() + 30.0),
-            deadline=_deadline(),
-            log_path=tmp_path / "never-created.log",
-            cwd=tmp_path,
-        )
+    try:
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                execution,
+                context=NativeChildContext(time.monotonic() + 30.0),
+                deadline=_deadline(),
+                log_path=tmp_path / "never-created.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
 
     assert raised.value.code == "REFINE_ENGINE_FAILED"
     assert "dedicated Linux native child session" in str(raised.value)
@@ -225,6 +259,7 @@ def test_non_linux_host_rejects_before_popen(monkeypatch, tmp_path):
 def test_unsealed_context_is_rejected_before_popen(monkeypatch, tmp_path):
     fake = _fake_cli(tmp_path, "print('unused')")
     tmp_path.chmod(0o700)
+    toolchain, execution = _pinned(fake, tmp_path)
     _patch_unit_host(monkeypatch)
     popen_called = False
 
@@ -235,14 +270,17 @@ def test_unsealed_context_is_rejected_before_popen(monkeypatch, tmp_path):
 
     monkeypatch.setattr(command_module.subprocess, "Popen", popen)
 
-    with pytest.raises(AdapterError) as raised:
-        run_inherited_colmap_command(
-            (str(fake), "point_triangulator"),
-            context=NativeChildContext(time.monotonic() + 30.0),
-            deadline=_deadline(),
-            log_path=tmp_path / "never-created.log",
-            cwd=tmp_path,
-        )
+    try:
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                execution,
+                context=NativeChildContext(time.monotonic() + 30.0),
+                deadline=_deadline(),
+                log_path=tmp_path / "never-created.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
 
     assert raised.value.code == "REFINE_ENGINE_FAILED"
     assert str(raised.value) == (
@@ -256,6 +294,7 @@ def test_unsealed_context_is_rejected_before_popen(monkeypatch, tmp_path):
 def test_context_lookalike_cannot_claim_verified_boundary(monkeypatch, tmp_path):
     fake = _fake_cli(tmp_path, "print('unused')")
     tmp_path.chmod(0o700)
+    toolchain, execution = _pinned(fake, tmp_path)
     _patch_unit_host(monkeypatch)
 
     class ForgedContext:
@@ -270,14 +309,17 @@ def test_context_lookalike_cannot_claim_verified_boundary(monkeypatch, tmp_path)
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
     )
 
-    with pytest.raises(AdapterError) as raised:
-        run_inherited_colmap_command(
-            (str(fake), "point_triangulator"),
-            context=ForgedContext(),
-            deadline=_deadline(),
-            log_path=tmp_path / "never-created.log",
-            cwd=tmp_path,
-        )
+    try:
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                execution,
+                context=ForgedContext(),
+                deadline=_deadline(),
+                log_path=tmp_path / "never-created.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
 
     assert raised.value.code == "REFINE_ENGINE_FAILED"
     assert str(raised.value) == (
@@ -290,6 +332,7 @@ def test_context_lookalike_cannot_claim_verified_boundary(monkeypatch, tmp_path)
 def test_boundary_inspection_failure_is_fixed_without_cause(monkeypatch, tmp_path):
     fake = _fake_cli(tmp_path, "print('unused')")
     tmp_path.chmod(0o700)
+    toolchain, execution = _pinned(fake, tmp_path)
     _patch_unit_host(monkeypatch)
     context = native_process._seal_native_child_context(
         NativeChildContext(time.monotonic() + 30.0)
@@ -309,14 +352,17 @@ def test_boundary_inspection_failure_is_fixed_without_cause(monkeypatch, tmp_pat
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
     )
 
-    with pytest.raises(AdapterError) as raised:
-        run_inherited_colmap_command(
-            (str(fake), "point_triangulator"),
-            context=context,
-            deadline=_deadline(),
-            log_path=tmp_path / "never-created.log",
-            cwd=tmp_path,
-        )
+    try:
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                execution,
+                context=context,
+                deadline=_deadline(),
+                log_path=tmp_path / "never-created.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
 
     assert raised.value.code == "REFINE_ENGINE_FAILED"
     assert str(raised.value) == (
@@ -595,6 +641,10 @@ def test_cwd_resolve_exception_is_fixed_and_does_not_leak_details(
     tmp_path,
 ):
     fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    # Pin the toolchain before Path.resolve is instrumented; the fault under
+    # test is the command workspace, not the installed prefix.
+    pinned = _pinned(fake, tmp_path)
     _patch_unit_host(monkeypatch)
     monkeypatch.setattr(
         Path,
@@ -605,7 +655,7 @@ def test_cwd_resolve_exception_is_fixed_and_does_not_leak_details(
     )
 
     with pytest.raises(AdapterError) as raised:
-        _run_unit_command(tmp_path, fake)
+        _run_unit_command(tmp_path, fake, pinned=pinned)
 
     assert raised.value.code == "REFINE_ENGINE_FAILED"
     assert str(raised.value) == "cannot resolve COLMAP command workspace"
@@ -924,6 +974,10 @@ def test_log_close_exception_is_cleanup_failure_without_raw_leak(
     tmp_path,
 ):
     fake = _fake_cli(tmp_path, "print('done')")
+    tmp_path.chmod(0o700)
+    # Pin the toolchain before os.open/os.close are instrumented; the fault
+    # under test is the command log descriptor, not toolchain verification.
+    pinned = _pinned(fake, tmp_path)
     _patch_unit_host(monkeypatch)
     log_path = tmp_path / "close.log"
     real_open = os.open
@@ -947,7 +1001,7 @@ def test_log_close_exception_is_cleanup_failure_without_raw_leak(
     monkeypatch.setattr(command_module.os, "close", close_file)
 
     with pytest.raises(AdapterError) as raised:
-        _run_unit_command(tmp_path, fake, name="close.log")
+        _run_unit_command(tmp_path, fake, name="close.log", pinned=pinned)
 
     assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
     assert str(raised.value) == "cannot close inherited COLMAP log"
@@ -958,21 +1012,28 @@ def test_log_close_exception_is_cleanup_failure_without_raw_leak(
 @native_engine_entrypoint
 def _run_two_commands(request, context: NativeChildContext):
     deadline = RefineDeadline(context.expires_at_monotonic_s)
-    run_inherited_colmap_command(
-        tuple(request["firstCommand"]),
-        context=context,
-        deadline=deadline,
-        log_path=Path(request["firstLog"]),
-        cwd=Path(request["cwd"]),
-    )
-    Path(request["secondStarted"]).write_text("started", encoding="utf-8")
-    run_inherited_colmap_command(
-        tuple(request["secondCommand"]),
-        context=context,
-        deadline=deadline,
-        log_path=Path(request["secondLog"]),
-        cwd=Path(request["cwd"]),
-    )
+    workspace = Path(request["cwd"])
+    first = load_fake_toolchain(Path(request["firstPrefix"]))
+    second = load_fake_toolchain(Path(request["secondPrefix"]))
+    try:
+        run_inherited_colmap_command(
+            plan_fake_command(first, workspace),
+            context=context,
+            deadline=deadline,
+            log_path=Path(request["firstLog"]),
+            cwd=workspace,
+        )
+        Path(request["secondStarted"]).write_text("started", encoding="utf-8")
+        run_inherited_colmap_command(
+            plan_fake_command(second, workspace),
+            context=context,
+            deadline=deadline,
+            log_path=Path(request["secondLog"]),
+            cwd=workspace,
+        )
+    finally:
+        first.close()
+        second.close()
 
 
 @pytest.mark.skipif(
@@ -987,23 +1048,23 @@ def test_same_group_live_descendant_fails_before_second_command(tmp_path):
         f"pathlib.Path({str(descendant_pid_path)!r}).write_text(str(os.getpid())); "
         "time.sleep(30)"
     )
-    first = _fake_cli(
-        tmp_path,
-        "import subprocess,sys; "
-        f"subprocess.Popen([sys.executable,'-c',{descendant_program!r}])",
+    write_toolchain(
+        tmp_path / "colmap-first",
+        program=(
+            "import subprocess,sys; "
+            f"subprocess.Popen([sys.executable,'-c',{descendant_program!r}])"
+        ),
     )
-    second = tmp_path / "second-colmap"
-    second.write_text(f"#!{sys.executable}\nprint('second')\n", encoding="utf-8")
-    second.chmod(0o700)
+    write_toolchain(tmp_path / "colmap-second", program="print('second')")
     descendant_pid: int | None = None
     try:
         with pytest.raises(AdapterError) as raised:
             run_native_engine_child(
                 f"{__name__}:_run_two_commands",
                 {
-                    "firstCommand": [str(first), "point_triangulator"],
+                    "firstPrefix": str(tmp_path / "colmap-first"),
                     "firstLog": str(tmp_path / "first.log"),
-                    "secondCommand": [str(second), "bundle_adjuster"],
+                    "secondPrefix": str(tmp_path / "colmap-second"),
                     "secondLog": str(tmp_path / "second.log"),
                     "secondStarted": str(second_started),
                     "cwd": str(tmp_path),
@@ -1045,23 +1106,23 @@ def test_escaped_live_descendant_fails_before_second_command(tmp_path):
         f"pathlib.Path({str(descendant_pid_path)!r}).write_text(str(os.getpid())); "
         "time.sleep(30)"
     )
-    first = _fake_cli(
-        tmp_path,
-        "import os,subprocess,sys; os.setsid(); "
-        f"subprocess.Popen([sys.executable,'-c',{descendant_program!r}])",
+    write_toolchain(
+        tmp_path / "colmap-first",
+        program=(
+            "import os,subprocess,sys; os.setsid(); "
+            f"subprocess.Popen([sys.executable,'-c',{descendant_program!r}])"
+        ),
     )
-    second = tmp_path / "second-colmap"
-    second.write_text(f"#!{sys.executable}\nprint('second')\n", encoding="utf-8")
-    second.chmod(0o700)
+    write_toolchain(tmp_path / "colmap-second", program="print('second')")
     descendant_pid: int | None = None
     try:
         with pytest.raises(AdapterError) as raised:
             run_native_engine_child(
                 f"{__name__}:_run_two_commands",
                 {
-                    "firstCommand": [str(first), "point_triangulator"],
+                    "firstPrefix": str(tmp_path / "colmap-first"),
                     "firstLog": str(tmp_path / "first.log"),
-                    "secondCommand": [str(second), "bundle_adjuster"],
+                    "secondPrefix": str(tmp_path / "colmap-second"),
                     "secondLog": str(tmp_path / "second.log"),
                     "secondStarted": str(second_started),
                     "cwd": str(tmp_path),
@@ -1082,3 +1143,378 @@ def test_escaped_live_descendant_fails_before_second_command(tmp_path):
                 os.kill(descendant_pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+
+
+# ---------------------------------------------------------------------------
+# I97 item 3 — executable identity, environment allowlist, deadline carriage
+# ---------------------------------------------------------------------------
+
+
+def test_child_receives_only_the_allowlisted_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv("PATINA_AMBIENT_SECRET", "DO_NOT_LEAK_AMBIENT")
+    monkeypatch.setenv("LD_PRELOAD", "/tmp/ambient.so")
+    fake = _fake_cli(
+        tmp_path,
+        "import json,os,sys; sys.stdout.write(json.dumps(dict(os.environ)))",
+    )
+    _patch_unit_host(monkeypatch)
+
+    result = _run_unit_command(tmp_path, fake, name="environment.log")
+
+    child_environment = json.loads(result.output_tail)
+    # Darwin's libSystem injects __CF_USER_TEXT_ENCODING into every process it
+    # starts; on the qualified Linux target the child environment is exactly the
+    # allowlist and nothing else.
+    injected = (
+        set()
+        if _HOST_PLATFORM.startswith("linux")
+        else {"__CF_USER_TEXT_ENCODING"}
+    )
+    assert (
+        tuple(sorted(set(child_environment) - injected))
+        == COMMAND_ENVIRONMENT_ALLOWLIST
+    )
+    assert "PATINA_AMBIENT_SECRET" not in child_environment
+    assert "LD_PRELOAD" not in child_environment
+    assert child_environment["TMPDIR"] == str(tmp_path)
+    assert child_environment["LANG"] == child_environment["LC_ALL"] == "C"
+    assert child_environment["QT_QPA_PLATFORM"] == "offscreen"
+    assert "DO_NOT_LEAK" not in result.output_tail
+
+
+def test_child_runs_in_the_private_workspace_with_closed_stdin(monkeypatch, tmp_path):
+    fake = _fake_cli(
+        tmp_path,
+        "import json,os,sys; "
+        "sys.stdout.write(json.dumps([os.getcwd(), sys.stdin.read()]))",
+    )
+    _patch_unit_host(monkeypatch)
+
+    result = _run_unit_command(tmp_path, fake, name="workspace.log")
+
+    cwd, stdin_payload = json.loads(result.output_tail)
+    assert cwd == str(tmp_path)
+    assert stdin_payload == ""
+
+
+def test_popen_receives_the_pinned_alias_and_closed_environment(monkeypatch, tmp_path):
+    fake = _fake_cli(tmp_path, "print('done')")
+    tmp_path.chmod(0o700)
+    pinned = _pinned(fake, tmp_path)
+    _patch_unit_host(monkeypatch)
+    real_popen = subprocess.Popen
+    recorded: dict[str, object] = {}
+
+    def popen(argv, **kwargs):
+        recorded["argv"] = tuple(argv)
+        recorded.update(kwargs)
+        return real_popen(argv, **kwargs)
+
+    monkeypatch.setattr(command_module.subprocess, "Popen", popen)
+
+    result = _run_unit_command(tmp_path, fake, name="popen.log", pinned=pinned)
+
+    assert result.returncode == 0
+    assert recorded["argv"] == pinned[1].argv
+    assert recorded["executable"] == pinned[1].executable_alias
+    assert recorded["env"] == pinned[1].environment()
+    assert recorded["close_fds"] is True
+    assert recorded["pass_fds"] == pinned[1].passed_descriptors()
+    assert recorded["stdin"] == subprocess.DEVNULL
+    assert recorded["start_new_session"] is False
+
+
+def test_unsealed_pinned_command_is_rejected_before_popen(monkeypatch, tmp_path):
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    toolchain, execution = _pinned(fake, tmp_path)
+    forged = dataclasses.replace(execution)
+    _patch_unit_host(monkeypatch)
+    monkeypatch.setattr(
+        command_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
+    )
+
+    try:
+        assert forged.is_verified_pinned_command is False
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                forged,
+                context=native_process._seal_native_child_context(
+                    NativeChildContext(time.monotonic() + 30.0)
+                ),
+                deadline=_deadline(),
+                log_path=tmp_path / "never-created.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "inherited COLMAP commands require a pinned toolchain execution"
+    )
+    assert not (tmp_path / "never-created.log").exists()
+
+
+def test_pinned_command_lookalike_is_rejected_before_popen(monkeypatch, tmp_path):
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    toolchain, execution = _pinned(fake, tmp_path)
+
+    class ForgedExecution:
+        is_verified_pinned_command = True
+        argv = execution.argv
+        workspace = execution.workspace
+        identity = execution.identity
+        executable_descriptor = execution.executable_descriptor
+        executable_alias = execution.executable_alias
+        descriptor_pinned = False
+
+        def environment(self):
+            return {"LD_PRELOAD": "/tmp/ambient.so"}
+
+        def passed_descriptors(self):
+            return ()
+
+    _patch_unit_host(monkeypatch)
+    monkeypatch.setattr(
+        command_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
+    )
+
+    try:
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                ForgedExecution(),
+                context=native_process._seal_native_child_context(
+                    NativeChildContext(time.monotonic() + 30.0)
+                ),
+                deadline=_deadline(),
+                log_path=tmp_path / "never-created.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "inherited COLMAP commands require a pinned toolchain execution"
+    )
+    assert not (tmp_path / "never-created.log").exists()
+
+
+def test_plan_authentication_failure_is_fixed_without_cause(monkeypatch, tmp_path):
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    toolchain, execution = _pinned(fake, tmp_path)
+    _patch_unit_host(monkeypatch)
+    monkeypatch.setattr(
+        PinnedColmapCommand,
+        "is_verified_pinned_command",
+        property(
+            lambda _self: (_ for _ in ()).throw(RuntimeError("DO_NOT_LEAK_PLAN"))
+        ),
+    )
+    monkeypatch.setattr(
+        command_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
+    )
+
+    try:
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                execution,
+                context=native_process._seal_native_child_context(
+                    NativeChildContext(time.monotonic() + 30.0)
+                ),
+                deadline=_deadline(),
+                log_path=tmp_path / "never-created.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
+
+    assert str(raised.value) == (
+        "cannot authenticate the pinned COLMAP toolchain execution"
+    )
+    assert raised.value.__cause__ is None
+    assert "DO_NOT_LEAK" not in str(raised.value)
+
+
+def test_execution_planned_for_another_workspace_is_rejected(monkeypatch, tmp_path):
+    fake = _fake_cli(tmp_path, "print('unused')")
+    other = tmp_path / "other"
+    other.mkdir()
+    other.chmod(0o700)
+    tmp_path.chmod(0o700)
+    toolchain = load_fake_toolchain(fake.parent.parent)
+    execution = plan_fake_command(toolchain, other)
+    _patch_unit_host(monkeypatch)
+    monkeypatch.setattr(
+        command_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
+    )
+
+    try:
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                execution,
+                context=native_process._seal_native_child_context(
+                    NativeChildContext(time.monotonic() + 30.0)
+                ),
+                deadline=_deadline(),
+                log_path=tmp_path / "never-created.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
+
+    assert str(raised.value) == (
+        "pinned COLMAP execution was planned for a different workspace"
+    )
+    assert not (tmp_path / "never-created.log").exists()
+
+
+def test_environment_materialization_failure_is_fixed(monkeypatch, tmp_path):
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    toolchain, execution = _pinned(fake, tmp_path)
+    _patch_unit_host(monkeypatch)
+    monkeypatch.setattr(
+        PinnedColmapCommand,
+        "environment",
+        lambda _self: (_ for _ in ()).throw(RuntimeError("DO_NOT_LEAK_ENVIRON")),
+    )
+    monkeypatch.setattr(
+        command_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
+    )
+
+    try:
+        with pytest.raises(AdapterError) as raised:
+            run_inherited_colmap_command(
+                execution,
+                context=native_process._seal_native_child_context(
+                    NativeChildContext(time.monotonic() + 30.0)
+                ),
+                deadline=_deadline(),
+                log_path=tmp_path / "never-created.log",
+                cwd=tmp_path,
+            )
+    finally:
+        toolchain.close()
+
+    assert str(raised.value) == (
+        "cannot materialize the pinned COLMAP command environment"
+    )
+    assert raised.value.__cause__ is None
+    assert "DO_NOT_LEAK" not in str(raised.value)
+
+
+def test_executable_swapped_after_planning_is_rejected_before_popen(
+    monkeypatch,
+    tmp_path,
+):
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    pinned = _pinned(fake, tmp_path)
+    replacement = tmp_path / "replacement"
+    replacement.write_bytes(fake.read_bytes())
+    replacement.chmod(0o755)
+    replacement.replace(fake)
+    _patch_unit_host(monkeypatch)
+    popen_called = False
+
+    def popen(*_args, **_kwargs):
+        nonlocal popen_called
+        popen_called = True
+        raise AssertionError
+
+    monkeypatch.setattr(command_module.subprocess, "Popen", popen)
+
+    with pytest.raises(AdapterError) as raised:
+        _run_unit_command(tmp_path, fake, name="swapped.log", pinned=pinned)
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "pinned COLMAP executable identity changed before execution"
+    )
+    assert popen_called is False
+    assert not (tmp_path / "swapped.log").exists()
+
+
+def test_identity_reverification_faults_are_fixed_and_remove_the_log(
+    monkeypatch,
+    tmp_path,
+):
+    fake = _fake_cli(tmp_path, "print('unused')")
+    tmp_path.chmod(0o700)
+    pinned = _pinned(fake, tmp_path)
+    _patch_unit_host(monkeypatch)
+    monkeypatch.setattr(
+        command_module,
+        "verify_executable_identity",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("DO_NOT_LEAK_IDENTITY")),
+    )
+    monkeypatch.setattr(
+        command_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError),
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        _run_unit_command(tmp_path, fake, name="identity.log", pinned=pinned)
+
+    assert raised.value.code == "REFINE_ENGINE_FAILED"
+    assert str(raised.value) == (
+        "cannot re-verify the pinned COLMAP executable identity"
+    )
+    assert raised.value.__cause__ is None
+    assert "DO_NOT_LEAK" not in str(raised.value)
+    assert not (tmp_path / "identity.log").exists()
+
+
+def test_drain_deadline_helper_tracks_the_one_shared_deadline():
+    context = NativeChildContext(time.monotonic() + 30.0)
+
+    assert command_module._drain_deadline_exhausted(context, _deadline(10.0)) is False
+    assert (
+        command_module._drain_deadline_exhausted(
+            context, RefineDeadline(time.monotonic() - 1.0)
+        )
+        is True
+    )
+    assert (
+        command_module._drain_deadline_exhausted(
+            NativeChildContext(time.monotonic() - 1.0), _deadline(10.0)
+        )
+        is True
+    )
+
+
+def test_log_drain_stops_and_fails_closed_when_the_deadline_expires(
+    monkeypatch,
+    tmp_path,
+):
+    fake = _fake_cli(tmp_path, "print('done')")
+    _patch_unit_host(monkeypatch)
+    monkeypatch.setattr(
+        command_module,
+        "_drain_deadline_exhausted",
+        lambda _context, _deadline: True,
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        _run_unit_command(tmp_path, fake, name="drain-deadline.log")
+
+    assert raised.value.code == "REFINE_ENGINE_TIMEOUT"
+    assert str(raised.value) == (
+        "inherited COLMAP log drain exceeded the carried deadline"
+    )
+    assert raised.value.__cause__ is None
