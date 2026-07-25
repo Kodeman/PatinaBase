@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 from pathlib import Path, PurePosixPath
 
 from patina_scan_worker import refine_colmap_toolchain as toolchain_module
@@ -37,6 +38,7 @@ from patina_scan_worker.refine_colmap_toolchain import (
     TOOLCHAIN_MANIFEST_SCHEMA,
     ColmapToolchain,
     PinnedColmapCommand,
+    QualifiedBoxLocation,
     load_colmap_toolchain,
     plan_pinned_colmap_command,
 )
@@ -82,6 +84,68 @@ def qualified_manifest_fields(**overrides: object) -> dict[str, object]:
     return fields
 
 
+#: How long :func:`age_past_the_inode_timestamp_tick` will wait for the
+#: filesystem clock to move.  One coarse Linux tick is 1 ms; five seconds is a
+#: failure, not a slow machine.
+_CTIME_TICK_TIMEOUT_S = 5.0
+
+
+def age_past_the_inode_timestamp_tick(reference_ns: int, *, near: Path) -> None:
+    """Block until the filesystem clock has moved strictly past ``reference_ns``.
+
+    ``st_ctime_ns`` granularity is per-filesystem: about 23 us on macOS/APFS but
+    a full **1.0 ms on Linux** (ext4/overlayfs -- what the container gate and the
+    qualified box both run).  A fixture that creates the fake COLMAP binary and
+    lets the caller stat it inside one coarse tick hands every same-tick write
+    an *identical* ``st_ctime_ns``/``st_mtime_ns``, so the timestamp half of
+    ``verify_executable_identity`` observes no change at all.  Measured on the
+    unaged fixture: an in-place ``pwrite`` went undetected 78/100 and 75/100
+    times on Linux, and 0/50 times on macOS -- which is exactly why the F1
+    regression tests looked green on a developer laptop while being vacuous in
+    the container.
+
+    Production never has that shape: the recorded baseline is the installed
+    binary's own last inode-change time, i.e. install time on a real box, so any
+    later write lands in a strictly later tick.  Giving the fixture the same
+    property is therefore restoring realism, not weakening the check -- deleting
+    the ``st_ctime_ns`` comparison from ``verify_executable_identity`` still
+    turns those tests red.
+
+    The probe is a *separate* inode: touching the binary itself would only move
+    its own ctime into the current tick and leave the same-tick question open.
+    Creating a fresh file until its ctime exceeds ``reference_ns`` proves the
+    clock itself has advanced beyond the tick the binary was written in.
+    """
+
+    if type(reference_ns) is not int:
+        raise TypeError("the inode-timestamp reference must be an exact int")
+    probe = near / f".ctime-tick-probe-{os.getpid()}"
+    stop = time.monotonic() + _CTIME_TICK_TIMEOUT_S
+    try:
+        while True:
+            # Unlink first: a fresh inode is guaranteed to carry the current
+            # coarse clock, whereas rewriting a same-size file need not.
+            try:
+                probe.unlink()
+            except FileNotFoundError:
+                pass
+            probe.write_bytes(b"")
+            if probe.stat().st_ctime_ns > reference_ns:
+                return
+            if time.monotonic() >= stop:
+                raise AssertionError(
+                    "the filesystem clock never moved past the fake COLMAP "
+                    "binary's ctime; the executable-identity regression tests "
+                    "would be silently vacuous"
+                )
+            time.sleep(0.0005)
+    finally:
+        try:
+            probe.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def write_toolchain(
     prefix: Path,
     *,
@@ -90,7 +154,12 @@ def write_toolchain(
     manifest_bytes: bytes | None = None,
     executable_mode: int = 0o755,
 ) -> Path:
-    """Install a fake COLMAP prefix whose manifest matches its binary."""
+    """Install a fake COLMAP prefix whose manifest matches its binary.
+
+    The installed binary is aged past its own ctime tick before this returns --
+    see :func:`age_past_the_inode_timestamp_tick` for why a fixture that skips
+    that makes the in-place-byte-swap tests pass without testing anything.
+    """
 
     binary = prefix / "bin" / "colmap"
     binary.parent.mkdir(parents=True, exist_ok=True)
@@ -126,7 +195,27 @@ def write_toolchain(
         manifest_bytes = canonical_manifest_bytes(fields)
     manifest_path.write_bytes(manifest_bytes)
     manifest_path.chmod(0o644)
+    age_past_the_inode_timestamp_tick(binary.stat().st_ctime_ns, near=prefix.parent)
     return binary
+
+
+def fake_box_location(prefix: Path) -> QualifiedBoxLocation:
+    """Declare where one fake prefix's "qualified box" is installed.
+
+    ``write_toolchain`` writes the real pinned constants for every box-identity
+    field except the three install-location paths, which have to live under
+    ``tmp_path``: ``/opt/colmap/4.0.2`` cannot be created on a developer macOS
+    box, and a Linux-only proof is the shape that hid the last regression.  So
+    only the location is substituted -- COLMAP version, build banner, source
+    commit and tree, CUDA release and architecture, nvcc, host compilers,
+    driver and pycolmap are still compared against the production constants.
+    """
+
+    return QualifiedBoxLocation(
+        colmap_prefix=str(prefix),
+        app_dir=str(prefix / "app"),
+        cuda_root=str(prefix / "cuda"),
+    )
 
 
 def load_fake_toolchain(
@@ -141,6 +230,11 @@ def load_fake_toolchain(
     ``tmp_path`` is owned by whoever runs the suite, so the declared owner is
     this euid.  That substitution is the *only* ownership relaxation: the
     exact-owner comparison itself is still the production one.
+
+    ``qualified=True`` does not assert qualification -- it declares this fake
+    prefix's install location and lets the real loader *prove* the manifest
+    against it.  A prefix whose manifest drifts from the pinned box is refused
+    here exactly as production would refuse it.
     """
 
     return load_colmap_toolchain(
@@ -148,7 +242,7 @@ def load_fake_toolchain(
         remaining_seconds=remaining_seconds or (lambda: 30.0),
         require_elf=False,
         owner_uid=os.geteuid(),
-        qualified=qualified,
+        box_location=fake_box_location(prefix) if qualified else None,
     )
 
 

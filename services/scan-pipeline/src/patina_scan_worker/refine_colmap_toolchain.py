@@ -490,11 +490,48 @@ def parse_toolchain_manifest(payload: bytes) -> ColmapToolchainManifest:
     return manifest
 
 
-def assert_qualified_box_identity(manifest: ColmapToolchainManifest) -> None:
+@dataclass(frozen=True)
+class QualifiedBoxLocation:
+    """Where the qualified COLMAP box is installed on disk.
+
+    These three install-location paths are the *only* substitutable part of the
+    box identity, and they are substitutable only so the mechanism stays
+    testable off the real host: ``/opt/colmap/4.0.2`` cannot be created
+    ``root:root`` on a developer macOS box, and a proof that runs only on Linux
+    is exactly the shape that let the last regression through unseen.
+
+    Every other qualified-box fact -- COLMAP version, build banner, source
+    commit and tree, CUDA release and architecture, nvcc, host compilers,
+    driver, pycolmap -- is compared against the repo-pinned production constant
+    on every route, substituted location or not.  Production never constructs
+    one of these: it uses :data:`QUALIFIED_BOX_LOCATION`.
+    """
+
+    colmap_prefix: str
+    app_dir: str
+    cuda_root: str
+
+
+#: The one location production accepts.  Every default in this module points
+#: here; nothing in the package may pass a different one.
+QUALIFIED_BOX_LOCATION = QualifiedBoxLocation(
+    colmap_prefix=QUALIFIED_COLMAP_PREFIX,
+    app_dir=QUALIFIED_APP_DIR,
+    cuda_root=QUALIFIED_CUDA_ROOT,
+)
+
+
+def assert_qualified_box_identity(
+    manifest: ColmapToolchainManifest,
+    *,
+    location: QualifiedBoxLocation = QUALIFIED_BOX_LOCATION,
+) -> None:
     """Reject any drift from the exact I87/I88 qualified box identity."""
 
+    if type(location) is not QualifiedBoxLocation:
+        raise _fail("COLMAP box identity requires a declared install location")
     exact = (
-        (manifest.colmap_prefix, QUALIFIED_COLMAP_PREFIX, "colmapPrefix"),
+        (manifest.colmap_prefix, location.colmap_prefix, "colmapPrefix"),
         (manifest.colmap_version, QUALIFIED_COLMAP_VERSION, "colmapVersion"),
         (
             manifest.colmap_build_banner,
@@ -507,7 +544,7 @@ def assert_qualified_box_identity(manifest: ColmapToolchainManifest) -> None:
             "colmapSourceCommit",
         ),
         (manifest.colmap_source_tree, QUALIFIED_COLMAP_SOURCE_TREE, "colmapSourceTree"),
-        (manifest.cuda_root, QUALIFIED_CUDA_ROOT, "cudaRoot"),
+        (manifest.cuda_root, location.cuda_root, "cudaRoot"),
         (manifest.cuda_release, QUALIFIED_CUDA_RELEASE, "cudaRelease"),
         (
             manifest.cuda_architecture,
@@ -523,7 +560,7 @@ def assert_qualified_box_identity(manifest: ColmapToolchainManifest) -> None:
             "nvidiaDriverVersion",
         ),
         (manifest.pycolmap_version, QUALIFIED_PYCOLMAP_VERSION, "pycolmapVersion"),
-        (manifest.app_dir, QUALIFIED_APP_DIR, "appDir"),
+        (manifest.app_dir, location.app_dir, "appDir"),
     )
     for observed, pinned, label in exact:
         if observed != pinned:
@@ -702,8 +739,23 @@ class ColmapToolchain:
     manifest: ColmapToolchainManifest
     identity: ColmapExecutableIdentity
     executable_descriptor: int
-    qualified: bool
+    #: The install location this toolchain's manifest was proved against, or
+    #: ``None`` for a load that never claimed the qualified box at all.
+    box_location: QualifiedBoxLocation | None
     _closed: list[bool] = field(default_factory=lambda: [False], repr=False)
+
+    @property
+    def qualified(self) -> bool:
+        """Whether this toolchain passed :func:`assert_qualified_box_identity`.
+
+        Derived, never accepted on a caller's word.  ``load_colmap_toolchain``
+        used to take a bare ``qualified=`` bool, and the flag rode straight into
+        the sealed plan the supervisor gates on -- so ``qualified=True`` over an
+        arbitrary prefix produced a plan indistinguishable from the production
+        one without the box identity ever being checked on that route.
+        """
+
+        return self.box_location is not None
 
     def close(self) -> None:
         """Release the pinned executable descriptor exactly once."""
@@ -723,25 +775,32 @@ def load_colmap_toolchain(
     remaining_seconds: Callable[[], float],
     require_elf: bool = True,
     owner_uid: int = 0,
-    qualified: bool = False,
+    box_location: QualifiedBoxLocation | None = None,
 ) -> ColmapToolchain:
     """Verify one installed COLMAP prefix against its canonical manifest.
 
-    ``prefix``, ``require_elf``, ``owner_uid``, and ``qualified`` are parameters
-    only so this mechanism stays testable without the qualified host.  Every one
-    of them defaults to the production value, and production must call
+    ``prefix``, ``require_elf``, ``owner_uid``, and ``box_location`` are
+    parameters only so this mechanism stays testable without the qualified host.
+    Every one of them defaults to the production value, and production must call
     :func:`load_qualified_colmap_toolchain`, which supplies the pinned prefix and
-    additionally rejects every box-identity drift; nothing else in the package
-    may call this function directly.  ``owner_uid`` in particular defaults to
-    ``root``: the qualified box installs ``/opt/colmap/4.0.2`` ``root:root``
-    ``0755``, and a prefix writable by the executing identity would void every
-    hash and metadata guarantee this module makes.
+    the pinned box location; nothing else in the package may call this function
+    directly.  ``owner_uid`` in particular defaults to ``root``: the qualified
+    box installs ``/opt/colmap/4.0.2`` ``root:root`` ``0755``, and a prefix
+    writable by the executing identity would void every hash and metadata
+    guarantee this module makes.
+
+    ``box_location`` replaces a former ``qualified=`` bool.  A toolchain is
+    qualified if and only if its manifest was *proved* against a declared box
+    location here -- the caller can no longer simply assert it -- because that
+    flag is what the supervisor gates every launch on.
     """
 
     if not callable(remaining_seconds):
         raise _fail("COLMAP toolchain load requires a carried deadline probe")
     if type(owner_uid) is not int or owner_uid < 0:
         raise _fail("COLMAP toolchain load requires a declared owner uid")
+    if box_location is not None and type(box_location) is not QualifiedBoxLocation:
+        raise _fail("COLMAP toolchain load requires a declared install location")
     remaining_seconds()
     # O_NOFOLLOW protects each descriptor-relative component below the prefix,
     # but not the prefix's own ancestors.  Require the installed prefix to be
@@ -782,6 +841,12 @@ def load_colmap_toolchain(
         raise _fail("cannot inspect the COLMAP toolchain prefix") from None
     if manifest.colmap_prefix != prefix_posix.as_posix():
         raise _fail("COLMAP toolchain manifest prefix does not match its installation")
+    if box_location is not None:
+        # Before the executable is so much as opened, so a drifted box leaks no
+        # descriptor.  This is the check that used to sit only on
+        # ``plan_qualified_colmap_command`` while ``qualified=True`` reached the
+        # supervisor by a route that never ran it.
+        assert_qualified_box_identity(manifest, location=box_location)
 
     executable_fd, executable_metadata = _open_prefix_relative(
         prefix, COLMAP_EXECUTABLE_RELATIVE_PATH, owner_uid=owner_uid
@@ -834,14 +899,17 @@ def load_colmap_toolchain(
             pass
         raise
     executable_path = (prefix_posix / COLMAP_EXECUTABLE_RELATIVE_PATH).as_posix()
-    # The identity comes from the post-hash stat: that is the one provably
-    # contemporaneous with the bytes the digest covers, so its timestamps are
-    # the baseline the pre-``execve`` re-verification compares against.
+    # The identity is built from ``after``, the post-hash stat.  That choice is
+    # cosmetic, not a guarantee: the equality guard above already compares every
+    # one of the nine recorded fields between ``executable_metadata`` and
+    # ``after``, so either stat yields a byte-identical identity and the load
+    # would have failed had they differed.  The guarantee is the guard, not the
+    # stat that feeds this call.
     return ColmapToolchain(
         manifest=manifest,
         identity=_identity_from_stat(executable_path, digest, after),
         executable_descriptor=executable_fd,
-        qualified=bool(qualified),
+        box_location=box_location,
     )
 
 
@@ -850,21 +918,20 @@ def load_qualified_colmap_toolchain(
     context: NativeChildContext,
     deadline: RefineDeadline,
 ) -> ColmapToolchain:
-    """Load the exact pinned COLMAP installation, rejecting any box drift."""
+    """Load the exact pinned COLMAP installation, rejecting any box drift.
 
-    probe = carried_deadline_probe(context, deadline)
-    toolchain = load_colmap_toolchain(
+    The box-identity assertion is not repeated here: passing
+    :data:`QUALIFIED_BOX_LOCATION` *is* how the loader is told to run it, and it
+    runs before any descriptor is opened.  A second call afterwards would be a
+    no-op that reads like a guarantee.
+    """
+
+    return load_colmap_toolchain(
         Path(QUALIFIED_COLMAP_PREFIX),
-        remaining_seconds=probe,
+        remaining_seconds=carried_deadline_probe(context, deadline),
         require_elf=True,
-        qualified=True,
+        box_location=QUALIFIED_BOX_LOCATION,
     )
-    try:
-        assert_qualified_box_identity(toolchain.manifest)
-    except BaseException:
-        toolchain.close()
-        raise
-    return toolchain
 
 
 def verify_executable_identity(
@@ -1078,10 +1145,19 @@ def plan_pinned_colmap_command(
     verification and ``execve``.  Both that choice and the toolchain's own
     ``qualified`` flag are carried into the sealed plan, because the supervisor
     accepts nothing else: a plan that is not both is refused before ``Popen``.
+
+    A plan may not claim ``qualified`` on the toolchain's say-so either: this
+    function re-proves the box identity against the location the toolchain was
+    loaded with before stamping the flag, so there is no route to a
+    supervisor-acceptable plan on which the box-identity check never ran.
     """
 
     if type(toolchain) is not ColmapToolchain:
         raise _fail("pinned COLMAP planning requires a verified toolchain")
+    if toolchain.qualified:
+        assert_qualified_box_identity(
+            toolchain.manifest, location=toolchain.box_location
+        )
     if type(descriptor_exec) is not bool:
         raise _fail("pinned COLMAP planning requires an exact descriptor_exec flag")
     if not callable(remaining_seconds):

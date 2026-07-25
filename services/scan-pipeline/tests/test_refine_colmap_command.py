@@ -1016,13 +1016,18 @@ def test_log_close_exception_is_cleanup_failure_without_raw_leak(
 
 @native_engine_entrypoint
 def _run_two_commands(request, context: NativeChildContext):
+    # Both phases must be planned in the one shape the supervisor accepts --
+    # qualified *and* descriptor-pinned.  These two tests are the only cover for
+    # sequential quiescence, subreaper adoption, and the escaped-``setsid``
+    # descendant, and an unqualified plan makes the first command die before
+    # ``Popen`` with no child, no descendant and nothing under test.
     deadline = RefineDeadline(context.expires_at_monotonic_s)
     workspace = Path(request["cwd"])
-    first = load_fake_toolchain(Path(request["firstPrefix"]))
-    second = load_fake_toolchain(Path(request["secondPrefix"]))
+    first = load_fake_toolchain(Path(request["firstPrefix"]), qualified=True)
+    second = load_fake_toolchain(Path(request["secondPrefix"]), qualified=True)
     try:
         run_inherited_colmap_command(
-            plan_fake_command(first, workspace),
+            plan_supervised_command(first, workspace),
             context=context,
             deadline=deadline,
             log_path=Path(request["firstLog"]),
@@ -1030,7 +1035,7 @@ def _run_two_commands(request, context: NativeChildContext):
         )
         Path(request["secondStarted"]).write_text("started", encoding="utf-8")
         run_inherited_colmap_command(
-            plan_fake_command(second, workspace),
+            plan_supervised_command(second, workspace),
             context=context,
             deadline=deadline,
             log_path=Path(request["secondLog"]),
@@ -1077,6 +1082,11 @@ def test_same_group_live_descendant_fails_before_second_command(tmp_path):
                 deadline=_deadline(5.0),
             )
         assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+        # The first command must actually have launched: a plan refused before
+        # ``Popen`` creates no log, spawns no child and leaves this assertion --
+        # and the descendant wait below -- as the only thing between a real
+        # quiescence proof and a vacuously green test.
+        assert (tmp_path / "first.log").exists()
         assert not second_started.exists()
         stop = time.monotonic() + 2.0
         while not descendant_pid_path.exists() and time.monotonic() < stop:
@@ -1135,6 +1145,10 @@ def test_escaped_live_descendant_fails_before_second_command(tmp_path):
                 deadline=_deadline(5.0),
             )
         assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+        # As above: proof the first command reached ``Popen`` at all, so the
+        # refusal being asserted is the quiescence gate and not a plan the
+        # supervisor rejected before any child existed.
+        assert (tmp_path / "first.log").exists()
         assert not second_started.exists()
         stop = time.monotonic() + 2.0
         while not descendant_pid_path.exists() and time.monotonic() < stop:
@@ -1491,6 +1505,67 @@ def test_executable_bytes_swapped_in_place_are_rejected_before_popen(
         "pinned COLMAP executable identity changed before execution"
     )
     assert not (tmp_path / "in-place.log").exists()
+
+
+def test_a_hostile_prefix_cannot_mint_a_qualified_descriptor_pinned_plan(
+    monkeypatch,
+    tmp_path,
+):
+    """The reviewer's exploit: an arbitrary prefix claiming the production shape.
+
+    ``test_hostile_unqualified_plan_is_refused_by_the_supervisor`` closed only
+    the ``qualified=False``/``descriptor_exec=False`` shape.  ``load_colmap_
+    toolchain`` also took a bare ``qualified=`` bool that nothing verified, and
+    ``plan_pinned_colmap_command`` stamped it straight into the sealed plan, so
+    ``load_colmap_toolchain(hostile, qualified=True)`` plus ``descriptor_exec=
+    True`` minted a ``qualified=True descriptor_pinned=True`` plan from
+    ``/tmp/.../hostile``.  ``assert_qualified_box_identity`` was not on that
+    route -- only on ``plan_qualified_colmap_command`` -- so the supervisor
+    accepted it, the child ran, and the hostile binary wrote its marker.
+
+    ``qualified`` is now derived from a box-identity assertion instead of taken
+    on the caller's word, so a prefix whose manifest is not the qualified box is
+    refused before any descriptor is even opened.
+    """
+
+    workspace = tmp_path / "work"
+    workspace.mkdir()
+    workspace.chmod(0o700)
+    hostile = tmp_path / "hostile"
+    marker = tmp_path / "hostile-ran"
+    write_toolchain(
+        hostile,
+        program=(
+            "import pathlib; "
+            f"pathlib.Path({str(marker)!r}).write_text('owned')"
+        ),
+        # Everything else about this manifest is a faithful copy of the
+        # qualified box; one drifted field is all it takes to be refused.
+        manifest_overrides={"colmapVersion": "4.0.3"},
+    )
+    _patch_unit_host(monkeypatch)
+
+    with pytest.raises(AdapterError) as raised:
+        toolchain = load_fake_toolchain(hostile, qualified=True)
+        try:
+            run_inherited_colmap_command(
+                plan_supervised_command(toolchain, workspace),
+                context=native_process._seal_native_child_context(
+                    NativeChildContext(time.monotonic() + 30.0)
+                ),
+                deadline=_deadline(10.0),
+                log_path=workspace / "hostile.log",
+                cwd=workspace,
+            )
+        finally:
+            toolchain.close()
+
+    assert raised.value.code == "REFINE_TOOLCHAIN_UNQUALIFIED"
+    assert str(raised.value) == (
+        "COLMAP toolchain colmapVersion drifted from the qualified box"
+    )
+    assert not marker.exists()
+    assert not (workspace / "hostile.log").exists()
 
 
 def test_hostile_unqualified_plan_is_refused_by_the_supervisor(monkeypatch, tmp_path):

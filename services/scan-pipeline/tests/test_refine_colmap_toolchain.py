@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -11,6 +12,7 @@ import pytest
 from _colmap_toolchain import (
     allowlisted_argv,
     canonical_manifest_bytes,
+    fake_box_location,
     load_fake_toolchain,
     plan_fake_command,
     qualified_manifest_fields,
@@ -24,12 +26,14 @@ from patina_scan_worker.refine_colmap_toolchain import (
     COMMAND_ENVIRONMENT_ALLOWLIST,
     OWED_BOX_VALUES,
     QUALIFIED_APP_DIR,
+    QUALIFIED_BOX_LOCATION,
     QUALIFIED_COLMAP_PREFIX,
     QUALIFIED_CUDA_ROOT,
     TOOLCHAIN_MANIFEST_RELATIVE_PATH,
     ColmapExecutableIdentity,
     ColmapToolchain,
     PinnedColmapCommand,
+    QualifiedBoxLocation,
     assert_qualified_box_identity,
     build_command_environment,
     carried_deadline_probe,
@@ -328,6 +332,14 @@ def test_elf_requirement_rejects_a_shebang_script(tmp_path):
     assert str(raised.value) == "COLMAP toolchain executable is not an ELF binary"
 
 
+@pytest.mark.skipif(
+    os.geteuid() == 0,
+    reason=(
+        "this test needs the fake prefix to be owned by a NON-root identity so "
+        "the root default refuses it; under a root euid (root container, root "
+        "CI) the fixture is root-owned and the premise cannot be built"
+    ),
+)
 def test_the_installed_prefix_must_be_owned_by_root_by_default(tmp_path):
     """A prefix owned by the *executing* identity is no longer trusted.
 
@@ -1136,11 +1148,11 @@ def test_qualified_planner_still_rechecks_the_box_identity(tmp_path):
 def test_qualified_loader_uses_only_the_pinned_prefix(monkeypatch):
     seen: dict[str, object] = {}
 
-    def fake_load(prefix, *, remaining_seconds, require_elf, qualified, **extra):
+    def fake_load(prefix, *, remaining_seconds, require_elf, box_location, **extra):
         seen.update(
             prefix=prefix,
             require_elf=require_elf,
-            qualified=qualified,
+            box_location=box_location,
             # Production must not pass an owner uid at all: it takes the root
             # default.  A test-only relaxation leaking into this path would be
             # exactly the amplifier the review found.
@@ -1159,9 +1171,147 @@ def test_qualified_loader_uses_only_the_pinned_prefix(monkeypatch):
     assert seen == {
         "prefix": Path(QUALIFIED_COLMAP_PREFIX),
         "require_elf": True,
-        "qualified": True,
+        # The production location, never a substituted one: this is what makes
+        # the loaded toolchain's ``qualified`` a proof rather than a claim.
+        "box_location": QUALIFIED_BOX_LOCATION,
         "extra": {},
     }
+
+
+def test_qualification_is_proved_by_the_loader_not_claimed_by_the_caller(tmp_path):
+    """``qualified`` is derived from a box-identity proof, not a caller's bool.
+
+    The loader used to take ``qualified=True`` on trust and the flag rode
+    straight into the sealed plan the supervisor gates on.  A declared install
+    location now only says *where* to look; the manifest still has to be the
+    pinned box, and one drifted field is refused.
+    """
+
+    drifted = tmp_path / "drifted"
+    write_toolchain(drifted, manifest_overrides={"nvccVersion": "12.4.99"})
+
+    with pytest.raises(AdapterError) as raised:
+        load_fake_toolchain(drifted, qualified=True)
+
+    assert raised.value.code == "REFINE_TOOLCHAIN_UNQUALIFIED"
+    assert str(raised.value) == (
+        "COLMAP toolchain nvccVersion drifted from the qualified box"
+    )
+
+    # The same prefix loads fine when it never claims the qualified box -- and
+    # is then not qualified, so the supervisor will not launch from it.
+    plain = load_fake_toolchain(drifted)
+    try:
+        assert plain.box_location is None
+        assert plain.qualified is False
+    finally:
+        plain.close()
+
+
+def test_a_drifted_box_leaks_no_executable_descriptor(monkeypatch, tmp_path):
+    """The box-identity proof runs before the executable is ever opened."""
+
+    drifted = tmp_path / "drifted"
+    write_toolchain(drifted, manifest_overrides={"colmapSourceCommit": "b" * 40})
+    opened: list[int] = []
+    closed: list[int] = []
+    real_open = os.open
+    real_close = os.close
+    monkeypatch.setattr(
+        os,
+        "open",
+        lambda *args, **kwargs: (opened.append(real_open(*args, **kwargs)) or opened[-1]),
+    )
+    monkeypatch.setattr(
+        os,
+        "close",
+        lambda descriptor: (closed.append(descriptor), real_close(descriptor))[1],
+    )
+
+    with pytest.raises(AdapterError) as raised:
+        load_fake_toolchain(drifted, qualified=True)
+
+    assert "colmapSourceCommit drifted from the qualified box" in str(raised.value)
+    assert set(opened) == set(closed)
+
+
+def test_the_pinned_planner_reproves_the_box_identity_it_stamps(tmp_path):
+    """``plan_pinned_colmap_command`` may not stamp ``qualified`` on trust.
+
+    A toolchain whose declared location no longer agrees with its manifest is
+    what a caller would have to forge to get a qualified plan out of an
+    arbitrary prefix now that the loader proves the identity.  The planner
+    re-proves it rather than carrying the flag forward, so the box-identity
+    check is on every route that can reach the supervisor.
+    """
+
+    prefix = tmp_path / "colmap"
+    write_toolchain(prefix)
+    workspace = _workspace(tmp_path)
+    toolchain = load_fake_toolchain(prefix, qualified=True)
+    forged = dataclasses.replace(
+        toolchain,
+        box_location=dataclasses.replace(
+            fake_box_location(prefix),
+            colmap_prefix=str(tmp_path / "elsewhere"),
+        ),
+    )
+    try:
+        assert forged.qualified is True
+        with pytest.raises(AdapterError) as raised:
+            plan_pinned_colmap_command(
+                allowlisted_argv(forged.identity.path, workspace),
+                toolchain=forged,
+                workspace=workspace,
+                remaining_seconds=lambda: 30.0,
+                descriptor_exec=False,
+            )
+    finally:
+        toolchain.close()
+
+    assert raised.value.code == "REFINE_TOOLCHAIN_UNQUALIFIED"
+    assert str(raised.value) == (
+        "COLMAP toolchain colmapPrefix drifted from the qualified box"
+    )
+
+
+@pytest.mark.parametrize("box_location", (True, "/opt/colmap/4.0.2", 0, object()))
+def test_the_declared_install_location_must_be_an_exact_location(tmp_path, box_location):
+    """A truthy stand-in must not read as "qualified" the way a bool used to."""
+
+    prefix = tmp_path / "colmap"
+    write_toolchain(prefix)
+
+    with pytest.raises(AdapterError) as raised:
+        load_colmap_toolchain(
+            prefix,
+            remaining_seconds=lambda: 30.0,
+            require_elf=False,
+            owner_uid=os.geteuid(),
+            box_location=box_location,
+        )
+
+    assert raised.value.code == "REFINE_TOOLCHAIN_UNQUALIFIED"
+    assert str(raised.value) == (
+        "COLMAP toolchain load requires a declared install location"
+    )
+
+
+def test_the_box_identity_assertion_requires_a_declared_location():
+    with pytest.raises(AdapterError) as raised:
+        assert_qualified_box_identity(_qualified_manifest(), location=None)
+
+    assert str(raised.value) == (
+        "COLMAP box identity requires a declared install location"
+    )
+
+
+def test_the_pinned_box_location_is_exactly_the_repo_pins():
+    assert QUALIFIED_BOX_LOCATION == QualifiedBoxLocation(
+        colmap_prefix=QUALIFIED_COLMAP_PREFIX,
+        app_dir=QUALIFIED_APP_DIR,
+        cuda_root=QUALIFIED_CUDA_ROOT,
+    )
 
 
 def test_a_plan_carries_its_qualification_and_descriptor_pinning(monkeypatch, tmp_path):
