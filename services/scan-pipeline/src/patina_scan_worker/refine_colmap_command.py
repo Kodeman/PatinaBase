@@ -10,12 +10,16 @@ signals a scanned numeric PID or PGID.
 
 The supervisor no longer accepts free argv or an ambient environment.  It runs
 only a sealed :class:`~patina_scan_worker.refine_colmap_toolchain.
-PinnedColmapCommand`: an allowlisted subcommand bound to a hash-verified
-executable identity and to the exact closed environment allowlist.  The
-recorded identity is re-proved immediately before ``execve``, and the child
-receives no inherited environment variable at all.  One lease-aware deadline is
-carried through workspace validation, toolchain re-verification, the child
-wait, the log-drain thread, and every quiescence probe.
+PinnedColmapCommand` that is *both* ``qualified`` and ``descriptor_pinned``: an
+allowlisted subcommand bound to a hash-verified executable identity from the
+pinned installed prefix, exec'd through the already-open descriptor, and bound
+to the exact closed environment allowlist.  A sealed plan that is neither -- one
+built from an arbitrary prefix, or one that would exec by path lookup -- is
+refused before ``Popen``.  The recorded identity is re-proved immediately before
+``execve``, and the child receives no inherited environment variable at all.
+One lease-aware deadline is carried through workspace validation, toolchain
+re-verification, the child wait, the log-drain thread, and every quiescence
+probe.
 """
 
 from __future__ import annotations
@@ -462,6 +466,24 @@ def _validate_pinned_execution(
     if verified_plan is not True:
         raise _fail(
             "inherited COLMAP commands require a pinned toolchain execution",
+            _ENGINE_FAILED,
+        )
+    # The seal proves only *this module in this process* built the plan; it says
+    # nothing about which prefix it was built from or how the child will be
+    # exec'd.  A plan from an arbitrary prefix with ``descriptor_exec=False`` is
+    # a path-lookup exec with no TOCTOU protection, and used to be accepted here
+    # indistinguishably from the production form.
+    try:
+        qualified_plan = execution.qualified
+        descriptor_pinned = execution.descriptor_pinned
+    except BaseException:
+        raise _fail(
+            "cannot authenticate the pinned COLMAP toolchain qualification",
+            _ENGINE_FAILED,
+        ) from None
+    if qualified_plan is not True or descriptor_pinned is not True:
+        raise _fail(
+            "inherited COLMAP commands require a qualified descriptor-pinned execution",
             _ENGINE_FAILED,
         )
     try:

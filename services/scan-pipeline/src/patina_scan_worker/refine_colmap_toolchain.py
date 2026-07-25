@@ -7,12 +7,18 @@ does not enable, register, or compose any Refine stage.
 Three closed contracts live here:
 
 * **Executable identity** -- the qualified COLMAP CLI is opened through a
-  descriptor-rooted walk of its installed prefix, its inode metadata is
-  recorded, its bytes are hashed under the carried deadline, and the digest
-  must equal the installed toolchain manifest.  The supervisor re-verifies the
-  recorded identity immediately before ``execve`` and, on Linux, executes the
-  already-open descriptor through ``/proc/self/fd`` so no path lookup can be
-  swapped underneath it.
+  descriptor-rooted walk of its installed prefix, every component of which must
+  be owned by ``root``, its inode metadata is recorded, its bytes are hashed
+  under the carried deadline, and the digest must equal the installed toolchain
+  manifest.  The supervisor re-verifies the recorded identity -- inode, size,
+  mode, ownership, *and* ``st_ctime_ns``/``st_mtime_ns`` -- immediately before
+  ``execve`` and, on Linux, executes the already-open descriptor through
+  ``/proc/self/fd`` so no path lookup can be swapped underneath it.  The
+  timestamps are what make an in-place same-length byte substitution visible:
+  every other stat field survives a ``pwrite`` into the verified inode
+  untouched, and the descriptor exec would then run exactly those bytes.  The
+  load-bearing guarantee is still that only ``root`` may write the installed
+  prefix; the timestamps are the detector, not the barrier.
 * **Command allowlist** -- argv is not "any bounded absolute argv".  It must be
   the pinned executable followed by one allowlisted COLMAP subcommand and that
   subcommand's exact ordered option sequence.  Path-valued options must stay
@@ -64,7 +70,12 @@ QUALIFIED_COLMAP_PREFIX = "/opt/colmap/4.0.2"
 QUALIFIED_COLMAP_VERSION = "4.0.2"
 QUALIFIED_COLMAP_SOURCE_COMMIT = "d927f7e518fc20afa33390712c4cc20d85b730b8"
 QUALIFIED_COLMAP_SOURCE_TREE = "9c381aea43304df66df991183563b659c2f712fa"
-QUALIFIED_COLMAP_BUILD_BANNER = "Commit d927f7e on 2026-03-18 with CUDA"
+# Byte-for-byte the SECOND line of `colmap -h`, parentheses included, exactly as
+# install-colmap-4.0.2.sh receipts it (`EXPECTED_BUILD`) and prints it.  An
+# operator transcribing what the binary emits must not trip `colmapBuildBanner
+# drifted`.  (PyCOLMAP's `COLMAP_build` attribute is the *unparenthesized* form;
+# that separate surface is pinned in pycolmap_cuda_smoke.py and is not this.)
+QUALIFIED_COLMAP_BUILD_BANNER = "(Commit d927f7e on 2026-03-18 with CUDA)"
 QUALIFIED_CUDA_ROOT = "/usr/local/cuda-11.8"
 QUALIFIED_CUDA_RELEASE = "11.8"
 QUALIFIED_CUDA_ARCHITECTURE = "75"
@@ -542,6 +553,12 @@ class ColmapExecutableIdentity:
     mode: int
     uid: int
     gid: int
+    #: ``st_ctime_ns`` cannot be set by userspace and moves on any write, so it
+    #: is the field that catches an in-place same-length byte substitution.
+    #: ``st_mtime_ns`` is recorded with it: it is forgeable through
+    #: ``utimensat``, but only by a writer who already had to move ``ctime``.
+    ctime_ns: int
+    mtime_ns: int
 
 
 def _identity_from_stat(
@@ -559,17 +576,28 @@ def _identity_from_stat(
         mode=metadata.st_mode,
         uid=metadata.st_uid,
         gid=metadata.st_gid,
+        ctime_ns=metadata.st_ctime_ns,
+        mtime_ns=metadata.st_mtime_ns,
     )
 
 
-def _trusted_metadata_ok(metadata: os.stat_result, *, directory: bool) -> bool:
+def _trusted_metadata_ok(
+    metadata: os.stat_result,
+    *,
+    directory: bool,
+    owner_uid: int,
+) -> bool:
     if directory and not stat.S_ISDIR(metadata.st_mode):
         return False
     if not directory and not stat.S_ISREG(metadata.st_mode):
         return False
     if metadata.st_mode & 0o022:
         return False
-    return metadata.st_uid in (0, os.geteuid())
+    # Exactly one declared owner.  The former ``st_uid in (0, os.geteuid())``
+    # accepted a prefix owned by the *executing* identity, which makes every
+    # later hash and metadata check worthless: the same identity could rewrite
+    # the binary afterwards.  Production declares ``root`` and nothing else.
+    return metadata.st_uid == owner_uid
 
 
 def _directory_flags() -> int:
@@ -592,6 +620,8 @@ def _file_flags() -> int:
 def _open_prefix_relative(
     prefix: Path,
     relative: PurePosixPath,
+    *,
+    owner_uid: int,
 ) -> tuple[int, os.stat_result]:
     """Walk one installed prefix by descriptor and open its trusted leaf."""
 
@@ -604,18 +634,18 @@ def _open_prefix_relative(
     leaf: int | None = None
     try:
         metadata = os.fstat(directory)
-        if not _trusted_metadata_ok(metadata, directory=True):
+        if not _trusted_metadata_ok(metadata, directory=True, owner_uid=owner_uid):
             raise _fail("COLMAP toolchain prefix has unsafe ownership or mode")
         for component in relative.parts[:-1]:
             child = os.open(component, _directory_flags(), dir_fd=directory)
             os.close(directory)
             directory = child
             metadata = os.fstat(directory)
-            if not _trusted_metadata_ok(metadata, directory=True):
+            if not _trusted_metadata_ok(metadata, directory=True, owner_uid=owner_uid):
                 raise _fail("COLMAP toolchain directory has unsafe ownership or mode")
         leaf = os.open(relative.parts[-1], _file_flags(), dir_fd=directory)
         leaf_metadata = os.fstat(leaf)
-        if not _trusted_metadata_ok(leaf_metadata, directory=False):
+        if not _trusted_metadata_ok(leaf_metadata, directory=False, owner_uid=owner_uid):
             raise _fail("COLMAP toolchain file has unsafe ownership or mode")
     except AdapterError:
         if leaf is not None:
@@ -692,18 +722,26 @@ def load_colmap_toolchain(
     *,
     remaining_seconds: Callable[[], float],
     require_elf: bool = True,
+    owner_uid: int = 0,
     qualified: bool = False,
 ) -> ColmapToolchain:
     """Verify one installed COLMAP prefix against its canonical manifest.
 
-    ``prefix`` is a parameter only so this mechanism stays testable without the
-    qualified host.  Production must call :func:`load_qualified_colmap_toolchain`,
-    which supplies the pinned prefix and additionally rejects every box-identity
-    drift; nothing else in the package may call this function directly.
+    ``prefix``, ``require_elf``, ``owner_uid``, and ``qualified`` are parameters
+    only so this mechanism stays testable without the qualified host.  Every one
+    of them defaults to the production value, and production must call
+    :func:`load_qualified_colmap_toolchain`, which supplies the pinned prefix and
+    additionally rejects every box-identity drift; nothing else in the package
+    may call this function directly.  ``owner_uid`` in particular defaults to
+    ``root``: the qualified box installs ``/opt/colmap/4.0.2`` ``root:root``
+    ``0755``, and a prefix writable by the executing identity would void every
+    hash and metadata guarantee this module makes.
     """
 
     if not callable(remaining_seconds):
         raise _fail("COLMAP toolchain load requires a carried deadline probe")
+    if type(owner_uid) is not int or owner_uid < 0:
+        raise _fail("COLMAP toolchain load requires a declared owner uid")
     remaining_seconds()
     # O_NOFOLLOW protects each descriptor-relative component below the prefix,
     # but not the prefix's own ancestors.  Require the installed prefix to be
@@ -715,7 +753,7 @@ def load_colmap_toolchain(
     if resolved_prefix != prefix:
         raise _fail("COLMAP toolchain prefix may not traverse a symlink")
     manifest_fd, manifest_metadata = _open_prefix_relative(
-        prefix, TOOLCHAIN_MANIFEST_RELATIVE_PATH
+        prefix, TOOLCHAIN_MANIFEST_RELATIVE_PATH, owner_uid=owner_uid
     )
     try:
         if (
@@ -746,9 +784,15 @@ def load_colmap_toolchain(
         raise _fail("COLMAP toolchain manifest prefix does not match its installation")
 
     executable_fd, executable_metadata = _open_prefix_relative(
-        prefix, COLMAP_EXECUTABLE_RELATIVE_PATH
+        prefix, COLMAP_EXECUTABLE_RELATIVE_PATH, owner_uid=owner_uid
     )
     try:
+        # ``st_nlink != 1`` is deliberate and fail-closed.  Anyone able to
+        # hardlink the installed binary can make every load fail -- but that
+        # requires write access to a root-owned directory inside the prefix, and
+        # a refusal to start is the correct outcome for a prefix in that state.
+        # The alternative (tolerating extra links) would let a second name for
+        # the same inode outlive an operator's `rm`.
         if (
             executable_metadata.st_nlink != 1
             or not executable_metadata.st_mode & stat.S_IXUSR
@@ -777,6 +821,10 @@ def load_colmap_toolchain(
             or after.st_size != executable_metadata.st_size
             or after.st_nlink != executable_metadata.st_nlink
             or after.st_mode != executable_metadata.st_mode
+            or after.st_uid != executable_metadata.st_uid
+            or after.st_gid != executable_metadata.st_gid
+            or after.st_ctime_ns != executable_metadata.st_ctime_ns
+            or after.st_mtime_ns != executable_metadata.st_mtime_ns
         ):
             raise _fail("COLMAP toolchain executable changed while it was verified")
     except BaseException:
@@ -786,9 +834,12 @@ def load_colmap_toolchain(
             pass
         raise
     executable_path = (prefix_posix / COLMAP_EXECUTABLE_RELATIVE_PATH).as_posix()
+    # The identity comes from the post-hash stat: that is the one provably
+    # contemporaneous with the bytes the digest covers, so its timestamps are
+    # the baseline the pre-``execve`` re-verification compares against.
     return ColmapToolchain(
         manifest=manifest,
-        identity=_identity_from_stat(executable_path, digest, executable_metadata),
+        identity=_identity_from_stat(executable_path, digest, after),
         executable_descriptor=executable_fd,
         qualified=bool(qualified),
     )
@@ -820,7 +871,16 @@ def verify_executable_identity(
     identity: ColmapExecutableIdentity,
     descriptor: int,
 ) -> None:
-    """Re-prove the recorded inode identity right before ``execve``."""
+    """Re-prove the recorded inode identity right before ``execve``.
+
+    ``st_ctime_ns``/``st_mtime_ns`` are part of the comparison because every
+    other field survives an in-place same-length ``pwrite`` into the verified
+    inode -- and the qualified path execs that exact descriptor, so the
+    substituted bytes would be what runs.  This is a detector, not a barrier:
+    it cannot close the residual window between this check and ``execve``.  What
+    closes that window is the installed prefix being writable only by ``root``,
+    which :func:`load_colmap_toolchain` now requires.
+    """
 
     if type(identity) is not ColmapExecutableIdentity:
         raise _fail(
@@ -844,6 +904,8 @@ def verify_executable_identity(
             or metadata.st_mode != identity.mode
             or metadata.st_uid != identity.uid
             or metadata.st_gid != identity.gid
+            or metadata.st_ctime_ns != identity.ctime_ns
+            or metadata.st_mtime_ns != identity.mtime_ns
         ):
             raise _fail(
                 "pinned COLMAP executable identity changed before execution",
@@ -947,7 +1009,14 @@ _PINNED_COMMAND_SEAL = object()
 
 @dataclass(frozen=True)
 class PinnedColmapCommand:
-    """One allowlisted argv bound to a verified binary and a closed environ."""
+    """One allowlisted argv bound to a verified binary and a closed environ.
+
+    ``qualified`` and ``descriptor_pinned`` are carried so the supervisor can
+    tell a production plan from an arbitrary one.  Without them every sealed
+    plan looked alike: a plan built from any prefix with ``descriptor_exec=
+    False`` -- a path-lookup exec with no TOCTOU protection -- was structurally
+    indistinguishable from the qualified descriptor-pinned form.
+    """
 
     argv: tuple[str, ...]
     environ: tuple[tuple[str, str], ...]
@@ -956,6 +1025,7 @@ class PinnedColmapCommand:
     executable_descriptor: int
     executable_alias: str
     descriptor_pinned: bool
+    qualified: bool
     _boundary_seal: object | None = field(
         default=None,
         init=False,
@@ -1005,11 +1075,15 @@ def plan_pinned_colmap_command(
     ``descriptor_exec`` is not a convenience switch: production always uses
     :func:`plan_qualified_colmap_command`, which requires the real Linux
     ``/proc/self/fd`` alias so no path lookup can be substituted between
-    verification and ``execve``.
+    verification and ``execve``.  Both that choice and the toolchain's own
+    ``qualified`` flag are carried into the sealed plan, because the supervisor
+    accepts nothing else: a plan that is not both is refused before ``Popen``.
     """
 
     if type(toolchain) is not ColmapToolchain:
         raise _fail("pinned COLMAP planning requires a verified toolchain")
+    if type(descriptor_exec) is not bool:
+        raise _fail("pinned COLMAP planning requires an exact descriptor_exec flag")
     if not callable(remaining_seconds):
         raise _fail("pinned COLMAP planning requires a carried deadline probe")
     remaining_seconds()
@@ -1037,7 +1111,8 @@ def plan_pinned_colmap_command(
             identity=toolchain.identity,
             executable_descriptor=toolchain.executable_descriptor,
             executable_alias=alias,
-            descriptor_pinned=bool(descriptor_exec),
+            descriptor_pinned=descriptor_exec is True,
+            qualified=toolchain.qualified is True,
         )
     )
 
