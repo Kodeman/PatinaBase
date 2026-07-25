@@ -33,6 +33,28 @@ recycles inode numbers — quarantine-renames it to an unguessable name inside
 the pinned directory, and refuses to remove anything whose identity changed.
 That bounds the race rather than eliminating it: the final removal is still
 name-based. See ``_purge_leased_entry`` for exactly what is and is not claimed.
+
+Engine outputs travel the other way over the same kind of transport. The parent
+names the closed seven-token universe up front; the child opens exactly those
+names under the leased ``work/`` directory and hands the descriptors back over
+SCM_RIGHTS with a declared size/digest ledger. The parent does not trust that
+ledger: it independently opens the same names relative to its OWN pinned lease
+descriptor, requires the transported descriptor to be the same ``(st_dev,
+st_ino)``, hashes its own descriptor, and refuses the run unless its own
+computation reproduces the declaration. The descriptor the parent keeps is the
+one it opened itself. Once the lease is purged those inodes have no name left,
+so they can never be reopened by path -- which is precisely the property the
+runner handoff needs.
+
+WHAT THE PARENT DOES NOT YET VERIFY: nothing here checks that
+``aligned-sparse-model-v1.tar`` is a correct Sim(3) alignment of the seed and
+raw pre-BA models, and nothing here computes or compares a pose digest. Those
+bytes remain a child PROPOSAL that this module transports intact and proves
+identical to the file the parent can see; deciding whether the proposal is
+*true* is item 6, which recomputes the alignment and the pose digest from the
+descriptors this channel returns. Until item 6 lands,
+``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT`` is False and no caller may
+treat an aligned model as verified.
 """
 
 from __future__ import annotations
@@ -65,6 +87,56 @@ NATIVE_CHILD_MAX_PINNED_FILES = 64
 NATIVE_CHILD_MAX_PINNED_TOKEN_BYTES = 64
 NATIVE_CHILD_MAX_PINNED_FILE_BYTES = 128 * 1024 * 1024
 NATIVE_CHILD_MAX_PINNED_TOTAL_BYTES = 4 * 1024 * 1024 * 1024
+# --- The reviewed child->parent output universe (I96 contract clause 5). ------
+# Seven descriptors travel back up: the six persistent engine artifacts the
+# publisher may later commit, plus one scratch raw pre-BA model snapshot that
+# exists only so the evidence builder can compare a fixed track universe before
+# and after bundle adjustment.  The scratch snapshot is NEVER published.
+#
+# The tuple is closed on purpose.  Both ends refuse a token outside it, so the
+# child cannot choose what leaves the boundary -- only what those seven files
+# contain.  That is the whole reason the parent can treat the transported
+# descriptors as corroboration rather than as a proposal about identity.
+NATIVE_ENGINE_PERSISTENT_OUTPUT_TOKENS = (
+    "adapter-v2.json",
+    "aligned-sparse-model-v1.tar",
+    "database-v1.db",
+    "engine-command-evidence-v1.json",
+    "pairs-v2.txt",
+    "seed-model-v1.tar",
+)
+NATIVE_ENGINE_SCRATCH_OUTPUT_TOKENS = ("raw-triangulated-model-snapshot-v1.tar",)
+NATIVE_ENGINE_OUTPUT_TOKENS = tuple(
+    sorted(
+        (
+            *NATIVE_ENGINE_PERSISTENT_OUTPUT_TOKENS,
+            *NATIVE_ENGINE_SCRATCH_OUTPUT_TOKENS,
+        )
+    )
+)
+#: Exactly the reviewed universe, not a generic ceiling.  The pinned-input side
+#: proved 64 files; the output side deliberately proves seven, because every
+#: additional name would be an unreviewed artifact leaving the boundary.
+NATIVE_CHILD_MAX_OUTPUT_FILES = len(NATIVE_ENGINE_OUTPUT_TOKENS)
+#: Per-file and aggregate output ceilings.  These are ENGINEERING ESTIMATES, not
+#: measurements: at the 400-frame pilot cap a COLMAP database with SIFT
+#: descriptors is the largest artifact (order 1-2 GiB), and each sparse-model tar
+#: is order 100-300 MiB.  The ceilings sit above that with room to spare while
+#: still refusing a runaway.  The parent hashes every accepted byte under the one
+#: carried deadline, so an oversized-but-admissible output fails on time rather
+#: than silently stalling.  Item 7's real run on scan 95266be1 is what will
+#: replace these estimates with a measurement.
+NATIVE_CHILD_MAX_OUTPUT_FILE_BYTES = 4 * 1024 * 1024 * 1024
+NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES = 8 * 1024 * 1024 * 1024
+#: The item-6 seam, stated as a fact rather than a placeholder.  This module
+#: transports and identity-binds the aligned model; it does not recompute the
+#: Sim(3) that produced it and does not compare any pose digest.  Item 6 attaches
+#: exactly here: it consumes the parent-owned descriptors this channel returns
+#: (``seed-model-v1.tar``, ``raw-triangulated-model-snapshot-v1.tar`` and
+#: ``aligned-sparse-model-v1.tar``), recomputes the alignment from the first two,
+#: and refuses the third unless its own transform and pose digest agree.  Nothing
+#: in this module may be read as that verification having happened.
+NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT = False
 NATIVE_CHILD_TERM_GRACE_S = 0.10
 NATIVE_CHILD_KILL_REAP_S = 1.0
 NATIVE_WORKSPACE_NAME_PREFIX = "patina-refine-native-workspace-"
@@ -419,6 +491,181 @@ class _PinnedFileTransfer:
     sha256: str
     size_bytes: int
     original_offset: int | None = None
+
+
+@dataclass(frozen=True)
+class _OutputTransfer:
+    """One child-side output descriptor plus the digest the child DECLARES."""
+
+    token: str
+    descriptor: int
+    sha256: str
+    size_bytes: int
+
+
+@dataclass(frozen=True)
+class NativeEngineOutput:
+    """One parent-opened, parent-hashed engine output.
+
+    ``descriptor`` is the parent's own ``openat`` of ``work/<token>`` relative to
+    the pinned lease root -- not the descriptor the child sent.  The child's
+    descriptor was received, proven to be the same ``identity``, and closed; that
+    is what binds the parent's open to the object the engine actually wrote.
+
+    ``sha256`` and ``size_bytes`` are the parent's own measurements.  The child
+    declared the same values and the run was refused when they disagreed, so
+    these fields never carry a number the parent did not compute itself.
+
+    The descriptor is owned by the :class:`NativeEngineOutputs` bundle that holds
+    it.  Borrowers must not close it, and it stays readable after the workspace
+    lease is purged because an unlinked inode outlives its last name.
+    """
+
+    token: str
+    descriptor: int
+    sha256: str
+    size_bytes: int
+    identity: tuple[int, int]
+
+
+class NativeEngineOutputs:
+    """Caller-created sink for the parent-owned engine output descriptors.
+
+    The caller constructs this with the exact token set it expects, hands it to
+    :func:`run_native_engine_child`, and closes it -- normally with ``with`` --
+    when it is done reading.  Making the sink caller-owned is deliberate: the
+    descriptors have to outlive the boundary call (the lease is purged before it
+    returns) while still having exactly one owner and one deterministic close.
+
+    An instance is single-use.  It refuses to be populated twice and refuses to
+    be populated after it has been closed, so a recycled sink cannot silently
+    hand a second run's caller the first run's descriptors.
+    """
+
+    __slots__ = ("_tokens", "_received", "_populated", "_closed")
+
+    def __init__(self, tokens: Iterable[str]) -> None:
+        self._tokens = _validated_output_request(tokens)
+        self._received: Mapping[str, NativeEngineOutput] = MappingProxyType({})
+        self._populated = False
+        self._closed = False
+
+    @property
+    def tokens(self) -> tuple[str, ...]:
+        """Return the canonical ordered token set this sink will accept."""
+
+        return self._tokens
+
+    @property
+    def is_populated(self) -> bool:
+        return self._populated
+
+    @property
+    def is_closed(self) -> bool:
+        return self._closed
+
+    @property
+    def received(self) -> Mapping[str, NativeEngineOutput]:
+        """Return the parent-verified outputs, keyed by canonical token."""
+
+        if self._closed:
+            raise AdapterError(
+                "native engine outputs are closed",
+                _INVALID_INPUT_CODE,
+            )
+        return self._received
+
+    def descriptor(self, token: str) -> int:
+        """Borrow one parent-owned output descriptor without taking ownership."""
+
+        if type(token) is not str:
+            raise AdapterError(
+                "native engine output token must be a string",
+                _INVALID_INPUT_CODE,
+            )
+        try:
+            return self.received[token].descriptor
+        except KeyError as exc:
+            raise AdapterError(
+                "native engine output token is unavailable",
+                _INVALID_INPUT_CODE,
+            ) from exc
+
+    def _adopt(self, outputs: tuple[NativeEngineOutput, ...]) -> None:
+        if self._closed or self._populated:
+            raise AdapterError(
+                "native engine output sink cannot be populated twice",
+                _INVALID_INPUT_CODE,
+            )
+        if tuple(output.token for output in outputs) != self._tokens:
+            raise AdapterError(
+                "native engine outputs do not match their requested token set",
+                _FAILED_CODE,
+            )
+        self._received = MappingProxyType(
+            {output.token: output for output in outputs}
+        )
+        self._populated = True
+
+    def close(self) -> tuple[str, ...]:
+        """Close every held descriptor exactly once; report per-token failures."""
+
+        if self._closed:
+            return ()
+        received = self._received
+        self._received = MappingProxyType({})
+        self._closed = True
+        return _close_descriptors_safely(
+            (output.token, output.descriptor) for output in received.values()
+        )
+
+    def __enter__(self) -> "NativeEngineOutputs":
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> bool:
+        close_errors = self.close()
+        if not close_errors:
+            return False
+        if exc is None:
+            raise _cleanup_failed_error(
+                "native engine output cleanup failed",
+                close_errors,
+            )
+        _add_cleanup_note(exc, close_errors)
+        return False
+
+
+def _validated_output_request(tokens: Iterable[str]) -> tuple[str, ...]:
+    """Accept only a canonical, unique, in-universe output token request."""
+
+    if type(tokens) is not tuple and type(tokens) is not list:
+        raise AdapterError(
+            "native engine output tokens must be an exact tuple or list",
+            _INVALID_INPUT_CODE,
+        )
+    requested = tuple(tokens)
+    if not requested or len(requested) > NATIVE_CHILD_MAX_OUTPUT_FILES:
+        raise AdapterError(
+            "native engine output token count is outside the reviewed universe",
+            _INVALID_INPUT_CODE,
+        )
+    for token in requested:
+        if type(token) is not str or token not in NATIVE_ENGINE_OUTPUT_TOKENS:
+            raise AdapterError(
+                "native engine output token is outside the reviewed universe",
+                _INVALID_INPUT_CODE,
+            )
+    if len(set(requested)) != len(requested):
+        raise AdapterError(
+            "native engine output tokens must be unique",
+            _INVALID_INPUT_CODE,
+        )
+    if requested != tuple(sorted(requested)):
+        raise AdapterError(
+            "native engine output tokens must use canonical order",
+            _INVALID_INPUT_CODE,
+        )
+    return requested
 
 
 def native_engine_entrypoint(target):
@@ -1360,6 +1607,438 @@ def _receive_pinned_files(
     return MappingProxyType(received), MappingProxyType(snapshots)
 
 
+def _output_file_open_flags() -> int:
+    """Open an engine output for reading without following or blocking on it."""
+
+    # ``O_NOFOLLOW`` refuses a symlink planted at the canonical name.
+    # ``O_NONBLOCK`` refuses to hang inside ``open`` if the name is a FIFO; the
+    # regular-file check that follows then rejects it outright.
+    return (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
+
+
+def _open_leased_output_directory(workspace_descriptor: int) -> int:
+    """Open the leased ``work/`` surface relative to the pinned lease root."""
+
+    try:
+        return os.open(
+            NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY,
+            _workspace_directory_flags(),
+            dir_fd=workspace_descriptor,
+        )
+    except OSError as exc:
+        raise AdapterError(
+            "native engine output directory is unavailable inside the lease",
+            _INVALID_INPUT_CODE,
+        ) from exc
+
+
+def _open_child_outputs(
+    tokens: tuple[str, ...],
+    *,
+    context: NativeChildContext,
+) -> tuple[_OutputTransfer, ...]:
+    """Open and measure exactly the parent-named outputs inside the child.
+
+    The child chooses nothing here.  ``tokens`` came from the parent, the names
+    are resolved only relative to the leased ``work/`` descriptor, and the digest
+    computed below is a DECLARATION the parent will independently reproduce
+    before it accepts anything.
+    """
+
+    if not tokens:
+        return ()
+    if not context.is_verified_native_boundary:
+        raise _ChildTransportError(
+            "native child cannot export outputs outside its verified boundary"
+        )
+    work_descriptor = _open_leased_output_directory(context.workspace_descriptor())
+    transfers: list[_OutputTransfer] = []
+    declared_total_bytes = 0
+    try:
+        for token in tokens:
+            context.remaining_seconds()
+            try:
+                descriptor = os.open(
+                    token,
+                    _output_file_open_flags(),
+                    dir_fd=work_descriptor,
+                )
+            except OSError as exc:
+                raise AdapterError(
+                    f"native engine output {token} could not be opened",
+                    _INVALID_INPUT_CODE,
+                ) from exc
+            transfers.append(
+                _OutputTransfer(
+                    token=token,
+                    descriptor=descriptor,
+                    sha256="",
+                    size_bytes=0,
+                )
+            )
+            os.set_inheritable(descriptor, False)
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise AdapterError(
+                    f"native engine output {token} must be a regular file",
+                    _INVALID_INPUT_CODE,
+                )
+            size_bytes = metadata.st_size
+            if size_bytes <= 0:
+                raise AdapterError(
+                    f"native engine output {token} is empty",
+                    _INVALID_INPUT_CODE,
+                )
+            if size_bytes > NATIVE_CHILD_MAX_OUTPUT_FILE_BYTES:
+                raise AdapterError(
+                    f"native engine output {token} exceeds the per-file byte limit",
+                    _INVALID_INPUT_CODE,
+                )
+            declared_total_bytes += size_bytes
+            if declared_total_bytes > NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES:
+                raise AdapterError(
+                    "native engine outputs exceed the aggregate byte limit",
+                    _INVALID_INPUT_CODE,
+                )
+            digest = hashlib.sha256()
+            offset = 0
+            while offset < size_bytes:
+                context.remaining_seconds()
+                read_size = min(_PINNED_FILE_READ_BYTES, size_bytes - offset)
+                try:
+                    chunk = os.pread(descriptor, read_size, offset)
+                except OSError as exc:
+                    raise AdapterError(
+                        f"native engine output {token} could not be read",
+                        _INVALID_INPUT_CODE,
+                    ) from exc
+                if not chunk:
+                    raise AdapterError(
+                        f"native engine output {token} ended before its size",
+                        _INVALID_INPUT_CODE,
+                    )
+                digest.update(chunk)
+                offset += len(chunk)
+            transfers[-1] = _OutputTransfer(
+                token=token,
+                descriptor=descriptor,
+                sha256=digest.hexdigest(),
+                size_bytes=size_bytes,
+            )
+        context.remaining_seconds()
+    except BaseException:
+        close_errors = _close_output_transfers(tuple(transfers))
+        transfers.clear()
+        if close_errors:
+            raise AdapterError(
+                _bounded_cleanup_report(
+                    "native engine output preparation failed",
+                    close_errors,
+                ),
+                _CLEANUP_FAILED_CODE,
+            )
+        raise
+    finally:
+        directory_errors = _close_descriptors_safely(
+            (("native engine output directory", work_descriptor),)
+        )
+        if directory_errors:
+            _close_output_transfers(tuple(transfers))
+            transfers.clear()
+            raise AdapterError(
+                _bounded_cleanup_report(
+                    "native engine output directory cleanup failed",
+                    directory_errors,
+                ),
+                _CLEANUP_FAILED_CODE,
+            )
+    return tuple(transfers)
+
+
+def _close_output_transfers(
+    transfers: tuple[_OutputTransfer, ...],
+) -> tuple[str, ...]:
+    return _close_descriptors_safely(
+        (transfer.token, transfer.descriptor) for transfer in transfers
+    )
+
+
+def _output_ledger_rows(
+    transfers: tuple[_OutputTransfer, ...],
+) -> list[list[Any]]:
+    return [
+        [transfer.token, transfer.sha256, transfer.size_bytes]
+        for transfer in transfers
+    ]
+
+
+def _send_native_outputs(
+    connection: Connection | None,
+    transfers: tuple[_OutputTransfer, ...],
+    *,
+    destination_pid: int,
+    context: NativeChildContext,
+) -> None:
+    """Hand every measured output descriptor up to the parent, in ledger order."""
+
+    if not transfers:
+        return
+    if connection is None:
+        raise _ChildTransportError("native engine output transport is unavailable")
+    from multiprocessing.reduction import send_handle
+
+    for transfer in transfers:
+        context.remaining_seconds()
+        # As with the pinned-input transport, CPython acknowledges SCM_RIGHTS
+        # only on Darwin, where this send waits on an untimed recv.  Linux -- the
+        # qualified platform -- does not acknowledge.
+        send_handle(connection, transfer.descriptor, destination_pid)
+    context.remaining_seconds()
+
+
+def _validated_output_ledger(
+    value: object,
+    expected_tokens: tuple[str, ...],
+) -> tuple[tuple[str, str, int], ...]:
+    """Accept only a canonical ledger naming exactly the requested tokens."""
+
+    if type(value) is not list or len(value) != len(expected_tokens):
+        raise AdapterError(
+            "native engine output ledger is invalid",
+            _FAILED_CODE,
+        )
+    declared_total_bytes = 0
+    rows: list[tuple[str, str, int]] = []
+    for row, expected_token in zip(value, expected_tokens, strict=True):
+        if type(row) is not list or len(row) != 3:
+            raise AdapterError(
+                "native engine output ledger is invalid",
+                _FAILED_CODE,
+            )
+        token, declared_sha256, declared_size = row
+        if type(token) is not str or token != expected_token:
+            raise AdapterError(
+                "native engine output ledger does not match its requested tokens",
+                _FAILED_CODE,
+            )
+        if (
+            type(declared_sha256) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", declared_sha256) is None
+        ):
+            raise AdapterError(
+                f"native engine output {token} declared an invalid digest",
+                _FAILED_CODE,
+            )
+        if (
+            type(declared_size) is not int
+            or declared_size <= 0
+            or declared_size > NATIVE_CHILD_MAX_OUTPUT_FILE_BYTES
+        ):
+            raise AdapterError(
+                f"native engine output {token} declared an invalid size",
+                _FAILED_CODE,
+            )
+        declared_total_bytes += declared_size
+        if declared_total_bytes > NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES:
+            raise AdapterError(
+                "native engine outputs exceed the aggregate byte limit",
+                _FAILED_CODE,
+            )
+        rows.append((token, declared_sha256, declared_size))
+    return tuple(rows)
+
+
+def _transported_output_identity(
+    child_descriptor: int,
+    *,
+    token: str,
+    declared_size: int,
+) -> tuple[int, int]:
+    """Validate and close one transported descriptor, keeping only its identity.
+
+    The transported descriptor exists to say "this exact inode is what the engine
+    wrote".  It is never kept: the parent reads through its own open, so holding
+    the child's open file description afterwards would only widen the window in
+    which a child-side offset or mode could matter.
+    """
+
+    try:
+        os.set_inheritable(child_descriptor, False)
+        metadata = os.fstat(child_descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise AdapterError(
+                f"native engine output {token} must be a regular file",
+                _INVALID_INPUT_CODE,
+            )
+        if _descriptor_access_mode(child_descriptor) != os.O_RDONLY:
+            raise AdapterError(
+                f"native engine output {token} must be transported read-only",
+                _INVALID_INPUT_CODE,
+            )
+        if metadata.st_size != declared_size:
+            raise AdapterError(
+                f"native engine output {token} size does not match its ledger",
+                _INVALID_INPUT_CODE,
+            )
+    except BaseException:
+        close_errors = _close_descriptors_safely(((token, child_descriptor),))
+        if close_errors:
+            raise _cleanup_failed_error(
+                "native engine output receipt failed",
+                close_errors,
+            )
+        raise
+    close_errors = _close_descriptors_safely(((token, child_descriptor),))
+    if close_errors:
+        raise _cleanup_failed_error(
+            "native engine output receipt failed",
+            close_errors,
+        )
+    return (metadata.st_dev, metadata.st_ino)
+
+
+def _receive_native_outputs(
+    connection: Connection | None,
+    ledger: tuple[tuple[str, str, int], ...],
+    *,
+    workspace_lease: NativeWorkspaceLease | None,
+    deadline: RefineDeadline,
+) -> tuple[NativeEngineOutput, ...]:
+    """Receive the child's descriptors and bind them to the parent's own opens.
+
+    For every token the parent receives the child's descriptor, opens the same
+    canonical name relative to its OWN pinned lease root, and refuses the run
+    unless the two descriptors are the same ``(st_dev, st_ino)``.  Only the
+    parent's descriptor is kept; the child's is closed as soon as it has done its
+    one job of binding the parent's open to what the engine wrote.
+
+    Neither check is sufficient alone.  Without the transported descriptor a name
+    swapped between the engine's write and this open would go unnoticed; without
+    the parent's own open a child could hand back any descriptor it liked.
+    """
+
+    if not ledger:
+        return ()
+    if connection is None:
+        raise AdapterError(
+            "native engine output transport is unavailable",
+            _FAILED_CODE,
+        )
+    if workspace_lease is None:
+        raise AdapterError(
+            "native engine outputs require a parent-provisioned workspace lease",
+            _FAILED_CODE,
+        )
+
+    from multiprocessing.reduction import recv_handle
+
+    work_descriptor = _open_leased_output_directory(workspace_lease.descriptor)
+    received: list[NativeEngineOutput] = []
+    seen_identities: set[tuple[int, int]] = set()
+    try:
+        for token, declared_sha256, declared_size in ledger:
+            deadline.remaining_seconds()
+            if not connection.poll(deadline.remaining_seconds()):
+                raise AdapterError(
+                    "native engine output transfer exceeded the shared deadline",
+                    _TIMEOUT_CODE,
+                )
+            child_descriptor = recv_handle(connection)
+            transported_identity = _transported_output_identity(
+                child_descriptor,
+                token=token,
+                declared_size=declared_size,
+            )
+            try:
+                parent_descriptor = os.open(
+                    token,
+                    _output_file_open_flags(),
+                    dir_fd=work_descriptor,
+                )
+            except OSError as exc:
+                raise AdapterError(
+                    (
+                        f"native engine output {token} is not readable from the "
+                        "parent-owned lease"
+                    ),
+                    _INVALID_INPUT_CODE,
+                ) from exc
+            received.append(
+                NativeEngineOutput(
+                    token=token,
+                    descriptor=parent_descriptor,
+                    sha256=declared_sha256,
+                    size_bytes=declared_size,
+                    identity=transported_identity,
+                )
+            )
+            parent_metadata = os.fstat(parent_descriptor)
+            if not stat.S_ISREG(parent_metadata.st_mode):
+                raise AdapterError(
+                    f"native engine output {token} must be a regular file",
+                    _INVALID_INPUT_CODE,
+                )
+            if (
+                parent_metadata.st_dev,
+                parent_metadata.st_ino,
+            ) != transported_identity:
+                raise AdapterError(
+                    (
+                        f"native engine output {token} is not the object the child "
+                        "transported"
+                    ),
+                    _INVALID_INPUT_CODE,
+                )
+            if transported_identity in seen_identities:
+                raise AdapterError(
+                    "native engine outputs must reference unique file identities",
+                    _INVALID_INPUT_CODE,
+                )
+            seen_identities.add(transported_identity)
+            # The parent's own bytes decide.  A declaration that this does not
+            # reproduce fails the run; nothing downstream sees a child number.
+            _validate_pinned_descriptor(
+                parent_descriptor,
+                token=token,
+                expected_sha256=declared_sha256,
+                expected_size=declared_size,
+                remaining_seconds=deadline.remaining_seconds,
+            )
+        deadline.remaining_seconds()
+    except BaseException as exc:
+        close_errors = _close_descriptors_safely(
+            (output.token, output.descriptor) for output in received
+        )
+        directory_errors = _close_descriptors_safely(
+            (("native engine output directory", work_descriptor),)
+        )
+        if close_errors or directory_errors:
+            raise _cleanup_failed_error(
+                "native engine output receipt failed",
+                (*close_errors, *directory_errors),
+            ) from exc
+        raise
+    directory_errors = _close_descriptors_safely(
+        (("native engine output directory", work_descriptor),)
+    )
+    if directory_errors:
+        raise _cleanup_failed_error(
+            "native engine output receipt failed",
+            (
+                *directory_errors,
+                *_close_descriptors_safely(
+                    (output.token, output.descriptor) for output in received
+                ),
+            ),
+        )
+    return tuple(received)
+
+
 def _child_entry(
     connection: Connection,
     pinned_connection: Connection | None,
@@ -1367,6 +2046,8 @@ def _child_entry(
     workspace_connection: Connection | None,
     workspace_leased: bool,
     workspace_path: str | None,
+    output_connection: Connection | None,
+    output_tokens: tuple[str, ...],
     entrypoint: str,
     request_payload: bytes,
     expires_at_monotonic_s: float,
@@ -1376,6 +2057,7 @@ def _child_entry(
     received_files: Mapping[str, int] = MappingProxyType({})
     received_snapshots: Mapping[str, tuple[int, ...]] = MappingProxyType({})
     workspace_descriptor: int | None = None
+    output_transfers: tuple[_OutputTransfer, ...] = ()
     terminal: Mapping[str, Any] | None = None
     try:
         if os.name != "posix" or not hasattr(os, "setsid"):
@@ -1385,6 +2067,20 @@ def _child_entry(
         if workspace_leased is not True and workspace_leased is not False:
             raise _ChildTransportError(
                 "native child workspace lease declaration must be an exact boolean"
+            )
+        # The child re-derives the request rather than trusting the transported
+        # tuple's shape: the two ends must agree on the closed universe or the
+        # boundary refuses before anything is opened.
+        requested_outputs: tuple[str, ...] = ()
+        if output_tokens:
+            requested_outputs = _validated_output_request(output_tokens)
+        if bool(requested_outputs) != (output_connection is not None):
+            raise _ChildTransportError(
+                "native child output transport does not match its token request"
+            )
+        if requested_outputs and workspace_leased is not True:
+            raise _ChildTransportError(
+                "native child outputs require a parent-provisioned workspace lease"
             )
         os.setsid()
         pid = os.getpid()
@@ -1399,6 +2095,7 @@ def _child_entry(
                 "pinnedFileCount": len(pinned_ledger),
                 "workspaceLeased": workspace_leased,
                 "workspacePath": workspace_path,
+                "outputTokens": list(requested_outputs),
             },
         )
         context = NativeChildContext(expires_at_monotonic_s)
@@ -1455,10 +2152,15 @@ def _child_entry(
                 remaining_seconds=context.remaining_seconds,
                 expected_snapshot=received_snapshots[token],
             )
+        output_transfers = _open_child_outputs(
+            requested_outputs,
+            context=context,
+        )
         terminal = {
             "protocolVersion": _PROTOCOL_VERSION,
             "kind": "result",
             "value": result,
+            "outputLedger": _output_ledger_rows(output_transfers),
         }
         _bounded_json_bytes(
             terminal,
@@ -1500,16 +2202,46 @@ def _child_entry(
         terminal = _error_envelope(
             AdapterError("native child produced no terminal result", _FAILED_CODE)
         )
+    # Descriptors only ever follow a "result".  Anything that turned the envelope
+    # into an error -- including a cleanup failure recorded above -- must not put
+    # a single output descriptor on the wire.
+    if terminal.get("kind") != "result":
+        _close_output_transfers(output_transfers)
+        output_transfers = ()
     try:
         _send_envelope(connection, terminal)
     except BaseException:
-        try:
-            connection.close()
-        except BaseException:
-            pass
+        _close_output_transfers(output_transfers)
+        output_transfers = ()
+        for closable in (output_connection, connection):
+            if closable is None:
+                continue
+            try:
+                closable.close()
+            except BaseException:
+                pass
         return
 
     protocol_rejected = False
+    try:
+        context = NativeChildContext(expires_at_monotonic_s)
+        _send_native_outputs(
+            output_connection,
+            output_transfers,
+            destination_pid=os.getppid(),
+            context=context,
+        )
+    except BaseException:
+        protocol_rejected = True
+    finally:
+        if _close_output_transfers(output_transfers):
+            protocol_rejected = True
+        output_transfers = ()
+        if output_connection is not None:
+            try:
+                output_connection.close()
+            except BaseException:
+                protocol_rejected = True
     try:
         context = NativeChildContext(expires_at_monotonic_s)
         _receive_exact_child_ack(
@@ -3449,6 +4181,47 @@ def _receive_workspace_lease(
     return descriptor, path, subdirectory_paths
 
 
+def _validated_group_leader_pid(
+    ready: Mapping[str, Any],
+    *,
+    process_pid: Any,
+    transfer_count: int,
+    workspace_lease: NativeWorkspaceLease | None,
+    output_tokens: tuple[str, ...],
+) -> int:
+    """Authenticate the child's self-report and return its process-group leader.
+
+    The ``pid > 0`` clause is what makes every downstream use of the return value
+    safe at once.  A zero would be accepted by ``killpg`` as "my own process
+    group", and the very first thing that addresses this number is an unguarded
+    ``os.killpg(..., SIGSTOP)`` on the success path -- i.e. the worker freezing
+    itself.  The child cannot report zero today (it sends ``os.getpid()``), so
+    this is a fail-closed guard on an invariant, not a live defect.
+    """
+
+    reported_pinned_count = ready.get("pinnedFileCount")
+    reported_output_tokens = ready.get("outputTokens")
+    if (
+        type(process_pid) is not int
+        or process_pid <= 0
+        or ready.get("pid") != process_pid
+        or ready.get("processGroupId") != process_pid
+        or ready.get("sessionId") != process_pid
+        or (bool(transfer_count) and reported_pinned_count != transfer_count)
+        or (not transfer_count and reported_pinned_count not in (None, 0))
+        or ready.get("workspaceLeased") is not (workspace_lease is not None)
+        or ready.get("workspacePath")
+        != (None if workspace_lease is None else workspace_lease.path)
+        or (bool(output_tokens) and reported_output_tokens != list(output_tokens))
+        or (not output_tokens and reported_output_tokens not in (None, []))
+    ):
+        raise AdapterError(
+            "refine native child did not establish its dedicated POSIX session",
+            _FAILED_CODE,
+        )
+    return process_pid
+
+
 def run_native_engine_child(
     entrypoint: str,
     request: Mapping[str, Any],
@@ -3456,6 +4229,7 @@ def run_native_engine_child(
     deadline: RefineDeadline,
     pinned_files: Mapping[str, NativePinnedFile] | None = None,
     workspace_parent_directory: str | None = None,
+    outputs: NativeEngineOutputs | None = None,
 ) -> Any:
     """Run one importable JSON engine operation in a killable child session.
 
@@ -3470,6 +4244,16 @@ def run_native_engine_child(
     descriptor down over SCM_RIGHTS, and removes it with bounded
     descriptor-relative cleanup after every outcome, so a SIGKILLed child cannot
     strand scratch.
+
+    ``outputs`` opts into the seven-descriptor engine output handoff and requires
+    a workspace lease.  The caller owns the sink and must close it; on success it
+    holds one parent-opened, parent-hashed descriptor per requested token, and
+    those descriptors stay readable after this call purges the lease because the
+    inodes simply lose their last name.  This function closes the sink itself on
+    every failing path, so an exception never leaves a populated sink behind.
+
+    What ``outputs`` does NOT give the caller is a verified alignment.  See
+    ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT``.
     """
 
     if os.name != "posix" or not hasattr(os, "killpg"):
@@ -3482,6 +4266,24 @@ def run_native_engine_child(
             "native child entry point must be module.path:function_name",
             _FAILED_CODE,
         )
+    output_tokens: tuple[str, ...] = ()
+    if outputs is not None:
+        if type(outputs) is not NativeEngineOutputs:
+            raise AdapterError(
+                "native engine outputs must be an exact NativeEngineOutputs sink",
+                _INVALID_INPUT_CODE,
+            )
+        if outputs.is_closed or outputs.is_populated:
+            raise AdapterError(
+                "native engine output sink must be unused",
+                _INVALID_INPUT_CODE,
+            )
+        if workspace_parent_directory is None:
+            raise AdapterError(
+                "native engine outputs require a parent-provisioned workspace lease",
+                _INVALID_INPUT_CODE,
+            )
+        output_tokens = outputs.tokens
     request_payload = _bounded_request(request)
     try:
         deadline.remaining_seconds()
@@ -3531,6 +4333,8 @@ def run_native_engine_child(
     child_pinned_connection: Connection | None = None
     parent_workspace_connection: Connection | None = None
     child_workspace_connection: Connection | None = None
+    parent_output_connection: Connection | None = None
+    child_output_connection: Connection | None = None
 
     def _optional_transports() -> tuple[tuple[str, Any], ...]:
         return (
@@ -3552,7 +4356,21 @@ def run_native_engine_child(
                 and child_workspace_connection is not None
                 else ()
             ),
+            *(
+                (
+                    ("parent engine output", parent_output_connection),
+                    ("child engine output", child_output_connection),
+                )
+                if parent_output_connection is not None
+                and child_output_connection is not None
+                else ()
+            ),
         )
+
+    def _release_outputs_for_failure() -> tuple[str, ...]:
+        if outputs is None:
+            return ()
+        return outputs.close()
 
     def _release_lease_for_setup_failure() -> tuple[str, ...]:
         if workspace_lease is None:
@@ -3568,6 +4386,10 @@ def run_native_engine_child(
             )
         if workspace_lease is not None:
             parent_workspace_connection, child_workspace_connection = context.Pipe(
+                duplex=True
+            )
+        if output_tokens:
+            parent_output_connection, child_output_connection = context.Pipe(
                 duplex=True
             )
     except BaseException as exc:
@@ -3608,6 +4430,8 @@ def run_native_engine_child(
                 child_workspace_connection,
                 workspace_lease is not None,
                 None if workspace_lease is None else workspace_lease.path,
+                child_output_connection,
+                output_tokens,
                 entrypoint,
                 request_payload,
                 deadline.expires_at_monotonic_s,
@@ -3642,6 +4466,10 @@ def run_native_engine_child(
     group_leader_pid: int | None = None
     reaped = False
     cleanup_handled = False
+    # Explicit, not ``sys.exc_info()``: this function can legitimately be called
+    # from inside an ``except`` block, where the ambient exception would make a
+    # successful run look like a failing one and close the caller's descriptors.
+    returned_successfully = False
     try:
         try:
             # Pipe/process construction can consume the entire absolute budget.
@@ -3666,6 +4494,8 @@ def run_native_engine_child(
                 child_pinned_connection.close()
             if child_workspace_connection is not None:
                 child_workspace_connection.close()
+            if child_output_connection is not None:
+                child_output_connection.close()
         except OSError as exc:
             raise AdapterError(
                 _bounded_diagnostic(
@@ -3690,23 +4520,13 @@ def run_native_engine_child(
                 message,
                 _validated_error_code(ready.get("code")),
             )
-        pid = process.pid
-        reported_pinned_count = ready.get("pinnedFileCount")
-        if (
-            type(pid) is not int
-            or ready.get("pid") != pid
-            or ready.get("processGroupId") != pid
-            or ready.get("sessionId") != pid
-            or (bool(transfers) and reported_pinned_count != len(transfers))
-            or (not transfers and reported_pinned_count not in (None, 0))
-            or ready.get("workspaceLeased") is not (workspace_lease is not None)
-            or ready.get("workspacePath")
-            != (None if workspace_lease is None else workspace_lease.path)
-        ):
-            raise AdapterError(
-                "refine native child did not establish its dedicated POSIX session",
-                _FAILED_CODE,
-            )
+        pid = _validated_group_leader_pid(
+            ready,
+            process_pid=process.pid,
+            transfer_count=len(transfers),
+            workspace_lease=workspace_lease,
+            output_tokens=output_tokens,
+        )
         group_leader_pid = pid
         try:
             parent_connection.send_bytes(_ACK_READY)
@@ -3751,6 +4571,23 @@ def run_native_engine_child(
             raise AdapterError(
                 "refine native child returned an invalid terminal response",
                 _FAILED_CODE,
+            )
+        if not output_tokens and terminal.get("outputLedger") not in (None, []):
+            raise AdapterError(
+                "refine native child declared engine outputs that were not requested",
+                _FAILED_CODE,
+            )
+        if outputs is not None:
+            outputs._adopt(
+                _receive_native_outputs(
+                    parent_output_connection,
+                    _validated_output_ledger(
+                        terminal.get("outputLedger"),
+                        output_tokens,
+                    ),
+                    workspace_lease=workspace_lease,
+                    deadline=deadline,
+                )
             )
 
         try:
@@ -3855,6 +4692,7 @@ def run_native_engine_child(
                 _FAILED_CODE,
             )
         deadline.remaining_seconds()
+        returned_successfully = True
         return terminal["value"]
     except _ChildBoundaryTimeout as exc:
         cleanup_errors = ()
@@ -3971,9 +4809,18 @@ def run_native_engine_child(
                         )
                     )
 
+        # A failing run never hands descriptors back.  The sink is caller-owned,
+        # but leaving it populated after a raise would make the caller responsible
+        # for cleaning up a run it was told had failed.
+        output_cleanup_errors: tuple[str, ...] = ()
+        if not returned_successfully:
+            output_cleanup_errors = _release_outputs_for_failure()
+
         # The workspace is parent-owned, so it is removed after every outcome:
         # normal return, timeout, SIGTERM, and SIGKILL all arrive here with the
-        # leader already reaped by the cleanup above.
+        # leader already reaped by the cleanup above.  Output descriptors survive
+        # this purge on purpose: an unlinked inode outlives its last name, which
+        # is exactly what makes the handoff un-reopenable by path.
         workspace_cleanup_errors: tuple[str, ...] = ()
         if workspace_lease is not None:
             workspace_cleanup_errors = _release_workspace_lease(
@@ -3984,10 +4831,16 @@ def run_native_engine_child(
         all_final_errors = (
             *final_cleanup_errors,
             *offset_restore_errors,
+            *output_cleanup_errors,
             *workspace_cleanup_errors,
             *resource_errors,
         )
-        if final_cleanup_errors or offset_restore_errors or workspace_cleanup_errors:
+        if (
+            final_cleanup_errors
+            or offset_restore_errors
+            or output_cleanup_errors
+            or workspace_cleanup_errors
+        ):
             raise _cleanup_failed_error(
                 "refine native child cleanup failed",
                 all_final_errors,

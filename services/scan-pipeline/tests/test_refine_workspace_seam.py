@@ -624,6 +624,10 @@ REVIEWED_ARGV_TAILS = (
     f"/{NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY}/seed-model-v1.tar",
     f"/{NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY}/aligned-sparse-model-v1.tar",
     f"/{NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY}/engine-command-evidence-v1.json",
+    # The seventh transported descriptor: the scratch raw pre-BA snapshot.  It is
+    # never published, but the engine writes it under an argv path like every
+    # other output, so it spends the same reserve.
+    f"/{NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY}/raw-triangulated-model-snapshot-v1.tar",
     f"/{NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY}/triangulated",
 )
 
@@ -676,6 +680,23 @@ def test_every_reviewed_argv_tail_fits_the_reserved_suffix_budget():
 
     for tail in REVIEWED_ARGV_TAILS:
         assert len(os.fsencode(tail)) <= NATIVE_WORKSPACE_MAX_ARGV_PATH_TAIL_BYTES
+
+
+def test_the_whole_output_universe_is_enrolled_in_the_argv_tail_budget():
+    """The budget above only fails closed for tails somebody remembered to list.
+
+    Enrolling the seven-descriptor output universe programmatically is what stops
+    a new engine output from being added to the transport, given to COLMAP as an
+    argv path, and never measured against the reserve.
+    """
+
+    from patina_scan_worker.refine_native_process import NATIVE_ENGINE_OUTPUT_TOKENS
+
+    enrolled = set(REVIEWED_ARGV_TAILS)
+    for token in NATIVE_ENGINE_OUTPUT_TOKENS:
+        assert (
+            f"/{NATIVE_WORKSPACE_COMMAND_SUBDIRECTORY}/{token}" in enrolled
+        ), f"engine output {token} is not enrolled in REVIEWED_ARGV_TAILS"
 
 
 def test_a_container_that_cannot_host_a_usable_command_is_refused(tmp_path):
