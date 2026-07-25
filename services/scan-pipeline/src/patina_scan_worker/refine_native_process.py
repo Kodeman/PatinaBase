@@ -1602,7 +1602,20 @@ def _parse_linux_process_stat(payload: bytes) -> tuple[int, int]:
         raise ValueError("Linux process stat fields are malformed")
     pid = int(prefix)
     process_group_id = int(fields[2])
-    if pid <= 0 or process_group_id <= 0:
+    # ``pgrp == 0`` is a legitimate reading, not a parse failure. Every Linux
+    # kernel thread reports it (no session, no process group), and so does any
+    # task whose group leader is invisible in the reading PID namespace. On the
+    # qualified host 283 of 547 live PIDs read that way, so rejecting the value
+    # aborted the whole quiescence scan on the first kernel thread it walked
+    # past and failed every successful native call with a cleanup error.
+    #
+    # Accepting it cannot hide a live group member: a member is recorded only
+    # when its group equals the leader PID, and _linux_process_group_members
+    # refuses any leader that is not strictly positive. A zero can therefore
+    # never compare equal to a leader -- it is irrelevant to this scan, not
+    # ignored by it. A negative identifier is still impossible in procfs, and
+    # any other unreadable row still raises and stays fatal.
+    if pid <= 0 or process_group_id < 0:
         raise ValueError("Linux process stat identifiers are invalid")
     return pid, process_group_id
 
@@ -1626,6 +1639,16 @@ def _linux_process_group_members(
 ) -> tuple[int, ...]:
     """Inspect the frozen Linux group while its unreaped leader reserves the PGID."""
 
+    # The membership test below is the only thing standing between a live
+    # adopted descendant and a "quiescent" verdict, and it is an equality
+    # against this PID. A zero or negative leader would make that comparison
+    # meaningless -- 0 matches every kernel thread and addresses our own group
+    # in killpg -- so refuse it here rather than assume the caller.
+    if type(group_leader_pid) is not int or group_leader_pid <= 0:
+        raise AdapterError(
+            "Linux process group inspection requires a positive group leader",
+            _CLEANUP_FAILED_CODE,
+        )
     members: list[int] = []
     try:
         entries = os.scandir("/proc")

@@ -351,6 +351,166 @@ def test_linux_process_stat_parser_handles_parentheses_in_command_name():
     assert native_process._parse_linux_process_stat(payload) == (123, 77)
 
 
+# ---------------------------------------------------------------------------
+# Linux procfs process-group scan
+#
+# Every Linux *kernel thread* reports ``pgrp 0``: it is spawned by ``kthreadd``
+# and belongs to no session and no process group.  These rows are the verbatim
+# prefixes captured from ``/proc`` on the qualified host, where 283 of 547 live
+# PIDs are kernel threads.  Only the first three post-``comm`` fields (state,
+# ppid, pgrp) are parsed, so the captured prefix is the whole input the parser
+# needs; nothing was reconstructed.
+#
+# A scan that treated ``pgrp 0`` as a parse failure aborted on the first kernel
+# thread it walked past, which made *every* successful native Refine call on
+# that host fail with REFINE_ENGINE_CLEANUP_FAILED.  macOS has no ``/proc`` and
+# a container has its own PID namespace with no kernel threads in it, so this
+# has to be proved by a pure parser/scan test that runs everywhere.
+# ---------------------------------------------------------------------------
+
+_KERNEL_THREAD_STAT_ROWS = (
+    (100, b"100 (idle_inject/14) S 2 0 0 0 -1"),
+    (101, b"101 (migration/14) S 2 0 0 0 -1"),
+    (102, b"102 (ksoftirqd/14) S 2 0 0 0 -1"),
+)
+
+
+@pytest.mark.parametrize(("expected_pid", "payload"), _KERNEL_THREAD_STAT_ROWS)
+def test_linux_process_stat_parser_reads_a_kernel_thread_group_of_zero(
+    expected_pid,
+    payload,
+):
+    assert native_process._parse_linux_process_stat(payload) == (expected_pid, 0)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    (
+        b"104 (kworker/14:0) S 2 nonsense 0 0 -1",  # pgrp is not a number at all
+        b"105 (kworker/14:1) S 2 -1 0 0 -1",  # procfs never reports a negative pgrp
+        b"0 (impossible) S 2 0 0 0 -1",  # /proc has no entry for PID 0
+        b"106 (truncated) S 2",  # the row ends before pgrp
+        b"107 no-parenthesised-comm S 2 0 0",
+    ),
+)
+def test_linux_process_stat_parser_still_refuses_a_malformed_row(payload):
+    with pytest.raises(ValueError):
+        native_process._parse_linux_process_stat(payload)
+
+
+def _write_fake_proc(root: Path, rows: Mapping[str, bytes]) -> None:
+    for name, payload in rows.items():
+        entry = root / name
+        entry.mkdir(mode=0o755)
+        (entry / "stat").write_bytes(payload)
+
+
+def _stat_row(pid: int, *, ppid: int, pgrp: int, state: str = "S") -> bytes:
+    return f"{pid} (colmap) {state} {ppid} {pgrp} {pgrp} 0 -1".encode("ascii")
+
+
+@pytest.fixture
+def fake_proc(tmp_path, monkeypatch) -> Path:
+    """Point the shipped ``/proc`` group scan at a synthetic procfs tree.
+
+    The scan is ``sys.platform``-gated, so on a developer macOS box it is never
+    executed and on a container it only ever sees namespaced userland PIDs.
+    That is precisely how a guard which rejected every kernel thread reached
+    the qualified host unchallenged.  Redirecting the two ``/proc`` lookups --
+    and nothing else -- runs the real ``scandir``/``open``/parse/membership
+    path on any platform, against rows this test controls.
+    """
+
+    root = tmp_path / "proc"
+    root.mkdir(mode=0o755)
+    real_scandir = os.scandir
+    real_open = os.open
+
+    def scandir(path="."):
+        return real_scandir(root if path == "/proc" else path)
+
+    def open_(path, flags, *args, **kwargs):
+        if isinstance(path, str) and path.startswith("/proc/"):
+            path = str(root / path[len("/proc/") :])
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(native_process.os, "scandir", scandir)
+    monkeypatch.setattr(native_process.os, "open", open_)
+    return root
+
+
+def test_linux_group_scan_walks_past_kernel_threads_to_the_real_descendant(fake_proc):
+    leader = 4242
+    rows = {
+        "1": b"1 (systemd) S 0 1 1 0 -1",
+        "2": b"2 (kthreadd) S 0 0 0 0 -1",
+        # A non-numeric /proc entry ("self", "sys", "meminfo", ...) is skipped
+        # before it is ever read.
+        "self": b"not a process directory",
+        # The unreaped leader: a zombie holding its own PGID open.
+        str(leader): _stat_row(leader, ppid=900, pgrp=leader, state="Z"),
+        # One live adopted descendant still carrying the leader's PGID.
+        "4243": _stat_row(4243, ppid=1, pgrp=leader),
+    }
+    rows.update({str(pid): payload for pid, payload in _KERNEL_THREAD_STAT_ROWS})
+    _write_fake_proc(fake_proc, rows)
+
+    assert native_process._linux_process_group_members(
+        leader,
+        deadline=_deadline(5.0),
+    ) == (4243,)
+
+
+def test_linux_group_scan_reports_quiescence_with_only_kernel_threads_present(
+    fake_proc,
+):
+    leader = 4242
+    rows = {
+        "1": b"1 (systemd) S 0 1 1 0 -1",
+        "2": b"2 (kthreadd) S 0 0 0 0 -1",
+        str(leader): _stat_row(leader, ppid=900, pgrp=leader, state="Z"),
+    }
+    rows.update({str(pid): payload for pid, payload in _KERNEL_THREAD_STAT_ROWS})
+    _write_fake_proc(fake_proc, rows)
+
+    assert (
+        native_process._linux_process_group_members(
+            leader,
+            deadline=_deadline(5.0),
+        )
+        == ()
+    )
+
+
+def test_linux_group_scan_still_fails_closed_on_a_genuinely_malformed_row(fake_proc):
+    leader = 4242
+    _write_fake_proc(
+        fake_proc,
+        {
+            str(leader): _stat_row(leader, ppid=900, pgrp=leader, state="Z"),
+            "77": b"77 (mystery) S 1 nonsense 1 0 -1",
+        },
+    )
+
+    with pytest.raises(AdapterError) as caught:
+        native_process._linux_process_group_members(leader, deadline=_deadline(5.0))
+
+    assert caught.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+
+
+def test_linux_group_scan_refuses_a_non_positive_group_leader(fake_proc):
+    # A zero PGID matches every kernel thread and ``killpg(0, ...)`` addresses
+    # our own group.  The scan may only ever be asked about a positive leader,
+    # which is what makes "pgrp 0 can never be a member" true by construction.
+    for leader in (0, -1):
+        with pytest.raises(AdapterError) as caught:
+            native_process._linux_process_group_members(
+                leader,
+                deadline=_deadline(5.0),
+            )
+        assert caught.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+
+
 @pytest.mark.skipif(os.name != "posix", reason="Refine requires SCM_RIGHTS")
 def test_native_child_reads_unlinked_path_swapped_pinned_bytes(tmp_path):
     original = b"qualified-pinned-bytes"
