@@ -1,0 +1,1064 @@
+"""Executable identity, command/environment allowlist, and toolchain pin.
+
+This module is a disabled Refine prerequisite.  It bounds *what* the COLMAP
+command supervisor may execute and *what environment* that child receives; it
+does not enable, register, or compose any Refine stage.
+
+Three closed contracts live here:
+
+* **Executable identity** -- the qualified COLMAP CLI is opened through a
+  descriptor-rooted walk of its installed prefix, its inode metadata is
+  recorded, its bytes are hashed under the carried deadline, and the digest
+  must equal the installed toolchain manifest.  The supervisor re-verifies the
+  recorded identity immediately before ``execve`` and, on Linux, executes the
+  already-open descriptor through ``/proc/self/fd`` so no path lookup can be
+  swapped underneath it.
+* **Command allowlist** -- argv is not "any bounded absolute argv".  It must be
+  the pinned executable followed by one allowlisted COLMAP subcommand and that
+  subcommand's exact ordered option sequence.  Path-valued options must stay
+  inside the private command workspace; every other option must equal one
+  allowlisted literal.
+* **Environment allowlist** -- the child never inherits the ambient process
+  environment.  It receives exactly :data:`COMMAND_ENVIRONMENT_ALLOWLIST`,
+  built from the manifest, with every writable surface confined to ``APP_DIR``
+  or the private workspace.  That confinement is what keeps the systemd
+  ``ProtectSystem=strict`` sandbox intact.
+
+The toolchain pin follows the I93 helper-manifest precedent: values that this
+repository already receipts (COLMAP 4.0.2 / commit ``d927f7e`` / CUDA 11.8 /
+``gcc-11`` / ``sm_75``) are pinned here and rejected on drift, while values that
+are only knowable from the qualified host are *declared inputs* of a canonical
+installed manifest.  Nothing is guessed: see :data:`OWED_BOX_VALUES` for the
+exact list that must still be produced on the box before this policy is real.
+
+Provenance for every pinned constant below:
+
+* ``services/scan-pipeline/install-colmap-4.0.2.sh`` (the in-repo builder that
+  produced the qualified COLMAP/PyCOLMAP artifacts), and
+* ``docs/design/field-capture/p2-item3-gpu-box-acceptance-2026-07-19.md``
+  (the I88 real-DeskDev dependency/sandbox receipt).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import stat
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
+
+from .refine_adapter import AdapterError, RefineDeadline
+from .refine_native_process import NativeChildContext
+
+TOOLCHAIN_MANIFEST_SCHEMA = "patina-refine-colmap-toolchain-manifest-v1"
+TOOLCHAIN_MANIFEST_RELATIVE_PATH = PurePosixPath(
+    "share/patina/refine-colmap-toolchain-v1.manifest.json"
+)
+COLMAP_EXECUTABLE_RELATIVE_PATH = PurePosixPath("bin/colmap")
+
+# --- Repo-pinned qualified box identity (drift is rejected, never adopted). ---
+QUALIFIED_COLMAP_PREFIX = "/opt/colmap/4.0.2"
+QUALIFIED_COLMAP_VERSION = "4.0.2"
+QUALIFIED_COLMAP_SOURCE_COMMIT = "d927f7e518fc20afa33390712c4cc20d85b730b8"
+QUALIFIED_COLMAP_SOURCE_TREE = "9c381aea43304df66df991183563b659c2f712fa"
+QUALIFIED_COLMAP_BUILD_BANNER = "Commit d927f7e on 2026-03-18 with CUDA"
+QUALIFIED_CUDA_ROOT = "/usr/local/cuda-11.8"
+QUALIFIED_CUDA_RELEASE = "11.8"
+QUALIFIED_CUDA_ARCHITECTURE = "75"
+QUALIFIED_NVCC_VERSION = "11.8.89"
+QUALIFIED_HOST_C_COMPILER = "/usr/bin/gcc-11"
+QUALIFIED_HOST_CXX_COMPILER = "/usr/bin/g++-11"
+# The I88 receipt records "GCC/G++ 11.5"; the exact dumpfullversion string is a
+# box value, so the pin is the receipted release series and drift outside it is
+# a hard failure rather than an adaptation.
+QUALIFIED_HOST_COMPILER_SERIES = "11.5"
+QUALIFIED_NVIDIA_DRIVER_VERSION = "580.159.03"
+QUALIFIED_PYCOLMAP_VERSION = "4.0.2"
+QUALIFIED_APP_DIR = "/opt/patina/scan-pipeline"
+
+# These flags stay false until the box supplies OWED_BOX_VALUES and a Linux
+# lifecycle receipt exists.  Nothing in this module may be read as enablement.
+TOOLCHAIN_POLICY_QUALIFIED = False
+EXECUTABLE_IDENTITY_QUALIFIED = False
+COMMAND_ENVIRONMENT_QUALIFIED = False
+
+#: The exact values an operator must produce on the qualified host before the
+#: toolchain pin is real.  Every one of them is a declared manifest input; none
+#: of them is guessed in this repository.
+OWED_BOX_VALUES = (
+    "sha256 of /opt/colmap/4.0.2/bin/colmap  (colmapExecutableSha256)",
+    "byte size of /opt/colmap/4.0.2/bin/colmap  (colmapExecutableSizeBytes)",
+    "exact `/usr/bin/gcc-11 -dumpfullversion` output  (hostCompilerVersion)",
+    (
+        "wheelSha256 from /opt/patina/scan-pipeline-artifacts/"
+        "pycolmap-4.0.2-cuda118-sm75/artifact.json  (pycolmapWheelSha256)"
+    ),
+    (
+        "the installed manifest itself at /opt/colmap/4.0.2/"
+        "share/patina/refine-colmap-toolchain-v1.manifest.json"
+    ),
+)
+
+#: Exact closed environment handed to every COLMAP child.  The ambient process
+#: environment is never inherited.
+COMMAND_ENVIRONMENT_ALLOWLIST = (
+    "CUDA_CACHE_PATH",
+    "CUDA_HOME",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LD_LIBRARY_PATH",
+    "PATH",
+    "QT_QPA_PLATFORM",
+    "TMPDIR",
+    "XDG_CACHE_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_STATE_HOME",
+)
+
+#: Environment entries whose value must resolve inside APP_DIR.  Everything the
+#: child can write must land on a surface systemd already lists in
+#: ``ReadWritePaths``; TMPDIR is handled separately because it is the private
+#: per-command workspace.
+_APP_DIR_CONFINED_ENVIRONMENT = (
+    "CUDA_CACHE_PATH",
+    "HOME",
+    "XDG_CACHE_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_STATE_HOME",
+)
+
+_ENGINE_FAILED = "REFINE_ENGINE_FAILED"
+_TOOLCHAIN_UNQUALIFIED = "REFINE_TOOLCHAIN_UNQUALIFIED"
+
+_MAX_COLMAP_EXECUTABLE_BYTES = 256 * 1024 * 1024
+_MAX_TOOLCHAIN_MANIFEST_BYTES = 8 * 1024
+_MAX_ENVIRONMENT_VALUE_BYTES = 4096
+_MAX_ENVIRONMENT_BYTES = 64 * 1024
+_MAX_ARGV_ITEMS = 64
+_MAX_OPTION_VALUE_BYTES = 1024
+_READ_BYTES = 1024 * 1024
+
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_VERSION_PATTERN = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+~_-]{0,63}$")
+_PROC_FD_ROOT = PurePosixPath("/proc/self/fd")
+
+
+def _fail(message: str, code: str = _TOOLCHAIN_UNQUALIFIED) -> AdapterError:
+    return AdapterError(message, code)
+
+
+def _canonical_json_bytes(value: object) -> bytes:
+    try:
+        return (
+            json.dumps(
+                value,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+                allow_nan=False,
+            )
+            + "\n"
+        ).encode("ascii")
+    except (RecursionError, TypeError, ValueError, UnicodeEncodeError) as exc:
+        raise _fail("COLMAP toolchain manifest is not canonicalizable") from exc
+
+
+def shared_remaining_seconds(
+    context: NativeChildContext,
+    deadline: RefineDeadline,
+) -> float:
+    """Return the single lease-aware budget shared by context and deadline."""
+
+    try:
+        return min(context.remaining_seconds(), deadline.remaining_seconds())
+    except AdapterError:
+        raise
+    except BaseException:
+        raise _fail(
+            "cannot read the carried COLMAP toolchain deadline",
+            _ENGINE_FAILED,
+        ) from None
+
+
+def carried_deadline_probe(
+    context: NativeChildContext,
+    deadline: RefineDeadline,
+) -> Callable[[], float]:
+    """Bind one probe so every toolchain read observes the same deadline."""
+
+    if type(context) is not NativeChildContext or not isinstance(
+        deadline, RefineDeadline
+    ):
+        raise _fail(
+            "COLMAP toolchain reads require the carried native deadline",
+            _ENGINE_FAILED,
+        )
+
+    def probe() -> float:
+        return shared_remaining_seconds(context, deadline)
+
+    probe()
+    return probe
+
+
+# --------------------------------------------------------------------------
+# Command allowlist
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ColmapCommandSpec:
+    """One allowlisted COLMAP subcommand and its exact ordered option shape."""
+
+    subcommand: str
+    option_order: tuple[str, ...]
+    workspace_path_options: frozenset[str]
+    literal_options: Mapping[str, frozenset[str]]
+
+
+_POINT_TRIANGULATOR = ColmapCommandSpec(
+    subcommand="point_triangulator",
+    option_order=(
+        "--database_path",
+        "--image_path",
+        "--input_path",
+        "--output_path",
+        "--clear_points",
+        "--refine_intrinsics",
+        "--Mapper.random_seed",
+    ),
+    workspace_path_options=frozenset(
+        {
+            "--database_path",
+            "--image_path",
+            "--input_path",
+            "--output_path",
+        }
+    ),
+    literal_options={
+        "--clear_points": frozenset({"1"}),
+        "--refine_intrinsics": frozenset({"0"}),
+        "--Mapper.random_seed": frozenset({"0"}),
+    },
+)
+
+#: The complete CLI surface of the I87 primary plan.  Every other reviewed
+#: operation is an in-process PyCOLMAP call, so no other subcommand -- not
+#: ``gui``, ``model_converter``, ``mapper``, or the fallback
+#: ``pose_prior_mapper`` -- may be executed by the supervisor.
+COLMAP_COMMAND_ALLOWLIST: Mapping[str, ColmapCommandSpec] = {
+    _POINT_TRIANGULATOR.subcommand: _POINT_TRIANGULATOR,
+}
+
+
+def _bounded_argv(command: Sequence[str]) -> tuple[str, ...]:
+    """Materialize bounded exact-string argv without trusting its container."""
+
+    try:
+        iterator = iter(command)
+    except BaseException:
+        raise _fail("cannot normalize the pinned COLMAP argv") from None
+    argv: list[str] = []
+    for index in range(_MAX_ARGV_ITEMS + 1):
+        try:
+            part = next(iterator)
+        except StopIteration:
+            break
+        except BaseException:
+            raise _fail("cannot normalize the pinned COLMAP argv") from None
+        if index == _MAX_ARGV_ITEMS:
+            raise _fail("pinned COLMAP argv exceeds the allowlist item limit")
+        if type(part) is not str or not part or "\x00" in part:
+            raise _fail("pinned COLMAP argv must be exact non-empty strings")
+        if len(part.encode("utf-8", errors="surrogatepass")) > _MAX_OPTION_VALUE_BYTES:
+            raise _fail("pinned COLMAP argv item exceeds its byte ceiling")
+        argv.append(part)
+    if not argv:
+        raise _fail("pinned COLMAP argv must be non-empty")
+    return tuple(argv)
+
+
+def _validate_workspace_path(value: str, *, workspace: PurePosixPath) -> None:
+    if not value.startswith("/"):
+        raise _fail("pinned COLMAP path option must be absolute")
+    if any(ord(character) < 0x20 or ord(character) == 0x7F for character in value):
+        raise _fail("pinned COLMAP path option contains control characters")
+    candidate = PurePosixPath(value)
+    if (
+        value != candidate.as_posix()
+        or any(part in ("", ".", "..") for part in candidate.parts[1:])
+        or candidate == workspace
+        or not candidate.is_relative_to(workspace)
+    ):
+        raise _fail("pinned COLMAP path option must stay inside its workspace")
+
+
+def validate_allowlisted_argv(
+    command: Sequence[str],
+    *,
+    executable_path: str,
+    workspace: Path,
+) -> tuple[str, ...]:
+    """Bind argv to one allowlisted subcommand, the pinned binary, and a cwd."""
+
+    if type(executable_path) is not str or not executable_path.startswith("/"):
+        raise _fail("pinned COLMAP executable path must be absolute")
+    try:
+        workspace_is_absolute = workspace.is_absolute()
+    except BaseException:
+        raise _fail("cannot validate the pinned COLMAP workspace") from None
+    if not workspace_is_absolute:
+        raise _fail("pinned COLMAP workspace must be absolute")
+    workspace_posix = PurePosixPath(os.fspath(workspace))
+    argv = _bounded_argv(command)
+    if argv[0] != executable_path:
+        raise _fail("pinned COLMAP argv[0] is not the verified executable")
+    if len(argv) < 2:
+        raise _fail("pinned COLMAP argv needs an allowlisted subcommand")
+    spec = COLMAP_COMMAND_ALLOWLIST.get(argv[1])
+    if spec is None:
+        raise _fail("COLMAP subcommand is not on the pilot allowlist")
+    options = argv[2:]
+    if len(options) != 2 * len(spec.option_order):
+        raise _fail("COLMAP subcommand argv does not match its allowlisted shape")
+    for index, expected_option in enumerate(spec.option_order):
+        name = options[2 * index]
+        value = options[2 * index + 1]
+        if name != expected_option:
+            raise _fail("COLMAP subcommand options must use the allowlisted order")
+        if name in spec.workspace_path_options:
+            _validate_workspace_path(value, workspace=workspace_posix)
+            continue
+        allowed = spec.literal_options.get(name)
+        if allowed is None or value not in allowed:
+            raise _fail("COLMAP subcommand option value is not allowlisted")
+    return argv
+
+
+# --------------------------------------------------------------------------
+# Toolchain manifest
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ColmapToolchainManifest:
+    colmap_prefix: str
+    colmap_version: str
+    colmap_build_banner: str
+    colmap_source_commit: str
+    colmap_source_tree: str
+    colmap_executable_sha256: str
+    colmap_executable_size_bytes: int
+    cuda_root: str
+    cuda_release: str
+    cuda_architecture: str
+    nvcc_version: str
+    host_c_compiler: str
+    host_cxx_compiler: str
+    host_compiler_version: str
+    nvidia_driver_version: str
+    pycolmap_version: str
+    pycolmap_wheel_sha256: str
+    app_dir: str
+
+
+_MANIFEST_FIELDS = {
+    "appDir",
+    "colmapBuildBanner",
+    "colmapExecutableSha256",
+    "colmapExecutableSizeBytes",
+    "colmapPrefix",
+    "colmapSourceCommit",
+    "colmapSourceTree",
+    "colmapVersion",
+    "cudaArchitecture",
+    "cudaRelease",
+    "cudaRoot",
+    "hostCCompiler",
+    "hostCompilerVersion",
+    "hostCxxCompiler",
+    "nvccVersion",
+    "nvidiaDriverVersion",
+    "pycolmapVersion",
+    "pycolmapWheelSha256",
+    "schema",
+}
+
+
+def _manifest_absolute_path(document: Mapping[str, object], key: str) -> str:
+    value = document.get(key)
+    if (
+        type(value) is not str
+        or not value.startswith("/")
+        or len(value) > 512
+        or value != PurePosixPath(value).as_posix()
+        or any(part in ("", ".", "..") for part in PurePosixPath(value).parts[1:])
+    ):
+        raise _fail(f"COLMAP toolchain manifest {key} is not a canonical path")
+    return value
+
+
+def _manifest_version(document: Mapping[str, object], key: str) -> str:
+    value = document.get(key)
+    if type(value) is not str or _VERSION_PATTERN.fullmatch(value) is None:
+        raise _fail(f"COLMAP toolchain manifest {key} is not a safe version")
+    return value
+
+
+def _manifest_sha256(document: Mapping[str, object], key: str) -> str:
+    value = document.get(key)
+    if type(value) is not str or _SHA256_PATTERN.fullmatch(value) is None:
+        raise _fail(f"COLMAP toolchain manifest {key} is not a lowercase SHA-256")
+    return value
+
+
+def _manifest_sha256_like(document: Mapping[str, object], key: str) -> str:
+    value = document.get(key)
+    if type(value) is not str or re.fullmatch(r"[0-9a-f]{40}", value) is None:
+        raise _fail(f"COLMAP toolchain manifest {key} is not a git object id")
+    return value
+
+
+def parse_toolchain_manifest(payload: bytes) -> ColmapToolchainManifest:
+    """Validate the canonical installed manifest before any value is trusted."""
+
+    if type(payload) is not bytes or not payload:
+        raise _fail("COLMAP toolchain manifest payload is empty")
+    if len(payload) > _MAX_TOOLCHAIN_MANIFEST_BYTES:
+        raise _fail("COLMAP toolchain manifest exceeds its byte ceiling")
+    try:
+        document = json.loads(payload.decode("ascii"))
+    except (RecursionError, UnicodeDecodeError, ValueError) as exc:
+        raise _fail("COLMAP toolchain manifest is not canonical ASCII JSON") from exc
+    if type(document) is not dict or _canonical_json_bytes(document) != payload:
+        raise _fail("COLMAP toolchain manifest is not canonical JSON")
+    if set(document) != _MANIFEST_FIELDS:
+        raise _fail("COLMAP toolchain manifest has an unknown or missing field")
+    if document["schema"] != TOOLCHAIN_MANIFEST_SCHEMA:
+        raise _fail("COLMAP toolchain manifest schema is unsupported")
+    banner = document["colmapBuildBanner"]
+    if type(banner) is not str or not 1 <= len(banner) <= 128:
+        raise _fail("COLMAP toolchain manifest colmapBuildBanner is not bounded text")
+    size_bytes = document["colmapExecutableSizeBytes"]
+    if (
+        type(size_bytes) is not int
+        or size_bytes < 1
+        or size_bytes > _MAX_COLMAP_EXECUTABLE_BYTES
+    ):
+        raise _fail("COLMAP toolchain manifest colmapExecutableSizeBytes is invalid")
+    manifest = ColmapToolchainManifest(
+        colmap_prefix=_manifest_absolute_path(document, "colmapPrefix"),
+        colmap_version=_manifest_version(document, "colmapVersion"),
+        colmap_build_banner=banner,
+        colmap_source_commit=_manifest_sha256_like(document, "colmapSourceCommit"),
+        colmap_source_tree=_manifest_sha256_like(document, "colmapSourceTree"),
+        colmap_executable_sha256=_manifest_sha256(document, "colmapExecutableSha256"),
+        colmap_executable_size_bytes=size_bytes,
+        cuda_root=_manifest_absolute_path(document, "cudaRoot"),
+        cuda_release=_manifest_version(document, "cudaRelease"),
+        cuda_architecture=_manifest_version(document, "cudaArchitecture"),
+        nvcc_version=_manifest_version(document, "nvccVersion"),
+        host_c_compiler=_manifest_absolute_path(document, "hostCCompiler"),
+        host_cxx_compiler=_manifest_absolute_path(document, "hostCxxCompiler"),
+        host_compiler_version=_manifest_version(document, "hostCompilerVersion"),
+        nvidia_driver_version=_manifest_version(document, "nvidiaDriverVersion"),
+        pycolmap_version=_manifest_version(document, "pycolmapVersion"),
+        pycolmap_wheel_sha256=_manifest_sha256(document, "pycolmapWheelSha256"),
+        app_dir=_manifest_absolute_path(document, "appDir"),
+    )
+    if manifest.colmap_prefix in ("/", manifest.app_dir):
+        raise _fail("COLMAP toolchain prefix and APP_DIR must be distinct real paths")
+    if manifest.app_dir == "/" or manifest.cuda_root == "/":
+        raise _fail("COLMAP toolchain APP_DIR and CUDA root may not be the filesystem")
+    return manifest
+
+
+def assert_qualified_box_identity(manifest: ColmapToolchainManifest) -> None:
+    """Reject any drift from the exact I87/I88 qualified box identity."""
+
+    exact = (
+        (manifest.colmap_prefix, QUALIFIED_COLMAP_PREFIX, "colmapPrefix"),
+        (manifest.colmap_version, QUALIFIED_COLMAP_VERSION, "colmapVersion"),
+        (
+            manifest.colmap_build_banner,
+            QUALIFIED_COLMAP_BUILD_BANNER,
+            "colmapBuildBanner",
+        ),
+        (
+            manifest.colmap_source_commit,
+            QUALIFIED_COLMAP_SOURCE_COMMIT,
+            "colmapSourceCommit",
+        ),
+        (manifest.colmap_source_tree, QUALIFIED_COLMAP_SOURCE_TREE, "colmapSourceTree"),
+        (manifest.cuda_root, QUALIFIED_CUDA_ROOT, "cudaRoot"),
+        (manifest.cuda_release, QUALIFIED_CUDA_RELEASE, "cudaRelease"),
+        (
+            manifest.cuda_architecture,
+            QUALIFIED_CUDA_ARCHITECTURE,
+            "cudaArchitecture",
+        ),
+        (manifest.nvcc_version, QUALIFIED_NVCC_VERSION, "nvccVersion"),
+        (manifest.host_c_compiler, QUALIFIED_HOST_C_COMPILER, "hostCCompiler"),
+        (manifest.host_cxx_compiler, QUALIFIED_HOST_CXX_COMPILER, "hostCxxCompiler"),
+        (
+            manifest.nvidia_driver_version,
+            QUALIFIED_NVIDIA_DRIVER_VERSION,
+            "nvidiaDriverVersion",
+        ),
+        (manifest.pycolmap_version, QUALIFIED_PYCOLMAP_VERSION, "pycolmapVersion"),
+        (manifest.app_dir, QUALIFIED_APP_DIR, "appDir"),
+    )
+    for observed, pinned, label in exact:
+        if observed != pinned:
+            raise _fail(f"COLMAP toolchain {label} drifted from the qualified box")
+    series = manifest.host_compiler_version
+    if series != QUALIFIED_HOST_COMPILER_SERIES and not series.startswith(
+        QUALIFIED_HOST_COMPILER_SERIES + "."
+    ):
+        raise _fail(
+            "COLMAP toolchain hostCompilerVersion drifted from the qualified box"
+        )
+
+
+# --------------------------------------------------------------------------
+# Executable identity
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ColmapExecutableIdentity:
+    path: str
+    sha256: str
+    size_bytes: int
+    device: int
+    inode: int
+    nlink: int
+    mode: int
+    uid: int
+    gid: int
+
+
+def _identity_from_stat(
+    path: str,
+    digest: str,
+    metadata: os.stat_result,
+) -> ColmapExecutableIdentity:
+    return ColmapExecutableIdentity(
+        path=path,
+        sha256=digest,
+        size_bytes=metadata.st_size,
+        device=metadata.st_dev,
+        inode=metadata.st_ino,
+        nlink=metadata.st_nlink,
+        mode=metadata.st_mode,
+        uid=metadata.st_uid,
+        gid=metadata.st_gid,
+    )
+
+
+def _trusted_metadata_ok(metadata: os.stat_result, *, directory: bool) -> bool:
+    if directory and not stat.S_ISDIR(metadata.st_mode):
+        return False
+    if not directory and not stat.S_ISREG(metadata.st_mode):
+        return False
+    if metadata.st_mode & 0o022:
+        return False
+    return metadata.st_uid in (0, os.geteuid())
+
+
+def _directory_flags() -> int:
+    return (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+
+
+def _file_flags() -> int:
+    return (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+
+
+def _open_prefix_relative(
+    prefix: Path,
+    relative: PurePosixPath,
+) -> tuple[int, os.stat_result]:
+    """Walk one installed prefix by descriptor and open its trusted leaf."""
+
+    try:
+        directory = os.open(prefix, _directory_flags())
+    except OSError as exc:
+        raise _fail(
+            f"cannot open the COLMAP toolchain prefix: {exc.strerror}"
+        ) from None
+    leaf: int | None = None
+    try:
+        metadata = os.fstat(directory)
+        if not _trusted_metadata_ok(metadata, directory=True):
+            raise _fail("COLMAP toolchain prefix has unsafe ownership or mode")
+        for component in relative.parts[:-1]:
+            child = os.open(component, _directory_flags(), dir_fd=directory)
+            os.close(directory)
+            directory = child
+            metadata = os.fstat(directory)
+            if not _trusted_metadata_ok(metadata, directory=True):
+                raise _fail("COLMAP toolchain directory has unsafe ownership or mode")
+        leaf = os.open(relative.parts[-1], _file_flags(), dir_fd=directory)
+        leaf_metadata = os.fstat(leaf)
+        if not _trusted_metadata_ok(leaf_metadata, directory=False):
+            raise _fail("COLMAP toolchain file has unsafe ownership or mode")
+    except AdapterError:
+        if leaf is not None:
+            try:
+                os.close(leaf)
+            except OSError:
+                pass
+        raise
+    except OSError as exc:
+        if leaf is not None:
+            try:
+                os.close(leaf)
+            except OSError:
+                pass
+        raise _fail(f"cannot open the COLMAP toolchain file: {exc.strerror}") from None
+    finally:
+        try:
+            os.close(directory)
+        except OSError:
+            pass
+    return leaf, leaf_metadata
+
+
+def _hash_descriptor(
+    descriptor: int,
+    *,
+    expected_size: int,
+    label: str,
+    remaining_seconds: Callable[[], float],
+) -> str:
+    digest = hashlib.sha256()
+    offset = 0
+    while offset < expected_size:
+        remaining_seconds()
+        try:
+            block = os.pread(
+                descriptor,
+                min(_READ_BYTES, expected_size - offset),
+                offset,
+            )
+        except OSError:
+            raise _fail(f"cannot read {label}") from None
+        if not block:
+            raise _fail(f"{label} ended before its declared size")
+        digest.update(block)
+        offset += len(block)
+    return digest.hexdigest()
+
+
+@dataclass(frozen=True)
+class ColmapToolchain:
+    """One verified COLMAP CLI installation, reusable across command phases."""
+
+    manifest: ColmapToolchainManifest
+    identity: ColmapExecutableIdentity
+    executable_descriptor: int
+    qualified: bool
+    _closed: list[bool] = field(default_factory=lambda: [False], repr=False)
+
+    def close(self) -> None:
+        """Release the pinned executable descriptor exactly once."""
+
+        if self._closed[0]:
+            return
+        self._closed[0] = True
+        try:
+            os.close(self.executable_descriptor)
+        except OSError:
+            raise _fail("cannot release the pinned COLMAP executable") from None
+
+
+def load_colmap_toolchain(
+    prefix: Path,
+    *,
+    remaining_seconds: Callable[[], float],
+    require_elf: bool = True,
+    qualified: bool = False,
+) -> ColmapToolchain:
+    """Verify one installed COLMAP prefix against its canonical manifest.
+
+    ``prefix`` is a parameter only so this mechanism stays testable without the
+    qualified host.  Production must call :func:`load_qualified_colmap_toolchain`,
+    which supplies the pinned prefix and additionally rejects every box-identity
+    drift; nothing else in the package may call this function directly.
+    """
+
+    if not callable(remaining_seconds):
+        raise _fail("COLMAP toolchain load requires a carried deadline probe")
+    remaining_seconds()
+    # O_NOFOLLOW protects each descriptor-relative component below the prefix,
+    # but not the prefix's own ancestors.  Require the installed prefix to be
+    # its own canonical path so no ancestor symlink can redirect the install.
+    try:
+        resolved_prefix = prefix.resolve(strict=True)
+    except BaseException:
+        raise _fail("cannot resolve the COLMAP toolchain prefix") from None
+    if resolved_prefix != prefix:
+        raise _fail("COLMAP toolchain prefix may not traverse a symlink")
+    manifest_fd, manifest_metadata = _open_prefix_relative(
+        prefix, TOOLCHAIN_MANIFEST_RELATIVE_PATH
+    )
+    try:
+        if (
+            manifest_metadata.st_nlink != 1
+            or manifest_metadata.st_size < 2
+            or manifest_metadata.st_size > _MAX_TOOLCHAIN_MANIFEST_BYTES
+        ):
+            raise _fail("COLMAP toolchain manifest is not a trusted regular file")
+        remaining_seconds()
+        try:
+            payload = os.pread(manifest_fd, manifest_metadata.st_size, 0)
+        except OSError:
+            raise _fail("cannot read the COLMAP toolchain manifest") from None
+        if len(payload) != manifest_metadata.st_size:
+            raise _fail("COLMAP toolchain manifest changed while it was read")
+        manifest = parse_toolchain_manifest(payload)
+    finally:
+        try:
+            os.close(manifest_fd)
+        except OSError:
+            pass
+
+    try:
+        prefix_posix = PurePosixPath(os.fspath(prefix))
+    except BaseException:
+        raise _fail("cannot inspect the COLMAP toolchain prefix") from None
+    if manifest.colmap_prefix != prefix_posix.as_posix():
+        raise _fail("COLMAP toolchain manifest prefix does not match its installation")
+
+    executable_fd, executable_metadata = _open_prefix_relative(
+        prefix, COLMAP_EXECUTABLE_RELATIVE_PATH
+    )
+    try:
+        if (
+            executable_metadata.st_nlink != 1
+            or not executable_metadata.st_mode & stat.S_IXUSR
+            or executable_metadata.st_size != manifest.colmap_executable_size_bytes
+        ):
+            raise _fail("COLMAP toolchain executable is not the manifest identity")
+        if require_elf:
+            try:
+                magic = os.pread(executable_fd, 4, 0)
+            except OSError:
+                raise _fail("cannot inspect the COLMAP toolchain executable") from None
+            if magic != b"\x7fELF":
+                raise _fail("COLMAP toolchain executable is not an ELF binary")
+        digest = _hash_descriptor(
+            executable_fd,
+            expected_size=executable_metadata.st_size,
+            label="the COLMAP toolchain executable",
+            remaining_seconds=remaining_seconds,
+        )
+        if digest != manifest.colmap_executable_sha256:
+            raise _fail("COLMAP toolchain executable differs from its manifest")
+        after = os.fstat(executable_fd)
+        if (
+            after.st_dev != executable_metadata.st_dev
+            or after.st_ino != executable_metadata.st_ino
+            or after.st_size != executable_metadata.st_size
+            or after.st_nlink != executable_metadata.st_nlink
+            or after.st_mode != executable_metadata.st_mode
+        ):
+            raise _fail("COLMAP toolchain executable changed while it was verified")
+    except BaseException:
+        try:
+            os.close(executable_fd)
+        except OSError:
+            pass
+        raise
+    executable_path = (prefix_posix / COLMAP_EXECUTABLE_RELATIVE_PATH).as_posix()
+    return ColmapToolchain(
+        manifest=manifest,
+        identity=_identity_from_stat(executable_path, digest, executable_metadata),
+        executable_descriptor=executable_fd,
+        qualified=bool(qualified),
+    )
+
+
+def load_qualified_colmap_toolchain(
+    *,
+    context: NativeChildContext,
+    deadline: RefineDeadline,
+) -> ColmapToolchain:
+    """Load the exact pinned COLMAP installation, rejecting any box drift."""
+
+    probe = carried_deadline_probe(context, deadline)
+    toolchain = load_colmap_toolchain(
+        Path(QUALIFIED_COLMAP_PREFIX),
+        remaining_seconds=probe,
+        require_elf=True,
+        qualified=True,
+    )
+    try:
+        assert_qualified_box_identity(toolchain.manifest)
+    except BaseException:
+        toolchain.close()
+        raise
+    return toolchain
+
+
+def verify_executable_identity(
+    identity: ColmapExecutableIdentity,
+    descriptor: int,
+) -> None:
+    """Re-prove the recorded inode identity right before ``execve``."""
+
+    if type(identity) is not ColmapExecutableIdentity:
+        raise _fail(
+            "pinned COLMAP execution requires a recorded executable identity",
+            _ENGINE_FAILED,
+        )
+    try:
+        held = os.fstat(descriptor)
+        named = os.stat(identity.path)
+    except BaseException:
+        raise _fail(
+            "cannot re-verify the pinned COLMAP executable identity",
+            _ENGINE_FAILED,
+        ) from None
+    for metadata in (held, named):
+        if (
+            metadata.st_dev != identity.device
+            or metadata.st_ino != identity.inode
+            or metadata.st_size != identity.size_bytes
+            or metadata.st_nlink != identity.nlink
+            or metadata.st_mode != identity.mode
+            or metadata.st_uid != identity.uid
+            or metadata.st_gid != identity.gid
+        ):
+            raise _fail(
+                "pinned COLMAP executable identity changed before execution",
+                _ENGINE_FAILED,
+            )
+
+
+# --------------------------------------------------------------------------
+# Environment allowlist
+# --------------------------------------------------------------------------
+
+
+def build_command_environment(
+    manifest: ColmapToolchainManifest,
+    *,
+    workspace: Path,
+) -> tuple[tuple[str, str], ...]:
+    """Build the exact closed environment; the ambient one is never inherited."""
+
+    if type(manifest) is not ColmapToolchainManifest:
+        raise _fail("COLMAP command environment requires a validated manifest")
+    try:
+        workspace_is_absolute = workspace.is_absolute()
+    except BaseException:
+        raise _fail("cannot inspect the COLMAP command workspace") from None
+    if not workspace_is_absolute:
+        raise _fail("COLMAP command workspace must be absolute")
+    workspace_value = PurePosixPath(os.fspath(workspace)).as_posix()
+    app_dir = PurePosixPath(manifest.app_dir)
+    cuda_root = PurePosixPath(manifest.cuda_root)
+    environ = {
+        # Confine the CUDA JIT cache; ProtectSystem=strict makes ~/.nv EACCES.
+        # This must stay byte-identical to patina-scan-worker.gpu.conf, which is
+        # the directory install.sh creates and doctor probes.
+        "CUDA_CACHE_PATH": (app_dir / ".cache" / "nv").as_posix(),
+        "CUDA_HOME": cuda_root.as_posix(),
+        "HOME": app_dir.as_posix(),
+        "LANG": "C",
+        "LC_ALL": "C",
+        "LD_LIBRARY_PATH": (cuda_root / "lib64").as_posix(),
+        # Only the pinned CUDA toolchain is resolvable by name; no system PATH.
+        "PATH": (cuda_root / "bin").as_posix(),
+        # COLMAP links Qt; force headless so no display is ever attempted.
+        "QT_QPA_PLATFORM": "offscreen",
+        "TMPDIR": workspace_value,
+        "XDG_CACHE_HOME": (app_dir / ".cache").as_posix(),
+        "XDG_CONFIG_HOME": (app_dir / ".config").as_posix(),
+        "XDG_DATA_HOME": (app_dir / ".data").as_posix(),
+        "XDG_STATE_HOME": (app_dir / ".state").as_posix(),
+    }
+    return validate_command_environment(environ, manifest=manifest, workspace=workspace)
+
+
+def validate_command_environment(
+    environ: Mapping[str, str],
+    *,
+    manifest: ColmapToolchainManifest,
+    workspace: Path,
+) -> tuple[tuple[str, str], ...]:
+    """Prove one environment is exactly the allowlist and stays confined."""
+
+    if type(environ) is not dict:
+        raise _fail("COLMAP command environment must be an exact mapping")
+    if tuple(sorted(environ)) != COMMAND_ENVIRONMENT_ALLOWLIST:
+        raise _fail("COLMAP command environment is not exactly the allowlist")
+    app_dir = PurePosixPath(manifest.app_dir)
+    workspace_value = PurePosixPath(os.fspath(workspace)).as_posix()
+    total = 0
+    rows: list[tuple[str, str]] = []
+    for name in COMMAND_ENVIRONMENT_ALLOWLIST:
+        value = environ[name]
+        if type(value) is not str or not value:
+            raise _fail(f"COLMAP command environment {name} must be a non-empty string")
+        try:
+            encoded = value.encode("ascii")
+        except UnicodeEncodeError:
+            raise _fail(f"COLMAP command environment {name} must be ASCII") from None
+        if len(encoded) > _MAX_ENVIRONMENT_VALUE_BYTES:
+            raise _fail(f"COLMAP command environment {name} exceeds its byte ceiling")
+        if any(byte < 0x20 or byte == 0x7F for byte in encoded):
+            raise _fail(f"COLMAP command environment {name} contains control bytes")
+        total += len(name.encode("ascii")) + len(encoded) + 2
+        rows.append((name, value))
+    if total > _MAX_ENVIRONMENT_BYTES:
+        raise _fail("COLMAP command environment exceeds its aggregate byte ceiling")
+    if environ["TMPDIR"] != workspace_value:
+        raise _fail("COLMAP command TMPDIR must be the private command workspace")
+    for name in _APP_DIR_CONFINED_ENVIRONMENT:
+        candidate = PurePosixPath(environ[name])
+        if not candidate.is_absolute() or not candidate.is_relative_to(app_dir):
+            raise _fail(f"COLMAP command environment {name} escapes APP_DIR")
+    return tuple(rows)
+
+
+# --------------------------------------------------------------------------
+# Pinned command
+# --------------------------------------------------------------------------
+
+_PINNED_COMMAND_SEAL = object()
+
+
+@dataclass(frozen=True)
+class PinnedColmapCommand:
+    """One allowlisted argv bound to a verified binary and a closed environ."""
+
+    argv: tuple[str, ...]
+    environ: tuple[tuple[str, str], ...]
+    workspace: str
+    identity: ColmapExecutableIdentity
+    executable_descriptor: int
+    executable_alias: str
+    descriptor_pinned: bool
+    _boundary_seal: object | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _boundary_pid: int | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+    @property
+    def is_verified_pinned_command(self) -> bool:
+        """Authenticate a plan produced by this module in this process."""
+
+        try:
+            pid = os.getpid()
+        except BaseException:  # noqa: BLE001 - authentication must fail closed
+            return False
+        return self._boundary_seal is _PINNED_COMMAND_SEAL and self._boundary_pid == pid
+
+    def environment(self) -> dict[str, str]:
+        return {name: value for name, value in self.environ}
+
+    def passed_descriptors(self) -> tuple[int, ...]:
+        return (self.executable_descriptor,) if self.descriptor_pinned else ()
+
+
+def _seal_pinned_command(command: PinnedColmapCommand) -> PinnedColmapCommand:
+    object.__setattr__(command, "_boundary_seal", _PINNED_COMMAND_SEAL)
+    object.__setattr__(command, "_boundary_pid", os.getpid())
+    return command
+
+
+def plan_pinned_colmap_command(
+    command: Sequence[str],
+    *,
+    toolchain: ColmapToolchain,
+    workspace: Path,
+    remaining_seconds: Callable[[], float],
+    descriptor_exec: bool,
+) -> PinnedColmapCommand:
+    """Bind one allowlisted argv, verified binary, and closed environment.
+
+    ``descriptor_exec`` is not a convenience switch: production always uses
+    :func:`plan_qualified_colmap_command`, which requires the real Linux
+    ``/proc/self/fd`` alias so no path lookup can be substituted between
+    verification and ``execve``.
+    """
+
+    if type(toolchain) is not ColmapToolchain:
+        raise _fail("pinned COLMAP planning requires a verified toolchain")
+    if not callable(remaining_seconds):
+        raise _fail("pinned COLMAP planning requires a carried deadline probe")
+    remaining_seconds()
+    argv = validate_allowlisted_argv(
+        command,
+        executable_path=toolchain.identity.path,
+        workspace=workspace,
+    )
+    environ = build_command_environment(toolchain.manifest, workspace=workspace)
+    verify_executable_identity(toolchain.identity, toolchain.executable_descriptor)
+    if descriptor_exec:
+        if not Path(_PROC_FD_ROOT).is_dir():
+            raise _fail(
+                "descriptor-pinned COLMAP execution requires Linux /proc/self/fd"
+            )
+        alias = (_PROC_FD_ROOT / str(toolchain.executable_descriptor)).as_posix()
+    else:
+        alias = toolchain.identity.path
+    remaining_seconds()
+    return _seal_pinned_command(
+        PinnedColmapCommand(
+            argv=argv,
+            environ=environ,
+            workspace=PurePosixPath(os.fspath(workspace)).as_posix(),
+            identity=toolchain.identity,
+            executable_descriptor=toolchain.executable_descriptor,
+            executable_alias=alias,
+            descriptor_pinned=bool(descriptor_exec),
+        )
+    )
+
+
+def plan_qualified_colmap_command(
+    command: Sequence[str],
+    *,
+    toolchain: ColmapToolchain,
+    workspace: Path,
+    context: NativeChildContext,
+    deadline: RefineDeadline,
+) -> PinnedColmapCommand:
+    """The only production planner: pinned box identity plus descriptor exec."""
+
+    if type(toolchain) is not ColmapToolchain or toolchain.qualified is not True:
+        raise _fail("production COLMAP planning requires the qualified toolchain")
+    assert_qualified_box_identity(toolchain.manifest)
+    return plan_pinned_colmap_command(
+        command,
+        toolchain=toolchain,
+        workspace=workspace,
+        remaining_seconds=carried_deadline_probe(context, deadline),
+        descriptor_exec=True,
+    )
