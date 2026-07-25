@@ -189,9 +189,16 @@ _MAX_ENVIRONMENT_VALUE_BYTES = 4096
 _MAX_ENVIRONMENT_BYTES = 64 * 1024
 _MAX_ARGV_ITEMS = 64
 #: One number, owned by the layer that mints the leased path this bounds.  See
-#: ``NATIVE_WORKSPACE_MAX_ARGV_ITEM_BYTES``: the lease provisioner refuses any
-#: container that cannot fit a path option inside this ceiling, so an operator's
-#: scratch root can no longer land in a gap between the two bounds.
+#: ``NATIVE_WORKSPACE_MAX_ARGV_ITEM_BYTES``.  Stated precisely, because the
+#: earlier wording here overreached: the lease provisioner refuses a container
+#: whose **lease root** would exceed ``NATIVE_WORKSPACE_MAX_PATH_BYTES``, which
+#: is this ceiling less ``NATIVE_WORKSPACE_MAX_ARGV_PATH_TAIL_BYTES``.  What
+#: that buys is guaranteed room for a tail of *at most* the reserve -- 64
+#: bytes, against a longest reviewed tail of 37 -- not room for an arbitrary
+#: path option.  A longer tail is still refused, here, by this ceiling.  What
+#: can no longer happen is the F-3 shape: an operator scratch root landing in a
+#: gap between the two bounds, provisioning cleanly and then making every
+#: command unplannable.
 _MAX_OPTION_VALUE_BYTES = NATIVE_WORKSPACE_MAX_ARGV_ITEM_BYTES
 _READ_BYTES = 1024 * 1024
 
@@ -1333,6 +1340,19 @@ def plan_pinned_colmap_command(
     into ``<lease>/packet/images`` pass the allowlist while ``--output_path``
     into that same directory does not.  See
     :func:`plan_leased_colmap_command`.
+
+    The per-option mapping is resolved relative to whatever ``workspace`` this
+    function is *handed*, and this function takes it from its caller.  So a
+    caller that passes ``workspace=<lease>/packet`` makes ``--output_path
+    <lease>/packet/work/tri`` admissible -- a write inside the packet, by
+    re-rooting rather than by naming.  Production cannot reach it: the two
+    doors are :func:`plan_qualified_colmap_command` and
+    :func:`plan_leased_colmap_command`, and the leased one takes its three
+    surfaces from :func:`leased_command_surfaces`, which returns the lease root
+    it was given.  This is the same class of residual as the caller-declared
+    ``QualifiedBoxLocation`` above -- reachable only with arbitrary in-process
+    Python, at which point the plan is not the weakest link -- and it is
+    recorded here for the same reason.
     """
 
     if type(toolchain) is not ColmapToolchain:
