@@ -1,4 +1,4 @@
-# Field Capture — orchestrator handoff — active 2026-07-24
+# Field Capture — orchestrator handoff — active 2026-07-25
 
 You are picking up the Field Capture program mid-P2. This document is the
 working state an orchestrator needs beyond what the repo already records.
@@ -257,6 +257,188 @@ Read it with, not instead of, the canonical sources below.
   exercise it only on reviewed local scratch. Do not claim a GPU queue task or
   run `95266be1` through production DB/Storage. Disable DeskDev suspend before
   any Refine enablement, or first make the lease-clock contract suspend-aware.
+
+## Current repository and runtime state
+
+This is the exact state at which a new agent should resume:
+
+- Remote `origin/main` is `d7861b6d` (`docs(field-capture): record disabled
+  I96 safety foundations`). The I96 integration branch
+  `field-capture/refine-i96-integration` is pushed and points at the same tip.
+- The clean integration worktree used for this work is
+  `/Users/kody/Code/patina-merged/.Codex/worktrees/agent-refine-i96-integration`.
+  Do not use the shared `/Users/kody/Code/patina-merged` checkout for writes;
+  it carries unrelated user changes and is intentionally not synchronized.
+- The current integration commit sequence after the I95 base
+  `e91aa967` is:
+
+  | Commit | Purpose |
+  | --- | --- |
+  | `9527af6a` | disabled COLMAP command supervisor foundation |
+  | `5e5e0a62` | supervisor fault and cleanup coverage |
+  | `c5d39e6c` | exact disabled packet extraction foundation |
+  | `cc82e853` | installer/package trust-list integration |
+  | `14882878` | exact sealed native-context enforcement for commands |
+  | `010280ef` | packet cleanup, FIFO, identity, and rollback hardening |
+  | `bb405078` | recursive JSON exception normalization |
+  | `68495fd9` | formatting/import hygiene for I96 hardening |
+  | `d7861b6d` | handoff and I96 decision-log record |
+
+- The new implementation modules are
+  `services/scan-pipeline/src/patina_scan_worker/refine_colmap_command.py` and
+  `refine_packet_extractor.py`. The principal integration points are
+  `refine_colmap_backend.py`, `refine_native_process.py`,
+  `install-path-guard.py`, `install.sh`, `tests/test_install_script.py`, and
+  `tests/test_packaging.py`.
+- The worker is not being installed, restarted, or run as part of this handoff.
+  No production DB, Storage, queue, DeskDev, or real-scan mutation occurred.
+  The intended deployed posture remains `patina-scan-worker` inactive with
+  `STAGES=ingest,solve,drawings`.
+
+### Resume verification
+
+Run these read-only checks from the integration worktree before changing code:
+
+```bash
+cd /Users/kody/Code/patina-merged/.Codex/worktrees/agent-refine-i96-integration
+git fetch origin main
+git rev-parse HEAD                 # d7861b6d...
+git rev-parse origin/main          # d7861b6d...
+git status --short --branch
+git diff --check origin/main...HEAD
+python3 scripts/workstream_state.py .
+```
+
+The posture probes should remain visibly false/unregistered:
+
+```bash
+rg -n '^(PACKET_EXTRACTION_QUALIFIED|SEQUENTIAL_COMMAND_QUIESCENCE_QUALIFIED|COMMAND_EXCEPTION_NORMALIZATION_QUALIFIED) = ' \
+  services/scan-pipeline/src/patina_scan_worker/refine_colmap_backend.py
+rg -n '^DEFAULT_STAGES = ' \
+  services/scan-pipeline/src/patina_scan_worker/config.py
+rg -n 'scan_pipeline\.refine' \
+  services/scan-pipeline/src/patina_scan_worker
+```
+
+Expected values are all qualification flags `False`, `DEFAULT_STAGES =
+"ingest,solve,drawings"`, and no stage registration. Do not “prove” a new
+runtime by editing a flag or adding a handler; that would invalidate the
+disabled-foundation boundary.
+
+### Verification commands
+
+The implementing worktree used a Python environment with the scan-pipeline
+test dependencies. If that environment is absent, provision an equivalent
+isolated environment; never install into the system Python or the deployed
+worker while testing.
+
+```bash
+PY=/path/to/scan-pipeline-test-venv/bin/python
+
+# Combined I96 boundary tests.
+"$PY" -m pytest -q \
+  services/scan-pipeline/tests/test_refine_colmap_command.py \
+  services/scan-pipeline/tests/test_refine_packet_extractor.py \
+  services/scan-pipeline/tests/test_refine_colmap_backend.py \
+  services/scan-pipeline/tests/test_refine_native_process.py
+
+# Full queue-independent Refine regression suite.
+"$PY" -m pytest -q services/scan-pipeline/tests/test_refine*.py
+
+# Exact isolated installer/package gate (no project environment or lockfile).
+uv run --no-project --python 3.12 \
+  --with 'pytest>=7.4' \
+  --with 'build>=1.2,<2' \
+  --with 'setuptools>=68' \
+  --with 'wheel>=0.41' \
+  --with 'httpx>=0.24,<1.0' \
+  python -m pytest -q \
+    services/scan-pipeline/tests/test_install_script.py \
+    services/scan-pipeline/tests/test_packaging.py
+
+python3 -m compileall -q services/scan-pipeline/src/patina_scan_worker \
+  services/scan-pipeline/tests
+bash -n services/scan-pipeline/install.sh
+git diff --check
+```
+
+The recorded results at this handoff are 458 Refine tests passed with five
+expected Linux-only lifecycle skips on macOS, and 148 installer/packaging
+tests passed. Linux child-subreaper behavior has not been physically proven on
+this host; the skips are evidence of unavailable platform coverage, not a
+qualification pass.
+
+## I96 implementation contract for the next agent
+
+Treat the following as implementation law, not suggestions:
+
+1. The packet is an exact uncompressed USTAR archive. It has one declared
+   request, 3–400 engine images, at most one source ledger, at most one adapter
+   ledger, no special files, no PAX/GNU/sparse extensions, exact canonical
+   metadata, exact two-block termination, and no trailing bytes.
+2. All packet reads are pinned to descriptors and use positional I/O. The
+   extractor revalidates chunk size/hash and the extracted request before the
+   caller can consume it. The native context must be the exact privately sealed
+   `NativeChildContext`; a lookalike or property-inspection failure is rejected.
+3. Cleanup records and revalidates file and directory identities and rolls back
+   a member if creation succeeds before ledger completion. This is still not a
+   substitute for a parent-owned workspace: `stat` followed by unlink/rmdir is
+   not atomic against a hostile same-UID actor.
+4. The command helper accepts bounded absolute argv, inherits the native group
+   and deadline, and refuses successful phase advancement while adopted
+   children remain. It detects escaped descendants but does not yet contain
+   them. Cleanup and exception failures are fail-closed with cleanup precedence.
+5. The future output handoff is seven child-to-parent descriptors: the six
+   persistent engine artifacts plus a scratch raw pre-BA snapshot. The child
+   may propose aligned/Sim3 bytes; the parent recomputes and verifies the
+   alignment and pose digest. Do not make the child’s proposal authoritative.
+
+## Ordered next-work packet
+
+Do not start composition or enablement until each item below has an owner,
+tests, and an independent adversarial review:
+
+1. Replace child-owned extraction scratch with a parent-provisioned,
+   descriptor-rooted 0700 workspace and a bounded reverse-FD lease. The parent
+   must perform bounded cleanup after normal return, timeout, SIGTERM, and
+   SIGKILL; cleanup must never unlink an object whose identity changed.
+2. Parse and validate the optional source and adapter ledgers, including their
+   cardinality, identity, and relationship to the manifest. Keep the closed
+   role universe and 200–400-frame packet cap explicit.
+3. Add an executable-identity and command/environment allowlist plus pinned
+   GCC/CUDA/toolchain policy. Preserve the single lease-aware deadline through
+   every command, helper, and drain thread.
+4. Prove Linux child-subreaper behavior, adopted-child reaping, escaped
+   descendant handling, and cleanup precedence on the qualified host. The five
+   macOS skips cannot be converted into green acceptance by changing tests.
+5. Implement the seven-descriptor native output handoff. Remove runner
+   display-path reopening; keep all data descriptor-pinned and parent-owned.
+6. Construct raw pre-BA and refined model snapshots, have the child propose
+   alignment, and have the parent recompute/verify Sim3 and pose digests before
+   producing the exact six persistent engine artifacts.
+7. Compose materializer → raster → backend → runner → publisher only on local
+   scratch. Require comparable reprojection, registration, verified-loop, and
+   evidence-builder results for `95266be1`; unchanged evidence is a failure and
+   trajectory shape remains diagnostic-only.
+8. Only after all of the above, Kody’s P2 gates (dense mesh, walkthrough/click-
+   to-measure, and maker quote without a site visit) can be requested. Refine,
+   Fuse, and Splat remain unregistered until Kody explicitly passes the gate.
+
+## Safe operating rules for this handoff
+
+- Never run `install.sh`, `systemctl`, a GPU doctor, a queue task, a real scan,
+  `supabase db push`, or Storage writes as part of I96 resume work.
+- Never blanket-push migrations. The live Field Capture queue head is 00378;
+  re-query the ledger and use the sanctioned surgical path if a later task
+  explicitly authorizes a migration.
+- Never edit `DECISIONS.md` by hand. Draft an `I_NEXT` block, run
+  `scripts/workstream_state.py`, then use `scripts/append_entry.py --check`
+  followed by the real append.
+- Never write from the shared dirty checkout, use `git add -A`, reset hard, or
+  overwrite user work. Use a dedicated worktree and explicit pathspecs.
+- Keep the I96 feature branch and `origin/main` aligned before beginning I97;
+  if another commit has landed, rebase/merge in the isolated worktree and
+  rerun all gates before pushing.
 
 ## The operating cadence (do not drop it)
 
