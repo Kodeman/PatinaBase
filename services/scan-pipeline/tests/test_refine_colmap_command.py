@@ -1082,6 +1082,13 @@ def test_same_group_live_descendant_fails_before_second_command(tmp_path):
                 deadline=_deadline(5.0),
             )
         assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+        # Name the descendant clause, not just the code.  A live descendant
+        # holds the command's log pipe open *and* is adopted by the subreaper,
+        # so two independent guarantees fire; asserting only the code would let
+        # the adoption half rot away unnoticed.
+        assert "native owner retains a live adopted COLMAP descendant" in str(
+            raised.value
+        )
         # The first command must actually have launched: a plan refused before
         # ``Popen`` creates no log, spawns no child and leaves this assertion --
         # and the descendant wait below -- as the only thing between a real
@@ -1145,6 +1152,12 @@ def test_escaped_live_descendant_fails_before_second_command(tmp_path):
                 deadline=_deadline(5.0),
             )
         assert raised.value.code == "REFINE_ENGINE_CLEANUP_FAILED"
+        # The escaped ``setsid`` descendant is in its own session and its own
+        # group, so nothing but Linux subreaper adoption can observe it.  This
+        # clause is that observation.
+        assert "native owner retains a live adopted COLMAP descendant" in str(
+            raised.value
+        )
         # As above: proof the first command reached ``Popen`` at all, so the
         # refusal being asserted is the quiescence gate and not a plan the
         # supervisor rejected before any child existed.
