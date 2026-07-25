@@ -308,6 +308,51 @@ def test_publication_never_opens_a_file_artifact_by_its_display_path(
     assert len(storage.calls) == len(result.files)
 
 
+def test_a_spool_substituted_between_write_and_reopen_is_refused(
+    tmp_path,
+    monkeypatch,
+):
+    """The inline spool is verified by identity, not by name.
+
+    ``_spool_inline`` writes the document, then reopens the name read-only. A
+    same-UID actor that swaps the file in that window would otherwise get an
+    arbitrary inode published under a manifest-bound digest.
+    """
+
+    result = _result(tmp_path)
+    storage = _RecordingStorage()
+    decoy = tmp_path / "decoy.json"
+    real_open = publisher_module.os.open
+    swapped = False
+
+    def swap_before_reopen(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and flags & os.O_RDONLY == os.O_RDONLY and not flags & os.O_CREAT:
+            try:
+                original = Path(path).read_bytes()
+            except OSError:
+                original = None
+            if original is not None:
+                swapped = True
+                decoy.write_bytes(original)
+                os.replace(decoy, path)
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(publisher_module.os, "open", swap_before_reopen)
+
+    with pytest.raises(PermanentError) as caught:
+        _publisher(storage, tmp_path).publish(
+            result,
+            user_id="user-1",
+            scan_id="scan-1",
+            deadline=_deadline(),
+        )
+
+    assert swapped is True
+    assert caught.value.token == "REFINE_ARTIFACT_VERIFY"
+    assert "spool could not be verified" in str(caught.value)
+
+
 def test_publication_leaves_every_borrowed_offset_untouched(tmp_path):
     result = _result(tmp_path)
     borrowed = [

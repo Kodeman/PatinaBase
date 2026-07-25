@@ -1419,6 +1419,155 @@ def test_the_descriptor_hasher_ignores_a_path_level_replacement(tmp_path):
     assert target.stat().st_ino != stable_stat.st_ino
 
 
+def test_a_directory_descriptor_is_not_a_frame(tmp_path):
+    request = _request(tmp_path)
+    directory = os.open(request.workspace_root, os.O_RDONLY)
+    _OPEN_ARTIFACT_DESCRIPTORS.append(directory)
+    request = replace(
+        request,
+        frames=(
+            replace(request.frames[0], source_descriptor=directory),
+            *request.frames[1:],
+        ),
+    )
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_FakeArtifactBuilder(),
+        ).run(request, deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.INPUT_INVALID
+    assert "frame source HEIC must be a regular file" in str(raised.value)
+
+
+def test_two_engine_artifacts_may_not_share_one_inode(tmp_path):
+    class _HardlinkingBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            artifacts = list(super().build_engine_artifacts(**kwargs))
+            directory = kwargs["request"].workspace_root / "engine-artifacts"
+            link = directory / "pairs-v2.txt"
+            link.unlink()
+            os.link(directory / "adapter-v2.json", link)
+            for index, artifact in enumerate(artifacts):
+                if artifact.name == "pairs-v2.txt":
+                    artifacts[index] = replace(
+                        artifact,
+                        descriptor=_borrowed_artifact_descriptor(link),
+                    )
+            return tuple(artifacts)
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_HardlinkingBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert "engine artifacts must reference unique file identities" in str(
+        raised.value
+    )
+
+
+@pytest.mark.parametrize("display_path", ("", 12, b"/tmp/x"))
+def test_an_unusable_display_path_is_refused(tmp_path, display_path):
+    class _BadDisplayPathBuilder(_FakeArtifactBuilder):
+        def build_engine_artifacts(self, **kwargs):
+            artifacts = list(super().build_engine_artifacts(**kwargs))
+            artifacts[0] = replace(artifacts[0], display_path=display_path)
+            return tuple(artifacts)
+
+    with pytest.raises(RefineRunError) as raised:
+        RefineRunner(
+            backend=_FakeBackend(primary=_candidate()),
+            artifact_builder=_BadDisplayPathBuilder(),
+        ).run(_request(tmp_path), deadline=_deadline())
+
+    assert raised.value.code is RefineFailureCode.ARTIFACT_INVALID
+    assert "display path must be absent or a non-empty string" in str(raised.value)
+
+
+def test_the_descriptor_hasher_rejects_a_size_disagreement(tmp_path):
+    target = tmp_path / "source.bin"
+    target.write_bytes(b"seven!!")
+    descriptor = _borrowed_artifact_descriptor(target)
+
+    with pytest.raises(ValueError) as raised:
+        refine_runner._stable_descriptor_sha256(
+            descriptor,
+            expected_size=8,
+            deadline=_deadline(),
+        )
+
+    assert "size does not match its ledger" in str(raised.value)
+
+
+def test_the_descriptor_hasher_rejects_a_source_that_grew_mid_read(
+    tmp_path,
+    monkeypatch,
+):
+    """The trailing-byte probe, reached the only way it can be: a growth race."""
+
+    target = tmp_path / "source.bin"
+    payload = b"z" * 16
+    target.write_bytes(payload)
+    descriptor = _borrowed_artifact_descriptor(target)
+    real_pread = refine_runner.os.pread
+    grown = False
+
+    def grow_once(fd, size, offset):
+        nonlocal grown
+        chunk = real_pread(fd, size, offset)
+        if not grown:
+            grown = True
+            with target.open("ab") as handle:
+                handle.write(b"extra")
+        return chunk
+
+    monkeypatch.setattr(refine_runner.os, "pread", grow_once)
+
+    with pytest.raises(ValueError) as raised:
+        refine_runner._stable_descriptor_sha256(
+            descriptor,
+            expected_size=len(payload),
+            deadline=_deadline(),
+        )
+
+    assert grown is True
+    assert "exceeds its declared size" in str(raised.value)
+
+
+def test_the_descriptor_hasher_rejects_an_in_place_mutation(tmp_path, monkeypatch):
+    target = tmp_path / "source.bin"
+    payload = b"w" * 16
+    target.write_bytes(payload)
+    descriptor = _borrowed_artifact_descriptor(target)
+    real_pread = refine_runner.os.pread
+    mutated = False
+
+    def mutate_once(fd, size, offset):
+        nonlocal mutated
+        chunk = real_pread(fd, size, offset)
+        if not mutated and size > 1:
+            mutated = True
+            time.sleep(0.01)
+            with target.open("r+b") as handle:
+                handle.write(b"v" * len(payload))
+        return chunk
+
+    monkeypatch.setattr(refine_runner.os, "pread", mutate_once)
+
+    with pytest.raises(ValueError) as raised:
+        refine_runner._stable_descriptor_sha256(
+            descriptor,
+            expected_size=len(payload),
+            deadline=_deadline(),
+        )
+
+    assert mutated is True
+    assert "changed while it was hashed" in str(raised.value)
+
+
 def test_the_descriptor_hasher_leaves_the_borrowed_offset_alone(tmp_path):
     target = tmp_path / "source.bin"
     payload = b"y" * ((1 << 20) + 3)

@@ -800,6 +800,7 @@ def test_source_mutation_while_staging_never_reaches_remote(tmp_path, monkeypatc
 
     assert mutated is True
     assert caught.value.token == "REFINE_ARTIFACT_IO"
+    assert "changed while staging" in str(caught.value)
     assert session.posts == []
 
 
@@ -872,6 +873,15 @@ def test_manifest_fingerprint_mismatch_is_rejected_before_network(
         )
 
     assert caught.value.token == "REFINE_ARTIFACT_IO"
+    # The exact clause matters: a declared size that disagrees with the live
+    # descriptor must be refused before a single byte is staged, not diagnosed
+    # later by the digest.
+    expected_message = (
+        "size no longer matches its manifest"
+        if expected_size != 7
+        else "hash no longer matches its manifest"
+    )
+    assert expected_message in str(caught.value)
     assert session.posts == []
 
 
@@ -1087,6 +1097,81 @@ def test_download_stops_when_deadline_expires_between_chunks(tmp_path):
 
     assert caught.value.token == "REFINE_ENGINE_TIMEOUT"
     assert destination.stat().st_size == 1 << 20
+
+
+def test_a_source_that_shrinks_mid_stage_never_reaches_remote(tmp_path, monkeypatch):
+    """The short-read probe, reached the only way it can be: a shrink race."""
+
+    payload = b"s" * ((1 << 20) * 2)
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(payload)
+    session = _Session(_Response(200))
+    real_pread = storage_module.os.pread
+    truncated = False
+
+    def truncate_once(fd, size, offset):
+        nonlocal truncated
+        chunk = real_pread(fd, size, offset)
+        if not truncated:
+            truncated = True
+            os.truncate(source, 16)
+        return chunk
+
+    monkeypatch.setattr(storage_module.os, "pread", truncate_once)
+
+    with pytest.raises(TransientError) as caught:
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            _descriptor(source),
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
+            expected_size=len(payload),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
+
+    assert truncated is True
+    assert caught.value.token == "REFINE_ARTIFACT_IO"
+    assert "ended before its manifest size" in str(caught.value)
+    assert session.posts == []
+
+
+def test_a_source_that_grows_mid_stage_never_reaches_remote(tmp_path, monkeypatch):
+    """The trailing-byte probe, reached the only way it can be: a growth race."""
+
+    payload = b"g" * 32
+    source = tmp_path / "artifact.bin"
+    source.write_bytes(payload)
+    session = _Session(_Response(200))
+    real_pread = storage_module.os.pread
+    grown = False
+
+    def grow_once(fd, size, offset):
+        nonlocal grown
+        chunk = real_pread(fd, size, offset)
+        if not grown:
+            grown = True
+            with source.open("ab") as handle:
+                handle.write(b"extra")
+        return chunk
+
+    monkeypatch.setattr(storage_module.os, "pread", grow_once)
+
+    with pytest.raises(TransientError) as caught:
+        _client(session).publish_immutable_descriptor(
+            f"{_PREFIX}/artifact.bin",
+            _descriptor(source),
+            "application/octet-stream",
+            expected_sha256=hashlib.sha256(payload).hexdigest(),
+            expected_size=len(payload),
+            user_id=_USER_ID,
+            scan_id=_SCAN_ID,
+        )
+
+    assert grown is True
+    assert caught.value.token == "REFINE_ARTIFACT_IO"
+    assert "grew while staging" in str(caught.value)
+    assert session.posts == []
 
 
 def test_publication_never_moves_the_borrowed_offset(tmp_path):

@@ -9,6 +9,7 @@ declares is authoritative.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import os
 import stat
 import threading
@@ -136,6 +137,22 @@ def _report_output_visibility(_request, _context: NativeChildContext):
     return {"ok": True}
 
 
+@native_engine_entrypoint
+def _create_directory_at_an_output_name(request, context: NativeChildContext):
+    work = _open_leased_work_directory(context)
+    try:
+        os.mkdir(request["name"], 0o700, dir_fd=work)
+    finally:
+        os.close(work)
+    return {"created": request["name"]}
+
+
+@native_engine_entrypoint
+def _write_outputs_then_overflow(request, context: NativeChildContext):
+    _write_engine_outputs(request, context)
+    return {"oversized": "x" * (256 * 1024)}
+
+
 # ---------------------------------------------------------------------------
 # The closed universe
 # ---------------------------------------------------------------------------
@@ -198,22 +215,41 @@ def test_parent_side_alignment_verification_is_not_claimed():
 # ---------------------------------------------------------------------------
 
 
+class _LookalikeToken(str):
+    """A ``str`` subclass that compares equal to a canonical token.
+
+    Membership tests use ``==``, so this passes ``in NATIVE_ENGINE_OUTPUT_TOKENS``
+    while being free to override anything else about itself.  Exact-type checks
+    are the only thing that stops it.
+    """
+
+    def __new__(cls) -> "_LookalikeToken":
+        return super().__new__(cls, "adapter-v2.json")
+
+
 @pytest.mark.parametrize(
-    "tokens",
+    ("tokens", "message"),
     (
-        (),
-        ["not-a-reviewed-token"],
-        ("adapter-v2.json", "adapter-v2.json"),
-        ("pairs-v2.txt", "adapter-v2.json"),
-        (*NATIVE_ENGINE_OUTPUT_TOKENS, "adapter-v2.json"),
-        ("adapter-v2.json", 7),
-        "adapter-v2.json",
-        {"adapter-v2.json"},
+        ((), "count is outside the reviewed universe"),
+        # Eight entries: the length clause must fire before the duplicate clause.
+        (
+            (*NATIVE_ENGINE_OUTPUT_TOKENS, "adapter-v2.json"),
+            "count is outside the reviewed universe",
+        ),
+        (["not-a-reviewed-token"], "outside the reviewed universe"),
+        (("adapter-v2.json", 7), "outside the reviewed universe"),
+        ((_LookalikeToken(),), "outside the reviewed universe"),
+        (("adapter-v2.json", "adapter-v2.json"), "must be unique"),
+        (("pairs-v2.txt", "adapter-v2.json"), "canonical order"),
+        ("adapter-v2.json", "exact tuple or list"),
+        ({"adapter-v2.json"}, "exact tuple or list"),
     ),
 )
-def test_output_sinks_refuse_a_noncanonical_request(tokens):
-    with pytest.raises(AdapterError):
+def test_output_sinks_refuse_a_noncanonical_request(tokens, message):
+    with pytest.raises(AdapterError) as raised:
         NativeEngineOutputs(tokens)
+
+    assert message in str(raised.value)
 
 
 def test_an_output_sink_exposes_its_canonical_tokens():
@@ -356,6 +392,44 @@ def test_a_noncanonical_ledger_is_refused(ledger):
         )
 
 
+def test_the_child_side_size_ceilings_refuse_what_they_promise():
+    """The 4 GiB per-file and 8 GiB aggregate bounds, exercised without the bytes."""
+
+    assert native_process._accumulated_output_bytes("adapter-v2.json", 10, 0) == 10
+    assert native_process._accumulated_output_bytes("adapter-v2.json", 10, 5) == 15
+
+    with pytest.raises(AdapterError) as empty:
+        native_process._accumulated_output_bytes("adapter-v2.json", 0, 0)
+    assert "is empty" in str(empty.value)
+
+    with pytest.raises(AdapterError) as oversized:
+        native_process._accumulated_output_bytes(
+            "database-v1.db",
+            NATIVE_CHILD_MAX_OUTPUT_FILE_BYTES + 1,
+            0,
+        )
+    assert "exceeds the per-file byte limit" in str(oversized.value)
+
+    with pytest.raises(AdapterError) as aggregate:
+        native_process._accumulated_output_bytes(
+            "database-v1.db",
+            NATIVE_CHILD_MAX_OUTPUT_FILE_BYTES,
+            NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES
+            - NATIVE_CHILD_MAX_OUTPUT_FILE_BYTES
+            + 1,
+        )
+    assert "exceed the aggregate byte limit" in str(aggregate.value)
+
+
+def test_the_child_opener_spends_the_shared_size_budget():
+    """The opener must go through the bounded helper, not its own arithmetic."""
+
+    source = inspect.getsource(native_process._open_child_outputs)
+    assert "_accumulated_output_bytes(" in source
+    assert "NATIVE_CHILD_MAX_OUTPUT_FILE_BYTES" not in source
+    assert "NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES" not in source
+
+
 def test_a_ledger_that_exceeds_the_aggregate_budget_is_refused():
     tokens = NATIVE_ENGINE_OUTPUT_TOKENS
     per_file = NATIVE_CHILD_MAX_OUTPUT_FILE_BYTES
@@ -491,7 +565,10 @@ def test_a_declared_size_that_disagrees_with_the_object_fails_the_run(leased):
     finally:
         os.close(sent)
 
-    assert "size does not match its ledger" in str(raised.value)
+    assert (
+        "native engine output adapter-v2.json size does not match its ledger"
+        in str(raised.value)
+    )
 
 
 def test_a_descriptor_for_a_file_outside_the_lease_is_refused(leased, tmp_path):
@@ -715,6 +792,7 @@ def test_a_missing_engine_output_fails_the_run_and_leaves_the_sink_empty(tmp_pat
         )
 
     assert "pairs-v2.txt could not be opened" in str(raised.value)
+    assert raised.value.code == "REFINE_INPUT_INVALID"
     assert sink.is_populated is False
     assert sink.is_closed is True
     assert os.listdir(container) == []
@@ -792,7 +870,8 @@ def test_outputs_require_a_parent_provisioned_workspace(tmp_path):
             outputs=sink,
         )
 
-    assert "require a parent-provisioned workspace lease" in str(raised.value)
+    # The PARENT wording, not the child's: this must fail before any spawn.
+    assert "require a workspace_parent_directory" in str(raised.value)
 
 
 def test_a_used_sink_cannot_be_handed_to_a_second_run(tmp_path):
@@ -890,6 +969,83 @@ def test_a_ready_envelope_with_the_wrong_token_set_is_refused(monkeypatch, tmp_p
     assert sink.is_populated is False
 
 
+def test_a_non_regular_object_at_an_output_name_is_refused(tmp_path):
+    """The child refuses to export a directory standing in for an artifact."""
+
+    container = tmp_path / "boundary"
+    container.mkdir(mode=0o700)
+    sink = NativeEngineOutputs(("adapter-v2.json",))
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_create_directory_at_an_output_name"),
+            {"name": "adapter-v2.json"},
+            deadline=_deadline(30.0),
+            workspace_parent_directory=str(container),
+            outputs=sink,
+        )
+
+    assert (
+        "native engine output adapter-v2.json must be a regular file"
+        in str(raised.value)
+    )
+    assert sink.is_populated is False
+
+
+def test_the_child_refuses_to_export_outside_a_verified_boundary(leased):
+    """``_open_child_outputs`` authenticates before it touches leased scratch.
+
+    Called here from the parent process, where the sealed-boundary predicate is
+    false by construction, so the refusal cannot be mistaken for a lucky path.
+    """
+
+    leased.write("adapter-v2.json", _payload("adapter-v2.json"))
+    context = NativeChildContext(
+        time.monotonic() + 600.0,
+        _workspace_descriptor=leased.lease.descriptor,
+        _workspace_path=leased.lease.path,
+    )
+    assert context.is_verified_native_boundary is False
+
+    with pytest.raises(native_process._ChildTransportError) as raised:
+        native_process._open_child_outputs(
+            ("adapter-v2.json",),
+            context=context,
+        )
+
+    assert "outside its verified boundary" in str(raised.value)
+
+
+def test_an_error_terminal_carries_no_descriptors_even_after_they_opened(tmp_path):
+    """Outputs are opened before the envelope is sized, so both paths exist.
+
+    An oversized result fails AFTER ``_open_child_outputs`` has succeeded, which
+    is the only way to reach the branch that closes those descriptors instead of
+    putting them on the wire.  Deleting that branch is not independently
+    observable from out here -- the run fails on the overflow either way -- so
+    this test exercises the path rather than proving the branch.
+    """
+
+    token = "adapter-v2.json"
+    container = tmp_path / "boundary"
+    container.mkdir(mode=0o700)
+    sink = NativeEngineOutputs((token,))
+
+    with pytest.raises(AdapterError) as raised:
+        run_native_engine_child(
+            _entrypoint("_write_outputs_then_overflow"),
+            {"outputs": {token: _payload(token).hex()}},
+            deadline=_deadline(30.0),
+            workspace_parent_directory=str(container),
+            outputs=sink,
+        )
+
+    assert "exceeds the bounded transport" in str(raised.value)
+    assert sink.is_populated is False
+    assert sink.is_closed is True
+    assert os.listdir(container) == []
+
+
 # ---------------------------------------------------------------------------
 # The ready-envelope identity guard
 # ---------------------------------------------------------------------------
@@ -927,6 +1083,22 @@ def test_a_valid_ready_envelope_yields_the_group_leader_pid():
 @pytest.mark.parametrize("process_pid", (0, -1, -4321))
 def test_a_non_positive_leader_pid_is_refused(process_pid):
     """``killpg(0, ...)`` addresses the worker's OWN group; refuse it up front."""
+
+    with pytest.raises(AdapterError) as raised:
+        native_process._validated_group_leader_pid(
+            _ready(process_pid),
+            process_pid=process_pid,
+            transfer_count=0,
+            workspace_lease=None,
+            output_tokens=(),
+        )
+
+    assert "did not establish its dedicated POSIX session" in str(raised.value)
+
+
+@pytest.mark.parametrize("process_pid", (None, "4321", 4321.0, True))
+def test_a_non_integer_leader_pid_is_refused(process_pid):
+    """``process.pid`` is ``None`` before start and must never reach ``killpg``."""
 
     with pytest.raises(AdapterError) as raised:
         native_process._validated_group_leader_pid(

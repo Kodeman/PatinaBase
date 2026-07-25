@@ -606,10 +606,13 @@ class NativeEngineOutputs:
         self._populated = True
 
     def close(self) -> tuple[str, ...]:
-        """Close every held descriptor exactly once; report per-token failures."""
+        """Close every held descriptor exactly once; report per-token failures.
 
-        if self._closed:
-            return ()
+        Idempotent because the held mapping is cleared before anything else can
+        observe it, not because of a separate already-closed early return: a
+        guard that no deletion can turn a test red is not a guard.
+        """
+
         received = self._received
         self._received = MappingProxyType({})
         self._closed = True
@@ -1635,6 +1638,38 @@ def _open_leased_output_directory(workspace_descriptor: int) -> int:
         ) from exc
 
 
+def _accumulated_output_bytes(
+    token: str,
+    size_bytes: int,
+    running_total: int,
+) -> int:
+    """Bound one output's size and the running aggregate, or fail closed.
+
+    Extracted so the ceilings are reachable by a test.  Inline, the only way to
+    exercise a 4 GiB per-file or 8 GiB aggregate refusal would be to actually
+    produce those bytes, which means in practice they would never be exercised
+    at all -- and an unexercised ceiling is indistinguishable from a missing one.
+    """
+
+    if size_bytes <= 0:
+        raise AdapterError(
+            f"native engine output {token} is empty",
+            _INVALID_INPUT_CODE,
+        )
+    if size_bytes > NATIVE_CHILD_MAX_OUTPUT_FILE_BYTES:
+        raise AdapterError(
+            f"native engine output {token} exceeds the per-file byte limit",
+            _INVALID_INPUT_CODE,
+        )
+    total = running_total + size_bytes
+    if total > NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES:
+        raise AdapterError(
+            "native engine outputs exceed the aggregate byte limit",
+            _INVALID_INPUT_CODE,
+        )
+    return total
+
+
 def _open_child_outputs(
     tokens: tuple[str, ...],
     *,
@@ -1687,22 +1722,11 @@ def _open_child_outputs(
                     _INVALID_INPUT_CODE,
                 )
             size_bytes = metadata.st_size
-            if size_bytes <= 0:
-                raise AdapterError(
-                    f"native engine output {token} is empty",
-                    _INVALID_INPUT_CODE,
-                )
-            if size_bytes > NATIVE_CHILD_MAX_OUTPUT_FILE_BYTES:
-                raise AdapterError(
-                    f"native engine output {token} exceeds the per-file byte limit",
-                    _INVALID_INPUT_CODE,
-                )
-            declared_total_bytes += size_bytes
-            if declared_total_bytes > NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES:
-                raise AdapterError(
-                    "native engine outputs exceed the aggregate byte limit",
-                    _INVALID_INPUT_CODE,
-                )
+            declared_total_bytes = _accumulated_output_bytes(
+                token,
+                size_bytes,
+                declared_total_bytes,
+            )
             digest = hashlib.sha256()
             offset = 0
             while offset < size_bytes:
@@ -2202,6 +2226,13 @@ def _child_entry(
     # Descriptors only ever follow a "result".  Anything that turned the envelope
     # into an error -- including a cleanup failure recorded above -- must not put
     # a single output descriptor on the wire.
+    #
+    # Honest note for reviewers: this branch is defence in depth with no
+    # independently observable effect from outside the boundary.  Deleting it
+    # leaves the run failing on the same error and the same descriptors closed
+    # moments later by the block below; the only difference is that descriptors
+    # the parent will never read would first be written into a pipe.  A guard
+    # sweep therefore cannot turn it red, and it is not claimed to be provable.
     if terminal.get("kind") != "result":
         _close_output_transfers(output_transfers)
         output_transfers = ()
@@ -4276,8 +4307,10 @@ def run_native_engine_child(
                 _INVALID_INPUT_CODE,
             )
         if workspace_parent_directory is None:
+            # Deliberately worded differently from the child's equivalent refusal
+            # so a test can prove the PARENT refused before anything was spawned.
             raise AdapterError(
-                "native engine outputs require a parent-provisioned workspace lease",
+                "native engine outputs require a workspace_parent_directory",
                 _INVALID_INPUT_CODE,
             )
         output_tokens = outputs.tokens
