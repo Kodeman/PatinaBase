@@ -39,12 +39,36 @@ names the closed seven-token universe up front; the child opens exactly those
 names under the leased ``work/`` directory and hands the descriptors back over
 SCM_RIGHTS with a declared size/digest ledger. The parent does not trust that
 ledger: it independently opens the same names relative to its OWN pinned lease
-descriptor, requires the transported descriptor to be the same ``(st_dev,
-st_ino)``, hashes its own descriptor, and refuses the run unless its own
-computation reproduces the declaration. The descriptor the parent keeps is the
-one it opened itself. Once the lease is purged those inodes have no name left,
-so they can never be reopened by path -- which is precisely the property the
-runner handoff needs.
+descriptor and requires the transported descriptor to be the same ``(st_dev,
+st_ino)``.
+
+The descriptor the caller receives is then NEITHER of those. Binding the
+child's descriptor to the parent's own open proves *which inode* the engine
+wrote; it cannot make that inode stop changing. Anything still holding a
+writable descriptor to it -- an escaped grandchild, or any same-UID process
+that can read this parent's ``/proc/<pid>/fd`` -- can rewrite those bytes after
+the parent has hashed them, and can restore ``st_mtime_ns`` with ``futimens``
+so that no ``fstat`` comparison shows it. No single ``fstat`` field survives
+both the lease purge and a forging writer, so the freeze is not attempted by
+observation at all.
+
+Instead the parent COPIES each output, at receipt, into an ``O_TMPFILE |
+O_EXCL`` anonymous file it creates itself in a private 0700 directory on the
+lease's own filesystem, and keeps that descriptor. That copy never had a name
+in any directory, ``linkat`` can never give it one, and no other process ever
+held a descriptor to it. The digest the caller is given is the parent's own
+measurement OF THE COPY, read positionally from the copy's own descriptor, and
+the run is refused unless it reproduces the child's declaration. Freezing is
+therefore a property of how the object was constructed rather than a claim
+about what was observed. See
+``NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS`` for the
+exact scope, including the one residual this cannot close.
+
+The lease is still purged, and the parent still holds each lease-side
+descriptor across that purge -- not to prove the returned bytes are frozen,
+which the copy already settles, but to catch a child that hardlinked an
+artifact out of its sandbox. That is a statement about the child's behaviour,
+not about the caller's bytes.
 
 WHAT THE PARENT DOES NOT YET VERIFY: nothing here checks that
 ``aligned-sparse-model-v1.tar`` is a correct Sim(3) alignment of the seed and
@@ -137,6 +161,37 @@ NATIVE_CHILD_MAX_OUTPUT_TOTAL_BYTES = 8 * 1024 * 1024 * 1024
 #: and refuses the third unless its own transform and pose digest agree.  Nothing
 #: in this module may be read as that verification having happened.
 NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT = False
+#: What "frozen" means for the descriptors this channel returns, stated as a
+#: fact rather than a hope.  It is True because the returned descriptor is a
+#: private anonymous COPY (``O_TMPFILE | O_EXCL``) the parent created after the
+#: child was already running, not the lease-side object the engine wrote:
+#:
+#:   * no directory entry ever pointed at it, so no ``open`` by path reaches it;
+#:   * ``O_EXCL`` makes ``linkat`` on it fail, so no name can be created later;
+#:   * it was never transported over SCM_RIGHTS and never inherited, so no
+#:     child, grandchild, or escaped descendant ever held a descriptor to it.
+#:
+#: THE RESIDUAL, precisely: a same-UID process that can ``ptrace_may_access``
+#: this parent can reopen ANY descriptor in this process's table through
+#: ``/proc/<pid>/fd`` -- including this one -- and rewrite it.  That is not a
+#: property of this channel; such an actor can equally attach to the parent and
+#: rewrite its memory.  On Linux this is gated by ``yama.ptrace_scope`` (Ubuntu
+#: defaults to 1, which forbids it; 0 permits it).  Nothing here closes it, and
+#: no caller may read this flag as if it did.
+NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS = True
+#: Name prefix for the private 0700 directory the frozen copies are born in.
+#: It is a SIBLING of the lease inside the operator's container, never the lease
+#: itself: the lease is purged with the child's scratch, and an anonymous file
+#: cannot be created against a directory that has already been removed (Linux
+#: returns ``EPERM``), so anchoring the copies inside the lease would make them
+#: impossible to mint at exactly the moment they are needed.
+NATIVE_OUTPUT_FREEZE_VAULT_PREFIX = "patina-refine-native-freeze-"
+#: This process's own file-descriptor table.  Used for exactly one thing: to
+#: reopen a copy the parent JUST created read-only, so the descriptor handed to
+#: the caller carries no write access.  It is not a filesystem name -- nothing
+#: outside this process can redirect it, and it stops existing when the
+#: descriptor closes.
+NATIVE_OUTPUT_FREEZE_ALIAS_DIRECTORY = "/proc/self/fd"
 NATIVE_CHILD_TERM_GRACE_S = 0.10
 NATIVE_CHILD_KILL_REAP_S = 1.0
 NATIVE_WORKSPACE_NAME_PREFIX = "patina-refine-native-workspace-"
@@ -244,6 +299,16 @@ _MAX_CLEANUP_ERROR_BYTES = 256
 _ERROR_CODE_PATTERN = re.compile(r"^REFINE_[A-Z0-9_]{1,63}$")
 _PINNED_FILE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 _PINNED_FILE_READ_BYTES = 1024 * 1024
+#: One chunk of the receipt-time freeze copy.  Deliberately the same number the
+#: hashing loops use: the copy and the hash walk the same bytes under the same
+#: carried deadline, so giving them different granularities would only make the
+#: deadline behave differently between two halves of one operation.
+_OUTPUT_FREEZE_COPY_BYTES = _PINNED_FILE_READ_BYTES
+#: Everything the freeze needs from the platform.  ``O_TMPFILE`` is Linux-only
+#: and there is no macOS/BSD equivalent that creates a never-named file, so this
+#: channel is Linux-only BY CONSTRUCTION.  It fails closed rather than falling
+#: back to create-then-unlink, which would open a window in which a name exists.
+_OUTPUT_FREEZE_REQUIRED_OS_NAMES = ("O_TMPFILE", "O_EXCL", "O_CLOEXEC", "pread", "pwrite")
 _NATIVE_CHILD_CONTEXT_SEAL = object()
 
 
@@ -505,25 +570,39 @@ class _OutputTransfer:
 
 @dataclass(frozen=True)
 class NativeEngineOutput:
-    """One parent-opened, parent-hashed engine output.
+    """One parent-owned private copy of an engine output, hashed by the parent.
 
-    ``descriptor`` is the parent's own ``openat`` of ``work/<token>`` relative to
-    the pinned lease root -- not the descriptor the child sent.  The child's
-    descriptor was received, proven to be the same ``identity``, and closed; that
-    is what binds the parent's open to the object the engine actually wrote.
+    ``descriptor`` is a read-only descriptor for an anonymous file the PARENT
+    created with ``O_TMPFILE | O_EXCL`` and filled by copying the lease-side
+    object the engine wrote.  It is neither the descriptor the child sent nor
+    the parent's own open of ``work/<token>``: both of those refer to an inode
+    that other descriptors may still be able to write, and this one refers to an
+    inode nothing else has ever been able to reach.  The lease-side open is
+    still performed and still bound to the child's transported ``(st_dev,
+    st_ino)`` -- that is what proves the copy was taken from the object the
+    engine actually wrote -- but it is not what the caller receives.
 
-    ``sha256`` and ``size_bytes`` are the parent's own measurements.  The child
-    declared the same values and the run was refused when they disagreed, so
-    these fields never carry a number the parent did not compute itself.
+    ``sha256`` and ``size_bytes`` are the parent's own measurements OF THE COPY,
+    read positionally from ``descriptor`` itself.  The child declared the same
+    values and the run was refused when they disagreed, so these fields never
+    carry a number the parent did not compute on the exact bytes it is handing
+    over.
+
+    ``identity`` is the copy's ``(st_dev, st_ino)`` -- the identity of
+    ``descriptor``, so a consumer that re-``fstat``s before use (the publisher
+    does) is checking the object it will actually read.  ``source_identity`` is
+    the lease-side inode the copy was taken from, retained for diagnostics only;
+    nothing may be published against it.
 
     The descriptor is owned by the :class:`NativeEngineOutputs` bundle that holds
-    it.  Borrowers must not close it, and it stays readable after the workspace
-    lease is purged because an unlinked inode outlives its last name.
+    it.  Borrowers must not close it.  It outlives the workspace purge trivially:
+    the purge removes lease names, and this object never had one.
 
-    ``verified_snapshot`` is the exact ``os.fstat`` tuple this descriptor carried
-    at the instant the parent finished hashing it.  It is kept so the boundary
-    can prove, AFTER the lease purge, that the object still has no name and still
-    has the bytes that were measured -- see :func:`_unfrozen_output_errors`.
+    ``verified_snapshot`` is the exact ``os.fstat`` tuple the copy carried at the
+    instant the parent finished hashing it, kept for the internal consistency
+    assertion in :func:`_unfrozen_output_errors`.  That assertion is NOT what
+    makes the bytes frozen -- see
+    ``NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS``.
     """
 
     token: str
@@ -532,6 +611,37 @@ class NativeEngineOutput:
     size_bytes: int
     identity: tuple[int, int]
     verified_snapshot: tuple[int, ...] = ()
+    source_identity: tuple[int, int] | None = None
+
+
+@dataclass(frozen=True)
+class _OutputSourceWitness:
+    """The lease-side descriptor, kept open only to watch what the child did.
+
+    This is NOT part of the caller's handoff and never becomes one: the caller
+    receives the private copy.  The witness exists so that, after the parent has
+    removed every name it owns, ``st_nlink != 0`` can still reveal a child that
+    hardlinked an engine artifact out of its sandbox.  That is a child-behaviour
+    refusal -- the escaped name can no longer affect the bytes the caller holds,
+    but a run whose engine smuggled artifacts out of its workspace is not a run
+    this boundary is willing to call successful.
+    """
+
+    token: str
+    descriptor: int
+    identity: tuple[int, int]
+
+
+@dataclass(frozen=True)
+class _NativeOutputReceipt:
+    """Everything one successful receipt produced, with distinct ownership.
+
+    ``outputs`` are handed to the caller's sink; ``witnesses`` stay with the
+    boundary and are closed by it before it returns, on every path.
+    """
+
+    outputs: tuple[NativeEngineOutput, ...]
+    witnesses: tuple[_OutputSourceWitness, ...]
 
 
 class NativeEngineOutputs:
@@ -1944,28 +2054,351 @@ def _transported_output_identity(
     return (metadata.st_dev, metadata.st_ino)
 
 
+def _require_output_freeze_capabilities() -> None:
+    """Refuse the output channel unless a never-named private copy is possible.
+
+    This is the fail-closed the design depends on.  Without ``O_TMPFILE`` the
+    only way to produce an unnamed file is to create a named one and unlink it,
+    which leaves a window in which the name exists and a same-UID actor can open
+    it -- exactly the escape this whole mechanism was built to remove.  A silent
+    fallback to that would be worse than no channel at all, because callers
+    would be told the bytes were frozen when they were not.
+
+    The practical consequence is that the engine output handoff is **Linux
+    only**.  macOS has no equivalent primitive, so this raises there rather than
+    degrading, and the tests that exercise the channel skip rather than pass.
+    """
+
+    missing = [name for name in _OUTPUT_FREEZE_REQUIRED_OS_NAMES if not hasattr(os, name)]
+    if os.name != "posix" or missing:
+        raise AdapterError(
+            "native engine outputs require O_TMPFILE anonymous files, which "
+            "this platform does not provide; the engine output handoff is "
+            "Linux-only and refuses to fall back to a named temporary",
+            _FAILED_CODE,
+        )
+    if not os.path.isdir(NATIVE_OUTPUT_FREEZE_ALIAS_DIRECTORY):
+        raise AdapterError(
+            "native engine outputs require /proc/self/fd to drop write access "
+            "on the parent's private copy",
+            _FAILED_CODE,
+        )
+
+
+def _open_output_freeze_vault(lease: NativeWorkspaceLease) -> tuple[str, int]:
+    """Create the parent-private 0700 directory the frozen copies are born in.
+
+    Where this lives is a deliberate choice, not a convenience:
+
+    * **Not the lease.**  The lease is purged before this call's caller returns,
+      and Linux refuses ``O_TMPFILE`` against an already-removed directory
+      (``EPERM``), so the copies could not be minted there at the moment they
+      are needed.  The lease is also the one directory the child can write.
+    * **Inside the operator's container**, as a sibling of the lease.  Anonymous
+      files are allocated on the FILESYSTEM the anchor directory lives on, and
+      ``provision_native_workspace_lease`` already refuses a lease whose
+      ``st_dev`` differs from that container's.  Anchoring here is therefore the
+      only placement that guarantees the copy is a same-filesystem copy without
+      re-deriving the container from anything the child influenced.
+    * **0700 and owned by us**, verified after the open rather than assumed, and
+      on the same device as the lease -- also verified, so a container that was
+      swapped between provisioning and now cannot silently move the copies onto
+      another filesystem.
+
+    The directory is always empty (nothing is ever named inside it), so its
+    removal in :func:`_release_output_freeze_vault` cannot fail for
+    ``ENOTEMPTY``, and its whole lifetime is inside one receipt call.
+    """
+
+    _require_output_freeze_capabilities()
+    name: str | None = None
+    for _attempt in range(NATIVE_WORKSPACE_NAME_ATTEMPTS):
+        candidate = _workspace_scratch_name(NATIVE_OUTPUT_FREEZE_VAULT_PREFIX)
+        try:
+            os.mkdir(candidate, mode=0o700, dir_fd=lease.parent_descriptor)
+        except FileExistsError:
+            continue
+        except OSError as exc:
+            raise AdapterError(
+                "cannot create the native engine output freeze vault",
+                _FAILED_CODE,
+            ) from exc
+        name = candidate
+        break
+    if name is None:
+        raise AdapterError(
+            "cannot create a unique native engine output freeze vault",
+            _FAILED_CODE,
+        )
+    try:
+        descriptor = os.open(
+            name,
+            _workspace_directory_flags(),
+            dir_fd=lease.parent_descriptor,
+        )
+    except OSError as exc:
+        cleanup_errors = _release_output_freeze_vault(lease, None, name)
+        if cleanup_errors:
+            raise _cleanup_failed_error(
+                "native engine output freeze vault setup failed",
+                cleanup_errors,
+            ) from exc
+        raise AdapterError(
+            "native engine output freeze vault is unreadable",
+            _FAILED_CODE,
+        ) from exc
+    try:
+        os.set_inheritable(descriptor, False)
+        metadata = os.fstat(descriptor)
+        # No ``S_ISDIR`` clause: ``_workspace_directory_flags`` carries
+        # ``O_DIRECTORY``, so a non-directory fails the open above with ENOTDIR
+        # and this expression is never reached with one.  A clause no deletion
+        # can turn a test red is not a guard, so it is not written.
+        if (
+            metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+            or metadata.st_dev != lease.identity[0]
+            or os.listdir(descriptor)
+        ):
+            raise AdapterError(
+                "native engine output freeze vault is not a fresh private "
+                "directory on the lease filesystem",
+                _FAILED_CODE,
+            )
+    except BaseException:
+        cleanup_errors = _release_output_freeze_vault(lease, descriptor, name)
+        if cleanup_errors:
+            raise _cleanup_failed_error(
+                "native engine output freeze vault setup failed",
+                cleanup_errors,
+            )
+        raise
+    return name, descriptor
+
+
+def _release_output_freeze_vault(
+    lease: NativeWorkspaceLease,
+    descriptor: int | None,
+    name: str | None,
+) -> tuple[str, ...]:
+    """Remove the freeze vault and close its descriptor; report what failed.
+
+    Removal is by name relative to the lease's pinned container descriptor, and
+    the vault is always empty, so ``ENOTEMPTY`` here means a same-UID actor put
+    something inside a directory only this process should be able to enter.
+    That is reported as a cleanup failure, which fails the run.
+    """
+
+    errors: list[str] = []
+    if name is not None:
+        try:
+            os.rmdir(name, dir_fd=lease.parent_descriptor)
+        except BaseException as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "cannot remove the native engine output freeze vault: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+    if type(descriptor) is int:
+        errors.extend(
+            _close_descriptors_safely(
+                (("native engine output freeze vault", descriptor),)
+            )
+        )
+    return tuple(errors)
+
+
+def _read_only_freeze_alias(writable_descriptor: int, *, token: str) -> int:
+    """Reopen the parent's just-written copy read-only and prove it is the same.
+
+    The caller must never be handed a writable descriptor: every consumer of
+    this channel reads positionally, and a write-capable handle sitting in a
+    long-lived sink is a hazard with no matching use.  Access mode cannot be
+    changed on an open descriptor, so the only way to drop it is to reopen.
+
+    ``/proc/self/fd/<n>`` is this process's own descriptor table.  It is not a
+    filesystem name: no other process can substitute an entry in it, it does not
+    outlive the descriptor, and it cannot be created for an inode this process
+    does not already hold.  The reopened descriptor is nevertheless bound back
+    to the original by ``(st_dev, st_ino)``, regular-file type and link count, so
+    the claim rests on a check rather than on that argument.
+
+    Two checks that would look natural here are deliberately absent because no
+    deletion of them could turn a test red: the reopened size cannot differ from
+    the original's when both name one inode at one instant, and the access mode
+    cannot be anything but ``O_RDONLY`` when this function is the only thing that
+    opens it.  The read-only property is asserted by a test on the descriptor
+    this channel actually hands out, which is where it can go red.
+    """
+
+    alias = f"{NATIVE_OUTPUT_FREEZE_ALIAS_DIRECTORY}/{writable_descriptor}"
+    try:
+        # No ``O_NOFOLLOW``: a procfs descriptor entry IS a magic symlink, and
+        # refusing to follow it would refuse every copy this function exists for.
+        readable = os.open(alias, os.O_RDONLY | os.O_CLOEXEC)
+    except OSError as exc:
+        raise AdapterError(
+            f"native engine output {token} private copy could not be reopened "
+            "read-only",
+            _FAILED_CODE,
+        ) from exc
+    try:
+        os.set_inheritable(readable, False)
+        original = os.fstat(writable_descriptor)
+        reopened = os.fstat(readable)
+        if (
+            (reopened.st_dev, reopened.st_ino) != (original.st_dev, original.st_ino)
+            or not stat.S_ISREG(reopened.st_mode)
+            or reopened.st_nlink != 0
+        ):
+            raise AdapterError(
+                f"native engine output {token} private copy is not the anonymous "
+                "file the parent just wrote",
+                _FAILED_CODE,
+            )
+    except BaseException:
+        close_errors = _close_descriptors_safely(((token, readable),))
+        if close_errors:
+            raise _cleanup_failed_error(
+                "native engine output freeze failed",
+                close_errors,
+            )
+        raise
+    return readable
+
+
+def _frozen_output_copy(
+    source_descriptor: int,
+    *,
+    token: str,
+    vault_descriptor: int,
+    expected_size: int,
+    remaining_seconds,
+) -> tuple[int, tuple[int, int]]:
+    """Copy one engine output into a never-named private file and keep THAT.
+
+    ``O_TMPFILE`` creates an inode with no directory entry; ``O_EXCL`` makes it
+    permanently un-linkable, so not even this process can give it a name later.
+    Nothing is transported, nothing is inherited (``O_CLOEXEC`` plus an explicit
+    ``set_inheritable``), and the file is created after the child is already
+    running, so no descendant can ever have held a descriptor to it.
+
+    Bytes are moved with positional reads and writes: the source's file offset is
+    never observed or disturbed, so the lease-side descriptor stays usable for
+    the post-purge witness check.  Every chunk re-checks the one carried
+    deadline, so a copy that cannot finish in the stage's remaining time fails on
+    time instead of stalling.
+
+    NOTE what this does NOT do: it does not verify the bytes.  A source that is
+    being rewritten while it is copied simply produces a copy of something else,
+    and the caller's digest check on the copy is what refuses that.  This
+    function is only responsible for producing an object nothing can change.
+    """
+
+    remaining_seconds()
+    try:
+        writable = os.open(
+            ".",
+            os.O_TMPFILE | os.O_RDWR | os.O_EXCL | os.O_CLOEXEC,
+            0o600,
+            dir_fd=vault_descriptor,
+        )
+    except OSError as exc:
+        raise AdapterError(
+            f"native engine output {token} cannot be frozen: the workspace "
+            "filesystem does not support O_TMPFILE anonymous files",
+            _FAILED_CODE,
+        ) from exc
+    try:
+        os.set_inheritable(writable, False)
+        copied = 0
+        while copied < expected_size:
+            remaining_seconds()
+            chunk = os.pread(
+                source_descriptor,
+                min(_OUTPUT_FREEZE_COPY_BYTES, expected_size - copied),
+                copied,
+            )
+            if not chunk:
+                # The ONLY bound on this loop.  A source truncated after its size
+                # was read stops returning bytes; without this the loop would
+                # spin on a fixed offset until the deadline rather than saying
+                # what happened.
+                raise AdapterError(
+                    f"native engine output {token} ended before its declared size",
+                    _INVALID_INPUT_CODE,
+                )
+            written = 0
+            while written < len(chunk):
+                remaining_seconds()
+                progress = os.pwrite(writable, chunk[written:], copied + written)
+                if progress <= 0:
+                    # The ONLY bound on the inner loop.  A ``pwrite`` that keeps
+                    # returning zero -- a full filesystem answering short, say --
+                    # would otherwise spin here forever on a fixed offset with no
+                    # deadline check between iterations.  Deleting this is a hang,
+                    # not a wrong answer.
+                    raise AdapterError(
+                        f"native engine output {token} private copy stopped "
+                        "accepting bytes",
+                        _FAILED_CODE,
+                    )
+                written += progress
+            copied += len(chunk)
+        remaining_seconds()
+        # No size/type/link post-condition here.  The loop copies exactly
+        # ``expected_size`` bytes or raises, and an ``O_TMPFILE`` file is a
+        # nameless regular file by construction, so every such clause would be
+        # undeletable-by-any-test.  The one property worth re-checking on a
+        # DIFFERENT descriptor -- that the alias really is the same anonymous
+        # inode -- is checked in ``_read_only_freeze_alias``, where a wrong
+        # descriptor can actually make it fire.
+        metadata = os.fstat(writable)
+        readable = _read_only_freeze_alias(writable, token=token)
+    except BaseException:
+        close_errors = _close_descriptors_safely(((token, writable),))
+        if close_errors:
+            raise _cleanup_failed_error(
+                "native engine output freeze failed",
+                close_errors,
+            )
+        raise
+    close_errors = _close_descriptors_safely(((token, writable),))
+    if close_errors:
+        raise _cleanup_failed_error(
+            "native engine output freeze failed",
+            (*close_errors, *_close_descriptors_safely(((token, readable),))),
+        )
+    return readable, (metadata.st_dev, metadata.st_ino)
+
+
 def _receive_native_outputs(
     connection: Connection | None,
     ledger: tuple[tuple[str, str, int], ...],
     *,
     workspace_lease: NativeWorkspaceLease | None,
     deadline: RefineDeadline,
-) -> tuple[NativeEngineOutput, ...]:
-    """Receive the child's descriptors and bind them to the parent's own opens.
+) -> _NativeOutputReceipt:
+    """Bind the child's descriptors to the parent's opens, then copy and keep.
 
     For every token the parent receives the child's descriptor, opens the same
     canonical name relative to its OWN pinned lease root, and refuses the run
-    unless the two descriptors are the same ``(st_dev, st_ino)``.  Only the
-    parent's descriptor is kept; the child's is closed as soon as it has done its
-    one job of binding the parent's open to what the engine wrote.
+    unless the two descriptors are the same ``(st_dev, st_ino)``.  Neither check
+    is sufficient alone: without the transported descriptor a name swapped
+    between the engine's write and this open would go unnoticed; without the
+    parent's own open a child could hand back any descriptor it liked.
 
-    Neither check is sufficient alone.  Without the transported descriptor a name
-    swapped between the engine's write and this open would go unnoticed; without
-    the parent's own open a child could hand back any descriptor it liked.
+    Together they establish WHICH inode the engine wrote.  They cannot establish
+    that its bytes will stop changing, so the parent then copies that inode into
+    an anonymous private file and hashes the copy.  What the caller receives is
+    the copy; the lease-side descriptor is retained only as a witness for the
+    post-purge hardlink check and is closed by the boundary itself.
     """
 
     if not ledger:
-        return ()
+        return _NativeOutputReceipt((), ())
     if connection is None:
         raise AdapterError(
             "native engine output transport is unavailable",
@@ -1979,10 +2412,15 @@ def _receive_native_outputs(
 
     from multiprocessing.reduction import recv_handle
 
+    _require_output_freeze_capabilities()
     work_descriptor = _open_leased_output_directory(workspace_lease.descriptor)
+    vault_name: str | None = None
+    vault_descriptor: int | None = None
     received: list[NativeEngineOutput] = []
+    witnesses: list[_OutputSourceWitness] = []
     seen_identities: set[tuple[int, int]] = set()
     try:
+        vault_name, vault_descriptor = _open_output_freeze_vault(workspace_lease)
         for token, declared_sha256, declared_size in ledger:
             deadline.remaining_seconds()
             if not connection.poll(deadline.remaining_seconds()):
@@ -1997,7 +2435,7 @@ def _receive_native_outputs(
                 declared_size=declared_size,
             )
             try:
-                parent_descriptor = os.open(
+                source_descriptor = os.open(
                     token,
                     _output_file_open_flags(),
                     dir_fd=work_descriptor,
@@ -2010,16 +2448,14 @@ def _receive_native_outputs(
                     ),
                     _INVALID_INPUT_CODE,
                 ) from exc
-            received.append(
-                NativeEngineOutput(
+            witnesses.append(
+                _OutputSourceWitness(
                     token=token,
-                    descriptor=parent_descriptor,
-                    sha256=declared_sha256,
-                    size_bytes=declared_size,
+                    descriptor=source_descriptor,
                     identity=transported_identity,
                 )
             )
-            parent_metadata = os.fstat(parent_descriptor)
+            parent_metadata = os.fstat(source_descriptor)
             if not stat.S_ISREG(parent_metadata.st_mode):
                 raise AdapterError(
                     f"native engine output {token} must be a regular file",
@@ -2042,15 +2478,32 @@ def _receive_native_outputs(
                     _INVALID_INPUT_CODE,
                 )
             seen_identities.add(transported_identity)
-            # The parent's own bytes decide.  A declaration that this does not
-            # reproduce fails the run; nothing downstream sees a child number.
-            #
-            # The returned snapshot is KEPT, not discarded: hashing here proves
-            # only what the bytes were before the lease was purged, and the child
-            # may still hold -- or have handed out -- a name for this inode.  The
-            # snapshot is what makes the post-purge freeze proof possible.
+            # From here the lease-side object has done its whole job: it proved
+            # which inode the engine wrote.  What the caller gets is a copy of it
+            # that nothing else can reach.
+            frozen_descriptor, frozen_identity = _frozen_output_copy(
+                source_descriptor,
+                token=token,
+                vault_descriptor=vault_descriptor,
+                expected_size=declared_size,
+                remaining_seconds=deadline.remaining_seconds,
+            )
+            received.append(
+                NativeEngineOutput(
+                    token=token,
+                    descriptor=frozen_descriptor,
+                    sha256=declared_sha256,
+                    size_bytes=declared_size,
+                    identity=frozen_identity,
+                    source_identity=transported_identity,
+                )
+            )
+            # The parent's own bytes decide, and they are read from the COPY --
+            # the exact object the caller will read.  A declared digest this does
+            # not reproduce fails the run, so a source rewritten mid-copy is
+            # caught here rather than being silently frozen.
             verified_snapshot = _validate_pinned_descriptor(
-                parent_descriptor,
+                frozen_descriptor,
                 token=token,
                 expected_sha256=declared_sha256,
                 expected_size=declared_size,
@@ -2058,19 +2511,30 @@ def _receive_native_outputs(
             )
             received[-1] = NativeEngineOutput(
                 token=token,
-                descriptor=parent_descriptor,
+                descriptor=frozen_descriptor,
                 sha256=declared_sha256,
                 size_bytes=declared_size,
-                identity=transported_identity,
+                identity=frozen_identity,
                 verified_snapshot=verified_snapshot,
+                source_identity=transported_identity,
             )
         deadline.remaining_seconds()
     except BaseException as exc:
-        close_errors = _close_descriptors_safely(
-            (output.token, output.descriptor) for output in received
+        close_errors = (
+            *_close_descriptors_safely(
+                (output.token, output.descriptor) for output in received
+            ),
+            *_close_descriptors_safely(
+                (witness.token, witness.descriptor) for witness in witnesses
+            ),
         )
-        directory_errors = _close_descriptors_safely(
-            (("native engine output directory", work_descriptor),)
+        directory_errors = (
+            *_release_output_freeze_vault(
+                workspace_lease, vault_descriptor, vault_name
+            ),
+            *_close_descriptors_safely(
+                (("native engine output directory", work_descriptor),)
+            ),
         )
         if close_errors or directory_errors:
             raise _cleanup_failed_error(
@@ -2078,8 +2542,11 @@ def _receive_native_outputs(
                 (*close_errors, *directory_errors),
             ) from exc
         raise
-    directory_errors = _close_descriptors_safely(
-        (("native engine output directory", work_descriptor),)
+    directory_errors = (
+        *_release_output_freeze_vault(workspace_lease, vault_descriptor, vault_name),
+        *_close_descriptors_safely(
+            (("native engine output directory", work_descriptor),)
+        ),
     )
     if directory_errors:
         raise _cleanup_failed_error(
@@ -2089,9 +2556,12 @@ def _receive_native_outputs(
                 *_close_descriptors_safely(
                     (output.token, output.descriptor) for output in received
                 ),
+                *_close_descriptors_safely(
+                    (witness.token, witness.descriptor) for witness in witnesses
+                ),
             ),
         )
-    return tuple(received)
+    return _NativeOutputReceipt(tuple(received), tuple(witnesses))
 
 
 def _frozen_snapshot_fields(snapshot: tuple[int, ...]) -> tuple[int, ...]:
@@ -2107,10 +2577,18 @@ def _frozen_snapshot_fields(snapshot: tuple[int, ...]) -> tuple[int, ...]:
     which is the worst kind of guard: green on a fast container, red on the
     qualified host.
 
-    Nothing is given up.  A write moves ``st_size``/``st_mtime_ns``, an
-    ``fchmod`` through a surviving descriptor moves ``st_mode``, a seek moves the
-    offset, and a surviving NAME -- the actual finding -- is caught by
-    ``st_nlink`` instead, which needs no timestamp at all.
+    SOMETHING IS GIVEN UP, and it is not recoverable.  ``st_ctime_ns`` was the
+    only field in this tuple a writer cannot forge: a process holding an
+    ``O_RDWR`` descriptor can ``pwrite`` same-length bytes and then restore
+    ``st_mtime_ns`` with ``futimens``, leaving every remaining field identical.
+    That was demonstrated, not theorised.  Dropping ``st_ctime_ns`` is still
+    correct -- keeping it would fail honest runs -- which means no subset of
+    ``fstat`` can prove these bytes did not change.  This comparison is
+    therefore an internal consistency assertion about an object the parent
+    constructed, NOT a defence against a hostile writer.  The defence is that
+    the object being compared is a private anonymous copy no other descriptor
+    has ever referred to; see
+    ``NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS``.
     """
 
     if len(snapshot) != _DESCRIPTOR_SNAPSHOT_FIELDS:
@@ -2126,38 +2604,61 @@ def _frozen_snapshot_fields(snapshot: tuple[int, ...]) -> tuple[int, ...]:
 
 def _unfrozen_output_errors(
     outputs: tuple[NativeEngineOutput, ...],
+    witnesses: tuple[_OutputSourceWitness, ...],
 ) -> tuple[str, ...]:
-    """Prove every adopted output lost its last name and none of its bytes.
+    """Check two different things after the purge, for two different reasons.
 
-    This runs AFTER the lease purge, and that ordering is the whole point.  At
-    receipt time the child is still alive and the object still has a name, so a
-    child that ``link``s ``work/<token>`` to any path outside the lease keeps a
-    writable route to the exact inode the parent hashed.  Nothing in the receipt
-    path can see that: the transported descriptor, the identity match and the
-    parent's own digest are all satisfied by the honest bytes.  The escape only
-    becomes visible once the parent has removed every name it owns.
+    **The witnesses: did the child smuggle an artifact out of its sandbox?**
+    At receipt time the child is still alive and the lease-side object still has
+    a name, so a child that ``link``s ``work/<token>`` to any path outside the
+    lease keeps a route to it that no receipt-time check can see -- the
+    transported descriptor, the identity match and the parent's own digest are
+    all satisfied by honest bytes.  Once the parent has removed every name it
+    owns, ``st_nlink != 0`` on the lease-side descriptor names exactly that
+    escape.  This no longer protects the caller's bytes (the caller holds a copy
+    the escaped name cannot reach) and it is not claimed to; it refuses a run
+    whose engine wrote outside the boundary it was given.
 
-    Two independent facts are required of each descriptor:
-
-    ``st_nlink == 0``
-        No name anywhere reaches these bytes, so no ``open`` can rewrite them.
-        This is the module's established shape for the hazard -- the packet
-        extractor, the toolchain and the raster materializer all refuse
-        ``st_nlink != 1`` at their own opens -- moved to the only instant at
-        which it is decisive for a channel whose files are meant to be nameless.
-
-    an unchanged ``fstat`` snapshot
-        ``st_nlink`` alone would still accept bytes rewritten through a
-        descriptor that survived the purge (a grandchild that escaped its
-        session, say).  Every field a purge may not move -- see
-        :func:`_frozen_snapshot_fields` -- is compared against the snapshot taken
-        at the instant the parent's own hash completed.
+    **The outputs: is the descriptor being handed over the private copy?**
+    ``st_nlink == 0`` and an unchanged :func:`_frozen_snapshot_fields` tuple are
+    both construction invariants of an ``O_TMPFILE | O_EXCL`` file this process
+    created and nothing else can reach.  They are asserted, not assumed, because
+    the alternative is trusting that a later edit did not accidentally return
+    the lease-side descriptor instead.  Neither clause is a defence against a
+    hostile writer: ``futimens`` forges the second, and the first is trivially
+    true of any unlinked file.  What makes the bytes frozen is that the object
+    is a never-named copy, which is settled at receipt, not here.
 
     Errors are collected rather than raised so one bad token cannot hide the
     state of the other six in the report the caller receives.
     """
 
     errors: list[str] = []
+    for witness in witnesses:
+        try:
+            witness_metadata = os.fstat(witness.descriptor)
+        except BaseException as exc:
+            errors.append(
+                _bounded_diagnostic(
+                    "native engine output ",
+                    witness.token,
+                    " could not be re-inspected after the purge: ",
+                    _exception_summary(exc),
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
+            continue
+        if witness_metadata.st_nlink != 0:
+            errors.append(
+                _bounded_diagnostic(
+                    "native engine output ",
+                    witness.token,
+                    " is still reachable by name after the lease purge (",
+                    _bounded_int_repr(witness_metadata.st_nlink, maximum_bytes=32),
+                    " links)",
+                    maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
+                )
+            )
     for output in outputs:
         if not output.verified_snapshot:
             errors.append(
@@ -2187,7 +2688,7 @@ def _unfrozen_output_errors(
                 _bounded_diagnostic(
                     "native engine output ",
                     output.token,
-                    " is still reachable by name after the lease purge (",
+                    " private copy is reachable by name (",
                     _bounded_int_repr(metadata.st_nlink, maximum_bytes=32),
                     " links)",
                     maximum_bytes=_MAX_CLEANUP_ERROR_BYTES,
@@ -4446,12 +4947,18 @@ def run_native_engine_child(
 
     ``outputs`` opts into the seven-descriptor engine output handoff and requires
     a workspace lease.  The caller owns the sink and must close it; on success it
-    holds one parent-opened, parent-hashed descriptor per requested token, and
-    those descriptors stay readable after this call purges the lease because the
-    inodes simply lose their last name -- which this call proves, per token,
-    after the purge.  This function closes the sink itself on every path that
-    raises, INCLUDING a cleanup failure discovered after the return value was
-    computed, so an exception never leaves a populated sink behind.
+    holds one descriptor per requested token, each one a read-only handle on a
+    never-named private copy this call took of the engine's output and hashed
+    itself.  Those descriptors are unaffected by the lease purge and unreachable
+    from any name, descriptor, or process outside this one -- see
+    ``NATIVE_ENGINE_OUTPUT_BYTES_FROZEN_AGAINST_SURVIVING_DESCRIPTORS`` for the
+    exact scope and its one residual.  This function closes the sink itself on
+    every path that raises, INCLUDING a cleanup failure discovered after the
+    return value was computed, so an exception never leaves a populated sink
+    behind.
+
+    Because that copy is made with ``O_TMPFILE``, ``outputs`` is **Linux only**
+    and fails closed elsewhere rather than degrading to a named temporary.
 
     What ``outputs`` does NOT give the caller is a verified alignment.  See
     ``NATIVE_ENGINE_OUTPUT_ALIGNMENT_VERIFIED_BY_PARENT``.
@@ -4486,6 +4993,11 @@ def run_native_engine_child(
                 "native engine outputs require a workspace_parent_directory",
                 _INVALID_INPUT_CODE,
             )
+        # Fail before anything is spawned or provisioned.  A platform that
+        # cannot mint a never-named file cannot honour this channel's contract,
+        # and discovering that after the engine has run would mean either
+        # throwing away real work or quietly weakening what the caller is told.
+        _require_output_freeze_capabilities()
         output_tokens = outputs.tokens
     request_payload = _bounded_request(request)
     try:
@@ -4571,11 +5083,21 @@ def run_native_engine_child(
         )
 
     def _release_outputs_for_failure() -> tuple[str, ...]:
+        nonlocal adopted_outputs
         if outputs is None:
             return ()
         # If ``_adopt`` refused the receipt, the sink never took ownership and
         # closing it would close nothing.  The descriptors are still open here.
         orphaned = () if outputs.is_populated else adopted_outputs
+        # Clearing is what makes the SECOND call site safe.  This runs twice on
+        # one path -- once because the run failed, once because cleanup must
+        # raise -- and ``_release_workspace_lease`` allocates descriptors in
+        # between.  Without this the second pass would close the same fd NUMBERS
+        # again, which by then belong to whatever the lease release opened, and
+        # report a "Bad file descriptor" per token for damage it caused itself.
+        # ``outputs.close`` is already idempotent; this makes the orphan branch
+        # idempotent too.
+        adopted_outputs = ()
         return (
             *outputs.close(),
             *_close_descriptors_safely(
@@ -4678,6 +5200,9 @@ def run_native_engine_child(
     reaped = False
     cleanup_handled = False
     adopted_outputs: tuple[NativeEngineOutput, ...] = ()
+    # Boundary-owned, never the caller's: closed in the ``finally`` below on
+    # every path, after the post-purge check that is their only purpose.
+    source_witnesses: tuple[_OutputSourceWitness, ...] = ()
     # Explicit, not ``sys.exc_info()``: this function can legitimately be called
     # from inside an ``except`` block, where the ambient exception would make a
     # successful run look like a failing one and close the caller's descriptors.
@@ -4790,7 +5315,7 @@ def run_native_engine_child(
                 _FAILED_CODE,
             )
         if outputs is not None:
-            adopted_outputs = _receive_native_outputs(
+            receipt = _receive_native_outputs(
                 parent_output_connection,
                 _validated_output_ledger(
                     terminal.get("outputLedger"),
@@ -4799,6 +5324,8 @@ def run_native_engine_child(
                 workspace_lease=workspace_lease,
                 deadline=deadline,
             )
+            adopted_outputs = receipt.outputs
+            source_witnesses = receipt.witnesses
             outputs._adopt(adopted_outputs)
 
         try:
@@ -5039,19 +5566,31 @@ def run_native_engine_child(
                 leader_quiescent=leader_quiescent,
             )
 
-        # ONLY here, with every parent-owned name gone, can "these bytes are
-        # frozen" be checked instead of assumed.  A child that hardlinked an
-        # output out of the lease is indistinguishable from an honest one until
-        # this point, and item 6 decides on these exact descriptors.
+        # ONLY here, with every parent-owned name gone, is a child that
+        # hardlinked an engine artifact out of the lease distinguishable from an
+        # honest one.  The caller's bytes are already frozen by construction, so
+        # this is no longer what makes the handoff safe -- it is a refusal of a
+        # child that wrote outside the boundary it was given, plus an assertion
+        # that the sink really holds the private copies.
         unfrozen_output_errors: tuple[str, ...] = ()
         if returned_successfully:
-            unfrozen_output_errors = _unfrozen_output_errors(adopted_outputs)
+            unfrozen_output_errors = _unfrozen_output_errors(
+                adopted_outputs,
+                source_witnesses,
+            )
+        # The witnesses have now done their whole job.  They are boundary-owned
+        # on every path, including the ones that never reached the check above.
+        witness_cleanup_errors = _close_descriptors_safely(
+            (witness.token, witness.descriptor) for witness in source_witnesses
+        )
+        source_witnesses = ()
 
         cleanup_must_raise = bool(
             final_cleanup_errors
             or offset_restore_errors
             or output_cleanup_errors
             or workspace_cleanup_errors
+            or witness_cleanup_errors
             or unfrozen_output_errors
         )
         if cleanup_must_raise:
@@ -5068,6 +5607,7 @@ def run_native_engine_child(
             *final_cleanup_errors,
             *offset_restore_errors,
             *unfrozen_output_errors,
+            *witness_cleanup_errors,
             *output_cleanup_errors,
             *workspace_cleanup_errors,
             *resource_errors,
