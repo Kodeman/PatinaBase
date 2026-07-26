@@ -2412,7 +2412,10 @@ def _receive_native_outputs(
 
     from multiprocessing.reduction import recv_handle
 
-    _require_output_freeze_capabilities()
+    # The capability refusal lives in ``_open_output_freeze_vault``, at the point
+    # of use, and in ``run_native_engine_child``, before anything is spawned.
+    # A third copy here was deletable with zero red -- the vault's own check
+    # raised the identical error two statements later -- so it is not written.
     work_descriptor = _open_leased_output_directory(workspace_lease.descriptor)
     vault_name: str | None = None
     vault_descriptor: int | None = None
