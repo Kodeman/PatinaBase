@@ -284,6 +284,62 @@ def test_file_artifacts_publish_the_runner_verified_descriptor_itself(tmp_path):
         assert call["expectedIdentity"] == (metadata.st_dev, metadata.st_ino)
 
 
+@pytest.mark.parametrize(
+    "identity",
+    (
+        ("12", 34),
+        (12, "34"),
+        (True, 34),
+        (12, False),
+        (12,),
+        (12, 34, 56),
+        [12, 34],
+    ),
+    ids=(
+        "dev-is-a-string",
+        "ino-is-a-string",
+        "dev-is-a-bool",
+        "ino-is-a-bool",
+        "one-element",
+        "three-elements",
+        "list-not-tuple",
+    ),
+)
+def test_a_file_artifact_identity_must_be_an_exact_pair_of_ints(tmp_path, identity):
+    """Every clause of the identity shape check, one parameter each.
+
+    ``bool`` is refused by ``type(value) is not int`` on its own -- ``type(True)``
+    is ``bool`` -- which is why the ``or type(value) is bool`` this check used to
+    carry could be deleted without turning anything red.  It is gone; these cases
+    are what keep the remaining clause honest.
+    """
+
+    result = _result(tmp_path)
+    target = next(
+        artifact for artifact in result.files if type(artifact) is RefineFileArtifact
+    )
+    result = replace(
+        result,
+        files=tuple(
+            replace(target, identity=identity) if artifact is target else artifact
+            for artifact in result.files
+        ),
+    )
+    storage = _RecordingStorage()
+
+    with pytest.raises(PermanentError) as caught:
+        _publisher(storage, tmp_path).publish(
+            result,
+            user_id="user-1",
+            scan_id="scan-1",
+            deadline=_deadline(),
+        )
+
+    assert caught.value.token == "REFINE_ARTIFACT_VERIFY"
+    assert "missing its measured file identity" in str(caught.value)
+    assert storage.calls == []
+
+
 def test_a_file_artifact_without_its_measured_identity_is_refused(tmp_path):
     """The runner always attaches it; publication refuses to guess if it did not."""
 

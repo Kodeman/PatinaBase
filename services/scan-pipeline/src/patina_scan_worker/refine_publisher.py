@@ -275,10 +275,14 @@ def _validate_result(
         if type(artifact) is RefineFileArtifact and (
             type(artifact.identity) is not tuple
             or len(artifact.identity) != 2
-            or any(
-                type(value) is not int or type(value) is bool
-                for value in artifact.identity
-            )
+            # ``type(value) is not int`` already rejects ``bool``: ``type(True)``
+            # is ``bool``, not ``int``.  The ``or type(value) is bool`` this used
+            # to carry could be deleted without turning a single test red, which
+            # is the definition of a clause that is not doing anything.  The
+            # exact-type form is kept rather than ``storage.py``'s
+            # ``isinstance``-based spelling because widening to int subclasses
+            # here would be a behaviour change, not a cleanup.
+            or any(type(value) is not int for value in artifact.identity)
         ):
             # Publishing a borrowed descriptor without the identity it was
             # measured on would mean uploading whatever that fd number happens
